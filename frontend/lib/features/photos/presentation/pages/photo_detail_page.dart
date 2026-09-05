@@ -738,7 +738,8 @@ class _DetailTopBar extends StatelessWidget {
         isDark
             ? Colors.white.withValues(alpha: 0.50)
             : context.photosColors.onSurfaceVariant;
-    final centerTitle = photo.locationDisplay ?? photo.title;
+    final centerTitle =
+        photo.locationDisplay(preferZh: _isZhLocale(context)) ?? photo.title;
     final date = photo.dateTaken ?? photo.createdAt;
 
     return Container(
@@ -1160,10 +1161,14 @@ class _ExifPanel extends ConsumerWidget {
                 title: AppLocalizations.of(context).photosLocationInfo,
                 sectionColor: sectionColor,
                 children: [
-                  if (photo.locationDisplay != null)
+                  if (photo.locationDisplay(preferZh: _isZhLocale(context)) !=
+                      null)
                     _ExifEntry(
                       label: AppLocalizations.of(context).photosPlace,
-                      value: photo.locationDisplay!,
+                      value:
+                          photo.locationDisplay(
+                            preferZh: _isZhLocale(context),
+                          )!,
                       labelColor: labelColor,
                       valueColor: valueColor,
                     ),
@@ -1485,6 +1490,11 @@ class _InfoPill extends StatelessWidget {
 String _formatDate(DateTime date) {
   return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
       '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
+}
+
+/// 当前界面语言是否为中文，用于地名等双语数据的选择。
+bool _isZhLocale(BuildContext context) {
+  return Localizations.localeOf(context).languageCode == 'zh';
 }
 
 String _formatShortDate(DateTime date) {

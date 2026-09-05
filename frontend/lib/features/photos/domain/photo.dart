@@ -219,22 +219,30 @@ class PhotoItem {
     return const [];
   }
 
-  /// 位置显示文本
-  String? get locationDisplay {
+  /// 位置显示文本；[preferZh] 为 true 时优先取中文字段，单个字段缺失时回退英文。
+  String? locationDisplay({bool preferZh = false}) {
     if (gpsLocation == null || gpsLocation!.isEmpty) return null;
-    final displayName = gpsLocation!['displayName']?.toString().trim();
-    final state = gpsLocation!['state']?.toString().trim();
-    final city = gpsLocation!['city']?.toString();
-    final district = gpsLocation!['district']?.toString().trim();
-    final country = gpsLocation!['country']?.toString();
-    final parts = <String?>[country, state, city, district]
+    String? pick(String key, String? zhKey) {
+      if (preferZh && zhKey != null) {
+        final zh = gpsLocation![zhKey]?.toString().trim();
+        if (zh != null && zh.isNotEmpty) return zh;
+      }
+      final value = gpsLocation![key]?.toString().trim();
+      return (value != null && value.isNotEmpty) ? value : null;
+    }
+
+    final parts = <String?>[
+          pick('country', 'countryZh'),
+          pick('state', 'stateZh'),
+          pick('city', 'cityZh'),
+          pick('district', 'districtZh'),
+        ]
         .whereType<String>()
-        .map((part) => part.trim())
         .where((part) => part.isNotEmpty)
         .toSet()
         .toList(growable: false);
     if (parts.isNotEmpty) return parts.join(' · ');
-    return displayName == null || displayName.isEmpty ? null : displayName;
+    return pick('displayName', 'displayNameZh');
   }
 }
 
