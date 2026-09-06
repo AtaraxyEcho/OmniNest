@@ -72,6 +72,23 @@ PhotoItem _photo(String id, String city) {
   );
 }
 
+/// 已提取运动视频的动态照片（仅用于徽标渲染断言，测试内不触发播放）。
+PhotoItem _motionPhoto(String id, String city) {
+  return PhotoItem(
+    id: id,
+    fileNodeId: 'file-$id',
+    title: 'Photo $id',
+    format: 'JPEG',
+    fileSize: 1024,
+    metadataStatus: 'READY',
+    favorite: false,
+    createdAt: DateTime(2024, 11, 12),
+    gpsLocation: <String, dynamic>{'city': city},
+    motionState: 'READY',
+    motionVideoUrl: 'https://example.com/motion/$id.mp4',
+  );
+}
+
 class _Harness {
   const _Harness({required this.router, required this.child});
 
@@ -318,6 +335,24 @@ void main() {
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pump();
     expect(find.text('Zurich'), findsOneWidget);
+  });
+
+  testWidgets('动态照片显示 LIVE 徽标且切换到普通照片后隐藏', (tester) async {
+    final mixedScope = [
+      _motionPhoto('photo-1', 'Bern'),
+      _photo('photo-2', 'Zurich'),
+    ];
+    await _pumpDesktop(tester, _harness(scope: mixedScope).child);
+
+    // 动态照片：徽标可见。
+    expect(find.text('LIVE'), findsOneWidget);
+
+    // 切换到普通照片：徽标隐藏。
+    await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+    expect(find.text('LIVE'), findsNothing);
   });
 
   testWidgets('桌面端信息面板是全高独立侧栏并压缩照片区', (tester) async {

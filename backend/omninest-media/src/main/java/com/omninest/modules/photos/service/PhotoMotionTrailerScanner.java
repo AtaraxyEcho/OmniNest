@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 三星 SEF（Samsung Extended Format）动态照片 trailer 扫描器。
@@ -13,6 +14,7 @@ import java.nio.file.Path;
  *
  * @author OmniNest
  */
+@Slf4j
 public final class PhotoMotionTrailerScanner {
 
     /** 尾部扫描窗口大小；SEF footer 固定在文件末尾，4KB 足够。 */
@@ -68,6 +70,7 @@ public final class PhotoMotionTrailerScanner {
             file.readFully(tail);
             return hasSefTrailer(tail, window);
         } catch (IOException ex) {
+            log.warn("SEF trailer 尾部扫描失败: {}, file={}", ex.getMessage(), sourceFile);
             return false;
         }
     }

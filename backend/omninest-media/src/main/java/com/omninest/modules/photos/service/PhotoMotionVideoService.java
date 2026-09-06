@@ -185,7 +185,7 @@ public class PhotoMotionVideoService {
                 return candidate;
             }
         }
-        return scanBackwardsForFtyp(sourceFile, fileSize);
+        return scanTailWindowForLastFtyp(sourceFile, fileSize);
     }
 
     private Long resolveOffset(PhotoItem photo) {
@@ -230,12 +230,13 @@ public class PhotoMotionVideoService {
     }
 
     /**
-     * 在尾部窗口内向前单遍扫描，记录最后一次出现的 "ftyp" 下标。
+     * 在尾部窗口内单遍扫描，取最后一次出现的 "ftyp" 下标。
      *
      * <p>MP4 起始 4 字节是 box size，紧随其后才是 "ftyp"，故命中下标需回退 4 字节。
+     * 不提前终止：视频段之后仍可能有其它嵌入记录，必须以窗口内最后一次命中为准。
      * 逐块顺序读取并在块间保留 4 字节重叠，避免魔数跨界漏检。</p>
      */
-    private long scanBackwardsForFtyp(Path sourceFile, long fileSize) {
+    private long scanTailWindowForLastFtyp(Path sourceFile, long fileSize) {
         long window = Math.min(MAX_SCAN_WINDOW_BYTES, fileSize);
         long scanStart = fileSize - window;
         long lastMatch = -1;
@@ -261,9 +262,6 @@ public class PhotoMotionVideoService {
                         lastMatch = position - overlapLength + i;
                         break;
                     }
-                }
-                if (lastMatch >= 0) {
-                    break;
                 }
                 int carry = Math.min(overlap.length, filled);
                 System.arraycopy(data, filled - carry, overlap, 0, carry);
