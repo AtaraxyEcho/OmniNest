@@ -781,6 +781,7 @@ public class PhotoLibraryService {
                 item.getFormat(),
                 item.getFileSize(),
                 coverUrls.get(item.getCoverFileId()),
+                resolveSourceUrl(ownerUserId, item.getFileNodeId()),
                 item.getMetadataStatus(),
                 favoriteIds.contains(item.getId()),
                 item.getCreatedAt(),

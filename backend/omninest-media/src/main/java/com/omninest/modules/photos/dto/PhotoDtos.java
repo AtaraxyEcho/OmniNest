@@ -187,6 +187,7 @@ public final class PhotoDtos {
             String format,
             long fileSize,
             String coverUrl,
+            String sourceUrl,
             String metadataStatus,
             boolean favorite,
             Instant createdAt,
