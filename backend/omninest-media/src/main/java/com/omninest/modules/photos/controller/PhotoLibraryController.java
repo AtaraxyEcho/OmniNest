@@ -399,6 +399,31 @@ public class PhotoLibraryController {
         return ApiResponse.success();
     }
 
+    @Operation(summary = "分页获取相册候选照片", description = "返回可加入相册的照片轻量列表，排除已在该相册内的照片")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @GetMapping("/api/v1/photos/albums/{albumId}/candidates/page")
+    ApiResponse<PageResponse<PhotoListItemDto>> albumCandidatesPage(
+            @PathVariable UUID albumId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        Page<PhotoListItemDto> result = libraryService.listAlbumCandidatesPage(
+                userId,
+                albumId,
+                page,
+                size,
+                sort
+        );
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()
+        ));
+    }
+
     @Operation(summary = "从相册移除照片", description = "从指定相册中移除照片")
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
     @DeleteMapping("/api/v1/photos/albums/{albumId}/items/{photoId}")
@@ -434,6 +459,26 @@ public class PhotoLibraryController {
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();
         Page<PhotoTimelineMonthDto> result = libraryService.timelinePage(userId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()
+        ));
+    }
+
+    @Operation(summary = "分页获取指定年月的照片", description = "按年月区间返回照片轻量列表，时间口径与时间线一致")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @GetMapping("/api/v1/photos/period/page")
+    ApiResponse<PageResponse<PhotoListItemDto>> periodPage(
+            @RequestParam int year,
+            @RequestParam int month,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size,
+            @RequestParam(defaultValue = "dateTaken,desc") String sort
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        Page<PhotoListItemDto> result = libraryService.listPeriodPage(userId, year, month, page, size, sort);
         return ApiResponse.success(PageResponse.of(
                 result.getContent(),
                 result.getNumber(),
@@ -626,6 +671,47 @@ public class PhotoLibraryController {
             @RequestParam(defaultValue = "50") int size
     ) {
         return ApiResponse.success(albumService.accessSharedAlbum(token, sessionToken, page, size));
+    }
+
+    // ─── 照片分享 ───
+
+    @Operation(summary = "创建照片分享链接", description = "为单张照片创建分享链接")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PostMapping("/api/v1/photos/{photoId}/share")
+    ApiResponse<PhotoShareLinkDto> createPhotoShare(
+            @PathVariable UUID photoId,
+            @Valid @RequestBody CreateAlbumShareRequest body
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(albumService.createPhotoShare(userId, photoId, body));
+    }
+
+    @Operation(summary = "获取照片分享链接列表", description = "返回单张照片的所有分享链接")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @GetMapping("/api/v1/photos/{photoId}/share")
+    ApiResponse<List<PhotoShareLinkDto>> listPhotoShares(@PathVariable UUID photoId) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(albumService.listPhotoShares(userId, photoId));
+    }
+
+    @Operation(summary = "访问分享照片", description = "通过分享令牌发起共享单张照片会话，可选密码验证")
+    @PostMapping("/api/v1/public/photos/item/{token}/authorize")
+    ApiResponse<ShareAccessSessionDto> authorizeSharedPhoto(
+            @PathVariable String token,
+            @RequestBody(required = false) ShareAuthorizationRequest body,
+            HttpServletRequest request
+    ) {
+        return ApiResponse.success(albumService.issueSharedPhotoSession(
+                token, body == null ? null : body.password(), request.getRemoteAddr()));
+    }
+
+    @Operation(summary = "访问分享照片", description = "通过短期分享会话访问共享单张照片")
+    @GetMapping("/api/v1/public/photos/item/{token}")
+    ApiResponse<PhotoItemDto> accessSharedPhoto(
+            @PathVariable String token,
+            @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken
+    ) {
+        return ApiResponse.success(albumService.accessSharedPhoto(token, sessionToken));
     }
 
     // ─── 管理 ───

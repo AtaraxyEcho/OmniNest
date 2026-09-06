@@ -193,6 +193,10 @@ class WindowChromeController extends Notifier<WindowChromeState> {
   }
 
   void _setState(WindowChromeState next) {
+    // 微任务延迟释放可能在 Provider 容器销毁后触发，禁止已释放回写。
+    if (!ref.mounted) {
+      return;
+    }
     final hidden = next.immersiveOwner != null || next.isFullscreen;
     state = next.copyWith(chromeHidden: hidden);
     final target = state;
@@ -217,6 +221,10 @@ class WindowChromeController extends Notifier<WindowChromeState> {
   }
 
   void _refreshState() {
+    // 微任务延迟释放可能在 Provider 容器销毁后触发，禁止已释放读写。
+    if (!ref.mounted) {
+      return;
+    }
     final latest = _requests.isEmpty ? null : _requests.values.last;
     _setState(
       state.copyWith(

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
@@ -14,6 +13,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 
 /// 相册详情页面
 class PhotoAlbumDetailPage extends ConsumerWidget {
@@ -72,14 +72,38 @@ class _AlbumDetailBody extends ConsumerWidget {
             );
           },
           onShare: () => _showShareDialog(context, ref, albumId),
+          onAddPhotos: () async {
+            await context.push('/photos/albums/$albumId/add');
+            // 选择页返回后刷新详情，无论是否新增都以服务端数据为准。
+            ref.invalidate(photoAlbumDetailProvider(albumId));
+          },
         ),
         // 照片网格
         Expanded(
           child:
               photos.isEmpty
-                  ? AppEmptyState(
-                    message: AppLocalizations.of(context).photosAlbumEmpty,
-                    icon: Icons.photo_library_outlined,
+                  ? Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppEmptyState(
+                          message:
+                              AppLocalizations.of(context).photosAlbumEmpty,
+                          icon: Icons.photo_library_outlined,
+                        ),
+                        const SizedBox(height: 8),
+                        FilledButton.icon(
+                          onPressed: () async {
+                            await context.push('/photos/albums/$albumId/add');
+                            ref.invalidate(photoAlbumDetailProvider(albumId));
+                          },
+                          icon: const Icon(Icons.add_photo_alternate_outlined),
+                          label: Text(
+                            AppLocalizations.of(context).photosAddPhotos,
+                          ),
+                        ),
+                      ],
+                    ),
                   )
                   : CustomScrollView(
                     slivers: [
@@ -100,7 +124,7 @@ class _AlbumDetailBody extends ConsumerWidget {
                                     ? 3
                                     : 2;
                             return SliverGrid.builder(
-                              itemCount: photos.length,
+                              itemCount: photos.length + 1,
                               gridDelegate:
                                   SliverGridDelegateWithFixedCrossAxisCount(
                                     crossAxisCount: columns,
@@ -109,7 +133,19 @@ class _AlbumDetailBody extends ConsumerWidget {
                                     childAspectRatio: 1,
                                   ),
                               itemBuilder: (context, index) {
-                                final photo = photos[index];
+                                if (index == 0) {
+                                  return _AddPhotoTile(
+                                    onTap: () async {
+                                      await context.push(
+                                        '/photos/albums/$albumId/add',
+                                      );
+                                      ref.invalidate(
+                                        photoAlbumDetailProvider(albumId),
+                                      );
+                                    },
+                                  );
+                                }
+                                final photo = photos[index - 1];
                                 return PhotoGridTile(
                                   key: ValueKey(photo.id),
                                   photo: photo,
@@ -222,242 +258,20 @@ class _AlbumDetailBody extends ConsumerWidget {
 
     if (!context.mounted) return;
 
-    String expiryOption = 'never';
-
-    final password = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => PhotoDialogTextField(
-            builder:
-                (ctx, passwordController) => StatefulBuilder(
-                  builder:
-                      (ctx, setDialogState) => AlertDialog(
-                        backgroundColor:
-                            context.photosColors.surfaceContainerHigh,
-                        title: Text(
-                          AppLocalizations.of(context).photosShareAlbum,
-                          style: TextStyle(
-                            color: context.photosColors.onSurface,
-                          ),
-                        ),
-                        content: SizedBox(
-                          width: 400,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              // 密码字段
-                              TextField(
-                                controller: passwordController,
-                                style: TextStyle(
-                                  color: context.photosColors.onSurface,
-                                ),
-                                decoration: InputDecoration(
-                                  labelText:
-                                      AppLocalizations.of(
-                                        context,
-                                      ).photosSharePassword,
-                                  hintText:
-                                      AppLocalizations.of(
-                                        context,
-                                      ).photosSharePasswordHint,
-                                  hintStyle: TextStyle(
-                                    color: context.photosColors.onSurfaceVariant
-                                        .withValues(alpha: 0.6),
-                                  ),
-                                ),
-                                obscureText: true,
-                              ),
-                              SizedBox(height: 12),
-                              // 过期时间
-                              Text(
-                                AppLocalizations.of(context).photosShareExpiry,
-                                style: TextStyle(
-                                  color: context.photosColors.onSurfaceVariant,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              SegmentedButton<String>(
-                                segments: [
-                                  ButtonSegment(
-                                    value: '1d',
-                                    label: Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      ).photosShareExpiry1d,
-                                    ),
-                                  ),
-                                  ButtonSegment(
-                                    value: '7d',
-                                    label: Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      ).photosShareExpiry7d,
-                                    ),
-                                  ),
-                                  ButtonSegment(
-                                    value: '30d',
-                                    label: Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      ).photosShareExpiry30d,
-                                    ),
-                                  ),
-                                  ButtonSegment(
-                                    value: 'never',
-                                    label: Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      ).photosShareExpiryNever,
-                                    ),
-                                  ),
-                                ],
-                                selected: {expiryOption},
-                                onSelectionChanged:
-                                    (v) => setDialogState(
-                                      () => expiryOption = v.first,
-                                    ),
-                                style: ButtonStyle(
-                                  foregroundColor:
-                                      WidgetStateProperty.resolveWith((states) {
-                                        if (states.contains(
-                                          WidgetState.selected,
-                                        )) {
-                                          return context
-                                              .photosColors
-                                              .primaryContainer;
-                                        }
-                                        return context
-                                            .photosColors
-                                            .onSurfaceVariant;
-                                      }),
-                                ),
-                              ),
-                              // 现有链接
-                              if (shares.isNotEmpty) ...[
-                                SizedBox(height: 16),
-                                Text(
-                                  AppLocalizations.of(
-                                    context,
-                                  ).photosExistingShareLinks,
-                                  style: TextStyle(
-                                    color:
-                                        context.photosColors.onSurfaceVariant,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                SizedBox(height: 8),
-                                ...shares.map(
-                                  (share) => ListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    title: Text(
-                                      share.token,
-                                      style: TextStyle(
-                                        color: context.photosColors.onSurface,
-                                        fontSize: 13,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    subtitle: Text(
-                                      AppLocalizations.of(
-                                        context,
-                                      ).photosShareAccessCount(
-                                        share.accessCount,
-                                      ),
-                                      style: TextStyle(
-                                        color:
-                                            context
-                                                .photosColors
-                                                .onSurfaceVariant,
-                                        fontSize: 11,
-                                      ),
-                                    ),
-                                    trailing: IconButton(
-                                      tooltip:
-                                          AppLocalizations.of(
-                                            context,
-                                          ).coreDelete,
-                                      icon: Icon(
-                                        Icons.delete_outline,
-                                        size: 18,
-                                        color: context.photosColors.danger,
-                                      ),
-                                      onPressed: () async {
-                                        try {
-                                          await ref
-                                              .read(
-                                                photoCenterControllerProvider
-                                                    .notifier,
-                                              )
-                                              .revokeAlbumShare(share.id);
-                                          if (ctx.mounted) {
-                                            Navigator.pop(ctx, true);
-                                          }
-                                        } on Exception catch (error) {
-                                          if (ctx.mounted) {
-                                            ScaffoldMessenger.of(
-                                              ctx,
-                                            ).showSnackBar(
-                                              SnackBar(
-                                                content: Text(
-                                                  describeUserFacingError(
-                                                    error,
-                                                  ).displayMessage,
-                                                ),
-                                              ),
-                                            );
-                                          }
-                                        }
-                                      },
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: Text(
-                              AppLocalizations.of(context).photosCancel,
-                            ),
-                          ),
-                          FilledButton(
-                            onPressed:
-                                () => Navigator.pop(
-                                  ctx,
-                                  passwordController.text.trim(),
-                                ),
-                            style: FilledButton.styleFrom(
-                              backgroundColor:
-                                  context.photosColors.primaryContainer,
-                              foregroundColor:
-                                  context.photosColors.onPrimaryContainer,
-                            ),
-                            child: Text(
-                              AppLocalizations.of(context).photosCreateLink,
-                            ),
-                          ),
-                        ],
-                      ),
-                ),
-          ),
+    final result = await showPhotoShareDialog(
+      context,
+      title: AppLocalizations.of(context).photosShareAlbum,
+      shares: shares,
+      onRevoke:
+          (shareId) => ref
+              .read(photoCenterControllerProvider.notifier)
+              .revokeAlbumShare(shareId),
     );
 
-    if (password != null && password.isNotEmpty && context.mounted) {
-      DateTime? expiresAt;
-      if (expiryOption == '1d') {
-        expiresAt = DateTime.now().add(const Duration(days: 1));
-      } else if (expiryOption == '7d') {
-        expiresAt = DateTime.now().add(const Duration(days: 7));
-      } else if (expiryOption == '30d') {
-        expiresAt = DateTime.now().add(const Duration(days: 30));
-      }
+    if (result == null || !context.mounted) return;
+    final (password, expiryOption) = result;
+    if (password.isNotEmpty) {
+      final expiresAt = resolveShareExpiry(expiryOption);
 
       try {
         final link = await ref
@@ -554,6 +368,51 @@ class _AlbumDetailBody extends ConsumerWidget {
 }
 
 /// 相册详情顶部栏
+/// 网格首格的“添加照片”卡片，点击进入候选照片选择页。
+class _AddPhotoTile extends StatelessWidget {
+  const _AddPhotoTile({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: context.photosColors.surfaceContainerHigh.withValues(
+            alpha: 0.55,
+          ),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: context.photosColors.outlineVariant.withValues(alpha: 0.5),
+          ),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.add_photo_alternate_outlined,
+              size: 28,
+              color: context.photosColors.onSurfaceVariant,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              AppLocalizations.of(context).photosAddPhotos,
+              style: TextStyle(
+                color: context.photosColors.onSurfaceVariant,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AlbumTopBar extends StatelessWidget {
   const _AlbumTopBar({
     required this.album,
@@ -561,6 +420,7 @@ class _AlbumTopBar extends StatelessWidget {
     required this.onDelete,
     required this.onSlideshow,
     required this.onShare,
+    required this.onAddPhotos,
   });
 
   final PhotoAlbum album;
@@ -568,6 +428,7 @@ class _AlbumTopBar extends StatelessWidget {
   final VoidCallback onDelete;
   final VoidCallback onSlideshow;
   final VoidCallback onShare;
+  final VoidCallback onAddPhotos;
 
   @override
   Widget build(BuildContext context) {
@@ -618,6 +479,14 @@ class _AlbumTopBar extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context).photosAddPhotos,
+            onPressed: onAddPhotos,
+            icon: Icon(
+              Icons.add_photo_alternate_outlined,
+              color: context.photosColors.onSurfaceVariant,
             ),
           ),
           IconButton(

@@ -20,6 +20,7 @@ import com.omninest.modules.photos.dto.PhotoDtos.PhotoShareLinkDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoSharedAlbumDto;
 import com.omninest.modules.photos.repository.PhotoAlbumItemRepository;
 import com.omninest.modules.photos.repository.PhotoAlbumRepository;
+import com.omninest.modules.photos.repository.PhotoItemRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -41,6 +42,7 @@ public class PhotoAlbumService {
 
     private final PhotoAlbumRepository albumRepository;
     private final PhotoAlbumItemRepository albumItemRepository;
+    private final PhotoItemRepository photoItemRepository;
     private final PhotoLibraryService libraryService;
     private final ResourceShareLinkService resourceShareLinkService;
     private final MediaSyncEventService syncEventService;
@@ -192,6 +194,67 @@ public class PhotoAlbumService {
     @Transactional(rollbackFor = Exception.class)
     public void revokeAlbumShare(UUID ownerUserId, UUID shareId) {
         resourceShareLinkService.revoke(ownerUserId, shareId);
+    }
+
+    /**
+     * 创建单张照片分享链接。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public PhotoShareLinkDto createPhotoShare(UUID ownerUserId, UUID photoId, CreateAlbumShareRequest request) {
+        requirePhoto(ownerUserId, photoId);
+        return toShareDto(resourceShareLinkService.create(
+                ownerUserId,
+                "PHOTO_ITEM",
+                photoId,
+                request.password(),
+                request.expiresAt(),
+                request.maxAccessCount()
+        ));
+    }
+
+    /**
+     * 列出单张照片的所有分享链接。
+     */
+    @Transactional(readOnly = true)
+    public List<PhotoShareLinkDto> listPhotoShares(UUID ownerUserId, UUID photoId) {
+        requirePhoto(ownerUserId, photoId);
+        return resourceShareLinkService.list(ownerUserId, photoId)
+                .stream()
+                .map(this::toShareDto)
+                .toList();
+    }
+
+    /**
+     * 通过公开链接发起共享单张照片会话。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ShareAccessSessionDto issueSharedPhotoSession(
+            String rawToken,
+            String password,
+            String clientAddress
+    ) {
+        return resourceShareLinkService.issueConsumedSession(
+                rawToken, password, "PHOTO_ITEM", clientAddress);
+    }
+
+    /**
+     * 通过短期分享会话访问共享单张照片。
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public PhotoItemDto accessSharedPhoto(String rawToken, String sessionToken) {
+        ResourceShareLinkDto link = resourceShareLinkService.requireSession(
+                rawToken, sessionToken, "PHOTO_ITEM");
+        PhotoItem photo = photoItemRepository.findById(link.resourceId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
+        return libraryService.listPhotosByIds(photo.getOwnerUserId(), List.of(photo.getId()))
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
+    }
+
+    private PhotoItem requirePhoto(UUID ownerUserId, UUID photoId) {
+        return photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
     }
 
     /**

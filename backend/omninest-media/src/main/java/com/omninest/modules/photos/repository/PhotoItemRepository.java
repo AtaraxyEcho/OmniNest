@@ -214,6 +214,116 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
             Pageable pageable);
 
     /**
+     * 按年月区间分页查询用户照片的轻量列表投影。
+     *
+     * <p>排序与时间线一致：以拍摄时间缺失时回退创建时间的复合值参与排序，由服务层把年月换算为起止时刻。</p>
+     *
+     * @param ownerUserId 用户标识
+     * @param periodStart 区间起点（含）
+     * @param periodEnd 区间终点（不含）
+     * @param pageable 分页和排序参数
+     * @return 照片投影分页
+     */
+    @Query(value = """
+            SELECT p.id AS id,
+                   p.ownerUserId AS ownerUserId,
+                   p.fileNodeId AS fileNodeId,
+                   p.title AS title,
+                   p.description AS description,
+                   p.width AS width,
+                   p.height AS height,
+                   p.orientation AS orientation,
+                   p.dateTaken AS dateTaken,
+                   p.gpsLatitude AS gpsLatitude,
+                   p.gpsLongitude AS gpsLongitude,
+                   p.gpsLocation AS gpsLocation,
+                   p.format AS format,
+                   p.fileSize AS fileSize,
+                   p.coverFileId AS coverFileId,
+                   p.metadataStatus AS metadataStatus,
+                   p.createdAt AS createdAt
+              FROM PhotoItem p, FileNode file
+             WHERE p.ownerUserId = :ownerUserId
+               AND file.id = p.fileNodeId
+               AND file.deleted = false
+               AND p.deletedAt IS NULL
+               AND COALESCE(p.dateTaken, p.createdAt) >= :periodStart
+               AND COALESCE(p.dateTaken, p.createdAt) < :periodEnd
+            """,
+            countQuery = """
+                    SELECT COUNT(p)
+                      FROM PhotoItem p, FileNode file
+                     WHERE p.ownerUserId = :ownerUserId
+                       AND file.id = p.fileNodeId
+                       AND file.deleted = false
+                       AND p.deletedAt IS NULL
+                       AND COALESCE(p.dateTaken, p.createdAt) >= :periodStart
+                       AND COALESCE(p.dateTaken, p.createdAt) < :periodEnd
+                    """)
+    Page<PhotoListItemProjection> findPeriodListPage(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("periodStart") Instant periodStart,
+            @Param("periodEnd") Instant periodEnd,
+            Pageable pageable);
+
+    /**
+     * 分页查询可加入相册的候选照片投影，排除已在该相册内的照片。
+     *
+     * @param ownerUserId 用户标识
+     * @param albumId 相册标识
+     * @param pageable 分页和排序参数
+     * @return 候选照片投影分页
+     */
+    @Query(value = """
+            SELECT p.id AS id,
+                   p.ownerUserId AS ownerUserId,
+                   p.fileNodeId AS fileNodeId,
+                   p.title AS title,
+                   p.description AS description,
+                   p.width AS width,
+                   p.height AS height,
+                   p.orientation AS orientation,
+                   p.dateTaken AS dateTaken,
+                   p.gpsLatitude AS gpsLatitude,
+                   p.gpsLongitude AS gpsLongitude,
+                   p.gpsLocation AS gpsLocation,
+                   p.format AS format,
+                   p.fileSize AS fileSize,
+                   p.coverFileId AS coverFileId,
+                   p.metadataStatus AS metadataStatus,
+                   p.createdAt AS createdAt
+              FROM PhotoItem p, FileNode file
+             WHERE p.ownerUserId = :ownerUserId
+               AND file.id = p.fileNodeId
+               AND file.deleted = false
+               AND p.deletedAt IS NULL
+               AND NOT EXISTS (
+                   SELECT 1
+                     FROM PhotoAlbumItem ai
+                    WHERE ai.albumId = :albumId
+                      AND ai.photoId = p.id
+               )
+            """,
+            countQuery = """
+                    SELECT COUNT(p)
+                      FROM PhotoItem p, FileNode file
+                     WHERE p.ownerUserId = :ownerUserId
+                       AND file.id = p.fileNodeId
+                       AND file.deleted = false
+                       AND p.deletedAt IS NULL
+                       AND NOT EXISTS (
+                           SELECT 1
+                             FROM PhotoAlbumItem ai
+                            WHERE ai.albumId = :albumId
+                              AND ai.photoId = p.id
+                       )
+                    """)
+    Page<PhotoListItemProjection> findAlbumCandidatePage(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("albumId") UUID albumId,
+            Pageable pageable);
+
+    /**
      * 按月份分页查询时间线，并为每个月返回最多四张预览照片。
      *
      * @param ownerUserId 用户标识

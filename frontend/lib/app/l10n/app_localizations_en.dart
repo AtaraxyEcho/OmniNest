@@ -6926,6 +6926,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosAlbumEmpty => 'No photos in this album';
 
   @override
+  String get photosAddPhotos => 'Add photos';
+
+  @override
+  String photosPickerAddCount(Object count) {
+    return 'Add $count';
+  }
+
+  @override
+  String photosPickerAddSuccess(Object count) {
+    return 'Added $count photos';
+  }
+
+  @override
+  String get photosPickerNoCandidates => 'No photos available to add';
+
+  @override
+  String get photosSharePhoto => 'Share Photo';
+
+  @override
+  String get photosSharedItemPasswordRequired =>
+      'This share requires password access';
+
+  @override
   String get photosShareAlbum => 'Share Album';
 
   @override

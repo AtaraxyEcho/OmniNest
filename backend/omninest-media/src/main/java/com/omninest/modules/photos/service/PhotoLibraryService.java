@@ -36,6 +36,7 @@ import com.omninest.modules.photos.repository.PhotoTimelinePreviewProjection;
 import com.omninest.modules.photos.search.PhotoSearchIndexService;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -599,6 +600,72 @@ public class PhotoLibraryService {
         long totalMonths = photoItemRepository.countTimelineMonths(ownerUserId, zoneId);
         List<PhotoTimelineMonthDto> months = mapTimelineMonths(ownerUserId, rows);
         return new PageImpl<>(months, PageRequest.of(safePage, safeSize), totalMonths);
+    }
+
+    /**
+     * 按年月分页查询照片轻量列表，时间口径与时间线一致。
+     *
+     * <p>分组键为拍摄时间缺失时回退创建时间，区间按系统默认时区换算，左闭右开避免跨月边界重复。</p>
+     *
+     * @param ownerUserId 用户标识
+     * @param year 年份
+     * @param month 月份（1-12）
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @param sort 排序表达式，格式为字段和方向
+     * @return 照片轻量列表分页
+     */
+    @Transactional(readOnly = true)
+    public Page<PhotoListItemDto> listPeriodPage(
+            UUID ownerUserId,
+            int year,
+            int month,
+            int page,
+            int size,
+            String sort
+    ) {
+        if (month < 1 || month > 12) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "照片月份参数不合法");
+        }
+        YearMonth period = YearMonth.of(year, month);
+        ZoneId zoneId = ZoneId.systemDefault();
+        Instant periodStart = period.atDay(1).atStartOfDay(zoneId).toInstant();
+        Instant periodEnd = period.plusMonths(1).atDay(1).atStartOfDay(zoneId).toInstant();
+        Pageable pageable = photoPageable(page, size, sort);
+        Page<PhotoListItemProjection> result = photoItemRepository.findPeriodListPage(
+                ownerUserId,
+                periodStart,
+                periodEnd,
+                pageable
+        );
+        return mapListPage(ownerUserId, result, false);
+    }
+
+    /**
+     * 分页查询可加入相册的候选照片，排除已在该相册内的照片。
+     *
+     * @param ownerUserId 用户标识
+     * @param albumId 相册标识
+     * @param page 页码，从零开始
+     * @param size 每页条数
+     * @param sort 排序表达式，格式为字段和方向
+     * @return 候选照片轻量列表分页
+     */
+    @Transactional(readOnly = true)
+    public Page<PhotoListItemDto> listAlbumCandidatesPage(
+            UUID ownerUserId,
+            UUID albumId,
+            int page,
+            int size,
+            String sort
+    ) {
+        Pageable pageable = photoPageable(page, size, sort);
+        Page<PhotoListItemProjection> result = photoItemRepository.findAlbumCandidatePage(
+                ownerUserId,
+                albumId,
+                pageable
+        );
+        return mapListPage(ownerUserId, result, false);
     }
 
     /**

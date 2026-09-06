@@ -12743,6 +12743,42 @@ abstract class AppLocalizations {
   /// **'No photos in this album'**
   String get photosAlbumEmpty;
 
+  /// No description provided for @photosAddPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Add photos'**
+  String get photosAddPhotos;
+
+  /// No description provided for @photosPickerAddCount.
+  ///
+  /// In en, this message translates to:
+  /// **'Add {count}'**
+  String photosPickerAddCount(Object count);
+
+  /// No description provided for @photosPickerAddSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {count} photos'**
+  String photosPickerAddSuccess(Object count);
+
+  /// No description provided for @photosPickerNoCandidates.
+  ///
+  /// In en, this message translates to:
+  /// **'No photos available to add'**
+  String get photosPickerNoCandidates;
+
+  /// No description provided for @photosSharePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Share Photo'**
+  String get photosSharePhoto;
+
+  /// No description provided for @photosSharedItemPasswordRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'This share requires password access'**
+  String get photosSharedItemPasswordRequired;
+
   /// No description provided for @photosShareAlbum.
   ///
   /// In en, this message translates to:

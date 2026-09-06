@@ -166,6 +166,33 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
   Future<void> revokeAlbumShare(String shareId) =>
       _repo.revokeAlbumShare(shareId);
 
+  /// 创建单张照片分享链接
+  Future<PhotoShareLink> createPhotoShare(
+    String photoId, {
+    String? password,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+  }) => _repo.createPhotoShare(
+    photoId,
+    password: password,
+    expiresAt: expiresAt,
+    maxAccessCount: maxAccessCount,
+  );
+
+  /// 列出单张照片分享链接
+  Future<List<PhotoShareLink>> listPhotoShares(String photoId) =>
+      _repo.listPhotoShares(photoId);
+
+  /// 发起共享单张照片会话
+  Future<String> authorizeSharedPhoto(String token, {String? password}) =>
+      _repo.authorizeSharedPhoto(token, password: password);
+
+  /// 访问共享单张照片
+  Future<PhotoItem> accessSharedPhoto(
+    String token, {
+    required String sessionToken,
+  }) => _repo.accessSharedPhoto(token, sessionToken: sessionToken);
+
   /// 访问共享相册
   Future<String> authorizeSharedAlbum(String token, {String? password}) =>
       _repo.authorizeSharedAlbum(token, password: password);

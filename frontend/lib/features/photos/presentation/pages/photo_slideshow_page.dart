@@ -170,10 +170,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         ref
             .read(photoDetailProvider(id).future)
             .then((item) {
-              final url = !mounted ? null : (item.sourceUrl ?? item.coverUrl);
+              if (!mounted) return null;
+              final url = item.sourceUrl ?? item.coverUrl;
               if (url == null || url.isEmpty) return null;
               // 预取为尽力而为，context 仅用于缓存查找。
-              // ignore: use_build_context_synchronously
               return precacheImage(
                 CachedNetworkImageProvider(
                   url,
@@ -339,6 +339,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
               key: ValueKey('leaving-$_leaving'),
               item: _photos[_leaving!],
               leaving: true,
+              directionNext: _directionNext,
             ),
           ),
         Positioned.fill(
@@ -346,6 +347,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             key: ValueKey('current-${photo.id}'),
             item: photo,
             leaving: false,
+            directionNext: _directionNext,
           ),
         ),
       ],
@@ -858,37 +860,48 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
 /// 单层幻灯片：满屏 cover 显示，进入/离场由父级过渡驱动。
 class _SlideLayer extends StatelessWidget {
-  const _SlideLayer({required this.item, required this.leaving, super.key});
+  const _SlideLayer({
+    required this.item,
+    required this.leaving,
+    required this.directionNext,
+    super.key,
+  });
 
   final PhotoItem item;
   final bool leaving;
+  final bool directionNext;
 
   @override
   Widget build(BuildContext context) {
     final imageUrl = item.sourceUrl ?? item.coverUrl;
-    final image =
-        imageUrl != null && imageUrl.isNotEmpty
-            ? CachedNetworkImage(
-              imageUrl: imageUrl,
-              cacheKey:
-                  item.sourceUrl != null
-                      ? item.sourceCacheKey
-                      : item.coverCacheKey,
-              fit: BoxFit.contain,
-              fadeInDuration: Duration.zero,
-              placeholder:
-                  (context, url) => const ColoredBox(color: Colors.black),
-              errorWidget:
-                  (context, url, error) =>
-                      const ColoredBox(color: Colors.black),
-            )
-            : const ColoredBox(color: Colors.black);
+    final cacheKey =
+        item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey;
+    final image = CachedNetworkImage(
+      imageUrl: imageUrl ?? '',
+      cacheKey: cacheKey,
+      fit: BoxFit.contain,
+      fadeInDuration: Duration.zero,
+      placeholder: (context, url) => const ColoredBox(color: Colors.black),
+      errorWidget:
+          (context, url, error) => const ColoredBox(color: Colors.black),
+    );
+    final backgroundImage = CachedNetworkImage(
+      imageUrl: imageUrl ?? '',
+      cacheKey: cacheKey,
+      fit: BoxFit.cover,
+      fadeInDuration: Duration.zero,
+      errorWidget:
+          (context, url, error) => const ColoredBox(color: Colors.black),
+    );
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
       duration: _transitionDuration,
       curve: _curve,
       builder: (context, t, child) {
-        final dx = leaving ? 4.0 * t : -4.0 * (1 - t);
+        final dx =
+            leaving
+                ? (directionNext ? -4.0 : 4.0) * t
+                : (directionNext ? 4.0 : -4.0) * (1 - t);
         final scale = leaving ? 1.0 - 0.03 * t : 1.02 - 0.02 * t;
         final opacity = leaving ? 1 - t : t;
         return Opacity(
@@ -899,7 +912,14 @@ class _SlideLayer extends StatelessWidget {
                 Matrix4.identity()
                   ..translateByDouble(dx, 0, 0, 1)
                   ..scaleByDouble(scale, scale, 1, 1),
-            child: child,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                backgroundImage,
+                ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
+                image,
+              ],
+            ),
           ),
         );
       },

@@ -4,7 +4,15 @@ import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
-enum _PhotoMenuAction { info, edit, slideshow, addToAlbum, download, delete }
+enum _PhotoMenuAction {
+  info,
+  edit,
+  slideshow,
+  addToAlbum,
+  share,
+  download,
+  delete,
+}
 
 /// 详情页顶部栏：设计稿 PhotoViewer 样式的半透明浮层。
 class PhotoViewerTopBar extends StatelessWidget {
@@ -19,6 +27,7 @@ class PhotoViewerTopBar extends StatelessWidget {
     required this.onEdit,
     required this.onSlideshow,
     required this.onDownload,
+    required this.onShare,
     required this.showInfo,
     required this.compact,
   });
@@ -32,6 +41,7 @@ class PhotoViewerTopBar extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onSlideshow;
   final VoidCallback onDownload;
+  final VoidCallback onShare;
   final bool showInfo;
   final bool compact;
 
@@ -123,6 +133,8 @@ class PhotoViewerTopBar extends StatelessWidget {
                     onSlideshow();
                   case _PhotoMenuAction.addToAlbum:
                     onAddToAlbum();
+                  case _PhotoMenuAction.share:
+                    onShare();
                   case _PhotoMenuAction.download:
                     onDownload();
                   case _PhotoMenuAction.delete:
@@ -151,6 +163,12 @@ class PhotoViewerTopBar extends StatelessWidget {
                       value: _PhotoMenuAction.addToAlbum,
                       child: Text(
                         AppLocalizations.of(context).photosAddToAlbum,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _PhotoMenuAction.share,
+                      child: Text(
+                        AppLocalizations.of(context).photosSharePhoto,
                       ),
                     ),
                     PopupMenuItem(
@@ -217,6 +235,12 @@ class PhotoViewerTopBar extends StatelessWidget {
                 color: iconColor,
                 size: 20,
               ),
+              visualDensity: VisualDensity.compact,
+            ),
+            IconButton(
+              tooltip: AppLocalizations.of(context).photosSharePhoto,
+              onPressed: onShare,
+              icon: Icon(Icons.share_outlined, color: iconColor, size: 20),
               visualDensity: VisualDensity.compact,
             ),
             IconButton(

@@ -6730,6 +6730,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosAlbumEmpty => '相册中还没有照片';
 
   @override
+  String get photosAddPhotos => '添加照片';
+
+  @override
+  String photosPickerAddCount(Object count) {
+    return '添加 $count 张';
+  }
+
+  @override
+  String photosPickerAddSuccess(Object count) {
+    return '已添加 $count 张照片';
+  }
+
+  @override
+  String get photosPickerNoCandidates => '没有可添加的照片';
+
+  @override
+  String get photosSharePhoto => '分享照片';
+
+  @override
+  String get photosSharedItemPasswordRequired => '此分享需要访问密码';
+
+  @override
   String get photosShareAlbum => '分享相册';
 
   @override

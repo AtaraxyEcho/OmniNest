@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -217,31 +218,54 @@ class _MonthHeader extends StatelessWidget {
         padding: EdgeInsets.fromLTRB(24, 16, 24, 8),
         child: Row(
           children: [
-            Text(
-              MaterialLocalizations.of(
-                context,
-              ).formatMonthYear(DateTime(year, month.month)),
-              style: TextStyle(
-                color: context.photosColors.onSurface,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            SizedBox(width: 8),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: context.photosColors.primaryContainer.withValues(
-                  alpha: 0.14,
-                ),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                '${month.photoCount}',
-                style: TextStyle(
-                  color: context.photosColors.primaryContainer,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
+            Expanded(
+              // 点击月份标题进入该月完整照片列表。
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap:
+                    () => context.push('/photos/period/$year/${month.month}'),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Text(
+                        MaterialLocalizations.of(
+                          context,
+                        ).formatMonthYear(DateTime(year, month.month)),
+                        style: TextStyle(
+                          color: context.photosColors.onSurface,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(width: 8),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.photosColors.primaryContainer
+                              .withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          '${month.photoCount}',
+                          style: TextStyle(
+                            color: context.photosColors.primaryContainer,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        size: 18,
+                        color: context.photosColors.onSurfaceVariant,
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),

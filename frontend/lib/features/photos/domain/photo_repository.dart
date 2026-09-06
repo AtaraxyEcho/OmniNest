@@ -61,6 +61,15 @@ abstract interface class PhotoRepository {
     String sort = 'createdAt,desc',
   });
 
+  /// 分页获取指定年月的照片列表，时间口径与时间线一致。
+  Future<PhotoPage> listByPeriod({
+    required int year,
+    required int month,
+    int page = 0,
+    int size = 50,
+    String sort = 'dateTaken,desc',
+  });
+
   /// 添加收藏
   Future<void> addFavorite(String photoId);
 
@@ -90,6 +99,13 @@ abstract interface class PhotoRepository {
   Future<void> addPhotosToAlbum({
     required String albumId,
     required List<String> photoIds,
+  });
+
+  /// 分页获取可加入相册的候选照片，排除已在该相册内的照片。
+  Future<PhotoPage> listAlbumCandidates({
+    required String albumId,
+    int page = 0,
+    int size = 50,
   });
 
   /// 从相册移除照片
@@ -174,6 +190,26 @@ abstract interface class PhotoRepository {
 
   /// 撤销分享链接
   Future<void> revokeAlbumShare(String shareId);
+
+  /// 创建单张照片分享链接
+  Future<PhotoShareLink> createPhotoShare(
+    String photoId, {
+    String? password,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+  });
+
+  /// 列出单张照片分享链接
+  Future<List<PhotoShareLink>> listPhotoShares(String photoId);
+
+  /// 发起共享单张照片会话
+  Future<String> authorizeSharedPhoto(String token, {String? password});
+
+  /// 访问共享单张照片
+  Future<PhotoItem> accessSharedPhoto(
+    String token, {
+    required String sessionToken,
+  });
 
   /// 访问共享相册
   Future<String> authorizeSharedAlbum(String token, {String? password});

@@ -155,6 +155,40 @@ class PhotoApi {
     await apiClient.dio.post<Map<String, dynamic>>('/photos/$photoId/favorite');
   }
 
+  /// 分页获取可加入相册的候选照片，排除已在该相册内的照片。
+  Future<PhotoPage> listAlbumCandidates({
+    required String albumId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/photos/albums/$albumId/candidates/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return PhotoPage.fromJson(parseData(response.data));
+  }
+
+  /// 分页获取指定年月的照片列表，时间口径与时间线一致。
+  Future<PhotoPage> listByPeriod({
+    required int year,
+    required int month,
+    int page = 0,
+    int size = 50,
+    String sort = 'dateTaken,desc',
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/photos/period/page',
+      queryParameters: {
+        'year': year,
+        'month': month,
+        'page': page,
+        'size': size,
+        'sort': sort,
+      },
+    );
+    return PhotoPage.fromJson(parseData(response.data));
+  }
+
   /// 取消收藏
   Future<void> removeFavorite(String photoId) async {
     await apiClient.dio.delete<Map<String, dynamic>>(
@@ -453,6 +487,54 @@ class PhotoApi {
   /// 撤销分享链接
   Future<void> revokeAlbumShare(String shareId) async {
     await apiClient.dio.delete<Map<String, dynamic>>('/photos/share/$shareId');
+  }
+
+  /// 创建单张照片分享链接
+  Future<PhotoShareLink> createPhotoShare(
+    String photoId, {
+    String? password,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/photos/$photoId/share',
+      data: {
+        if (password != null && password.isNotEmpty) 'password': password,
+        if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
+        if (maxAccessCount != null) 'maxAccessCount': maxAccessCount,
+      },
+    );
+    return PhotoShareLink.fromJson(parseData(response.data));
+  }
+
+  /// 列出单张照片分享链接
+  Future<List<PhotoShareLink>> listPhotoShares(String photoId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/photos/$photoId/share',
+    );
+    return parseList(response.data).map(PhotoShareLink.fromJson).toList();
+  }
+
+  /// 发起共享单张照片会话（公开接口）。
+  Future<String> authorizeSharedPhoto(String token, {String? password}) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/public/photos/item/$token/authorize',
+      data: {if (password != null && password.isNotEmpty) 'password': password},
+    );
+    return parseData(response.data)['sessionToken']?.toString() ??
+        (throw StateError('分享会话响应无效'));
+  }
+
+  /// 访问共享单张照片（公开接口）。
+  Future<PhotoItem> accessSharedPhoto(
+    String token, {
+    required String sessionToken,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/public/photos/item/$token',
+      options: Options(headers: {'X-OmniNest-Share-Session': sessionToken}),
+    );
+    return PhotoItem.fromJson(parseData(response.data));
   }
 
   /// 校验共享相册密码并获取短期会话令牌。

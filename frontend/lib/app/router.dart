@@ -20,10 +20,13 @@ import 'package:omninest/features/profile/presentation/pages/profile_page.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_album_detail_page.dart';
+import 'package:omninest/features/photos/presentation/pages/photo_album_photo_picker_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_editor_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_shared_album_page.dart';
+import 'package:omninest/features/photos/presentation/pages/photo_shared_item_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_browse_page.dart';
+import 'package:omninest/features/photos/presentation/pages/photo_period_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_albums_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_insights_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
@@ -183,6 +186,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         (state) =>
             PhotoAlbumDetailPage(albumId: state.pathParameters['albumId']!),
       ),
+      _animatedRoute(
+        '/photos/albums/:albumId/add',
+        (state) => PhotoAlbumPhotoPickerPage(
+          albumId: state.pathParameters['albumId']!,
+        ),
+      ),
       GoRoute(
         path: '/photos/slideshow',
         pageBuilder: (context, state) {
@@ -209,6 +218,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       _animatedRoute(
+        '/photos/period/:year/:month',
+        (state) => PhotoPeriodPage(
+          year: int.tryParse(state.pathParameters['year'] ?? '') ?? 0,
+          month: int.tryParse(state.pathParameters['month'] ?? '') ?? 0,
+        ),
+      ),
+      _animatedRoute(
         '/photos/:photoId',
         (state) => PhotoDetailPage(photoId: state.pathParameters['photoId']!),
       ),
@@ -219,6 +235,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       _animatedRoute(
         '/shared/photos/:token',
         (state) => PhotoSharedAlbumPage(token: state.pathParameters['token']!),
+      ),
+      _animatedRoute(
+        '/shared/photos/item/:token',
+        (state) => PhotoSharedItemPage(token: state.pathParameters['token']!),
       ),
       GoRoute(
         path: '/s/:token',

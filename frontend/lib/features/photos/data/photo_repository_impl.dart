@@ -73,7 +73,29 @@ class PhotoRepositoryImpl implements PhotoRepository {
   }) => _api.listFavorites(query: query, page: page, size: size, sort: sort);
 
   @override
+  Future<PhotoPage> listByPeriod({
+    required int year,
+    required int month,
+    int page = 0,
+    int size = 50,
+    String sort = 'dateTaken,desc',
+  }) => _api.listByPeriod(
+    year: year,
+    month: month,
+    page: page,
+    size: size,
+    sort: sort,
+  );
+
+  @override
   Future<void> addFavorite(String photoId) => _api.addFavorite(photoId);
+
+  @override
+  Future<PhotoPage> listAlbumCandidates({
+    required String albumId,
+    int page = 0,
+    int size = 50,
+  }) => _api.listAlbumCandidates(albumId: albumId, page: page, size: size);
 
   @override
   Future<void> removeFavorite(String photoId) => _api.removeFavorite(photoId);
@@ -215,6 +237,33 @@ class PhotoRepositoryImpl implements PhotoRepository {
   @override
   Future<void> revokeAlbumShare(String shareId) =>
       _api.revokeAlbumShare(shareId);
+
+  @override
+  Future<PhotoShareLink> createPhotoShare(
+    String photoId, {
+    String? password,
+    DateTime? expiresAt,
+    int? maxAccessCount,
+  }) => _api.createPhotoShare(
+    photoId,
+    password: password,
+    expiresAt: expiresAt,
+    maxAccessCount: maxAccessCount,
+  );
+
+  @override
+  Future<List<PhotoShareLink>> listPhotoShares(String photoId) =>
+      _api.listPhotoShares(photoId);
+
+  @override
+  Future<String> authorizeSharedPhoto(String token, {String? password}) =>
+      _api.authorizeSharedPhoto(token, password: password);
+
+  @override
+  Future<PhotoItem> accessSharedPhoto(
+    String token, {
+    required String sessionToken,
+  }) => _api.accessSharedPhoto(token, sessionToken: sessionToken);
 
   @override
   Future<String> authorizeSharedAlbum(String token, {String? password}) =>
