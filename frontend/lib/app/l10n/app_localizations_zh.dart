@@ -8091,6 +8091,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosBackToPhotos => '返回照片';
 
   @override
+  String get photosPlay => '播放';
+
+  @override
+  String get photosPause => '暂停';
+
+  @override
+  String get photosFullscreen => '全屏';
+
+  @override
+  String get photosStripHide => '隐藏';
+
+  @override
+  String get photosStripShow => '缩略图';
+
+  @override
+  String get photosIso => 'ISO';
+
+  @override
   String get photosTagsSelectHint => '选择一个标签查看对应照片';
 
   @override

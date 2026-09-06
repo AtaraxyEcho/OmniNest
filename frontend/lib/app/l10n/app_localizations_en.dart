@@ -8342,6 +8342,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosBackToPhotos => 'Back to Photos';
 
   @override
+  String get photosPlay => 'Play';
+
+  @override
+  String get photosPause => 'Pause';
+
+  @override
+  String get photosFullscreen => 'Fullscreen';
+
+  @override
+  String get photosStripHide => 'HIDE';
+
+  @override
+  String get photosStripShow => 'STRIP';
+
+  @override
+  String get photosIso => 'ISO';
+
+  @override
   String get photosTagsSelectHint => 'Select a tag to browse its photos';
 
   @override

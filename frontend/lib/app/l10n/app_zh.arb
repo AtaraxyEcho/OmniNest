@@ -3641,6 +3641,12 @@
   "photosTrashPurged": "已永久删除",
   "photosTrashMoved": "已移入回收站",
   "photosBackToPhotos": "返回照片",
+  "photosPlay": "播放",
+  "photosPause": "暂停",
+  "photosFullscreen": "全屏",
+  "photosStripHide": "隐藏",
+  "photosStripShow": "缩略图",
+  "photosIso": "ISO",
   "photosTagsSelectHint": "选择一个标签查看对应照片",
   "photosTagsPhotoCount": "{count} 张照片",
   "@photosTagsPhotoCount": {

@@ -434,7 +434,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
               _ViewerIconButton(
                 tooltip: l10n.photosBackToPhotos,
                 icon: Icons.close_rounded,
-                onTap: () => Navigator.of(context).maybePop(),
+                onTap:
+                    () => Navigator.of(
+                      context,
+                    ).pop({'photoId': _photos[_current].id}),
               ),
               const SizedBox(width: 8),
               Text(
@@ -908,7 +911,7 @@ class _SlideLayer extends StatelessWidget {
             )
             : ColoredBox(color: Colors.black);
     return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: active ? 0 : 1, end: active ? 1 : 1),
+      tween: Tween<double>(begin: 0, end: 1),
       duration: _transitionDuration,
       curve: _curve,
       builder: (context, t, child) {

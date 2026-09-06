@@ -15246,6 +15246,42 @@ abstract class AppLocalizations {
   /// **'Back to Photos'**
   String get photosBackToPhotos;
 
+  /// No description provided for @photosPlay.
+  ///
+  /// In en, this message translates to:
+  /// **'Play'**
+  String get photosPlay;
+
+  /// No description provided for @photosPause.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause'**
+  String get photosPause;
+
+  /// No description provided for @photosFullscreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Fullscreen'**
+  String get photosFullscreen;
+
+  /// No description provided for @photosStripHide.
+  ///
+  /// In en, this message translates to:
+  /// **'HIDE'**
+  String get photosStripHide;
+
+  /// No description provided for @photosStripShow.
+  ///
+  /// In en, this message translates to:
+  /// **'STRIP'**
+  String get photosStripShow;
+
+  /// No description provided for @photosIso.
+  ///
+  /// In en, this message translates to:
+  /// **'ISO'**
+  String get photosIso;
+
   /// No description provided for @photosTagsSelectHint.
   ///
   /// In en, this message translates to:

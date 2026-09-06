@@ -3767,6 +3767,12 @@
   "photosTrashPurged": "Deleted permanently",
   "photosTrashMoved": "Moved to Trash",
   "photosBackToPhotos": "Back to Photos",
+  "photosPlay": "Play",
+  "photosPause": "Pause",
+  "photosFullscreen": "Fullscreen",
+  "photosStripHide": "HIDE",
+  "photosStripShow": "STRIP",
+  "photosIso": "ISO",
   "photosTagsSelectHint": "Select a tag to browse its photos",
   "photosTagsPhotoCount": "{count} photos",
   "@photosTagsPhotoCount": {
