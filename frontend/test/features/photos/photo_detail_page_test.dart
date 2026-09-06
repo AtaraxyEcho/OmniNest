@@ -249,6 +249,25 @@ void main() {
     expect(find.text('幻灯片 · 2 / 3'), findsOneWidget);
   });
 
+  testWidgets('箭头与滑动手势在单路由内切换照片', (tester) async {
+    await _pumpDesktop(tester, _harness(scope: scope).child);
+
+    // 箭头切换：当前照片数据与徽章随之更新。
+    await tester.tap(find.byIcon(Icons.chevron_right_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('Zurich'), findsOneWidget);
+
+    // 滑动手势切换到下一张。
+    await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
+    await tester.pumpAndSettle();
+    expect(find.text('Geneva'), findsOneWidget);
+
+    // 反向滑动回到上一张。
+    await tester.fling(find.byType(PageView), const Offset(400, 0), 1200);
+    await tester.pumpAndSettle();
+    expect(find.text('Zurich'), findsOneWidget);
+  });
+
   testWidgets('浏览页式进入（范围未写、中心列表含照片）可播放', (tester) async {
     await _pumpDesktop(
       tester,
