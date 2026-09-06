@@ -287,11 +287,10 @@ void main() {
 
     // 点击播放：沉浸页打开，顶栏计数可见并自动推进。
     await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('01 / 03'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
-    await tester.pump();
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('02 / 03'), findsOneWidget);
   });
 
@@ -300,17 +299,17 @@ void main() {
 
     // 箭头切换：当前照片数据与徽章随之更新。
     await tester.tap(find.byIcon(Icons.chevron_right_rounded));
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 500));
     expect(find.text('Zurich'), findsOneWidget);
 
     // 滑动手势切换到下一张。
     await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Geneva'), findsOneWidget);
 
     // 反向滑动回到上一张。
     await tester.fling(find.byType(PageView), const Offset(400, 0), 1200);
-    await tester.pumpAndSettle();
+    await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('Zurich'), findsOneWidget);
   });
 
