@@ -777,6 +777,7 @@ public class PhotoLibraryService {
                 item.getDateTaken(),
                 item.getGpsLatitude() == null ? null : item.getGpsLatitude().doubleValue(),
                 item.getGpsLongitude() == null ? null : item.getGpsLongitude().doubleValue(),
+                item.getGpsLocation(),
                 item.getFormat(),
                 item.getFileSize(),
                 coverUrls.get(item.getCoverFileId()),
@@ -948,6 +949,7 @@ public class PhotoLibraryService {
                 null,
                 item.gpsLatitude(),
                 item.gpsLongitude(),
+                item.gpsLocation(),
                 item.format(),
                 item.fileSize(),
                 item.coverUrl(),
@@ -955,7 +957,6 @@ public class PhotoLibraryService {
                 item.metadataStatus(),
                 item.favorite(),
                 item.createdAt(),
-                Map.of(),
                 item.tags(),
                 Map.of(),
                 null

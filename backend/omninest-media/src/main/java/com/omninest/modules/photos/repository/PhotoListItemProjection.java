@@ -2,6 +2,7 @@ package com.omninest.modules.photos.repository;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -43,6 +44,9 @@ public interface PhotoListItemProjection {
 
     /** @return GPS 经度 */
     BigDecimal getGpsLongitude();
+
+    /** @return 逆地理地名信息（含中英双语字段），未解析时为空 */
+    Map<String, Object> getGpsLocation();
 
     /** @return 文件格式 */
     String getFormat();

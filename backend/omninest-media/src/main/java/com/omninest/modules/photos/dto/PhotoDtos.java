@@ -39,6 +39,7 @@ public final class PhotoDtos {
             String lensModel,
             Double gpsLatitude,
             Double gpsLongitude,
+            Map<String, Object> gpsLocation,
             String format,
             long fileSize,
             String coverUrl,
@@ -46,7 +47,6 @@ public final class PhotoDtos {
             String metadataStatus,
             boolean favorite,
             Instant createdAt,
-            Map<String, Object> gpsLocation,
             List<String> tags,
             Map<String, Object> providerMetadata,
             PhotoContentAnalysisDto contentAnalysis
@@ -114,6 +114,7 @@ public final class PhotoDtos {
                     photo.getGpsLongitude() != null
                             ? photo.getGpsLongitude().doubleValue()
                             : null,
+                    photo.getGpsLocation(),
                     photo.getFormat(),
                     photo.getFileSize(),
                     coverUrl,
@@ -121,7 +122,6 @@ public final class PhotoDtos {
                     photo.getMetadataStatus(),
                     favorite,
                     photo.getCreatedAt(),
-                    photo.getGpsLocation(),
                     tags,
                     photo.getProviderMetadata(),
                     contentAnalysis
@@ -183,6 +183,7 @@ public final class PhotoDtos {
             Instant dateTaken,
             Double gpsLatitude,
             Double gpsLongitude,
+            Map<String, Object> gpsLocation,
             String format,
             long fileSize,
             String coverUrl,

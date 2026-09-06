@@ -798,6 +798,7 @@ public class PhotoLibraryController {
                 null,
                 item.gpsLatitude(),
                 item.gpsLongitude(),
+                item.gpsLocation(),
                 item.format(),
                 item.fileSize(),
                 item.coverUrl(),
@@ -805,7 +806,6 @@ public class PhotoLibraryController {
                 item.metadataStatus(),
                 item.favorite(),
                 item.createdAt(),
-                Map.of(),
                 item.tags(),
                 Map.of(),
                 null
