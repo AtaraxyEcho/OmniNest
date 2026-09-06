@@ -8345,6 +8345,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosTagsSelectHint => 'Select a tag to browse its photos';
 
   @override
+  String photosTagsPhotoCount(int count) {
+    return '$count photos';
+  }
+
+  @override
   String get photosDeleteShort => 'Delete';
 
   @override

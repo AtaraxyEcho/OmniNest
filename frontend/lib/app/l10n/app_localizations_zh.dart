@@ -8094,6 +8094,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosTagsSelectHint => '选择一个标签查看对应照片';
 
   @override
+  String photosTagsPhotoCount(int count) {
+    return '$count 张照片';
+  }
+
+  @override
   String get photosDeleteShort => '删除';
 
   @override

@@ -57,65 +57,79 @@ class _FrameTagsViewState extends ConsumerState<FrameTagsView> {
   Widget _buildContent(BuildContext context, List<String> tags) {
     final colors = context.frameColors;
     final l10n = AppLocalizations.of(context);
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            l10n.photosFrameNavTags,
-            style: TextStyle(
-              fontFamily: FramePalette.serifFamily,
-              fontFamilyFallback: FramePalette.serifFallback,
-              color: colors.ink,
-              fontSize: 24,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              for (final tag in tags)
-                _TagChip(
-                  tag: tag,
-                  selected: _selectedTag == tag,
-                  onTap:
-                      () => setState(
-                        () => _selectedTag = _selectedTag == tag ? null : tag,
-                      ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          if (_selectedTag == null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Center(
-                child: Text(
-                  l10n.photosTagsSelectHint,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: colors.muted, fontSize: 13),
+              Text(
+                l10n.photosFrameNavTags,
+                style: TextStyle(
+                  fontFamily: FramePalette.serifFamily,
+                  fontFamilyFallback: FramePalette.serifFallback,
+                  color: colors.ink,
+                  fontSize: 24,
                 ),
               ),
-            )
-          else
-            _TagPhotos(
-              key: ValueKey('tag-photos-$_selectedTag'),
-              tag: _selectedTag!,
-              onOpenPhoto: (photo) {
-                ref
-                    .read(photoBrowseScopeProvider.notifier)
-                    .set(
-                      ref.read(photosByTagProvider(_selectedTag!)).value ??
-                          const <PhotoItem>[],
-                    );
-                widget.onOpenPhoto(photo);
-              },
-              onToggleFavorite: widget.onToggleFavorite,
-            ),
-        ],
-      ),
+              const SizedBox(height: 16),
+              // 芯片数量多时限制头部高度并内部滚动，避免挤压照片区。
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final tag in tags)
+                        _TagChip(
+                          tag: tag,
+                          selected: _selectedTag == tag,
+                          onTap:
+                              () => setState(
+                                () =>
+                                    _selectedTag =
+                                        _selectedTag == tag ? null : tag,
+                              ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        Expanded(
+          child:
+              _selectedTag == null
+                  ? Center(
+                    child: Text(
+                      l10n.photosTagsSelectHint,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: colors.muted, fontSize: 13),
+                    ),
+                  )
+                  : _TagPhotos(
+                    key: ValueKey('tag-photos-$_selectedTag'),
+                    tag: _selectedTag!,
+                    onOpenPhoto: (photo) {
+                      ref
+                          .read(photoBrowseScopeProvider.notifier)
+                          .set(
+                            ref
+                                    .read(photosByTagProvider(_selectedTag!))
+                                    .value ??
+                                const <PhotoItem>[],
+                          );
+                      widget.onOpenPhoto(photo);
+                    },
+                    onToggleFavorite: widget.onToggleFavorite,
+                  ),
+        ),
+      ],
     );
   }
 }
@@ -152,10 +166,42 @@ class _TagPhotos extends ConsumerWidget {
             ),
           ),
       data:
-          (photos) => FrameMasonryGrid(
-            photos: photos,
-            onOpenPhoto: onOpenPhoto,
-            onToggleFavorite: onToggleFavorite,
+          (photos) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(
+                      '#$tag',
+                      style: TextStyle(
+                        fontFamily: FramePalette.serifFamily,
+                        fontFamilyFallback: FramePalette.serifFallback,
+                        color: colors.ink,
+                        fontSize: 20,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      AppLocalizations.of(
+                        context,
+                      ).photosTagsPhotoCount(photos.length),
+                      style: TextStyle(color: colors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: FrameMasonryGrid(
+                  photos: photos,
+                  onOpenPhoto: onOpenPhoto,
+                  onToggleFavorite: onToggleFavorite,
+                ),
+              ),
+            ],
           ),
     );
   }

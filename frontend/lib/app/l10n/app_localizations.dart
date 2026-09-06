@@ -15252,6 +15252,12 @@ abstract class AppLocalizations {
   /// **'Select a tag to browse its photos'**
   String get photosTagsSelectHint;
 
+  /// No description provided for @photosTagsPhotoCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} photos'**
+  String photosTagsPhotoCount(int count);
+
   /// No description provided for @photosDeleteShort.
   ///
   /// In en, this message translates to:

@@ -3768,6 +3768,14 @@
   "photosTrashMoved": "Moved to Trash",
   "photosBackToPhotos": "Back to Photos",
   "photosTagsSelectHint": "Select a tag to browse its photos",
+  "photosTagsPhotoCount": "{count} photos",
+  "@photosTagsPhotoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "photosDeleteShort": "Delete",
   "photosSaturation": "Saturation",
   "photosModuleDisplayName": "Lightbox",

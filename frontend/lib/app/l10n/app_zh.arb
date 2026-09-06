@@ -3642,6 +3642,14 @@
   "photosTrashMoved": "已移入回收站",
   "photosBackToPhotos": "返回照片",
   "photosTagsSelectHint": "选择一个标签查看对应照片",
+  "photosTagsPhotoCount": "{count} 张照片",
+  "@photosTagsPhotoCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "photosDeleteShort": "删除",
   "photosSaturation": "饱和度",
   "photosModuleDisplayName": "光影集",
