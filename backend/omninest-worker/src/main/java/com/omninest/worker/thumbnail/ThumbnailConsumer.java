@@ -3,18 +3,17 @@ package com.omninest.worker.thumbnail;
 import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
 
 import com.omninest.common.messaging.QueueNames;
-import com.omninest.common.storage.ObjectStorageClient;
-import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
+import com.omninest.modules.photos.service.PhotoSourceFileService;
 import com.omninest.modules.photos.service.PhotoThumbnailService;
 import com.omninest.modules.photos.service.PhotoAdminService;
 import com.omninest.worker.file.FilePostProcessingTaskTracker;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -36,7 +35,7 @@ public class ThumbnailConsumer {
     private static final Set<String> IMAGE_MIME_PREFIXES = Set.of("image/jpeg", "image/png", "image/gif", "image/bmp");
     private static final String TASK_TYPE = "THUMBNAIL";
 
-    private final ObjectStorageClient objectStorageClient;
+    private final PhotoSourceFileService photoSourceFileService;
     private final PhotoThumbnailService photoThumbnailService;
     private final PhotoAdminService photoAdminService;
     private final FileLifecycleGuard fileLifecycleGuard;
@@ -65,12 +64,27 @@ public class ThumbnailConsumer {
                 channel.basicAck(deliveryTag, false);
                 return;
             }
+
+            // 快速路径：缩略图资产已存在时仅回填封面引用，避免重复解码。
+            Optional<UUID> storedThumbnail = photoThumbnailService.findStoredThumbnailFileNodeId(
+                    event.ownerUserId(), event.fileNodeId());
+            if (storedThumbnail.isPresent()) {
+                log.info("缩略图已存在，直接回填封面: fileNodeId={}, thumbnailId={}",
+                        event.fileNodeId(), storedThumbnail.get());
+                photoAdminService.attachCoverIfMissing(
+                        event.ownerUserId(), event.fileNodeId(), storedThumbnail.get());
+                taskTracker.complete(tracked.taskId(), Map.of("thumbnailId", storedThumbnail.get().toString()));
+                channel.basicAck(deliveryTag, false);
+                return;
+            }
+
             log.info("开始生成缩略图: fileNodeId={}, fileName={}", event.fileNodeId(), event.fileName());
-            ObjectStorageKey key = new ObjectStorageKey(event.bucket(), event.objectKey());
             UUID thumbnailId = null;
-            try (InputStream inputStream = objectStorageClient.getObject(key)) {
-                thumbnailId = photoThumbnailService.generateAndStore(
-                        event.ownerUserId(), event.fileNodeId(), inputStream, event.fileName());
+            // provider 无关取源：MinIO 托管与本地媒体挂载的照片统一走受控暂存。
+            try (PhotoSourceFileService.StagedPhotoFile source = photoSourceFileService.stageReadable(
+                    event.ownerUserId(), event.fileNodeId())) {
+                thumbnailId = photoThumbnailService.generateAndStoreFile(
+                        event.ownerUserId(), event.fileNodeId(), source.path(), source.fileName());
                 if (thumbnailId != null) {
                     photoAdminService.attachCoverIfMissing(
                             event.ownerUserId(), event.fileNodeId(), thumbnailId);

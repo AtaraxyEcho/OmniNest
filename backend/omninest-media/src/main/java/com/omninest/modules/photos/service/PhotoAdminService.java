@@ -8,13 +8,16 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePermissionService;
+import com.omninest.modules.file.service.FilePostProcessingTaskService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.notification.port.NotificationPublisher;
@@ -40,6 +43,7 @@ import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -82,6 +86,7 @@ public class PhotoAdminService {
     private final PhotoGeoService photoGeoService;
     private final PhotoAiTaskService photoAiTaskService;
     private final TaskRecordService taskRecordService;
+    private final FilePostProcessingTaskService filePostProcessingTaskService;
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
     private final PlatformTransactionManager transactionManager;
@@ -278,32 +283,49 @@ public class PhotoAdminService {
         photo.setFileNodeId(file.id());
         photo.setTitle(titleFromFileName(file.name()));
         photo.setFormat(fileDetector.extension(file.name()));
-        try (PhotoSourceFileService.StagedPhotoFile source = sourceFileService.stageReadable(
-                ownerUserId,
-                file.id()
-        )) {
-            photo.setFileSize(source.sizeBytes());
-            if (fileDetector.isDecodable(source.fileName())) {
-                inputGuard.inspectForDecode(source.path(), source.fileName());
+        // RAW 预览需要真实文件，保留暂存路径；常规图片流式读取，
+        // EXIF 提取与内容哈希共用一次下载，封面交给缩略图任务异步生成回填。
+        boolean raw = fileDetector.isRaw(file.name());
+        String contentHash;
+        PhotoExifExtractor.ExifData exif;
+        if (raw) {
+            try (PhotoSourceFileService.StagedPhotoFile source = sourceFileService.stageReadable(
+                    ownerUserId,
+                    file.id()
+            )) {
+                photo.setFileSize(source.sizeBytes());
+                try (InputStream input = Files.newInputStream(source.path())) {
+                    exif = exifExtractor.extract(input);
+                }
+                inputGuard.validateDimensions(exif.width(), exif.height());
+                applyExif(photo, exif);
+                applyLocation(photo);
+                if (!fileDetector.isDecodable(file.name())) {
+                    photo.setCoverFileId(rawPreviewService.createPreview(
+                            ownerUserId, photo.getId(), source.path()));
+                }
+                contentHash = computeSha256(source.path());
+            } catch (IOException exception) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片源文件处理失败");
             }
-
-            PhotoExifExtractor.ExifData exif;
-            try (InputStream input = Files.newInputStream(source.path())) {
-                exif = exifExtractor.extract(input);
+        } else {
+            try (FileContentStream content = fileQueryService.openReadableFileContent(ownerUserId, file.id());
+                 DigestInputStream digestInput = new DigestInputStream(content.inputStream(), sha256Digest())) {
+                photo.setFileSize(file.sizeBytes());
+                exif = exifExtractor.extract(digestInput);
+                inputGuard.validateDimensions(exif.width(), exif.height());
+                applyExif(photo, exif);
+                applyLocation(photo);
+                digestInput.transferTo(OutputStream.nullOutputStream());
+                contentHash = HexFormat.of().formatHex(digestInput.getMessageDigest().digest());
+            } catch (IOException exception) {
+                throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片源文件处理失败");
             }
-            inputGuard.validateDimensions(exif.width(), exif.height());
-            applyExif(photo, exif);
-            applyLocation(photo);
-
-            UUID coverFileId = createCover(ownerUserId, photo, file, source);
-            photo.setCoverFileId(coverFileId);
-            photo.setMetadataStatus(exif.hasAnyValue()
-                    ? MetadataStatus.MATCHED.getValue()
-                    : MetadataStatus.PENDING.getValue());
-            photo.getProviderMetadata().put("contentHash", computeSha256(source.path()));
-        } catch (IOException exception) {
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片源文件处理失败");
         }
+        photo.setMetadataStatus(exif.hasAnyValue()
+                ? MetadataStatus.MATCHED.getValue()
+                : MetadataStatus.PENDING.getValue());
+        photo.getProviderMetadata().put("contentHash", contentHash);
 
         photoItemRepository.save(photo);
 
@@ -316,7 +338,11 @@ public class PhotoAdminService {
                         QueueNames.PHOTO_INDEX_ROUTING_KEY,
                         new PhotoIndexEvent(savedPhotoId, ownerUserId)
                 );
-
+                if (!raw && file.currentObjectId() != null) {
+                    // 封面不再同步生成，补投缩略图任务（含 active-task 去重）。
+                    filePostProcessingTaskService.enqueueThumbnailIfAbsent(
+                            thumbnailEvent(file, ownerUserId));
+                }
             }
         });
 
@@ -342,25 +368,33 @@ public class PhotoAdminService {
         readThroughCache.invalidate("omninest:dashboard:photo:" + ownerUserId);
     }
 
-    private UUID createCover(
-            UUID ownerUserId,
-            PhotoItem photo,
-            FileDescriptor file,
-            PhotoSourceFileService.StagedPhotoFile source
-    ) {
-        UUID coverFileId = null;
-        if (fileDetector.isDecodable(source.fileName())) {
-            coverFileId = thumbnailService.generateAndStoreFile(
-                    ownerUserId,
-                    file.id(),
-                    source.path(),
-                    source.fileName()
-            );
+    /**
+     * 构造补投缩略图任务所需的最小上传事件。
+     *
+     * <p>缩略图消费者通过 provider 无关的源文件服务读取内容，
+     * 不依赖对象存储定位信息。</p>
+     */
+    private FileUploadedEvent thumbnailEvent(FileDescriptor file, UUID ownerUserId) {
+        return new FileUploadedEvent(
+                file.id(),
+                file.currentObjectId(),
+                ownerUserId,
+                "",
+                "",
+                file.name(),
+                file.mimeType(),
+                file.sizeBytes(),
+                Instant.now()
+        );
+    }
+
+    /** 新建 SHA-256 摘要器。 */
+    private MessageDigest sha256Digest() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 算法不可用", exception);
         }
-        if (coverFileId == null && source.raw()) {
-            coverFileId = rawPreviewService.createPreview(ownerUserId, photo.getId(), source.path());
-        }
-        return coverFileId;
     }
 
     private void applyExif(PhotoItem photo, PhotoExifExtractor.ExifData exif) {
@@ -480,6 +514,38 @@ public class PhotoAdminService {
             taskRecordService.markFailed(taskId, ex.getMessage());
             throw ex;
         }
+    }
+
+    /**
+     * 为重生成流程创建封面：可解码图片生成缩略图，RAW 生成预览图。
+     *
+     * <p>仅供缩略图重生成任务使用；常规导入的封面由缩略图任务异步生成。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param photo 照片实体
+     * @param file 源文件描述
+     * @param source 暂存源文件句柄
+     * @return 封面派生文件节点 ID，无法生成时返回 null
+     */
+    private UUID createCover(
+            UUID ownerUserId,
+            PhotoItem photo,
+            FileDescriptor file,
+            PhotoSourceFileService.StagedPhotoFile source
+    ) {
+        UUID coverFileId = null;
+        if (fileDetector.isDecodable(source.fileName())) {
+            coverFileId = thumbnailService.generateAndStoreFile(
+                    ownerUserId,
+                    file.id(),
+                    source.path(),
+                    source.fileName()
+            );
+        }
+        if (coverFileId == null && source.raw()) {
+            coverFileId = rawPreviewService.createPreview(ownerUserId, photo.getId(), source.path());
+        }
+        return coverFileId;
     }
 
     private int progressPercent(int finished, int total) {

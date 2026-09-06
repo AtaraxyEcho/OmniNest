@@ -103,6 +103,21 @@ public class FilePostProcessingTaskService {
         }
     }
 
+    /**
+     * 为导入完成的图片补投缩略图任务；已有进行中的同任务时跳过。
+     *
+     * <p>照片导入不再同步生成封面，由本任务在 Worker/内嵌 Worker 中
+     * 异步生成并回填，避免上传请求路径承担整图解码开销。</p>
+     *
+     * @param event 文件上传事件
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void enqueueThumbnailIfAbsent(FileUploadedEvent event) {
+        if (isImage(event.mimeType()) && !hasActiveTask(event, "THUMBNAIL")) {
+            enqueueThumbnail(event);
+        }
+    }
+
     private boolean hasActiveTask(FileUploadedEvent event, String taskType) {
         return taskRecordService.findActiveResourceTask(
                 event.ownerUserId(),

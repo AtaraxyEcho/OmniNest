@@ -28,6 +28,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.HexFormat;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -113,6 +114,39 @@ public class DerivedAssetStorageService {
      * @return 找到并删除派生资源时返回 true
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    /**
+     * 查询已存在的派生资产文件节点 ID。
+     *
+     * <p>与 {@link #isAvailable} 使用同一可用性判定（路径存在、来源为派生、
+     * 对象仍在对象存储中），供调用方在不重新生成资产的情况下回填引用。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @param resourceId 资源 ID
+     * @param assetType 资产类型
+     * @param fileName 资产文件名
+     * @return 派生资产 FileNode ID；不可用或不存在时返回空
+     */
+    public Optional<UUID> findStoredFileNodeId(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            String assetType,
+            String fileName
+    ) {
+        String path = normalizedPath(resourceType, resourceId, assetType, fileName);
+        return fileNodeRepository.findActivePath(ownerUserId, path)
+                .filter(node -> SOURCE_TYPE_DERIVED.equals(node.getSourceType())
+                        && node.getCurrentObjectId() != null)
+                .filter(node -> fileObjectRepository.findById(node.getCurrentObjectId())
+                        .map(object -> objectStorageClient.objectExists(new ObjectStorageKey(
+                                object.getBucketName(),
+                                object.getObjectKey()
+                        )))
+                        .orElse(false))
+                .map(FileNode::getId);
+    }
+
     public boolean deleteOwned(UUID ownerUserId, UUID fileNodeId) {
         return deleteOwnedInCurrentTransaction(ownerUserId, fileNodeId);
     }

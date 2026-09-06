@@ -1,16 +1,18 @@
 package com.omninest.worker.thumbnail;
 
-import com.omninest.common.storage.ObjectStorageClient;
-import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
+import com.omninest.modules.file.service.FilePostProcessingTaskService;
+import com.omninest.modules.photos.service.PhotoSourceFileService;
 import com.omninest.modules.photos.service.PhotoThumbnailService;
 import com.omninest.modules.photos.service.PhotoAdminService;
+import com.omninest.worker.file.FilePostProcessingTaskTracker;
 import com.rabbitmq.client.Channel;
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
@@ -31,13 +33,13 @@ import static org.mockito.Mockito.when;
 
 /**
  * ThumbnailConsumer 单元测试。
- * 验证缩略图生成逻辑：图片文件触发生成，非图片文件跳过。
+ * 验证缩略图生成逻辑：图片文件触发生成，已存在缩略图仅回填封面，非图片文件跳过。
  */
 @ExtendWith(MockitoExtension.class)
 class ThumbnailConsumerTest {
 
     @Mock
-    private ObjectStorageClient objectStorageClient;
+    private PhotoSourceFileService photoSourceFileService;
 
     @Mock
     private PhotoThumbnailService photoThumbnailService;
@@ -49,6 +51,9 @@ class ThumbnailConsumerTest {
     private FileLifecycleGuard fileLifecycleGuard;
 
     @Mock
+    private FilePostProcessingTaskTracker taskTracker;
+
+    @Mock
     private Channel channel;
 
     @InjectMocks
@@ -57,6 +62,10 @@ class ThumbnailConsumerTest {
     @BeforeEach
     void allowFileProcessing() {
         lenient().when(fileLifecycleGuard.isOwnedProcessable(any(), any())).thenReturn(true);
+        lenient().when(taskTracker.begin(any(), any(), any(), any()))
+                .thenReturn(new FilePostProcessingTaskTracker.TrackedTask(UUID.randomUUID(), true));
+        lenient().when(photoThumbnailService.findStoredThumbnailFileNodeId(any(), any()))
+                .thenReturn(Optional.empty());
     }
 
     /**
@@ -85,27 +94,53 @@ class ThumbnailConsumerTest {
         return new Message(new byte[0], props);
     }
 
+    /**
+     * 构造真实暂存文件句柄；消费者结束后会删除该临时文件。
+     */
+    private PhotoSourceFileService.StagedPhotoFile stageJpeg() throws IOException {
+        Path temp = Files.createTempFile("thumbnail-consumer-test", ".jpg");
+        return new PhotoSourceFileService.StagedPhotoFile(temp, "photo.jpg", 100, "image/jpeg", false);
+    }
+
     @Test
     @DisplayName("JPEG 图片应触发缩略图生成")
     void handle_withJpegImage_shouldGenerateThumbnail() throws IOException {
         FileUploadedEvent event = createEvent("photo.jpg", "image/jpeg");
-        InputStream inputStream = new ByteArrayInputStream(new byte[100]);
         UUID thumbnailId = UUID.randomUUID();
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
-        when(photoThumbnailService.generateAndStore(
-                any(), any(), any(InputStream.class), any()
+        when(photoSourceFileService.stageReadable(any(), any())).thenReturn(stageJpeg());
+        when(photoThumbnailService.generateAndStoreFile(
+                any(), any(), any(Path.class), any()
         )).thenReturn(thumbnailId);
 
         thumbnailConsumer.handle(event, createMessage(), channel);
 
-        verify(photoThumbnailService).generateAndStore(
+        verify(photoThumbnailService).generateAndStoreFile(
                 eq(event.ownerUserId()),
                 eq(event.fileNodeId()),
-                any(InputStream.class),
-                eq(event.fileName())
+                any(Path.class),
+                eq("photo.jpg")
         );
         verify(photoAdminService).attachCoverIfMissing(
-                eq(event.ownerUserId()), eq(event.fileNodeId()), any(UUID.class));
+                eq(event.ownerUserId()), eq(event.fileNodeId()), eq(thumbnailId));
+        verify(channel).basicAck(1L, false);
+    }
+
+    @Test
+    @DisplayName("缩略图已存在时应仅回填封面而不重新生成")
+    void handle_withStoredThumbnail_shouldAttachOnly() throws IOException {
+        FileUploadedEvent event = createEvent("photo.jpg", "image/jpeg");
+        UUID storedThumbnailId = UUID.randomUUID();
+        when(photoThumbnailService.findStoredThumbnailFileNodeId(
+                event.ownerUserId(), event.fileNodeId())).thenReturn(Optional.of(storedThumbnailId));
+
+        thumbnailConsumer.handle(event, createMessage(), channel);
+
+        verify(photoAdminService).attachCoverIfMissing(
+                eq(event.ownerUserId()), eq(event.fileNodeId()), eq(storedThumbnailId));
+        verify(photoThumbnailService, never()).generateAndStoreFile(
+                any(), any(), any(), any()
+        );
+        verify(photoSourceFileService, never()).stageReadable(any(), any());
         verify(channel).basicAck(1L, false);
     }
 
@@ -113,19 +148,18 @@ class ThumbnailConsumerTest {
     @DisplayName("PNG 图片应触发缩略图生成")
     void handle_withPngImage_shouldGenerateThumbnail() throws IOException {
         FileUploadedEvent event = createEvent("icon.png", "image/png");
-        InputStream inputStream = new ByteArrayInputStream(new byte[100]);
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
-        when(photoThumbnailService.generateAndStore(
-                any(), any(), any(InputStream.class), any()
+        when(photoSourceFileService.stageReadable(any(), any())).thenReturn(stageJpeg());
+        when(photoThumbnailService.generateAndStoreFile(
+                any(), any(), any(Path.class), any()
         )).thenReturn(UUID.randomUUID());
 
         thumbnailConsumer.handle(event, createMessage(), channel);
 
-        verify(photoThumbnailService).generateAndStore(
+        verify(photoThumbnailService).generateAndStoreFile(
                 eq(event.ownerUserId()),
                 eq(event.fileNodeId()),
-                any(InputStream.class),
-                eq(event.fileName())
+                any(Path.class),
+                eq("photo.jpg")
         );
         verify(channel).basicAck(1L, false);
     }
@@ -137,7 +171,7 @@ class ThumbnailConsumerTest {
 
         thumbnailConsumer.handle(event, createMessage(), channel);
 
-        verify(photoThumbnailService, never()).generateAndStore(
+        verify(photoThumbnailService, never()).generateAndStoreFile(
                 any(), any(), any(), any()
         );
         verify(channel).basicAck(1L, false);
@@ -150,8 +184,7 @@ class ThumbnailConsumerTest {
 
         thumbnailConsumer.handle(event, createMessage(), channel);
 
-        verify(objectStorageClient, never()).getObject(any());
-        verify(photoThumbnailService, never()).generateAndStore(
+        verify(photoThumbnailService, never()).generateAndStoreFile(
                 any(), any(), any(), any()
         );
         verify(channel).basicAck(1L, false);
@@ -164,8 +197,7 @@ class ThumbnailConsumerTest {
 
         thumbnailConsumer.handle(event, createMessage(), channel);
 
-        verify(objectStorageClient, never()).getObject(any());
-        verify(photoThumbnailService, never()).generateAndStore(
+        verify(photoThumbnailService, never()).generateAndStoreFile(
                 any(), any(), any(), any()
         );
         verify(channel).basicAck(1L, false);
@@ -178,8 +210,7 @@ class ThumbnailConsumerTest {
 
         thumbnailConsumer.handle(event, createMessage(), channel);
 
-        verify(objectStorageClient, never()).getObject(any());
-        verify(photoThumbnailService, never()).generateAndStore(
+        verify(photoThumbnailService, never()).generateAndStoreFile(
                 any(), any(), any(), any()
         );
         verify(channel).basicAck(1L, false);
@@ -189,71 +220,38 @@ class ThumbnailConsumerTest {
     @DisplayName("缩略图服务返回 null 时不抛异常")
     void handle_whenThumbnailServiceReturnsNull_shouldCompleteNormally() throws IOException {
         FileUploadedEvent event = createEvent("photo.jpg", "image/jpeg");
-        InputStream inputStream = new ByteArrayInputStream(new byte[100]);
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
-        when(photoThumbnailService.generateAndStore(
-                any(), any(), any(InputStream.class), any()
+        when(photoSourceFileService.stageReadable(any(), any())).thenReturn(stageJpeg());
+        when(photoThumbnailService.generateAndStoreFile(
+                any(), any(), any(Path.class), any()
         )).thenReturn(null);
 
         thumbnailConsumer.handle(event, createMessage(), channel);
 
-        verify(photoThumbnailService).generateAndStore(
+        verify(photoThumbnailService).generateAndStoreFile(
                 eq(event.ownerUserId()),
                 eq(event.fileNodeId()),
-                any(InputStream.class),
-                eq(event.fileName())
+                any(Path.class),
+                eq("photo.jpg")
         );
+        verify(photoAdminService, never()).attachCoverIfMissing(
+                any(), any(), any());
         verify(channel).basicAck(1L, false);
     }
 
     @Test
-    @DisplayName("对象存储抛出异常时应 nack 消息")
-    void handle_whenStorageThrows_shouldNackMessage() throws IOException {
+    @DisplayName("暂存或生成抛出异常时应记录失败并 ack 消息")
+    void handle_whenStagingThrows_shouldHandleFailureAndAck() throws IOException {
         FileUploadedEvent event = createEvent("photo.jpg", "image/jpeg");
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class)))
+        when(photoSourceFileService.stageReadable(any(), any()))
                 .thenThrow(new RuntimeException("存储服务不可用"));
 
         thumbnailConsumer.handle(event, createMessage(), channel);
 
-        verify(photoThumbnailService, never()).generateAndStore(
+        verify(photoThumbnailService, never()).generateAndStoreFile(
                 any(), any(), any(), any()
         );
-        verify(channel).basicNack(1L, false, false);
-    }
-
-    @Test
-    @DisplayName("缩略图服务抛出异常时应 nack 消息")
-    void handle_whenThumbnailServiceThrows_shouldNackMessage() throws IOException {
-        FileUploadedEvent event = createEvent("photo.jpg", "image/jpeg");
-        InputStream inputStream = new ByteArrayInputStream(new byte[100]);
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
-        when(photoThumbnailService.generateAndStore(
-                any(), any(), any(InputStream.class), any()
-        )).thenThrow(new RuntimeException("图片处理失败"));
-
-        thumbnailConsumer.handle(event, createMessage(), channel);
-
-        verify(channel).basicNack(1L, false, false);
-    }
-
-    @Test
-    @DisplayName("MIME 类型大小写不敏感匹配")
-    void handle_withUppercaseMimeType_shouldStillGenerate() throws IOException {
-        FileUploadedEvent event = createEvent("photo.JPG", "IMAGE/JPEG");
-        InputStream inputStream = new ByteArrayInputStream(new byte[100]);
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
-        when(photoThumbnailService.generateAndStore(
-                any(), any(), any(InputStream.class), any()
-        )).thenReturn(UUID.randomUUID());
-
-        thumbnailConsumer.handle(event, createMessage(), channel);
-
-        verify(photoThumbnailService).generateAndStore(
-                eq(event.ownerUserId()),
-                eq(event.fileNodeId()),
-                any(InputStream.class),
-                eq(event.fileName())
-        );
+        verify(taskTracker).handleFailure(
+                eq("THUMBNAIL"), any(), any(), eq(event), any());
         verify(channel).basicAck(1L, false);
     }
 }

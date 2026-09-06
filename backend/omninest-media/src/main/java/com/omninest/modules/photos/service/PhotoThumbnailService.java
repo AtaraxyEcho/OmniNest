@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Optional;
 import java.util.UUID;
 import javax.imageio.ImageIO;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +64,23 @@ public class PhotoThumbnailService {
      */
     public boolean hasStoredThumbnail(UUID ownerUserId, UUID fileNodeId) {
         return derivedAssetStorageService.isAvailable(
+                ownerUserId,
+                ResourceType.PHOTO_ITEM.getValue(),
+                fileNodeId,
+                AssetType.POSTER.getValue(),
+                FILE_NAME
+        );
+    }
+
+    /**
+     * 查询已存在缩略图的派生文件节点 ID，供调用方在不重新生成的情况下回填封面引用。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param fileNodeId 源照片文件节点 ID
+     * @return 缩略图派生文件节点 ID；不可用时返回空
+     */
+    public Optional<UUID> findStoredThumbnailFileNodeId(UUID ownerUserId, UUID fileNodeId) {
+        return derivedAssetStorageService.findStoredFileNodeId(
                 ownerUserId,
                 ResourceType.PHOTO_ITEM.getValue(),
                 fileNodeId,
