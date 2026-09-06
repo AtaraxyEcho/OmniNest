@@ -53,11 +53,10 @@ class _FrameViewContent extends ConsumerWidget {
           },
           state: state,
         ),
-        FrameView.locations => FrameEmptyView(
+        FrameView.locations => FrameLocationsView(
           key: const ValueKey('frame-locations'),
-          icon: Icons.place_outlined,
-          message: AppLocalizations.of(context).photosFrameLocationsEmpty,
-          hint: AppLocalizations.of(context).photosFrameLocationsEmptyHint,
+          onOpenPhoto: onOpenPhoto,
+          onToggleFavorite: onToggleFavorite,
         ),
         FrameView.tags => FrameTagsView(
           key: const ValueKey('frame-tags'),

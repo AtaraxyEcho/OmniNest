@@ -8350,6 +8350,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get photosLocationsBack => 'Back to Locations';
+
+  @override
   String get photosDeleteShort => 'Delete';
 
   @override

@@ -3650,6 +3650,7 @@
       }
     }
   },
+  "photosLocationsBack": "返回地点列表",
   "photosDeleteShort": "删除",
   "photosSaturation": "饱和度",
   "photosModuleDisplayName": "光影集",

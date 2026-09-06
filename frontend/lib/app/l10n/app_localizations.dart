@@ -15258,6 +15258,12 @@ abstract class AppLocalizations {
   /// **'{count} photos'**
   String photosTagsPhotoCount(int count);
 
+  /// No description provided for @photosLocationsBack.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to Locations'**
+  String get photosLocationsBack;
+
   /// No description provided for @photosDeleteShort.
   ///
   /// In en, this message translates to:

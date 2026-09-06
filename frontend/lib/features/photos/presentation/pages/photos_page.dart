@@ -17,7 +17,7 @@ import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/presentation/widgets/batch_progress_dialog.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_albums_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_bottom_nav.dart';
-import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_locations_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_masonry_grid.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_sidebar.dart';

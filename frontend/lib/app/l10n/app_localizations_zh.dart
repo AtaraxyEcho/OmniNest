@@ -8099,6 +8099,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get photosLocationsBack => '返回地点列表';
+
+  @override
   String get photosDeleteShort => '删除';
 
   @override
