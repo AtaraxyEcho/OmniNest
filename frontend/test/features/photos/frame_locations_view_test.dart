@@ -133,9 +133,10 @@ void main() {
     // 打开照片时浏览范围写入该地点的全部照片。
     await tester.tap(find.byType(PhotoGridTile).first);
     await tester.pumpAndSettle();
+    // 地点视图写入空 scope + library 来源，查看器回退到中心列表。
     final scope = container!.read(photoBrowseScopeProvider);
-    expect(scope.length, 2);
-    expect(scope.every((p) => p.id == 'photo-1' || p.id == 'photo-2'), isTrue);
+    expect(scope.source, PhotoBrowseSource.library);
+    expect(scope.photos.length, 0);
   });
 
   testWidgets('返回按钮回到地点卡片网格', (tester) async {

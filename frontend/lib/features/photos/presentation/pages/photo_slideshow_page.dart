@@ -50,12 +50,12 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   bool _controlsVisible = true;
   bool _thumbnailsVisible = true;
   bool _showInfo = false;
+  bool _isFullscreen = false;
   bool _transitioning = false;
   Timer? _idleTimer;
   late AnimationController _progressController;
   WindowChromeLease? _windowChromeLease;
   final Set<String> _precached = {};
-  bool _isFullscreen = false;
 
   @override
   void initState() {
@@ -235,6 +235,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             .then((item) {
               final url = !mounted ? null : (item.sourceUrl ?? item.coverUrl);
               if (url == null || url.isEmpty) return null;
+              // 预取为尽力而为，context 仅用于缓存查找。
+              // ignore: use_build_context_synchronously
+              // ignore: use_build_context_synchronously
               return precacheImage(
                 CachedNetworkImageProvider(
                   url,
@@ -252,6 +255,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 
   void _toggleFullscreen() {
+    _isFullscreen = !_isFullscreen;
     if (kIsWeb) {
       fs.toggleFullscreen();
       return;
@@ -706,7 +710,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _photos.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final selected = index == _current;
           final thumb = _photos[index].coverUrl;
@@ -918,8 +922,8 @@ class _SlideLayer extends StatelessWidget {
             alignment: Alignment.center,
             transform:
                 Matrix4.identity()
-                  ..translate(dx, 0, 0)
-                  ..scale(scale, scale, 1),
+                  ..translateByDouble(dx, 0, 0, 1)
+                  ..scaleByDouble(scale, scale, 1, 1),
             child: child,
           ),
         );
