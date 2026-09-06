@@ -8,6 +8,9 @@ server:
 spring:
   application:
     name: omninest
+  # 项目仅通过 RedisTemplate 使用 Redis，不存在 Spring Data Redis Repository，排除后避免多数据模块仓库扫描噪音
+  autoconfigure:
+    exclude: org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
   config:
     import: optional:file:.env[.properties]
   profiles:
