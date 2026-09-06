@@ -147,8 +147,8 @@ class PhotoThumbnailServiceTest {
             storedPath.set(output);
             BufferedImage thumbnail = ImageIO.read(output.toFile());
             assertThat(thumbnail).isNotNull();
-            assertThat(thumbnail.getWidth()).isLessThanOrEqualTo(512);
-            assertThat(thumbnail.getHeight()).isLessThanOrEqualTo(512);
+            assertThat(thumbnail.getWidth()).isLessThanOrEqualTo(1024);
+            assertThat(thumbnail.getHeight()).isLessThanOrEqualTo(1024);
             return thumbnailId;
         });
 

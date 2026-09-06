@@ -20,9 +20,9 @@ import org.springframework.stereotype.Service;
 /**
  * 图片缩略图生成服务。
  *
- * <p>使用 Thumbnailator 将原始图片压缩为 512×512 以内的 WebP 缩略图，
+ * <p>使用 Thumbnailator 将原始图片压缩为 1024×1024 以内的 WebP 缩略图，
  * 并通过 {@link DerivedAssetStorageService} 持久化到 MinIO。
- * 若 JVM 不支持 WebP 编码则自动回退到 JPEG。</p>
+ * WebP 编码器由 webp-imageio 依赖提供；若 JVM 缺少该编码器则自动回退到 JPEG。</p>
  *
  * @author OmniNest
  */
@@ -36,9 +36,10 @@ public class PhotoThumbnailService {
     private final PhotoSourceFileService sourceFileService;
     private final PhotoInputGuard inputGuard;
 
-    private static final int MAX_THUMBNAIL_WIDTH = 512;
-    private static final int MAX_THUMBNAIL_HEIGHT = 512;
-    private static final double QUALITY = 0.85;
+    // 1024 长边在高 DPI 屏幕的网格/列表场景达到视网膜级清晰度。
+    private static final int MAX_THUMBNAIL_WIDTH = 1024;
+    private static final int MAX_THUMBNAIL_HEIGHT = 1024;
+    private static final double QUALITY = 0.82;
 
     private static final boolean WEBP_AVAILABLE;
     static {
