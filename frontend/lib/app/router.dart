@@ -17,6 +17,7 @@ import 'package:omninest/features/music/presentation/player/music_immersive_over
 import 'package:omninest/features/notifications/presentation/pages/notification_page.dart';
 import 'package:omninest/features/notifications/presentation/pages/notification_settings_page.dart';
 import 'package:omninest/features/profile/presentation/pages/profile_page.dart';
+import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_album_detail_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
@@ -188,6 +189,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
           final photos = (extra['photos'] as List<PhotoItem>?) ?? [];
           final initialIndex = extra['initialIndex'] as int? ?? 0;
+          final source =
+              extra['source'] as PhotoBrowseSource? ??
+              PhotoBrowseSource.library;
+          final sourceKey = extra['sourceKey'] as String?;
           return _materialTransition(
             state,
             AppRouteSurface(
@@ -195,6 +200,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               policy: AppBackdropPolicy.staticContent,
               child: PhotoSlideshowPage(
                 photos: photos,
+                source: source,
+                sourceKey: sourceKey,
                 initialIndex: initialIndex,
               ),
             ),

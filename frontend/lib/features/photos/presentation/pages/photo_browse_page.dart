@@ -108,7 +108,13 @@ class PhotoBrowsePage extends ConsumerWidget {
                           return PhotoGridTile(
                             key: ValueKey(photo.id),
                             photo: photo,
-                            onTap: () => context.push('/photos/${photo.id}'),
+                            onTap: () {
+                              // 浏览范围 = 全部照片（v5.1：所有入口显式写入）。
+                              ref
+                                  .read(photoBrowseScopeProvider.notifier)
+                                  .set(photos, PhotoBrowseSource.library);
+                              context.push('/photos/${photo.id}');
+                            },
                           );
                         }, childCount: photos.length),
                       ),

@@ -72,15 +72,12 @@ class _PhotoDetailBody extends ConsumerStatefulWidget {
 }
 
 class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
-  static const Duration _slideshowInterval = Duration(seconds: 3);
-
   bool get _showInfo => ref.watch(photoInfoPanelVisibleProvider);
   List<PhotoItem> _pages = const <PhotoItem>[];
   late PageController _pageController;
   int _currentPage = 0;
   String? _currentPhotoId;
   final Set<String> _locationBackfillAttempted = {};
-  Timer? _slideshowTimer;
 
   @override
   void initState() {
@@ -94,15 +91,11 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       if (!mounted) return;
       _backfillLocationIfNeeded(_pages[_currentPage]);
       _precacheNeighbors(_currentPage);
-      if (ref.read(photoSlideshowPlayingProvider)) {
-        _startSlideshow();
-      }
     });
   }
 
   @override
   void dispose() {
-    _slideshowTimer?.cancel();
     _pageController.dispose();
     super.dispose();
   }
@@ -111,13 +104,13 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   List<PhotoItem> _resolveInitialPages() {
     final entry = widget.photo;
     final scope = ref.read(photoBrowseScopeProvider);
-    if (scope.length > 1 && scope.any((p) => p.id == entry.id)) {
-      return scope;
+    if (scope.photos.isNotEmpty && scope.photos.any((p) => p.id == entry.id)) {
+      return scope.photos;
     }
     final center =
         ref.read(photoCenterControllerProvider).asData?.value.photos ??
         const <PhotoItem>[];
-    if (center.length > 1 && center.any((p) => p.id == entry.id)) {
+    if (center.isNotEmpty && center.any((p) => p.id == entry.id)) {
       return center;
     }
     return [entry];
@@ -125,14 +118,14 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
 
   /// 序列变化（浏览范围/中心列表晚到）时保持当前照片位置并同步分页控制器。
   List<PhotoItem> _resolvePages(
-    List<PhotoItem> browseScope,
+    PhotoBrowseScope browseScope,
     List<PhotoItem> centerPhotos,
   ) {
-    if (browseScope.length > 1 &&
-        browseScope.any((p) => p.id == widget.photo.id)) {
-      return browseScope;
+    if (browseScope.photos.isNotEmpty &&
+        browseScope.photos.any((p) => p.id == widget.photo.id)) {
+      return browseScope.photos;
     }
-    if (centerPhotos.length > 1 &&
+    if (centerPhotos.isNotEmpty &&
         centerPhotos.any((p) => p.id == widget.photo.id)) {
       return centerPhotos;
     }
@@ -179,53 +172,6 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   }
 
   // ─── 幻灯片（设计稿 PhotoViewer 内嵌播放模式） ───
-
-  void _startSlideshow() {
-    _slideshowTimer?.cancel();
-    _slideshowTimer = null;
-    if (_pages.length < 2) return;
-    _slideshowTimer = Timer.periodic(_slideshowInterval, (_) {
-      _slideshowAdvance();
-    });
-  }
-
-  void _stopSlideshow() {
-    _slideshowTimer?.cancel();
-    _slideshowTimer = null;
-  }
-
-  /// 播放/暂停切换；无可播放序列时给出可见反馈，绝不静默。
-  void _toggleSlideshow() {
-    if (ref.read(photoSlideshowPlayingProvider)) {
-      ref.read(photoSlideshowPlayingProvider.notifier).stop();
-      return;
-    }
-    if (_pages.length < 2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context).photosSlideshowUnavailable,
-          ),
-        ),
-      );
-      return;
-    }
-    ref.read(photoSlideshowPlayingProvider.notifier).start();
-  }
-
-  /// 播放到序列末尾后无动画回卷到第一张，避免长距离快速扫页。
-  void _slideshowAdvance() {
-    if (!mounted) return;
-    final page =
-        _pageController.hasClients
-            ? (_pageController.page?.round() ?? 0)
-            : _currentPage;
-    if (page >= _pages.length - 1) {
-      _pageController.jumpToPage(0);
-      return;
-    }
-    _goToPage(page + 1);
-  }
 
   /// 切换到指定页；相邻切换带滑动动画。
   void _goToPage(int index, {bool animate = true}) {
@@ -290,12 +236,27 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     }
   }
 
-  /// 关闭查看器：复位幻灯片播放后返回照片列表。
-  ///
-  /// 深链进入时路由栈内没有上级页面，popOrGo 会退化为 go()，
-  /// PopScope 不触发，因此这里显式停止播放。
+  /// 启动沉浸幻灯片页；关闭后按回传结果恢复查看器位置。
+  Future<void> _launchSlideshow() async {
+    final scope = ref.read(photoBrowseScopeProvider);
+    final result = await context.push<Object>(
+      '/photos/slideshow',
+      extra: {
+        'photos': _pages,
+        'initialIndex': _currentPage,
+        'source': scope.source,
+        'sourceKey': scope.sourceKey,
+      },
+    );
+    if (!mounted || result is! Map) return;
+    final restored = result['photoId'];
+    if (restored is String && restored.isNotEmpty) {
+      setState(() => _currentPhotoId = restored);
+    }
+  }
+
+  /// 关闭查看器，返回照片列表。
   void _closeViewer() {
-    ref.read(photoSlideshowPlayingProvider.notifier).stop();
     context.popOrGo('/photos');
   }
 
@@ -424,178 +385,140 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       }
     });
 
-    // 幻灯片开关由 Provider 承载，单路由内跨页面切换保持播放。
-    ref.listen(photoSlideshowPlayingProvider, (_, playing) {
-      if (playing) {
-        _startSlideshow();
-      } else {
-        _stopSlideshow();
-      }
-    });
-
-    return PopScope(
-      // 路由真实退出（关闭/系统返回/删除后返回）时复位播放状态。
-      onPopInvokedWithResult: (didPop, result) {
-        if (!didPop) return;
-        ref.read(photoSlideshowPlayingProvider.notifier).stop();
-      },
-      child: Stack(
-        children: [
-          // 主体：照片舞台（PageView 支持左右滑动切换）+ 桌面端信息侧栏
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: PageView.builder(
-                  controller: _pageController,
-                  itemCount: _pages.length,
-                  onPageChanged: (index) {
-                    setState(() {
-                      _currentPage = index;
-                      _currentPhotoId = _pages[index].id;
-                    });
-                    _backfillLocationIfNeeded(_pages[index]);
-                    _precacheNeighbors(index);
-                  },
-                  itemBuilder: (context, index) {
-                    final base = _pages[index];
-                    return Consumer(
-                      builder: (context, pageRef, _) {
-                        final item =
-                            pageRef
-                                .watch(photoDetailProvider(base.id))
-                                .asData
-                                ?.value ??
-                            base;
-                        return _buildPhotoStage(
-                          context,
-                          item,
-                          index,
-                          _pages.length,
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
-              if (!compact)
-                AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.ease,
-                  alignment: Alignment.centerRight,
-                  child:
-                      _showInfo
-                          ? SizedBox(
-                            width: _kExifPanelWidth,
-                            child: PhotoExifPanel(photo: currentFresh),
-                          )
-                          : const SizedBox.shrink(),
-                ),
-            ],
-          ),
-          // 紧凑端信息侧栏：全高右抽屉 + 遮罩
-          if (compact && _showInfo)
-            Positioned.fill(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final width = (constraints.maxWidth * 0.86).clamp(
-                    288.0,
-                    360.0,
-                  );
-                  return Stack(
-                    children: [
-                      Positioned.fill(
-                        child: GestureDetector(
-                          onTap:
-                              () =>
-                                  ref
-                                      .read(
-                                        photoInfoPanelVisibleProvider.notifier,
-                                      )
-                                      .toggle(),
-                          child: ColoredBox(
-                            color: Colors.black.withValues(alpha: 0.40),
-                          ),
-                        ),
-                      ),
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        bottom: 0,
-                        width: width,
-                        child: PhotoExifPanel(photo: currentFresh),
-                      ),
-                    ],
+    return Stack(
+      children: [
+        // 主体：照片舞台（PageView 支持左右滑动切换）+ 桌面端信息侧栏
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: _pages.length,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentPage = index;
+                    _currentPhotoId = _pages[index].id;
+                  });
+                  _backfillLocationIfNeeded(_pages[index]);
+                  _precacheNeighbors(index);
+                },
+                itemBuilder: (context, index) {
+                  final base = _pages[index];
+                  return Consumer(
+                    builder: (context, pageRef, _) {
+                      final item =
+                          pageRef
+                              .watch(photoDetailProvider(base.id))
+                              .asData
+                              ?.value ??
+                          base;
+                      return _buildPhotoStage(
+                        context,
+                        item,
+                        index,
+                        _pages.length,
+                      );
+                    },
                   );
                 },
               ),
             ),
-          // 顶部操作栏：设计稿样式，半透明浮层横贯照片与侧栏
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: PhotoViewerTopBar(
-              photo: currentFresh,
-              onClose: _closeViewer,
-              onToggleFavorite: () async {
-                try {
-                  if (!mounted) return;
-                  await ref
-                      .read(photoCenterControllerProvider.notifier)
-                      .toggleFavorite(
-                        currentFresh.id,
-                        currentFavorite: currentFresh.favorite,
-                      );
-                  if (!mounted) return;
-                  // 刷新详情
-                  ref.invalidate(photoDetailProvider(currentFresh.id));
-                } on Exception {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          AppLocalizations.of(context).photosOperationFailed,
+            if (!compact)
+              AnimatedSize(
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.ease,
+                alignment: Alignment.centerRight,
+                child:
+                    _showInfo
+                        ? SizedBox(
+                          width: _kExifPanelWidth,
+                          child: PhotoExifPanel(photo: currentFresh),
+                        )
+                        : const SizedBox.shrink(),
+              ),
+          ],
+        ),
+        // 紧凑端信息侧栏：全高右抽屉 + 遮罩
+        if (compact && _showInfo)
+          Positioned.fill(
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final width = (constraints.maxWidth * 0.86).clamp(288.0, 360.0);
+                return Stack(
+                  children: [
+                    Positioned.fill(
+                      child: GestureDetector(
+                        onTap:
+                            () =>
+                                ref
+                                    .read(
+                                      photoInfoPanelVisibleProvider.notifier,
+                                    )
+                                    .toggle(),
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 0.40),
                         ),
                       ),
-                    );
-                  }
-                }
+                    ),
+                    Positioned(
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      width: width,
+                      child: PhotoExifPanel(photo: currentFresh),
+                    ),
+                  ],
+                );
               },
-              onDelete: _confirmDelete,
-              onToggleInfo:
-                  () =>
-                      ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
-              onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
-              onEdit: () {
-                // 进入编辑器前停止幻灯片，避免定时器在编辑页下继续换图。
-                ref.read(photoSlideshowPlayingProvider.notifier).stop();
-                context.push('/photos/${currentFresh.id}/edit');
-              },
-              onToggleSlideshow: _toggleSlideshow,
-              onDownload: () => unawaited(_downloadPhoto()),
-              showInfo: _showInfo,
-              slideshowPlaying: ref.watch(photoSlideshowPlayingProvider),
-              compact: compact,
             ),
           ),
-          // 幻灯片播放徽章：底部居中
-          if (ref.watch(photoSlideshowPlayingProvider) && _pages.length >= 2)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 20,
-              child: IgnorePointer(
-                child: Center(
-                  child: PhotoViewerSlideshowBadge(
-                    current: _currentPage + 1,
-                    total: _pages.length,
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
+        // 顶部操作栏：设计稿样式，半透明浮层横贯照片与侧栏
+        Positioned(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: PhotoViewerTopBar(
+            photo: currentFresh,
+            onClose: _closeViewer,
+            onToggleFavorite: () async {
+              try {
+                if (!mounted) return;
+                await ref
+                    .read(photoCenterControllerProvider.notifier)
+                    .toggleFavorite(
+                      currentFresh.id,
+                      currentFavorite: currentFresh.favorite,
+                    );
+                if (!mounted) return;
+                // 刷新详情
+                ref.invalidate(photoDetailProvider(currentFresh.id));
+              } on Exception {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppLocalizations.of(context).photosOperationFailed,
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
+            onDelete: _confirmDelete,
+            onToggleInfo:
+                () => ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
+            onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
+            onEdit: () {
+              context.push('/photos/${currentFresh.id}/edit');
+            },
+            onSlideshow: _launchSlideshow,
+            onDownload: () => unawaited(_downloadPhoto()),
+            showInfo: _showInfo,
+            compact: compact,
+          ),
+        ),
+      ],
     );
   }
 

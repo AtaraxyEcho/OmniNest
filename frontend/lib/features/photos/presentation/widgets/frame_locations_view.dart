@@ -56,9 +56,10 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
       photos: groups[selected]!,
       onBack: () => setState(() => _selectedLocation = null),
       onOpenPhoto: (photo) {
+        // 地点视图的幻灯片播放范围为全部照片（v5.1 语义）。
         ref
             .read(photoBrowseScopeProvider.notifier)
-            .set(List.unmodifiable(locationPhotos(groups, selected)));
+            .set(const <PhotoItem>[], PhotoBrowseSource.library);
         widget.onOpenPhoto(photo);
       },
       onToggleFavorite: widget.onToggleFavorite,

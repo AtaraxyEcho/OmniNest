@@ -117,7 +117,11 @@ class _AlbumDetailBody extends ConsumerWidget {
                                     // 浏览范围 = 当前相册的照片序列。
                                     ref
                                         .read(photoBrowseScopeProvider.notifier)
-                                        .set(photos);
+                                        .set(
+                                          photos,
+                                          PhotoBrowseSource.album,
+                                          sourceKey: album.id,
+                                        );
                                     context.push('/photos/${photo.id}');
                                   },
                                   onLongPress:

@@ -123,6 +123,8 @@ class _FrameTagsViewState extends ConsumerState<FrameTagsView> {
                                     .read(photosByTagProvider(_selectedTag!))
                                     .value ??
                                 const <PhotoItem>[],
+                            PhotoBrowseSource.tag,
+                            sourceKey: _selectedTag,
                           );
                       widget.onOpenPhoto(photo);
                     },

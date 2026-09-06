@@ -17,10 +17,9 @@ class PhotoViewerTopBar extends StatelessWidget {
     required this.onToggleInfo,
     required this.onAddToAlbum,
     required this.onEdit,
-    required this.onToggleSlideshow,
+    required this.onSlideshow,
     required this.onDownload,
     required this.showInfo,
-    required this.slideshowPlaying,
     required this.compact,
   });
 
@@ -31,10 +30,9 @@ class PhotoViewerTopBar extends StatelessWidget {
   final VoidCallback onToggleInfo;
   final VoidCallback onAddToAlbum;
   final VoidCallback onEdit;
-  final VoidCallback onToggleSlideshow;
+  final VoidCallback onSlideshow;
   final VoidCallback onDownload;
   final bool showInfo;
-  final bool slideshowPlaying;
   final bool compact;
 
   @override
@@ -122,7 +120,7 @@ class PhotoViewerTopBar extends StatelessWidget {
                   case _PhotoMenuAction.edit:
                     onEdit();
                   case _PhotoMenuAction.slideshow:
-                    onToggleSlideshow();
+                    onSlideshow();
                   case _PhotoMenuAction.addToAlbum:
                     onAddToAlbum();
                   case _PhotoMenuAction.download:
@@ -207,14 +205,8 @@ class PhotoViewerTopBar extends StatelessWidget {
             ),
             IconButton(
               tooltip: AppLocalizations.of(context).photosSlideshow,
-              onPressed: onToggleSlideshow,
-              icon: Icon(
-                slideshowPlaying
-                    ? Icons.pause_rounded
-                    : Icons.play_arrow_rounded,
-                color: slideshowPlaying ? activeColor : iconColor,
-                size: 22,
-              ),
+              onPressed: onSlideshow,
+              icon: Icon(Icons.play_arrow_rounded, color: iconColor, size: 22),
               visualDensity: VisualDensity.compact,
             ),
             IconButton(

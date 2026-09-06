@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +17,7 @@ import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_browse_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
+import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
@@ -45,7 +48,8 @@ class _FixedScopeNotifier extends PhotoBrowseScopeNotifier {
   final List<PhotoItem> photos;
 
   @override
-  List<PhotoItem> build() => photos;
+  PhotoBrowseScope build() =>
+      PhotoBrowseScope(photos: photos, source: PhotoBrowseSource.library);
 }
 
 /// 伪造的照片中心控制器，返回空状态以避免网络请求。
@@ -99,6 +103,24 @@ _Harness _harness({
                 const Scaffold(body: Center(child: Text('Photos Home'))),
       ),
       GoRoute(
+        path: '/photos/slideshow',
+        builder: (context, state) {
+          final extra = state.extra as Map<String, dynamic>? ?? {};
+          final photos = (extra['photos'] as List<PhotoItem>?) ?? [];
+          final source =
+              extra['source'] as PhotoBrowseSource? ??
+              PhotoBrowseSource.library;
+          final sourceKey = extra['sourceKey'] as String?;
+          final initialIndex = extra['initialIndex'] as int? ?? 0;
+          return PhotoSlideshowPage(
+            photos: photos,
+            source: source,
+            sourceKey: sourceKey,
+            initialIndex: initialIndex,
+          );
+        },
+      ),
+      GoRoute(
         path: '/photos/:photoId',
         builder:
             (context, state) =>
@@ -139,6 +161,7 @@ Future<void> _pumpDesktop(WidgetTester tester, Widget child) async {
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(child);
+  await tester.pump();
   await tester.pumpAndSettle();
 }
 
@@ -149,7 +172,18 @@ void main() {
     _photo('photo-3', 'Geneva'),
   ];
 
-  testWidgets('生产链路：网格打开详情后幻灯片点击播放并自动推进', (tester) async {
+  testWidgets('顶栏使用关闭/下载/删除命令且删除不再是永久删除文案', (tester) async {
+    await _pumpDesktop(tester, _harness(scope: scope).child);
+
+    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+    expect(find.byTooltip('Download original'), findsOneWidget);
+    expect(find.byTooltip('Delete'), findsOneWidget);
+    expect(find.byTooltip('Permanently Delete'), findsNothing);
+    expect(find.byIcon(Icons.download_outlined), findsOneWidget);
+    expect(find.byIcon(Icons.delete_outline_rounded), findsOneWidget);
+  });
+
+  testWidgets('生产链路：网格打开详情后播放按钮启动沉浸页并自动推进', (tester) async {
     final repository = _MockPhotoRepository();
     when(
       () => repository.dashboard(),
@@ -201,6 +235,20 @@ void main() {
           builder: (context, state) => const PhotoBrowsePage(),
         ),
         GoRoute(
+          path: '/photos/slideshow',
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            return PhotoSlideshowPage(
+              photos: (extra['photos'] as List<PhotoItem>?) ?? const [],
+              source:
+                  extra['source'] as PhotoBrowseSource? ??
+                  PhotoBrowseSource.library,
+              sourceKey: extra['sourceKey'] as String?,
+              initialIndex: extra['initialIndex'] as int? ?? 0,
+            );
+          },
+        ),
+        GoRoute(
           path: '/photos/:photoId',
           builder:
               (context, state) =>
@@ -239,14 +287,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Bern'), findsOneWidget);
 
-    // 点击播放：徽章出现并开始自动推进。
+    // 点击播放：沉浸页打开，顶栏计数可见并自动推进。
     await tester.tap(find.byIcon(Icons.play_arrow_rounded));
     await tester.pump();
-    expect(find.text('幻灯片 · 1 / 3'), findsOneWidget);
-    await tester.pump(const Duration(seconds: 3));
+    expect(find.text('01 / 03'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
     await tester.pump();
     await tester.pumpAndSettle();
-    expect(find.text('幻灯片 · 2 / 3'), findsOneWidget);
+    expect(find.text('02 / 03'), findsOneWidget);
   });
 
   testWidgets('箭头与滑动手势在单路由内切换照片', (tester) async {
@@ -266,169 +314,6 @@ void main() {
     await tester.fling(find.byType(PageView), const Offset(400, 0), 1200);
     await tester.pumpAndSettle();
     expect(find.text('Zurich'), findsOneWidget);
-  });
-
-  testWidgets('浏览页式进入（范围未写、中心列表含照片）可播放', (tester) async {
-    await _pumpDesktop(
-      tester,
-      _harness(
-        scope: scope,
-        centerSeed: scope,
-        overrideScope: false,
-        localeCode: 'zh',
-      ).child,
-    );
-
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
-    expect(find.text('幻灯片 · 1 / 3'), findsOneWidget);
-  });
-
-  testWidgets('无可播放序列时点击给出可见反馈且不进入播放态', (tester) async {
-    await _pumpDesktop(
-      tester,
-      _harness(
-        scope: scope,
-        centerSeed: const [],
-        overrideScope: false,
-        localeCode: 'zh',
-      ).child,
-    );
-
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
-    expect(find.text('当前没有可连续播放的照片'), findsOneWidget);
-    expect(find.textContaining('幻灯片 ·'), findsNothing);
-    expect(find.byIcon(Icons.pause_rounded), findsNothing);
-  });
-
-  testWidgets('浏览范围晚到时点击反馈后可正常播放', (tester) async {
-    final harness = _harness(
-      scope: scope,
-      centerSeed: const [],
-      overrideScope: false,
-      localeCode: 'zh',
-    );
-    await _pumpDesktop(tester, harness.child);
-
-    // 数据未就绪时点击只提示，不进入播放态。
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
-    expect(find.text('当前没有可连续播放的照片'), findsOneWidget);
-    expect(find.byIcon(Icons.pause_rounded), findsNothing);
-
-    // 浏览范围晚到写入后无需重建页面即可播放。
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(PhotoDetailPage)),
-    );
-    container.read(photoBrowseScopeProvider.notifier).set(scope);
-    // 清除第一次点击的提示条，避免干扰第二次点击的断言。
-    ScaffoldMessenger.of(
-      tester.element(find.byType(PhotoDetailPage)),
-    ).clearSnackBars();
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
-    expect(find.text('幻灯片 · 1 / 3'), findsOneWidget);
-    expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
-    expect(find.text('当前没有可连续播放的照片'), findsNothing);
-  });
-
-  testWidgets('顶栏使用关闭/下载/删除命令且删除不再是永久删除文案', (tester) async {
-    await _pumpDesktop(tester, _harness(scope: scope).child);
-
-    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
-    expect(find.byTooltip('Download original'), findsOneWidget);
-    expect(find.byTooltip('Delete'), findsOneWidget);
-    expect(find.byTooltip('Permanently Delete'), findsNothing);
-    expect(find.byIcon(Icons.download_outlined), findsOneWidget);
-    expect(find.byIcon(Icons.delete_outline_rounded), findsOneWidget);
-  });
-
-  testWidgets('幻灯片在查看器内自动推进并循环回第一张', (tester) async {
-    await _pumpDesktop(tester, _harness(scope: scope).child);
-
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
-    expect(find.text('Slideshow · 1 / 3'), findsOneWidget);
-
-    // 第一次推进：photo-1 → photo-2，播放状态跨路由替换保持。
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pump();
-    await tester.pumpAndSettle();
-    expect(find.text('Slideshow · 2 / 3'), findsOneWidget);
-
-    // 第二次推进：photo-2 → photo-3。
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pump();
-    await tester.pumpAndSettle();
-    expect(find.text('Slideshow · 3 / 3'), findsOneWidget);
-
-    // 末尾循环回第一张。
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pump();
-    await tester.pumpAndSettle();
-    expect(find.text('Slideshow · 1 / 3'), findsOneWidget);
-  });
-
-  testWidgets('暂停后不再自动推进', (tester) async {
-    await _pumpDesktop(tester, _harness(scope: scope).child);
-
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pump();
-    await tester.pumpAndSettle();
-    expect(find.text('Slideshow · 2 / 3'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.pause_rounded));
-    await tester.pump();
-    expect(find.text('Slideshow · 2 / 3'), findsNothing);
-
-    await tester.pump(const Duration(seconds: 10));
-    await tester.pump();
-    await tester.pumpAndSettle();
-    expect(find.text('Zurich'), findsOneWidget);
-    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
-  });
-
-  testWidgets('离开详情后播放状态自动复位，再次进入不恢复播放', (tester) async {
-    final harness = _harness(scope: scope, initialLocation: '/photos');
-    await _pumpDesktop(tester, harness.child);
-    expect(find.text('Photos Home'), findsOneWidget);
-
-    // 从列表 push 进入详情，与生产导航路径一致，关闭时走 pop。
-    harness.router.push('/photos/photo-1');
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
-    await tester.pump(const Duration(seconds: 3));
-    await tester.pump();
-    await tester.pumpAndSettle();
-    expect(find.text('Slideshow · 2 / 3'), findsOneWidget);
-
-    await tester.tap(find.byIcon(Icons.close_rounded));
-    await tester.pumpAndSettle();
-    expect(find.text('Photos Home'), findsOneWidget);
-
-    harness.router.push('/photos/photo-3');
-    await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.pause_rounded), findsNothing);
-    expect(find.textContaining('Slideshow ·'), findsNothing);
-    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
-  });
-
-  testWidgets('页面销毁时幻灯片定时器随之取消', (tester) async {
-    await _pumpDesktop(tester, _harness(scope: scope).child);
-
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
-
-    await tester.pumpWidget(const SizedBox());
-    // 若定时器未取消，测试结束时会被标记为 pending timer。
-    await tester.pump(const Duration(seconds: 10));
   });
 
   testWidgets('桌面端信息面板是全高独立侧栏并压缩照片区', (tester) async {

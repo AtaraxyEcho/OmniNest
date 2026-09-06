@@ -47,7 +47,9 @@ class _FrameViewContent extends ConsumerWidget {
                 for (final year in timeline.years)
                   for (final month in year.months) ...month.previewPhotos,
               ];
-              ref.read(photoBrowseScopeProvider.notifier).set(previews);
+              ref
+                  .read(photoBrowseScopeProvider.notifier)
+                  .set(previews, PhotoBrowseSource.timeline);
             }
             onOpenPhoto(photo);
           },
@@ -91,7 +93,14 @@ class _FrameViewContent extends ConsumerWidget {
       photos: state.visiblePhotos,
       onOpenPhoto: (photo) {
         // 记录浏览范围：详情页的上一张/下一张与幻灯片以该序列为准。
-        ref.read(photoBrowseScopeProvider.notifier).set(state.visiblePhotos);
+        ref
+            .read(photoBrowseScopeProvider.notifier)
+            .set(
+              state.visiblePhotos,
+              isFavorites
+                  ? PhotoBrowseSource.favorites
+                  : PhotoBrowseSource.library,
+            );
         onOpenPhoto(photo);
       },
       onToggleFavorite: onToggleFavorite,
