@@ -40,6 +40,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -287,6 +288,7 @@ public class PhotoAdminService {
         // EXIF 提取与内容哈希共用一次下载，封面交给缩略图任务异步生成回填。
         boolean raw = fileDetector.isRaw(file.name());
         String contentHash;
+        String motionKind = null;
         PhotoExifExtractor.ExifData exif;
         if (raw) {
             try (PhotoSourceFileService.StagedPhotoFile source = sourceFileService.stageReadable(
@@ -316,8 +318,25 @@ public class PhotoAdminService {
                 inputGuard.validateDimensions(exif.width(), exif.height());
                 applyExif(photo, exif);
                 applyLocation(photo);
-                digestInput.transferTo(OutputStream.nullOutputStream());
+                // 流式哈希同时维护 4KB 尾部环形缓冲，供三星 SEF trailer 扫描，零额外 IO。
+                byte[] tail = new byte[PhotoMotionTrailerScanner.TAIL_WINDOW_BYTES];
+                byte[] chunk = new byte[READ_CHUNK_BYTES];
+                int tailFilled = 0;
+                int read;
+                while ((read = digestInput.read(chunk)) != -1) {
+                    tailFilled = appendTail(tail, tailFilled, chunk, read);
+                }
                 contentHash = HexFormat.of().formatHex(digestInput.getMessageDigest().digest());
+                motionKind = resolveMotionKind(file.name(), exif.motion(), tail, tailFilled);
+                if (motionKind != null) {
+                    Map<String, Object> motion = new HashMap<>();
+                    motion.put("kind", motionKind);
+                    if (exif.motion().microVideoOffset() != null) {
+                        motion.put("offsetBytes", exif.motion().microVideoOffset());
+                    }
+                    photo.getProviderMetadata().put("motion", motion);
+                    photo.setMotionState(PhotoMotionVideoService.STATE_DETECTED);
+                }
             } catch (IOException exception) {
                 throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "照片源文件处理失败");
             }
@@ -331,6 +350,7 @@ public class PhotoAdminService {
 
         // 事务提交后再发布消息，避免 Worker 在事务提交前查询导致"照片不存在"
         UUID savedPhotoId = photo.getId();
+        final String detectedMotionKind = motionKind;
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
@@ -342,6 +362,11 @@ public class PhotoAdminService {
                     // 封面不再同步生成，补投缩略图任务（含 active-task 去重）。
                     filePostProcessingTaskService.enqueueThumbnailIfAbsent(
                             thumbnailEvent(file, ownerUserId));
+                    if (detectedMotionKind != null) {
+                        // 动态照片补投运动视频提取任务（含 active-task 去重）。
+                        filePostProcessingTaskService.enqueuePhotoMotionIfAbsent(
+                                thumbnailEvent(file, ownerUserId));
+                    }
                 }
             }
         });
@@ -395,6 +420,55 @@ public class PhotoAdminService {
         } catch (NoSuchAlgorithmException exception) {
             throw new IllegalStateException("SHA-256 算法不可用", exception);
         }
+    }
+
+    /** 动态照片检测的流式读取块大小。 */
+    private static final int READ_CHUNK_BYTES = 8192;
+
+    /**
+     * 把本次读取的字节追加进尾部环形缓冲，保留最近的窗口字节。
+     *
+     * @param tail 尾部缓冲
+     * @param tailFilled 缓冲中的有效字节数
+     * @param chunk 本次读取的数据
+     * @param length 本次读取的有效长度
+     * @return 更新后的有效字节数
+     */
+    private int appendTail(byte[] tail, int tailFilled, byte[] chunk, int length) {
+        if (length >= tail.length) {
+            System.arraycopy(chunk, length - tail.length, tail, 0, tail.length);
+            return tail.length;
+        }
+        int overflow = tailFilled + length - tail.length;
+        if (overflow > 0) {
+            System.arraycopy(tail, overflow, tail, 0, tailFilled - overflow);
+            tailFilled -= overflow;
+        }
+        System.arraycopy(chunk, 0, tail, tailFilled, length);
+        return tailFilled + length;
+    }
+
+    /**
+     * 解析动态照片类型：优先 XMP（GCamera 新旧标准），未命中时扫描三星 SEF trailer。
+     * 仅对 JPEG 生效，RAW/HEIC 等格式不做检测。
+     */
+    private String resolveMotionKind(
+            String fileName,
+            PhotoExifExtractor.MotionInfo motionInfo,
+            byte[] tail,
+            int tailFilled
+    ) {
+        String extension = fileDetector.extension(fileName);
+        if (!"jpg".equals(extension) && !"jpeg".equals(extension)) {
+            return null;
+        }
+        if (motionInfo.detected()) {
+            return motionInfo.microVideo() ? "MICRO_VIDEO" : "MOTION_PHOTO";
+        }
+        if (PhotoMotionTrailerScanner.hasSefTrailer(tail, tailFilled)) {
+            return "SEF_TRAILER";
+        }
+        return null;
     }
 
     private void applyExif(PhotoItem photo, PhotoExifExtractor.ExifData exif) {

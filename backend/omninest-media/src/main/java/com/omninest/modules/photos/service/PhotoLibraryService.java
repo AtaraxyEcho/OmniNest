@@ -796,8 +796,30 @@ public class PhotoLibraryService {
                         : null,
                 includeContentAnalysis
                         ? contentAnalysisService.current(photo.getOwnerUserId(), photo.getId())
+                        : null,
+                includeContentAnalysis
+                        ? resolveMotionVideoUrl(photo)
                         : null
         );
+    }
+
+    /**
+     * 解析动态照片的运动视频地址，仅在 READY 状态对派生节点签发下载地址。
+     */
+    private String resolveMotionVideoUrl(PhotoItem photo) {
+        if (!PhotoMotionVideoService.STATE_READY.equals(photo.getMotionState())
+                || photo.getMotionVideoFileNodeId() == null) {
+            return null;
+        }
+        try {
+            return fileQueryService.createDownloadUrl(
+                    photo.getOwnerUserId(),
+                    photo.getMotionVideoFileNodeId()
+            ).downloadUrl();
+        } catch (Exception ex) {
+            log.warn("解析动态视频地址失败: fileNodeId={}", photo.getMotionVideoFileNodeId(), ex);
+            return null;
+        }
     }
 
     private Page<PhotoListItemDto> mapListPage(
@@ -852,7 +874,8 @@ public class PhotoLibraryService {
                 item.getMetadataStatus(),
                 favoriteIds.contains(item.getId()),
                 item.getCreatedAt(),
-                tagsByPhoto.getOrDefault(item.getId(), List.of())
+                tagsByPhoto.getOrDefault(item.getId(), List.of()),
+                item.getMotionState()
         )).toList();
     }
 
@@ -1027,6 +1050,8 @@ public class PhotoLibraryService {
                 item.createdAt(),
                 item.tags(),
                 Map.of(),
+                null,
+                item.motionState(),
                 null
         );
     }

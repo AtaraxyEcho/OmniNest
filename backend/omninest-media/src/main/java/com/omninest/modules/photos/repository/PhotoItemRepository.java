@@ -45,6 +45,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    p.fileSize AS fileSize,
                    p.coverFileId AS coverFileId,
                    p.metadataStatus AS metadataStatus,
+                   p.motionState AS motionState,
                    p.createdAt AS createdAt
               FROM PhotoItem p
               JOIN FileNode file ON p.fileNodeId = file.id
@@ -89,6 +90,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    p.fileSize AS fileSize,
                    p.coverFileId AS coverFileId,
                    p.metadataStatus AS metadataStatus,
+                   p.motionState AS motionState,
                    p.createdAt AS createdAt
               FROM PhotoItem p
               JOIN FileNode file ON p.fileNodeId = file.id
@@ -137,6 +139,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    p.fileSize AS fileSize,
                    p.coverFileId AS coverFileId,
                    p.metadataStatus AS metadataStatus,
+                   p.motionState AS motionState,
                    p.createdAt AS createdAt
               FROM PhotoItem p, PhotoFavorite f, FileNode file
              WHERE p.ownerUserId = :ownerUserId
@@ -185,6 +188,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    p.fileSize AS fileSize,
                    p.coverFileId AS coverFileId,
                    p.metadataStatus AS metadataStatus,
+                   p.motionState AS motionState,
                    p.createdAt AS createdAt
               FROM PhotoItem p, PhotoFavorite f, FileNode file
              WHERE p.ownerUserId = :ownerUserId
@@ -241,6 +245,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    p.fileSize AS fileSize,
                    p.coverFileId AS coverFileId,
                    p.metadataStatus AS metadataStatus,
+                   p.motionState AS motionState,
                    p.createdAt AS createdAt
               FROM PhotoItem p, FileNode file
              WHERE p.ownerUserId = :ownerUserId
@@ -291,6 +296,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    p.fileSize AS fileSize,
                    p.coverFileId AS coverFileId,
                    p.metadataStatus AS metadataStatus,
+                   p.motionState AS motionState,
                    p.createdAt AS createdAt
               FROM PhotoItem p, FileNode file
              WHERE p.ownerUserId = :ownerUserId
@@ -322,6 +328,45 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
             @Param("ownerUserId") UUID ownerUserId,
             @Param("albumId") UUID albumId,
             Pageable pageable);
+
+    /**
+     * 分页查询动态照片回扫候选：尚无运动状态、可解码 JPEG 且未删除的照片。
+     *
+     * @param ownerUserId 用户标识
+     * @param startAfterId 游标照片 ID，首批传 null
+     * @param pageable 分页参数（仅用页大小，按 ID 升序）
+     * @return 候选照片列表
+     */
+    @Query(value = """
+            SELECT p
+              FROM PhotoItem p
+             WHERE p.ownerUserId = :ownerUserId
+               AND p.deletedAt IS NULL
+               AND p.motionState IS NULL
+               AND LOWER(p.format) IN ('jpg', 'jpeg')
+               AND (:startAfterId IS NULL OR p.id > :startAfterId)
+             ORDER BY p.id ASC
+            """)
+    List<PhotoItem> findMotionRescanCandidates(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("startAfterId") UUID startAfterId,
+            Pageable pageable);
+
+    /**
+     * 统计动态照片回扫候选总数，用于任务进度基准。
+     *
+     * @param ownerUserId 用户标识
+     * @return 候选总数
+     */
+    @Query(value = """
+            SELECT COUNT(p)
+              FROM PhotoItem p
+             WHERE p.ownerUserId = :ownerUserId
+               AND p.deletedAt IS NULL
+               AND p.motionState IS NULL
+               AND LOWER(p.format) IN ('jpg', 'jpeg')
+            """)
+    long countMotionRescanCandidates(@Param("ownerUserId") UUID ownerUserId);
 
     /**
      * 按月份分页查询时间线，并为每个月返回最多四张预览照片。
@@ -396,6 +441,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    r.file_size AS "fileSize",
                    r.cover_file_id AS "coverFileId",
                    r.metadata_status AS "metadataStatus",
+                   r.motion_state AS "motionState",
                    r.created_at AS "createdAt"
               FROM ranked r
              WHERE r.preview_rank <= 4
@@ -515,6 +561,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    r.file_size AS "fileSize",
                    r.cover_file_id AS "coverFileId",
                    r.metadata_status AS "metadataStatus",
+                   r.motion_state AS "motionState",
                    r.created_at AS "createdAt"
               FROM ranked r
              WHERE r.preview_rank <= 4
@@ -774,6 +821,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                    p.fileSize AS fileSize,
                    p.coverFileId AS coverFileId,
                    p.metadataStatus AS metadataStatus,
+                   p.motionState AS motionState,
                    p.createdAt AS createdAt
               FROM PhotoItem p
               JOIN FileNode file ON p.fileNodeId = file.id

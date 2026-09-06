@@ -34,6 +34,8 @@ class PhotoItem {
     this.tags = const [],
     this.providerMetadata,
     this.contentAnalysis,
+    this.motionState,
+    this.motionVideoUrl,
   });
 
   final String id;
@@ -67,6 +69,18 @@ class PhotoItem {
   final List<String> tags;
   final Map<String, dynamic>? providerMetadata;
   final PhotoContentAnalysis? contentAnalysis;
+
+  /// 动态照片状态：null 表示历史照片或非动态照片；DETECTED/READY/FAILED。
+  final String? motionState;
+
+  /// 动态视频播放地址，仅详情接口且 READY 状态返回。
+  final String? motionVideoUrl;
+
+  /// 是否已提取出可播放的动态视频。
+  bool get isMotionReady =>
+      motionState == 'READY' &&
+      motionVideoUrl != null &&
+      motionVideoUrl!.isNotEmpty;
 
   factory PhotoItem.fromJson(Map<String, dynamic> json) {
     return PhotoItem(
@@ -124,6 +138,8 @@ class PhotoItem {
                 Map<String, dynamic>.from(json['contentAnalysis'] as Map),
               )
               : null,
+      motionState: json['motionState']?.toString(),
+      motionVideoUrl: json['motionVideoUrl']?.toString(),
     );
   }
 

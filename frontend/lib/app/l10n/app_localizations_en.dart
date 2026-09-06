@@ -6949,6 +6949,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'This share requires password access';
 
   @override
+  String get photosLiveBadge => 'LIVE';
+
+  @override
+  String get photosLiveBadgeTooltip =>
+      'Tap to play the motion photo, long-press the photo for a quick preview';
+
+  @override
+  String get photosMotionPlayFailed => 'Failed to play motion video';
+
+  @override
   String get photosShareAlbum => 'Share Album';
 
   @override

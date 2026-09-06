@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class FilePostProcessingTaskService {
     private static final String TASK_TYPE = "MEDIA_AUTO_IMPORT";
+    private static final String PHOTO_MOTION_TASK_TYPE = "PHOTO_MOTION";
     private static final String RESOURCE_TYPE = "FILE_NODE";
     private static final List<String> ACTIVE_STATUSES = List.of(
             TaskStatus.QUEUED.getValue(),
@@ -116,6 +117,37 @@ public class FilePostProcessingTaskService {
         if (isImage(event.mimeType()) && !hasActiveTask(event, "THUMBNAIL")) {
             enqueueThumbnail(event);
         }
+    }
+
+    /**
+     * 为已识别的动态照片投递运动视频提取任务；已有进行中的同任务时跳过。
+     *
+     * <p>仅由照片导入在检测命中后调用，调用方负责事务提交时机（经 outbox 投递）。</p>
+     *
+     * @param event 照片源文件事件
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void enqueuePhotoMotionIfAbsent(FileUploadedEvent event) {
+        if (hasActiveTask(event, PHOTO_MOTION_TASK_TYPE)) {
+            return;
+        }
+        UUID taskId = UUID.randomUUID();
+        taskRecordService.createQueuedTask(
+                taskId,
+                event.ownerUserId(),
+                PHOTO_MOTION_TASK_TYPE,
+                QueueNames.PHOTO_MOTION_ROUTING_KEY,
+                "PENDING",
+                RESOURCE_TYPE,
+                event.fileNodeId(),
+                postProcessPayload(event)
+        );
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.PHOTO_MOTION_ROUTING_KEY,
+                event
+        );
     }
 
     private boolean hasActiveTask(FileUploadedEvent event, String taskType) {

@@ -12779,6 +12779,24 @@ abstract class AppLocalizations {
   /// **'This share requires password access'**
   String get photosSharedItemPasswordRequired;
 
+  /// No description provided for @photosLiveBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'LIVE'**
+  String get photosLiveBadge;
+
+  /// No description provided for @photosLiveBadgeTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to play the motion photo, long-press the photo for a quick preview'**
+  String get photosLiveBadgeTooltip;
+
+  /// No description provided for @photosMotionPlayFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to play motion video'**
+  String get photosMotionPlayFailed;
+
   /// No description provided for @photosShareAlbum.
   ///
   /// In en, this message translates to:

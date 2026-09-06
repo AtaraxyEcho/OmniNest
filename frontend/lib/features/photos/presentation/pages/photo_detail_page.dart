@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_exif_sidebar.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
@@ -79,6 +80,12 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   late PageController _pageController;
   int _currentPage = 0;
   String? _currentPhotoId;
+
+  /// 动态照片长按预览中；松手复位。
+  bool _motionHoldPlaying = false;
+
+  /// 动态照片常驻播放开关；点按 LIVE 徽标切换，切页/点播放层复位。
+  bool _motionPinnedPlaying = false;
   final Set<String> _locationBackfillAttempted = {};
 
   @override
@@ -188,6 +195,29 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     } else {
       _pageController.jumpToPage(target);
     }
+  }
+
+  void _setMotionHold(bool playing) {
+    if (!mounted || _motionHoldPlaying == playing) return;
+    setState(() => _motionHoldPlaying = playing);
+  }
+
+  void _setMotionPinned(bool playing) {
+    if (!mounted || _motionPinnedPlaying == playing) return;
+    setState(() => _motionPinnedPlaying = playing);
+  }
+
+  void _handleMotionPlayError() {
+    if (!mounted) return;
+    setState(() {
+      _motionHoldPlaying = false;
+      _motionPinnedPlaying = false;
+    });
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(AppLocalizations.of(context).photosMotionPlayFailed),
+      ),
+    );
   }
 
   /// 当前查看的照片：浏览序列中按下标取，并叠加详情数据的最新值。
@@ -458,6 +488,8 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                   setState(() {
                     _currentPage = index;
                     _currentPhotoId = _pages[index].id;
+                    _motionHoldPlaying = false;
+                    _motionPinnedPlaying = false;
                   });
                   _backfillLocationIfNeeded(_pages[index]);
                   _precacheNeighbors(index);
@@ -600,91 +632,125 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       child: Stack(
         children: [
           Positioned.fill(
-            child: Padding(
-              // 设计稿照片区四周留白 40px，顶部避开浮层顶栏。
-              padding: const EdgeInsets.fromLTRB(40, 56, 40, 24),
-              child: Center(
-                child:
-                    imageUrl != null && imageUrl.isNotEmpty
-                        ? Hero(
-                          tag: 'photo-cover-${photo.id}',
-                          child: InteractiveViewer(
-                            minScale: 1,
-                            maxScale: 5,
-                            child: SizedBox.expand(
-                              child: CachedNetworkImage(
-                                imageUrl: imageUrl,
-                                cacheKey:
-                                    photo.sourceUrl != null
-                                        ? photo.sourceCacheKey
-                                        : photo.coverCacheKey,
-                                fit: BoxFit.contain,
-                                placeholder:
-                                    (context, url) => Center(
-                                      child: CircularProgressIndicator(
-                                        color:
-                                            context
-                                                .photosColors
-                                                .primaryContainer,
+            child: GestureDetector(
+              // 动态照片：长按快速预览运动视频，松手回到静态帧。
+              onLongPressStart:
+                  photo.isMotionReady ? (_) => _setMotionHold(true) : null,
+              onLongPressEnd:
+                  photo.isMotionReady ? (_) => _setMotionHold(false) : null,
+              onLongPressCancel:
+                  photo.isMotionReady ? () => _setMotionHold(false) : null,
+              child: Padding(
+                // 设计稿照片区四周留白 40px，顶部避开浮层顶栏。
+                padding: const EdgeInsets.fromLTRB(40, 56, 40, 24),
+                child: Center(
+                  child:
+                      imageUrl != null && imageUrl.isNotEmpty
+                          ? Hero(
+                            tag: 'photo-cover-${photo.id}',
+                            child: InteractiveViewer(
+                              minScale: 1,
+                              maxScale: 5,
+                              child: SizedBox.expand(
+                                child: CachedNetworkImage(
+                                  imageUrl: imageUrl,
+                                  cacheKey:
+                                      photo.sourceUrl != null
+                                          ? photo.sourceCacheKey
+                                          : photo.coverCacheKey,
+                                  fit: BoxFit.contain,
+                                  placeholder:
+                                      (context, url) => Center(
+                                        child: CircularProgressIndicator(
+                                          color:
+                                              context
+                                                  .photosColors
+                                                  .primaryContainer,
+                                        ),
                                       ),
-                                    ),
-                                errorWidget:
-                                    (context, url, error) => Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(
-                                            Icons.broken_image_outlined,
-                                            color: context
-                                                .photosColors
-                                                .onSurfaceVariant
-                                                .withValues(alpha: 0.4),
-                                            size: 48,
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            AppLocalizations.of(
-                                              context,
-                                            ).photosImageLoadFailed,
-                                            style: TextStyle(
-                                              color:
-                                                  context
-                                                      .photosColors
-                                                      .onSurfaceVariant,
+                                  errorWidget:
+                                      (context, url, error) => Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.broken_image_outlined,
+                                              color: context
+                                                  .photosColors
+                                                  .onSurfaceVariant
+                                                  .withValues(alpha: 0.4),
+                                              size: 48,
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              AppLocalizations.of(
+                                                context,
+                                              ).photosImageLoadFailed,
+                                              style: TextStyle(
+                                                color:
+                                                    context
+                                                        .photosColors
+                                                        .onSurfaceVariant,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
+                                ),
                               ),
                             ),
+                          )
+                          : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.photo_outlined,
+                                color: context.photosColors.onSurfaceVariant
+                                    .withValues(alpha: 0.4),
+                                size: 64,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                photo.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: context.photosColors.onSurfaceVariant,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
                           ),
-                        )
-                        : Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.photo_outlined,
-                              color: context.photosColors.onSurfaceVariant
-                                  .withValues(alpha: 0.4),
-                              size: 64,
-                            ),
-                            const SizedBox(height: 12),
-                            Text(
-                              photo.title,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: context.photosColors.onSurfaceVariant,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ],
-                        ),
+                ),
               ),
             ),
           ),
+          // 动态照片：运动视频播放层（长按或点按徽标触发），盖在照片上方、箭头之下。
+          if (photo.isMotionReady &&
+              (_motionHoldPlaying || _motionPinnedPlaying))
+            Positioned.fill(
+              child: GestureDetector(
+                onTap: () => _setMotionPinned(false),
+                child: PhotoMotionPlayer(
+                  key: ValueKey('motion-${photo.id}'),
+                  url: photo.motionVideoUrl!,
+                  onError: _handleMotionPlayError,
+                ),
+              ),
+            ),
+          // LIVE 徽标：常驻播放开关。
+          if (photo.isMotionReady)
+            Positioned(
+              left: 24,
+              bottom: 24,
+              child: _MotionBadge(
+                active: _motionPinnedPlaying,
+                label: AppLocalizations.of(context).photosLiveBadge,
+                tooltip: AppLocalizations.of(context).photosLiveBadgeTooltip,
+                onTap: () => _setMotionPinned(!_motionPinnedPlaying),
+              ),
+            ),
           if (index > 0)
             PhotoViewerArrowButton(
               icon: Icons.chevron_left_rounded,
@@ -700,6 +766,72 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               onTap: () => _goToPage(index + 1),
             ),
         ],
+      ),
+    );
+  }
+}
+
+/// LIVE 徽标：胶囊样式，激活时高亮，点按切换常驻播放。
+class _MotionBadge extends StatelessWidget {
+  const _MotionBadge({
+    required this.active,
+    required this.label,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  final bool active;
+  final String label;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final background =
+        active
+            ? context.photosColors.primaryContainer
+            : isDark
+            ? Colors.black.withValues(alpha: 0.55)
+            : Colors.white.withValues(alpha: 0.78);
+    final foreground =
+        active
+            ? context.photosColors.onPrimaryContainer
+            : isDark
+            ? Colors.white.withValues(alpha: 0.92)
+            : Colors.black.withValues(alpha: 0.78);
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: background,
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.motion_photos_on_rounded,
+                  size: 16,
+                  color: foreground,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: foreground,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

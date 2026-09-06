@@ -1,17 +1,20 @@
 package com.omninest.modules.photos.service;
 
 import com.drew.imaging.ImageMetadataReader;
+import com.drew.lang.annotations.Nullable;
 import com.drew.metadata.Directory;
 import com.drew.metadata.Metadata;
-import com.drew.metadata.exif.ExifIFD0Directory;
 import com.drew.metadata.exif.ExifDirectoryBase;
+import com.drew.metadata.exif.ExifIFD0Directory;
 import com.drew.metadata.exif.ExifSubIFDDirectory;
 import com.drew.metadata.exif.GpsDirectory;
+import com.drew.metadata.xmp.XmpDirectory;
 import java.io.InputStream;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -19,6 +22,23 @@ import org.springframework.stereotype.Service;
 @Slf4j
 @Service
 public class PhotoExifExtractor {
+
+    /**
+     * 动态照片（Motion Photo）XMP 检测结果。
+     *
+     * @param motionPhoto GCamera 新标准标记（MotionPhoto=true）
+     * @param microVideo GCamera 旧标准标记（MicroVideo=1）
+     * @param microVideoOffset 旧标准的视频起点距文件末尾字节数；新标准通常无此值
+     */
+    public record MotionInfo(
+            boolean motionPhoto,
+            boolean microVideo,
+            @Nullable Long microVideoOffset
+    ) {
+        public boolean detected() {
+            return motionPhoto || microVideo;
+        }
+    }
 
     public record ExifData(
             Integer width,
@@ -37,11 +57,12 @@ public class PhotoExifExtractor {
             String lensModel,
             BigDecimal gpsLatitude,
             BigDecimal gpsLongitude,
-            Map<String, Object> rawMetadata
+            Map<String, Object> rawMetadata,
+            MotionInfo motion
     ) {
         public static ExifData empty() {
             return new ExifData(null, null, null, null, null, null, null, null, null, null,
-                    null, null, null, null, null, null, Map.of());
+                    null, null, null, null, null, null, Map.of(), new MotionInfo(false, false, null));
         }
 
         public boolean hasAnyValue() {
@@ -116,7 +137,7 @@ public class PhotoExifExtractor {
             return new ExifData(width, height, orientation, dateTaken,
                     cameraMake, cameraModel, aperture, shutterSpeed,
                     iso, focalLength, flash, whiteBalance, meteringMode, lensModel,
-                    gpsLat, gpsLon, raw);
+                    gpsLat, gpsLon, raw, extractMotionInfo(metadata));
         } catch (Exception ex) {
             log.warn("EXIF 提取失败: {}", ex.getMessage());
             return ExifData.empty();
@@ -133,5 +154,50 @@ public class PhotoExifExtractor {
             log.debug("EXIF 整型读取失败: tagType={}, message={}", tagType, ex.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 从 XMP 目录解析动态照片标记（GCamera 新旧标准）。
+     *
+     * <p>XmpDirectory 会把所有命名空间属性平铺为字符串键值；三星新固件同样写入
+     * GCamera 标记，老固件的纯 SEF trailer 由文件尾部扫描单独兜底。</p>
+     */
+    MotionInfo extractMotionInfo(Metadata metadata) {
+        XmpDirectory xmp = metadata.getFirstDirectoryOfType(XmpDirectory.class);
+        if (xmp == null) {
+            return new MotionInfo(false, false, null);
+        }
+        try {
+            Map<String, String> properties = xmp.getXmpProperties();
+            if (properties == null || properties.isEmpty()) {
+                return new MotionInfo(false, false, null);
+            }
+            boolean motionPhoto = parseBooleanFlag(properties.get("GCamera:MotionPhoto"));
+            boolean microVideo = parseBooleanFlag(properties.get("GCamera:MicroVideo"));
+            Long offset = null;
+            String rawOffset = properties.get("GCamera:MicroVideoOffset");
+            if (rawOffset != null && !rawOffset.isBlank()) {
+                try {
+                    long parsed = Long.parseLong(rawOffset.trim());
+                    if (parsed > 0) {
+                        offset = parsed;
+                    }
+                } catch (NumberFormatException ex) {
+                    log.debug("MicroVideoOffset 解析失败: {}", rawOffset);
+                }
+            }
+            return new MotionInfo(motionPhoto, microVideo, offset);
+        } catch (Exception ex) {
+            log.warn("XMP 动态照片标记解析失败: {}", ex.getMessage());
+            return new MotionInfo(false, false, null);
+        }
+    }
+
+    private boolean parseBooleanFlag(String value) {
+        if (value == null) {
+            return false;
+        }
+        String normalized = value.trim().toLowerCase(Locale.ROOT);
+        return "true".equals(normalized) || "1".equals(normalized);
     }
 }

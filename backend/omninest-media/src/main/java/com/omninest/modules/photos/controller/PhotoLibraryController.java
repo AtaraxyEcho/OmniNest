@@ -47,6 +47,7 @@ import com.omninest.modules.photos.service.PhotoAlbumService;
 import com.omninest.modules.photos.service.PhotoBackupService;
 import com.omninest.modules.photos.service.PhotoBatchService;
 import com.omninest.modules.photos.service.PhotoEditService;
+import com.omninest.modules.photos.service.PhotoMotionRescanService;
 import com.omninest.modules.photos.service.GeoDatasetService;
 import com.omninest.modules.photos.service.PhotoLibraryService;
 import com.omninest.modules.photos.service.PhotoRelationService;
@@ -93,6 +94,7 @@ public class PhotoLibraryController {
     private final PhotoAiTaskService photoAiTaskService;
     private final PhotosRuntimeConfigService photosRuntimeConfigService;
     private final PhotoRelationService relationService;
+    private final PhotoMotionRescanService motionRescanService;
     private final CurrentUserContext currentUserContext;
 
     // ─── 浏览 ───
@@ -753,6 +755,15 @@ public class PhotoLibraryController {
         return ApiResponse.success(Map.of("taskId", taskId.toString()));
     }
 
+    @Operation(summary = "回扫动态照片", description = "创建异步任务为历史导入的可解码 JPEG 回扫动态照片标记并提取运动视频")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_ADMIN + "')")
+    @PostMapping("/api/v1/admin/photos/motion/reanalyze")
+    ApiResponse<Map<String, String>> reanalyzeMotionPhotos() {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        UUID taskId = motionRescanService.enqueueRescan(userId);
+        return ApiResponse.success(Map.of("taskId", taskId.toString()));
+    }
+
     // ─── 图像分析与人脸聚类 ───
 
     @Operation(summary = "获取人脸聚类列表", description = "返回图像分析识别的人脸聚类分组")
@@ -894,6 +905,8 @@ public class PhotoLibraryController {
                 item.createdAt(),
                 item.tags(),
                 Map.of(),
+                null,
+                item.motionState(),
                 null
         );
     }

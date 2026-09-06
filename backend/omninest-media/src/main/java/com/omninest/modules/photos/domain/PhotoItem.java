@@ -110,6 +110,17 @@ public class PhotoItem {
     @Column(name = "deleted_at")
     private Instant deletedAt;
 
+    /**
+     * 动态照片状态：NULL 表示历史照片或非动态照片；
+     * DETECTED 表示已识别运动段待提取；READY 表示运动视频派生资产可用；FAILED 表示提取失败。
+     */
+    @Column(name = "motion_state", length = 16)
+    private String motionState;
+
+    /** 动态照片提取出的运动视频派生资产文件节点；仅 READY 状态有值。 */
+    @Column(name = "motion_video_file_node_id")
+    private UUID motionVideoFileNodeId;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 

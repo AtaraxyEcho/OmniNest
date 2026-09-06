@@ -49,7 +49,9 @@ public final class PhotoDtos {
             Instant createdAt,
             List<String> tags,
             Map<String, Object> providerMetadata,
-            PhotoContentAnalysisDto contentAnalysis
+            PhotoContentAnalysisDto contentAnalysis,
+            String motionState,
+            String motionVideoUrl
     ) {
         /**
          * 从 PhotoItem 实体和已解析的关联数据创建 DTO。
@@ -61,7 +63,7 @@ public final class PhotoDtos {
                 boolean favorite,
                 List<String> tags
         ) {
-            return fromEntity(photo, coverUrl, favorite, tags, null, null);
+            return fromEntity(photo, coverUrl, favorite, tags, null, null, null);
         }
 
         /**
@@ -74,12 +76,14 @@ public final class PhotoDtos {
                 List<String> tags,
                 PhotoContentAnalysisDto contentAnalysis
         ) {
-            return fromEntity(photo, coverUrl, favorite, tags, null, contentAnalysis);
+            return fromEntity(photo, coverUrl, favorite, tags, null, contentAnalysis, null);
         }
 
         /**
          * 从照片实体和详情资源地址创建 DTO。
          * 原图地址只在详情接口生成，避免列表和仪表盘批量签发大文件地址。
+         *
+         * @param motionVideoUrl 动态视频地址，仅详情接口且 READY 状态解析，其余传 null
          */
         public static PhotoItemDto fromEntity(
                 PhotoItem photo,
@@ -87,7 +91,8 @@ public final class PhotoDtos {
                 boolean favorite,
                 List<String> tags,
                 String sourceUrl,
-                PhotoContentAnalysisDto contentAnalysis
+                PhotoContentAnalysisDto contentAnalysis,
+                String motionVideoUrl
         ) {
             return new PhotoItemDto(
                     photo.getId(),
@@ -124,7 +129,9 @@ public final class PhotoDtos {
                     photo.getCreatedAt(),
                     tags,
                     photo.getProviderMetadata(),
-                    contentAnalysis
+                    contentAnalysis,
+                    photo.getMotionState(),
+                    motionVideoUrl
             );
         }
     }
@@ -191,7 +198,8 @@ public final class PhotoDtos {
             String metadataStatus,
             boolean favorite,
             Instant createdAt,
-            List<String> tags
+            List<String> tags,
+            String motionState
     ) {}
 
     public record PhotoDashboardDto(

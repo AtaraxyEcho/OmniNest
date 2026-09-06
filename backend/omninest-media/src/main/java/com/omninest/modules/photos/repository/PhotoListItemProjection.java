@@ -60,6 +60,9 @@ public interface PhotoListItemProjection {
     /** @return 元数据处理状态 */
     String getMetadataStatus();
 
+    /** @return 动态照片状态；NULL 表示历史照片或非动态照片 */
+    String getMotionState();
+
     /** @return 创建时间 */
     Instant getCreatedAt();
 }

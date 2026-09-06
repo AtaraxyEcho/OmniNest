@@ -1816,7 +1816,9 @@ CREATE TABLE "omni"."photo_items" (
   "metering_mode" varchar(32),
   "lens_model" varchar(120),
   "gps_location" jsonb DEFAULT '{}'::jsonb,
-  "deleted_at" timestamptz(6)
+  "deleted_at" timestamptz(6),
+  "motion_state" varchar(16),
+  "motion_video_file_node_id" uuid
 )
 ;
 

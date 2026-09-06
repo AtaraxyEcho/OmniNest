@@ -6752,6 +6752,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosSharedItemPasswordRequired => '此分享需要访问密码';
 
   @override
+  String get photosLiveBadge => '实况';
+
+  @override
+  String get photosLiveBadgeTooltip => '点击播放动态效果，长按照片可快速预览';
+
+  @override
+  String get photosMotionPlayFailed => '动态视频播放失败';
+
+  @override
   String get photosShareAlbum => '分享相册';
 
   @override
