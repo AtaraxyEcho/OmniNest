@@ -874,7 +874,7 @@ class _SlideLayer extends StatelessWidget {
                   item.sourceUrl != null
                       ? item.sourceCacheKey
                       : item.coverCacheKey,
-              fit: BoxFit.cover,
+              fit: BoxFit.contain,
               fadeInDuration: Duration.zero,
               placeholder:
                   (context, url) => const ColoredBox(color: Colors.black),
