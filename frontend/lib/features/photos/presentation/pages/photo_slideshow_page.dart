@@ -12,6 +12,7 @@ import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 
 const _slideshowInterval = Duration(seconds: 5);
@@ -878,41 +879,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                 ),
                 const SizedBox(height: 32),
                 for (final row in rows)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 20),
-                    padding: const EdgeInsets.only(bottom: 12),
-                    decoration: const BoxDecoration(
-                      border: Border(
-                        bottom: BorderSide(color: Color(0x14FFFFFF)),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          row.$1,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.35),
-                            fontSize: 11,
-                            letterSpacing: 0.04,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            row.$2,
-                            textAlign: TextAlign.right,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.75),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w300,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                  PhotoInfoRow(label: row.$1, value: row.$2),
                 const SizedBox(height: 16),
                 Row(
                   children: [

@@ -7001,6 +7001,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosShareOptionsEyebrow => 'OPTIONS';
 
   @override
+  String get photosShareExpiryOption => 'Expiry';
+
+  @override
+  String get photosSharePasswordOption => 'Password protection';
+
+  @override
+  String get photosSharePasswordNone => 'Not set';
+
+  @override
+  String get photosSharePasswordOn => 'Enabled';
+
+  @override
   String get photosShareCreatedHint => 'Link created and copied to clipboard';
 
   @override

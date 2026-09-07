@@ -43,6 +43,7 @@ Future<void> _pumpPanel(WidgetTester tester, PhotoRepository repository) async {
         theme: OmniNestTheme.dark(),
         home: Scaffold(
           body: Stack(
+            fit: StackFit.expand,
             children: [
               const ColoredBox(color: Colors.black),
               PhotoSharePanel(visible: true, photo: _photo()),
@@ -103,10 +104,113 @@ void main() {
     expect(find.text('✓ 已复制'), findsOneWidget);
     // 渠道宫格、OPTIONS 开关与管理入口。
     expect(find.text('分享至'), findsOneWidget);
+    expect(find.text('有效期'), findsOneWidget);
+    expect(find.text('密码保护'), findsOneWidget);
+    expect(find.text('未设置'), findsOneWidget);
     expect(find.text('包含位置信息'), findsOneWidget);
     expect(find.text('原图画质'), findsOneWidget);
     expect(find.text('管理已有链接'), findsOneWidget);
     expect(find.text('完成'), findsOneWidget);
+  });
+
+  testWidgets('切换有效期为 7 天后按新时限重建链接并复制', (tester) async {
+    final repository = _MockPhotoRepository();
+    final link = PhotoShareLink(
+      id: 'share-1',
+      token: 'tok-1',
+      resourceType: 'PHOTO_ITEM',
+      resourceId: 'photo-1',
+      accessCount: 0,
+      createdAt: DateTime(2024, 11, 12),
+    );
+    when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(
+      () => repository.createPhotoShare(
+        any(),
+        password: any(named: 'password'),
+        expiresAt: captureAny(named: 'expiresAt'),
+        maxAccessCount: any(named: 'maxAccessCount'),
+      ),
+    ).thenAnswer((_) async => link);
+
+    await _pumpPanel(tester, repository);
+    await tester.pump();
+    await tester.pump();
+
+    await tester.dragUntilVisible(
+      find.text('有效期'),
+      find.byType(Scrollable).first,
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('有效期'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('7天'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final captured =
+        verify(
+          () => repository.createPhotoShare(
+            any(),
+            password: any(named: 'password'),
+            expiresAt: captureAny(named: 'expiresAt'),
+            maxAccessCount: any(named: 'maxAccessCount'),
+          ),
+        ).captured;
+    final expiry = captured.last;
+    final days = expiry.difference(DateTime.now()).inDays;
+    expect(days, inInclusiveRange(6, 7));
+  });
+
+  testWidgets('开启密码保护后携带密码重建链接', (tester) async {
+    final repository = _MockPhotoRepository();
+    final link = PhotoShareLink(
+      id: 'share-2',
+      token: 'tok-2',
+      resourceType: 'PHOTO_ITEM',
+      resourceId: 'photo-1',
+      accessCount: 0,
+      createdAt: DateTime(2024, 11, 12),
+    );
+    when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(
+      () => repository.createPhotoShare(
+        any(),
+        password: captureAny(named: 'password'),
+        expiresAt: any(named: 'expiresAt'),
+        maxAccessCount: any(named: 'maxAccessCount'),
+      ),
+    ).thenAnswer((_) async => link);
+
+    await _pumpPanel(tester, repository);
+    await tester.pump();
+    await tester.pump();
+
+    await tester.dragUntilVisible(
+      find.text('密码保护'),
+      find.byType(Scrollable).first,
+      const Offset(0, -120),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('密码保护'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'secret123');
+    await tester.tap(find.text('确认'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
+    final captured =
+        verify(
+          () => repository.createPhotoShare(
+            any(),
+            password: captureAny(named: 'password'),
+            expiresAt: any(named: 'expiresAt'),
+            maxAccessCount: any(named: 'maxAccessCount'),
+          ),
+        ).captured;
+    expect(captured.last, 'secret123');
+    expect(find.text('已启用'), findsOneWidget);
   });
 
   testWidgets('链接创建失败时在链接框内展示错误', (tester) async {

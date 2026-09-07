@@ -6803,6 +6803,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosShareOptionsEyebrow => '选项';
 
   @override
+  String get photosShareExpiryOption => '有效期';
+
+  @override
+  String get photosSharePasswordOption => '密码保护';
+
+  @override
+  String get photosSharePasswordNone => '未设置';
+
+  @override
+  String get photosSharePasswordOn => '已启用';
+
+  @override
   String get photosShareCreatedHint => '链接已创建并复制到剪贴板';
 
   @override

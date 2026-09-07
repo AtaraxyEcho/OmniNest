@@ -12881,6 +12881,30 @@ abstract class AppLocalizations {
   /// **'OPTIONS'**
   String get photosShareOptionsEyebrow;
 
+  /// No description provided for @photosShareExpiryOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Expiry'**
+  String get photosShareExpiryOption;
+
+  /// No description provided for @photosSharePasswordOption.
+  ///
+  /// In en, this message translates to:
+  /// **'Password protection'**
+  String get photosSharePasswordOption;
+
+  /// No description provided for @photosSharePasswordNone.
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get photosSharePasswordNone;
+
+  /// No description provided for @photosSharePasswordOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get photosSharePasswordOn;
+
   /// No description provided for @photosShareCreatedHint.
   ///
   /// In en, this message translates to:

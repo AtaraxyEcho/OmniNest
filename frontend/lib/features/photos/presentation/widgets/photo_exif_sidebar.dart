@@ -5,6 +5,7 @@ import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 
 /// EXIF 信息侧栏：设计稿 w-72 独立全高侧栏，堆叠式标签/数值行。
@@ -456,23 +457,18 @@ class _ExifEntry extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: TextStyle(color: labelColor, fontSize: 11)),
-          const SizedBox(height: 2),
-          Text(
-            value,
-            style: TextStyle(
-              color: valueColor,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
-      ),
+    // 行样式与幻灯片 Info 统一（左右分布 + 底部分隔线），分隔色随主题。
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final dividerColor =
+        isDark
+            ? const Color(0x14FFFFFF)
+            : Theme.of(context).dividerColor.withValues(alpha: 0.24);
+    return PhotoInfoRow(
+      label: label,
+      value: value,
+      labelColor: labelColor,
+      valueColor: valueColor,
+      dividerColor: dividerColor,
     );
   }
 }

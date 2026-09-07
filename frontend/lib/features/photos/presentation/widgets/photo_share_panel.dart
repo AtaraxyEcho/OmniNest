@@ -40,6 +40,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   bool _copied = false;
   bool _includeLocation = true;
   bool _originalQuality = true;
+
+  /// 分享设置：有效期档位（1d/7d/30d/never）与访问密码；变更即重建链接。
+  String _expiryOption = '30d';
+  String? _password;
   Timer? _copyResetTimer;
   String? _loadedForPhotoId;
 
@@ -103,7 +107,8 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       }
       latest ??= await controller.createPhotoShare(
         photoId,
-        expiresAt: DateTime.now().add(const Duration(days: 30)),
+        password: _password,
+        expiresAt: resolveShareExpiry(_expiryOption),
       );
       if (!mounted || photoId != widget.photo.id) return;
       setState(() {
@@ -133,6 +138,133 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         setState(() => _copied = false);
       }
     });
+  }
+
+  /// 按当前有效期/密码设置重建链接并复制；用户在 OPTIONS 变更设置时触发。
+  Future<void> _recreateLink() async {
+    final photoId = widget.photo.id;
+    setState(() {
+      _creating = true;
+      _error = null;
+    });
+    try {
+      final link = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .createPhotoShare(
+            photoId,
+            password: _password,
+            expiresAt: resolveShareExpiry(_expiryOption),
+          );
+      if (!mounted || photoId != widget.photo.id) return;
+      setState(() {
+        _shareUrl = _buildShareUrl(link.token);
+        _creating = false;
+      });
+      unawaited(_copyToClipboard());
+    } on Exception {
+      if (!mounted) return;
+      setState(() {
+        _creating = false;
+        _error = AppLocalizations.of(context).photosShareLinkFailed;
+      });
+    }
+  }
+
+  String _expiryLabel(AppLocalizations l10n) {
+    switch (_expiryOption) {
+      case '1d':
+        return l10n.photosShareExpiry1d;
+      case '7d':
+        return l10n.photosShareExpiry7d;
+      case 'never':
+        return l10n.photosShareExpiryNever;
+      default:
+        return l10n.photosShareExpiry30d;
+    }
+  }
+
+  Future<void> _pickExpiry(AppLocalizations l10n) async {
+    final selected = await showDialog<String>(
+      context: context,
+      builder:
+          (ctx) => SimpleDialog(
+            backgroundColor: Colors.grey.shade900,
+            title: Text(
+              l10n.photosShareExpiryOption,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            children: [
+              for (final (value, label) in [
+                ('1d', l10n.photosShareExpiry1d),
+                ('7d', l10n.photosShareExpiry7d),
+                ('30d', l10n.photosShareExpiry30d),
+                ('never', l10n.photosShareExpiryNever),
+              ])
+                SimpleDialogOption(
+                  onPressed: () => Navigator.pop(ctx, value),
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      color:
+                          value == _expiryOption
+                              ? const Color(0xFF4ADE80)
+                              : Colors.white.withValues(alpha: 0.80),
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+    );
+    if (selected == null || selected == _expiryOption || !mounted) return;
+    setState(() => _expiryOption = selected);
+    await _recreateLink();
+  }
+
+  Future<void> _togglePassword(bool enable, AppLocalizations l10n) async {
+    if (!enable) {
+      if (_password == null) return;
+      _password = null;
+      await _recreateLink();
+      return;
+    }
+    final controller = TextEditingController();
+    final password = await showDialog<String>(
+      context: context,
+      builder:
+          (ctx) => AlertDialog(
+            backgroundColor: Colors.grey.shade900,
+            title: Text(
+              l10n.photosSharePasswordOption,
+              style: const TextStyle(color: Colors.white, fontSize: 16),
+            ),
+            content: TextField(
+              controller: controller,
+              autofocus: true,
+              obscureText: true,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: l10n.photosSharePasswordHint,
+                hintStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.40),
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: Text(l10n.photosCancel),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+                child: Text(l10n.coreConfirm),
+              ),
+            ],
+          ),
+    );
+    if (!mounted || password == null || password.isEmpty) return;
+    _password = password;
+    await _recreateLink();
   }
 
   String describeShareError(Object error) {
@@ -505,6 +637,22 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           ),
         ),
         const SizedBox(height: 12),
+        _ShareSelectRow(
+          label: l10n.photosShareExpiryOption,
+          valueLabel: _expiryLabel(l10n),
+          onTap: () => unawaited(_pickExpiry(l10n)),
+        ),
+        const SizedBox(height: 8),
+        _ShareToggleRow(
+          label: l10n.photosSharePasswordOption,
+          sublabel:
+              _password != null
+                  ? l10n.photosSharePasswordOn
+                  : l10n.photosSharePasswordNone,
+          value: _password != null,
+          onChanged: (on) => unawaited(_togglePassword(on, l10n)),
+        ),
+        const SizedBox(height: 8),
         _ShareToggleRow(
           label: l10n.photosShareOptionLocation,
           sublabel: location ?? '—',
@@ -519,6 +667,61 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           onChanged: (v) => setState(() => _originalQuality = v),
         ),
       ],
+    );
+  }
+}
+
+/// OPTIONS 选择行：整行可点，右侧显示当前值。
+class _ShareSelectRow extends StatelessWidget {
+  const _ShareSelectRow({
+    required this.label,
+    required this.valueLabel,
+    required this.onTap,
+  });
+
+  final String label;
+  final String valueLabel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.75),
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            Text(
+              valueLabel,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.45),
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Icon(
+              Icons.expand_more_rounded,
+              size: 16,
+              color: Colors.white.withValues(alpha: 0.40),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -539,73 +742,77 @@ class _ShareToggleRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.75),
-                    fontSize: 12,
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.04),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.75),
+                      fontSize: 12,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  sublabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.30),
-                    fontSize: 11,
+                  const SizedBox(height: 1),
+                  Text(
+                    sublabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.30),
+                      fontSize: 11,
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          GestureDetector(
-            onTap: () => onChanged(!value),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              width: 36,
-              height: 22,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                color:
-                    value
-                        ? const Color(0xB34ADE80)
-                        : Colors.white.withValues(alpha: 0.15),
+                ],
               ),
-              child: AnimatedAlign(
+            ),
+            const SizedBox(width: 12),
+            GestureDetector(
+              onTap: () => onChanged(!value),
+              child: AnimatedContainer(
                 duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-                child: Container(
-                  width: 18,
-                  height: 18,
-                  margin: const EdgeInsets.all(2),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    shape: BoxShape.circle,
-                    boxShadow: [
-                      BoxShadow(color: Color(0x66000000), blurRadius: 3),
-                    ],
+                width: 36,
+                height: 22,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color:
+                      value
+                          ? const Color(0xB34ADE80)
+                          : Colors.white.withValues(alpha: 0.15),
+                ),
+                child: AnimatedAlign(
+                  duration: const Duration(milliseconds: 250),
+                  curve: Curves.easeOutCubic,
+                  alignment:
+                      value ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    width: 18,
+                    height: 18,
+                    margin: const EdgeInsets.all(2),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(color: Color(0x66000000), blurRadius: 3),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
