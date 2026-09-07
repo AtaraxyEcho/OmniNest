@@ -52,18 +52,25 @@ class FrameTopBar extends ConsumerWidget {
       controller: searchController,
       onChanged: onSearchChanged,
       hintText: l10n.photosSearchHint,
-      maxWidth: searchExpanded ? double.infinity : 232,
-      // 较共享默认更紧凑的垂直内边距，压低搜索框高度。
+      maxWidth: searchExpanded ? double.infinity : 262,
+      style: TextStyle(fontSize: 14),
+      // 设计稿搜索框高 34px（py-1.5 + text-sm 行高 20px + 1px 边框），
+      // 与顶栏 34px 图标按钮一致；prefixIcon 默认 48x48 最小约束
+      // 会托高输入框，必须显式收窄才能压到目标高度。
       decoration: InputDecoration(
         isDense: true,
         filled: true,
         hintText: l10n.photosSearchHint,
-        prefixIcon: const Icon(Icons.search_rounded, size: 18),
+        prefixIcon: const Icon(Icons.search_rounded, size: 14),
+        prefixIconConstraints: const BoxConstraints(
+          minWidth: 34,
+          minHeight: 34,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide.none,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       ),
     );
     if (searchExpanded) {

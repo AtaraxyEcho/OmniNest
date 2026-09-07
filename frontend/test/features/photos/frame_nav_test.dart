@@ -115,6 +115,27 @@ void main() {
       expect(find.text('New Album'), findsOneWidget);
     });
 
+    testWidgets('顶栏搜索框压缩至设计稿 34px 高度', (tester) async {
+      await _pumpAt(tester, const Size(1280, 800));
+
+      final field = find.byType(TextField);
+      expect(field, findsOneWidget);
+      expect(tester.getSize(field).height, moreOrLessEquals(34));
+      // prefixIcon 默认 48x48 最小约束会托高输入框，收窄后文字
+      // 与图标仍须保持垂直居中，防止压高度时内容上浮。
+      final fieldRect = tester.getRect(field);
+      final editRect = tester.getRect(find.byType(EditableText));
+      expect(
+        editRect.center.dy - fieldRect.center.dy,
+        moreOrLessEquals(0, epsilon: 0.5),
+      );
+      final iconRect = tester.getRect(find.byIcon(Icons.search_rounded));
+      expect(
+        iconRect.center.dy - fieldRect.center.dy,
+        moreOrLessEquals(0, epsilon: 0.5),
+      );
+    });
+
     testWidgets('宽 1024 以下侧栏折叠为 60px 且隐藏文字', (tester) async {
       await _pumpAt(tester, const Size(950, 800));
 
