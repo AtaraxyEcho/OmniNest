@@ -80,6 +80,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       _windowChromeLease = ref
           .read(windowChromeControllerProvider.notifier)
           .acquireImmersive(owner: 'photos.slideshow');
+      // 首张也必须就绪（否则点开即播的那张永远是模糊占位）。
+      unawaited(_ensureReady(_current));
       _precacheNeighbors();
     });
     _progressController.forward(from: 0);
@@ -144,6 +146,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       _current = target;
     });
     _progressController.forward(from: 0);
+    _precacheNeighbors();
     Timer(_transitionDuration, () {
       if (!mounted) return;
       setState(() => _leaving = null);
@@ -196,6 +199,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       final info = await _decodeToInfo(provider).timeout(_maxReadyWait);
       if (!mounted) return;
       _decodedImages[item.id] = info.image;
+      // 位图就绪后触发重建，让 RawImage 从模糊兜底切换到原图。
+      if (mounted) setState(() {});
     } catch (_) {
       // 失败/超时同样标记，避免每次切换重复等待同一张失败图
     }
@@ -208,9 +213,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     late final ImageStreamListener listener;
     final stream = provider.resolve(createLocalImageConfiguration(context));
     listener = ImageStreamListener(
-      (info, synchronousCall) {
+      (ImageInfo info, bool synchronousCall) {
+        // 成功后保留监听不移除：持有活跃监听使 ImageCache 将该位图视为
+        // live 而免于 LRU 驱逐释放——否则 RawImage 持有的位图会被 dispose，
+        // 已显示的清晰图随后"变模糊/失效"。
         if (!completer.isCompleted) completer.complete(info);
-        if (!synchronousCall) stream.removeListener(listener);
       },
       onError: (Object error, StackTrace? stackTrace) {
         stream.removeListener(listener);
