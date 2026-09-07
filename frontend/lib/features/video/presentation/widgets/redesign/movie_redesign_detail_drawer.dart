@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -37,101 +38,114 @@ class _MovieRedesignDetailDrawerState
     final l10n = AppLocalizations.of(context);
     final item = widget.item;
     final wide = MediaQuery.sizeOf(context).width >= 640;
-    return Material(
-      color: Colors.transparent,
-      child: Row(
-        children: [
-          if (wide)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: widget.onClose,
-                child: ColoredBox(color: Colors.black.withValues(alpha: 0.60)),
-              ),
-            ),
-          Material(
-            color: palette.background,
-            child: SizedBox(
-              width: wide ? 384 : double.infinity,
-              height: double.infinity,
-              child: Column(
-                children: [
-                  _DrawerHeader(item: item, onClose: widget.onClose),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _MetaRow(item: item),
-                          if (item.overview != null &&
-                              item.overview!.trim().isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Text(
-                              item.overview!,
-                              style: text.body(
-                                size: 14,
-                                height: 22 / 14,
-                                color: palette.foreground,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: double.infinity,
-                            child: Material(
-                              color: palette.primary,
-                              borderRadius: MovieRedesignPalette.borderRadius,
-                              child: InkWell(
-                                borderRadius: MovieRedesignPalette.borderRadius,
-                                onTap: () {
-                                  widget.onClose();
-                                  context.push('/video/${item.id}/play');
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.escape): widget.onClose,
+      },
+      child: Focus(
+        autofocus: true,
+        child: Material(
+          color: Colors.transparent,
+          child: Row(
+            children: [
+              if (wide)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: widget.onClose,
+                    child: ColoredBox(
+                      color: Colors.black.withValues(alpha: 0.60),
+                    ),
+                  ),
+                ),
+              Material(
+                color: palette.background,
+                child: SizedBox(
+                  width: wide ? 384 : double.infinity,
+                  height: double.infinity,
+                  child: Column(
+                    children: [
+                      _DrawerHeader(item: item, onClose: widget.onClose),
+                      Expanded(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _MetaRow(item: item),
+                              if (item.overview != null &&
+                                  item.overview!.trim().isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  item.overview!,
+                                  style: text.body(
+                                    size: 14,
+                                    height: 22 / 14,
+                                    color: palette.foreground,
                                   ),
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Icon(
-                                        Icons.play_arrow_rounded,
-                                        size: 18,
-                                        color: Colors.white,
+                                ),
+                              ],
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: Material(
+                                  color: palette.primary,
+                                  borderRadius:
+                                      MovieRedesignPalette.borderRadius,
+                                  child: InkWell(
+                                    borderRadius:
+                                        MovieRedesignPalette.borderRadius,
+                                    onTap: () {
+                                      widget.onClose();
+                                      context.push('/video/${item.id}/play');
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 10,
                                       ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        l10n.videoRedesignPlayNow,
-                                        style: text.body(
-                                          size: 14,
-                                          weight: FontWeight.w500,
-                                          color: palette.onPrimary,
-                                        ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          const Icon(
+                                            Icons.play_arrow_rounded,
+                                            size: 18,
+                                            color: Colors.white,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            l10n.videoRedesignPlayNow,
+                                            style: text.body(
+                                              size: 14,
+                                              weight: FontWeight.w500,
+                                              color: palette.onPrimary,
+                                            ),
+                                          ),
+                                        ],
                                       ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
+                              const SizedBox(height: 20),
+                              _SubtitleSection(
+                                item: item,
+                                uploading: _uploading,
+                                onUpload: _pickAndUploadSubtitle,
+                              ),
+                              const SizedBox(height: 20),
+                              _VersionsSection(item: item),
+                            ],
                           ),
-                          const SizedBox(height: 20),
-                          _SubtitleSection(
-                            item: item,
-                            uploading: _uploading,
-                            onUpload: _pickAndUploadSubtitle,
-                          ),
-                          const SizedBox(height: 20),
-                          _VersionsSection(item: item),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -427,9 +441,34 @@ class _SubtitleSection extends ConsumerWidget {
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Center(
-                    child: Text(
-                      l10n.videoRedesignNoSubtitles,
-                      style: text.mono(size: 12),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          l10n.videoRedesignNoSubtitles,
+                          style: text.mono(size: 12),
+                        ),
+                        const SizedBox(height: 8),
+                        Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            onTap: uploading ? null : onUpload,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              child: Text(
+                                l10n.videoRedesignUploadSubtitle,
+                                style: text.mono(
+                                  size: 12,
+                                  color: palette.primary,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),

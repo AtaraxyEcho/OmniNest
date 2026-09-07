@@ -79,7 +79,7 @@ class MovieRedesignFilterSortBar extends StatelessWidget {
   }
 }
 
-class _Chip extends StatelessWidget {
+class _Chip extends StatefulWidget {
   const _Chip({
     required this.label,
     required this.selected,
@@ -97,42 +97,61 @@ class _Chip extends StatelessWidget {
   final bool sortStyle;
 
   @override
+  State<_Chip> createState() => _ChipState();
+}
+
+class _ChipState extends State<_Chip> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    final activeFill = sortStyle ? false : selected;
+    final palette = widget.palette;
+    final text = widget.text;
+    final selected = widget.selected;
+    final sortStyle = widget.sortStyle;
     final Color foreground;
     final Color background;
     final Color borderColor;
     if (sortStyle) {
       foreground = selected ? palette.primary : palette.mutedForeground;
       background = Colors.transparent;
-      borderColor = selected ? palette.primary : Colors.transparent;
-    } else if (activeFill) {
+      borderColor =
+          selected
+              ? palette.primary
+              : _hovered
+              ? palette.border
+              : Colors.transparent;
+    } else if (selected) {
       foreground = palette.background;
       background = palette.foreground;
       borderColor = palette.foreground;
     } else {
-      foreground = palette.mutedForeground;
+      foreground = _hovered ? palette.foreground : palette.mutedForeground;
       background = Colors.transparent;
-      borderColor = palette.border;
+      borderColor = _hovered ? palette.foreground : palette.border;
     }
-    return Material(
-      color: background,
-      shape: RoundedRectangleBorder(
-        borderRadius: MovieRedesignPalette.borderRadius,
-        side: BorderSide(color: borderColor),
-      ),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: MovieRedesignPalette.borderRadius,
-        hoverColor: palette.foreground.withValues(alpha: 0.06),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          child: Text(
-            label,
-            style: text.body(
-              size: 12,
-              weight: FontWeight.w500,
-              color: foreground,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      cursor: SystemMouseCursors.click,
+      child: Material(
+        color: background,
+        shape: RoundedRectangleBorder(
+          borderRadius: MovieRedesignPalette.borderRadius,
+          side: BorderSide(color: borderColor),
+        ),
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: MovieRedesignPalette.borderRadius,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Text(
+              widget.label,
+              style: text.body(
+                size: 12,
+                weight: FontWeight.w500,
+                color: foreground,
+              ),
             ),
           ),
         ),

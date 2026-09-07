@@ -216,62 +216,65 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
           ),
           const SizedBox(height: 8),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  data.title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: text.body(
-                    size: 13,
-                    weight: FontWeight.w500,
-                    color: _hovered ? palette.primary : palette.foreground,
-                    height: 16 / 13,
-                  ),
-                ),
-                if (data.subtitle != null) ...[
-                  const SizedBox(height: 2),
+            child: InkWell(
+              onTap: data.onTap ?? data.onPlay,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    data.subtitle!,
+                    data.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: text.body(
-                      size: 11,
-                      color: palette.mutedForeground,
-                      height: 14 / 11,
+                      size: 13,
+                      weight: FontWeight.w500,
+                      color: _hovered ? palette.primary : palette.foreground,
+                      height: 16 / 13,
                     ),
                   ),
-                ],
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Flexible(
-                      child: Text(
-                        data.year,
-                        style: text.mono(size: 10),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  if (data.subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      data.subtitle!,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: text.body(
+                        size: 11,
+                        color: palette.mutedForeground,
+                        height: 14 / 11,
                       ),
                     ),
-                    _MetaDot(palette: palette),
-                    if (data.rating != null) ...[
-                      Icon(
-                        Icons.star,
-                        size: 10,
-                        color: MovieRedesignPalette.star,
-                      ),
-                      const SizedBox(width: 2),
-                      Text(
-                        data.rating!.toStringAsFixed(1),
-                        style: text.mono(size: 10),
+                  ],
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          data.year,
+                          style: text.mono(size: 10),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       _MetaDot(palette: palette),
+                      if (data.rating != null) ...[
+                        Icon(
+                          Icons.star,
+                          size: 10,
+                          color: MovieRedesignPalette.star,
+                        ),
+                        const SizedBox(width: 2),
+                        Text(
+                          data.rating!.toStringAsFixed(1),
+                          style: text.mono(size: 10),
+                        ),
+                        _MetaDot(palette: palette),
+                      ],
+                      MovieRedesignStatusDot(status: data.status),
                     ],
-                    MovieRedesignStatusDot(status: data.status),
-                  ],
-                ),
-              ],
+                  ),
+                ],
+              ),
             ),
           ),
         ],

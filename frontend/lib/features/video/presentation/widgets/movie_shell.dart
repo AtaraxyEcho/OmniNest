@@ -437,13 +437,15 @@ class _MovieGroupLabel extends StatelessWidget {
     final palette = context.movieRedesign;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: Text(
-        label.toUpperCase(),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: context.movieRedesignText.mono(
-          size: 9,
-          color: palette.mutedForeground,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label.toUpperCase(),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: context.movieRedesignText
+              .mono(size: 9, color: palette.mutedForeground)
+              .copyWith(letterSpacing: 2),
         ),
       ),
     );
