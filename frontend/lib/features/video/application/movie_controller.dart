@@ -36,16 +36,17 @@ final movieDashboardProvider = FutureProvider<MovieDashboard>((ref) {
   return ref.watch(movieApiProvider).dashboard();
 });
 
+// autoDispose：Admin 存储管理添加挂载位置后回到本模块时强制重新拉取，
+// 避免 Keep-alive 缓存让「新建库源」按钮按旧的空列表持续置灰。
 final videoStorageLocationsProvider =
-    FutureProvider<List<VideoStorageLocation>>((ref) {
+    FutureProvider.autoDispose<List<VideoStorageLocation>>((ref) {
       return ref.watch(movieApiProvider).accessibleStorageLocations();
     });
 
-final videoLibrarySourcesProvider = FutureProvider<List<VideoLibrarySource>>((
-  ref,
-) {
-  return ref.watch(movieApiProvider).librarySources();
-});
+final videoLibrarySourcesProvider =
+    FutureProvider.autoDispose<List<VideoLibrarySource>>((ref) {
+      return ref.watch(movieApiProvider).librarySources();
+    });
 
 final mediaLibraryAccessProvider = FutureProvider.autoDispose
     .family<MediaLibraryAccessSettings, String>((ref, sourceId) {
