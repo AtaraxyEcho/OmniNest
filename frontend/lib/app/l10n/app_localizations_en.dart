@@ -8544,4 +8544,69 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get photosRelHint =>
       'Tap an entity to inspect relations; View all filters the library by that entity.';
+
+  @override
+  String videoRedesignItemsCount(int count) {
+    return '$count items';
+  }
+
+  @override
+  String get videoRedesignStatusMatched => 'Matched';
+
+  @override
+  String get videoRedesignStatusPending => 'Pending';
+
+  @override
+  String get videoRedesignStatusFailed => 'Failed';
+
+  @override
+  String get videoRedesignFilterAll => 'All';
+
+  @override
+  String get videoRedesignFilterMatched => 'Matched';
+
+  @override
+  String get videoRedesignFilterPending => 'Pending';
+
+  @override
+  String get videoRedesignFilterFailed => 'Failed';
+
+  @override
+  String get videoRedesignDetail => 'Detail';
+
+  @override
+  String get videoRedesignPlayNow => 'Play now';
+
+  @override
+  String get videoRedesignNoMatches => 'No matching items';
+
+  @override
+  String get videoRedesignAdjustFilters => 'Try adjusting the filters';
+
+  @override
+  String get videoRedesignSubMovies => 'Movies';
+
+  @override
+  String get videoRedesignSubTvShows => 'TV Series';
+
+  @override
+  String get videoRedesignSubAnime => 'Anime';
+
+  @override
+  String get videoRedesignSubCollections => 'Collections';
+
+  @override
+  String get videoRedesignSubRecent => 'Recently Added';
+
+  @override
+  String get videoRedesignSubContinue => 'Continue Watching';
+
+  @override
+  String get videoRedesignSubFavorites => 'Favorites';
+
+  @override
+  String get videoRedesignSubHistory => 'Watch History';
+
+  @override
+  String get videoRedesignSubAdmin => 'Library Management';
 }

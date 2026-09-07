@@ -15611,6 +15611,132 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tap an entity to inspect relations; View all filters the library by that entity.'**
   String get photosRelHint;
+
+  /// No description provided for @videoRedesignItemsCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} items'**
+  String videoRedesignItemsCount(int count);
+
+  /// No description provided for @videoRedesignStatusMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched'**
+  String get videoRedesignStatusMatched;
+
+  /// No description provided for @videoRedesignStatusPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get videoRedesignStatusPending;
+
+  /// No description provided for @videoRedesignStatusFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get videoRedesignStatusFailed;
+
+  /// No description provided for @videoRedesignFilterAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get videoRedesignFilterAll;
+
+  /// No description provided for @videoRedesignFilterMatched.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched'**
+  String get videoRedesignFilterMatched;
+
+  /// No description provided for @videoRedesignFilterPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Pending'**
+  String get videoRedesignFilterPending;
+
+  /// No description provided for @videoRedesignFilterFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed'**
+  String get videoRedesignFilterFailed;
+
+  /// No description provided for @videoRedesignDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Detail'**
+  String get videoRedesignDetail;
+
+  /// No description provided for @videoRedesignPlayNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Play now'**
+  String get videoRedesignPlayNow;
+
+  /// No description provided for @videoRedesignNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching items'**
+  String get videoRedesignNoMatches;
+
+  /// No description provided for @videoRedesignAdjustFilters.
+  ///
+  /// In en, this message translates to:
+  /// **'Try adjusting the filters'**
+  String get videoRedesignAdjustFilters;
+
+  /// No description provided for @videoRedesignSubMovies.
+  ///
+  /// In en, this message translates to:
+  /// **'Movies'**
+  String get videoRedesignSubMovies;
+
+  /// No description provided for @videoRedesignSubTvShows.
+  ///
+  /// In en, this message translates to:
+  /// **'TV Series'**
+  String get videoRedesignSubTvShows;
+
+  /// No description provided for @videoRedesignSubAnime.
+  ///
+  /// In en, this message translates to:
+  /// **'Anime'**
+  String get videoRedesignSubAnime;
+
+  /// No description provided for @videoRedesignSubCollections.
+  ///
+  /// In en, this message translates to:
+  /// **'Collections'**
+  String get videoRedesignSubCollections;
+
+  /// No description provided for @videoRedesignSubRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently Added'**
+  String get videoRedesignSubRecent;
+
+  /// No description provided for @videoRedesignSubContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Continue Watching'**
+  String get videoRedesignSubContinue;
+
+  /// No description provided for @videoRedesignSubFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
+  String get videoRedesignSubFavorites;
+
+  /// No description provided for @videoRedesignSubHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Watch History'**
+  String get videoRedesignSubHistory;
+
+  /// No description provided for @videoRedesignSubAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Library Management'**
+  String get videoRedesignSubAdmin;
 }
 
 class _AppLocalizationsDelegate

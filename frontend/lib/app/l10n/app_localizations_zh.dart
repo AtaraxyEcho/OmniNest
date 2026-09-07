@@ -8288,4 +8288,69 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get photosRelHint => '点击实体查看关联；「查看全部」将按该实体筛选图库。';
+
+  @override
+  String videoRedesignItemsCount(int count) {
+    return '$count 项';
+  }
+
+  @override
+  String get videoRedesignStatusMatched => '已匹配';
+
+  @override
+  String get videoRedesignStatusPending => '待刮削';
+
+  @override
+  String get videoRedesignStatusFailed => '失败';
+
+  @override
+  String get videoRedesignFilterAll => '全部';
+
+  @override
+  String get videoRedesignFilterMatched => '已匹配';
+
+  @override
+  String get videoRedesignFilterPending => '待刮削';
+
+  @override
+  String get videoRedesignFilterFailed => '失败';
+
+  @override
+  String get videoRedesignDetail => '详情';
+
+  @override
+  String get videoRedesignPlayNow => '立即播放';
+
+  @override
+  String get videoRedesignNoMatches => '无匹配条目';
+
+  @override
+  String get videoRedesignAdjustFilters => '尝试调整筛选条件';
+
+  @override
+  String get videoRedesignSubMovies => 'Movies';
+
+  @override
+  String get videoRedesignSubTvShows => 'TV Series';
+
+  @override
+  String get videoRedesignSubAnime => 'Anime';
+
+  @override
+  String get videoRedesignSubCollections => 'Collections';
+
+  @override
+  String get videoRedesignSubRecent => 'Recently Added';
+
+  @override
+  String get videoRedesignSubContinue => 'Continue Watching';
+
+  @override
+  String get videoRedesignSubFavorites => 'Favorites';
+
+  @override
+  String get videoRedesignSubHistory => 'Watch History';
+
+  @override
+  String get videoRedesignSubAdmin => 'Library Management';
 }

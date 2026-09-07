@@ -3734,5 +3734,33 @@
     }
   },
   "photosRelCooccurTitle": "关联实体",
-  "photosRelHint": "点击实体查看关联；「查看全部」将按该实体筛选图库。"
+  "photosRelHint": "点击实体查看关联；「查看全部」将按该实体筛选图库。",
+  "videoRedesignItemsCount": "{count} 项",
+  "@videoRedesignItemsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "videoRedesignStatusMatched": "已匹配",
+  "videoRedesignStatusPending": "待刮削",
+  "videoRedesignStatusFailed": "失败",
+  "videoRedesignFilterAll": "全部",
+  "videoRedesignFilterMatched": "已匹配",
+  "videoRedesignFilterPending": "待刮削",
+  "videoRedesignFilterFailed": "失败",
+  "videoRedesignDetail": "详情",
+  "videoRedesignPlayNow": "立即播放",
+  "videoRedesignNoMatches": "无匹配条目",
+  "videoRedesignAdjustFilters": "尝试调整筛选条件",
+  "videoRedesignSubMovies": "Movies",
+  "videoRedesignSubTvShows": "TV Series",
+  "videoRedesignSubAnime": "Anime",
+  "videoRedesignSubCollections": "Collections",
+  "videoRedesignSubRecent": "Recently Added",
+  "videoRedesignSubContinue": "Continue Watching",
+  "videoRedesignSubFavorites": "Favorites",
+  "videoRedesignSubHistory": "Watch History",
+  "videoRedesignSubAdmin": "Library Management"
 }

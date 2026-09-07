@@ -3860,5 +3860,33 @@
     }
   },
   "photosRelCooccurTitle": "Related entities",
-  "photosRelHint": "Tap an entity to inspect relations; View all filters the library by that entity."
+  "photosRelHint": "Tap an entity to inspect relations; View all filters the library by that entity.",
+  "videoRedesignItemsCount": "{count} items",
+  "@videoRedesignItemsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "videoRedesignStatusMatched": "Matched",
+  "videoRedesignStatusPending": "Pending",
+  "videoRedesignStatusFailed": "Failed",
+  "videoRedesignFilterAll": "All",
+  "videoRedesignFilterMatched": "Matched",
+  "videoRedesignFilterPending": "Pending",
+  "videoRedesignFilterFailed": "Failed",
+  "videoRedesignDetail": "Detail",
+  "videoRedesignPlayNow": "Play now",
+  "videoRedesignNoMatches": "No matching items",
+  "videoRedesignAdjustFilters": "Try adjusting the filters",
+  "videoRedesignSubMovies": "Movies",
+  "videoRedesignSubTvShows": "TV Series",
+  "videoRedesignSubAnime": "Anime",
+  "videoRedesignSubCollections": "Collections",
+  "videoRedesignSubRecent": "Recently Added",
+  "videoRedesignSubContinue": "Continue Watching",
+  "videoRedesignSubFavorites": "Favorites",
+  "videoRedesignSubHistory": "Watch History",
+  "videoRedesignSubAdmin": "Library Management"
 }
