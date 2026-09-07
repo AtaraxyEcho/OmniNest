@@ -517,6 +517,7 @@ class _MovieMobileDrawer extends StatelessWidget {
                           count: counts[item],
                           collapsed: false,
                           closeOnSelect: true,
+                          height: 40,
                           onSectionSelected: onSectionSelected,
                         ),
                       const SizedBox(height: 4),

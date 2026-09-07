@@ -457,6 +457,7 @@ class _MovieNavItem extends StatelessWidget {
     required this.collapsed,
     required this.closeOnSelect,
     this.count,
+    this.height = 36,
     this.onSectionSelected,
   });
 
@@ -468,6 +469,9 @@ class _MovieNavItem extends StatelessWidget {
   final bool collapsed;
   final bool closeOnSelect;
   final int? count;
+
+  /// 行高：桌面侧栏 36（py-2），移动端抽屉 40（py-2.5）。
+  final double height;
   final ValueChanged<MovieSection>? onSectionSelected;
 
   @override
@@ -475,19 +479,19 @@ class _MovieNavItem extends StatelessWidget {
     final palette = context.movieRedesign;
     final text = context.movieRedesignText;
     final foreground = selected ? palette.foreground : palette.mutedForeground;
+    final iconColor = selected ? palette.primary : foreground;
+    // 对应原型 px-4：图标前先留 16px 内边距，折叠态图标在 48px 内居中。
     final content = SizedBox(
-      height: 36,
+      height: height,
       child: Row(
         children: [
-          SizedBox(
-            width: collapsed ? 48 : 16,
-            child: Icon(
-              icon,
-              size: 15,
-              color: selected ? palette.primary : foreground,
-            ),
-          ),
-          if (!collapsed) ...[
+          if (collapsed)
+            Expanded(
+              child: Center(child: Icon(icon, size: 15, color: iconColor)),
+            )
+          else ...[
+            const SizedBox(width: 16),
+            Icon(icon, size: 15, color: iconColor),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
