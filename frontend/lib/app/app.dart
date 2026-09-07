@@ -6,6 +6,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
+import 'package:omninest/app/appearance/application/composed_scaler.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
+import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/providers.dart';
@@ -52,6 +55,7 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     ref.watch(appSyncCoordinatorProvider);
     final router = ref.watch(appRouterProvider);
     final themeMode = ref.watch(appearanceControllerProvider);
+    final fontScalePreset = ref.watch(fontScaleControllerProvider);
     final languageCode = ref.watch(localeControllerProvider);
 
     // 通知复用实时同步连接，仅用于副作用。
@@ -75,8 +79,10 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
       locale: Locale(languageCode),
       routerConfig: router,
       builder: (context, child) {
+        final mediaQuery = MediaQuery.of(context);
+        final systemScaler = mediaQuery.textScaler;
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        return AnnotatedRegion<SystemUiOverlayStyle>(
+        Widget content = AnnotatedRegion<SystemUiOverlayStyle>(
           value: SystemUiOverlayStyle(
             statusBarColor: Colors.transparent,
             systemNavigationBarColor: Theme.of(context).colorScheme.surface,
@@ -87,6 +93,17 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
           ),
           child: AppBackdropHost(child: child ?? const SizedBox.shrink()),
         );
+        // 应用字体档位根部生效；跟随系统时不覆盖，系统 TextScaler 原样穿透。
+        final appScale = fontScalePreset.scale;
+        if (appScale != null) {
+          content = MediaQuery(
+            data: mediaQuery.copyWith(
+              textScaler: ComposedScaler(systemScaler, appScale),
+            ),
+            child: content,
+          );
+        }
+        return FontScaleScope(systemScaler: systemScaler, child: content);
       },
     );
   }

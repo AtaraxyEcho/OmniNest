@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
@@ -78,6 +79,9 @@ Future<AppBootstrapData> _loadBootstrapData() async {
           preferences.getString(localeDeviceLanguageKey) ??
           preferences.getString(legacyGlobalLanguageKey) ??
           resolveSystemLanguage(),
+      fontScaleName:
+          preferences.getString(appearanceDeviceFontScaleKey) ??
+          FontScalePreset.followSystem.name,
     );
   } on Object catch (error, stackTrace) {
     _reportRecoverableBootstrapError(error, stackTrace);

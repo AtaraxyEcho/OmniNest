@@ -1,0 +1,40 @@
+import 'package:flutter/material.dart';
+
+/// 向子树暴露进入根部覆盖前的原始系统 TextScaler。
+///
+/// 根部注入 ComposedScaler 后环境缩放为"系统 × 应用档位"，Reader 正文等
+/// 自绘排版区域需要剔除应用档位、仅保留系统无障碍缩放，由此取值。
+class FontScaleScope extends InheritedWidget {
+  const FontScaleScope({
+    required this.systemScaler,
+    required super.child,
+    super.key,
+  });
+
+  final TextScaler systemScaler;
+
+  /// 读取仅含系统缩放的 TextScaler；缺失时回退当前环境值，保证
+  /// 未接入根部注入的场景（如局部 Widget 测试）行为不变。
+  static TextScaler systemScalerOf(BuildContext context) {
+    final scope = context.dependOnInheritedWidgetOfExactType<FontScaleScope>();
+    return scope?.systemScaler ?? MediaQuery.textScalerOf(context);
+  }
+
+  /// 用仅含系统缩放的 scaler 覆盖子树，剔除应用字体档位。
+  static Widget withSystemScaleOnly({
+    required BuildContext context,
+    required Widget child,
+  }) {
+    return MediaQuery(
+      data: MediaQuery.of(
+        context,
+      ).copyWith(textScaler: systemScalerOf(context)),
+      child: child,
+    );
+  }
+
+  @override
+  bool updateShouldNotify(FontScaleScope oldWidget) {
+    return oldWidget.systemScaler != systemScaler;
+  }
+}

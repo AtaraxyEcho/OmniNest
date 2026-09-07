@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
 import 'package:omninest/core/realtime/realtime_scope_handler.dart';
@@ -73,6 +74,9 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
       case appearancePreferenceScope:
         await ref
             .read(appearanceControllerProvider.notifier)
+            .refreshFromRemote();
+        await ref
+            .read(fontScaleControllerProvider.notifier)
             .refreshFromRemote();
         return true;
       case localePreferenceScope:

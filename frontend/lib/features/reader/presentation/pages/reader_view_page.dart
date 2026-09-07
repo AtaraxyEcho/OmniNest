@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
+import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -587,7 +588,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    _lastTextScale = MediaQuery.textScalerOf(context).scale(1);
+    // 分页测量只跟随系统缩放；应用字体档位变化不应触发阅读器重排。
+    _lastTextScale = FontScaleScope.systemScalerOf(context).scale(1);
     _annotationHandler ??= ReaderAnnotationHandler(
       itemId: widget.itemId,
       chapterId: widget.chapterId,
@@ -874,7 +876,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     final readerLayout = ReaderControlLayout.resolve(
       viewport: viewport,
       fontSize: _settings.fontSize,
-      textScale: MediaQuery.textScalerOf(context).scale(1),
+      textScale: FontScaleScope.systemScalerOf(context).scale(1),
     );
     final screenWidth = viewport.width;
     final contentWidth = math.min(screenWidth, readerLayout.contentFrameWidth);
@@ -888,12 +890,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
     return Stack(
       children: [
-        // 内容层
+        // 内容层：剔除应用字体档位仅保留系统缩放，保证自绘分页测量与渲染一致
         Positioned.fill(
-          child: Padding(
-            key: const Key('readerContentViewportPadding'),
-            padding: chromeLayout.contentPadding,
-            child: _buildContent(content, detail),
+          child: FontScaleScope.withSystemScaleOnly(
+            context: context,
+            child: Padding(
+              key: const Key('readerContentViewportPadding'),
+              padding: chromeLayout.contentPadding,
+              child: _buildContent(content, detail),
+            ),
           ),
         ),
         // 进度恢复加载遮罩：定位完成后自动消失
