@@ -19,6 +19,7 @@ const _slideshowInterval = Duration(seconds: 5);
 const _transitionDuration = Duration(milliseconds: 600);
 const _idleHideDuration = Duration(seconds: 3);
 const _curve = Cubic(0.76, 0.0, 0.24, 1.0);
+const _maxReadyWait = Duration(seconds: 2);
 
 /// 全屏沉浸幻灯片页（设计稿：Photos Management UI Design）。
 ///
@@ -56,7 +57,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   Timer? _idleTimer;
   late AnimationController _progressController;
   WindowChromeLease? _windowChromeLease;
-  final Set<String> _precached = {};
+
+  /// 已完成解码进入图片缓存的幻灯片 id；切换前必须就绪，动画不携带占位图。
+  final Set<String> _readyImageIds = {};
   bool _transitioning = false;
 
   @override
@@ -120,18 +123,24 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
   }
 
-  void _goTo(int index, {required bool next}) {
+  Future<void> _goTo(int index, {required bool next}) async {
     if (_transitioning || _photos.isEmpty) return;
     final target = ((index % _photos.length) + _photos.length) % _photos.length;
     if (target == _current) return;
+    // 提前置位：等待目标图就绪期间忽略重复触发。
+    _transitioning = true;
+    // 主流幻灯片策略：目标原图完成解码前不启动动画（当前帧保持等待，
+    // 超时兜底强制推进），动画全程不携带占位图——消除"切换后二次加载"。
+    await _ensureReady(target);
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _leaving = _current;
       _directionNext = next;
       _current = target;
-      _transitioning = true;
     });
     _progressController.forward(from: 0);
-    _precacheNeighbors();
     Timer(_transitionDuration, () {
       if (!mounted) return;
       setState(() => _leaving = null);
@@ -166,29 +175,27 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     });
   }
 
+  /// 确保目标原图完成解码进入图片缓存；超时或失败也标记就绪（动画带占位图兜底推进）。
+  Future<void> _ensureReady(int index) async {
+    final item = _photos[index];
+    if (_readyImageIds.contains(item.id)) return;
+    final provider = _rendererProvider(item, context);
+    if (provider == null) {
+      _readyImageIds.add(item.id);
+      return;
+    }
+    try {
+      await precacheImage(provider, context).timeout(_maxReadyWait);
+    } catch (_) {
+      // 失败/超时同样标记，避免每次切换重复等待同一张失败图
+    }
+    _readyImageIds.add(item.id);
+  }
+
   void _precacheNeighbors() {
-    // 预取 provider 必须与渲染层逐字节一致，否则内存缓存 key 不同、预热无效：
-    // 渲染层 = ResizeImage.resizeIfNeeded(memCacheWidth, null, provider)（OctoImage 内部实现），
-    // URL 也必须取渲染所用的列表快照，而非 detailProvider 新签名的地址。
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final screenSize = MediaQuery.sizeOf(context);
-    final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
-    for (final index in [_current - 1, _current + 1]) {
+    for (final index in [_current + 1, _current - 1]) {
       if (index < 0 || index >= _photos.length) continue;
-      final item = _photos[index];
-      if (!_precached.add(item.id)) continue;
-      final url = item.sourceUrl ?? item.coverUrl;
-      if (url == null || url.isEmpty) continue;
-      final provider = ResizeImage.resizeIfNeeded(
-        memCacheWidth,
-        null,
-        CachedNetworkImageProvider(
-          url,
-          cacheKey:
-              item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey,
-        ),
-      );
-      unawaited(precacheImage(provider, context).catchError((Object _) {}));
+      unawaited(_ensureReady(index));
     }
   }
 
@@ -923,6 +930,27 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 }
 
+/// 与渲染层逐字节一致的图片 provider（ResizeImage 包装，内存缓存 key 一致）。
+///
+/// 预取（_ensureReady）与渲染（_SlideLayer）必须共用本构造，否则内存缓存
+/// key 不一致会导致预取失效、每次切换都走"占位图→原图"两段显示。
+ImageProvider? _rendererProvider(PhotoItem item, BuildContext context) {
+  final url = item.sourceUrl ?? item.coverUrl;
+  if (url == null || url.isEmpty) return null;
+  final dpr = MediaQuery.devicePixelRatioOf(context);
+  final screenSize = MediaQuery.sizeOf(context);
+  final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
+  return ResizeImage.resizeIfNeeded(
+    memCacheWidth,
+    null,
+    CachedNetworkImageProvider(
+      url,
+      cacheKey:
+          item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey,
+    ),
+  );
+}
+
 /// 前景幻灯片层：contain 原图，进入/离场由父级过渡驱动。
 ///
 /// 模糊背景在页面级（_buildBackdrop），本层不再包含 ImageFiltered，
@@ -974,17 +1002,11 @@ class _SlideLayerState extends State<_SlideLayer>
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = widget.item.sourceUrl ?? widget.item.coverUrl;
-    final cacheKey =
-        widget.item.sourceUrl != null
-            ? widget.item.sourceCacheKey
-            : widget.item.coverCacheKey;
     // 原图按屏宽降采样解码：contain 显示不会超过屏宽像素，
     // 全尺寸解码位图（4K 照片约 45MB/张）会把图片缓存预算挤爆，
     // 邻居预取互相驱逐导致每次切换重新下载解码（表现为闪烁）。
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final screenSize = MediaQuery.sizeOf(context);
-    final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
+    final provider = _rendererProvider(widget.item, context);
+    final imageUrl = widget.item.sourceUrl ?? widget.item.coverUrl;
     final thumbUrl = widget.item.coverUrl;
     // 原图尚未进缓存时以模糊缩略图兜底，避免入场瞬间闪黑；
     // 模糊后的缩略图与背景氛围一致，原图就绪时仅清晰度提升、不产生跳变。
@@ -1004,8 +1026,17 @@ class _SlideLayerState extends State<_SlideLayer>
     }
     final image = CachedNetworkImage(
       imageUrl: imageUrl ?? '',
-      cacheKey: cacheKey,
-      memCacheWidth: memCacheWidth,
+      cacheKey:
+          widget.item.sourceUrl != null
+              ? widget.item.sourceCacheKey
+              : widget.item.coverCacheKey,
+      memCacheWidth:
+          provider == null
+              ? null
+              : (MediaQuery.devicePixelRatioOf(context) *
+                      MediaQuery.sizeOf(context).width)
+                  .round()
+                  .clamp(1, 8192),
       fit: BoxFit.contain,
       fadeInDuration: Duration.zero,
       placeholder:
