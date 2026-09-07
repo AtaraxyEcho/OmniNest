@@ -3909,5 +3909,13 @@
   "videoRedesignLanguage": "Language",
   "videoRedesignConfirmUpload": "Confirm upload",
   "videoRedesignStatTotal": "Total items",
-  "videoRedesignStatTotalEn": "Total"
+  "videoRedesignStatTotalEn": "Total",
+  "fontScaleTitle": "Font size",
+  "fontScaleFollowSystem": "Follow system",
+  "fontScaleCompact": "Compact",
+  "fontScaleStandard": "Standard",
+  "fontScaleComfortable": "Comfortable",
+  "fontScaleLarge": "Large",
+  "fontScaleResetDefault": "Reset to default",
+  "fontScalePreviewSample": "Hello, OmniNest"
 }

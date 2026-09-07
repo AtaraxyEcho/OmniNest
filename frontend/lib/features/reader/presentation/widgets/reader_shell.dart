@@ -13,6 +13,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -405,6 +406,7 @@ class _ReaderTopBar extends ConsumerWidget {
             const SizedBox(width: 16),
           ],
           if (isWide) ...[
+            FontScaleControl(size: 20, color: rc.onSurfaceVariant),
             NotificationIcon(size: 20, color: rc.onSurfaceVariant),
             const SizedBox(width: 8),
           ],

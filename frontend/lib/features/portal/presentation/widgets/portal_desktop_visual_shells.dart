@@ -10,6 +10,7 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_fullscreen_control.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
@@ -328,6 +329,7 @@ class _PortalDesktopVisualHostState
                     .updateImmersiveMode(!resolved.immersiveModeEnabled),
           ),
           const SizedBox(width: 10),
+          FontScaleControl(size: 20, color: palette.text),
           NotificationIcon(size: 20, color: palette.text),
           const SizedBox(width: 8),
           const UserAvatarMenu(),

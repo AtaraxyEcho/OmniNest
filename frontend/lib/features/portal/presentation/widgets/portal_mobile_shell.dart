@@ -10,6 +10,7 @@ import 'package:omninest/features/backdrop/application/app_backdrop_controller.d
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/core/widgets/animated_card.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
@@ -187,6 +188,7 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
                             size: 20,
                           ),
                         ),
+                        FontScaleControl(size: 20, color: foreground),
                         NotificationIcon(size: 20, color: foreground),
                         const SizedBox(width: 8),
                         const UserAvatarMenu(),

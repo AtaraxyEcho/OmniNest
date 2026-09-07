@@ -3783,5 +3783,13 @@
   "videoRedesignLanguage": "语言",
   "videoRedesignConfirmUpload": "确认上传",
   "videoRedesignStatTotal": "总条目",
-  "videoRedesignStatTotalEn": "Total"
+  "videoRedesignStatTotalEn": "Total",
+  "fontScaleTitle": "字体大小",
+  "fontScaleFollowSystem": "跟随系统",
+  "fontScaleCompact": "紧凑",
+  "fontScaleStandard": "标准",
+  "fontScaleComfortable": "舒适",
+  "fontScaleLarge": "大",
+  "fontScaleResetDefault": "恢复默认",
+  "fontScalePreviewSample": "你好，OmniNest"
 }

@@ -15833,6 +15833,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Total'**
   String get videoRedesignStatTotalEn;
+
+  /// No description provided for @fontScaleTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Font size'**
+  String get fontScaleTitle;
+
+  /// No description provided for @fontScaleFollowSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'Follow system'**
+  String get fontScaleFollowSystem;
+
+  /// No description provided for @fontScaleCompact.
+  ///
+  /// In en, this message translates to:
+  /// **'Compact'**
+  String get fontScaleCompact;
+
+  /// No description provided for @fontScaleStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get fontScaleStandard;
+
+  /// No description provided for @fontScaleComfortable.
+  ///
+  /// In en, this message translates to:
+  /// **'Comfortable'**
+  String get fontScaleComfortable;
+
+  /// No description provided for @fontScaleLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Large'**
+  String get fontScaleLarge;
+
+  /// No description provided for @fontScaleResetDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get fontScaleResetDefault;
+
+  /// No description provided for @fontScalePreviewSample.
+  ///
+  /// In en, this message translates to:
+  /// **'Hello, OmniNest'**
+  String get fontScalePreviewSample;
 }
 
 class _AppLocalizationsDelegate

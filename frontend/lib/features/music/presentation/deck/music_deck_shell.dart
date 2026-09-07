@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
@@ -261,6 +262,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
             icon: Icons.cloud_sync_outlined,
             onPressed: _openAccounts,
           ),
+          FontScaleControl(size: 20, color: colors.onSurface),
           NotificationIcon(size: 20, color: colors.onSurface),
           const SizedBox(width: 8),
           const UserAvatarMenu(),

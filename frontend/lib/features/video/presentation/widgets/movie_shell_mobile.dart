@@ -292,6 +292,7 @@ class _MovieMobileTopBar extends StatelessWidget {
             ),
             tooltip: l10n.videoSearch,
           ),
+          const FontScaleControl(size: 20),
           const NotificationIcon(size: 20),
           const SizedBox(width: 4),
           const UserAvatarMenu(),

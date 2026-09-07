@@ -8403,4 +8403,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoRedesignStatTotalEn => 'Total';
+
+  @override
+  String get fontScaleTitle => '字体大小';
+
+  @override
+  String get fontScaleFollowSystem => '跟随系统';
+
+  @override
+  String get fontScaleCompact => '紧凑';
+
+  @override
+  String get fontScaleStandard => '标准';
+
+  @override
+  String get fontScaleComfortable => '舒适';
+
+  @override
+  String get fontScaleLarge => '大';
+
+  @override
+  String get fontScaleResetDefault => '恢复默认';
+
+  @override
+  String get fontScalePreviewSample => '你好，OmniNest';
 }

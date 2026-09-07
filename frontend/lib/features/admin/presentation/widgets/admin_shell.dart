@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
@@ -413,6 +414,7 @@ class _AdminTopBar extends ConsumerWidget {
               ),
               const SizedBox(width: 16),
               const SizedBox(width: 16),
+              const FontScaleControl(size: 20),
               const NotificationIcon(size: 20),
               const SizedBox(width: 12),
               const UserAvatarMenu(),

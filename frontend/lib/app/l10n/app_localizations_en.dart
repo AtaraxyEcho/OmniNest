@@ -8661,4 +8661,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoRedesignStatTotalEn => 'Total';
+
+  @override
+  String get fontScaleTitle => 'Font size';
+
+  @override
+  String get fontScaleFollowSystem => 'Follow system';
+
+  @override
+  String get fontScaleCompact => 'Compact';
+
+  @override
+  String get fontScaleStandard => 'Standard';
+
+  @override
+  String get fontScaleComfortable => 'Comfortable';
+
+  @override
+  String get fontScaleLarge => 'Large';
+
+  @override
+  String get fontScaleResetDefault => 'Reset to default';
+
+  @override
+  String get fontScalePreviewSample => 'Hello, OmniNest';
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/responsive_search_field.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
@@ -111,6 +112,7 @@ class FrameTopBar extends ConsumerWidget {
           const SizedBox(width: 12),
           _FrameImportAction(),
           const SizedBox(width: 12),
+          const FontScaleControl(size: 20),
           const NotificationIcon(size: 20),
           const SizedBox(width: 12),
           const UserAvatarMenu(),

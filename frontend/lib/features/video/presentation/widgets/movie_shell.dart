@@ -7,6 +7,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
+import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
@@ -354,6 +355,7 @@ class MovieTopBar extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 2),
+          const FontScaleControl(size: 18),
           const NotificationIcon(size: 18),
           const SizedBox(width: 4),
           const UserAvatarMenu(),
