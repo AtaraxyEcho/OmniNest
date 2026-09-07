@@ -15761,6 +15761,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your watch records will appear here'**
   String get videoRedesignNoHistoryHint;
+
+  /// No description provided for @videoRedesignSubtitlesEn.
+  ///
+  /// In en, this message translates to:
+  /// **'Subtitles'**
+  String get videoRedesignSubtitlesEn;
+
+  /// No description provided for @videoRedesignUploadSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload subtitle'**
+  String get videoRedesignUploadSubtitle;
+
+  /// No description provided for @videoRedesignNoSubtitles.
+  ///
+  /// In en, this message translates to:
+  /// **'No subtitles'**
+  String get videoRedesignNoSubtitles;
+
+  /// No description provided for @videoRedesignSubtitleEmbedded.
+  ///
+  /// In en, this message translates to:
+  /// **'Embedded'**
+  String get videoRedesignSubtitleEmbedded;
+
+  /// No description provided for @videoRedesignSubtitleExternal.
+  ///
+  /// In en, this message translates to:
+  /// **'External'**
+  String get videoRedesignSubtitleExternal;
+
+  /// No description provided for @videoRedesignVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'Versions'**
+  String get videoRedesignVersions;
+
+  /// No description provided for @videoRedesignVersionsEn.
+  ///
+  /// In en, this message translates to:
+  /// **'Versions'**
+  String get videoRedesignVersionsEn;
+
+  /// No description provided for @videoRedesignOriginalVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Original'**
+  String get videoRedesignOriginalVersion;
+
+  /// No description provided for @videoRedesignLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get videoRedesignLanguage;
+
+  /// No description provided for @videoRedesignConfirmUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm upload'**
+  String get videoRedesignConfirmUpload;
 }
 
 class _AppLocalizationsDelegate

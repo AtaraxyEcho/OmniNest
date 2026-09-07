@@ -16,6 +16,7 @@ import 'package:omninest/features/video/presentation/widgets/movie_history.dart'
 import 'package:omninest/features/video/presentation/widgets/movie_management.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_continue.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_detail_drawer.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_empty_state.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_filter_sort_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_poster_card.dart';
@@ -28,61 +29,81 @@ class MovieCenterPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(movieCenterControllerProvider);
+    final drawerItem = ref.watch(movieRedesignDetailProvider);
     return state.when(
       data: (data) {
         // 管理分区不再静默回退到电影：无权限时由内容区显示明确提示，
         // 避免用户点击「媒体库管理」等管理项后被悄悄带回电影页。
         final visibleState = data;
-        return Column(
+        return Stack(
           children: [
-            if (data.errorMessage != null)
-              MaterialBanner(
-                content: Text(data.errorMessage!),
-                backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                actions: [
-                  TextButton(
-                    onPressed:
-                        () =>
-                            ref
-                                .read(movieCenterControllerProvider.notifier)
-                                .clearError(),
-                    child: Text(AppLocalizations.of(context).videoClose),
+            Column(
+              children: [
+                if (data.errorMessage != null)
+                  MaterialBanner(
+                    content: Text(data.errorMessage!),
+                    backgroundColor:
+                        Theme.of(context).colorScheme.errorContainer,
+                    actions: [
+                      TextButton(
+                        onPressed:
+                            () =>
+                                ref
+                                    .read(
+                                      movieCenterControllerProvider.notifier,
+                                    )
+                                    .clearError(),
+                        child: Text(AppLocalizations.of(context).videoClose),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            Expanded(
-              child: MovieShell(
-                section: visibleState.section,
-                childOwnsScroll: true,
-                onSectionSelected:
-                    ref
-                        .read(movieCenterControllerProvider.notifier)
-                        .selectSection,
-                counts: {
-                  MovieSection.movies: visibleState.dashboard.stats.movieCount,
-                  MovieSection.tvShows:
-                      visibleState.dashboard.stats.seriesCount,
-                  MovieSection.anime: visibleState.animeSeries.length,
-                  MovieSection.collections: visibleState.collections.length,
-                  MovieSection.continueWatching:
-                      visibleState.continueWatching.length,
-                  MovieSection.favorites: visibleState.favoriteItems.length,
-                  MovieSection.history: visibleState.watchHistory.length,
-                },
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Flexible(child: _MovieSearchField(state: visibleState)),
-                  ],
+                Expanded(
+                  child: MovieShell(
+                    section: visibleState.section,
+                    childOwnsScroll: true,
+                    onSectionSelected:
+                        ref
+                            .read(movieCenterControllerProvider.notifier)
+                            .selectSection,
+                    counts: {
+                      MovieSection.movies:
+                          visibleState.dashboard.stats.movieCount,
+                      MovieSection.tvShows:
+                          visibleState.dashboard.stats.seriesCount,
+                      MovieSection.anime: visibleState.animeSeries.length,
+                      MovieSection.collections: visibleState.collections.length,
+                      MovieSection.continueWatching:
+                          visibleState.continueWatching.length,
+                      MovieSection.favorites: visibleState.favoriteItems.length,
+                      MovieSection.history: visibleState.watchHistory.length,
+                    },
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Flexible(child: _MovieSearchField(state: visibleState)),
+                      ],
+                    ),
+                    onRefresh: () async {
+                      await ref
+                          .read(movieCenterControllerProvider.notifier)
+                          .refresh();
+                    },
+                    child: _MovieContent(state: visibleState),
+                  ),
                 ),
-                onRefresh: () async {
-                  await ref
-                      .read(movieCenterControllerProvider.notifier)
-                      .refresh();
-                },
-                child: _MovieContent(state: visibleState),
-              ),
+              ],
             ),
+            if (drawerItem != null)
+              Positioned.fill(
+                child: MovieRedesignDetailDrawer(
+                  item: drawerItem,
+                  onClose:
+                      () =>
+                          ref
+                              .read(movieRedesignDetailProvider.notifier)
+                              .close(),
+                ),
+              ),
           ],
         );
       },
@@ -256,22 +277,24 @@ class _ManagementAccessDenied extends StatelessWidget {
   }
 }
 
-/// 电影卡片：点击进详情（批次 4 换详情抽屉），播放进播放器。
-MovieRedesignCardData _movieCard(BuildContext context, MovieVideoItem item) {
+/// 电影卡片：点击打开页内详情抽屉，系列进剧集详情，播放进播放器。
+MovieRedesignCardData _movieCard(
+  BuildContext context,
+  WidgetRef ref,
+  MovieVideoItem item,
+) {
   return MovieRedesignCardData.fromVideoItem(item).copyWith(
-    onTap: () => _openDetail(context, item),
+    onTap: () {
+      if (item.mediaType == 'TV') {
+        context.push('/video/series/${item.id}');
+      } else {
+        ref.read(movieRedesignDetailProvider.notifier).open(item);
+      }
+    },
     onPlay: () {
       unawaited(context.push('/video/${item.id}/play'));
     },
   );
-}
-
-void _openDetail(BuildContext context, MovieVideoItem item) {
-  if (item.mediaType == 'TV') {
-    context.push('/video/series/${item.id}');
-  } else {
-    context.push('/video/${item.id}');
-  }
 }
 
 /// 电影分区：标题 + 继续观看横条 + 状态筛选/排序 + 海报分页网格。
@@ -428,7 +451,8 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             sliver: MovieRedesignPosterSliverGrid(
               items: [
-                for (final item in filteredItems) _movieCard(context, item),
+                for (final item in filteredItems)
+                  _movieCard(context, ref, item),
               ],
             ),
           ),
@@ -513,13 +537,13 @@ class _SeriesGridSection extends StatelessWidget {
 }
 
 /// 最近添加分区。
-class _RecentSection extends StatelessWidget {
+class _RecentSection extends ConsumerWidget {
   const _RecentSection({required this.state});
 
   final MovieCenterState state;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(
@@ -553,7 +577,8 @@ class _RecentSection extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 4),
             sliver: MovieRedesignPosterSliverGrid(
               items: [
-                for (final item in state.recentItems) _movieCard(context, item),
+                for (final item in state.recentItems)
+                  _movieCard(context, ref, item),
               ],
             ),
           ),
@@ -658,13 +683,13 @@ class _ContinueCardWrap extends StatelessWidget {
 }
 
 /// 收藏分区。
-class _FavoritesSection extends StatelessWidget {
+class _FavoritesSection extends ConsumerWidget {
   const _FavoritesSection({required this.state});
 
   final MovieCenterState state;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(
@@ -702,7 +727,7 @@ class _FavoritesSection extends StatelessWidget {
             sliver: MovieRedesignPosterSliverGrid(
               items: [
                 for (final item in state.favoriteItems)
-                  _movieCard(context, item),
+                  _movieCard(context, ref, item),
               ],
             ),
           ),

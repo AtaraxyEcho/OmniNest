@@ -8625,4 +8625,34 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get videoRedesignNoHistoryHint =>
       'Your watch records will appear here';
+
+  @override
+  String get videoRedesignSubtitlesEn => 'Subtitles';
+
+  @override
+  String get videoRedesignUploadSubtitle => 'Upload subtitle';
+
+  @override
+  String get videoRedesignNoSubtitles => 'No subtitles';
+
+  @override
+  String get videoRedesignSubtitleEmbedded => 'Embedded';
+
+  @override
+  String get videoRedesignSubtitleExternal => 'External';
+
+  @override
+  String get videoRedesignVersions => 'Versions';
+
+  @override
+  String get videoRedesignVersionsEn => 'Versions';
+
+  @override
+  String get videoRedesignOriginalVersion => 'Original';
+
+  @override
+  String get videoRedesignLanguage => 'Language';
+
+  @override
+  String get videoRedesignConfirmUpload => 'Confirm upload';
 }

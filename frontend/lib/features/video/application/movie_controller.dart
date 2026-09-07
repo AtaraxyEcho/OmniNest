@@ -273,6 +273,26 @@ class MovieCenterSectionNotifier extends Notifier<MovieSection> {
   }
 }
 
+/// 新版详情抽屉当前展示的条目；为空时抽屉关闭。
+/// 抽屉是页内覆盖层，不承载路由跳转；外部 deep-link 仍走 /video/:id 详情页。
+final movieRedesignDetailProvider =
+    NotifierProvider<MovieRedesignDetailNotifier, MovieVideoItem?>(
+      MovieRedesignDetailNotifier.new,
+    );
+
+class MovieRedesignDetailNotifier extends Notifier<MovieVideoItem?> {
+  @override
+  MovieVideoItem? build() => null;
+
+  void open(MovieVideoItem item) {
+    state = item;
+  }
+
+  void close() {
+    state = null;
+  }
+}
+
 final movieDetailProvider = FutureProvider.autoDispose
     .family<MovieVideoItem, String>((ref, videoItemId) {
       return ref.watch(movieApiProvider).detail(videoItemId);

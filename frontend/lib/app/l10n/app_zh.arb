@@ -3771,5 +3771,15 @@
   },
   "videoRedesignNoFavorites": "暂无收藏",
   "videoRedesignNoFavoritesHint": "播放时点击收藏按钮",
-  "videoRedesignNoHistoryHint": "开始观看后记录将在此显示"
+  "videoRedesignNoHistoryHint": "开始观看后记录将在此显示",
+  "videoRedesignSubtitlesEn": "Subtitles",
+  "videoRedesignUploadSubtitle": "上传字幕",
+  "videoRedesignNoSubtitles": "暂无字幕",
+  "videoRedesignSubtitleEmbedded": "内嵌",
+  "videoRedesignSubtitleExternal": "外挂",
+  "videoRedesignVersions": "版本",
+  "videoRedesignVersionsEn": "Versions",
+  "videoRedesignOriginalVersion": "原版",
+  "videoRedesignLanguage": "语言",
+  "videoRedesignConfirmUpload": "确认上传"
 }

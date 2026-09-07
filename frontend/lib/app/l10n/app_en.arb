@@ -3897,5 +3897,15 @@
   },
   "videoRedesignNoFavorites": "No favorites yet",
   "videoRedesignNoFavoritesHint": "Tap the favorite button while playing",
-  "videoRedesignNoHistoryHint": "Your watch records will appear here"
+  "videoRedesignNoHistoryHint": "Your watch records will appear here",
+  "videoRedesignSubtitlesEn": "Subtitles",
+  "videoRedesignUploadSubtitle": "Upload subtitle",
+  "videoRedesignNoSubtitles": "No subtitles",
+  "videoRedesignSubtitleEmbedded": "Embedded",
+  "videoRedesignSubtitleExternal": "External",
+  "videoRedesignVersions": "Versions",
+  "videoRedesignVersionsEn": "Versions",
+  "videoRedesignOriginalVersion": "Original",
+  "videoRedesignLanguage": "Language",
+  "videoRedesignConfirmUpload": "Confirm upload"
 }

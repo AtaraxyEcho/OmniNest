@@ -8367,4 +8367,34 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoRedesignNoHistoryHint => '开始观看后记录将在此显示';
+
+  @override
+  String get videoRedesignSubtitlesEn => 'Subtitles';
+
+  @override
+  String get videoRedesignUploadSubtitle => '上传字幕';
+
+  @override
+  String get videoRedesignNoSubtitles => '暂无字幕';
+
+  @override
+  String get videoRedesignSubtitleEmbedded => '内嵌';
+
+  @override
+  String get videoRedesignSubtitleExternal => '外挂';
+
+  @override
+  String get videoRedesignVersions => '版本';
+
+  @override
+  String get videoRedesignVersionsEn => 'Versions';
+
+  @override
+  String get videoRedesignOriginalVersion => '原版';
+
+  @override
+  String get videoRedesignLanguage => '语言';
+
+  @override
+  String get videoRedesignConfirmUpload => '确认上传';
 }
