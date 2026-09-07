@@ -382,6 +382,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   cacheKey: photo.coverCacheKey,
                   memCacheWidth: 96,
                   fit: BoxFit.cover,
+                  filterQuality: FilterQuality.medium,
                   fadeInDuration: Duration.zero,
                   errorWidget:
                       (context, url, error) =>
@@ -730,19 +731,22 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                 onTap: () => _goTo(i, next: i > _current),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    // 仅当前段跟随进度逐帧刷新；其余段为静态，避免照片多时每 30ms 重建全部段。
-                    child:
-                        i == _current
-                            ? ValueListenableBuilder<double>(
-                              valueListenable: _progressController,
-                              builder:
-                                  (context, progress, _) => _buildSegmentBar(
-                                    _progressValueFor(i, progress),
-                                  ),
-                            )
-                            : _buildSegmentBar(_progressValueFor(i, 0)),
+                  child: RepaintBoundary(
+                    // 隔离绘制：进度 tick 的重绘不传播到页面根。
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(2),
+                      // 仅当前段跟随进度逐帧刷新；其余段为静态，避免照片多时每 30ms 重建全部段。
+                      child:
+                          i == _current
+                              ? ValueListenableBuilder<double>(
+                                valueListenable: _progressController,
+                                builder:
+                                    (context, progress, _) => _buildSegmentBar(
+                                      _progressValueFor(i, progress),
+                                    ),
+                              )
+                              : _buildSegmentBar(_progressValueFor(i, 0)),
+                    ),
                   ),
                 ),
               ),
@@ -1037,6 +1041,8 @@ class _SlideLayerState extends State<_SlideLayer>
                       MediaQuery.sizeOf(context).width)
                   .round()
                   .clamp(1, 8192),
+      // medium（mipmap 三线性）：大位图随动画缩放时 low 双线性会产生采样伪影闪烁
+      filterQuality: FilterQuality.medium,
       fit: BoxFit.contain,
       fadeInDuration: Duration.zero,
       placeholder:

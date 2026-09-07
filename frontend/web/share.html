@@ -93,7 +93,11 @@
 <footer><p>Powered by OmniNest · 光影集</p></footer>
 <script>
 (function () {
-  var token = new URLSearchParams(location.search).get('token');
+  // 支持两种链接形态：/share/{token}（路径）与 share.html?token=（查询参数）
+  var token =
+    decodeURIComponent(location.pathname.replace(/\/+$/, '').split('/').pop() || '') ||
+    new URLSearchParams(location.search).get('token') ||
+    '';
   var state = { sessionToken: '', password: '' };
 
   function show(id) {

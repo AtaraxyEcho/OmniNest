@@ -209,10 +209,11 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   }
 
   /// 分享页为独立静态页（share.html，原生 JS 调公开 API），
-  /// 不依赖 Flutter SPA 部署；指向 API 地址会命中受保护接口返回 401。
+  /// 不依赖 Flutter SPA 部署；链接用路径形态携带令牌，避免地址栏暴露查询参数。
+  /// 指向 API 地址会命中受保护接口返回 401。
   String _buildShareUrl(String token) {
     final webBase = ref.read(appEnvironmentProvider).effectiveWebBaseUrl;
-    return '$webBase/share.html?token=$token';
+    return '$webBase/share/$token';
   }
 
   @override

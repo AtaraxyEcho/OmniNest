@@ -58,7 +58,7 @@ public class SecurityConfig {
             matchIfMissing = true
     )
     SecurityFilterChain publicContentFilterChain(HttpSecurity http) throws Exception {
-        http.securityMatcher("/api/v1/public/**", "/api/v1/s/**")
+        http.securityMatcher("/api/v1/public/**", "/api/v1/s/**", "/share/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
