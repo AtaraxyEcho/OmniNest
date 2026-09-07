@@ -86,6 +86,21 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        // 托管的前端 SPA（分享链接的 Web 入口）：hash 路由仅需首页与静态资源匿名可达
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/",
+                                "/index.html",
+                                "/main.dart.js",
+                                "/flutter.js",
+                                "/flutter_bootstrap.js",
+                                "/flutter_service_worker.js",
+                                "/manifest.json",
+                                "/favicon.png",
+                                "/favicon.ico",
+                                "/version.json"
+                        ).permitAll()
+                        .requestMatchers("/assets/**", "/icons/**", "/canvaskit/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/setup/status").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/setup/super-admin").permitAll()

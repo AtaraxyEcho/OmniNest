@@ -359,34 +359,38 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   // ─── 幻灯片层（静态模糊背景 + 离场/入场前景交叉过渡） ───
 
-  /// 页面级模糊背景：当前图缩略图 cover 放大 + 高斯模糊，掩盖 contain 黑边。
+  /// 页面级模糊背景：96px 超低分辨率缩略图放大拉伸 + RepaintBoundary。
   ///
-  /// 刻意放在动画子树之外并使用缩略图：ImageFiltered 跟随逐帧 Transform
-  /// 会引发全屏重滤波掉帧（闪烁根因）；背景为低频内容，切图瞬时切换不显突兀。
+  /// 低分辨率放大本身即强模糊，sigma 滤波只作用于 96px 小纹理（成本可忽略）；
+  /// RepaintBoundary 使该层稳定数帧后进入光栅缓存——前景动画帧不触发
+  /// 全屏重滤波（此前每次前景交叉都会整帧重算 sigma40 模糊，是掉帧主因）。
   Widget _buildBackdrop(PhotoItem photo) {
     final thumb = photo.coverUrl;
     if (thumb == null || thumb.isEmpty) {
       return const SizedBox.shrink();
     }
     return Positioned.fill(
-      child: Transform.scale(
-        scale: 1.12,
-        child: ImageFiltered(
-          imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CachedNetworkImage(
-                imageUrl: thumb,
-                cacheKey: photo.coverCacheKey,
-                fit: BoxFit.cover,
-                fadeInDuration: Duration.zero,
-                errorWidget:
-                    (context, url, error) =>
-                        const ColoredBox(color: Colors.black),
-              ),
-              ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
-            ],
+      child: RepaintBoundary(
+        child: Transform.scale(
+          scale: 1.12,
+          child: ImageFiltered(
+            imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CachedNetworkImage(
+                  imageUrl: thumb,
+                  cacheKey: photo.coverCacheKey,
+                  memCacheWidth: 96,
+                  fit: BoxFit.cover,
+                  fadeInDuration: Duration.zero,
+                  errorWidget:
+                      (context, url, error) =>
+                          const ColoredBox(color: Colors.black),
+                ),
+                ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
+              ],
+            ),
           ),
         ),
       ),
@@ -716,38 +720,45 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   // ─── 分段进度条 ───
 
   Widget _buildSegments() {
-    return ValueListenableBuilder<double>(
-      valueListenable: _progressController,
-      builder: (context, progress, _) {
-        return SizedBox(
-          height: 2,
-          child: Row(
-            children: [
-              for (var i = 0; i < _photos.length; i++)
-                Expanded(
-                  child: GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: () => _goTo(i, next: i > _current),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 2),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: _progressValueFor(i, progress),
-                          minHeight: 2,
-                          backgroundColor: Colors.white.withValues(alpha: 0.20),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            Color(0xE6FFFFFF),
-                          ),
-                        ),
-                      ),
-                    ),
+    return SizedBox(
+      height: 2,
+      child: Row(
+        children: [
+          for (var i = 0; i < _photos.length; i++)
+            Expanded(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: () => _goTo(i, next: i > _current),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    // 仅当前段跟随进度逐帧刷新；其余段为静态，避免照片多时每 30ms 重建全部段。
+                    child:
+                        i == _current
+                            ? ValueListenableBuilder<double>(
+                              valueListenable: _progressController,
+                              builder:
+                                  (context, progress, _) => _buildSegmentBar(
+                                    _progressValueFor(i, progress),
+                                  ),
+                            )
+                            : _buildSegmentBar(_progressValueFor(i, 0)),
                   ),
                 ),
-            ],
-          ),
-        );
-      },
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSegmentBar(double value) {
+    return LinearProgressIndicator(
+      value: value,
+      minHeight: 2,
+      backgroundColor: Colors.white.withValues(alpha: 0.20),
+      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xE6FFFFFF)),
     );
   }
 
