@@ -112,39 +112,11 @@ class _BatchActionBar extends StatelessWidget {
   }
 
   Future<void> _showBatchTagDialog(BuildContext context) async {
-    final tag = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => PhotoDialogTextField(
-            builder:
-                (ctx, tagController) => AlertDialog(
-                  backgroundColor: context.photosColors.surfaceContainerHigh,
-                  title: Text(
-                    AppLocalizations.of(context).photosBatchAddTag,
-                    style: TextStyle(color: context.photosColors.onSurface),
-                  ),
-                  content: TextField(
-                    controller: tagController,
-                    autofocus: true,
-                    style: TextStyle(color: context.photosColors.onSurface),
-                    decoration: InputDecoration(
-                      labelText: AppLocalizations.of(context).photosTagName,
-                      hintText: AppLocalizations.of(context).photosTagNameHint,
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text(AppLocalizations.of(context).photosCancel),
-                    ),
-                    FilledButton(
-                      onPressed:
-                          () => Navigator.pop(ctx, tagController.text.trim()),
-                      child: Text(AppLocalizations.of(context).photosAdd),
-                    ),
-                  ],
-                ),
-          ),
+    final tag = await showFramePromptDialog(
+      context,
+      title: AppLocalizations.of(context).photosBatchAddTag,
+      hint: AppLocalizations.of(context).photosTagNameHint,
+      confirmLabel: AppLocalizations.of(context).photosAdd,
     );
     if (tag != null && tag.trim().isNotEmpty && context.mounted) {
       try {
@@ -172,30 +144,20 @@ class _BatchActionBar extends StatelessWidget {
     final albums =
         await ref.read(photoCenterControllerProvider.notifier).listAlbums();
     if (!context.mounted) return;
-    final selected = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => SimpleDialog(
-            backgroundColor: context.photosColors.surfaceContainerHigh,
-            title: Text(
-              AppLocalizations.of(context).photosSelectAlbum,
-              style: TextStyle(color: context.photosColors.onSurface),
-            ),
-            children:
-                albums
-                    .map(
-                      (album) => SimpleDialogOption(
-                        onPressed: () => Navigator.pop(ctx, album.id),
-                        child: Text(
-                          album.name,
-                          style: TextStyle(
-                            color: context.photosColors.onSurface,
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
+    final selected = await showFrameChoiceDialog<String>(
+      context,
+      title: AppLocalizations.of(context).photosSelectAlbum,
+      choices: [
+        for (final album in albums)
+          FrameChoice(
+            value: album.id,
+            title: album.name,
+            subtitle: AppLocalizations.of(
+              context,
+            ).photosAlbumPhotoCountLabel(album.photoCount),
           ),
+      ],
+      emptyMessage: AppLocalizations.of(context).photosNoAlbumsCreateFirst,
     );
     if (selected != null && context.mounted) {
       try {

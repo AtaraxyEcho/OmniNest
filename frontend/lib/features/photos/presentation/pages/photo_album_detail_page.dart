@@ -12,6 +12,7 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 
@@ -180,35 +181,15 @@ class _AlbumDetailBody extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            backgroundColor: context.photosColors.surfaceContainerHigh,
-            title: Text(
-              AppLocalizations.of(context).photosDeleteAlbumTitle,
-              style: TextStyle(color: context.photosColors.onSurface),
-            ),
-            content: Text(
-              AppLocalizations.of(context).photosDeleteAlbumConfirm(album.name),
-              style: TextStyle(color: context.photosColors.onSurfaceVariant),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(AppLocalizations.of(context).photosCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: context.photosColors.danger,
-                ),
-                child: Text(AppLocalizations.of(context).photosDelete),
-              ),
-            ],
-          ),
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showFrameConfirmDialog(
+      context,
+      title: l10n.photosDeleteAlbumTitle,
+      body: l10n.photosDeleteAlbumConfirm(album.name),
+      confirmLabel: l10n.photosDelete,
+      destructive: true,
     );
-    if (confirmed == true && context.mounted) {
+    if (confirmed && context.mounted) {
       try {
         await ref
             .read(photoCenterControllerProvider.notifier)
@@ -307,32 +288,12 @@ class _AlbumDetailBody extends ConsumerWidget {
     WidgetRef ref,
     PhotoItem photo,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            backgroundColor: context.photosColors.surfaceContainerHigh,
-            title: Text(
-              AppLocalizations.of(context).photosRemoveFromAlbum,
-              style: TextStyle(color: context.photosColors.onSurface),
-            ),
-            content: Text(
-              AppLocalizations.of(
-                context,
-              ).photosRemoveFromAlbumConfirm(photo.title),
-              style: TextStyle(color: context.photosColors.onSurfaceVariant),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(AppLocalizations.of(context).photosCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: Text(AppLocalizations.of(context).photosRemove),
-              ),
-            ],
-          ),
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showFrameConfirmDialog(
+      context,
+      title: l10n.photosRemoveFromAlbum,
+      body: l10n.photosRemoveFromAlbumConfirm(photo.title),
+      confirmLabel: l10n.photosRemove,
     );
     if (confirmed == true && context.mounted) {
       try {

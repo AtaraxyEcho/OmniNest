@@ -2,70 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/photos/application/photo_center_models.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
-
-/// Frame 确认弹窗：白底圆角 12、衬线标题，确认按钮支持危险色。
-Future<bool> showFrameConfirmDialog(
-  BuildContext context, {
-  required String title,
-  required String body,
-  required String confirmLabel,
-  bool destructive = false,
-}) async {
-  final colors = context.frameColors;
-  final result = await showDialog<bool>(
-    context: context,
-    builder:
-        (ctx) => AlertDialog(
-          backgroundColor: colors.searchFill,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          title: Text(
-            title,
-            style: TextStyle(
-              fontFamily: FramePalette.serifFamily,
-              fontFamilyFallback: FramePalette.serifFallback,
-              color: colors.ink,
-              fontSize: 18,
-            ),
-          ),
-          content: Text(
-            body,
-            style: TextStyle(color: colors.sub, fontSize: 14),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(
-                AppLocalizations.of(ctx).photosCancel,
-                style: TextStyle(color: colors.sub),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              style: TextButton.styleFrom(
-                backgroundColor:
-                    destructive ? const Color(0xFFEF4444) : colors.btnBg,
-                foregroundColor: destructive ? Colors.white : colors.onBtn,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              child: Text(confirmLabel),
-            ),
-          ],
-        ),
-  );
-  return result ?? false;
-}
 
 /// Frame 回收站视图：衬线标题 + 计数说明 + 清空按钮 + 暗化瀑布流。
 ///

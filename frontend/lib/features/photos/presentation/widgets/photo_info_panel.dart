@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
 
 /// 信息侧栏宽度：与分享侧栏一致（幻灯片与详情页共用）。
@@ -265,55 +264,12 @@ class PhotoInfoPanel extends ConsumerWidget {
     WidgetRef ref,
     String photoId,
   ) async {
-    final tag = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => PhotoDialogTextField(
-            builder:
-                (ctx, controller) => AlertDialog(
-                  backgroundColor: context.photosColors.surfaceContainerHigh,
-                  title: Text(
-                    AppLocalizations.of(context).photosAddTag,
-                    style: TextStyle(color: context.photosColors.onSurface),
-                  ),
-                  content: TextField(
-                    controller: controller,
-                    autofocus: true,
-                    style: TextStyle(color: context.photosColors.onSurface),
-                    decoration: InputDecoration(
-                      hintText: AppLocalizations.of(context).photosTagNameInput,
-                      hintStyle: TextStyle(
-                        color: context.photosColors.onSurfaceVariant.withValues(
-                          alpha: 0.6,
-                        ),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderSide: BorderSide(
-                          color: context.photosColors.outlineVariant.withValues(
-                            alpha: 0.32,
-                          ),
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderSide: BorderSide(
-                          color: context.photosColors.primaryContainer,
-                        ),
-                      ),
-                    ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(ctx),
-                      child: Text(AppLocalizations.of(context).photosCancel),
-                    ),
-                    FilledButton(
-                      onPressed:
-                          () => Navigator.pop(ctx, controller.text.trim()),
-                      child: Text(AppLocalizations.of(context).photosAdd),
-                    ),
-                  ],
-                ),
-          ),
+    final l10n = AppLocalizations.of(context);
+    final tag = await showFramePromptDialog(
+      context,
+      title: l10n.photosAddTag,
+      hint: l10n.photosTagNameInput,
+      confirmLabel: l10n.photosAdd,
     );
     if (tag != null && tag.isNotEmpty && context.mounted) {
       try {
@@ -324,11 +280,9 @@ class PhotoInfoPanel extends ConsumerWidget {
         ref.invalidate(photoDetailProvider(photoId));
       } on Exception {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(AppLocalizations.of(context).photosAddTagFailed),
-          ),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.photosAddTagFailed)));
       }
     }
   }

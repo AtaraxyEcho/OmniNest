@@ -22,9 +22,9 @@ import 'package:omninest/features/photos/presentation/widgets/frame_masonry_grid
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_sidebar.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_tags_view.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_trash_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_top_bar.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_timeline_view.dart';
 
 part 'photos_page_batch_actions.dart';
@@ -361,35 +361,15 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     BuildContext context,
     PhotoAlbum album,
   ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            backgroundColor: context.photosColors.surfaceContainerHigh,
-            title: Text(
-              AppLocalizations.of(context).photosDeleteAlbumTitle,
-              style: TextStyle(color: context.photosColors.onSurface),
-            ),
-            content: Text(
-              AppLocalizations.of(context).photosDeleteAlbumConfirm(album.name),
-              style: TextStyle(color: context.photosColors.onSurfaceVariant),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: Text(AppLocalizations.of(context).photosCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                style: FilledButton.styleFrom(
-                  backgroundColor: context.photosColors.danger,
-                ),
-                child: Text(AppLocalizations.of(context).photosDelete),
-              ),
-            ],
-          ),
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showFrameConfirmDialog(
+      context,
+      title: l10n.photosDeleteAlbumTitle,
+      body: l10n.photosDeleteAlbumConfirm(album.name),
+      confirmLabel: l10n.photosDelete,
+      destructive: true,
     );
-    if (confirmed == true && context.mounted) {
+    if (confirmed && context.mounted) {
       try {
         await ref
             .read(photoCenterControllerProvider.notifier)
@@ -415,116 +395,31 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     }
   }
 
-  void _showCreateAlbumDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder:
-          (ctx) => PhotoDialogTextField(
-            builder:
-                (ctx, nameController) => PhotoDialogTextField(
-                  builder:
-                      (ctx, descController) => AlertDialog(
-                        backgroundColor:
-                            context.photosColors.surfaceContainerHigh,
-                        title: Text(
-                          AppLocalizations.of(context).photosNewAlbum,
-                          style: TextStyle(
-                            color: context.photosColors.onSurface,
-                          ),
-                        ),
-                        content: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            TextField(
-                              controller: nameController,
-                              autofocus: true,
-                              style: TextStyle(
-                                color: context.photosColors.onSurface,
-                              ),
-                              decoration: InputDecoration(
-                                labelText:
-                                    AppLocalizations.of(
-                                      context,
-                                    ).photosAlbumName,
-                                hintText:
-                                    AppLocalizations.of(
-                                      context,
-                                    ).photosAlbumNameHint,
-                              ),
-                            ),
-                            SizedBox(height: 12),
-                            TextField(
-                              controller: descController,
-                              style: TextStyle(
-                                color: context.photosColors.onSurface,
-                              ),
-                              decoration: InputDecoration(
-                                labelText:
-                                    AppLocalizations.of(
-                                      context,
-                                    ).photosAlbumDescription,
-                                hintText:
-                                    AppLocalizations.of(
-                                      context,
-                                    ).photosAlbumDescriptionHint,
-                              ),
-                            ),
-                          ],
-                        ),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx),
-                            child: Text(
-                              AppLocalizations.of(context).photosCancel,
-                            ),
-                          ),
-                          FilledButton(
-                            onPressed: () async {
-                              final name = nameController.text.trim();
-                              if (name.isEmpty) return;
-                              Navigator.pop(ctx);
-                              try {
-                                await ref
-                                    .read(
-                                      photoCenterControllerProvider.notifier,
-                                    )
-                                    .createAlbum(
-                                      name: name,
-                                      description: descController.text.trim(),
-                                    );
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        ).photosAlbumCreated(name),
-                                      ),
-                                    ),
-                                  );
-                                }
-                              } on Exception {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        ).photosCreateFailed,
-                                      ),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            child: Text(
-                              AppLocalizations.of(context).photosCreate,
-                            ),
-                          ),
-                        ],
-                      ),
-                ),
+  Future<void> _showCreateAlbumDialog(BuildContext context) async {
+    final created = await showFrameNewAlbumDialog(context);
+    if (created == null || !context.mounted) return;
+    final (name, description) = created;
+    try {
+      await ref
+          .read(photoCenterControllerProvider.notifier)
+          .createAlbum(name: name, description: description);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).photosAlbumCreated(name),
+            ),
           ),
-    );
+        );
+      }
+    } on Exception {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).photosCreateFailed),
+          ),
+        );
+      }
+    }
   }
 }

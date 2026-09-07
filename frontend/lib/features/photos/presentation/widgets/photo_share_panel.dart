@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 
 /// 照片分享侧栏：SHARE 眉题 + 预览卡 + LINK 复制 + 分享渠道宫格 + OPTIONS 开关。
@@ -165,39 +166,12 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       await _recreateLink();
       return;
     }
-    final controller = TextEditingController();
-    final password = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => AlertDialog(
-            backgroundColor: Colors.grey.shade900,
-            title: Text(
-              l10n.photosSharePasswordOption,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
-            content: TextField(
-              controller: controller,
-              autofocus: true,
-              obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: InputDecoration(
-                hintText: l10n.photosSharePasswordHint,
-                hintStyle: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.40),
-                ),
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(l10n.photosCancel),
-              ),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-                child: Text(l10n.coreConfirm),
-              ),
-            ],
-          ),
+    final password = await showFramePromptDialog(
+      context,
+      title: l10n.photosSharePasswordOption,
+      hint: l10n.photosSharePasswordHint,
+      obscureText: true,
+      confirmLabel: l10n.coreConfirm,
     );
     if (!mounted || password == null || password.isEmpty) return;
     _password = password;

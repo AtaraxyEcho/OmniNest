@@ -10,7 +10,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.d
 import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
-import 'package:omninest/features/photos/presentation/widgets/frame_trash_view.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -337,44 +337,20 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
         await ref.read(photoCenterControllerProvider.notifier).listAlbums();
     if (!context.mounted) return;
 
-    final selected = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => SimpleDialog(
-            backgroundColor: context.photosColors.surfaceContainerHigh,
-            title: Text(
-              AppLocalizations.of(context).photosSelectAlbum,
-              style: TextStyle(color: context.photosColors.onSurface),
-            ),
-            children:
-                albums.isEmpty
-                    ? [
-                      Padding(
-                        padding: EdgeInsets.all(20),
-                        child: Text(
-                          AppLocalizations.of(
-                            context,
-                          ).photosNoAlbumsCreateFirst,
-                          style: TextStyle(
-                            color: context.photosColors.onSurfaceVariant,
-                          ),
-                        ),
-                      ),
-                    ]
-                    : albums
-                        .map(
-                          (album) => SimpleDialogOption(
-                            onPressed: () => Navigator.pop(ctx, album.id),
-                            child: Text(
-                              album.name,
-                              style: TextStyle(
-                                color: context.photosColors.onSurface,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
+    final selected = await showFrameChoiceDialog<String>(
+      context,
+      title: AppLocalizations.of(context).photosSelectAlbum,
+      choices: [
+        for (final album in albums)
+          FrameChoice(
+            value: album.id,
+            title: album.name,
+            subtitle: AppLocalizations.of(
+              context,
+            ).photosAlbumPhotoCountLabel(album.photoCount),
           ),
+      ],
+      emptyMessage: AppLocalizations.of(context).photosNoAlbumsCreateFirst,
     );
 
     if (selected != null && context.mounted) {

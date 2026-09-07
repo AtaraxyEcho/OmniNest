@@ -2,12 +2,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/application/photo_batch_task_monitor.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
+import 'package:omninest/app/theme/feature/photos_colors.dart';
 
-/// 批量任务进度对话框
+/// 批量任务进度对话框（Frame 极简风格）。
 class BatchProgressDialog extends ConsumerStatefulWidget {
   const BatchProgressDialog({super.key, required this.taskId});
 
@@ -67,59 +69,66 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
     final snapshot = monitor.asData?.value;
     final task = snapshot?.task;
     final l10n = AppLocalizations.of(context);
+    final colors = context.frameColors;
+    final photosColors = context.photosColors;
     return AlertDialog(
-      backgroundColor: context.photosColors.surfaceContainerHigh,
+      backgroundColor: colors.searchFill,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       title: Text(
         task == null ? l10n.photosLoading : _taskTitle(l10n, task.taskType),
-        style: TextStyle(color: context.photosColors.onSurface),
+        style: TextStyle(
+          fontFamily: FramePalette.serifFamily,
+          fontFamilyFallback: FramePalette.serifFallback,
+          color: colors.ink,
+          fontSize: 18,
+        ),
       ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (task == null) ...[
             if (monitor.hasError)
               Text(
                 l10n.photosTaskFailed,
-                style: TextStyle(color: context.photosColors.danger),
+                style: TextStyle(color: photosColors.danger),
               )
             else
-              CircularProgressIndicator(),
+              const Center(child: CircularProgressIndicator(strokeWidth: 2)),
           ] else if (task.isFailed) ...[
-            Icon(
-              Icons.error_outline,
-              color: context.photosColors.danger,
-              size: 48,
-            ),
-            SizedBox(height: 16),
+            Icon(Icons.error_outline, color: photosColors.danger, size: 48),
+            const SizedBox(height: 16),
             Text(
               task.errorMessage ??
                   AppLocalizations.of(context).photosTaskFailed,
-              style: TextStyle(color: context.photosColors.onSurfaceVariant),
+              style: TextStyle(color: colors.sub),
               textAlign: TextAlign.center,
             ),
           ] else if (task.isCompleted) ...[
             Icon(
               Icons.check_circle_outline,
-              color: context.photosColors.success,
+              color: photosColors.success,
               size: 48,
             ),
-            SizedBox(height: 16),
+            const SizedBox(height: 16),
             Text(
               AppLocalizations.of(
                 context,
               ).photosProcessedItems(task.processedItems),
-              style: TextStyle(color: context.photosColors.onSurfaceVariant),
+              style: TextStyle(color: colors.sub),
             ),
           ] else ...[
             LinearProgressIndicator(
               value: task.progress,
-              backgroundColor: context.photosColors.surfaceContainer,
-              color: context.photosColors.primaryContainer,
+              minHeight: 4,
+              borderRadius: BorderRadius.circular(2),
+              backgroundColor: colors.hover,
+              color: colors.accent,
             ),
-            SizedBox(height: 12),
+            const SizedBox(height: 12),
             Text(
               '${task.processedItems} / ${task.totalItems}',
-              style: TextStyle(color: context.photosColors.onSurfaceVariant),
+              style: TextStyle(color: colors.sub, fontSize: 13),
             ),
           ],
           if (snapshot?.refreshError != null) ...[
@@ -131,7 +140,7 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
                   l10n.photosTaskMonitorTimedOut,
                 null => l10n.photosTaskStatusRefreshFailed,
               },
-              style: TextStyle(color: context.photosColors.danger),
+              style: TextStyle(color: photosColors.danger),
               textAlign: TextAlign.center,
             ),
           ],
@@ -144,38 +153,35 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
                 () => ref.invalidate(
                   photoBatchTaskMonitorProvider(widget.taskId),
                 ),
-            icon: const Icon(Icons.refresh_rounded),
+            style: TextButton.styleFrom(foregroundColor: colors.sub),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
             label: Text(l10n.photosRetryStatus),
           ),
         if (task == null)
           TextButton(
             onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(foregroundColor: colors.sub),
             child: Text(l10n.photosDone),
           )
         else if (task.isCompleted && task.taskType == 'DOWNLOAD') ...[
           TextButton(
             onPressed: _isDownloading ? null : () => Navigator.pop(context),
+            style: TextButton.styleFrom(foregroundColor: colors.sub),
             child: Text(AppLocalizations.of(context).photosDone),
           ),
-          FilledButton.icon(
+          FrameDialogActionButton(
+            label: AppLocalizations.of(context).photosSaveZip,
             onPressed: _isDownloading ? null : _downloadArchive,
-            icon:
-                _isDownloading
-                    ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                    : const Icon(Icons.download_rounded),
-            label: Text(AppLocalizations.of(context).photosSaveZip),
           ),
         ] else if (task.isCompleted || task.isFailed)
-          FilledButton(
+          FrameDialogActionButton(
+            label: AppLocalizations.of(context).photosDone,
             onPressed: () => Navigator.pop(context),
-            child: Text(AppLocalizations.of(context).photosDone),
           )
         else
           TextButton(
             onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(foregroundColor: colors.sub),
             child: Text(AppLocalizations.of(context).photosRunInBackground),
           ),
       ],
