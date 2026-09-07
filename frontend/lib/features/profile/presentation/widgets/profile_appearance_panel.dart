@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
@@ -7,16 +8,20 @@ class ProfileAppearancePanel extends StatelessWidget {
   const ProfileAppearancePanel({
     required this.themeMode,
     required this.languageCode,
+    required this.fontScalePreset,
     required this.onThemeChanged,
     required this.onLanguageChanged,
+    required this.onFontScaleChanged,
     required this.onBackdropSettings,
     super.key,
   });
 
   final ThemeMode themeMode;
   final String languageCode;
+  final FontScalePreset fontScalePreset;
   final ValueChanged<ThemeMode> onThemeChanged;
   final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<FontScalePreset> onFontScaleChanged;
   final VoidCallback onBackdropSettings;
 
   @override
@@ -59,6 +64,39 @@ class ProfileAppearancePanel extends StatelessWidget {
               selected: {themeMode},
               onSelectionChanged:
                   (selection) => onThemeChanged(selection.first),
+            ),
+          ),
+          const Divider(height: 32),
+          _ResponsivePreferenceRow(
+            icon: Icons.format_size_rounded,
+            title: l10n.fontScaleTitle,
+            control: SegmentedButton<FontScalePreset>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                  value: FontScalePreset.followSystem,
+                  label: Text(l10n.fontScaleFollowSystem),
+                ),
+                ButtonSegment(
+                  value: FontScalePreset.compact,
+                  label: Text(l10n.fontScaleCompact),
+                ),
+                ButtonSegment(
+                  value: FontScalePreset.standard,
+                  label: Text(l10n.fontScaleStandard),
+                ),
+                ButtonSegment(
+                  value: FontScalePreset.comfortable,
+                  label: Text(l10n.fontScaleComfortable),
+                ),
+                ButtonSegment(
+                  value: FontScalePreset.large,
+                  label: Text(l10n.fontScaleLarge),
+                ),
+              ],
+              selected: {fontScalePreset},
+              onSelectionChanged:
+                  (selection) => onFontScaleChanged(selection.first),
             ),
           ),
           const Divider(height: 32),

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
@@ -24,8 +25,10 @@ class ProfileMobileContent extends ConsumerWidget {
     required this.onEditWeatherCity,
     required this.themeMode,
     required this.languageCode,
+    required this.fontScalePreset,
     required this.onThemeChanged,
     required this.onLanguageChanged,
+    required this.onFontScaleChanged,
     this.avatarUrl,
     this.weatherCity,
     super.key,
@@ -42,8 +45,10 @@ class ProfileMobileContent extends ConsumerWidget {
   final VoidCallback onEditWeatherCity;
   final ThemeMode themeMode;
   final String languageCode;
+  final FontScalePreset fontScalePreset;
   final ValueChanged<ThemeMode> onThemeChanged;
   final ValueChanged<String> onLanguageChanged;
+  final ValueChanged<FontScalePreset> onFontScaleChanged;
 
   bool get _isAdmin => role == 'SUPER_ADMIN' || role == 'ADMIN';
 
@@ -120,6 +125,12 @@ class ProfileMobileContent extends ConsumerWidget {
                 title: l10n.settingsAppearance,
                 subtitle: _themeLabel(l10n),
                 onTap: () => _showThemePicker(context),
+              ),
+              MobileSettingsTile(
+                icon: Icons.format_size_rounded,
+                title: l10n.fontScaleTitle,
+                subtitle: _fontScaleLabel(l10n),
+                onTap: () => _showFontScalePicker(context),
               ),
               MobileSettingsTile(
                 icon: Icons.language_rounded,
@@ -246,6 +257,51 @@ class ProfileMobileContent extends ConsumerWidget {
             ),
           ),
     );
+  }
+
+  Future<void> _showFontScalePicker(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (sheetContext) => SafeArea(
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final preset in FontScalePreset.values)
+                    _ChoiceTile(
+                      icon:
+                          preset == FontScalePreset.followSystem
+                              ? Icons.brightness_auto_rounded
+                              : Icons.format_size_rounded,
+                      label: _presetLabel(preset, l10n),
+                      selected: fontScalePreset == preset,
+                      onTap: () {
+                        onFontScaleChanged(preset);
+                        Navigator.pop(sheetContext);
+                      },
+                    ),
+                ],
+              ),
+            ),
+          ),
+    );
+  }
+
+  String _fontScaleLabel(AppLocalizations l10n) {
+    return _presetLabel(fontScalePreset, l10n);
+  }
+
+  String _presetLabel(FontScalePreset preset, AppLocalizations l10n) {
+    return switch (preset) {
+      FontScalePreset.followSystem => l10n.fontScaleFollowSystem,
+      FontScalePreset.compact => l10n.fontScaleCompact,
+      FontScalePreset.standard => l10n.fontScaleStandard,
+      FontScalePreset.comfortable => l10n.fontScaleComfortable,
+      FontScalePreset.large => l10n.fontScaleLarge,
+    };
   }
 
   Future<void> _showLanguagePicker(BuildContext context) {

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
@@ -35,8 +36,10 @@ void main() {
             weatherCity: 'Shanghai',
             themeMode: ThemeMode.system,
             languageCode: 'zh',
+            fontScalePreset: FontScalePreset.followSystem,
             onThemeChanged: (_) {},
             onLanguageChanged: (_) {},
+            onFontScaleChanged: (_) {},
             onEditAvatar: _noop,
             onEditWeatherCity: _noop,
           ),

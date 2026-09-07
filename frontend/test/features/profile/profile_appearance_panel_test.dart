@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_appearance_panel.dart';
@@ -20,8 +21,10 @@ void main() {
           body: ProfileAppearancePanel(
             themeMode: ThemeMode.system,
             languageCode: 'zh',
+            fontScalePreset: FontScalePreset.followSystem,
             onThemeChanged: (value) => selectedTheme = value,
             onLanguageChanged: (value) => selectedLanguage = value,
+            onFontScaleChanged: (_) {},
             onBackdropSettings: () {},
           ),
         ),

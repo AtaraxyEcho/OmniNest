@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
+import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
@@ -169,6 +172,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final weatherCity = ref.watch(weatherLocationProvider).asData?.value;
     final themeMode = ref.watch(appearanceControllerProvider);
     final languageCode = ref.watch(localeControllerProvider);
+    final fontScalePreset = ref.watch(fontScaleControllerProvider);
 
     if (MediaQuery.sizeOf(context).width < 860) {
       return Scaffold(
@@ -203,10 +207,17 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           weatherCity: weatherCity,
           themeMode: themeMode,
           languageCode: languageCode,
+          fontScalePreset: fontScalePreset,
           onThemeChanged:
               ref.read(appearanceControllerProvider.notifier).setThemeMode,
           onLanguageChanged:
               ref.read(localeControllerProvider.notifier).setLanguage,
+          onFontScaleChanged:
+              (preset) => unawaited(
+                ref
+                    .read(fontScaleControllerProvider.notifier)
+                    .setPreset(preset),
+              ),
           onEditAvatar: _pickAndUploadAvatar,
           onEditWeatherCity: _showWeatherCityEditor,
         ),
@@ -235,6 +246,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         weatherCity: weatherCity,
         themeMode: themeMode,
         languageCode: languageCode,
+        fontScalePreset: fontScalePreset,
       ),
     );
   }
@@ -250,6 +262,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     required String? weatherCity,
     required ThemeMode themeMode,
     required String languageCode,
+    required FontScalePreset fontScalePreset,
   }) {
     return switch (_selectedSection) {
       ProfileSection.account => LayoutBuilder(
@@ -286,10 +299,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       ProfileSection.appearance => ProfileAppearancePanel(
         themeMode: themeMode,
         languageCode: languageCode,
+        fontScalePreset: fontScalePreset,
         onThemeChanged:
             ref.read(appearanceControllerProvider.notifier).setThemeMode,
         onLanguageChanged:
             ref.read(localeControllerProvider.notifier).setLanguage,
+        onFontScaleChanged:
+            (preset) => unawaited(
+              ref.read(fontScaleControllerProvider.notifier).setPreset(preset),
+            ),
         onBackdropSettings: _showBackdropSettings,
       ),
       ProfileSection.notifications => _notificationPanel(),
