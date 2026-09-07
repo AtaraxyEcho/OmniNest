@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' as ui show Image, ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -58,7 +58,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   late AnimationController _progressController;
   WindowChromeLease? _windowChromeLease;
 
-  /// 已完成解码进入图片缓存的幻灯片 id；切换前必须就绪，动画不携带占位图。
+  /// 已解码位图表：切换前必须就绪，动画直接绘制位图（无任何加载概念）。
+  final Map<String, ui.Image> _decodedImages = {};
+
+  /// 已完成首次解码的幻灯片 id（失败/超时也标记，防止重复等待）。
   final Set<String> _readyImageIds = {};
   bool _transitioning = false;
 
@@ -175,21 +178,49 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     });
   }
 
-  /// 确保目标原图完成解码进入图片缓存；超时或失败也标记就绪（动画带占位图兜底推进）。
+  /// 确保目标原图完成解码，并持有解码位图供 RawImage 直接绘制。
+  ///
+  /// 超时或失败也标记就绪（动画带占位图兜底推进），避免每次切换重复等待同一张失败图。
   Future<void> _ensureReady(int index) async {
     final item = _photos[index];
-    if (_readyImageIds.contains(item.id)) return;
+    if (_readyImageIds.contains(item.id) &&
+        _decodedImages.containsKey(item.id)) {
+      return;
+    }
     final provider = _rendererProvider(item, context);
     if (provider == null) {
       _readyImageIds.add(item.id);
       return;
     }
     try {
-      await precacheImage(provider, context).timeout(_maxReadyWait);
+      final info = await _decodeToInfo(provider).timeout(_maxReadyWait);
+      if (!mounted) return;
+      _decodedImages[item.id] = info.image;
     } catch (_) {
       // 失败/超时同样标记，避免每次切换重复等待同一张失败图
     }
     _readyImageIds.add(item.id);
+  }
+
+  /// 把 provider 解码为 ImageInfo（ImageCache 共享同一流，不产生重复下载）。
+  Future<ImageInfo> _decodeToInfo(ImageProvider provider) {
+    final completer = Completer<ImageInfo>();
+    late final ImageStreamListener listener;
+    final stream = provider.resolve(createLocalImageConfiguration(context));
+    listener = ImageStreamListener(
+      (info, synchronousCall) {
+        if (!completer.isCompleted) completer.complete(info);
+        if (!synchronousCall) stream.removeListener(listener);
+      },
+      onError: (Object error, StackTrace? stackTrace) {
+        stream.removeListener(listener);
+        if (!completer.isCompleted) {
+          completer.completeError(error, stackTrace);
+        }
+      },
+    );
+    stream.addListener(listener);
+    return completer.future;
   }
 
   void _precacheNeighbors() {
@@ -373,7 +404,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         child: Transform.scale(
           scale: 1.12,
           child: ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+            imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
             child: Stack(
               fit: StackFit.expand,
               children: [
@@ -406,6 +437,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             child: _SlideLayer(
               key: ValueKey('leaving-$_leaving'),
               item: _photos[_leaving!],
+              decoded: _decodedImages[_photos[_leaving!].id],
               leaving: true,
               directionNext: _directionNext,
             ),
@@ -414,6 +446,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           child: _SlideLayer(
             key: ValueKey('current-${photo.id}'),
             item: photo,
+            decoded: _decodedImages[photo.id],
             leaving: false,
             directionNext: _directionNext,
           ),
@@ -966,12 +999,16 @@ ImageProvider? _rendererProvider(PhotoItem item, BuildContext context) {
 class _SlideLayer extends StatefulWidget {
   const _SlideLayer({
     required this.item,
+    required this.decoded,
     required this.leaving,
     required this.directionNext,
     super.key,
   });
 
   final PhotoItem item;
+
+  /// 已解码位图；就绪门控保证动画开始时非空，RawImage 直接绘制（零加载概念）。
+  final ui.Image? decoded;
   final bool leaving;
   final bool directionNext;
 
@@ -1006,54 +1043,30 @@ class _SlideLayerState extends State<_SlideLayer>
 
   @override
   Widget build(BuildContext context) {
-    // 原图按屏宽降采样解码：contain 显示不会超过屏宽像素，
-    // 全尺寸解码位图（4K 照片约 45MB/张）会把图片缓存预算挤爆，
-    // 邻居预取互相驱逐导致每次切换重新下载解码（表现为闪烁）。
-    final provider = _rendererProvider(widget.item, context);
-    final imageUrl = widget.item.sourceUrl ?? widget.item.coverUrl;
     final thumbUrl = widget.item.coverUrl;
-    // 原图尚未进缓存时以模糊缩略图兜底，避免入场瞬间闪黑；
-    // 模糊后的缩略图与背景氛围一致，原图就绪时仅清晰度提升、不产生跳变。
-    Widget? placeholder;
-    if (thumbUrl != null && thumbUrl.isNotEmpty) {
-      placeholder = ImageFiltered(
-        imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-        child: CachedNetworkImage(
-          imageUrl: thumbUrl,
-          cacheKey: widget.item.coverCacheKey,
-          fit: BoxFit.contain,
-          fadeInDuration: Duration.zero,
-          errorWidget:
-              (context, url, error) => const ColoredBox(color: Colors.black),
-        ),
-      );
-    }
-    final image = CachedNetworkImage(
-      imageUrl: imageUrl ?? '',
-      cacheKey:
-          widget.item.sourceUrl != null
-              ? widget.item.sourceCacheKey
-              : widget.item.coverCacheKey,
-      memCacheWidth:
-          provider == null
-              ? null
-              : (MediaQuery.devicePixelRatioOf(context) *
-                      MediaQuery.sizeOf(context).width)
-                  .round()
-                  .clamp(1, 8192),
-      // medium（mipmap 三线性）：大位图随动画缩放时 low 双线性会产生采样伪影闪烁
-      filterQuality: FilterQuality.medium,
-      fit: BoxFit.contain,
-      fadeInDuration: Duration.zero,
-      placeholder:
-          placeholder == null
-              ? (context, url) => const ColoredBox(color: Colors.black)
-              : (context, url) => placeholder!,
-      errorWidget:
-          placeholder == null
-              ? (context, url, error) => const ColoredBox(color: Colors.black)
-              : (context, url, error) => placeholder!,
-    );
+    // 解码位图直接绘制——渲染路径上没有任何网络/异步/占位状态机，
+    // "切换后再加载一次"在机制上不可能发生。无位图才以模糊缩略图兜底。
+    Widget image =
+        widget.decoded != null
+            ? RawImage(
+              image: widget.decoded,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.medium,
+            )
+            : (thumbUrl != null && thumbUrl.isNotEmpty
+                ? ImageFiltered(
+                  imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: CachedNetworkImage(
+                    imageUrl: thumbUrl,
+                    cacheKey: widget.item.coverCacheKey,
+                    fit: BoxFit.contain,
+                    fadeInDuration: Duration.zero,
+                    errorWidget:
+                        (context, url, error) =>
+                            const ColoredBox(color: Colors.black),
+                  ),
+                )
+                : const ColoredBox(color: Colors.black));
     return AnimatedBuilder(
       animation: _controller,
       child: RepaintBoundary(child: SizedBox.expand(child: image)),
