@@ -124,3 +124,4 @@ ai-sidecar/models/
 test-results/
 **/test-results/
 /webapp/
+**/webapp/

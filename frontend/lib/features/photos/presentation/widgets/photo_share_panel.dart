@@ -82,7 +82,8 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     super.dispose();
   }
 
-  /// 加载已有链接（取最新一条），没有则创建默认链接。
+  /// 创建分享链接。后端只存 token 哈希、列表接口不回明文（仅创建时返回一次），
+  /// 因此不做"复用已有链接"——每次打开面板创建新链接，旧链接经"管理"撤销。
   Future<void> _ensureShareLink() async {
     final photoId = widget.photo.id;
     if (_creating || (_loadedForPhotoId == photoId && _shareUrl != null)) {
@@ -94,25 +95,14 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     });
     try {
       final controller = ref.read(photoCenterControllerProvider.notifier);
-      final shares = await controller.listPhotoShares(photoId);
-      if (!mounted) return;
-      PhotoShareLink? latest;
-      for (final share in shares) {
-        if (latest == null ||
-            (share.createdAt ?? DateTime.now()).isAfter(
-              latest.createdAt ?? DateTime.now(),
-            )) {
-          latest = share;
-        }
-      }
-      latest ??= await controller.createPhotoShare(
+      final link = await controller.createPhotoShare(
         photoId,
         password: _password,
         expiresAt: resolveShareExpiry(_expiryOption),
       );
       if (!mounted || photoId != widget.photo.id) return;
       setState(() {
-        _shareUrl = _buildShareUrl(latest!.token);
+        _shareUrl = _buildShareUrl(link.token);
         _loadedForPhotoId = photoId;
         _creating = false;
       });
