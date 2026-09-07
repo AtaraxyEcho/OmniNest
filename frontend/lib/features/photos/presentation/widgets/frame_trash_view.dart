@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/photos/application/photo_center_models.dart';
@@ -6,6 +5,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// Frame 确认弹窗：白底圆角 12、衬线标题，确认按钮支持危险色。
 Future<bool> showFrameConfirmDialog(
@@ -317,19 +317,9 @@ class _TrashTileState extends State<_TrashTile> {
                   opacity: 0.7,
                   child:
                       photo.hasCover
-                          ? CachedNetworkImage(
+                          ? PhotoThumbImage(
                             imageUrl: photo.coverUrl!,
                             cacheKey: photo.coverCacheKey,
-                            fit: BoxFit.cover,
-                            memCacheWidth: 200,
-                            fadeInDuration: Duration.zero,
-                            fadeOutDuration: Duration.zero,
-                            placeholder:
-                                (context, url) =>
-                                    ColoredBox(color: colors.card),
-                            errorWidget:
-                                (context, url, error) =>
-                                    ColoredBox(color: colors.card),
                           )
                           : ColoredBox(color: colors.card),
                 ),

@@ -1,9 +1,9 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// Frame 影集视图：衬线标题 + 黑色新建按钮 + 相册封面卡网格。
 ///
@@ -199,10 +199,14 @@ class _FrameAlbumCardState extends State<_FrameAlbumCard> {
                               : const Duration(milliseconds: 300),
                       child:
                           album.hasCover
-                              ? CachedNetworkImage(
+                              ? PhotoThumbImage(
                                 imageUrl: album.coverUrl!,
-                                fit: BoxFit.cover,
-                                memCacheWidth: 400,
+                                fadeInDuration: const Duration(
+                                  milliseconds: 500,
+                                ),
+                                fadeOutDuration: const Duration(
+                                  milliseconds: 1000,
+                                ),
                               )
                               : const SizedBox.expand(),
                     ),

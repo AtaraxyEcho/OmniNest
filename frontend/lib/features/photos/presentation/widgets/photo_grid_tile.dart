@@ -1,10 +1,10 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// Frame 照片卡片：图片按纵横比自撑高度，悬停/多选/选中时显示遮罩层。
 ///
@@ -71,17 +71,9 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
         fit: StackFit.expand,
         children: [
           if (photo.hasCover)
-            CachedNetworkImage(
+            PhotoThumbImage(
               imageUrl: photo.coverUrl!,
               cacheKey: photo.coverCacheKey,
-              fit: BoxFit.cover,
-              memCacheWidth: 200,
-              useOldImageOnUrlChange: true,
-              fadeInDuration: Duration.zero,
-              fadeOutDuration: Duration.zero,
-              placeholder:
-                  (context, url) => ColoredBox(color: context.frameColors.card),
-              errorWidget: (context, url, error) => const _Placeholder(),
             )
           else
             const _Placeholder(),

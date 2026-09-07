@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -7,6 +6,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_masonry_grid.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// Frame 地点视图：按地点分组的卡片网格 + 单地点照片瀑布流（设计稿 LocationsView）。
 ///
@@ -160,7 +160,8 @@ class _LocationCardState extends State<_LocationCard> {
 
   @override
   Widget build(BuildContext context) {
-    final cover = widget.photos.first.coverUrl ?? widget.photos.first.sourceUrl;
+    final item = widget.photos.first;
+    final cover = item.coverUrl ?? item.sourceUrl;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
@@ -182,16 +183,13 @@ class _LocationCardState extends State<_LocationCard> {
                 curve: Curves.easeOutCubic,
                 child:
                     cover != null && cover.isNotEmpty
-                        ? CachedNetworkImage(
+                        ? PhotoThumbImage(
                           imageUrl: cover,
-                          fit: BoxFit.cover,
-                          fadeInDuration: Duration.zero,
-                          placeholder:
-                              (context, url) =>
-                                  ColoredBox(color: context.frameColors.card),
-                          errorWidget:
-                              (context, url, error) =>
-                                  ColoredBox(color: context.frameColors.card),
+                          // 缓存键与来源资源对应，避免污染封面/原图的磁盘缓存。
+                          cacheKey:
+                              cover == item.coverUrl
+                                  ? item.coverCacheKey
+                                  : item.sourceCacheKey,
                         )
                         : ColoredBox(color: context.frameColors.card),
               ),
