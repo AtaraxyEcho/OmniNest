@@ -2888,9 +2888,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminConfigProviderTmdb => 'TMDB';
 
   @override
-  String get adminConfigProviderOpenSubtitles => 'OpenSubtitles';
-
-  @override
   String get adminConfigProviderGoogleBooks => 'Google Books';
 
   @override
@@ -2969,9 +2966,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminConfigTmdbAdult => '包含成人内容';
-
-  @override
-  String get adminConfigOpenSubtitlesApiKey => 'OpenSubtitles API Key';
 
   @override
   String get adminConfigPhotoAiEnabled => '启用图像分析';

@@ -5515,12 +5515,6 @@ abstract class AppLocalizations {
   /// **'TMDB'**
   String get adminConfigProviderTmdb;
 
-  /// No description provided for @adminConfigProviderOpenSubtitles.
-  ///
-  /// In en, this message translates to:
-  /// **'OpenSubtitles'**
-  String get adminConfigProviderOpenSubtitles;
-
   /// No description provided for @adminConfigProviderGoogleBooks.
   ///
   /// In en, this message translates to:
@@ -5676,12 +5670,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Include adult content'**
   String get adminConfigTmdbAdult;
-
-  /// No description provided for @adminConfigOpenSubtitlesApiKey.
-  ///
-  /// In en, this message translates to:
-  /// **'OpenSubtitles API Key'**
-  String get adminConfigOpenSubtitlesApiKey;
 
   /// No description provided for @adminConfigPhotoAiEnabled.
   ///

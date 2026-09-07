@@ -26,7 +26,6 @@ public class MediaRuntimeConfigService extends BaseRuntimeConfigService {
     public static final String TMDB_SEARCH_STRATEGY = "media.tmdb.strategy";
     public static final String TMDB_MAX_RESULTS = "media.tmdb.limit";
     public static final String TRANSCODE_ENABLED = "media.transcode.enabled";
-    public static final String OPENSUBTITLES_API_KEY = "media.subtitle.key";
 
     /**
      * 创建媒体运行时配置服务。
@@ -87,15 +86,6 @@ public class MediaRuntimeConfigService extends BaseRuntimeConfigService {
 
     public boolean transcodeEnabled() {
         return booleanWithLegacy(TRANSCODE_ENABLED, "transcode.enabled", true);
-    }
-
-    /**
-     * 读取 OpenSubtitles API Key。
-     *
-     * @return API Key，未配置时返回空字符串
-     */
-    public String opensubtitlesApiKey() {
-        return stringWithLegacy(OPENSUBTITLES_API_KEY, "media.subtitle.opensubtitles-api-key", "");
     }
 
     /**

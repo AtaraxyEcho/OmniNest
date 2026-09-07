@@ -140,14 +140,13 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteRuntimeConfigurationDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(60);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(59);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
                     VALUES
                         ('media.transcode.enabled'),
                         ('media.import.enabled'),
-                        ('media.subtitle.key'),
                         ('reader.import.enabled'),
                         ('photo.backup'),
                         ('photo.geo.rate'),
@@ -218,12 +217,11 @@ class BuiltinCatalogFlywayMigrationTest {
                   AND config_key IN (
                     'media.tmdb.key',
                     'media.tmdb.token',
-                    'media.subtitle.key',
                     'reader.gbooks.key',
                     'weather.qweather.key'
                   )
                   AND config_value = ''
-                """)).isEqualTo(5);
+                """)).isEqualTo(4);
     }
 
     @Test

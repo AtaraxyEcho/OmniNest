@@ -37,11 +37,11 @@ extension MovieSectionMeta on MovieSection {
       MovieSection.movies => l10n.videoSectionMovies,
       MovieSection.tvShows => l10n.videoSectionTvShows,
       MovieSection.anime => l10n.videoSectionAnime,
-      MovieSection.collections => 'Collections',
+      MovieSection.collections => l10n.videoSectionCollections,
       MovieSection.recent => l10n.videoSectionRecent,
-      MovieSection.continueWatching => 'Continue Watching',
+      MovieSection.continueWatching => l10n.videoSectionContinueWatching,
       MovieSection.favorites => l10n.videoSectionFavorites,
-      MovieSection.history => 'Watch History',
+      MovieSection.history => l10n.videoSectionHistory,
       MovieSection.management => l10n.videoSectionMovieAdmin,
     };
   }

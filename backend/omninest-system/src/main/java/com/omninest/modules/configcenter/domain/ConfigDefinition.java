@@ -110,7 +110,6 @@ public record ConfigDefinition(
     public boolean superAdminOnly() {
         return "media.import.enabled".equals(key)
                 || key.startsWith("media.tmdb.")
-                || "media.subtitle.key".equals(key)
                 || key.startsWith("music.")
                 || key.startsWith("reader.gbooks.")
                 || key.startsWith("reader.openlib.")

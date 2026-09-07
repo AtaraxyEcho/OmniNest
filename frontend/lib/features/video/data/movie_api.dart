@@ -24,21 +24,6 @@ class MovieApi {
     );
   }
 
-  Future<List<MovieVideoItem>> library({String mediaType = 'MOVIE'}) async {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/video/library',
-      queryParameters: {'mediaType': mediaType},
-    );
-    final data = parseEnvelope(response.data)['data'];
-    if (data is! List) {
-      throw const AppException(code: 'INVALID_RESPONSE', message: '影视列表格式不正确');
-    }
-    return data
-        .whereType<Map<String, dynamic>>()
-        .map(_videoItemFromJson)
-        .toList();
-  }
-
   Future<MediaPage<MovieVideoItem>> libraryPage({
     String mediaType = 'MOVIE',
     String? metadataStatus,

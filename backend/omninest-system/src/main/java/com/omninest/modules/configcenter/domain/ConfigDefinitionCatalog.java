@@ -30,7 +30,6 @@ public final class ConfigDefinitionCatalog {
             "media.metadata-provider.tmdb.include-adult",
             "media.auto-import.enabled",
             "transcode.enabled",
-            "media.subtitle.opensubtitles-api-key",
             "reader.metadata-providers.enabled",
             "reader.metadata-provider.google-books.enabled",
             "reader.metadata-provider.google-books.base-url",
@@ -109,8 +108,6 @@ public final class ConfigDefinitionCatalog {
                 "config.media.transcode", "是否启用媒体转码"));
         add(values, bool("media.import.enabled", true, "media", ConfigSurface.GENERAL,
                 "config.media.autoImport", "是否启用媒体自动导入"));
-        add(values, sensitive("media.subtitle.key", "", "media", ConfigSurface.INTEGRATION,
-                "config.integration.opensubtitles.apiKey", "OpenSubtitles API Key", 1024));
         add(values, bool("reader.import.enabled", true, "reader", ConfigSurface.GENERAL,
                 "config.reader.import", "是否启用阅读内容自动导入"));
         add(values, bool("photo.backup", true, "photo", ConfigSurface.GENERAL,

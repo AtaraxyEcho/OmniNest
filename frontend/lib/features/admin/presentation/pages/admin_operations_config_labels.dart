@@ -10,6 +10,8 @@ bool _isRemovedConfigKey(String key) {
     'music.metadata-providers.enabled',
     'music.metadata-provider.musicbrainz.request-delay-ms',
     'music.platform.netease.request-delay-ms',
+    'media.subtitle.key',
+    'media.subtitle.opensubtitles-api-key',
     'photo.geo.cache-enabled',
     'upload.bandwidth.max-parts-per-second',
     'upload.bandwidth.burst-capacity',
@@ -37,34 +39,28 @@ int _configGroupOrder(AdminConfigEntry entry) {
     return 1;
   }
   if (_startsWithAny(key, const [
-    'media.subtitle',
-    'media.subtitle.opensubtitles',
-  ])) {
-    return 2;
-  }
-  if (_startsWithAny(key, const [
     'reader.gbooks',
     'reader.metadata-provider.google-books',
   ])) {
-    return 3;
+    return 2;
   }
   if (_startsWithAny(key, const [
     'reader.openlib',
     'reader.metadata-provider.open-library',
   ])) {
-    return 4;
+    return 3;
   }
   if (key.startsWith('photo.ai')) {
-    return 5;
+    return 4;
   }
   if (_startsWithAny(key, const ['music.netease', 'music.platform.netease'])) {
-    return 6;
+    return 5;
   }
   if (_startsWithAny(key, const ['music.qq', 'music.platform.qq'])) {
-    return 7;
+    return 6;
   }
   if (key.startsWith('weather.qweather')) {
-    return 8;
+    return 7;
   }
   return 9 + _configCategoryOrder(entry.category);
 }
@@ -95,12 +91,6 @@ String _configGroup(AppLocalizations l10n, AdminConfigEntry entry) {
     'media.metadata-provider.tmdb',
   ])) {
     return l10n.adminConfigProviderTmdb;
-  }
-  if (_startsWithAny(entry.key, const [
-    'media.subtitle',
-    'media.subtitle.opensubtitles',
-  ])) {
-    return l10n.adminConfigProviderOpenSubtitles;
   }
   if (_startsWithAny(entry.key, const [
     'reader.gbooks',
@@ -174,9 +164,6 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
         'transcode.enabled': l10n.adminConfigMediaTranscode,
         'media.import.enabled': l10n.adminConfigMediaAutoImport,
         'media.auto-import.enabled': l10n.adminConfigMediaAutoImport,
-        'media.subtitle.key': l10n.adminConfigOpenSubtitlesApiKey,
-        'media.subtitle.opensubtitles-api-key':
-            l10n.adminConfigOpenSubtitlesApiKey,
         'reader.gbooks.enabled': l10n.adminConfigReaderGoogleBooksEnabled,
         'reader.metadata-provider.google-books.enabled':
             l10n.adminConfigReaderGoogleBooksEnabled,
@@ -294,8 +281,6 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
     'config.integration.tmdb.accessToken' => l10n.adminConfigTmdbAccessToken,
     'config.integration.tmdb.language' => l10n.adminConfigTmdbLanguage,
     'config.integration.tmdb.includeAdult' => l10n.adminConfigTmdbAdult,
-    'config.integration.opensubtitles.apiKey' =>
-      l10n.adminConfigOpenSubtitlesApiKey,
     'config.integration.photoAi.enabled' => l10n.adminConfigPhotoAiEnabled,
     'config.integration.netease.enabled' => l10n.adminConfigNeteaseEnabled,
     'config.integration.qq.enabled' => l10n.adminConfigQqEnabled,
@@ -350,9 +335,6 @@ String _configDescription(AppLocalizations l10n, AdminConfigEntry entry) {
         'media.metadata-provider.tmdb.api-key':
             l10n.adminConfigCredentialDescription,
         'media.metadata-provider.tmdb.access-token':
-            l10n.adminConfigCredentialDescription,
-        'media.subtitle.key': l10n.adminConfigCredentialDescription,
-        'media.subtitle.opensubtitles-api-key':
             l10n.adminConfigCredentialDescription,
         'reader.gbooks.key': l10n.adminConfigCredentialDescription,
         'reader.metadata-provider.google-books.api-key':
@@ -436,7 +418,6 @@ String _configDescription(AppLocalizations l10n, AdminConfigEntry entry) {
       l10n.adminConfigProviderIdentifierDescription,
     'config.integration.tmdb.apiKey' ||
     'config.integration.tmdb.accessToken' ||
-    'config.integration.opensubtitles.apiKey' ||
     'config.integration.qweather.privateKey' =>
       l10n.adminConfigCredentialDescription,
     _ => l10n.adminConfigProviderToggleDescription,
@@ -479,18 +460,15 @@ bool _isSensitiveConfigEntry(AdminConfigEntry entry) {
   const sensitiveDisplayCodes = {
     'config.integration.tmdb.apiKey',
     'config.integration.tmdb.accessToken',
-    'config.integration.opensubtitles.apiKey',
     'config.integration.qweather.privateKey',
   };
   const sensitiveKeys = {
     'media.tmdb.key',
     'media.tmdb.token',
-    'media.subtitle.key',
     'reader.gbooks.key',
     'weather.qweather.key',
     'media.metadata-provider.tmdb.api-key',
     'media.metadata-provider.tmdb.access-token',
-    'media.subtitle.opensubtitles-api-key',
     'reader.metadata-provider.google-books.api-key',
     'weather.qweather.private-key',
   };

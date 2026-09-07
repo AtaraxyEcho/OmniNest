@@ -25,7 +25,6 @@ INSERT INTO omni.config_entries (
 ) VALUES
     ('media.transcode.enabled', 'true', 'BOOLEAN', 'media', 'HOT', '是否启用媒体转码', false),
     ('media.import.enabled', 'true', 'BOOLEAN', 'media', 'HOT', '是否启用媒体自动导入', false),
-    ('media.subtitle.key', '', 'STRING', 'media', 'HOT', 'OpenSubtitles API Key', true),
     ('reader.import.enabled', 'true', 'BOOLEAN', 'reader', 'HOT', '是否启用阅读内容自动导入', false),
     ('photo.backup', 'true', 'BOOLEAN', 'photo', 'HOT', '是否启用照片自动备份', false),
     ('photo.geo.rate', '1', 'NUMBER', 'photo', 'HOT', '地理编码每秒请求上限', false),

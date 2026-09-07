@@ -10,14 +10,14 @@ class ConfigDefinitionCatalogTest {
     void catalogContainsOnlyTheApprovedRuntimeSettings() {
         var definitions = ConfigDefinitionCatalog.definitions();
 
-        assertThat(definitions).hasSize(60);
+        assertThat(definitions).hasSize(59);
         assertThat(definitions).extracting(ConfigDefinition::key).doesNotHaveDuplicates();
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.GENERAL)
                 .hasSize(20);
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.INTEGRATION)
-                .hasSize(40);
+                .hasSize(39);
     }
 
     @Test
@@ -48,9 +48,6 @@ class ConfigDefinitionCatalogTest {
     void restrictedMediaDefinitionsAreMarkedForSuperAdminOnly() {
         assertThat(ConfigDefinitionCatalog.find("media.import.enabled").orElseThrow().superAdminOnly()).isTrue();
         assertThat(ConfigDefinitionCatalog.find("media.tmdb.key")
-                .orElseThrow()
-                .superAdminOnly()).isTrue();
-        assertThat(ConfigDefinitionCatalog.find("media.subtitle.key")
                 .orElseThrow()
                 .superAdminOnly()).isTrue();
         assertThat(ConfigDefinitionCatalog.find("reader.gbooks.key")
