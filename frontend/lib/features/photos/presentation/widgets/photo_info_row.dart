@@ -68,6 +68,64 @@ class PhotoInfoEntry {
   final String value;
 }
 
+/// 信息侧栏底部操作按钮：半透明白底圆角块，Like/Share 共用样式。
+///
+/// 幻灯片 Info 面板与详情页信息侧栏使用同一规格；[iconColor] 用于
+/// 收藏态的玫红心形等强调色。
+class PhotoPanelActionButton extends StatelessWidget {
+  const PhotoPanelActionButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.iconColor,
+    super.key,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: iconColor ?? Colors.white.withValues(alpha: 0.80),
+              ),
+              const SizedBox(width: 8),
+              // 长文案（如英文 Unfavorite）超宽时省略，避免信息面板按钮溢出。
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.80),
+                    fontSize: 12,
+                    letterSpacing: 0.04,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 幻灯片 Info 与详情页信息侧栏共用的统一字段集，有值才渲染、顺序一致。
 ///
 /// 与 PhotoExifPanel 的分组字段保持同步：新增字段需两处同改。

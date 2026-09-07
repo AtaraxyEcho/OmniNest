@@ -1185,7 +1185,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                 Row(
                   children: [
                     Expanded(
-                      child: _InfoPanelButton(
+                      child: PhotoPanelActionButton(
                         icon:
                             photo.favorite
                                 ? Icons.favorite_rounded
@@ -1203,7 +1203,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: _InfoPanelButton(
+                      child: PhotoPanelActionButton(
                         icon: Icons.share_rounded,
                         label: l10n.photosSharePhoto,
                         onTap:
@@ -1277,60 +1277,6 @@ class _SlideLayer extends StatelessWidget {
       child: Opacity(
         opacity: opacity.clamp(0.0, 1.0),
         child: RepaintBoundary(child: SizedBox.expand(child: image)),
-      ),
-    );
-  }
-}
-
-/// Info 面板底部操作按钮：Like / Share。
-class _InfoPanelButton extends StatelessWidget {
-  const _InfoPanelButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.iconColor,
-  });
-
-  final IconData icon;
-  final Color? iconColor;
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white.withValues(alpha: 0.07),
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                icon,
-                size: 18,
-                color: iconColor ?? Colors.white.withValues(alpha: 0.80),
-              ),
-              const SizedBox(width: 8),
-              // 长文案（如英文 Unfavorite）超宽时省略，避免 Info 面板按钮溢出。
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.80),
-                    fontSize: 12,
-                    letterSpacing: 0.04,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

@@ -16,7 +16,9 @@ import 'package:omninest/features/photos/presentation/pages/photo_browse_page.da
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_exif_sidebar.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
 
@@ -102,6 +104,7 @@ _Harness _harness({
   bool overrideScope = true,
   String localeCode = 'en',
   String initialLocation = '/photos/photo-1',
+  bool darkTheme = true,
 }) {
   final repository = _MockPhotoRepository();
   when(() => repository.getPhoto(any())).thenAnswer(
@@ -164,7 +167,10 @@ _Harness _harness({
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: Locale(localeCode),
-        theme: OmniNestTheme.from(AppThemePalette.dark),
+        theme:
+            darkTheme
+                ? OmniNestTheme.from(AppThemePalette.dark)
+                : OmniNestTheme.light(),
       ),
     ),
   );
@@ -396,5 +402,36 @@ void main() {
     await tester.tapAt(const Offset(20, 400));
     await tester.pumpAndSettle();
     expect(find.text('Photo Info'), findsNothing);
+  });
+
+  testWidgets('亮色主题下查看器保持恒暗（顶栏与信息侧栏）', (tester) async {
+    await _pumpDesktop(tester, _harness(scope: scope, darkTheme: false).child);
+
+    // 打开信息侧栏后，亮色应用主题下面板仍为幻灯片同款恒暗底色。
+    await tester.tap(find.byIcon(Icons.info_outline_rounded));
+    await tester.pumpAndSettle();
+
+    final panel = tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byType(PhotoExifPanel),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect((panel.decoration! as BoxDecoration).color, const Color(0xF00A0A0A));
+
+    final bar = tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byType(PhotoViewerTopBar),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
+    expect(
+      (bar.decoration! as BoxDecoration).color,
+      Colors.black.withValues(alpha: 0.38),
+    );
   });
 }

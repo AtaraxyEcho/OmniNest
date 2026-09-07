@@ -8,326 +8,96 @@ import 'package:omninest/features/photos/presentation/widgets/photo_common_widge
 import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 
-/// EXIF 信息侧栏：设计稿 w-72 独立全高侧栏，堆叠式标签/数值行。
+/// EXIF 信息侧栏：与幻灯片 Info 面板统一的恒暗设计（w-72 全高侧栏）。
+///
+/// 视觉规格与幻灯片一致：0A0A0A 面板底、眉题 + 标题头部、
+/// `buildPhotoInfoEntries` 平铺字段行；详情页独有的 AI 识别 / 描述 /
+/// 标签交互保留在字段区下方，使用同一暗色语言。
 class PhotoExifPanel extends ConsumerWidget {
-  const PhotoExifPanel({super.key, required this.photo});
+  const PhotoExifPanel({super.key, required this.photo, required this.onShare});
 
   final PhotoItem photo;
 
+  /// 底部 Share 按钮：由宿主关闭信息面板并打开分享侧栏。
+  final VoidCallback onShare;
+
+  static const Color _panelColor = Color(0xF00A0A0A);
+  static const Color _borderColor = Color(0x12FFFFFF);
+  static const Color _pillBackground = Color(0x12FFFFFF);
+  static const Color _pillForeground = Color(0x99FFFFFF);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final backgroundColor =
-        isDark
-            ? FramePalette.viewerPanel
-            : context.photosColors.surfaceContainer;
-    final headerColor =
-        isDark
-            ? Colors.white.withValues(alpha: 0.90)
-            : context.photosColors.onSurface;
-    final sectionColor =
-        isDark
-            ? Colors.white.withValues(alpha: 0.50)
-            : context.photosColors.onSurfaceVariant;
-    final labelColor =
-        isDark
-            ? Colors.white.withValues(alpha: 0.35)
-            : context.photosColors.onSurfaceVariant.withValues(alpha: 0.7);
-    final valueColor =
-        isDark
-            ? Colors.white.withValues(alpha: 0.80)
-            : context.photosColors.onSurface;
-    final dividerColor =
-        isDark
-            ? Colors.white.withValues(alpha: 0.08)
-            : context.photosColors.outlineVariant.withValues(alpha: 0.24);
-    final pillBackground =
-        isDark
-            ? Colors.white.withValues(alpha: 0.10)
-            : context.photosColors.surfaceContainerHighest;
-    final pillColor =
-        isDark
-            ? Colors.white.withValues(alpha: 0.60)
-            : context.photosColors.onSurfaceVariant;
-
+    final l10n = AppLocalizations.of(context);
+    final preferZh = Localizations.localeOf(context).languageCode == 'zh';
+    final rows = buildPhotoInfoEntries(photo, l10n, preferZh: preferZh);
     return Container(
       width: double.infinity,
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border(left: BorderSide(color: dividerColor)),
+      decoration: const BoxDecoration(
+        color: _panelColor,
+        border: Border(left: BorderSide(color: _borderColor)),
       ),
       child: SingleChildScrollView(
         // 顶部留白避开浮层顶栏（设计稿 pt-16）。
-        padding: const EdgeInsets.fromLTRB(20, 68, 20, 24),
+        padding: const EdgeInsets.fromLTRB(24, 68, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               AppLocalizations.of(context).photosPhotoInfo,
-              style: TextStyle(
-                color: headerColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0.5,
-              ),
+              style: _eyebrowStyle,
             ),
-            const SizedBox(height: 20),
-            _ExifSection(
-              title: AppLocalizations.of(context).photosBasicInfo,
-              sectionColor: sectionColor,
-              children: [
-                if (photo.format.isNotEmpty)
-                  _ExifEntry(
-                    label: AppLocalizations.of(context).photosFormat,
-                    value: photo.format.toUpperCase(),
-                    labelColor: labelColor,
-                    valueColor: valueColor,
-                  ),
-                _ExifEntry(
-                  label: AppLocalizations.of(context).photosFileSize,
-                  value: photo.fileSizeDisplay,
-                  labelColor: labelColor,
-                  valueColor: valueColor,
-                ),
-                if (photo.resolutionDisplay != null)
-                  _ExifEntry(
-                    label: AppLocalizations.of(context).photosResolution,
-                    value: photo.resolutionDisplay!,
-                    labelColor: labelColor,
-                    valueColor: valueColor,
-                  ),
-                if (photo.dateTaken != null)
-                  _ExifEntry(
-                    label: AppLocalizations.of(context).photosDateTaken,
-                    value: _formatDate(photo.dateTaken!),
-                    labelColor: labelColor,
-                    valueColor: valueColor,
-                  ),
-              ],
-            ),
-            if (photo.hasExif) ...[
-              const SizedBox(height: 20),
-              _ExifSection(
-                title: AppLocalizations.of(context).photosCameraInfo,
-                sectionColor: sectionColor,
-                children: [
-                  if (photo.cameraMake != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosBrand,
-                      value: photo.cameraMake!,
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  if (photo.cameraModel != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosModel,
-                      value: photo.cameraModel!,
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  if (photo.lensModel != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosLens,
-                      value: photo.lensModel!,
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  if (photo.aperture != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosAperture,
-                      value: 'f/${photo.aperture}',
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  if (photo.shutterSpeed != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosShutterSpeed,
-                      value: photo.shutterSpeed!,
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  if (photo.iso != null)
-                    _ExifEntry(
-                      label: 'ISO',
-                      value: '${photo.iso}',
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  if (photo.focalLength != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosFocalLength,
-                      value: '${photo.focalLength}mm',
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                ],
-              ),
-            ],
-            if (photo.hasAdvancedExif) ...[
-              const SizedBox(height: 20),
-              _ExifSection(
-                title: AppLocalizations.of(context).photosShootingParams,
-                sectionColor: sectionColor,
-                children: [
-                  if (photo.flash != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosFlash,
-                      value: photo.flash!,
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  if (photo.whiteBalance != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosWhiteBalance,
-                      value: photo.whiteBalance!,
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  if (photo.meteringMode != null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosMeteringMode,
-                      value: photo.meteringMode!,
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                ],
-              ),
-            ],
-            if (photo.hasGps) ...[
-              const SizedBox(height: 20),
-              _ExifSection(
-                title: AppLocalizations.of(context).photosLocationInfo,
-                sectionColor: sectionColor,
-                children: [
-                  if (photo.locationDisplay(preferZh: _isZhLocale(context)) !=
-                      null)
-                    _ExifEntry(
-                      label: AppLocalizations.of(context).photosPlace,
-                      value:
-                          photo.locationDisplay(
-                            preferZh: _isZhLocale(context),
-                          )!,
-                      labelColor: labelColor,
-                      valueColor: valueColor,
-                    ),
-                  _ExifEntry(
-                    label: AppLocalizations.of(context).photosCoordinates,
-                    value:
-                        '${photo.gpsLatitude!.toStringAsFixed(6)}, ${photo.gpsLongitude!.toStringAsFixed(6)}',
-                    labelColor: labelColor,
-                    valueColor: valueColor,
-                  ),
-                ],
-              ),
-            ],
-            if (photo.contentAnalysis?.labels.isNotEmpty == true) ...[
-              const SizedBox(height: 20),
-              Text(
-                AppLocalizations.of(context).photosAIRecognition,
-                style: TextStyle(
-                  color: sectionColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 8),
-              for (final entry
-                  in photo.contentAnalysis!.labelsByNamespace.entries) ...[
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Text(
-                    _localizedPhotoAnalysisNamespace(context, entry.key),
-                    style: TextStyle(
-                      color: labelColor,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final label in entry.value)
-                      _InfoPill(
-                        text: _localizedPhotoContentLabel(context, label.code),
-                        background: pillBackground,
-                        foreground: pillColor,
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-              ],
-            ],
-            if (photo.description != null && photo.description!.isNotEmpty) ...[
-              const SizedBox(height: 20),
-              Text(
-                AppLocalizations.of(context).photosDescription,
-                style: TextStyle(
-                  color: sectionColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                photo.description!,
-                style: TextStyle(
-                  color: valueColor,
-                  fontSize: 13,
-                  height: 18 / 13,
-                ),
-              ),
-            ],
-            const SizedBox(height: 20),
+            const SizedBox(height: 4),
             Text(
-              AppLocalizations.of(context).photosTag,
-              style: TextStyle(
-                color: sectionColor,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+              photo.title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w300,
               ),
             ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
+            const SizedBox(height: 32),
+            if (rows.isEmpty)
+              Text(
+                '—',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.35),
+                  fontSize: 12,
+                ),
+              )
+            else
+              for (final row in rows)
+                PhotoInfoRow(label: row.label, value: row.value),
+            ..._buildAiSection(context),
+            ..._buildDescriptionSection(context),
+            _buildTagSection(context, ref),
+            const SizedBox(height: 24),
+            Row(
               children: [
-                for (final tag in photo.tags)
-                  _InfoPill(
-                    text: _localizedPhotoAiCategory(context, tag),
-                    background: pillBackground,
-                    foreground: pillColor,
-                    onRemoved: () async {
-                      try {
-                        await ref
-                            .read(photoCenterControllerProvider.notifier)
-                            .removeTag(photo.id, tag);
-                        if (!context.mounted) return;
-                        ref.invalidate(photoDetailProvider(photo.id));
-                      } on Exception {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                AppLocalizations.of(
-                                  context,
-                                ).photosDeleteTagFailed,
-                              ),
-                            ),
-                          );
-                        }
-                      }
-                    },
+                Expanded(
+                  child: PhotoPanelActionButton(
+                    icon:
+                        photo.favorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                    iconColor:
+                        photo.favorite
+                            ? const Color(0xFFFB7185)
+                            : Colors.white.withValues(alpha: 0.80),
+                    label:
+                        photo.favorite
+                            ? AppLocalizations.of(context).photosUnfavorite
+                            : AppLocalizations.of(context).photosFavorite,
+                    onTap: () => _toggleFavorite(context, ref),
                   ),
-                _InfoPill(
-                  text: AppLocalizations.of(context).photosAddTag,
-                  background: context.frameColors.accent.withValues(
-                    alpha: 0.12,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: PhotoPanelActionButton(
+                    icon: Icons.share_rounded,
+                    label: l10n.photosSharePhoto,
+                    onTap: onShare,
                   ),
-                  foreground: context.frameColors.accent,
-                  icon: Icons.add,
-                  onRemoved: () => _showAddTagDialog(context, ref),
                 ),
               ],
             ),
@@ -335,6 +105,145 @@ class PhotoExifPanel extends ConsumerWidget {
         ),
       ),
     );
+  }
+
+  /// 眉题/分区标题样式，与幻灯片 Info 面板一致。
+  static const TextStyle _eyebrowStyle = TextStyle(
+    color: Color(0x4DFFFFFF),
+    fontSize: 10,
+    letterSpacing: 0.14,
+  );
+
+  /// AI 识别分区：按命名空间分组的识别标签胶囊。
+  List<Widget> _buildAiSection(BuildContext context) {
+    final analysis = photo.contentAnalysis;
+    if (analysis?.labels.isNotEmpty != true) {
+      return const [];
+    }
+    return [
+      const SizedBox(height: 24),
+      Text(
+        AppLocalizations.of(context).photosAIRecognition,
+        style: _eyebrowStyle,
+      ),
+      const SizedBox(height: 12),
+      for (final entry in analysis!.labelsByNamespace.entries) ...[
+        Text(
+          _localizedPhotoAnalysisNamespace(context, entry.key),
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.45),
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final label in entry.value)
+              _InfoPill(
+                text: _localizedPhotoContentLabel(context, label.code),
+                background: _pillBackground,
+                foreground: _pillForeground,
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+      ],
+    ];
+  }
+
+  /// 描述分区：照片备注文本。
+  List<Widget> _buildDescriptionSection(BuildContext context) {
+    final description = photo.description;
+    if (description == null || description.isEmpty) {
+      return const [];
+    }
+    return [
+      const SizedBox(height: 24),
+      Text(
+        AppLocalizations.of(context).photosDescription,
+        style: _eyebrowStyle,
+      ),
+      const SizedBox(height: 8),
+      Text(
+        description,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.75),
+          fontSize: 13,
+          height: 18 / 13,
+        ),
+      ),
+    ];
+  }
+
+  /// 标签分区：可移除的用户标签胶囊与添加入口。
+  Widget _buildTagSection(BuildContext context, WidgetRef ref) {
+    final colors = context.frameColors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 24),
+        Text(AppLocalizations.of(context).photosTag, style: _eyebrowStyle),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final tag in photo.tags)
+              _InfoPill(
+                text: _localizedPhotoAiCategory(context, tag),
+                background: _pillBackground,
+                foreground: _pillForeground,
+                onRemoved: () async {
+                  try {
+                    await ref
+                        .read(photoCenterControllerProvider.notifier)
+                        .removeTag(photo.id, tag);
+                    if (!context.mounted) return;
+                    ref.invalidate(photoDetailProvider(photo.id));
+                  } on Exception {
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          AppLocalizations.of(context).photosDeleteTagFailed,
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+            _InfoPill(
+              text: AppLocalizations.of(context).photosAddTag,
+              background: colors.accent.withValues(alpha: 0.12),
+              foreground: colors.accent,
+              icon: Icons.add,
+              onRemoved: () => _showAddTagDialog(context, ref),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  /// 切换收藏；成功后刷新详情数据（与顶栏心形同一数据路径）。
+  Future<void> _toggleFavorite(BuildContext context, WidgetRef ref) async {
+    try {
+      await ref
+          .read(photoCenterControllerProvider.notifier)
+          .toggleFavorite(photo.id, currentFavorite: photo.favorite);
+      if (!context.mounted) return;
+      ref.invalidate(photoDetailProvider(photo.id));
+    } on Exception {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).photosOperationFailed),
+        ),
+      );
+    }
   }
 
   Future<void> _showAddTagDialog(BuildContext context, WidgetRef ref) async {
@@ -396,84 +305,18 @@ class PhotoExifPanel extends ConsumerWidget {
         if (!context.mounted) return;
         ref.invalidate(photoDetailProvider(photo.id));
       } on Exception {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosAddTagFailed),
-            ),
-          );
-        }
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).photosAddTagFailed),
+          ),
+        );
       }
     }
   }
 }
 
-/// EXIF 分组标题。
-class _ExifSection extends StatelessWidget {
-  const _ExifSection({
-    required this.title,
-    required this.sectionColor,
-    required this.children,
-  });
-
-  final String title;
-  final Color sectionColor;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    if (children.isEmpty) return const SizedBox.shrink();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: TextStyle(
-            color: sectionColor,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        ...children,
-      ],
-    );
-  }
-}
-
-/// 设计稿 EXIF 行：标签在上、数值在下，行间 14px。
-class _ExifEntry extends StatelessWidget {
-  const _ExifEntry({
-    required this.label,
-    required this.value,
-    required this.labelColor,
-    required this.valueColor,
-  });
-
-  final String label;
-  final String value;
-  final Color labelColor;
-  final Color valueColor;
-
-  @override
-  Widget build(BuildContext context) {
-    // 行样式与幻灯片 Info 统一（左右分布 + 底部分隔线），分隔色随主题。
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final dividerColor =
-        isDark
-            ? const Color(0x14FFFFFF)
-            : Theme.of(context).dividerColor.withValues(alpha: 0.24);
-    return PhotoInfoRow(
-      label: label,
-      value: value,
-      labelColor: labelColor,
-      valueColor: valueColor,
-      dividerColor: dividerColor,
-    );
-  }
-}
-
-/// 设计稿标签胶囊：全圆角、半透明底、可带关闭或加号动作。
+/// 设计稿标签胶囊：全圆角、半透明白底、可带关闭或加号动作（恒暗配色）。
 class _InfoPill extends StatelessWidget {
   const _InfoPill({
     required this.text,
@@ -518,16 +361,6 @@ class _InfoPill extends StatelessWidget {
       ),
     );
   }
-}
-
-String _formatDate(DateTime date) {
-  return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')} '
-      '${date.hour.toString().padLeft(2, '0')}:${date.minute.toString().padLeft(2, '0')}';
-}
-
-/// 当前界面语言是否为中文，用于地名等双语数据的选择。
-bool _isZhLocale(BuildContext context) {
-  return Localizations.localeOf(context).languageCode == 'zh';
 }
 
 String _localizedPhotoAiCategory(BuildContext context, String category) {

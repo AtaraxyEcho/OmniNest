@@ -2,13 +2,15 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_exif_sidebar.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_trash_view.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,32 +35,39 @@ class PhotoDetailPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final photoAsync = ref.watch(photoDetailProvider(photoId));
-    return Scaffold(
-      backgroundColor: context.photosColors.surface,
-      body: photoAsync.when(
-        data: (photo) => _PhotoDetailBody(photo: photo),
-        error:
-            (error, stackTrace) => Column(
-              children: [
-                SafeArea(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: IconButton(
-                      tooltip: AppLocalizations.of(context).photosBackToPhotos,
-                      onPressed: () => context.popOrGo('/photos'),
-                      icon: const Icon(Icons.arrow_back_rounded),
+    // 查看器为沉浸暗色场景（与幻灯片一致）：整页子树强制暗色主题，
+    // 顶栏/箭头/徽标/对话框/加载与错误态自动使用暗色变体。
+    return Theme(
+      data: OmniNestTheme.from(AppThemePalette.dark),
+      child: Scaffold(
+        backgroundColor: context.photosColors.surface,
+        body: photoAsync.when(
+          data: (photo) => _PhotoDetailBody(photo: photo),
+          error:
+              (error, stackTrace) => Column(
+                children: [
+                  SafeArea(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconButton(
+                        tooltip:
+                            AppLocalizations.of(context).photosBackToPhotos,
+                        onPressed: () => context.popOrGo('/photos'),
+                        icon: const Icon(Icons.arrow_back_rounded),
+                      ),
                     ),
                   ),
-                ),
-                Expanded(
-                  child: AppErrorView(
-                    message: describeUserFacingError(error).message,
-                    onRetry: () => ref.invalidate(photoDetailProvider(photoId)),
+                  Expanded(
+                    child: AppErrorView(
+                      message: describeUserFacingError(error).message,
+                      onRetry:
+                          () => ref.invalidate(photoDetailProvider(photoId)),
+                    ),
                   ),
-                ),
-              ],
-            ),
-        loading: () => const AppLoading.detail(),
+                ],
+              ),
+          loading: () => const AppLoading.detail(),
+        ),
       ),
     );
   }
@@ -469,7 +478,10 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                     _showInfo
                         ? SizedBox(
                           width: _kExifPanelWidth,
-                          child: PhotoExifPanel(photo: currentFresh),
+                          child: PhotoExifPanel(
+                            photo: currentFresh,
+                            onShare: _openSharePanel,
+                          ),
                         )
                         : const SizedBox.shrink(),
               ),
@@ -502,7 +514,10 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                       right: 0,
                       bottom: 0,
                       width: width,
-                      child: PhotoExifPanel(photo: currentFresh),
+                      child: PhotoExifPanel(
+                        photo: currentFresh,
+                        onShare: _openSharePanel,
+                      ),
                     ),
                   ],
                 );
