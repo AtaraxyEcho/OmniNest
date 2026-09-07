@@ -134,7 +134,9 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     ];
     return LayoutBuilder(
       builder: (context, constraints) {
-        final columns = constraints.maxWidth >= 900 ? 4 : 2;
+        // 原型 grid-cols-2 sm:grid-cols-4。
+        final wide = constraints.maxWidth >= 640;
+        final columns = wide ? 4 : 2;
         final gap = 10.0;
         final cardWidth =
             (constraints.maxWidth - gap * (columns - 1)) / columns;
@@ -157,7 +159,11 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
                     children: [
                       Text(
                         '$value',
-                        style: text.display(size: 24, height: 1.1),
+                        style: text.mono(
+                          size: wide ? 24.0 : 20.0,
+                          color: palette.foreground,
+                          weight: FontWeight.w500,
+                        ),
                       ),
                       const SizedBox(height: 4),
                       Text(

@@ -105,15 +105,15 @@ class MovieRedesignGridMetrics {
   /// 单元高度 = 海报宽高比 2:3 + 文本区固定高度。
   static const double _textExtent = 64;
 
-  /// 按内容宽度解析列数（对应原型 grid-cols-3/4/5/6 断点）。
+  /// 按内容宽度解析列数与间距（对应原型 grid-cols-3/4/5/6 与 gap-3 sm:gap-4）。
   factory MovieRedesignGridMetrics.resolve(double width) {
-    final (columns, spacing) = switch (width) {
-      < 480 => (3, 10.0),
-      < 768 => (3, 12.0),
-      < 1024 => (4, 12.0),
-      < 1280 => (5, 14.0),
-      _ => (6, 16.0),
+    final columns = switch (width) {
+      < 768 => 3,
+      < 1024 => 4,
+      < 1280 => 5,
+      _ => 6,
     };
+    final spacing = movieRedesignAtSm(width) ? 16.0 : 12.0;
     final cellWidth = (width - spacing * (columns - 1)) / columns;
     final cellHeight = cellWidth * 1.5 + _textExtent;
     return MovieRedesignGridMetrics._(
@@ -176,7 +176,12 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _PlayButton(onPlay: onPlay),
+                            AnimatedScale(
+                              duration: const Duration(milliseconds: 200),
+                              curve: Curves.easeOut,
+                              scale: _hovered ? 1.0 : 0.75,
+                              child: _PlayButton(onPlay: onPlay),
+                            ),
                             const SizedBox(height: 8),
                             Material(
                               color: Colors.transparent,
@@ -221,57 +226,75 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    data.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: text.body(
-                      size: 13,
-                      weight: FontWeight.w500,
-                      color: _hovered ? palette.primary : palette.foreground,
-                      height: 16 / 13,
-                    ),
-                  ),
-                  if (data.subtitle != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      data.subtitle!,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: text.body(
-                        size: 11,
-                        color: palette.mutedForeground,
-                        height: 14 / 11,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          data.year,
-                          style: text.mono(size: 10),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      _MetaDot(palette: palette),
-                      if (data.rating != null) ...[
-                        Icon(
-                          Icons.star,
-                          size: 10,
-                          color: MovieRedesignPalette.star,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          data.rating!.toStringAsFixed(1),
-                          style: text.mono(size: 10),
-                        ),
-                        _MetaDot(palette: palette),
-                      ],
-                      MovieRedesignStatusDot(status: data.status),
-                    ],
+                  Builder(
+                    builder: (context) {
+                      // 原型 text-xs sm:text-sm。
+                      final atSm = movieRedesignAtSm(
+                        MediaQuery.sizeOf(context).width,
+                      );
+                      final titleSize = atSm ? 14.0 : 12.0;
+                      final smallSize = atSm ? 12.0 : 10.0;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            data.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: text.body(
+                              size: titleSize,
+                              weight: FontWeight.w500,
+                              color:
+                                  _hovered
+                                      ? palette.primary
+                                      : palette.foreground,
+                              height: 16 / titleSize,
+                            ),
+                          ),
+                          if (data.subtitle != null) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              data.subtitle!,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: text.body(
+                                size: smallSize,
+                                color: palette.mutedForeground,
+                                height: 14 / smallSize,
+                              ),
+                            ),
+                          ],
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  data.year,
+                                  style: text.mono(size: smallSize),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              _MetaDot(palette: palette),
+                              if (data.rating != null) ...[
+                                Icon(
+                                  Icons.star,
+                                  size: 10,
+                                  color: MovieRedesignPalette.star,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  data.rating!.toStringAsFixed(1),
+                                  style: text.mono(size: smallSize),
+                                ),
+                                _MetaDot(palette: palette),
+                              ],
+                              MovieRedesignStatusDot(status: data.status),
+                            ],
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ],
               ),

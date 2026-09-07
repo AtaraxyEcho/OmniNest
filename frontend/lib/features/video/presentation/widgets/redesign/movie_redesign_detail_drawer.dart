@@ -109,7 +109,7 @@ class _MovieRedesignDetailDrawerState
                                         children: [
                                           const Icon(
                                             Icons.play_arrow_rounded,
-                                            size: 18,
+                                            size: 14,
                                             color: Colors.white,
                                           ),
                                           const SizedBox(width: 8),
@@ -216,13 +216,16 @@ class _DrawerHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final palette = context.movieRedesign;
     final text = context.movieRedesignText;
+    // 对应原型 h-48 sm:h-56。
+    final wide = MediaQuery.sizeOf(context).width >= 640;
+    final headerHeight = wide ? 224.0 : 192.0;
     final coverUrl = item.backdropImageUrl ?? item.posterImageUrl;
     final originalTitle =
         (item.originalTitle?.trim().isNotEmpty ?? false)
             ? item.originalTitle
             : null;
     return SizedBox(
-      height: 200,
+      height: headerHeight,
       width: double.infinity,
       child: Stack(
         fit: StackFit.expand,

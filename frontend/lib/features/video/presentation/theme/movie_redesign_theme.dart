@@ -172,3 +172,6 @@ EdgeInsets movieRedesignPagePadding(double width) {
   final edge = width >= 1024 ? 24.0 : (width >= 640 ? 20.0 : 12.0);
   return EdgeInsets.all(edge);
 }
+
+/// 原型 sm: 断点（640px）判断，用于成对字号/间距切换。
+bool movieRedesignAtSm(double width) => width >= 640;

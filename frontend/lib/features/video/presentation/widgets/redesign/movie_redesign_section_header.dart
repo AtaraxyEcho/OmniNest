@@ -29,7 +29,9 @@ class MovieRedesignSectionHeader extends StatelessWidget {
     final text = context.movieRedesignText;
     final l10n = AppLocalizations.of(context);
     // 对应原型 text-2xl sm:text-3xl 的响应式标题字号。
-    final titleSize = MediaQuery.sizeOf(context).width >= 640 ? 30.0 : 24.0;
+    final atSm = movieRedesignAtSm(MediaQuery.sizeOf(context).width);
+    final titleSize = atSm ? 30.0 : 24.0;
+    final secondarySize = atSm ? 14.0 : 12.0;
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 20),
@@ -55,7 +57,10 @@ class MovieRedesignSectionHeader extends StatelessWidget {
                 const SizedBox(width: 10),
                 Text(
                   subtitleEn!,
-                  style: text.body(size: 13, color: palette.mutedForeground),
+                  style: text.body(
+                    size: secondarySize,
+                    color: palette.mutedForeground,
+                  ),
                 ),
               ],
               if (count != null) ...[
@@ -71,7 +76,10 @@ class MovieRedesignSectionHeader extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               subtitle!,
-              style: text.body(size: 13, color: palette.mutedForeground),
+              style: text.body(
+                size: secondarySize,
+                color: palette.mutedForeground,
+              ),
             ),
           ],
         ],

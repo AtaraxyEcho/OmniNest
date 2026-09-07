@@ -663,7 +663,8 @@ class _ContinueCardWrap extends StatelessWidget {
     final columns = width >= 1024 ? 4 : (width >= 640 ? 2 : 1);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final gap = 12.0;
+        // 原型 gap-3 sm:gap-4。
+        final gap = movieRedesignAtSm(width) ? 16.0 : 12.0;
         final cardWidth =
             (constraints.maxWidth - gap * (columns - 1)) / columns;
         return Wrap(
@@ -673,7 +674,7 @@ class _ContinueCardWrap extends StatelessWidget {
             for (final item in items)
               SizedBox(
                 width: cardWidth,
-                child: MovieRedesignContinueCard(item: item),
+                child: MovieRedesignContinueCard(item: item, compact: false),
               ),
           ],
         );

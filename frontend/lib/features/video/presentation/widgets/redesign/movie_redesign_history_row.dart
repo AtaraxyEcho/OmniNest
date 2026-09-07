@@ -86,8 +86,8 @@ class _MovieRedesignHistoryRowState extends State<MovieRedesignHistoryRow> {
                 ClipRRect(
                   borderRadius: MovieRedesignPalette.borderRadius,
                   child: SizedBox(
-                    width: 54,
-                    height: 38,
+                    width: wide ? 56 : 48,
+                    height: wide ? 40 : 32,
                     child: _HistoryThumb(url: entry.thumbUrl),
                   ),
                 ),

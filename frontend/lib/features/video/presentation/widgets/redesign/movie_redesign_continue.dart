@@ -83,10 +83,18 @@ class MovieRedesignContinueStrip extends StatelessWidget {
 }
 
 /// 新版继续观看卡片：16:9 画面 + 底部进度条 + 标题/时间/百分比。
+///
+/// [compact] 对应原型电影页顶部的紧凑横条卡（xs 字号/32px 播放钮）；
+/// false 对应继续观看整页卡（sm 字号/40px 播放钮/p-3 页脚）。
 class MovieRedesignContinueCard extends StatefulWidget {
-  const MovieRedesignContinueCard({required this.item, super.key});
+  const MovieRedesignContinueCard({
+    required this.item,
+    this.compact = true,
+    super.key,
+  });
 
   final MovieRedesignContinueItem item;
+  final bool compact;
 
   @override
   State<MovieRedesignContinueCard> createState() =>
@@ -103,6 +111,15 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
     final data = widget.item.data;
     final posterUrl = data.posterUrl;
     final hasAction = widget.item.onPlay != null;
+    final compact = widget.compact;
+    final playSize = compact ? 32.0 : 40.0;
+    final playIconSize = compact ? 18.0 : 20.0;
+    final titleSize = compact ? 12.0 : 14.0;
+    final metaSize = compact ? 10.0 : 12.0;
+    final footerPadding =
+        compact
+            ? const EdgeInsets.fromLTRB(10, 8, 10, 8)
+            : const EdgeInsets.all(12);
     return MouseRegion(
       cursor: hasAction ? SystemMouseCursors.click : MouseCursor.defer,
       onEnter: (_) => setState(() => _hovered = true),
@@ -143,12 +160,12 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                                 ? Material(
                                   color: palette.primary,
                                   shape: const CircleBorder(),
-                                  child: const SizedBox(
-                                    width: 32,
-                                    height: 32,
+                                  child: SizedBox(
+                                    width: playSize,
+                                    height: playSize,
                                     child: Icon(
                                       Icons.play_arrow_rounded,
-                                      size: 18,
+                                      size: playIconSize,
                                       color: Colors.white,
                                     ),
                                   ),
@@ -166,7 +183,7 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                 ),
               ),
               Padding(
-                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+                padding: footerPadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -175,7 +192,7 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: text.body(
-                        size: 12,
+                        size: titleSize,
                         weight: FontWeight.w500,
                         color: palette.secondaryForeground,
                       ),
@@ -187,14 +204,17 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                         Flexible(
                           child: Text(
                             widget.item.timeText,
-                            style: text.mono(size: 10),
+                            style: text.mono(size: metaSize),
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         const SizedBox(width: 8),
                         Text(
                           '${data.progressPercent.round()}%',
-                          style: text.mono(size: 10, color: palette.primary),
+                          style: text.mono(
+                            size: metaSize,
+                            color: palette.primary,
+                          ),
                         ),
                       ],
                     ),
