@@ -126,6 +126,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 交叉动画完成：清除离场层、背景跟进新图、窗口整理并预热邻居、
   /// 消化等待期间记录的最终导航目标。
   void _onTransitionCompleted() {
+    _transitionController.reset();
+
     setState(() {
       _previousImage = null;
       _transitioning = false;
@@ -235,9 +237,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       final index =
           ((_current + offset) % _photos.length + _photos.length) %
           _photos.length;
-      if (_hasImage(_photos[index])) {
-        unawaited(_imageCache.obtain(_photos[index], context));
-      }
+      if (!_hasImage(_photos[index])) continue;
+      unawaited(() async {
+        final image = await _imageCache.obtain(_photos[index], context);
+        if (image != null) {
+          _imageCache.retain(_photos[index].id, image);
+        }
+      }());
     }
   }
 
@@ -257,15 +263,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         _current = target;
         _transitioning = true;
       });
+      _transitionController.forward(from: 0);
       _progressController.forward(from: 0);
-      Timer(_transitionDuration, () {
-        if (!mounted) return;
-        setState(() {
-          _transitioning = false;
-          _backdropIndex = _current;
-        });
-        _imageCache.updateWindow(_photos, _current);
-      });
+      Timer(_transitionDuration, _onTransitionCompleted);
       return;
     }
     setState(() => _awaitingTarget = true);
@@ -291,11 +291,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
       _imageCache.retain(_photos[target].id, image);
       setState(() {
+        // 保存旧图用于离场动画；更新当前显示图片。
+        _previousImage = _currentImage;
+        _currentImage = image;
+
         _directionNext = next;
         _current = target;
         _awaitingTarget = false;
         _transitioning = true;
       });
+
+      _transitionController.forward(from: 0);
 
       _progressController.forward(from: 0);
 
