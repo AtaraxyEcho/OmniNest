@@ -47,10 +47,9 @@ class PhotoSlideshowPage extends ConsumerStatefulWidget {
 }
 
 class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
-    with SingleTickerProviderStateMixin {
+    with TickerProviderStateMixin {
   late List<PhotoItem> _photos;
   late int _current;
-  int? _leaving;
   bool _directionNext = true;
   bool _isPlaying = true;
   bool _controlsVisible = true;
@@ -59,13 +58,21 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   bool _showShare = false;
   Timer? _idleTimer;
   late AnimationController _progressController;
+  late AnimationController _transitionController;
+  late Animation<double> _transitionFade;
   WindowChromeLease? _windowChromeLease;
 
-  /// 解码位图缓存：独占位图生命周期（绕过 ImageCache），窗口化持有 current±1。
+  /// 解码位图缓存：位图本体归 ImageCache 所有（live 保活），本页持窗口引用。
   late final SlideshowImageCache _imageCache = SlideshowImageCache();
 
   /// TRANSITIONING 阶段：交叉动画进行中。
   bool _transitioning = false;
+
+  /// 当前显示的解码位图（切换目标就绪后由此字段承载，RawImage 直接绘制）。
+  ui.Image? _currentImage;
+
+  /// 交叉过渡期间的离场位图；动画完成置 null。
+  ui.Image? _previousImage;
 
   /// 切换等待中：目标位图解码期间保持当前帧并忽略重复触发。
   bool _awaitingTarget = false;
@@ -83,13 +90,25 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   void initState() {
     super.initState();
     _photos = List.unmodifiable(widget.photos);
-    _current = widget.initialIndex.clamp(0, _photos.length - 1);
+    _current =
+        widget.photos.isEmpty
+            ? 0
+            : widget.initialIndex.clamp(0, _photos.length - 1);
+    _backdropIndex = _current;
     // 进度条经 ValueListenableBuilder 局部刷新，避免 30ms tick 触发整页重建。
     _progressController = AnimationController(
       vsync: this,
       duration: _slideshowInterval,
     )..addStatusListener(_onProgressStatus);
-    _backdropIndex = _current;
+    // 交叉过渡控制器常驻：动画只更新层属性，层位图引用跨切换稳定。
+    _transitionController = AnimationController(
+      vsync: this,
+      duration: _transitionDuration,
+    )..addStatusListener(_onTransitionStatus);
+    _transitionFade = CurvedAnimation(
+      parent: _transitionController,
+      curve: _curve,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _windowChromeLease = ref
@@ -104,12 +123,32 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     if (status == AnimationStatus.completed) _goNext();
   }
 
+  /// 交叉动画完成：清除离场层、背景跟进新图、窗口整理并预热邻居、
+  /// 消化等待期间记录的最终导航目标。
+  void _onTransitionStatus(AnimationStatus status) {
+    if (status != AnimationStatus.completed) return;
+    setState(() {
+      _previousImage = null;
+      _transitioning = false;
+      _backdropIndex = _current;
+    });
+    _imageCache.updateWindow(_photos, _current);
+    _preloadNeighbors();
+    final pending = _pendingTarget;
+    _pendingTarget = null;
+    if (pending != null && pending != _current) {
+      unawaited(_goTo(pending, next: pending > _current));
+    }
+  }
+
   @override
   void dispose() {
     _idleTimer?.cancel();
     _progressController.dispose();
+    _transitionController.dispose();
     _windowChromeLease?.release();
-    // 释放位图缓存；后台仍在进行的解码完成后不会写回（cache 内部 _disposed 守卫）。
+    // 位图本体归 ImageCache 所有（live 保活），页面销毁不 dispose；
+    // 窗口引用随 State 释放，后台完成的解码因 _disposed 守卫不再写回。
     _imageCache.dispose();
     super.dispose();
   }
@@ -133,6 +172,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       setState(() {
         if (image != null) {
           _imageCache.retain(_photos[_current].id, image);
+          _currentImage = image;
           _phase = SlideshowPhase.ready;
         } else {
           _phase = SlideshowPhase.failed;
@@ -214,7 +254,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     // 无图照片（元数据条目）：无需位图，直接切换到占位层。
     if (!_hasImage(_photos[target])) {
       setState(() {
-        _leaving = _current;
         _directionNext = next;
         _current = target;
         _transitioning = true;
@@ -223,7 +262,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       Timer(_transitionDuration, () {
         if (!mounted) return;
         setState(() {
-          _leaving = null;
           _transitioning = false;
           _backdropIndex = _current;
         });
@@ -254,7 +292,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
       _imageCache.retain(_photos[target].id, image);
       setState(() {
-        _leaving = _current;
         _directionNext = next;
         _current = target;
         _awaitingTarget = false;
@@ -267,7 +304,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         if (!mounted) return;
 
         setState(() {
-          _leaving = null;
           _transitioning = false;
           // 动画完成后背景才跟进新图（切换期间背景保持旧图稳定）。
           _backdropIndex = _current;
@@ -457,7 +493,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                     fit: StackFit.expand,
                     children: [
                       _buildBackdrop(_photos[_backdropIndex]),
-                      _buildSlides(photo),
+                      _buildSlides(),
                     ],
                   ),
                 },
@@ -538,30 +574,40 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     );
   }
 
-  Widget _buildSlides(PhotoItem photo) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (_leaving != null && _leaving! < _photos.length)
-          Positioned.fill(
-            child: _SlideLayer(
-              key: ValueKey('leaving-$_leaving'),
-              item: _photos[_leaving!],
-              decoded: _imageCache.peek(_photos[_leaving!].id),
-              leaving: true,
-              directionNext: _directionNext,
+  Widget _buildSlides() {
+    // 固定双层：动画只更新层属性（opacity/transform），位图引用跨切换稳定，
+    // 层不销毁重建（GPU 纹理与 RepaintBoundary 光栅缓存跨切换保持）。
+    return AnimatedBuilder(
+      animation: _transitionFade,
+      builder: (context, _) {
+        final t = _transitionFade.value;
+        final leaving = _transitioning ? _previousImage : null;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (leaving != null)
+              Positioned.fill(
+                child: _SlideLayer(
+                  image: leaving,
+                  opacity: (1 - t).clamp(0.0, 1.0),
+                  scale: 0.97 + 0.03 * t,
+                  dx: (_directionNext ? -4.0 : 4.0) * t,
+                ),
+              ),
+            Positioned.fill(
+              child: _SlideLayer(
+                image: _currentImage,
+                opacity: _transitioning ? t : 1.0,
+                scale: 1.02 - 0.02 * t,
+                dx:
+                    _transitioning
+                        ? (_directionNext ? 4.0 : -4.0) * (1 - t)
+                        : 0,
+              ),
             ),
-          ),
-        Positioned.fill(
-          child: _SlideLayer(
-            key: ValueKey('current-${photo.id}'),
-            item: photo,
-            decoded: _imageCache.peek(photo.id),
-            leaving: false,
-            directionNext: _directionNext,
-          ),
-        ),
-      ],
+          ],
+        );
+      },
     );
   }
 
@@ -1119,87 +1165,44 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 /// 丝滑关键：图片子树由 [RepaintBoundary] 包裹且动画全程保持同一实例
 /// （光栅缓存命中后每帧只做合成级平移/缩放/淡变，不再逐帧重绘大图），
 /// 动画用 FadeTransition/Transform 直接驱动 Layer 属性而非重建子树。
-class _SlideLayer extends StatefulWidget {
+/// 幻灯片单层：直接绘制解码位图（RawImage）。
+///
+/// 无状态、无网络、无占位状态机——位图引用由页面持有并跨切换稳定，
+/// 层本身只根据调用方给定的 opacity/scale/dx 绘制（合成级操作）。
+class _SlideLayer extends StatelessWidget {
   const _SlideLayer({
-    required this.item,
-    required this.decoded,
-    required this.leaving,
-    required this.directionNext,
-    super.key,
+    required this.image,
+    required this.opacity,
+    required this.scale,
+    required this.dx,
   });
 
-  final PhotoItem item;
-
-  /// 已解码位图；就绪门控保证有图照片动画开始时非空（RawImage 直接绘制）。
-  /// 无图照片（元数据条目）为 null，渲染为纯色占位层。
-  final ui.Image? decoded;
-  final bool leaving;
-  final bool directionNext;
-
-  @override
-  State<_SlideLayer> createState() => _SlideLayerState();
-}
-
-class _SlideLayerState extends State<_SlideLayer>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-  late final Animation<double> _fade;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: _transitionDuration,
-    );
-    _fade = Tween<double>(
-      begin: widget.leaving ? 1.0 : 0.0,
-      end: widget.leaving ? 0.0 : 1.0,
-    ).animate(CurvedAnimation(parent: _controller, curve: _curve));
-    _controller.forward();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
+  final ui.Image? image;
+  final double opacity;
+  final double scale;
+  final double dx;
 
   @override
   Widget build(BuildContext context) {
-    // 就绪门控保证动画开始时位图必到位：本层只绘制已解码位图，
-    // 渲染路径上没有任何网络/异步/占位状态机，不存在二次加载。
     final image =
-        widget.decoded != null
+        this.image != null
             ? RawImage(
-              image: widget.decoded,
+              image: this.image,
               fit: BoxFit.contain,
               // 主图 high：缩放动画期间最高采样质量；缩略图/backdrop 仍为 medium。
               filterQuality: FilterQuality.high,
             )
             : const ColoredBox(color: Colors.black);
-    return AnimatedBuilder(
-      animation: _controller,
-      child: RepaintBoundary(child: SizedBox.expand(child: image)),
-      builder: (context, child) {
-        final t = _fade.value;
-        final dx =
-            widget.leaving
-                ? (widget.directionNext ? -4.0 : 4.0) * t
-                : (widget.directionNext ? 4.0 : -4.0) * (1 - t);
-        final scale = widget.leaving ? 1.0 - 0.03 * t : 1.02 - 0.02 * t;
-        return FadeTransition(
-          opacity: _fade,
-          child: Transform(
-            alignment: Alignment.center,
-            transform:
-                Matrix4.identity()
-                  ..translateByDouble(dx, 0, 0, 1)
-                  ..scaleByDouble(scale, scale, 1, 1),
-            child: child,
-          ),
-        );
-      },
+    return Transform(
+      alignment: Alignment.center,
+      transform:
+          Matrix4.identity()
+            ..translateByDouble(dx, 0, 0, 1)
+            ..scaleByDouble(scale, scale, 1, 1),
+      child: Opacity(
+        opacity: opacity.clamp(0.0, 1.0),
+        child: RepaintBoundary(child: SizedBox.expand(child: image)),
+      ),
     );
   }
 }
