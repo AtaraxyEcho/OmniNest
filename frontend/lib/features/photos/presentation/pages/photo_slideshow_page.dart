@@ -16,13 +16,23 @@ import 'package:omninest/features/photos/presentation/pages/photo_slideshow_imag
 import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 
+/// 幻灯片帧：页面上的一层画面（照片 + 已解码位图）。
+///
+/// 背景模糊层直接使用 [photo] 的 coverUrl，前景用 [image] 的解码位图。
+class SlideFrame {
+  const SlideFrame(this.photo, this.image);
+
+  final PhotoItem photo;
+  final ui.Image? image;
+}
+
 /// 幻灯片页面阶段：首图解码中 / 可播放 / 首图加载失败。
 enum SlideshowPhase { loading, ready, failed }
 
 const _slideshowInterval = Duration(seconds: 5);
-const _transitionDuration = Duration(milliseconds: 600);
+const _transitionDuration = Duration(milliseconds: 450);
 const _idleHideDuration = Duration(seconds: 3);
-const _curve = Cubic(0.76, 0.0, 0.24, 1.0);
+const _transitionCurve = Curves.easeOutCubic;
 
 /// 全屏沉浸幻灯片页（设计稿：Photos Management UI Design）。
 ///
@@ -50,7 +60,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     with TickerProviderStateMixin {
   late List<PhotoItem> _photos;
   late int _current;
-  bool _directionNext = true;
   bool _isPlaying = true;
   bool _controlsVisible = true;
   bool _thumbnailsVisible = true;
@@ -65,23 +74,20 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 解码位图缓存：位图本体归 ImageCache 所有（live 保活），本页持窗口引用。
   late final SlideshowImageCache _imageCache = SlideshowImageCache();
 
+  /// 当前显示帧（照片 + 解码位图）；就绪门控保证有图照片动画开始时 image 非空。
+  SlideFrame? _currentFrame;
+
+  /// 交叉过渡期间的离场帧；动画完成置 null。
+  SlideFrame? _leavingFrame;
+
   /// TRANSITIONING 阶段：交叉动画进行中。
   bool _transitioning = false;
-
-  /// 当前显示的解码位图（切换目标就绪后由此字段承载，RawImage 直接绘制）。
-  ui.Image? _currentImage;
-
-  /// 交叉过渡期间的离场位图；动画完成置 null。
-  ui.Image? _previousImage;
 
   /// 切换等待中：目标位图解码期间保持当前帧并忽略重复触发。
   bool _awaitingTarget = false;
 
   /// 等待期间的最终导航目标：当前加载完成后链式推进（快速连点不丢操作）。
   int? _pendingTarget;
-
-  /// 背景层索引：独立于 current，动画完成后再跟进新图（避免背景突跳）。
-  late int _backdropIndex;
 
   /// 页面阶段：loading（首图解码中）/ ready（可播放）/ failed（首图加载失败）。
   SlideshowPhase _phase = SlideshowPhase.loading;
@@ -94,7 +100,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         widget.photos.isEmpty
             ? 0
             : widget.initialIndex.clamp(0, _photos.length - 1);
-    _backdropIndex = _current;
     // 进度条经 ValueListenableBuilder 局部刷新，避免 30ms tick 触发整页重建。
     _progressController = AnimationController(
       vsync: this,
@@ -107,14 +112,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     );
     _transitionFade = CurvedAnimation(
       parent: _transitionController,
-      curve: _curve,
+      curve: _transitionCurve,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _windowChromeLease = ref
           .read(windowChromeControllerProvider.notifier)
           .acquireImmersive(owner: 'photos.slideshow');
-      _imageCache.updateWindow(_photos, _current);
       unawaited(_loadInitialImage());
     });
   }
@@ -129,16 +133,15 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _transitionController.reset();
 
     setState(() {
-      _previousImage = null;
+      _leavingFrame = null;
       _transitioning = false;
-      _backdropIndex = _current;
     });
     _imageCache.updateWindow(_photos, _current);
     _preloadNeighbors();
     final pending = _pendingTarget;
     _pendingTarget = null;
     if (pending != null && pending != _current) {
-      unawaited(_goTo(pending, next: pending > _current));
+      unawaited(_goTo(pending));
     }
   }
 
@@ -161,7 +164,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     if (!_hasImage(_photos[_current])) {
       setState(() {
         _phase = SlideshowPhase.ready;
-        _backdropIndex = _current;
       });
       _progressController.forward(from: 0);
       _preloadNeighbors();
@@ -173,7 +175,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       setState(() {
         if (image != null) {
           _imageCache.retain(_photos[_current].id, image);
-          _currentImage = image;
+          _currentFrame = SlideFrame(_photos[_current], image);
           _phase = SlideshowPhase.ready;
         } else {
           _phase = SlideshowPhase.failed;
@@ -247,7 +249,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
   }
 
-  Future<void> _goTo(int index, {required bool next}) async {
+  Future<void> _goTo(int index) async {
     if (_transitioning ||
         _awaitingTarget ||
         _phase != SlideshowPhase.ready ||
@@ -259,7 +261,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     // 无图照片（元数据条目）：无需位图，直接切换到占位层。
     if (!_hasImage(_photos[target])) {
       setState(() {
-        _directionNext = next;
         _current = target;
         _transitioning = true;
       });
@@ -291,11 +292,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
       _imageCache.retain(_photos[target].id, image);
       setState(() {
-        // 保存旧图用于离场动画；更新当前显示图片。
-        _previousImage = _currentImage;
-        _currentImage = image;
+        // 保存旧帧用于离场动画；更新当前显示帧。
+        _leavingFrame = _currentFrame;
+        _currentFrame = SlideFrame(_photos[target], image);
 
-        _directionNext = next;
         _current = target;
         _awaitingTarget = false;
         _transitioning = true;
@@ -319,9 +319,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
   }
 
-  void _goNext() => _goTo(_current + 1, next: true);
+  void _goNext() => _goTo(_current + 1);
 
-  void _goPrev() => _goTo(_current - 1, next: false);
+  void _goPrev() => _goTo(_current - 1);
 
   void _togglePlay() {
     setState(() {
@@ -478,10 +478,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   SlideshowPhase.failed => _buildErrorRetry(context),
                   SlideshowPhase.ready => Stack(
                     fit: StackFit.expand,
-                    children: [
-                      _buildBackdrop(_photos[_backdropIndex]),
-                      _buildSlides(),
-                    ],
+                    children: [_buildBackdropLayers(), _buildSlideLayers()],
                   ),
                 },
                 _buildGradients(showControls),
@@ -522,15 +519,42 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   // ─── 幻灯片层（静态模糊背景 + 离场/入场前景交叉过渡） ───
 
-  /// 页面级模糊背景：96px 超低分辨率缩略图放大拉伸 + RepaintBoundary。
-  ///
-  /// 低分辨率放大本身即强模糊，sigma 滤波只作用于 96px 小纹理（成本可忽略）；
-  /// RepaintBoundary 使该层稳定数帧后进入光栅缓存——前景动画帧不触发
-  /// 全屏重滤波（此前每次前景交叉都会整帧重算 sigma40 模糊，是掉帧主因）。
-  Widget _buildBackdrop(PhotoItem photo) {
+  /// 背景双层模糊：与前景同一过渡控制器同步交叉（Apple Photos 式氛围同步）。
+  Widget _buildBackdropLayers() {
+    return AnimatedBuilder(
+      animation: _transitionFade,
+      builder: (context, _) {
+        final t = _transitionFade.value;
+        final leaving = _transitioning ? _leavingFrame : null;
+        final entering = _currentFrame;
+        if (entering == null) return const SizedBox.shrink();
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (leaving != null)
+              Positioned.fill(
+                child: Opacity(
+                  opacity: (1 - t).clamp(0.0, 1.0),
+                  child: _buildBlurredCover(leaving.photo),
+                ),
+              ),
+            Positioned.fill(
+              child: Opacity(
+                opacity: t.clamp(0.0, 1.0),
+                child: _buildBlurredCover(entering.photo),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// 单张模糊背景：96px 超低分辨率缩略图放大拉伸（放大即强模糊）+ 压暗。
+  Widget _buildBlurredCover(PhotoItem photo) {
     final thumb = photo.coverUrl;
     if (thumb == null || thumb.isEmpty) {
-      return const SizedBox.shrink();
+      return const ColoredBox(color: Colors.black);
     }
     return Positioned.fill(
       child: RepaintBoundary(
@@ -561,35 +585,31 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     );
   }
 
-  Widget _buildSlides() {
-    // 固定双层：动画只更新层属性（opacity/transform），位图引用跨切换稳定，
-    // 层不销毁重建（GPU 纹理与 RepaintBoundary 光栅缓存跨切换保持）。
+  /// 前景双层：离场位图淡出 + 当前位图淡入（微缩放，摄影应用式 motion）。
+  Widget _buildSlideLayers() {
     return AnimatedBuilder(
       animation: _transitionFade,
       builder: (context, _) {
         final t = _transitionFade.value;
-        final leaving = _transitioning ? _previousImage : null;
+        final leaving = _transitioning ? _leavingFrame : null;
+        final entering = _currentFrame;
+        if (entering == null) return const SizedBox.shrink();
         return Stack(
           fit: StackFit.expand,
           children: [
-            if (leaving != null)
+            if (leaving != null && leaving.image != null)
               Positioned.fill(
                 child: _SlideLayer(
-                  image: leaving,
+                  image: leaving.image,
                   opacity: (1 - t).clamp(0.0, 1.0),
-                  scale: 0.97 + 0.03 * t,
-                  dx: (_directionNext ? -4.0 : 4.0) * t,
+                  scale: 1.0 - 0.005 * t,
                 ),
               ),
             Positioned.fill(
               child: _SlideLayer(
-                image: _currentImage,
-                opacity: _transitioning ? t : 1.0,
-                scale: 1.02 - 0.02 * t,
-                dx:
-                    _transitioning
-                        ? (_directionNext ? 4.0 : -4.0) * (1 - t)
-                        : 0,
+                image: entering.image,
+                opacity: t.clamp(0.0, 1.0),
+                scale: 1.015 - 0.015 * t,
               ),
             ),
           ],
@@ -938,7 +958,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _goTo(i, next: i > _current),
+                onTap: () => _goTo(i),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: RepaintBoundary(
@@ -997,7 +1017,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             opacity: selected ? 1 : 0.45,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => _goTo(index, next: index > _current),
+              onTap: () => _goTo(index),
               child: Container(
                 width: 72,
                 height: 48,
@@ -1155,19 +1175,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 /// 幻灯片单层：直接绘制解码位图（RawImage）。
 ///
 /// 无状态、无网络、无占位状态机——位图引用由页面持有并跨切换稳定，
-/// 层本身只根据调用方给定的 opacity/scale/dx 绘制（合成级操作）。
+/// 层本身只根据调用方给定的 opacity/scale 绘制（合成级操作）。
 class _SlideLayer extends StatelessWidget {
   const _SlideLayer({
     required this.image,
     required this.opacity,
     required this.scale,
-    required this.dx,
   });
 
   final ui.Image? image;
   final double opacity;
   final double scale;
-  final double dx;
 
   @override
   Widget build(BuildContext context) {
@@ -1182,10 +1200,7 @@ class _SlideLayer extends StatelessWidget {
             : const ColoredBox(color: Colors.black);
     return Transform(
       alignment: Alignment.center,
-      transform:
-          Matrix4.identity()
-            ..translateByDouble(dx, 0, 0, 1)
-            ..scaleByDouble(scale, scale, 1, 1),
+      transform: Matrix4.identity()..scaleByDouble(scale, scale, 1, 1),
       child: Opacity(
         opacity: opacity.clamp(0.0, 1.0),
         child: RepaintBoundary(child: SizedBox.expand(child: image)),
