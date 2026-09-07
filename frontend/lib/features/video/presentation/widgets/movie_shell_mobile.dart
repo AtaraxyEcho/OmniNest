@@ -57,7 +57,10 @@ class _MovieMobileShell extends StatelessWidget {
                     child: MovieSectionTransition(
                       section: section,
                       slideDistance: 0.024,
-                      child: child,
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: child,
+                      ),
                     ),
                   ),
                 ),
@@ -95,7 +98,7 @@ class _MovieMobileShell extends StatelessWidget {
                       ),
                     ),
                   SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 24),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
                     sliver: SliverToBoxAdapter(
                       child: MovieSectionTransition(
                         section: section,

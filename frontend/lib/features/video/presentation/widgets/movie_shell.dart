@@ -206,26 +206,21 @@ class _MovieShellState extends ConsumerState<MovieShell> {
                             Expanded(
                               child: LayoutBuilder(
                                 builder: (context, contentConstraints) {
-                                  final horizontalPadding =
-                                      contentConstraints.maxWidth < 1000
-                                          ? 16.0
-                                          : contentConstraints.maxWidth < 1600
-                                          ? 20.0
-                                          : 24.0;
+                                  final pagePadding = movieRedesignPagePadding(
+                                    contentConstraints.maxWidth,
+                                  );
                                   final content = MovieSectionTransition(
                                     section: effectiveSection,
                                     child: widget.child,
                                   );
                                   if (widget.childOwnsScroll) {
-                                    return content;
+                                    return Padding(
+                                      padding: pagePadding,
+                                      child: content,
+                                    );
                                   }
                                   return SingleChildScrollView(
-                                    padding: EdgeInsets.fromLTRB(
-                                      horizontalPadding,
-                                      20,
-                                      horizontalPadding,
-                                      48,
-                                    ),
+                                    padding: pagePadding.copyWith(bottom: 48),
                                     child: content,
                                   );
                                 },

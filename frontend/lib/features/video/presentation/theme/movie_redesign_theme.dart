@@ -166,3 +166,9 @@ class MovieRedesignText {
 extension MovieRedesignTextX on BuildContext {
   MovieRedesignText get movieRedesignText => MovieRedesignText(movieRedesign);
 }
+
+/// 原型 main 区域四周留白：p-3 / sm:p-5 / lg:p-6（12 / 20 / 24）。
+EdgeInsets movieRedesignPagePadding(double width) {
+  final edge = width >= 1024 ? 24.0 : (width >= 640 ? 20.0 : 12.0);
+  return EdgeInsets.all(edge);
+}

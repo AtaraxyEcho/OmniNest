@@ -393,7 +393,7 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
       ),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+          padding: const EdgeInsets.only(top: 4),
           sliver: SliverToBoxAdapter(
             child: MovieRedesignSectionHeader(
               title: l10n.videoMovieLibrary,
@@ -405,7 +405,7 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
         ),
         if (continueItems.isNotEmpty)
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
               child: MovieRedesignContinueStrip(
                 title: l10n.videoSectionContinueWatching,
@@ -415,7 +415,7 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
             ),
           ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 16),
+          padding: const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
             child: MovieRedesignFilterSortBar(
               filters: filters,
@@ -437,7 +437,7 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
         ),
         if (filteredItems.isEmpty)
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
               child: MovieRedesignEmptyState(
                 icon: Icons.movie_outlined,
@@ -448,7 +448,7 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: MovieRedesignPosterSliverGrid(
               items: [
                 for (final item in filteredItems)
@@ -457,7 +457,7 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
             ),
           ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 24, 4, 48),
+          padding: const EdgeInsets.fromLTRB(0, 24, 0, 48),
           sliver: SliverToBoxAdapter(
             child: Center(
               child:
@@ -498,7 +498,7 @@ class _SeriesGridSection extends StatelessWidget {
       ),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 16),
+          padding: const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
             child: MovieRedesignSectionHeader(
               title: title,
@@ -510,7 +510,7 @@ class _SeriesGridSection extends StatelessWidget {
         ),
         if (series.isEmpty)
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
               child: MovieRedesignEmptyState(
                 icon: Icons.tv_outlined,
@@ -520,7 +520,7 @@ class _SeriesGridSection extends StatelessWidget {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: MovieRedesignPosterSliverGrid(
               items: [
                 for (final item in series)
@@ -551,7 +551,7 @@ class _RecentSection extends ConsumerWidget {
       ),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 16),
+          padding: const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
             child: MovieRedesignSectionHeader(
               title: l10n.videoSectionRecent,
@@ -564,7 +564,7 @@ class _RecentSection extends ConsumerWidget {
         ),
         if (state.recentItems.isEmpty)
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
               child: MovieRedesignEmptyState(
                 icon: Icons.new_releases_outlined,
@@ -574,7 +574,7 @@ class _RecentSection extends ConsumerWidget {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: MovieRedesignPosterSliverGrid(
               items: [
                 for (final item in state.recentItems)
@@ -603,7 +603,7 @@ class _ContinueSection extends StatelessWidget {
       ),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 16),
+          padding: const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
             child: MovieRedesignSectionHeader(
               title: l10n.videoSectionContinueWatching,
@@ -617,7 +617,7 @@ class _ContinueSection extends StatelessWidget {
         ),
         if (state.continueWatching.isEmpty)
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
               child: MovieRedesignEmptyState(
                 icon: Icons.play_circle_outline_rounded,
@@ -627,7 +627,7 @@ class _ContinueSection extends StatelessWidget {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
               child: _ContinueCardWrap(
                 items: [
@@ -697,7 +697,7 @@ class _FavoritesSection extends ConsumerWidget {
       ),
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 16),
+          padding: const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
             child: MovieRedesignSectionHeader(
               title: l10n.videoSectionFavorites,
@@ -712,7 +712,7 @@ class _FavoritesSection extends ConsumerWidget {
         ),
         if (state.favoriteItems.isEmpty)
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
               child: MovieRedesignEmptyState(
                 icon: Icons.favorite_rounded,
@@ -723,7 +723,7 @@ class _FavoritesSection extends ConsumerWidget {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 4),
+            padding: EdgeInsets.zero,
             sliver: MovieRedesignPosterSliverGrid(
               items: [
                 for (final item in state.favoriteItems)

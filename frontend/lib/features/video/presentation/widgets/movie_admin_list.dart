@@ -43,7 +43,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+          padding: const EdgeInsets.only(top: 4),
           sliver: SliverToBoxAdapter(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -65,18 +65,18 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
           ),
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+          padding: EdgeInsets.zero,
           sliver: SliverToBoxAdapter(child: _buildStatCards(context, entries)),
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
+          padding: const EdgeInsets.only(top: 12),
           sliver: SliverToBoxAdapter(
             child: _buildFilterChips(context, l10n, state.filter),
           ),
         ),
         if (pageEntries.isEmpty)
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(4, 24, 4, 0),
+            padding: const EdgeInsets.only(top: 24),
             sliver: SliverToBoxAdapter(
               child: MovieRedesignEmptyState(
                 icon: Icons.admin_panel_settings_outlined,
@@ -86,7 +86,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
+            padding: const EdgeInsets.only(top: 10),
             sliver: SliverList.builder(
               itemCount: pageEntries.length,
               itemBuilder: (context, index) {
@@ -100,7 +100,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
             ),
           ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(4, 16, 4, 32),
+          padding: const EdgeInsets.fromLTRB(0, 16, 0, 32),
           sliver: SliverToBoxAdapter(
             child: _buildPager(context, l10n, safePage, pageCount),
           ),
