@@ -6761,6 +6761,51 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosMotionPlayFailed => '动态视频播放失败';
 
   @override
+  String get photosShareEyebrow => '分享';
+
+  @override
+  String get photosShareLinkEyebrow => '链接';
+
+  @override
+  String get photosShareCopy => '复制';
+
+  @override
+  String get photosShareCopied => '✓ 已复制';
+
+  @override
+  String get photosShareToEyebrow => '分享至';
+
+  @override
+  String get photosShareToMessages => '信息';
+
+  @override
+  String get photosShareToMail => '邮件';
+
+  @override
+  String get photosShareToInstagram => 'Instagram';
+
+  @override
+  String get photosShareToMore => '更多';
+
+  @override
+  String get photosShareOptionLocation => '包含位置信息';
+
+  @override
+  String get photosShareOptionOriginal => '原图画质';
+
+  @override
+  String get photosShareManage => '管理已有链接';
+
+  @override
+  String get photosShareDone => '完成';
+
+  @override
+  String get photosShareOptionsEyebrow => '选项';
+
+  @override
+  String get photosShareCreatedHint => '链接已创建并复制到剪贴板';
+
+  @override
   String get photosShareAlbum => '分享相册';
 
   @override

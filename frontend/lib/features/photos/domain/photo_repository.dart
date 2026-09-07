@@ -211,6 +211,9 @@ abstract interface class PhotoRepository {
     required String sessionToken,
   });
 
+  /// 构造单张照片分享页的完整访问链接
+  String sharedPhotoUrl(String token);
+
   /// 访问共享相册
   Future<String> authorizeSharedAlbum(String token, {String? password});
 

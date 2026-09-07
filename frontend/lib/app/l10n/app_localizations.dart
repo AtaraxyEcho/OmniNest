@@ -12797,6 +12797,96 @@ abstract class AppLocalizations {
   /// **'Failed to play motion video'**
   String get photosMotionPlayFailed;
 
+  /// No description provided for @photosShareEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'SHARE'**
+  String get photosShareEyebrow;
+
+  /// No description provided for @photosShareLinkEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'LINK'**
+  String get photosShareLinkEyebrow;
+
+  /// No description provided for @photosShareCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get photosShareCopy;
+
+  /// No description provided for @photosShareCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'✓ Copied'**
+  String get photosShareCopied;
+
+  /// No description provided for @photosShareToEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'SHARE TO'**
+  String get photosShareToEyebrow;
+
+  /// No description provided for @photosShareToMessages.
+  ///
+  /// In en, this message translates to:
+  /// **'Messages'**
+  String get photosShareToMessages;
+
+  /// No description provided for @photosShareToMail.
+  ///
+  /// In en, this message translates to:
+  /// **'Mail'**
+  String get photosShareToMail;
+
+  /// No description provided for @photosShareToInstagram.
+  ///
+  /// In en, this message translates to:
+  /// **'Instagram'**
+  String get photosShareToInstagram;
+
+  /// No description provided for @photosShareToMore.
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get photosShareToMore;
+
+  /// No description provided for @photosShareOptionLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'Include location'**
+  String get photosShareOptionLocation;
+
+  /// No description provided for @photosShareOptionOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Original quality'**
+  String get photosShareOptionOriginal;
+
+  /// No description provided for @photosShareManage.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage existing links'**
+  String get photosShareManage;
+
+  /// No description provided for @photosShareDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get photosShareDone;
+
+  /// No description provided for @photosShareOptionsEyebrow.
+  ///
+  /// In en, this message translates to:
+  /// **'OPTIONS'**
+  String get photosShareOptionsEyebrow;
+
+  /// No description provided for @photosShareCreatedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Link created and copied to clipboard'**
+  String get photosShareCreatedHint;
+
   /// No description provided for @photosShareAlbum.
   ///
   /// In en, this message translates to:

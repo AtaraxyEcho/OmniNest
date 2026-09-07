@@ -525,6 +525,12 @@ class PhotoApi {
         (throw StateError('分享会话响应无效'));
   }
 
+  /// 构造单张照片分享页的完整访问链接。
+  String sharedPhotoUrl(String token) {
+    final base = apiClient.dio.options.baseUrl;
+    return '$base/shared/photos/item/$token';
+  }
+
   /// 访问共享单张照片（公开接口）。
   Future<PhotoItem> accessSharedPhoto(
     String token, {

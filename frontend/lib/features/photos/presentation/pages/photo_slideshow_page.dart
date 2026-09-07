@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 
 const _slideshowInterval = Duration(seconds: 5);
 const _transitionDuration = Duration(milliseconds: 600);
@@ -49,6 +51,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   bool _controlsVisible = true;
   bool _thumbnailsVisible = true;
   bool _showInfo = false;
+  bool _showShare = false;
   Timer? _idleTimer;
   late AnimationController _progressController;
   WindowChromeLease? _windowChromeLease;
@@ -60,10 +63,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     super.initState();
     _photos = List.unmodifiable(widget.photos);
     _current = widget.initialIndex.clamp(0, _photos.length - 1);
-    _progressController =
-        AnimationController(vsync: this, duration: _slideshowInterval)
-          ..addListener(() => setState(() {}))
-          ..addStatusListener(_onProgressStatus);
+    // 进度条经 ValueListenableBuilder 局部刷新，避免 30ms tick 触发整页重建。
+    _progressController = AnimationController(
+      vsync: this,
+      duration: _slideshowInterval,
+    )..addStatusListener(_onProgressStatus);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _windowChromeLease = ref
@@ -218,11 +222,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.keyI) {
-      setState(() => _showInfo = !_showInfo);
+      setState(() {
+        _showInfo = !_showInfo;
+        if (_showInfo) _showShare = false;
+      });
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.escape && _showInfo) {
-      setState(() => _showInfo = false);
+    if (key == LogicalKeyboardKey.escape && (_showInfo || _showShare)) {
+      setState(() {
+        _showInfo = false;
+        _showShare = false;
+      });
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -311,14 +321,27 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   _buildArrow(context, right: true, visible: showControls),
                 ],
                 _buildBottomArea(context, photo, showControls),
-                _buildInfoPanel(context, photo),
-                if (_showInfo)
+                // 面板 scrim 在侧栏之下（zIndex 语义），点击空白处同时收起。
+                if (_showInfo || _showShare)
                   Positioned.fill(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
-                      onTap: () => setState(() => _showInfo = false),
+                      onTap:
+                          () => setState(() {
+                            _showInfo = false;
+                            _showShare = false;
+                          }),
                     ),
                   ),
+                _buildInfoPanel(context, photo),
+                PhotoSharePanel(
+                  visible: _showShare,
+                  photo: photo,
+                  onDone:
+                      () => setState(() {
+                        _showShare = false;
+                      }),
+                ),
               ],
             ),
           ),
@@ -455,6 +478,20 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                               ? const Color(0xFFFB7185)
                               : Colors.white.withValues(alpha: 0.70),
                       onTap: () => _toggleFavorite(photo),
+                    ),
+                    const SizedBox(width: 16),
+                    _ViewerIconButton(
+                      tooltip: l10n.photosSharePhoto,
+                      icon: Icons.share_rounded,
+                      color:
+                          _showShare
+                              ? Colors.white
+                              : Colors.white.withValues(alpha: 0.70),
+                      onTap:
+                          () => setState(() {
+                            _showShare = !_showShare;
+                            if (_showShare) _showInfo = false;
+                          }),
                     ),
                     const SizedBox(width: 16),
                     _ViewerIconButton(
@@ -638,40 +675,45 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   // ─── 分段进度条 ───
 
   Widget _buildSegments() {
-    return SizedBox(
-      height: 2,
-      child: Row(
-        children: [
-          for (var i = 0; i < _photos.length; i++)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => _goTo(i, next: i > _current),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(2),
-                    child: LinearProgressIndicator(
-                      value: _progressValueFor(i),
-                      minHeight: 2,
-                      backgroundColor: Colors.white.withValues(alpha: 0.20),
-                      valueColor: const AlwaysStoppedAnimation<Color>(
-                        Color(0xE6FFFFFF),
+    return ValueListenableBuilder<double>(
+      valueListenable: _progressController,
+      builder: (context, progress, _) {
+        return SizedBox(
+          height: 2,
+          child: Row(
+            children: [
+              for (var i = 0; i < _photos.length; i++)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => _goTo(i, next: i > _current),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(2),
+                        child: LinearProgressIndicator(
+                          value: _progressValueFor(i, progress),
+                          minHeight: 2,
+                          backgroundColor: Colors.white.withValues(alpha: 0.20),
+                          valueColor: const AlwaysStoppedAnimation<Color>(
+                            Color(0xE6FFFFFF),
+                          ),
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            ),
-        ],
-      ),
+            ],
+          ),
+        );
+      },
     );
   }
 
-  double? _progressValueFor(int index) {
+  double _progressValueFor(int index, double progress) {
     if (index < _current) return 1;
     if (index > _current) return 0;
-    return _isPlaying ? _progressController.value : 0;
+    return _isPlaying ? progress : 0;
   }
 
   // ─── 缩略图条 ───
@@ -733,33 +775,33 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   Widget _buildInfoPanel(BuildContext context, PhotoItem photo) {
     final preferZh = Localizations.localeOf(context).languageCode == 'zh';
+    final l10n = AppLocalizations.of(context);
+    final camera = [
+      photo.cameraMake,
+      photo.cameraModel,
+    ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
+    // 设计稿固定 8 行字段，缺失值统一显示占位符。
     final rows = <(String, String)>[
       (
-        AppLocalizations.of(context).photosLocationInfo,
-        photo.locationDisplay(preferZh: preferZh) ?? '-',
+        l10n.photosLocationInfo,
+        photo.locationDisplay(preferZh: preferZh) ?? '—',
       ),
-      if (photo.dateTaken != null)
-        (
-          AppLocalizations.of(context).photosDateTaken,
-          _formatDate(photo.dateTaken!),
-        ),
-      if (photo.cameraMake != null)
-        (AppLocalizations.of(context).photosBrand, photo.cameraMake!),
-      if (photo.cameraModel != null)
-        (AppLocalizations.of(context).photosModel, photo.cameraModel!),
-      if (photo.lensModel != null)
-        (AppLocalizations.of(context).photosLens, photo.lensModel!),
-      if (photo.shutterSpeed != null)
-        (AppLocalizations.of(context).photosShutterSpeed, photo.shutterSpeed!),
-      if (photo.aperture != null)
-        (AppLocalizations.of(context).photosAperture, 'f/${photo.aperture}'),
-      if (photo.iso != null)
-        (AppLocalizations.of(context).photosIso, '${photo.iso}'),
-      if (photo.focalLength != null)
-        (
-          AppLocalizations.of(context).photosFocalLength,
-          '${photo.focalLength}mm',
-        ),
+      (
+        l10n.photosDateTaken,
+        photo.dateTaken != null ? _formatDate(photo.dateTaken!) : '—',
+      ),
+      (l10n.photosBrand, camera.isNotEmpty ? camera : '—'),
+      (l10n.photosLens, _nonBlank(photo.lensModel) ?? '—'),
+      (l10n.photosShutterSpeed, _nonBlank(photo.shutterSpeed) ?? '—'),
+      (
+        l10n.photosAperture,
+        _nonBlank(photo.aperture) != null ? 'f/${photo.aperture}' : '—',
+      ),
+      (l10n.photosIso, photo.iso != null ? '${photo.iso}' : '—'),
+      (
+        l10n.photosFocalLength,
+        _nonBlank(photo.focalLength) != null ? '${photo.focalLength}mm' : '—',
+      ),
     ];
     return Positioned(
       top: 0,
@@ -831,12 +873,52 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                       ],
                     ),
                   ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _InfoPanelButton(
+                        icon:
+                            photo.favorite
+                                ? Icons.favorite_rounded
+                                : Icons.favorite_border_rounded,
+                        iconColor:
+                            photo.favorite
+                                ? const Color(0xFFFB7185)
+                                : Colors.white.withValues(alpha: 0.80),
+                        label:
+                            photo.favorite
+                                ? AppLocalizations.of(context).photosUnfavorite
+                                : AppLocalizations.of(context).photosFavorite,
+                        onTap: () => unawaited(_toggleFavorite(photo)),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _InfoPanelButton(
+                        icon: Icons.share_rounded,
+                        label: l10n.photosSharePhoto,
+                        onTap:
+                            () => setState(() {
+                              _showInfo = false;
+                              _showShare = true;
+                            }),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  String? _nonBlank(String? value) {
+    if (value == null) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   // ─── 辅助方法 ───
@@ -858,7 +940,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 }
 
-/// 单层幻灯片：满屏 cover 显示，进入/离场由父级过渡驱动。
+/// 单层幻灯片：模糊铺满背景 + contain 前景，进入/离场由父级过渡驱动。
 class _SlideLayer extends StatelessWidget {
   const _SlideLayer({
     required this.item,
@@ -876,14 +958,27 @@ class _SlideLayer extends StatelessWidget {
     final imageUrl = item.sourceUrl ?? item.coverUrl;
     final cacheKey =
         item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey;
+    final thumbUrl = item.coverUrl;
+    // 原图尚未进缓存时以缩略图兜底，避免入场瞬间闪黑。
+    final placeholder =
+        thumbUrl != null && thumbUrl.isNotEmpty
+            ? CachedNetworkImage(
+              imageUrl: thumbUrl,
+              cacheKey: item.coverCacheKey,
+              fit: BoxFit.contain,
+              fadeInDuration: Duration.zero,
+              errorWidget:
+                  (context, url, error) =>
+                      const ColoredBox(color: Colors.black),
+            )
+            : const ColoredBox(color: Colors.black);
     final image = CachedNetworkImage(
       imageUrl: imageUrl ?? '',
       cacheKey: cacheKey,
       fit: BoxFit.contain,
       fadeInDuration: Duration.zero,
-      placeholder: (context, url) => const ColoredBox(color: Colors.black),
-      errorWidget:
-          (context, url, error) => const ColoredBox(color: Colors.black),
+      placeholder: (context, url) => placeholder,
+      errorWidget: (context, url, error) => placeholder,
     );
     final backgroundImage = CachedNetworkImage(
       imageUrl: imageUrl ?? '',
@@ -915,7 +1010,14 @@ class _SlideLayer extends StatelessWidget {
             child: Stack(
               fit: StackFit.expand,
               children: [
-                backgroundImage,
+                // 底层：同图 cover 放大 + 高斯模糊，掩盖 contain 黑边。
+                Transform.scale(
+                  scale: 1.12,
+                  child: ImageFiltered(
+                    imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+                    child: backgroundImage,
+                  ),
+                ),
                 ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
                 image,
               ],
@@ -924,6 +1026,55 @@ class _SlideLayer extends StatelessWidget {
         );
       },
       child: SizedBox.expand(child: image),
+    );
+  }
+}
+
+/// Info 面板底部操作按钮：Like / Share。
+class _InfoPanelButton extends StatelessWidget {
+  const _InfoPanelButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.iconColor,
+  });
+
+  final IconData icon;
+  final Color? iconColor;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(8),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 18,
+                color: iconColor ?? Colors.white.withValues(alpha: 0.80),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.80),
+                  fontSize: 12,
+                  letterSpacing: 0.04,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

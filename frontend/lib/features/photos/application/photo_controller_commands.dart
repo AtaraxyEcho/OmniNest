@@ -193,6 +193,9 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     required String sessionToken,
   }) => _repo.accessSharedPhoto(token, sessionToken: sessionToken);
 
+  /// 构造单张照片分享页的完整访问链接
+  String sharedPhotoUrl(String token) => _repo.sharedPhotoUrl(token);
+
   /// 访问共享相册
   Future<String> authorizeSharedAlbum(String token, {String? password}) =>
       _repo.authorizeSharedAlbum(token, password: password);

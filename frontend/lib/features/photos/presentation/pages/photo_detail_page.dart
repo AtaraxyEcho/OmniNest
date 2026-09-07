@@ -5,8 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_exif_sidebar.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
-import 'package:omninest/features/photos/domain/photo_share_link.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_trash_view.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -86,6 +85,9 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
 
   /// 动态照片常驻播放开关；点按 LIVE 徽标切换，切页/点播放层复位。
   bool _motionPinnedPlaying = false;
+
+  /// 分享侧栏开合；与幻灯片共用 PhotoSharePanel。
+  bool _showSharePanel = false;
   final Set<String> _locationBackfillAttempted = {};
 
   @override
@@ -320,63 +322,6 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     }
   }
 
-  /// 分享当前照片：加载已有链接，弹共享分享面板，创建成功后提示令牌。
-  Future<void> _showPhotoShareDialog(BuildContext context) async {
-    List<PhotoShareLink> shares = [];
-    try {
-      shares = await ref
-          .read(photoCenterControllerProvider.notifier)
-          .listPhotoShares(_currentPhotoId!);
-    } on Exception catch (error) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(describeUserFacingError(error).displayMessage)),
-      );
-    }
-
-    if (!context.mounted) return;
-
-    final result = await showPhotoShareDialog(
-      context,
-      title: AppLocalizations.of(context).photosSharePhoto,
-      shares: shares,
-      onRevoke:
-          (shareId) => ref
-              .read(photoCenterControllerProvider.notifier)
-              .revokeAlbumShare(shareId),
-    );
-
-    if (result == null || !context.mounted) return;
-    final (password, expiryOption) = result;
-    if (password.isEmpty) {
-      return;
-    }
-    try {
-      final link = await ref
-          .read(photoCenterControllerProvider.notifier)
-          .createPhotoShare(
-            _currentPhotoId!,
-            password: password,
-            expiresAt: resolveShareExpiry(expiryOption),
-          );
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context).photosShareLinkCreated(link.token),
-          ),
-        ),
-      );
-    } on Exception {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).photosShareLinkFailed),
-        ),
-      );
-    }
-  }
-
   Future<void> _showAddToAlbumDialog(
     BuildContext context,
     WidgetRef ref,
@@ -605,13 +550,35 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
             },
             onSlideshow: _launchSlideshow,
             onDownload: () => unawaited(_downloadPhoto()),
-            onShare: () => unawaited(_showPhotoShareDialog(context)),
+            onShare: _openSharePanel,
             showInfo: _showInfo,
             compact: compact,
           ),
         ),
+        // 分享侧栏：与幻灯片共用组件，scrim 在面板之下。
+        if (_showSharePanel)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _showSharePanel = false),
+            ),
+          ),
+        if (_showSharePanel)
+          PhotoSharePanel(
+            visible: true,
+            photo: currentFresh,
+            onDone: () => setState(() => _showSharePanel = false),
+          ),
       ],
     );
+  }
+
+  /// 打开分享侧栏；桌面端信息侧栏与其互斥。
+  void _openSharePanel() {
+    if (ref.read(photoInfoPanelVisibleProvider)) {
+      ref.read(photoInfoPanelVisibleProvider.notifier).toggle();
+    }
+    setState(() => _showSharePanel = true);
   }
 
   Widget _buildPhotoStage(

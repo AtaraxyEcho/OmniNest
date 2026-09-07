@@ -266,6 +266,9 @@ class PhotoRepositoryImpl implements PhotoRepository {
   }) => _api.accessSharedPhoto(token, sessionToken: sessionToken);
 
   @override
+  String sharedPhotoUrl(String token) => _api.sharedPhotoUrl(token);
+
+  @override
   Future<String> authorizeSharedAlbum(String token, {String? password}) =>
       _api.authorizeSharedAlbum(token, password: password);
 

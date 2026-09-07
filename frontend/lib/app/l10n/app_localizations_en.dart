@@ -6959,6 +6959,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosMotionPlayFailed => 'Failed to play motion video';
 
   @override
+  String get photosShareEyebrow => 'SHARE';
+
+  @override
+  String get photosShareLinkEyebrow => 'LINK';
+
+  @override
+  String get photosShareCopy => 'Copy';
+
+  @override
+  String get photosShareCopied => '✓ Copied';
+
+  @override
+  String get photosShareToEyebrow => 'SHARE TO';
+
+  @override
+  String get photosShareToMessages => 'Messages';
+
+  @override
+  String get photosShareToMail => 'Mail';
+
+  @override
+  String get photosShareToInstagram => 'Instagram';
+
+  @override
+  String get photosShareToMore => 'More';
+
+  @override
+  String get photosShareOptionLocation => 'Include location';
+
+  @override
+  String get photosShareOptionOriginal => 'Original quality';
+
+  @override
+  String get photosShareManage => 'Manage existing links';
+
+  @override
+  String get photosShareDone => 'Done';
+
+  @override
+  String get photosShareOptionsEyebrow => 'OPTIONS';
+
+  @override
+  String get photosShareCreatedHint => 'Link created and copied to clipboard';
+
+  @override
   String get photosShareAlbum => 'Share Album';
 
   @override
