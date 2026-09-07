@@ -34,6 +34,10 @@ class SlideshowImageCache {
   final Set<String> _window = {};
   bool _disposed = false;
 
+  /// 统一解码缓存键：照片 id + 质量档位；读、写、窗口清理必须使用同一键形。
+  static String keyFor(String photoId, ImageQuality quality) =>
+      '$photoId-${quality.name}';
+
   /// 读取已解码位图（未解码返回 null）。
   ui.Image? peek(String id) => _decoded[id];
 
@@ -48,7 +52,15 @@ class SlideshowImageCache {
                   photos.length]
               .id,
       });
-    _decoded.removeWhere((id, _) => !_window.contains(id));
+    // 缓存键带质量档位，清理按“窗口内 id + 全部档位”的组合键匹配，
+    // 不能用裸照片 id 过滤，否则会误删全部带档位后缀的解码结果。
+    final validKeys = <String>{
+      for (final id in _window) ...[
+        keyFor(id, ImageQuality.thumbnail),
+        keyFor(id, ImageQuality.preview),
+      ],
+    };
+    _decoded.removeWhere((key, _) => !validKeys.contains(key));
   }
 
   /// Single-flight 获取解码位图。
@@ -65,7 +77,7 @@ class SlideshowImageCache {
   ) async {
     if (_disposed) return null;
     final id = item.id;
-    final key = '$id-${quality.name}';
+    final key = keyFor(id, quality);
     final cached = _decoded[key];
     if (cached != null) return cached;
     final loading = _loading[key];
@@ -78,7 +90,8 @@ class SlideshowImageCache {
     final screenSize = MediaQuery.sizeOf(context);
     final memCacheWidth = switch (quality) {
       ImageQuality.thumbnail => 400,
-      ImageQuality.preview => (screenSize.width * dpr).round().clamp(1, 2560),
+      // preview 档按物理像素宽解码，上限 4096 覆盖 4K 全宽显示且不超常规纹理上限。
+      ImageQuality.preview => (screenSize.width * dpr).round().clamp(1, 4096),
     };
     final cacheKey =
         quality == ImageQuality.thumbnail
@@ -91,14 +104,27 @@ class SlideshowImageCache {
     );
     final future = _decodeViaResolve(provider, context).timeout(_obtainTimeout);
     _loading[key] = future;
-    return future.then((image) {
-      // 窗口竞态防护：解码期间可能已切走并更新窗口，窗口外的图不登记；
-      // 切换调用方拿到位图后会显式 retain。
-      if (image != null && !_disposed && _window.contains(id)) {
-        _decoded[key] = image;
-      }
-      return image;
-    });
+    return future.then<ui.Image?>(
+      (image) {
+        if (identical(_loading[key], future)) {
+          _loading.remove(key);
+        }
+        // 窗口竞态防护：解码期间可能已切走并更新窗口，窗口外的图不登记；
+        // 切换调用方拿到位图后会显式 retain。
+        if (image != null && !_disposed && _window.contains(id)) {
+          _decoded[key] = image;
+        }
+        return image;
+      },
+      onError: (Object error) {
+        // 超时/解码异常归一为 null 并清理 single-flight 表，
+        // 避免失败的 Future 永久占据键位导致该照片后续无法重试。
+        if (identical(_loading[key], future)) {
+          _loading.remove(key);
+        }
+        return null;
+      },
+    );
   }
 
   /// 通过 ImageCache 解码并保留 stream 监听（live 保活，位图不被驱逐）。
@@ -123,10 +149,12 @@ class SlideshowImageCache {
     return completer.future;
   }
 
-  /// 强制写入缓存（切换目标：切换后必在窗口内，供交叉动画与回看使用）。
-  void retain(String id, ui.Image image) {
+  /// 强制写入缓存（切换目标 / 渐进升级：写入后必在窗口内，供交叉动画与回看使用）。
+  /// [key] 必须是 [keyFor] 生成的完整键；写入裸照片 id 会与读取键形错位，
+  /// 位图永远不会被 obtain 命中。
+  void retain(String key, ui.Image image) {
     if (_disposed) return;
-    _decoded[id] = image;
+    _decoded[key] = image;
   }
 
   /// 清空窗口引用。位图本体归 ImageCache 所有（live 保活），此处不 dispose。

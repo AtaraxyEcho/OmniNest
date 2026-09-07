@@ -105,11 +105,12 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       vsync: this,
       duration: _slideshowInterval,
     )..addStatusListener(_onProgressStatus);
-    // 交叉过渡控制器常驻：动画只更新层属性，层位图引用跨切换稳定。
+    // 交叉过渡控制器常驻：动画只更新层属性，层位图引用跨切换稳定；
+    // 完成清理由过渡自身的 completed 状态驱动，与动画时序严格同步，不依赖 Timer。
     _transitionController = AnimationController(
       vsync: this,
       duration: _transitionDuration,
-    );
+    )..addStatusListener(_onTransitionStatus);
     _transitionFade = CurvedAnimation(
       parent: _transitionController,
       curve: _transitionCurve,
@@ -125,6 +126,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   void _onProgressStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) _goNext();
+  }
+
+  /// 过渡动画到达终点（completed）时同步清理离场层并恢复静止态。
+  void _onTransitionStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && _transitioning) {
+      _onTransitionCompleted();
+    }
   }
 
   /// 交叉动画完成：清除离场层、背景跟进新图、窗口整理并预热邻居、
@@ -178,7 +186,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       if (!mounted) return;
       setState(() {
         if (image != null) {
-          _imageCache.retain(_photos[_current].id, image);
+          _imageCache.retain(
+            SlideshowImageCache.keyFor(
+              _photos[_current].id,
+              ImageQuality.thumbnail,
+            ),
+            image,
+          );
           _currentFrame = SlideFrame(_photos[_current], image);
           _phase = SlideshowPhase.ready;
         } else {
@@ -188,6 +202,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       if (image != null) {
         _progressController.forward(from: 0);
         _preloadNeighbors();
+        // 首图先以缩略图档立即显示，preview 高清档后台解码完成后原位替换。
+        unawaited(_upgradeCurrentImage());
       }
     } catch (error, stackTrace) {
       debugPrint('Initial slideshow image failed: $error');
@@ -203,6 +219,34 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     if (_phase != SlideshowPhase.failed) return;
     setState(() => _phase = SlideshowPhase.loading);
     await _loadInitialImage();
+  }
+
+  /// 当前帧为缩略图档时，后台解码 preview 档并原位替换（渐进升级）。
+  ///
+  /// 解码期间可能已切到其他照片，回写前按照片 id 校验，避免旧图覆盖新帧；
+  /// 位图已缓存或与当前帧同源时直接跳过。
+  Future<void> _upgradeCurrentImage() async {
+    final photo = _currentPhoto;
+    if (!_hasImage(photo)) return;
+    final image = await _imageCache.obtain(
+      photo,
+      ImageQuality.preview,
+      context,
+    );
+    if (!mounted || image == null) return;
+    final frame = _currentFrame;
+    if (frame == null || frame.photo.id != photo.id) return;
+    if (identical(frame.image, image)) return;
+    _imageCache.retain(
+      SlideshowImageCache.keyFor(photo.id, ImageQuality.preview),
+      image,
+    );
+    if (!mounted || _currentFrame?.photo.id != photo.id) return;
+    setState(() {
+      if (_currentFrame?.photo.id == photo.id) {
+        _currentFrame = SlideFrame(photo, image);
+      }
+    });
   }
 
   /// 当前缓存窗口由 SlideshowImageCache 内部管理（current ± radius）。
@@ -251,7 +295,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           context,
         );
         if (image != null) {
-          _imageCache.retain(_photos[index].id, image);
+          _imageCache.retain(
+            SlideshowImageCache.keyFor(
+              _photos[index].id,
+              ImageQuality.thumbnail,
+            ),
+            image,
+          );
         }
       }());
     }
@@ -266,15 +316,19 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
     final target = ((index % _photos.length) + _photos.length) % _photos.length;
     if (target == _current) return;
+    // 切换等待期间冻结进度条：解码耗时超过剩余间隔时，
+    // 进度完成回调不会再触发新一轮导航造成连续跳转。
+    _progressController.stop();
     // 无图照片（元数据条目）：无需位图，直接切换到占位层。
     if (!_hasImage(_photos[target])) {
       setState(() {
         _current = target;
         _transitioning = true;
       });
-      _transitionController.forward(from: 0);
-      _progressController.forward(from: 0);
-      Timer(_transitionDuration, _onTransitionCompleted);
+      if (_isPlaying) {
+        _progressController.forward(from: 0);
+      }
+      unawaited(_transitionController.forward(from: 0));
       return;
     }
     setState(() => _awaitingTarget = true);
@@ -302,7 +356,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       }
 
       // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
-      _imageCache.retain(_photos[target].id, image);
+      _imageCache.retain(
+        SlideshowImageCache.keyFor(_photos[target].id, ImageQuality.preview),
+        image,
+      );
       setState(() {
         // 保存旧帧用于离场动画；更新当前显示帧。
         _leavingFrame = _currentFrame;
@@ -313,11 +370,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         _transitioning = true;
       });
 
-      _transitionController.forward(from: 0);
-
-      _progressController.forward(from: 0);
-
-      Timer(_transitionDuration, _onTransitionCompleted);
+      if (_isPlaying) {
+        _progressController.forward(from: 0);
+      }
+      unawaited(_transitionController.forward(from: 0));
     } catch (error, stackTrace) {
       debugPrint('Slideshow transition failed: $error');
       debugPrintStack(stackTrace: stackTrace);
@@ -331,9 +387,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
   }
 
-  void _goNext() => _goTo(_current + 1);
+  void _goNext() => unawaited(_goTo(_current + 1));
 
-  void _goPrev() => _goTo(_current - 1);
+  void _goPrev() => unawaited(_goTo(_current - 1));
 
   void _togglePlay() {
     setState(() {
@@ -552,7 +608,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
               ),
             Positioned.fill(
               child: Opacity(
-                opacity: t.clamp(0.0, 1.0),
+                // 过渡控制器在静止态停在 0，入场层不透明度必须按过渡态门控，
+                // 否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
+                opacity: _transitioning ? t.clamp(0.0, 1.0) : 1.0,
                 child: _buildBlurredCover(entering.photo),
               ),
             ),
@@ -621,8 +679,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             Positioned.fill(
               child: _SlideLayer(
                 image: entering.image,
-                opacity: t.clamp(0.0, 1.0),
-                scale: 1.015 - 0.015 * t,
+                // 过渡控制器在静止态停在 0：入场层不透明度与缩放必须按
+                // 过渡态门控，否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
+                opacity: _transitioning ? t.clamp(0.0, 1.0) : 1.0,
+                scale: _transitioning ? 1.015 - 0.015 * t : 1.0,
               ),
             ),
           ],
@@ -971,7 +1031,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             Expanded(
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
-                onTap: () => _goTo(i),
+                onTap: () => unawaited(_goTo(i)),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 2),
                   child: RepaintBoundary(
@@ -1030,7 +1090,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             opacity: selected ? 1 : 0.45,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onTap: () => _goTo(index),
+              onTap: () => unawaited(_goTo(index)),
               child: Container(
                 width: 72,
                 height: 48,
@@ -1179,7 +1239,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
 /// 前景幻灯片层：contain 原图，进入/离场由父级过渡驱动。
 ///
-/// 模糊背景在页面级（_buildBackdrop），本层不再包含 ImageFiltered，
+/// 模糊背景在页面级（_buildBackdropLayers），本层不再包含 ImageFiltered，
 /// 避免逐帧动画触发全屏重滤波导致掉帧闪烁。
 ///
 /// 丝滑关键：图片子树由 [RepaintBoundary] 包裹且动画全程保持同一实例
@@ -1255,12 +1315,17 @@ class _InfoPanelButton extends StatelessWidget {
                 color: iconColor ?? Colors.white.withValues(alpha: 0.80),
               ),
               const SizedBox(width: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.80),
-                  fontSize: 12,
-                  letterSpacing: 0.04,
+              // 长文案（如英文 Unfavorite）超宽时省略，避免 Info 面板按钮溢出。
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.80),
+                    fontSize: 12,
+                    letterSpacing: 0.04,
+                  ),
                 ),
               ),
             ],
