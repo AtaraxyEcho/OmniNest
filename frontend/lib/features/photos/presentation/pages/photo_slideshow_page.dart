@@ -12,6 +12,7 @@ import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
+import 'package:omninest/features/photos/presentation/pages/photo_slideshow_image_cache.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 
@@ -22,7 +23,6 @@ const _slideshowInterval = Duration(seconds: 5);
 const _transitionDuration = Duration(milliseconds: 600);
 const _idleHideDuration = Duration(seconds: 3);
 const _curve = Cubic(0.76, 0.0, 0.24, 1.0);
-const _preloadRadius = 2;
 
 /// 全屏沉浸幻灯片页（设计稿：Photos Management UI Design）。
 ///
@@ -61,17 +61,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   late AnimationController _progressController;
   WindowChromeLease? _windowChromeLease;
 
-  /// 已解码位图缓存：SlideLayer 只接受这里的位图，禁止任何占位路径。
-  final Map<String, ui.Image> _decodedImages = {};
-
-  /// 进行中的解码任务（single-flight：同一张图只加载一次）。
-  final Map<String, Future<ui.Image?>> _loadingImages = {};
+  /// 解码位图缓存：独占位图生命周期（绕过 ImageCache），窗口化持有 current±1。
+  late final SlideshowImageCache _imageCache = SlideshowImageCache();
 
   /// TRANSITIONING 阶段：交叉动画进行中。
   bool _transitioning = false;
 
   /// 切换等待中：目标位图解码期间保持当前帧并忽略重复触发。
   bool _awaitingTarget = false;
+
+  /// 等待期间的最终导航目标：当前加载完成后链式推进（快速连点不丢操作）。
+  int? _pendingTarget;
 
   /// 背景层索引：独立于 current，动画完成后再跟进新图（避免背景突跳）。
   late int _backdropIndex;
@@ -95,6 +95,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       _windowChromeLease = ref
           .read(windowChromeControllerProvider.notifier)
           .acquireImmersive(owner: 'photos.slideshow');
+      _imageCache.updateWindow(_photos, _current);
       unawaited(_loadInitialImage());
     });
   }
@@ -108,6 +109,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _idleTimer?.cancel();
     _progressController.dispose();
     _windowChromeLease?.release();
+    // 释放位图缓存；后台仍在进行的解码完成后不会写回（cache 内部 _disposed 守卫）。
+    _imageCache.dispose();
     super.dispose();
   }
 
@@ -125,12 +128,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       return;
     }
     try {
-      final image = await _loadDecodedImage(_photos[_current]);
+      final image = await _imageCache.obtain(_photos[_current], context);
       if (!mounted) return;
       setState(() {
         if (image != null) {
-          // 切换目标必在窗口内，强制落缓存（preload 回调可能因窗口检查跳过写回）。
-          _decodedImages[_photos[_current].id] = image;
+          _imageCache.retain(_photos[_current].id, image);
           _phase = SlideshowPhase.ready;
         } else {
           _phase = SlideshowPhase.failed;
@@ -156,15 +158,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     await _loadInitialImage();
   }
 
-  /// 当前缓存窗口内的幻灯片 id（current ± _preloadRadius）。
-  Set<String> _windowIds() {
-    return {
-      for (var offset = -_preloadRadius; offset <= _preloadRadius; offset++)
-        _photos[((_current + offset) % _photos.length + _photos.length) %
-                _photos.length]
-            .id,
-    };
-  }
+  /// 当前缓存窗口由 SlideshowImageCache 内部管理（current ± radius）。
 
   /// 播放集合随来源类型实时扩展：库/收藏跟随分页控制器，影集/标签为全量查询。
   void _ensurePlaylist() {
@@ -196,6 +190,18 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   bool _hasImage(PhotoItem item) =>
       (item.sourceUrl ?? item.coverUrl)?.isNotEmpty == true;
 
+  /// 预加载优先级：下一张 > 上一张（窗口半径内的后台预热）。
+  void _preloadNeighbors() {
+    for (final offset in const [1, -1]) {
+      final index =
+          ((_current + offset) % _photos.length + _photos.length) %
+          _photos.length;
+      if (_hasImage(_photos[index])) {
+        unawaited(_imageCache.obtain(_photos[index], context));
+      }
+    }
+  }
+
   Future<void> _goTo(int index, {required bool next}) async {
     if (_transitioning ||
         _awaitingTarget ||
@@ -211,6 +217,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         _leaving = _current;
         _directionNext = next;
         _current = target;
+        _transitioning = true;
       });
       _progressController.forward(from: 0);
       Timer(_transitionDuration, () {
@@ -220,21 +227,24 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           _transitioning = false;
           _backdropIndex = _current;
         });
-        _pruneWindow();
+        _imageCache.updateWindow(_photos, _current);
       });
       return;
     }
     setState(() => _awaitingTarget = true);
 
     try {
-      final image = await _loadDecodedImage(_photos[target]);
+      final image = await _imageCache.obtain(_photos[target], context);
 
       if (!mounted) return;
 
       if (image == null) {
         // 加载失败（网络错误等）：保持当前图，允许用户重试；
         // 自动播放中重启进度计时，避免单张失败打断整个循环。
-        setState(() => _awaitingTarget = false);
+        setState(() {
+          _awaitingTarget = false;
+          _pendingTarget = null;
+        });
         if (_isPlaying) {
           _progressController.forward(from: 0);
         }
@@ -242,8 +252,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       }
 
       // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
-      // 切换目标必在窗口内，强制落缓存（preload 回调可能因窗口检查跳过写回）。
-      _decodedImages[_photos[target].id] = image;
+      _imageCache.retain(_photos[target].id, image);
       setState(() {
         _leaving = _current;
         _directionNext = next;
@@ -264,8 +273,15 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           _backdropIndex = _current;
         });
 
-        _pruneWindow();
+        _imageCache.updateWindow(_photos, _current);
         _preloadNeighbors();
+
+        // 消化等待期间记录的最终导航目标。
+        final pending = _pendingTarget;
+        _pendingTarget = null;
+        if (pending != null && pending != _current) {
+          unawaited(_goTo(pending, next: pending > _current));
+        }
       });
     } catch (error, stackTrace) {
       debugPrint('Slideshow transition failed: $error');
@@ -305,119 +321,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       if (!mounted) return;
       if (_isPlaying) setState(() => _controlsVisible = false);
     });
-  }
-
-  /// 统一 provider 构造：URL、cacheKey、Resize、DPR 完全由这里决定。
-  ImageProvider<Object>? _imageProvider(PhotoItem item, BuildContext context) {
-    final url = item.sourceUrl ?? item.coverUrl;
-    if (url == null || url.isEmpty) return null;
-    final dpr = MediaQuery.devicePixelRatioOf(context);
-    final screenSize = MediaQuery.sizeOf(context);
-    final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
-    return ResizeImage.resizeIfNeeded(
-      memCacheWidth,
-      null,
-      CachedNetworkImageProvider(
-        url,
-        cacheKey:
-            item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey,
-      ),
-    );
-  }
-
-  /// 解码 provider 为位图；失败（网络错误等）返回 null 而非抛出。
-  Future<ui.Image?> _decodeImage(ImageProvider<Object> provider) async {
-    final completer = Completer<ui.Image?>();
-    late final ImageStreamListener listener;
-    final stream = provider.resolve(createLocalImageConfiguration(context));
-    listener = ImageStreamListener(
-      (ImageInfo info, bool synchronousCall) {
-        // 解码完成即移除监听：位图由本页 _decodedImages 持有（窗口化缓存），
-        // 不依赖永久 listener 保活。
-        stream.removeListener(listener);
-        if (!completer.isCompleted) completer.complete(info.image);
-      },
-      onError: (Object error, StackTrace? stackTrace) {
-        stream.removeListener(listener);
-        if (!completer.isCompleted) completer.complete(null);
-      },
-    );
-    stream.addListener(listener);
-    return completer.future;
-  }
-
-  /// Single-flight 加载：同一张图无论被请求多少次只做一次真正加载/解码。
-  ///
-  /// 本方法绝不向调用方抛出异常：任何加载失败都归一为返回 null，
-  /// 保证 _goTo / 首图加载的状态机总能恢复正常（不会锁死 _awaitingTarget）。
-  Future<ui.Image?> _loadDecodedImage(PhotoItem item) async {
-    final id = item.id;
-    final cached = _decodedImages[id];
-    if (cached != null) {
-      return cached;
-    }
-    final loading = _loadingImages[id];
-    if (loading != null) {
-      return loading;
-    }
-    try {
-      final provider = _imageProvider(item, context);
-      if (provider == null) {
-        // 无图可解码的照片：null 由调用方按占位层处理。
-        return null;
-      }
-      final future = _decodeImage(provider)
-          .then((image) {
-            // 竞态防护：解码期间可能已切走并 prune 窗口，窗口外的图不写回缓存
-            //（_goTo 切换时会强制落缓存，不受影响）。
-            if (image != null && _windowIds().contains(id)) {
-              _decodedImages[id] = image;
-            }
-            return image;
-          })
-          .whenComplete(() => _loadingImages.remove(id));
-      _loadingImages[id] = future;
-      return await future;
-    } catch (error, stackTrace) {
-      _loadingImages.remove(id);
-      debugPrint('Failed to load slideshow image [$id]: $error');
-      debugPrintStack(stackTrace: stackTrace);
-      return null;
-    }
-  }
-
-  /// 后台预热（不参与 UI 状态判断）。
-  void _preloadImage(int index) {
-    if (index < 0 || index >= _photos.length) return;
-    unawaited(_loadDecodedImage(_photos[index]));
-  }
-
-  /// 预加载优先级：下一张 > 上一张 > 下下张 > 上上张。
-  void _preloadNeighbors() {
-    for (final offset in [1, -1, 2, -2]) {
-      final index =
-          ((_current + offset) % _photos.length + _photos.length) %
-          _photos.length;
-      _preloadImage(index);
-    }
-  }
-
-  /// 窗口化缓存：只保留 current ± 半径的解码位图，窗口外显式释放 native 内存。
-  ///
-  /// 所有权约定：_decodedImages 中的 ui.Image 由本页独占持有（解码完成即从
-  /// ImageStream 移除监听、不再受 ImageCache 生命周期管理），因此窗口外
-  /// 条目必须显式 dispose。调用时机固定在动画完成后，窗口外位图必然不在显示中。
-  void _pruneWindow() {
-    final keep = _windowIds();
-    final evicted = <ui.Image>[];
-    _decodedImages.removeWhere((id, image) {
-      if (keep.contains(id)) return false;
-      evicted.add(image);
-      return true;
-    });
-    for (final image in evicted) {
-      image.dispose();
-    }
   }
 
   void _toggleFullscreen() {
@@ -644,7 +547,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             child: _SlideLayer(
               key: ValueKey('leaving-$_leaving'),
               item: _photos[_leaving!],
-              decoded: _decodedImages[_photos[_leaving!].id],
+              decoded: _imageCache.peek(_photos[_leaving!].id),
               leaving: true,
               directionNext: _directionNext,
             ),
@@ -653,7 +556,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           child: _SlideLayer(
             key: ValueKey('current-${photo.id}'),
             item: photo,
-            decoded: _decodedImages[photo.id],
+            decoded: _imageCache.peek(photo.id),
             leaving: false,
             directionNext: _directionNext,
           ),
