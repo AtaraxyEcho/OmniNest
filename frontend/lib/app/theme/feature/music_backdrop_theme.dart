@@ -51,6 +51,14 @@ abstract final class MusicBackdropTheme {
         modalBackgroundColor: BackdropTranslucentColors.surface,
         surfaceTintColor: Colors.transparent,
       ),
+      popupMenuTheme: source.popupMenuTheme.copyWith(
+        color: BackdropTranslucentColors.surfaceHigh,
+        surfaceTintColor: Colors.transparent,
+        textStyle: TextStyle(
+          fontSize: 14,
+          color: BackdropTranslucentColors.onSurface,
+        ),
+      ),
       extensions: source.extensions.values.map(
         (extension) => switch (extension) {
           MusicColors value => _resolveMusicColors(value),

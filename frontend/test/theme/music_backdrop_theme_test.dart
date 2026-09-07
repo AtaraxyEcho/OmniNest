@@ -24,6 +24,22 @@ void main() {
     );
   });
 
+  test('浅色 Music 动态背景主题同步改写弹出菜单配色', () {
+    final resolved = MusicBackdropTheme.resolve(
+      OmniNestTheme.light(),
+      backdropActive: true,
+    );
+
+    expect(
+      resolved.popupMenuTheme.color,
+      BackdropTranslucentColors.surfaceHigh,
+    );
+    expect(
+      resolved.popupMenuTheme.textStyle?.color,
+      BackdropTranslucentColors.onSurface,
+    );
+  });
+
   test('未启用背景和深色主题保持原主题实例', () {
     final light = OmniNestTheme.light();
     final dark = OmniNestTheme.dark();

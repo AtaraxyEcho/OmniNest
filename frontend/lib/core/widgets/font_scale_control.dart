@@ -8,8 +8,8 @@ import 'package:omninest/core/utils/platform_helper.dart';
 
 /// 顶栏字体档位快捷入口：桌面端弹出锚定菜单，移动端弹出底部面板。
 ///
-/// 与设置页共享 [fontScaleControllerProvider] 单一状态源，档位切换经
-/// 根部 ComposedScaler 即时全局生效。
+/// 仅呈现五档名称与选中态勾选；与设置页共享 [fontScaleControllerProvider]
+/// 单一状态源，档位切换经根部 ComposedScaler 即时全局生效。
 class FontScaleControl extends ConsumerWidget {
   const FontScaleControl({super.key, this.size = 20, this.color});
 
@@ -26,11 +26,17 @@ class FontScaleControl extends ConsumerWidget {
   }
 
   Future<void> _openPanel(BuildContext context, WidgetRef ref) async {
+    final notifier = ref.read(fontScaleControllerProvider.notifier);
+    final current = ref.read(fontScaleControllerProvider);
     if (isMobilePlatform) {
-      await showModalBottomSheet<void>(
+      final selected = await showModalBottomSheet<FontScalePreset>(
         context: context,
-        builder: (sheetContext) => const _FontScaleSheet(),
+        builder: (sheetContext) => _FontScaleSheet(current: current),
       );
+      if (selected == null) {
+        return;
+      }
+      await notifier.setPreset(selected);
       return;
     }
     final RenderBox button = context.findRenderObject()! as RenderBox;
@@ -49,93 +55,50 @@ class FontScaleControl extends ConsumerWidget {
     final selected = await showMenu<FontScalePreset>(
       context: context,
       position: position,
-      constraints: const BoxConstraints(minWidth: 240),
-      items: _buildMenuItems(context, ref),
+      constraints: const BoxConstraints(minWidth: 168),
+      items: [
+        for (final preset in FontScalePreset.values)
+          PopupMenuItem<FontScalePreset>(
+            value: preset,
+            height: 44,
+            child: _FontScaleOptionRow(
+              preset: preset,
+              selected: preset == current,
+            ),
+          ),
+      ],
     );
-    if (selected == null || !context.mounted) {
+    if (selected == null) {
       return;
     }
-    await ref.read(fontScaleControllerProvider.notifier).setPreset(selected);
-  }
-
-  List<PopupMenuEntry<FontScalePreset>> _buildMenuItems(
-    BuildContext context,
-    WidgetRef ref,
-  ) {
-    final l10n = AppLocalizations.of(context);
-    final current = ref.read(fontScaleControllerProvider);
-    return [
-      PopupMenuItem<FontScalePreset>(
-        enabled: false,
-        height: 36,
-        child: Text(
-          l10n.fontScaleTitle,
-          style: Theme.of(context).textTheme.labelMedium,
-        ),
-      ),
-      for (final preset in FontScalePreset.values)
-        PopupMenuItem<FontScalePreset>(
-          value: preset,
-          height: 44,
-          child: _FontScaleOptionRow(
-            preset: preset,
-            selected: preset == current,
-          ),
-        ),
-      const PopupMenuDivider(),
-      PopupMenuItem<FontScalePreset>(
-        enabled: false,
-        height: 64,
-        padding: EdgeInsets.zero,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-          child: _FontScalePreview(preset: current),
-        ),
-      ),
-    ];
+    await notifier.setPreset(selected);
   }
 }
 
-/// 移动端底部面板，选项与预览和桌面菜单一致。
-class _FontScaleSheet extends ConsumerWidget {
-  const _FontScaleSheet();
+/// 移动端底部面板，选项与桌面菜单一致。
+class _FontScaleSheet extends StatelessWidget {
+  const _FontScaleSheet({required this.current});
+
+  final FontScalePreset current;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final current = ref.watch(fontScaleControllerProvider);
+  Widget build(BuildContext context) {
     return SafeArea(
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 4),
-              child: Text(
-                l10n.fontScaleTitle,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ),
             for (final preset in FontScalePreset.values)
               ListTile(
                 title: _FontScaleOptionRow(
                   preset: preset,
                   selected: preset == current,
                 ),
-                onTap:
-                    preset == current
-                        ? null
-                        : () => unawaited(
-                          ref
-                              .read(fontScaleControllerProvider.notifier)
-                              .setPreset(preset),
-                        ),
+                onTap: () {
+                  Navigator.of(context).pop(preset);
+                },
               ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 4, 24, 16),
-              child: _FontScalePreview(preset: current),
-            ),
           ],
         ),
       ),
@@ -151,8 +114,6 @@ class _FontScaleOptionRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final scale = preset.scale;
     return Row(
       children: [
         SizedBox(
@@ -166,16 +127,7 @@ class _FontScaleOptionRow extends StatelessWidget {
                   )
                   : null,
         ),
-        Text(presetLabel(l10n)),
-        if (scale != null) ...[
-          const SizedBox(width: 8),
-          Text(
-            '${(scale * 100).round()}%',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+        Text(presetLabel(AppLocalizations.of(context))),
       ],
     );
   }
@@ -188,42 +140,5 @@ class _FontScaleOptionRow extends StatelessWidget {
       FontScalePreset.comfortable => l10n.fontScaleComfortable,
       FontScalePreset.large => l10n.fontScaleLarge,
     };
-  }
-}
-
-class _FontScalePreview extends StatelessWidget {
-  const _FontScalePreview({required this.preset});
-
-  final FontScalePreset preset;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final colors = Theme.of(context).colorScheme;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: SizedBox(
-        width: double.infinity,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          child: MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(
-                preset.scale ?? MediaQuery.textScalerOf(context).scale(1),
-              ),
-            ),
-            child: Text(
-              l10n.fontScalePreviewSample,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 15, color: colors.onSurface),
-            ),
-          ),
-        ),
-      ),
-    );
   }
 }

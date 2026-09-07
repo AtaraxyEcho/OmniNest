@@ -28,20 +28,21 @@ void main() {
     );
   }
 
-  testWidgets('桌面端点击弹出档位菜单并回写状态', (tester) async {
+  testWidgets('桌面端点击弹出极简档位菜单并回写状态', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     try {
       await tester.pumpWidget(host(const FontScaleControl(size: 20)));
       await tester.tap(find.byType(FontScaleControl));
       await tester.pumpAndSettle();
 
-      expect(find.text('字体大小'), findsOneWidget);
       expect(find.text('跟随系统'), findsOneWidget);
       expect(find.text('紧凑'), findsOneWidget);
+      expect(find.text('标准'), findsOneWidget);
       expect(find.text('舒适'), findsOneWidget);
       expect(find.text('大'), findsOneWidget);
-      expect(find.text('115%'), findsOneWidget);
-      expect(find.text('你好，OmniNest'), findsOneWidget);
+      expect(find.text('字体大小'), findsNothing);
+      expect(find.text('115%'), findsNothing);
+      expect(find.text('你好，OmniNest'), findsNothing);
 
       await tester.tap(find.text('舒适'));
       await tester.pumpAndSettle();
@@ -52,16 +53,17 @@ void main() {
     }
   });
 
-  testWidgets('移动端点击弹出底部面板并回写状态', (tester) async {
+  testWidgets('移动端点击弹出极简底部面板并回写状态', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.android;
     try {
       await tester.pumpWidget(host(const FontScaleControl(size: 20)));
       await tester.tap(find.byType(FontScaleControl));
       await tester.pumpAndSettle();
 
-      expect(find.text('字体大小'), findsOneWidget);
+      expect(find.text('字体大小'), findsNothing);
       expect(find.text('跟随系统'), findsOneWidget);
       expect(find.text('大'), findsOneWidget);
+      expect(find.text('你好，OmniNest'), findsNothing);
 
       await tester.tap(find.text('大'));
       await tester.pumpAndSettle();
