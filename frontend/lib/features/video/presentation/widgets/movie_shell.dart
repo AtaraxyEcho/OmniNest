@@ -4,16 +4,14 @@ import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
-import 'package:omninest/core/widgets/workbench_top_bar.dart';
-import 'package:omninest/core/widgets/workbench_navigation_bar.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
-import 'package:omninest/features/files/media_import_ui.dart';
-import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/features/files/media_import_ui.dart';
+import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
-import 'package:omninest/features/video/presentation/widgets/movie_responsive_layout.dart';
+import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_section_transition.dart';
 
 part 'movie_shell_search_overlay.dart';
@@ -43,6 +41,21 @@ extension MovieSectionMeta on MovieSection {
       MovieSection.favorites => l10n.videoSectionFavorites,
       MovieSection.history => l10n.videoSectionHistory,
       MovieSection.management => l10n.videoSectionMovieAdmin,
+    };
+  }
+
+  /// 分区英文辅助标注（新版设计中的副标题样式）。
+  String subtitleEnOf(AppLocalizations l10n) {
+    return switch (this) {
+      MovieSection.movies => l10n.videoRedesignSubMovies,
+      MovieSection.tvShows => l10n.videoRedesignSubTvShows,
+      MovieSection.anime => l10n.videoRedesignSubAnime,
+      MovieSection.collections => l10n.videoRedesignSubCollections,
+      MovieSection.recent => l10n.videoRedesignSubRecent,
+      MovieSection.continueWatching => l10n.videoRedesignSubContinue,
+      MovieSection.favorites => l10n.videoRedesignSubFavorites,
+      MovieSection.history => l10n.videoRedesignSubHistory,
+      MovieSection.management => l10n.videoRedesignSubAdmin,
     };
   }
 
@@ -106,6 +119,7 @@ class MovieShell extends ConsumerStatefulWidget {
     this.trailing,
     this.onRefresh,
     this.childOwnsScroll = false,
+    this.counts = const {},
     super.key,
   });
 
@@ -115,6 +129,9 @@ class MovieShell extends ConsumerStatefulWidget {
   final Widget? trailing;
   final Future<void> Function()? onRefresh;
   final bool childOwnsScroll;
+
+  /// 各分区条目计数，展示在侧栏与抽屉导航项尾部。
+  final Map<MovieSection, int> counts;
 
   @override
   ConsumerState<MovieShell> createState() => _MovieShellState();
@@ -157,89 +174,75 @@ class _MovieShellState extends ConsumerState<MovieShell> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = !ResponsiveBreakpoints.isCompact(constraints.maxWidth);
+        // 平板宽度（md~lg）下侧栏折叠为图标栏。
+        final sidebarCollapsed = isWide && constraints.maxWidth < 1024;
         return Scaffold(
-          backgroundColor: context.videoColors.surface,
-          body: Stack(
+          backgroundColor: context.movieRedesign.background,
+          body: Column(
             children: [
-              const _MovieBackdrop(),
-              Column(
-                children: [
-                  if (isWide)
-                    MovieTopBar(
-                      section: effectiveSection,
-                      showMenu: false,
-                      canManage: canManage,
-                      onSectionSelected: _onSectionSelected,
-                      trailing: widget.trailing,
-                      onRefresh: widget.onRefresh,
-                      userName: user?.displayName ?? user?.username ?? 'M',
-                    ),
-                  if (isWide)
-                    Expanded(
-                      child: Row(
-                        children: [
-                          MovieSidebar(
-                            section: effectiveSection,
-                            canManage: canManage,
-                            closeOnSelect: false,
-                            onSectionSelected: _onSectionSelected,
-                          ),
-                          Expanded(
-                            child: LayoutBuilder(
-                              builder: (context, contentConstraints) {
-                                final horizontalPadding =
-                                    contentConstraints.maxWidth < 1000
-                                        ? 24.0
-                                        : contentConstraints.maxWidth < 1600
-                                        ? 32.0
-                                        : 40.0;
-                                final availableWidth =
-                                    contentConstraints.maxWidth -
-                                    horizontalPadding * 2;
-                                final contentWidth =
-                                    availableWidth
-                                        .clamp(0.0, movieDesktopContentMaxWidth)
-                                        .toDouble();
-                                final content = MovieSectionTransition(
-                                  section: effectiveSection,
-                                  child: widget.child,
-                                );
-                                if (widget.childOwnsScroll) {
-                                  return content;
-                                }
-                                return SingleChildScrollView(
-                                  padding: EdgeInsets.fromLTRB(
-                                    horizontalPadding,
-                                    32,
-                                    horizontalPadding,
-                                    48,
-                                  ),
-                                  child: Center(
-                                    child: SizedBox(
-                                      width: contentWidth,
-                                      child: content,
-                                    ),
-                                  ),
-                                );
-                              },
+              if (isWide)
+                MovieTopBar(
+                  section: effectiveSection,
+                  showMenu: false,
+                  canManage: canManage,
+                  onSectionSelected: _onSectionSelected,
+                  trailing: widget.trailing,
+                  onRefresh: widget.onRefresh,
+                  userName: user?.displayName ?? user?.username ?? 'M',
+                ),
+              Expanded(
+                child:
+                    isWide
+                        ? Row(
+                          children: [
+                            MovieSidebar(
+                              section: effectiveSection,
+                              canManage: canManage,
+                              counts: widget.counts,
+                              collapsed: sidebarCollapsed,
+                              closeOnSelect: false,
+                              onSectionSelected: _onSectionSelected,
                             ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    Expanded(
-                      child: _MovieMobileShell(
-                        section: effectiveSection,
-                        onSectionSelected: _onSectionSelected,
-                        canManage: canManage,
-                        onRefresh: widget.onRefresh,
-                        onBack: _onBack,
-                        childOwnsScroll: widget.childOwnsScroll,
-                        child: widget.child,
-                      ),
-                    ),
-                ],
+                            Expanded(
+                              child: LayoutBuilder(
+                                builder: (context, contentConstraints) {
+                                  final horizontalPadding =
+                                      contentConstraints.maxWidth < 1000
+                                          ? 16.0
+                                          : contentConstraints.maxWidth < 1600
+                                          ? 20.0
+                                          : 24.0;
+                                  final content = MovieSectionTransition(
+                                    section: effectiveSection,
+                                    child: widget.child,
+                                  );
+                                  if (widget.childOwnsScroll) {
+                                    return content;
+                                  }
+                                  return SingleChildScrollView(
+                                    padding: EdgeInsets.fromLTRB(
+                                      horizontalPadding,
+                                      20,
+                                      horizontalPadding,
+                                      48,
+                                    ),
+                                    child: content,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        )
+                        : _MovieMobileShell(
+                          section: effectiveSection,
+                          onSectionSelected: _onSectionSelected,
+                          canManage: canManage,
+                          counts: widget.counts,
+                          onRefresh: widget.onRefresh,
+                          onBack: _onBack,
+                          childOwnsScroll: widget.childOwnsScroll,
+                          child: widget.child,
+                        ),
               ),
             ],
           ),
@@ -271,25 +274,26 @@ class MovieTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.movieRedesign;
+    final text = context.movieRedesignText;
+    final l10n = AppLocalizations.of(context);
+    final wide = MediaQuery.sizeOf(context).width >= 640;
     return Container(
-      height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: context.videoColors.surfaceContainer.withValues(alpha: 0.70),
-        border: Border(
-          bottom: BorderSide(
-            color: context.videoColors.outlineVariant.withValues(alpha: 0.32),
-          ),
-        ),
+        color: palette.background,
+        border: Border(bottom: BorderSide(color: palette.border)),
       ),
       child: Row(
         children: [
           if (showMenu && canManage)
             PopupMenuButton<MovieSection>(
-              tooltip: AppLocalizations.of(context).videoSidebarGroupManagement,
+              tooltip: l10n.videoSidebarGroupManagement,
               icon: Icon(
                 Icons.admin_panel_settings_outlined,
-                color: context.videoColors.onSurfaceVariant,
+                size: 18,
+                color: palette.mutedForeground,
               ),
               onSelected: onSectionSelected,
               itemBuilder:
@@ -310,66 +314,53 @@ class MovieTopBar extends StatelessWidget {
                           )
                           .toList(),
             ),
-          TextButton.icon(
+          IconButton(
             onPressed: () => context.go('/portal'),
+            tooltip: l10n.videoBackToPortal,
             icon: Icon(
               Icons.arrow_back_rounded,
               size: 18,
-              color: context.videoColors.onSurfaceVariant,
-            ),
-            label: Text(
-              'Portal',
-              style: TextStyle(
-                fontSize: 13,
-                height: 18 / 13,
-                fontWeight: FontWeight.w700,
-                color: context.videoColors.onSurfaceVariant,
-              ),
+              color: palette.mutedForeground,
             ),
           ),
-          const SizedBox(width: 12),
-          Text(
-            section.labelOf(AppLocalizations.of(context)),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: context.videoColors.primary,
-              fontSize: 16,
-              height: 24 / 16,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0,
-            ),
-          ),
-          const SizedBox(width: 20),
+          if (wide) ...[
+            const SizedBox(width: 8),
+            Icon(Icons.movie_outlined, size: 16, color: palette.primary),
+            const SizedBox(width: 6),
+            Text('OmniNest', style: text.display(size: 16, height: 1.0)),
+            const SizedBox(width: 6),
+            Text(l10n.portalDockMovies, style: text.mono(size: 10)),
+          ],
+          const SizedBox(width: 16),
           if (trailing != null)
             Expanded(
-              child: Align(alignment: Alignment.centerRight, child: trailing!),
+              child: Align(alignment: Alignment.centerLeft, child: trailing!),
             )
           else
             const Spacer(),
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           Consumer(
             builder:
                 (context, ref, _) => MediaImportButton(
                   subsystemDirectory: 'Media',
                   onImportComplete: onRefresh ?? () async {},
                   style: ImportButtonStyle.iconButton,
-                  color: context.videoColors.onSurfaceVariant,
+                  color: palette.mutedForeground,
                 ),
           ),
-          const SizedBox(width: 4),
+          const SizedBox(width: 2),
           IconButton(
-            tooltip: AppLocalizations.of(context).videoRefreshTooltip,
+            tooltip: l10n.videoRefreshTooltip,
             onPressed: onRefresh,
             icon: Icon(
               Icons.refresh_rounded,
-              size: 20,
-              color: context.videoColors.onSurfaceVariant,
+              size: 18,
+              color: palette.mutedForeground,
             ),
           ),
+          const SizedBox(width: 2),
+          const NotificationIcon(size: 18),
           const SizedBox(width: 4),
-          const NotificationIcon(size: 20),
-          const SizedBox(width: 8),
           const UserAvatarMenu(),
         ],
       ),
@@ -382,6 +373,8 @@ class MovieSidebar extends StatelessWidget {
     required this.section,
     required this.canManage,
     required this.closeOnSelect,
+    this.counts = const {},
+    this.collapsed = false,
     this.onSectionSelected,
     super.key,
   });
@@ -389,70 +382,159 @@ class MovieSidebar extends StatelessWidget {
   final MovieSection section;
   final bool canManage;
   final bool closeOnSelect;
+  final Map<MovieSection, int> counts;
+  final bool collapsed;
   final ValueChanged<MovieSection>? onSectionSelected;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final palette = context.movieRedesign;
     final groups = movieSidebarGroups.entries.where(
       (entry) => canManage || entry.key != MovieSidebarGroup.management,
     );
     return Container(
-      width: 280,
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      width: collapsed ? 48 : 192,
       decoration: BoxDecoration(
-        color: context.videoColors.surfaceContainerLow,
-        border: Border(
-          right: BorderSide(
-            color: context.videoColors.outlineVariant.withValues(alpha: 0.24),
-          ),
-        ),
+        color: palette.background,
+        border: Border(right: BorderSide(color: palette.border)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: ListView(
+        padding: const EdgeInsets.symmetric(vertical: 12),
         children: [
-          const _MovieBrand(),
-          const SizedBox(height: 28),
-          Expanded(
-            child: ListView(
-              children: [
-                for (final entry in groups) ...[
-                  _MovieGroupLabel(entry.key.labelOf(l10n)),
-                  const SizedBox(height: 8),
-                  for (final item in entry.value)
-                    _MovieNavItem(
-                      item: item,
-                      label: item.labelOf(l10n),
-                      icon: item.icon,
-                      selected: item == section,
-                      closeOnSelect: closeOnSelect,
-                      onSectionSelected: onSectionSelected,
-                    ),
-                  const SizedBox(height: 18),
-                ],
-              ],
-            ),
-          ),
-          if (!canManage) const _MovieAccessHint(),
+          for (final entry in groups) ...[
+            if (!collapsed)
+              _MovieGroupLabel(entry.key.labelOf(l10n))
+            else
+              const SizedBox(height: 8),
+            for (final item in entry.value)
+              _MovieNavItem(
+                item: item,
+                label: item.labelOf(l10n),
+                subtitleEn: item.subtitleEnOf(l10n),
+                icon: item.icon,
+                selected: item == section,
+                count: counts[item],
+                collapsed: collapsed,
+                closeOnSelect: closeOnSelect,
+                onSectionSelected: onSectionSelected,
+              ),
+            const SizedBox(height: 4),
+          ],
         ],
       ),
     );
   }
 }
 
-class _MovieBackdrop extends StatelessWidget {
-  const _MovieBackdrop();
+class _MovieGroupLabel extends StatelessWidget {
+  const _MovieGroupLabel(this.label);
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(color: context.videoColors.surface),
-      child: const SizedBox.expand(),
+    final palette = context.movieRedesign;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Text(
+        label.toUpperCase(),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: context.movieRedesignText.mono(
+          size: 9,
+          color: palette.mutedForeground,
+        ),
+      ),
     );
   }
 }
 
-/// 移动端布局：底部导航栏 + 简洁 TopBar + 可滚动内容。
-///
-/// 底部导航 5 项：电影、剧集、动漫、收藏、更多。
-/// "更多"导航到浏览入口页面，包含合集、最近添加、继续观看、观看历史。
+class _MovieNavItem extends StatelessWidget {
+  const _MovieNavItem({
+    required this.item,
+    required this.label,
+    required this.subtitleEn,
+    required this.icon,
+    required this.selected,
+    required this.collapsed,
+    required this.closeOnSelect,
+    this.count,
+    this.onSectionSelected,
+  });
+
+  final MovieSection? item;
+  final String label;
+  final String subtitleEn;
+  final IconData icon;
+  final bool selected;
+  final bool collapsed;
+  final bool closeOnSelect;
+  final int? count;
+  final ValueChanged<MovieSection>? onSectionSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.movieRedesign;
+    final text = context.movieRedesignText;
+    final foreground = selected ? palette.foreground : palette.mutedForeground;
+    final content = SizedBox(
+      height: 36,
+      child: Row(
+        children: [
+          SizedBox(
+            width: collapsed ? 48 : 16,
+            child: Icon(
+              icon,
+              size: 15,
+              color: selected ? palette.primary : foreground,
+            ),
+          ),
+          if (!collapsed) ...[
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: text.body(
+                  size: 14,
+                  weight: FontWeight.w500,
+                  color: foreground,
+                ),
+              ),
+            ),
+            if (count != null)
+              Padding(
+                padding: const EdgeInsets.only(right: 16),
+                child: Text(
+                  count.toString(),
+                  style: text.mono(size: 10, color: palette.mutedForeground),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+    final button = Material(
+      color: selected ? palette.muted : Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          final target = item;
+          if (target != null) {
+            onSectionSelected?.call(target);
+          }
+          if (closeOnSelect) {
+            Navigator.of(context).maybePop();
+          }
+        },
+        hoverColor: palette.muted.withValues(alpha: 0.5),
+        child: content,
+      ),
+    );
+    if (collapsed) {
+      return Tooltip(message: '$label · $subtitleEn', child: button);
+    }
+    return button;
+  }
+}

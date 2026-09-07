@@ -3762,5 +3762,11 @@
   "videoRedesignSubContinue": "Continue Watching",
   "videoRedesignSubFavorites": "Favorites",
   "videoRedesignSubHistory": "Watch History",
-  "videoRedesignSubAdmin": "Library Management"
+  "videoRedesignSubAdmin": "Library Management",
+  "videoRedesignSearchHint": "搜索{section}…",
+  "@videoRedesignSearchHint": {
+    "placeholders": {
+      "section": {}
+    }
+  }
 }

@@ -8609,4 +8609,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoRedesignSubAdmin => 'Library Management';
+
+  @override
+  String videoRedesignSearchHint(Object section) {
+    return 'Search $section…';
+  }
 }

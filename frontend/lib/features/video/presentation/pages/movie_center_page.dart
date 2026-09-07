@@ -20,6 +20,7 @@ import 'package:omninest/features/video/presentation/widgets/movie_management.da
 import 'package:omninest/features/video/presentation/widgets/movie_poster_grid.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_series.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
+import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_responsive_layout.dart';
 
 class MovieCenterPage extends ConsumerWidget {
@@ -61,6 +62,17 @@ class MovieCenterPage extends ConsumerWidget {
                     ref
                         .read(movieCenterControllerProvider.notifier)
                         .selectSection,
+                counts: {
+                  MovieSection.movies: visibleState.dashboard.stats.movieCount,
+                  MovieSection.tvShows:
+                      visibleState.dashboard.stats.seriesCount,
+                  MovieSection.anime: visibleState.animeSeries.length,
+                  MovieSection.collections: visibleState.collections.length,
+                  MovieSection.continueWatching:
+                      visibleState.continueWatching.length,
+                  MovieSection.favorites: visibleState.favoriteItems.length,
+                  MovieSection.history: visibleState.watchHistory.length,
+                },
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -102,43 +114,53 @@ class _MovieSearchField extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final palette = context.movieRedesign;
     return ConstrainedBox(
       constraints: const BoxConstraints(maxWidth: 320),
       child: TextField(
         onChanged:
             ref.read(movieCenterControllerProvider.notifier).setSearchQuery,
         style: TextStyle(
-          color: context.videoColors.onSurface,
+          fontFamily: 'JetBrainsMono',
+          fontFamilyFallback: const ['NotoSansSC'],
+          color: palette.foreground,
           fontSize: 13,
           height: 18 / 13,
         ),
         decoration: InputDecoration(
           isDense: true,
           filled: true,
-          fillColor: context.videoColors.surfaceContainerHighest.withValues(
-            alpha: 0.40,
+          fillColor: palette.muted,
+          hintText: AppLocalizations.of(context).videoRedesignSearchHint(
+            state.section.labelOf(AppLocalizations.of(context)),
           ),
-          hintText: AppLocalizations.of(context).videoSearchLibraryHint,
           hintStyle: TextStyle(
-            color: context.videoColors.onSurfaceVariant.withValues(alpha: 0.6),
+            fontFamily: 'JetBrainsMono',
+            fontFamilyFallback: const ['NotoSansSC'],
+            color: palette.mutedForeground,
             fontSize: 13,
           ),
           prefixIcon: Icon(
             Icons.search_rounded,
-            color: context.videoColors.onSurfaceVariant.withValues(alpha: 0.8),
-            size: 20,
+            color: palette.mutedForeground,
+            size: 16,
           ),
-          prefixIconConstraints: BoxConstraints(minWidth: 40),
-          contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          prefixIconConstraints: const BoxConstraints(minWidth: 34),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 10,
+            vertical: 8,
+          ),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(999),
-            borderSide: BorderSide.none,
+            borderRadius: MovieRedesignPalette.borderRadius,
+            borderSide: BorderSide(color: palette.border),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: MovieRedesignPalette.borderRadius,
+            borderSide: BorderSide(color: palette.border),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(999),
-            borderSide: BorderSide(
-              color: context.videoColors.primary.withValues(alpha: 0.4),
-            ),
+            borderRadius: MovieRedesignPalette.borderRadius,
+            borderSide: BorderSide(color: palette.foreground),
           ),
         ),
       ),

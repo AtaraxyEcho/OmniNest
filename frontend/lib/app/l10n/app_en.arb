@@ -3888,5 +3888,11 @@
   "videoRedesignSubContinue": "Continue Watching",
   "videoRedesignSubFavorites": "Favorites",
   "videoRedesignSubHistory": "Watch History",
-  "videoRedesignSubAdmin": "Library Management"
+  "videoRedesignSubAdmin": "Library Management",
+  "videoRedesignSearchHint": "Search {section}…",
+  "@videoRedesignSearchHint": {
+    "placeholders": {
+      "section": {}
+    }
+  }
 }

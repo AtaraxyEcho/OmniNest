@@ -15737,6 +15737,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Library Management'**
   String get videoRedesignSubAdmin;
+
+  /// No description provided for @videoRedesignSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search {section}…'**
+  String videoRedesignSearchHint(Object section);
 }
 
 class _AppLocalizationsDelegate

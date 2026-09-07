@@ -8353,4 +8353,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoRedesignSubAdmin => 'Library Management';
+
+  @override
+  String videoRedesignSearchHint(Object section) {
+    return '搜索$section…';
+  }
 }
