@@ -310,6 +310,12 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('02 / 03'), findsOneWidget);
+
+    // 清场：推时钟消化自动播放的后续切换 Timer 与 idle 计时器，
+    // 避免测试结束时残留未触发 Timer（新状态机的就绪门控时序）。
+    await tester.pump(const Duration(seconds: 5));
+    await tester.pump(const Duration(milliseconds: 700));
+    await tester.pump(const Duration(seconds: 3));
   });
 
   testWidgets('箭头与滑动手势在单路由内切换照片', (tester) async {

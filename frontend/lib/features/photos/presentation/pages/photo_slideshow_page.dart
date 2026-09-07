@@ -19,7 +19,7 @@ const _slideshowInterval = Duration(seconds: 5);
 const _transitionDuration = Duration(milliseconds: 600);
 const _idleHideDuration = Duration(seconds: 3);
 const _curve = Cubic(0.76, 0.0, 0.24, 1.0);
-const _maxReadyWait = Duration(seconds: 2);
+const _preloadRadius = 2;
 
 /// 全屏沉浸幻灯片页（设计稿：Photos Management UI Design）。
 ///
@@ -58,12 +58,20 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   late AnimationController _progressController;
   WindowChromeLease? _windowChromeLease;
 
-  /// 已解码位图表：切换前必须就绪，动画直接绘制位图（无任何加载概念）。
+  /// 已解码位图缓存：SlideLayer 只接受这里的位图，禁止任何占位路径。
   final Map<String, ui.Image> _decodedImages = {};
 
-  /// 已完成首次解码的幻灯片 id（失败/超时也标记，防止重复等待）。
-  final Set<String> _readyImageIds = {};
+  /// 进行中的解码任务（single-flight：同一张图只加载一次）。
+  final Map<String, Future<ui.Image?>> _loadingImages = {};
+
+  /// PREPARING 阶段：目标位图未就绪，不切换 current。
+  bool _preparing = true;
+
+  /// TRANSITIONING 阶段：交叉动画进行中。
   bool _transitioning = false;
+
+  /// 背景层索引：独立于 current，动画完成后再跟进新图（避免背景突跳）。
+  late int _backdropIndex;
 
   @override
   void initState() {
@@ -75,16 +83,22 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       vsync: this,
       duration: _slideshowInterval,
     )..addStatusListener(_onProgressStatus);
+    _backdropIndex = _current;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _windowChromeLease = ref
           .read(windowChromeControllerProvider.notifier)
           .acquireImmersive(owner: 'photos.slideshow');
-      // 首张也必须就绪（否则点开即播的那张永远是模糊占位）。
-      unawaited(_ensureReady(_current));
-      _precacheNeighbors();
+      // 首张同样走就绪门控（否则点开即播的那张是占位）。
+      unawaited(
+        _loadDecodedImage(_photos[_current]).then((_) {
+          if (!mounted) return;
+          setState(() => _preparing = false);
+          _progressController.forward(from: 0);
+          _preloadNeighbors();
+        }),
+      );
     });
-    _progressController.forward(from: 0);
   }
 
   void _onProgressStatus(AnimationStatus status) {
@@ -128,29 +142,63 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
   }
 
+  bool _hasImage(PhotoItem item) =>
+      (item.sourceUrl ?? item.coverUrl)?.isNotEmpty == true;
+
   Future<void> _goTo(int index, {required bool next}) async {
-    if (_transitioning || _photos.isEmpty) return;
+    if (_transitioning || _preparing || _photos.isEmpty) return;
     final target = ((index % _photos.length) + _photos.length) % _photos.length;
     if (target == _current) return;
-    // 提前置位：等待目标图就绪期间忽略重复触发。
-    _transitioning = true;
-    // 主流幻灯片策略：目标原图完成解码前不启动动画（当前帧保持等待，
-    // 超时兜底强制推进），动画全程不携带占位图——消除"切换后二次加载"。
-    await _ensureReady(target);
-    if (!mounted) {
+    // 无图照片（元数据条目）：无需位图，直接切换到占位层。
+    if (!_hasImage(_photos[target])) {
+      setState(() {
+        _leaving = _current;
+        _directionNext = next;
+        _current = target;
+      });
+      _progressController.forward(from: 0);
+      Timer(_transitionDuration, () {
+        if (!mounted) return;
+        setState(() {
+          _leaving = null;
+          _transitioning = false;
+          _backdropIndex = _current;
+        });
+        _pruneWindow();
+      });
       return;
     }
+    // PREPARING：目标位图就绪前不切换 current（保持当前帧等待）。
+    _preparing = true;
+    final image = await _loadDecodedImage(_photos[target]);
+    if (!mounted) {
+      _preparing = false;
+      return;
+    }
+    if (image == null) {
+      // 加载失败（网络错误等）：保持当前图，允许用户重试。
+      setState(() => _preparing = false);
+      return;
+    }
+    // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
     setState(() {
       _leaving = _current;
       _directionNext = next;
       _current = target;
+      _preparing = false;
+      _transitioning = true;
     });
     _progressController.forward(from: 0);
-    _precacheNeighbors();
     Timer(_transitionDuration, () {
       if (!mounted) return;
-      setState(() => _leaving = null);
-      _transitioning = false;
+      setState(() {
+        _leaving = null;
+        _transitioning = false;
+        // 动画完成后背景才跟进新图（切换期间背景保持旧图稳定）。
+        _backdropIndex = _current;
+      });
+      _pruneWindow();
+      _preloadNeighbors();
     });
   }
 
@@ -181,60 +229,98 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     });
   }
 
-  /// 确保目标原图完成解码，并持有解码位图供 RawImage 直接绘制。
-  ///
-  /// 超时或失败也标记就绪（动画带占位图兜底推进），避免每次切换重复等待同一张失败图。
-  Future<void> _ensureReady(int index) async {
-    final item = _photos[index];
-    if (_readyImageIds.contains(item.id) &&
-        _decodedImages.containsKey(item.id)) {
-      return;
-    }
-    final provider = _rendererProvider(item, context);
-    if (provider == null) {
-      _readyImageIds.add(item.id);
-      return;
-    }
-    try {
-      final info = await _decodeToInfo(provider).timeout(_maxReadyWait);
-      if (!mounted) return;
-      _decodedImages[item.id] = info.image;
-      // 位图就绪后触发重建，让 RawImage 从模糊兜底切换到原图。
-      if (mounted) setState(() {});
-    } catch (_) {
-      // 失败/超时同样标记，避免每次切换重复等待同一张失败图
-    }
-    _readyImageIds.add(item.id);
+  /// 统一 provider 构造：URL、cacheKey、Resize、DPR 完全由这里决定。
+  ImageProvider<Object>? _imageProvider(PhotoItem item, BuildContext context) {
+    final url = item.sourceUrl ?? item.coverUrl;
+    if (url == null || url.isEmpty) return null;
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final screenSize = MediaQuery.sizeOf(context);
+    final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
+    return ResizeImage.resizeIfNeeded(
+      memCacheWidth,
+      null,
+      CachedNetworkImageProvider(
+        url,
+        cacheKey:
+            item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey,
+      ),
+    );
   }
 
-  /// 把 provider 解码为 ImageInfo（ImageCache 共享同一流，不产生重复下载）。
-  Future<ImageInfo> _decodeToInfo(ImageProvider provider) {
-    final completer = Completer<ImageInfo>();
+  /// 解码 provider 为位图；失败（网络错误等）返回 null 而非抛出。
+  Future<ui.Image?> _decodeImage(ImageProvider<Object> provider) async {
+    final completer = Completer<ui.Image?>();
     late final ImageStreamListener listener;
     final stream = provider.resolve(createLocalImageConfiguration(context));
     listener = ImageStreamListener(
       (ImageInfo info, bool synchronousCall) {
-        // 成功后保留监听不移除：持有活跃监听使 ImageCache 将该位图视为
-        // live 而免于 LRU 驱逐释放——否则 RawImage 持有的位图会被 dispose，
-        // 已显示的清晰图随后"变模糊/失效"。
-        if (!completer.isCompleted) completer.complete(info);
+        // 解码完成即移除监听：位图由本页 _decodedImages 持有（窗口化缓存），
+        // 不依赖永久 listener 保活。
+        stream.removeListener(listener);
+        if (!completer.isCompleted) completer.complete(info.image);
       },
       onError: (Object error, StackTrace? stackTrace) {
         stream.removeListener(listener);
-        if (!completer.isCompleted) {
-          completer.completeError(error, stackTrace);
-        }
+        if (!completer.isCompleted) completer.complete(null);
       },
     );
     stream.addListener(listener);
     return completer.future;
   }
 
-  void _precacheNeighbors() {
-    for (final index in [_current + 1, _current - 1]) {
-      if (index < 0 || index >= _photos.length) continue;
-      unawaited(_ensureReady(index));
+  /// Single-flight 加载：同一张图无论被请求多少次只做一次真正加载/解码。
+  Future<ui.Image?> _loadDecodedImage(PhotoItem item) {
+    final id = item.id;
+    final cached = _decodedImages[id];
+    if (cached != null) {
+      return Future.value(cached);
     }
+    final loading = _loadingImages[id];
+    if (loading != null) {
+      return loading;
+    }
+    final provider = _imageProvider(item, context);
+    if (provider == null) {
+      // 无图可解码的照片：null 由调用方按占位层处理。
+      return Future.value(null);
+    }
+    final future = _decodeImage(provider)
+        .then((image) {
+          if (image != null) {
+            _decodedImages[id] = image;
+          }
+          return image;
+        })
+        .whenComplete(() => _loadingImages.remove(id));
+    _loadingImages[id] = future;
+    return future;
+  }
+
+  /// 后台预热（不参与 UI 状态判断）。
+  void _preloadImage(int index) {
+    if (index < 0 || index >= _photos.length) return;
+    unawaited(_loadDecodedImage(_photos[index]));
+  }
+
+  /// 预加载优先级：下一张 > 上一张 > 下下张 > 上上张。
+  void _preloadNeighbors() {
+    for (final offset in [1, -1, 2, -2]) {
+      final index =
+          ((_current + offset) % _photos.length + _photos.length) %
+          _photos.length;
+      _preloadImage(index);
+    }
+  }
+
+  /// 窗口化缓存：只保留 current ± 半径的解码位图，释放更早的图。
+  void _pruneWindow() {
+    final keep = <String>{
+      for (var offset = -_preloadRadius; offset <= _preloadRadius; offset++)
+        _photos[((_current + offset) % _photos.length + _photos.length) %
+                _photos.length]
+            .id,
+    };
+    _decodedImages.removeWhere((id, _) => !keep.contains(id));
   }
 
   void _toggleFullscreen() {
@@ -356,8 +442,19 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                _buildBackdrop(photo),
-                _buildSlides(photo),
+                if (_decodedImages[photo.id] != null) ...[
+                  _buildBackdrop(_photos[_backdropIndex]),
+                  _buildSlides(photo),
+                ] else
+                  const Center(
+                    child: SizedBox.square(
+                      dimension: 28,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        color: Color(0x66FFFFFF),
+                      ),
+                    ),
+                  ),
                 _buildGradients(showControls),
                 _buildTopBar(context, photo, showControls),
                 if (_photos.length > 1) ...[
@@ -974,27 +1071,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 }
 
-/// 与渲染层逐字节一致的图片 provider（ResizeImage 包装，内存缓存 key 一致）。
-///
-/// 预取（_ensureReady）与渲染（_SlideLayer）必须共用本构造，否则内存缓存
-/// key 不一致会导致预取失效、每次切换都走"占位图→原图"两段显示。
-ImageProvider? _rendererProvider(PhotoItem item, BuildContext context) {
-  final url = item.sourceUrl ?? item.coverUrl;
-  if (url == null || url.isEmpty) return null;
-  final dpr = MediaQuery.devicePixelRatioOf(context);
-  final screenSize = MediaQuery.sizeOf(context);
-  final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
-  return ResizeImage.resizeIfNeeded(
-    memCacheWidth,
-    null,
-    CachedNetworkImageProvider(
-      url,
-      cacheKey:
-          item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey,
-    ),
-  );
-}
-
 /// 前景幻灯片层：contain 原图，进入/离场由父级过渡驱动。
 ///
 /// 模糊背景在页面级（_buildBackdrop），本层不再包含 ImageFiltered，
@@ -1014,7 +1090,8 @@ class _SlideLayer extends StatefulWidget {
 
   final PhotoItem item;
 
-  /// 已解码位图；就绪门控保证动画开始时非空，RawImage 直接绘制（零加载概念）。
+  /// 已解码位图；就绪门控保证有图照片动画开始时非空（RawImage 直接绘制）。
+  /// 无图照片（元数据条目）为 null，渲染为纯色占位层。
   final ui.Image? decoded;
   final bool leaving;
   final bool directionNext;
@@ -1050,30 +1127,17 @@ class _SlideLayerState extends State<_SlideLayer>
 
   @override
   Widget build(BuildContext context) {
-    final thumbUrl = widget.item.coverUrl;
-    // 解码位图直接绘制——渲染路径上没有任何网络/异步/占位状态机，
-    // "切换后再加载一次"在机制上不可能发生。无位图才以模糊缩略图兜底。
-    Widget image =
+    // 就绪门控保证动画开始时位图必到位：本层只绘制已解码位图，
+    // 渲染路径上没有任何网络/异步/占位状态机，不存在二次加载。
+    final image =
         widget.decoded != null
             ? RawImage(
               image: widget.decoded,
               fit: BoxFit.contain,
-              filterQuality: FilterQuality.medium,
+              // 主图 high：缩放动画期间最高采样质量；缩略图/backdrop 仍为 medium。
+              filterQuality: FilterQuality.high,
             )
-            : (thumbUrl != null && thumbUrl.isNotEmpty
-                ? ImageFiltered(
-                  imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                  child: CachedNetworkImage(
-                    imageUrl: thumbUrl,
-                    cacheKey: widget.item.coverCacheKey,
-                    fit: BoxFit.contain,
-                    fadeInDuration: Duration.zero,
-                    errorWidget:
-                        (context, url, error) =>
-                            const ColoredBox(color: Colors.black),
-                  ),
-                )
-                : const ColoredBox(color: Colors.black));
+            : const ColoredBox(color: Colors.black);
     return AnimatedBuilder(
       animation: _controller,
       child: RepaintBoundary(child: SizedBox.expand(child: image)),
