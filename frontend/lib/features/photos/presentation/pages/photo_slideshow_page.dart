@@ -124,20 +124,28 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       _preloadNeighbors();
       return;
     }
-    final image = await _loadDecodedImage(_photos[_current]);
-    if (!mounted) return;
-    setState(() {
+    try {
+      final image = await _loadDecodedImage(_photos[_current]);
+      if (!mounted) return;
+      setState(() {
+        if (image != null) {
+          // 切换目标必在窗口内，强制落缓存（preload 回调可能因窗口检查跳过写回）。
+          _decodedImages[_photos[_current].id] = image;
+          _phase = SlideshowPhase.ready;
+        } else {
+          _phase = SlideshowPhase.failed;
+        }
+      });
       if (image != null) {
-        // 切换目标必在窗口内，强制落缓存（preload 回调可能因窗口检查跳过写回）。
-        _decodedImages[_photos[_current].id] = image;
-        _phase = SlideshowPhase.ready;
-      } else {
-        _phase = SlideshowPhase.failed;
+        _progressController.forward(from: 0);
+        _preloadNeighbors();
       }
-    });
-    if (image != null) {
-      _progressController.forward(from: 0);
-      _preloadNeighbors();
+    } catch (error, stackTrace) {
+      debugPrint('Initial slideshow image failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+      setState(() => _phase = SlideshowPhase.failed);
     }
   }
 
@@ -216,39 +224,60 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       });
       return;
     }
-    // PREPARING：目标位图就绪前不切换 current（保持当前帧等待）。
-    _awaitingTarget = true;
-    final image = await _loadDecodedImage(_photos[target]);
-    if (!mounted) {
-      _awaitingTarget = false;
-      return;
-    }
-    if (image == null) {
-      // 加载失败（网络错误等）：保持当前图，允许用户重试。
-      setState(() => _awaitingTarget = false);
-      return;
-    }
-    // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
-    // 切换目标必在窗口内，强制落缓存（preload 回调可能因窗口检查跳过写回）。
-    _decodedImages[_photos[target].id] = image;
-    setState(() {
-      _leaving = _current;
-      _directionNext = next;
-      _current = target;
-      _transitioning = true;
-    });
-    _progressController.forward(from: 0);
-    Timer(_transitionDuration, () {
+    setState(() => _awaitingTarget = true);
+
+    try {
+      final image = await _loadDecodedImage(_photos[target]);
+
       if (!mounted) return;
+
+      if (image == null) {
+        // 加载失败（网络错误等）：保持当前图，允许用户重试；
+        // 自动播放中重启进度计时，避免单张失败打断整个循环。
+        setState(() => _awaitingTarget = false);
+        if (_isPlaying) {
+          _progressController.forward(from: 0);
+        }
+        return;
+      }
+
+      // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
+      // 切换目标必在窗口内，强制落缓存（preload 回调可能因窗口检查跳过写回）。
+      _decodedImages[_photos[target].id] = image;
       setState(() {
-        _leaving = null;
-        _transitioning = false;
-        // 动画完成后背景才跟进新图（切换期间背景保持旧图稳定）。
-        _backdropIndex = _current;
+        _leaving = _current;
+        _directionNext = next;
+        _current = target;
+        _awaitingTarget = false;
+        _transitioning = true;
       });
-      _pruneWindow();
-      _preloadNeighbors();
-    });
+
+      _progressController.forward(from: 0);
+
+      Timer(_transitionDuration, () {
+        if (!mounted) return;
+
+        setState(() {
+          _leaving = null;
+          _transitioning = false;
+          // 动画完成后背景才跟进新图（切换期间背景保持旧图稳定）。
+          _backdropIndex = _current;
+        });
+
+        _pruneWindow();
+        _preloadNeighbors();
+      });
+    } catch (error, stackTrace) {
+      debugPrint('Slideshow transition failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+
+      if (!mounted) return;
+
+      setState(() => _awaitingTarget = false);
+      if (_isPlaying) {
+        _progressController.forward(from: 0);
+      }
+    }
   }
 
   void _goNext() => _goTo(_current + 1, next: true);
@@ -318,33 +347,43 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 
   /// Single-flight 加载：同一张图无论被请求多少次只做一次真正加载/解码。
-  Future<ui.Image?> _loadDecodedImage(PhotoItem item) {
+  ///
+  /// 本方法绝不向调用方抛出异常：任何加载失败都归一为返回 null，
+  /// 保证 _goTo / 首图加载的状态机总能恢复正常（不会锁死 _awaitingTarget）。
+  Future<ui.Image?> _loadDecodedImage(PhotoItem item) async {
     final id = item.id;
     final cached = _decodedImages[id];
     if (cached != null) {
-      return Future.value(cached);
+      return cached;
     }
     final loading = _loadingImages[id];
     if (loading != null) {
       return loading;
     }
-    final provider = _imageProvider(item, context);
-    if (provider == null) {
-      // 无图可解码的照片：null 由调用方按占位层处理。
-      return Future.value(null);
+    try {
+      final provider = _imageProvider(item, context);
+      if (provider == null) {
+        // 无图可解码的照片：null 由调用方按占位层处理。
+        return null;
+      }
+      final future = _decodeImage(provider)
+          .then((image) {
+            // 竞态防护：解码期间可能已切走并 prune 窗口，窗口外的图不写回缓存
+            //（_goTo 切换时会强制落缓存，不受影响）。
+            if (image != null && _windowIds().contains(id)) {
+              _decodedImages[id] = image;
+            }
+            return image;
+          })
+          .whenComplete(() => _loadingImages.remove(id));
+      _loadingImages[id] = future;
+      return await future;
+    } catch (error, stackTrace) {
+      _loadingImages.remove(id);
+      debugPrint('Failed to load slideshow image [$id]: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      return null;
     }
-    final future = _decodeImage(provider)
-        .then((image) {
-          // 竞态防护：解码期间可能已切走并 prune 窗口，窗口外的图不写回缓存
-          //（_goTo 切换时会强制落缓存，不受影响）。
-          if (image != null && _windowIds().contains(id)) {
-            _decodedImages[id] = image;
-          }
-          return image;
-        })
-        .whenComplete(() => _loadingImages.remove(id));
-    _loadingImages[id] = future;
-    return future;
   }
 
   /// 后台预热（不参与 UI 状态判断）。
