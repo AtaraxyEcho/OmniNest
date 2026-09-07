@@ -13,7 +13,7 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_image_cache.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 
 /// 幻灯片帧：页面上的一层画面（照片 + 已解码位图）。
@@ -1132,92 +1132,22 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   // ─── Info 面板 ───
 
   Widget _buildInfoPanel(BuildContext context, PhotoItem photo) {
-    final preferZh = Localizations.localeOf(context).languageCode == 'zh';
-    final l10n = AppLocalizations.of(context);
-    // 与详情页信息侧栏共用同一字段集（buildPhotoInfoEntries），有值才渲染。
-    final rows = buildPhotoInfoEntries(photo, l10n, preferZh: preferZh);
     return Positioned(
       top: 0,
       right: 0,
       bottom: 0,
-      width: 288,
+      width: photoInfoPanelWidth,
       child: AnimatedSlide(
         offset: _showInfo ? Offset.zero : const Offset(1, 0),
         duration: const Duration(milliseconds: 450),
         curve: Curves.easeOutCubic,
-        child: Container(
-          color: const Color(0xF00A0A0A),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  AppLocalizations.of(context).photosPhotoInfo,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.30),
-                    fontSize: 10,
-                    letterSpacing: 0.14,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  photo.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.w300,
-                  ),
-                ),
-                const SizedBox(height: 32),
-                if (rows.isEmpty)
-                  Text(
-                    '—',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.35),
-                      fontSize: 12,
-                    ),
-                  )
-                else
-                  for (final row in rows)
-                    PhotoInfoRow(label: row.label, value: row.value),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: PhotoPanelActionButton(
-                        icon:
-                            photo.favorite
-                                ? Icons.favorite_rounded
-                                : Icons.favorite_border_rounded,
-                        iconColor:
-                            photo.favorite
-                                ? const Color(0xFFFB7185)
-                                : Colors.white.withValues(alpha: 0.80),
-                        label:
-                            photo.favorite
-                                ? AppLocalizations.of(context).photosUnfavorite
-                                : AppLocalizations.of(context).photosFavorite,
-                        onTap: () => unawaited(_toggleFavorite(photo)),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: PhotoPanelActionButton(
-                        icon: Icons.share_rounded,
-                        label: l10n.photosSharePhoto,
-                        onTap:
-                            () => setState(() {
-                              _showInfo = false;
-                              _showShare = true;
-                            }),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+        child: PhotoInfoPanel(
+          photo: photo,
+          onShare:
+              () => setState(() {
+                _showInfo = false;
+                _showShare = true;
+              }),
         ),
       ),
     );

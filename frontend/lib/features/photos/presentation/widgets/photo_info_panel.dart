@@ -2,19 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
+import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
-import 'package:omninest/features/photos/application/photo_controller.dart';
 
-/// EXIF 信息侧栏：与幻灯片 Info 面板统一的恒暗设计（w-72 全高侧栏）。
+/// 信息侧栏宽度：与分享侧栏一致（幻灯片与详情页共用）。
+const double photoInfoPanelWidth = 320;
+
+/// 照片信息面板：幻灯片与详情页共用的恒暗信息侧栏内容。
 ///
-/// 视觉规格与幻灯片一致：0A0A0A 面板底、眉题 + 标题头部、
-/// `buildPhotoInfoEntries` 平铺字段行；详情页独有的 AI 识别 / 描述 /
-/// 标签交互保留在字段区下方，使用同一暗色语言。
-class PhotoExifPanel extends ConsumerWidget {
-  const PhotoExifPanel({super.key, required this.photo, required this.onShare});
+/// 视觉规格：0A0A0A 面板底、PHOTO INFO 眉题 + 标题头部、
+/// `buildPhotoInfoEntries` 平铺字段行（有值才渲染）、AI 识别 / 描述 /
+/// 标签分区（数据存在时渲染）、底部 Like/Share 操作。
+///
+/// 收藏与标签等状态经详情 provider 读取，切换后面板立即回显。
+class PhotoInfoPanel extends ConsumerWidget {
+  const PhotoInfoPanel({required this.photo, required this.onShare, super.key});
 
   final PhotoItem photo;
 
@@ -26,11 +31,21 @@ class PhotoExifPanel extends ConsumerWidget {
   static const Color _pillBackground = Color(0x12FFFFFF);
   static const Color _pillForeground = Color(0x99FFFFFF);
 
+  /// 眉题/分区标题样式。
+  static const TextStyle _eyebrowStyle = TextStyle(
+    color: Color(0x4DFFFFFF),
+    fontSize: 10,
+    letterSpacing: 0.14,
+  );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final preferZh = Localizations.localeOf(context).languageCode == 'zh';
-    final rows = buildPhotoInfoEntries(photo, l10n, preferZh: preferZh);
+    // 收藏/标签等字段以详情 provider 的最新数据为准，切换后立即回显。
+    final fresh =
+        ref.watch(photoDetailProvider(photo.id)).asData?.value ?? photo;
+    final rows = buildPhotoInfoEntries(fresh, l10n, preferZh: preferZh);
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -38,18 +53,16 @@ class PhotoExifPanel extends ConsumerWidget {
         border: Border(left: BorderSide(color: _borderColor)),
       ),
       child: SingleChildScrollView(
-        // 顶部留白避开浮层顶栏（设计稿 pt-16）。
         padding: const EdgeInsets.fromLTRB(24, 68, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              AppLocalizations.of(context).photosPhotoInfo,
-              style: _eyebrowStyle,
-            ),
+            Text(l10n.photosPhotoInfo, style: _eyebrowStyle),
             const SizedBox(height: 4),
             Text(
-              photo.title,
+              fresh.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 20,
@@ -68,27 +81,27 @@ class PhotoExifPanel extends ConsumerWidget {
             else
               for (final row in rows)
                 PhotoInfoRow(label: row.label, value: row.value),
-            ..._buildAiSection(context),
-            ..._buildDescriptionSection(context),
-            _buildTagSection(context, ref),
+            ..._buildAiSection(context, fresh),
+            ..._buildDescriptionSection(context, fresh),
+            _buildTagSection(context, ref, fresh),
             const SizedBox(height: 24),
             Row(
               children: [
                 Expanded(
                   child: PhotoPanelActionButton(
                     icon:
-                        photo.favorite
+                        fresh.favorite
                             ? Icons.favorite_rounded
                             : Icons.favorite_border_rounded,
                     iconColor:
-                        photo.favorite
+                        fresh.favorite
                             ? const Color(0xFFFB7185)
                             : Colors.white.withValues(alpha: 0.80),
                     label:
-                        photo.favorite
+                        fresh.favorite
                             ? AppLocalizations.of(context).photosUnfavorite
                             : AppLocalizations.of(context).photosFavorite,
-                    onTap: () => _toggleFavorite(context, ref),
+                    onTap: () => _toggleFavorite(context, ref, fresh),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -107,16 +120,31 @@ class PhotoExifPanel extends ConsumerWidget {
     );
   }
 
-  /// 眉题/分区标题样式，与幻灯片 Info 面板一致。
-  static const TextStyle _eyebrowStyle = TextStyle(
-    color: Color(0x4DFFFFFF),
-    fontSize: 10,
-    letterSpacing: 0.14,
-  );
+  /// 切换收藏；成功后刷新详情数据，面板经 provider watch 自动回显。
+  Future<void> _toggleFavorite(
+    BuildContext context,
+    WidgetRef ref,
+    PhotoItem fresh,
+  ) async {
+    try {
+      await ref
+          .read(photoCenterControllerProvider.notifier)
+          .toggleFavorite(fresh.id, currentFavorite: fresh.favorite);
+      if (!context.mounted) return;
+      ref.invalidate(photoDetailProvider(fresh.id));
+    } on Exception {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).photosOperationFailed),
+        ),
+      );
+    }
+  }
 
   /// AI 识别分区：按命名空间分组的识别标签胶囊。
-  List<Widget> _buildAiSection(BuildContext context) {
-    final analysis = photo.contentAnalysis;
+  List<Widget> _buildAiSection(BuildContext context, PhotoItem fresh) {
+    final analysis = fresh.contentAnalysis;
     if (analysis?.labels.isNotEmpty != true) {
       return const [];
     }
@@ -155,8 +183,8 @@ class PhotoExifPanel extends ConsumerWidget {
   }
 
   /// 描述分区：照片备注文本。
-  List<Widget> _buildDescriptionSection(BuildContext context) {
-    final description = photo.description;
+  List<Widget> _buildDescriptionSection(BuildContext context, PhotoItem fresh) {
+    final description = fresh.description;
     if (description == null || description.isEmpty) {
       return const [];
     }
@@ -179,7 +207,11 @@ class PhotoExifPanel extends ConsumerWidget {
   }
 
   /// 标签分区：可移除的用户标签胶囊与添加入口。
-  Widget _buildTagSection(BuildContext context, WidgetRef ref) {
+  Widget _buildTagSection(
+    BuildContext context,
+    WidgetRef ref,
+    PhotoItem fresh,
+  ) {
     final colors = context.frameColors;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -191,7 +223,7 @@ class PhotoExifPanel extends ConsumerWidget {
           spacing: 6,
           runSpacing: 6,
           children: [
-            for (final tag in photo.tags)
+            for (final tag in fresh.tags)
               _InfoPill(
                 text: _localizedPhotoAiCategory(context, tag),
                 background: _pillBackground,
@@ -200,9 +232,9 @@ class PhotoExifPanel extends ConsumerWidget {
                   try {
                     await ref
                         .read(photoCenterControllerProvider.notifier)
-                        .removeTag(photo.id, tag);
+                        .removeTag(fresh.id, tag);
                     if (!context.mounted) return;
-                    ref.invalidate(photoDetailProvider(photo.id));
+                    ref.invalidate(photoDetailProvider(fresh.id));
                   } on Exception {
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -220,7 +252,7 @@ class PhotoExifPanel extends ConsumerWidget {
               background: colors.accent.withValues(alpha: 0.12),
               foreground: colors.accent,
               icon: Icons.add,
-              onRemoved: () => _showAddTagDialog(context, ref),
+              onRemoved: () => _showAddTagDialog(context, ref, fresh.id),
             ),
           ],
         ),
@@ -228,25 +260,11 @@ class PhotoExifPanel extends ConsumerWidget {
     );
   }
 
-  /// 切换收藏；成功后刷新详情数据（与顶栏心形同一数据路径）。
-  Future<void> _toggleFavorite(BuildContext context, WidgetRef ref) async {
-    try {
-      await ref
-          .read(photoCenterControllerProvider.notifier)
-          .toggleFavorite(photo.id, currentFavorite: photo.favorite);
-      if (!context.mounted) return;
-      ref.invalidate(photoDetailProvider(photo.id));
-    } on Exception {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context).photosOperationFailed),
-        ),
-      );
-    }
-  }
-
-  Future<void> _showAddTagDialog(BuildContext context, WidgetRef ref) async {
+  Future<void> _showAddTagDialog(
+    BuildContext context,
+    WidgetRef ref,
+    String photoId,
+  ) async {
     final tag = await showDialog<String>(
       context: context,
       builder:
@@ -301,9 +319,9 @@ class PhotoExifPanel extends ConsumerWidget {
       try {
         await ref
             .read(photoCenterControllerProvider.notifier)
-            .addTag(photo.id, tag);
+            .addTag(photoId, tag);
         if (!context.mounted) return;
-        ref.invalidate(photoDetailProvider(photo.id));
+        ref.invalidate(photoDetailProvider(photoId));
       } on Exception {
         if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(

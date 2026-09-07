@@ -6,7 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_exif_sidebar.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
@@ -23,8 +23,8 @@ import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
-/// 桌面端 EXIF 侧栏宽度：设计稿 w-72（288px）。
-const double _kExifPanelWidth = 288;
+/// 桌面端信息侧栏宽度：与幻灯片信息面板及分享侧栏一致。
+const double _kExifPanelWidth = photoInfoPanelWidth;
 
 /// 照片详情/查看器页面
 class PhotoDetailPage extends ConsumerWidget {
@@ -478,7 +478,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                     _showInfo
                         ? SizedBox(
                           width: _kExifPanelWidth,
-                          child: PhotoExifPanel(
+                          child: PhotoInfoPanel(
                             photo: currentFresh,
                             onShare: _openSharePanel,
                           ),
@@ -492,7 +492,10 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
           Positioned.fill(
             child: LayoutBuilder(
               builder: (context, constraints) {
-                final width = (constraints.maxWidth * 0.86).clamp(288.0, 360.0);
+                final width = (constraints.maxWidth * 0.86).clamp(
+                  photoInfoPanelWidth,
+                  400.0,
+                );
                 return Stack(
                   children: [
                     Positioned.fill(
@@ -514,7 +517,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                       right: 0,
                       bottom: 0,
                       width: width,
-                      child: PhotoExifPanel(
+                      child: PhotoInfoPanel(
                         photo: currentFresh,
                         onShare: _openSharePanel,
                       ),

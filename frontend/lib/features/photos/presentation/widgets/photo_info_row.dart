@@ -126,9 +126,8 @@ class PhotoPanelActionButton extends StatelessWidget {
   }
 }
 
-/// 幻灯片 Info 与详情页信息侧栏共用的统一字段集，有值才渲染、顺序一致。
-///
-/// 与 PhotoExifPanel 的分组字段保持同步：新增字段需两处同改。
+/// 幻灯片 Info 与详情页信息侧栏（共享 PhotoInfoPanel）的统一字段集，
+/// 有值才渲染、顺序一致。新增字段只改此处，两个宿主自动同步。
 List<PhotoInfoEntry> buildPhotoInfoEntries(
   PhotoItem photo,
   AppLocalizations l10n, {

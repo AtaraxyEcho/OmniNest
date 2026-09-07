@@ -16,8 +16,8 @@ import 'package:omninest/features/photos/presentation/pages/photo_browse_page.da
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_exif_sidebar.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
 
 class _MockPhotoRepository extends Mock implements PhotoRepository {}
@@ -376,7 +376,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final panelSize = tester.getSize(find.byType(AnimatedSize));
-    expect(panelSize.width, 288);
+    expect(panelSize.width, photoInfoPanelWidth);
     expect(panelSize.height, 800);
     expect(find.text('Photo Info'), findsOneWidget);
   });
@@ -414,7 +414,7 @@ void main() {
     final panel = tester.widget<Container>(
       find
           .descendant(
-            of: find.byType(PhotoExifPanel),
+            of: find.byType(PhotoInfoPanel),
             matching: find.byType(Container),
           )
           .first,

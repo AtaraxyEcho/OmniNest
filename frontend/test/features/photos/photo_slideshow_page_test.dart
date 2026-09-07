@@ -12,6 +12,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_image_cache.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
 
@@ -233,6 +234,21 @@ Future<void> _warmImageCache(
   });
 }
 
+/// 按照片 id 返回照片的仓储桩：信息面板 watch 详情 provider 时不触真实网络。
+class _StubPhotoRepository implements PhotoRepository {
+  _StubPhotoRepository(this.photos);
+
+  final List<PhotoItem> photos;
+
+  @override
+  Future<PhotoItem> getPhoto(String photoId) async =>
+      photos.firstWhere((p) => p.id == photoId, orElse: () => photos.first);
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError(invocation.memberName.toString());
+}
+
 Future<void> _pumpSlideshow(WidgetTester tester, List<PhotoItem> photos) async {
   tester.view.physicalSize = const Size(1280, 800);
   tester.view.devicePixelRatio = 1;
@@ -244,6 +260,7 @@ Future<void> _pumpSlideshow(WidgetTester tester, List<PhotoItem> photos) async {
         photoCenterControllerProvider.overrideWith(
           () => _FakePhotoCenterController(),
         ),
+        photoRepositoryProvider.overrideWithValue(_StubPhotoRepository(photos)),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
