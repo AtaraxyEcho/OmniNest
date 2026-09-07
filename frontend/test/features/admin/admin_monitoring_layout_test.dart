@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
+import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
 
 void main() {
   testWidgets('监控列表使用独立限高滚动区域', (tester) async {
@@ -67,4 +68,39 @@ void main() {
     }
     expect(tester.takeException(), isNull);
   });
+
+  for (final scale in <double>[1.15, 1.3]) {
+    testWidgets('监控页指标卡在字体档位 $scale 下不溢出', (tester) async {
+      tester.view.physicalSize = const Size(1920, 1080);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: OmniNestTheme.light(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          builder: (context, child) {
+            return MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: TextScaler.linear(scale)),
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
+          home: const Scaffold(
+            body: SingleChildScrollView(
+              child: AdminMonitoringPage(view: AdminMonitoringView()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AdminMetricCard), findsNWidgets(3));
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

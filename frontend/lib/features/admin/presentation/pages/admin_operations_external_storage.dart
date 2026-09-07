@@ -138,6 +138,9 @@ class _MetricGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 单卡高度随字体档位放大，115%/130% 下标题、数值与 supporting 行不溢出。
+    final textScale =
+        MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5).toDouble();
     return LayoutBuilder(
       builder: (context, constraints) {
         final columns = constraints.maxWidth >= 560 ? 3 : 1;
@@ -145,7 +148,7 @@ class _MetricGrid extends StatelessWidget {
           crossAxisCount: columns,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          mainAxisExtent: mainAxisExtent,
+          mainAxisExtent: mainAxisExtent * textScale,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: children,
