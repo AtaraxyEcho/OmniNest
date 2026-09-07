@@ -167,36 +167,28 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 
   void _precacheNeighbors() {
-    // 预取与渲染使用同宽降采样，保证预热命中渲染用的缓存条目。
+    // 预取 provider 必须与渲染层逐字节一致，否则内存缓存 key 不同、预热无效：
+    // 渲染层 = ResizeImage.resizeIfNeeded(memCacheWidth, null, provider)（OctoImage 内部实现），
+    // URL 也必须取渲染所用的列表快照，而非 detailProvider 新签名的地址。
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final screenSize = MediaQuery.sizeOf(context);
     final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
     for (final index in [_current - 1, _current + 1]) {
       if (index < 0 || index >= _photos.length) continue;
-      final id = _photos[index].id;
-      if (!_precached.add(id)) continue;
-      unawaited(
-        ref
-            .read(photoDetailProvider(id).future)
-            .then((item) {
-              if (!mounted) return null;
-              final url = item.sourceUrl ?? item.coverUrl;
-              if (url == null || url.isEmpty) return null;
-              // 预取为尽力而为，context 仅用于缓存查找。
-              return precacheImage(
-                CachedNetworkImageProvider(
-                  url,
-                  cacheKey:
-                      item.sourceUrl != null
-                          ? item.sourceCacheKey
-                          : item.coverCacheKey,
-                  maxWidth: memCacheWidth,
-                ),
-                context,
-              );
-            })
-            .catchError((_) {}),
+      final item = _photos[index];
+      if (!_precached.add(item.id)) continue;
+      final url = item.sourceUrl ?? item.coverUrl;
+      if (url == null || url.isEmpty) continue;
+      final provider = ResizeImage.resizeIfNeeded(
+        memCacheWidth,
+        null,
+        CachedNetworkImageProvider(
+          url,
+          cacheKey:
+              item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey,
+        ),
       );
+      unawaited(precacheImage(provider, context).catchError((Object _) {}));
     }
   }
 
