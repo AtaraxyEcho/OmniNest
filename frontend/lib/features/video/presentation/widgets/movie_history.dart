@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
-import 'package:omninest/features/video/presentation/widgets/movie_common_widgets.dart';
+import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_empty_state.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_history_row.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_section_header.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_time.dart';
 
+/// 新版观看历史区：标题 + 清空入口 + 缩略图行列表。
 class HistorySection extends StatelessWidget {
   const HistorySection({
     required this.items,
@@ -19,89 +23,88 @@ class HistorySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.movieRedesign;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: MovieSectionHeading(
-                title: AppLocalizations.of(context).videoSectionHistory,
-                subtitle: AppLocalizations.of(context).videoHistorySubtitle,
+              child: MovieRedesignSectionHeader(
+                title: l10n.videoSectionHistory,
+                subtitleEn: l10n.videoRedesignSubHistory,
+                count: items.isEmpty ? null : items.length,
+                subtitle: l10n.videoHistorySubtitle,
               ),
             ),
             if (onClearAll != null && items.isNotEmpty)
-              TextButton.icon(
-                onPressed: onClearAll,
-                icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-                label: Text(AppLocalizations.of(context).videoClearHistory),
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: onClearAll,
+                    borderRadius: MovieRedesignPalette.borderRadius,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      child: Text(
+                        l10n.videoClearHistory,
+                        style: context.movieRedesignText.mono(
+                          size: 12,
+                          color: palette.mutedForeground,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
           ],
         ),
-        const SizedBox(height: 22),
         if (items.isEmpty)
-          EmptyMovieState(
-            message: AppLocalizations.of(context).videoNoWatchHistory,
+          MovieRedesignEmptyState(
+            icon: Icons.manage_history_rounded,
+            title: l10n.videoNoWatchHistory,
+            subtitle: l10n.videoRedesignNoHistoryHint,
           )
         else
-          for (final item in items) HistoryRow(item: item, onDelete: onDelete),
+          MovieRedesignHistoryList(
+            entries: [
+              for (final item in items)
+                MovieRedesignHistoryEntry(
+                  title: item.title,
+                  subtitle: _subtitleOf(context, item),
+                  timeText: movieRedesignRelativeTime(context, item.playedAt),
+                  progressText: _progressText(item),
+                  thumbUrl: item.posterUrl,
+                  onTap:
+                      item.videoItemId.isEmpty
+                          ? null
+                          : () => context.go('/video/${item.videoItemId}/play'),
+                  onDelete: onDelete == null ? null : () => onDelete!(item),
+                ),
+            ],
+          ),
       ],
     );
   }
-}
 
-class HistoryRow extends StatelessWidget {
-  const HistoryRow({required this.item, this.onDelete, super.key});
+  String _subtitleOf(BuildContext context, MovieWatchHistory item) {
+    final duration = movieRedesignFormatDuration(item.durationSeconds);
+    if (duration.isEmpty) {
+      return item.completed ? '100%' : '';
+    }
+    return duration;
+  }
 
-  final MovieWatchHistory item;
-  final ValueChanged<MovieWatchHistory>? onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () => context.go('/video/${item.videoItemId}/play'),
-      child: Container(
-        margin: EdgeInsets.only(bottom: 10),
-        padding: EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.videoColors.surfaceContainerHigh.withValues(
-            alpha: 0.72,
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: context.videoColors.outlineVariant.withValues(alpha: 0.22),
-          ),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.history_rounded, color: context.videoColors.primary),
-            SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                item.title,
-                style: TextStyle(
-                  color: context.videoColors.onSurface,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-            Text(
-              '${item.progressPercent.toStringAsFixed(1)}%',
-              style: TextStyle(color: context.videoColors.onSurfaceVariant),
-            ),
-            if (onDelete != null) ...[
-              SizedBox(width: 8),
-              IconButton(
-                tooltip: AppLocalizations.of(context).coreDelete,
-                icon: Icon(Icons.close_rounded, size: 18),
-                color: context.videoColors.onSurfaceVariant,
-                onPressed: () => onDelete!.call(item),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
+  String _progressText(MovieWatchHistory item) {
+    if (item.completed) {
+      return '100%';
+    }
+    return '${item.progressPercent.round()}%';
   }
 }

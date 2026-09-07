@@ -8614,4 +8614,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String videoRedesignSearchHint(Object section) {
     return 'Search $section…';
   }
+
+  @override
+  String get videoRedesignNoFavorites => 'No favorites yet';
+
+  @override
+  String get videoRedesignNoFavoritesHint =>
+      'Tap the favorite button while playing';
+
+  @override
+  String get videoRedesignNoHistoryHint =>
+      'Your watch records will appear here';
 }

@@ -15743,6 +15743,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Search {section}…'**
   String videoRedesignSearchHint(Object section);
+
+  /// No description provided for @videoRedesignNoFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorites yet'**
+  String get videoRedesignNoFavorites;
+
+  /// No description provided for @videoRedesignNoFavoritesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the favorite button while playing'**
+  String get videoRedesignNoFavoritesHint;
+
+  /// No description provided for @videoRedesignNoHistoryHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your watch records will appear here'**
+  String get videoRedesignNoHistoryHint;
 }
 
 class _AppLocalizationsDelegate

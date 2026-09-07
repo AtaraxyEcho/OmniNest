@@ -4,8 +4,11 @@ import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
-import 'package:omninest/features/video/presentation/widgets/movie_common_widgets.dart';
+import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_styles.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_collection_card.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_empty_state.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_section_header.dart';
 
 import 'movie_feedback.dart';
 
@@ -21,59 +24,80 @@ class CollectionsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final palette = context.movieRedesign;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: MovieSectionHeading(
-                title: AppLocalizations.of(context).videoSectionCollections,
-                subtitle: AppLocalizations.of(context).videoCollectionsSubtitle,
+              child: MovieRedesignSectionHeader(
+                title: l10n.videoSectionCollections,
+                subtitleEn: l10n.videoRedesignSubCollections,
+                count: collections.isEmpty ? null : collections.length,
+                subtitle: l10n.videoCollectionsSubtitle,
               ),
             ),
-            FilledButton.icon(
-              onPressed: () => _showCreateCollectionDialog(context, ref),
-              icon: const Icon(Icons.add_rounded),
-              label: Text(AppLocalizations.of(context).videoNewCollection),
-              style: movieFilledButtonStyle(context),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => _showCreateCollectionDialog(context, ref),
+                  borderRadius: MovieRedesignPalette.borderRadius,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      '+ ${l10n.videoNewCollection}',
+                      style: context.movieRedesignText.mono(
+                        size: 12,
+                        color: palette.primary,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 22),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 1000 ? 3 : 1;
-            return GridView.count(
-              crossAxisCount: columns,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 18,
-              mainAxisSpacing: 18,
-              childAspectRatio: columns == 3 ? 2.2 : 3.2,
-              children: [
-                CollectionCard(
-                  title: AppLocalizations.of(context).videoAllMedia,
-                  count: totalCount,
-                ),
-                for (final item in collections)
-                  CollectionCard(
-                    title: item.name,
-                    count: item.itemCount,
-                    subtitle: item.collectionType,
-                    collectionId: item.id,
-                    onTap: () => _showCollectionItems(context, ref, item),
-                  ),
-                if (collections.isEmpty)
-                  CollectionCard(
-                    title: AppLocalizations.of(context).videoCustomCollection,
-                    count: 0,
-                  ),
-              ],
-            );
-          },
-        ),
+        if (collections.isEmpty)
+          MovieRedesignEmptyState(
+            icon: Icons.video_collection_rounded,
+            title: l10n.videoNoMediaItems,
+            subtitle: l10n.videoNewCollection,
+          )
+        else
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final width = constraints.maxWidth;
+              final columns = width >= 1000 ? 3 : (width >= 640 ? 2 : 1);
+              final gap = 14.0;
+              final cardWidth = (width - gap * (columns - 1)) / columns;
+              return Wrap(
+                spacing: gap,
+                runSpacing: gap,
+                children: [
+                  for (final item in collections)
+                    SizedBox(
+                      width: cardWidth,
+                      child: MovieRedesignCollectionCard(
+                        data: MovieRedesignCollectionCardData(
+                          name: item.name,
+                          nameEn: item.description,
+                          count: item.itemCount,
+                          onTap: () => _showCollectionItems(context, ref, item),
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
       ],
     );
   }
@@ -250,71 +274,4 @@ Future<void> _showCollectionItems(
           ],
         ),
   );
-}
-
-class CollectionCard extends StatelessWidget {
-  const CollectionCard({
-    required this.title,
-    required this.count,
-    this.subtitle,
-    this.collectionId,
-    this.onTap,
-    super.key,
-  });
-
-  final String title;
-  final int count;
-  final String? subtitle;
-  final String? collectionId;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          color: context.videoColors.surfaceContainerHigh.withValues(
-            alpha: 0.75,
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: context.videoColors.outlineVariant.withValues(alpha: 0.22),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Icon(
-              Icons.video_collection_rounded,
-              color: context.videoColors.primary,
-              size: 28,
-            ),
-            Spacer(),
-            Text(
-              title,
-              style: TextStyle(
-                color: context.videoColors.onSurface,
-                fontSize: 18,
-                height: 24 / 18,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            SizedBox(height: 6),
-            Text(
-              subtitle == null ? '$count items' : '$count items · $subtitle',
-              style: TextStyle(
-                color: context.videoColors.onSurfaceVariant,
-                fontSize: 13,
-                height: 18 / 13,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

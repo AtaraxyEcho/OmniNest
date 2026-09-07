@@ -3768,5 +3768,8 @@
     "placeholders": {
       "section": {}
     }
-  }
+  },
+  "videoRedesignNoFavorites": "暂无收藏",
+  "videoRedesignNoFavoritesHint": "播放时点击收藏按钮",
+  "videoRedesignNoHistoryHint": "开始观看后记录将在此显示"
 }

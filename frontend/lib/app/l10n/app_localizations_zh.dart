@@ -8358,4 +8358,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String videoRedesignSearchHint(Object section) {
     return '搜索$section…';
   }
+
+  @override
+  String get videoRedesignNoFavorites => '暂无收藏';
+
+  @override
+  String get videoRedesignNoFavoritesHint => '播放时点击收藏按钮';
+
+  @override
+  String get videoRedesignNoHistoryHint => '开始观看后记录将在此显示';
 }

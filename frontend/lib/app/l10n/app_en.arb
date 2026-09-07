@@ -3894,5 +3894,8 @@
     "placeholders": {
       "section": {}
     }
-  }
+  },
+  "videoRedesignNoFavorites": "No favorites yet",
+  "videoRedesignNoFavoritesHint": "Tap the favorite button while playing",
+  "videoRedesignNoHistoryHint": "Your watch records will appear here"
 }

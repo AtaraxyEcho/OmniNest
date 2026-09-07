@@ -5,6 +5,91 @@ import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_progress_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_status.dart';
 
+/// 海报卡片视图模型：统一电影条目与系列两类数据源。
+@immutable
+class MovieRedesignCardData {
+  const MovieRedesignCardData({
+    required this.id,
+    required this.title,
+    this.subtitle,
+    required this.year,
+    this.rating,
+    required this.status,
+    this.posterUrl,
+    this.progressPercent,
+    this.onTap,
+    this.onPlay,
+  });
+
+  final String id;
+  final String title;
+
+  /// 英文原标题，与主标题相同时不展示。
+  final String? subtitle;
+  final String year;
+  final double? rating;
+  final MovieRedesignStatus status;
+  final String? posterUrl;
+
+  /// 观看进度百分比 0-100，为空时不显示进度条。
+  final double? progressPercent;
+  final VoidCallback? onTap;
+  final VoidCallback? onPlay;
+
+  /// 从影视条目构建。
+  factory MovieRedesignCardData.fromVideoItem(MovieVideoItem item) {
+    return MovieRedesignCardData(
+      id: item.id,
+      title: item.title,
+      subtitle: _distinctOriginalTitle(item.title, item.originalTitle),
+      year: item.year,
+      rating: item.rating,
+      status: movieRedesignStatusFrom(item.metadataStatus),
+      posterUrl: item.posterImageUrl,
+    );
+  }
+
+  /// 复制并覆盖回调。
+  MovieRedesignCardData copyWith({VoidCallback? onTap, VoidCallback? onPlay}) {
+    return MovieRedesignCardData(
+      id: id,
+      title: title,
+      subtitle: subtitle,
+      year: year,
+      rating: rating,
+      status: status,
+      posterUrl: posterUrl,
+      progressPercent: progressPercent,
+      onTap: onTap ?? this.onTap,
+      onPlay: onPlay ?? this.onPlay,
+    );
+  }
+
+  /// 从系列构建。
+  factory MovieRedesignCardData.fromSeries(MovieSeries series) {
+    return MovieRedesignCardData(
+      id: series.id,
+      title: series.title,
+      subtitle: _distinctOriginalTitle(series.title, series.originalTitle),
+      year: series.year,
+      rating: series.rating,
+      status: movieRedesignStatusFrom(series.metadataStatus),
+      posterUrl: series.posterImageUrl,
+    );
+  }
+
+  static String? _distinctOriginalTitle(String title, String? original) {
+    final trimmed = original?.trim();
+    if (trimmed == null || trimmed.isEmpty) {
+      return null;
+    }
+    if (trimmed.toLowerCase() == title.trim().toLowerCase()) {
+      return null;
+    }
+    return trimmed;
+  }
+}
+
 /// 海报网格度量：按可用宽度决定列数与单元纵横比。
 class MovieRedesignGridMetrics {
   const MovieRedesignGridMetrics._({
@@ -41,24 +126,9 @@ class MovieRedesignGridMetrics {
 
 /// 新版海报卡：2:3 海报 + hover 播放浮层 + 进度条 + 双语标题 + 等宽元信息行。
 class MovieRedesignPosterCard extends StatefulWidget {
-  const MovieRedesignPosterCard({
-    required this.item,
-    required this.onDetail,
-    this.onPlay,
-    this.progressPercent,
-    super.key,
-  });
+  const MovieRedesignPosterCard({required this.data, super.key});
 
-  final MovieVideoItem item;
-
-  /// 点击卡片（海报或文本区）打开详情。
-  final ValueChanged<MovieVideoItem> onDetail;
-
-  /// hover 播放按钮；为空时不显示浮层播放入口。
-  final ValueChanged<MovieVideoItem>? onPlay;
-
-  /// 观看进度百分比 0-100，为空时不显示进度条。
-  final double? progressPercent;
+  final MovieRedesignCardData data;
 
   @override
   State<MovieRedesignPosterCard> createState() =>
@@ -70,12 +140,11 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
+    final data = widget.data;
     final palette = context.movieRedesign;
     final text = context.movieRedesignText;
     final l10n = AppLocalizations.of(context);
-    final onPlay = widget.onPlay;
-    final originalTitle = _originalTitle(item);
+    final onPlay = data.onPlay;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -96,7 +165,7 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                     duration: const Duration(milliseconds: 500),
                     curve: Curves.easeOut,
                     scale: _hovered ? 1.05 : 1.0,
-                    child: _PosterImage(item: item),
+                    child: _PosterImage(posterUrl: data.posterUrl),
                   ),
                   if (onPlay != null)
                     AnimatedOpacity(
@@ -107,12 +176,12 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            _PlayButton(onPlay: () => onPlay(item)),
+                            _PlayButton(onPlay: onPlay),
                             const SizedBox(height: 8),
                             Material(
                               color: Colors.transparent,
                               child: InkWell(
-                                onTap: () => widget.onDetail(item),
+                                onTap: data.onTap,
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,
@@ -134,11 +203,11 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                         ),
                       ),
                     ),
-                  if (widget.progressPercent != null)
+                  if (data.progressPercent != null)
                     Align(
                       alignment: Alignment.bottomCenter,
                       child: MovieRedesignProgressBar(
-                        value: widget.progressPercent! / 100,
+                        value: data.progressPercent! / 100,
                       ),
                     ),
                 ],
@@ -151,7 +220,7 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.title,
+                  data.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: text.body(
@@ -161,10 +230,10 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                     height: 16 / 13,
                   ),
                 ),
-                if (originalTitle != null) ...[
+                if (data.subtitle != null) ...[
                   const SizedBox(height: 2),
                   Text(
-                    originalTitle,
+                    data.subtitle!,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: text.body(
@@ -179,14 +248,14 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                   children: [
                     Flexible(
                       child: Text(
-                        item.year,
+                        data.year,
                         style: text.mono(size: 10),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     _MetaDot(palette: palette),
-                    if (item.rating != null) ...[
+                    if (data.rating != null) ...[
                       Icon(
                         Icons.star,
                         size: 10,
@@ -194,14 +263,12 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                       ),
                       const SizedBox(width: 2),
                       Text(
-                        item.rating!.toStringAsFixed(1),
+                        data.rating!.toStringAsFixed(1),
                         style: text.mono(size: 10),
                       ),
                       _MetaDot(palette: palette),
                     ],
-                    MovieRedesignStatusDot(
-                      status: movieRedesignStatusFrom(item.metadataStatus),
-                    ),
+                    MovieRedesignStatusDot(status: data.status),
                   ],
                 ),
               ],
@@ -210,17 +277,6 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
         ],
       ),
     );
-  }
-
-  String? _originalTitle(MovieVideoItem item) {
-    final original = item.originalTitle;
-    if (original == null || original.trim().isEmpty) {
-      return null;
-    }
-    if (original.trim().toLowerCase() == item.title.trim().toLowerCase()) {
-      return null;
-    }
-    return original;
   }
 }
 
@@ -263,18 +319,18 @@ class _PlayButton extends StatelessWidget {
 }
 
 class _PosterImage extends StatelessWidget {
-  const _PosterImage({required this.item});
+  const _PosterImage({this.posterUrl});
 
-  final MovieVideoItem item;
+  final String? posterUrl;
 
   @override
   Widget build(BuildContext context) {
-    final posterUrl = item.posterImageUrl;
-    if (posterUrl == null || posterUrl.isEmpty) {
+    final url = posterUrl;
+    if (url == null || url.isEmpty) {
       return const SizedBox.expand();
     }
     return Image.network(
-      posterUrl,
+      url,
       fit: BoxFit.cover,
       alignment: Alignment.topCenter,
       filterQuality: FilterQuality.medium,
@@ -291,16 +347,9 @@ class _PosterImage extends StatelessWidget {
 
 /// 非滚动区的静态海报网格。
 class MovieRedesignPosterGrid extends StatelessWidget {
-  const MovieRedesignPosterGrid({
-    required this.items,
-    required this.onDetail,
-    this.onPlay,
-    super.key,
-  });
+  const MovieRedesignPosterGrid({required this.items, super.key});
 
-  final List<MovieVideoItem> items;
-  final ValueChanged<MovieVideoItem> onDetail;
-  final ValueChanged<MovieVideoItem>? onPlay;
+  final List<MovieRedesignCardData> items;
 
   @override
   Widget build(BuildContext context) {
@@ -318,14 +367,8 @@ class MovieRedesignPosterGrid extends StatelessWidget {
             mainAxisSpacing: metrics.spacing,
             childAspectRatio: metrics.childAspectRatio,
           ),
-          itemBuilder: (context, index) {
-            final item = items[index];
-            return MovieRedesignPosterCard(
-              item: item,
-              onDetail: onDetail,
-              onPlay: onPlay,
-            );
-          },
+          itemBuilder:
+              (context, index) => MovieRedesignPosterCard(data: items[index]),
         );
       },
     );
@@ -334,16 +377,9 @@ class MovieRedesignPosterGrid extends StatelessWidget {
 
 /// 滚动区内的海报 Sliver 网格。
 class MovieRedesignPosterSliverGrid extends StatelessWidget {
-  const MovieRedesignPosterSliverGrid({
-    required this.items,
-    required this.onDetail,
-    this.onPlay,
-    super.key,
-  });
+  const MovieRedesignPosterSliverGrid({required this.items, super.key});
 
-  final List<MovieVideoItem> items;
-  final ValueChanged<MovieVideoItem> onDetail;
-  final ValueChanged<MovieVideoItem>? onPlay;
+  final List<MovieRedesignCardData> items;
 
   @override
   Widget build(BuildContext context) {
@@ -359,14 +395,10 @@ class MovieRedesignPosterSliverGrid extends StatelessWidget {
             mainAxisSpacing: metrics.spacing,
             childAspectRatio: metrics.childAspectRatio,
           ),
-          delegate: SliverChildBuilderDelegate((context, index) {
-            final item = items[index];
-            return MovieRedesignPosterCard(
-              item: item,
-              onDetail: onDetail,
-              onPlay: onPlay,
-            );
-          }, childCount: items.length),
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => MovieRedesignPosterCard(data: items[index]),
+            childCount: items.length,
+          ),
         );
       },
     );
