@@ -53,7 +53,7 @@ class PhotoInfoPanel extends ConsumerWidget {
         border: Border(left: BorderSide(color: _borderColor)),
       ),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 68, 24, 24),
+        padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

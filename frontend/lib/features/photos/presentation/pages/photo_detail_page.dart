@@ -24,8 +24,6 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
 /// 桌面端信息侧栏宽度：与幻灯片信息面板及分享侧栏一致。
-const double _kExifPanelWidth = photoInfoPanelWidth;
-
 /// 照片详情/查看器页面
 class PhotoDetailPage extends ConsumerWidget {
   const PhotoDetailPage({required this.photoId, super.key});
@@ -430,103 +428,62 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
 
     return Stack(
       children: [
-        // 主体：照片舞台（PageView 支持左右滑动切换）+ 桌面端信息侧栏
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                itemCount: _pages.length,
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentPage = index;
-                    _currentPhotoId = _pages[index].id;
-                    _motionHoldPlaying = false;
-                    _motionPinnedPlaying = false;
-                  });
-                  _backfillLocationIfNeeded(_pages[index]);
-                  _precacheNeighbors(index);
+        // 照片舞台：PageView 支持左右滑动切换（信息侧栏以覆盖层滑入，不挤压舞台）。
+        Positioned.fill(
+          child: PageView.builder(
+            controller: _pageController,
+            itemCount: _pages.length,
+            onPageChanged: (index) {
+              setState(() {
+                _currentPage = index;
+                _currentPhotoId = _pages[index].id;
+                _motionHoldPlaying = false;
+                _motionPinnedPlaying = false;
+              });
+              _backfillLocationIfNeeded(_pages[index]);
+              _precacheNeighbors(index);
+            },
+            itemBuilder: (context, index) {
+              final base = _pages[index];
+              return Consumer(
+                builder: (context, pageRef, _) {
+                  final item =
+                      pageRef
+                          .watch(photoDetailProvider(base.id))
+                          .asData
+                          ?.value ??
+                      base;
+                  return _buildPhotoStage(context, item, index, _pages.length);
                 },
-                itemBuilder: (context, index) {
-                  final base = _pages[index];
-                  return Consumer(
-                    builder: (context, pageRef, _) {
-                      final item =
-                          pageRef
-                              .watch(photoDetailProvider(base.id))
-                              .asData
-                              ?.value ??
-                          base;
-                      return _buildPhotoStage(
-                        context,
-                        item,
-                        index,
-                        _pages.length,
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-            if (!compact)
-              AnimatedSize(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.ease,
-                alignment: Alignment.centerRight,
-                child:
-                    _showInfo
-                        ? SizedBox(
-                          width: _kExifPanelWidth,
-                          child: PhotoInfoPanel(
-                            photo: currentFresh,
-                            onShare: _openSharePanel,
-                          ),
-                        )
-                        : const SizedBox.shrink(),
-              ),
-          ],
+              );
+            },
+          ),
         ),
-        // 紧凑端信息侧栏：全高右抽屉 + 遮罩
-        if (compact && _showInfo)
+        // 信息侧栏：与幻灯片一致的右滑入覆盖层，透明遮罩点击关闭。
+        if (_showInfo)
           Positioned.fill(
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final width = (constraints.maxWidth * 0.86).clamp(
-                  photoInfoPanelWidth,
-                  400.0,
-                );
-                return Stack(
-                  children: [
-                    Positioned.fill(
-                      child: GestureDetector(
-                        onTap:
-                            () =>
-                                ref
-                                    .read(
-                                      photoInfoPanelVisibleProvider.notifier,
-                                    )
-                                    .toggle(),
-                        child: ColoredBox(
-                          color: Colors.black.withValues(alpha: 0.40),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 0,
-                      right: 0,
-                      bottom: 0,
-                      width: width,
-                      child: PhotoInfoPanel(
-                        photo: currentFresh,
-                        onShare: _openSharePanel,
-                      ),
-                    ),
-                  ],
-                );
-              },
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap:
+                  () =>
+                      ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
             ),
           ),
+        Positioned(
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: photoInfoPanelWidth,
+          child: AnimatedSlide(
+            offset: _showInfo ? Offset.zero : const Offset(1, 0),
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeOutCubic,
+            child: PhotoInfoPanel(
+              photo: currentFresh,
+              onShare: _openSharePanel,
+            ),
+          ),
+        ),
         // 顶部操作栏：设计稿样式，半透明浮层横贯照片与侧栏
         Positioned(
           top: 0,

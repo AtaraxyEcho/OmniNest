@@ -306,7 +306,13 @@ void main() {
     expect(find.byType(PhotoGridTile), findsNWidgets(3));
     await tester.tap(find.byType(PhotoGridTile).first);
     await tester.pumpAndSettle();
-    expect(find.text('Bern'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(PhotoViewerTopBar),
+        matching: find.text('Bern'),
+      ),
+      findsOneWidget,
+    );
 
     // 点击播放：沉浸页打开，顶栏计数可见并自动推进。
     await tester.tap(find.byIcon(Icons.play_arrow_rounded));
@@ -332,21 +338,39 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 500));
     await tester.pump();
-    expect(find.text('Zurich'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(PhotoViewerTopBar),
+        matching: find.text('Zurich'),
+      ),
+      findsOneWidget,
+    );
 
     // 滑动手势切换到下一张。
     await tester.fling(find.byType(PageView), const Offset(-400, 0), 1200);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pump();
-    expect(find.text('Geneva'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(PhotoViewerTopBar),
+        matching: find.text('Geneva'),
+      ),
+      findsOneWidget,
+    );
 
     // 反向滑动回到上一张。
     await tester.fling(find.byType(PageView), const Offset(400, 0), 1200);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 600));
     await tester.pump();
-    expect(find.text('Zurich'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(PhotoViewerTopBar),
+        matching: find.text('Zurich'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('动态照片显示 LIVE 徽标且切换到普通照片后隐藏', (tester) async {
@@ -367,21 +391,38 @@ void main() {
     expect(find.text('LIVE'), findsNothing);
   });
 
-  testWidgets('桌面端信息面板是全高独立侧栏并压缩照片区', (tester) async {
+  testWidgets('桌面端信息侧栏为右滑入覆盖层（320px），点击遮罩关闭', (tester) async {
     await _pumpDesktop(tester, _harness(scope: scope).child);
 
-    // 收起时 AnimatedSize 宽度为 0，不占舞台空间。
-    expect(tester.getSize(find.byType(AnimatedSize)).width, 0);
+    // 打开 Info：覆盖层滑入，宽度与幻灯片信息面板一致。
     await tester.tap(find.byIcon(Icons.info_outline_rounded));
     await tester.pumpAndSettle();
-
-    final panelSize = tester.getSize(find.byType(AnimatedSize));
-    expect(panelSize.width, photoInfoPanelWidth);
-    expect(panelSize.height, 800);
     expect(find.text('Photo Info'), findsOneWidget);
+    final positioned = tester.widget<Positioned>(
+      find
+          .ancestor(
+            of: find.byType(PhotoInfoPanel),
+            matching: find.byType(Positioned),
+          )
+          .first,
+    );
+    expect(positioned.width, photoInfoPanelWidth);
+
+    // 点击遮罩：面板滑出（offset 回到 (1, 0)）。
+    await tester.tapAt(const Offset(100, 400));
+    await tester.pumpAndSettle();
+    final slide = tester.widget<AnimatedSlide>(
+      find
+          .ancestor(
+            of: find.byType(PhotoInfoPanel),
+            matching: find.byType(AnimatedSlide),
+          )
+          .first,
+    );
+    expect(slide.offset, const Offset(1, 0));
   });
 
-  testWidgets('紧凑端信息面板为右侧抽屉且点击遮罩关闭', (tester) async {
+  testWidgets('紧凑端信息侧栏为同一右滑入覆盖层且点击遮罩关闭', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -389,7 +430,7 @@ void main() {
     await tester.pumpWidget(_harness(scope: scope).child);
     await tester.pumpAndSettle();
 
-    // 紧凑端不存在桌面侧栏，信息入口在弹出菜单中。
+    // 信息入口在弹出菜单中；打开后与桌面同为覆盖层。
     expect(find.byType(AnimatedSize), findsNothing);
     await tester.tap(find.byIcon(Icons.more_vert_rounded));
     await tester.pumpAndSettle();
@@ -401,7 +442,15 @@ void main() {
 
     await tester.tapAt(const Offset(20, 400));
     await tester.pumpAndSettle();
-    expect(find.text('Photo Info'), findsNothing);
+    final slide = tester.widget<AnimatedSlide>(
+      find
+          .ancestor(
+            of: find.byType(PhotoInfoPanel),
+            matching: find.byType(AnimatedSlide),
+          )
+          .first,
+    );
+    expect(slide.offset, const Offset(1, 0));
   });
 
   testWidgets('亮色主题下查看器保持恒暗（顶栏与信息侧栏）', (tester) async {
