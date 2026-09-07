@@ -166,6 +166,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 
   void _precacheNeighbors() {
+    // 预取与渲染使用同宽降采样，保证预热命中渲染用的缓存条目。
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final screenSize = MediaQuery.sizeOf(context);
+    final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
     for (final index in [_current - 1, _current + 1]) {
       if (index < 0 || index >= _photos.length) continue;
       final id = _photos[index].id;
@@ -185,6 +189,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                       item.sourceUrl != null
                           ? item.sourceCacheKey
                           : item.coverCacheKey,
+                  maxWidth: memCacheWidth,
                 ),
                 context,
               );
@@ -313,6 +318,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             child: Stack(
               fit: StackFit.expand,
               children: [
+                _buildBackdrop(photo),
                 _buildSlides(photo),
                 _buildGradients(showControls),
                 _buildTopBar(context, photo, showControls),
@@ -350,7 +356,41 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     );
   }
 
-  // ─── 幻灯片层（离场 + 入场交叉过渡） ───
+  // ─── 幻灯片层（静态模糊背景 + 离场/入场前景交叉过渡） ───
+
+  /// 页面级模糊背景：当前图缩略图 cover 放大 + 高斯模糊，掩盖 contain 黑边。
+  ///
+  /// 刻意放在动画子树之外并使用缩略图：ImageFiltered 跟随逐帧 Transform
+  /// 会引发全屏重滤波掉帧（闪烁根因）；背景为低频内容，切图瞬时切换不显突兀。
+  Widget _buildBackdrop(PhotoItem photo) {
+    final thumb = photo.coverUrl;
+    if (thumb == null || thumb.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    return Positioned.fill(
+      child: Transform.scale(
+        scale: 1.12,
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
+                imageUrl: thumb,
+                cacheKey: photo.coverCacheKey,
+                fit: BoxFit.cover,
+                fadeInDuration: Duration.zero,
+                errorWidget:
+                    (context, url, error) =>
+                        const ColoredBox(color: Colors.black),
+              ),
+              ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Widget _buildSlides(PhotoItem photo) {
     return Stack(
@@ -940,7 +980,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 }
 
-/// 单层幻灯片：模糊铺满背景 + contain 前景，进入/离场由父级过渡驱动。
+/// 前景幻灯片层：contain 原图，进入/离场由父级过渡驱动。
+///
+/// 模糊背景在页面级（_buildBackdrop），本层不再包含 ImageFiltered，
+/// 避免逐帧动画触发全屏重滤波导致掉帧闪烁。
 class _SlideLayer extends StatelessWidget {
   const _SlideLayer({
     required this.item,
@@ -958,35 +1001,43 @@ class _SlideLayer extends StatelessWidget {
     final imageUrl = item.sourceUrl ?? item.coverUrl;
     final cacheKey =
         item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey;
+    // 原图按屏宽降采样解码：contain 显示不会超过屏宽像素，
+    // 全尺寸解码位图（4K 照片约 45MB/张）会把图片缓存预算挤爆，
+    // 邻居预取互相驱逐导致每次切换重新下载解码（表现为闪烁）。
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final screenSize = MediaQuery.sizeOf(context);
+    final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
     final thumbUrl = item.coverUrl;
-    // 原图尚未进缓存时以缩略图兜底，避免入场瞬间闪黑。
-    final placeholder =
-        thumbUrl != null && thumbUrl.isNotEmpty
-            ? CachedNetworkImage(
-              imageUrl: thumbUrl,
-              cacheKey: item.coverCacheKey,
-              fit: BoxFit.contain,
-              fadeInDuration: Duration.zero,
-              errorWidget:
-                  (context, url, error) =>
-                      const ColoredBox(color: Colors.black),
-            )
-            : const ColoredBox(color: Colors.black);
+    // 原图尚未进缓存时以模糊缩略图兜底，避免入场瞬间闪黑；
+    // 模糊后的缩略图与背景氛围一致，原图就绪时仅清晰度提升、不产生跳变。
+    Widget? placeholder;
+    if (thumbUrl != null && thumbUrl.isNotEmpty) {
+      placeholder = ImageFiltered(
+        imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+        child: CachedNetworkImage(
+          imageUrl: thumbUrl,
+          cacheKey: item.coverCacheKey,
+          fit: BoxFit.contain,
+          fadeInDuration: Duration.zero,
+          errorWidget:
+              (context, url, error) => const ColoredBox(color: Colors.black),
+        ),
+      );
+    }
     final image = CachedNetworkImage(
       imageUrl: imageUrl ?? '',
       cacheKey: cacheKey,
+      memCacheWidth: memCacheWidth,
       fit: BoxFit.contain,
       fadeInDuration: Duration.zero,
-      placeholder: (context, url) => placeholder,
-      errorWidget: (context, url, error) => placeholder,
-    );
-    final backgroundImage = CachedNetworkImage(
-      imageUrl: imageUrl ?? '',
-      cacheKey: cacheKey,
-      fit: BoxFit.cover,
-      fadeInDuration: Duration.zero,
+      placeholder:
+          placeholder == null
+              ? (context, url) => const ColoredBox(color: Colors.black)
+              : (context, url) => placeholder!,
       errorWidget:
-          (context, url, error) => const ColoredBox(color: Colors.black),
+          placeholder == null
+              ? (context, url, error) => const ColoredBox(color: Colors.black)
+              : (context, url, error) => placeholder!,
     );
     return TweenAnimationBuilder<double>(
       tween: Tween<double>(begin: 0, end: 1),
@@ -1007,21 +1058,7 @@ class _SlideLayer extends StatelessWidget {
                 Matrix4.identity()
                   ..translateByDouble(dx, 0, 0, 1)
                   ..scaleByDouble(scale, scale, 1, 1),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                // 底层：同图 cover 放大 + 高斯模糊，掩盖 contain 黑边。
-                Transform.scale(
-                  scale: 1.12,
-                  child: ImageFiltered(
-                    imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
-                    child: backgroundImage,
-                  ),
-                ),
-                ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
-                image,
-              ],
-            ),
+            child: child,
           ),
         );
       },

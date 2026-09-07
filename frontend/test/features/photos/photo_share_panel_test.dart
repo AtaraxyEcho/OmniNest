@@ -85,10 +85,6 @@ void main() {
         maxAccessCount: any(named: 'maxAccessCount'),
       ),
     ).thenAnswer((_) async => link);
-    when(
-      () => repository.sharedPhotoUrl(any()),
-    ).thenReturn('https://api.example.com/shared/photos/item/tok-1');
-
     await _pumpPanel(tester, repository);
     // 自动复制为异步链路，补帧等待复制态渲染。
     await tester.pump();
@@ -99,8 +95,9 @@ void main() {
     expect(find.text('Motion Shot'), findsOneWidget);
     expect(find.text('Bern'), findsNWidgets(2));
     // 链接创建成功后自动复制，按钮进入已复制态。
+    // 链接基于前端站点地址（默认退化 origin），而非 API 地址。
     expect(
-      find.text('https://api.example.com/shared/photos/item/tok-1'),
+      find.text('http://localhost:8080/#/shared/photos/item/tok-1'),
       findsOneWidget,
     );
     expect(find.text('✓ 已复制'), findsOneWidget);

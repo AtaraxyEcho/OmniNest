@@ -144,11 +144,15 @@ class PhotoViewerTopBar extends StatelessWidget {
               itemBuilder:
                   (context) => [
                     PopupMenuItem(
-                      value: _PhotoMenuAction.info,
+                      value: _PhotoMenuAction.share,
                       child: Text(
-                        showInfo
-                            ? AppLocalizations.of(context).photosHideInfo
-                            : AppLocalizations.of(context).photosShowInfo,
+                        AppLocalizations.of(context).photosSharePhoto,
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: _PhotoMenuAction.download,
+                      child: Text(
+                        AppLocalizations.of(context).photosDownloadPhoto,
                       ),
                     ),
                     PopupMenuItem(
@@ -166,15 +170,11 @@ class PhotoViewerTopBar extends StatelessWidget {
                       ),
                     ),
                     PopupMenuItem(
-                      value: _PhotoMenuAction.share,
+                      value: _PhotoMenuAction.info,
                       child: Text(
-                        AppLocalizations.of(context).photosSharePhoto,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.download,
-                      child: Text(
-                        AppLocalizations.of(context).photosDownloadPhoto,
+                        showInfo
+                            ? AppLocalizations.of(context).photosHideInfo
+                            : AppLocalizations.of(context).photosShowInfo,
                       ),
                     ),
                     PopupMenuItem(
@@ -202,17 +202,17 @@ class PhotoViewerTopBar extends StatelessWidget {
               ),
               visualDensity: VisualDensity.compact,
             ),
+            // Heart/Share/Download 前置组与设计稿（幻灯片顶栏）一致。
             IconButton(
-              tooltip:
-                  showInfo
-                      ? AppLocalizations.of(context).photosHideInfo
-                      : AppLocalizations.of(context).photosShowInfo,
-              onPressed: onToggleInfo,
-              icon: Icon(
-                Icons.info_outline_rounded,
-                color: showInfo ? activeColor : iconColor,
-                size: 20,
-              ),
+              tooltip: AppLocalizations.of(context).photosSharePhoto,
+              onPressed: onShare,
+              icon: Icon(Icons.share_outlined, color: iconColor, size: 20),
+              visualDensity: VisualDensity.compact,
+            ),
+            IconButton(
+              tooltip: AppLocalizations.of(context).photosDownloadPhoto,
+              onPressed: onDownload,
+              icon: Icon(Icons.download_outlined, color: iconColor, size: 20),
               visualDensity: VisualDensity.compact,
             ),
             IconButton(
@@ -238,15 +238,16 @@ class PhotoViewerTopBar extends StatelessWidget {
               visualDensity: VisualDensity.compact,
             ),
             IconButton(
-              tooltip: AppLocalizations.of(context).photosSharePhoto,
-              onPressed: onShare,
-              icon: Icon(Icons.share_outlined, color: iconColor, size: 20),
-              visualDensity: VisualDensity.compact,
-            ),
-            IconButton(
-              tooltip: AppLocalizations.of(context).photosDownloadPhoto,
-              onPressed: onDownload,
-              icon: Icon(Icons.download_outlined, color: iconColor, size: 20),
+              tooltip:
+                  showInfo
+                      ? AppLocalizations.of(context).photosHideInfo
+                      : AppLocalizations.of(context).photosShowInfo,
+              onPressed: onToggleInfo,
+              icon: Icon(
+                Icons.info_outline_rounded,
+                color: showInfo ? activeColor : iconColor,
+                size: 20,
+              ),
               visualDensity: VisualDensity.compact,
             ),
             IconButton(

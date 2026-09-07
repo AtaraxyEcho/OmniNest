@@ -53,9 +53,11 @@ abstract final class AppImageCachePolicy {
           maximumBytes: 64 * _mebibyte,
         );
       case AppImageCacheTarget.desktop:
+        // 桌面内存充裕；幻灯片/查看器按屏宽降采样后单张约 10-30MB，
+        // 预算过小会让邻居预取互相驱逐、每次切换重新解码（表现为闪烁）。
         return const AppImageCacheBudget(
           maximumEntries: 320,
-          maximumBytes: 192 * _mebibyte,
+          maximumBytes: 384 * _mebibyte,
         );
       default:
         return const AppImageCacheBudget(

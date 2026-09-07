@@ -68,7 +68,13 @@ class AppEnvironment {
     if (webBaseUrl != null) {
       return webBaseUrl!;
     }
-    return platform.getBrowserOrigin() ?? apiBaseUrl;
+    final browserOrigin = platform.getBrowserOrigin();
+    if (browserOrigin != null) {
+      return browserOrigin;
+    }
+    // 桌面端退化：分享页挂在前端站点而非 API，须剥离 apiBaseUrl 的路径段，
+    // 否则链接形如 host/api/v1/#/s/xxx，浏览器仅请求 /api/v1/ 命中受保护接口返回 401。
+    return Uri.parse(apiBaseUrl).origin;
   }
 
   static Uri? _normalizeHttpOrigin(String? origin) {

@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -106,7 +107,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       );
       if (!mounted || photoId != widget.photo.id) return;
       setState(() {
-        _shareUrl = controller.sharedPhotoUrl(latest!.token);
+        _shareUrl = _buildShareUrl(latest!.token);
         _loadedForPhotoId = photoId;
         _creating = false;
       });
@@ -138,6 +139,13 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     return AppLocalizations.of(context).photosShareLinkFailed;
   }
 
+  /// 分享页挂在前端站点（hash 路由），与文件分享链接同构；
+  /// 指向 API 地址会命中受保护接口返回 401。
+  String _buildShareUrl(String token) {
+    final webBase = ref.read(appEnvironmentProvider).effectiveWebBaseUrl;
+    return '$webBase/#/shared/photos/item/$token';
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -154,7 +162,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         curve: const Cubic(0.25, 0.46, 0.45, 0.94),
         child: Container(
           decoration: const BoxDecoration(
-            color: Color(0xE00A0A0A),
+            color: Color(0xFF0A0A0A),
             border: Border(left: BorderSide(color: Color(0x12FFFFFF))),
           ),
           child: SingleChildScrollView(
@@ -394,9 +402,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
               );
           if (!mounted) return;
           setState(() {
-            _shareUrl = ref
-                .read(photoCenterControllerProvider.notifier)
-                .sharedPhotoUrl(link.token);
+            _shareUrl = _buildShareUrl(link.token);
             _error = null;
           });
           unawaited(_copyToClipboard());
