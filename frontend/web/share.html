@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>照片分享 · OmniNest</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #0a0a0a; color: rgba(255,255,255,.85);
+    font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex; flex-direction: column; min-height: 100vh;
+  }
+  header {
+    display: flex; align-items: center; gap: 12px;
+    padding: 14px 24px; border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  header .dot { width: 10px; height: 10px; border-radius: 50%; background: #4ade80; }
+  header span { font-size: 13px; letter-spacing: .04em; color: rgba(255,255,255,.6); }
+  main { flex: 1; display: flex; flex-direction: column; }
+  .stage {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    padding: 24px; min-height: 0;
+  }
+  .stage img {
+    max-width: 100%; max-height: 100%; object-fit: contain;
+    border-radius: 6px; box-shadow: 0 8px 40px rgba(0,0,0,.6);
+  }
+  .meta { padding: 12px 24px 4px; }
+  .meta h1 {
+    font-size: 20px; font-weight: 300; letter-spacing: -.01em;
+    color: #fff; margin-bottom: 4px;
+  }
+  .meta p { font-size: 12px; letter-spacing: .06em; color: rgba(255,255,255,.45); font-weight: 300; }
+  footer { padding: 16px 24px 20px; }
+  footer p { font-size: 11px; color: rgba(255,255,255,.30); letter-spacing: .04em; }
+  .center {
+    flex: 1; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; gap: 16px; padding: 24px; text-align: center;
+  }
+  .center .icon { font-size: 44px; }
+  .center .msg { font-size: 14px; color: rgba(255,255,255,.65); max-width: 420px; line-height: 1.6; }
+  .password-box {
+    display: flex; flex-direction: column; gap: 12px; width: 320px; max-width: 90vw;
+    background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.08);
+    border-radius: 12px; padding: 24px;
+  }
+  .password-box p.title { font-size: 14px; color: rgba(255,255,255,.85); font-weight: 600; }
+  .password-box input {
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+    border-radius: 8px; padding: 10px 12px; color: #fff; font-size: 13px; outline: none;
+  }
+  .password-box input:focus { border-color: rgba(74,222,128,.5); }
+  .password-box button {
+    background: #4ade80; color: #052e16; border: none; border-radius: 8px;
+    padding: 10px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .spin {
+    width: 28px; height: 28px; border-radius: 50%;
+    border: 3px solid rgba(255,255,255,.15); border-top-color: rgba(255,255,255,.7);
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <div class="dot"></div><span>OmniNest 分享</span>
+</header>
+<main>
+  <div id="loading" class="center"><div class="spin"></div><div class="msg">正在加载分享内容…</div></div>
+  <div id="error" class="center hidden">
+    <div class="icon">🔗</div>
+    <div class="msg" id="errorMsg"></div>
+  </div>
+  <div id="passwordView" class="center hidden">
+    <div class="password-box">
+      <p class="title">此分享需要访问密码</p>
+      <input id="passwordInput" type="password" placeholder="请输入访问密码" autocomplete="off">
+      <button id="passwordSubmit">访 问</button>
+    </div>
+  </div>
+  <div id="content" class="hidden" style="display: flex; flex-direction: column; flex: 1;">
+    <div class="stage"><img id="photo" alt=""></div>
+    <div class="meta">
+      <h1 id="title"></h1>
+      <p id="subline"></p>
+    </div>
+  </div>
+</main>
+<footer><p>Powered by OmniNest · 光影集</p></footer>
+<script>
+(function () {
+  var token = new URLSearchParams(location.search).get('token');
+  var state = { sessionToken: '', password: '' };
+
+  function show(id) {
+    ['loading', 'error', 'passwordView', 'content'].forEach(function (el) {
+      document.getElementById(el).classList.toggle('hidden', el !== id);
+    });
+  }
+  function showError(msg) {
+    document.getElementById('errorMsg').textContent = msg;
+    show('error');
+  }
+  function api(path, options) {
+    return fetch(path, options).then(function (res) {
+      return res.json().then(function (body) { return { status: res.status, body: body }; });
+    });
+  }
+  function authorize() {
+    return api('/api/v1/public/photos/item/' + encodeURIComponent(token) + '/authorize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state.password ? { password: state.password } : {})
+    });
+  }
+  function loadPhoto() {
+    return api('/api/v1/public/photos/item/' + encodeURIComponent(token), {
+      headers: { 'X-OmniNest-Share-Session': state.sessionToken }
+    });
+  }
+  function render(item) {
+    document.getElementById('title').textContent = item.title || '照片';
+    var parts = [];
+    if (item.gpsLocation && item.gpsLocation.city) parts.push(item.gpsLocation.city);
+    if (item.dateTaken) parts.push(String(item.dateTaken).slice(0, 10));
+    document.getElementById('subline').textContent = parts.join(' · ');
+    var url = item.sourceUrl || item.coverUrl;
+    var img = document.getElementById('photo');
+    if (url) {
+      img.onerror = function () { showError('图片加载失败，请刷新重试'); };
+      img.src = url;
+    } else {
+      showError('该分享不包含可显示的图片');
+    }
+    show('content');
+  }
+  function start() {
+    if (!token) { showError('链接无效'); return; }
+    show('loading');
+    authorize().then(function (res) {
+      if (res.status === 200 && res.body.data) {
+        state.sessionToken = res.body.data.sessionToken;
+        return loadPhoto().then(function (r2) {
+          if (r2.status === 200 && r2.body.data) return render(r2.body.data);
+          showError(shareErrorMessage(r2));
+        });
+      }
+      // 密码错误：展示密码表单
+      if (res.status === 400 || res.status === 401) {
+        show('passwordView');
+        return;
+      }
+      if (res.status === 404) { showError('分享链接不存在或已撤销'); return; }
+      showError(shareErrorMessage(res));
+    }).catch(function () { showError('网络异常，请稍后重试'); });
+  }
+  function shareErrorMessage(res) {
+    return (res.body && res.body.message) || '分享内容加载失败';
+  }
+  document.getElementById('passwordSubmit').addEventListener('click', function () {
+    state.password = document.getElementById('passwordInput').value.trim();
+    if (!state.password) return;
+    show('loading');
+    start();
+  });
+  document.getElementById('passwordInput').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') document.getElementById('passwordSubmit').click();
+  });
+  start();
+})();
+</script>
+</body>
+</html>

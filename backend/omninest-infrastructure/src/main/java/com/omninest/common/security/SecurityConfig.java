@@ -90,6 +90,7 @@ public class SecurityConfig {
                         .requestMatchers(
                                 HttpMethod.GET,
                                 "/",
+                                "/share.html",
                                 "/index.html",
                                 "/main.dart.js",
                                 "/flutter.js",

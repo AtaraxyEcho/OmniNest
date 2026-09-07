@@ -218,11 +218,11 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     return AppLocalizations.of(context).photosShareLinkFailed;
   }
 
-  /// 分享页挂在前端站点（hash 路由），与文件分享链接同构；
-  /// 指向 API 地址会命中受保护接口返回 401。
+  /// 分享页为独立静态页（share.html，原生 JS 调公开 API），
+  /// 不依赖 Flutter SPA 部署；指向 API 地址会命中受保护接口返回 401。
   String _buildShareUrl(String token) {
     final webBase = ref.read(appEnvironmentProvider).effectiveWebBaseUrl;
-    return '$webBase/#/shared/photos/item/$token';
+    return '$webBase/share.html?token=$token';
   }
 
   @override

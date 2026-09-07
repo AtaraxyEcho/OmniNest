@@ -123,3 +123,4 @@ ai-sidecar/models/
 *.prof
 test-results/
 **/test-results/
+/webapp/

@@ -96,7 +96,7 @@ void main() {
     expect(find.text('Bern'), findsNWidgets(2));
     // 链接基于前端站点地址（默认退化 origin），而非 API 地址；复制为手动操作。
     expect(
-      find.text('http://localhost:8080/#/shared/photos/item/tok-1'),
+      find.text('http://localhost:8080/share.html?token=tok-1'),
       findsOneWidget,
     );
     expect(find.text('复制'), findsOneWidget);
