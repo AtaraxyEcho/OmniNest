@@ -12,16 +12,24 @@ import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_management.dart';
+import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_filter_sort_bar.dart';
 
 void main() {
   testWidgets('影片管理列表按剧聚合并显示连续序号', (tester) async {
     final container = _container();
     await _pumpSection(tester, container);
 
-    expect(find.text('1'), findsOneWidget);
-    expect(find.text('2'), findsNWidgets(2));
-    expect(find.text('3'), findsOneWidget);
-    expect(find.text('4'), findsOneWidget);
+    // 统计卡与行号并存，行号断言使用专属 Key 定位。
+    expect(find.byKey(const ValueKey('admin-row-number-1')), findsOneWidget);
+    expect(find.byKey(const ValueKey('admin-row-number-2')), findsOneWidget);
+    expect(find.byKey(const ValueKey('admin-row-number-3')), findsOneWidget);
+    // 统计卡将后续行推出缓存范围，滚动后再断言末行。
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('admin-row-number-4')),
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.byKey(const ValueKey('admin-row-number-4')), findsOneWidget);
     expect(find.text('家庭剧集'), findsOneWidget);
     expect(find.textContaining('3 集'), findsOneWidget);
     expect(find.text('独立电影A'), findsOneWidget);
@@ -33,7 +41,11 @@ void main() {
     final container = _container();
     await _pumpSection(tester, container);
 
-    await tester.tap(find.widgetWithText(ChoiceChip, '待刮削'));
+    final filterBar = find.byType(MovieRedesignFilterSortBar);
+    expect(filterBar, findsOneWidget);
+    await tester.tap(
+      find.descendant(of: filterBar, matching: find.text('待刮削')),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
 
@@ -47,7 +59,8 @@ void main() {
     await _pumpSection(tester, container);
 
     // 弹窗内持有 2 秒周期刷新 Timer，避免 pumpAndSettle 永不静止。
-    await tester.tap(find.text('任务进度'));
+    // 头部按钮文案带活跃任务数后缀（如"任务进度 2"），用 textContaining 定位。
+    await tester.tap(find.textContaining('任务进度'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 

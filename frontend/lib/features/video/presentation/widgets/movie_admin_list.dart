@@ -43,39 +43,50 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     return CustomScrollView(
       slivers: [
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+          padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
           sliver: SliverToBoxAdapter(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: MovieSectionHeading(
+                  child: MovieRedesignSectionHeader(
                     title: l10n.videoSectionMovieAdmin,
+                    subtitleEn: l10n.videoRedesignSubAdmin,
                     subtitle: l10n.videoMovieAdminSubtitle,
                   ),
                 ),
                 const SizedBox(width: 16),
-                _buildHeaderActions(context, l10n, activeTaskCount),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: _buildHeaderActions(context, l10n, activeTaskCount),
+                ),
               ],
             ),
           ),
         ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 0),
+          sliver: SliverToBoxAdapter(child: _buildStatCards(context, entries)),
+        ),
+        SliverPadding(
+          padding: const EdgeInsets.fromLTRB(4, 12, 4, 0),
           sliver: SliverToBoxAdapter(
             child: _buildFilterChips(context, l10n, state.filter),
           ),
         ),
         if (pageEntries.isEmpty)
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+            padding: const EdgeInsets.fromLTRB(4, 24, 4, 0),
             sliver: SliverToBoxAdapter(
-              child: EmptyMovieState(message: l10n.videoMovieAdminEmpty),
+              child: MovieRedesignEmptyState(
+                icon: Icons.admin_panel_settings_outlined,
+                title: l10n.videoMovieAdminEmpty,
+              ),
             ),
           )
         else
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(24, 10, 24, 0),
+            padding: const EdgeInsets.fromLTRB(4, 10, 4, 0),
             sliver: SliverList.builder(
               itemCount: pageEntries.length,
               itemBuilder: (context, index) {
@@ -89,7 +100,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
             ),
           ),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
+          padding: const EdgeInsets.fromLTRB(4, 16, 4, 32),
           sliver: SliverToBoxAdapter(
             child: _buildPager(context, l10n, safePage, pageCount),
           ),
@@ -98,29 +109,102 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     );
   }
 
+  /// 四张统计卡：总条目 / 已匹配 / 待刮削 / 失败。
+  Widget _buildStatCards(BuildContext context, List<_AdminRowEntry> entries) {
+    final palette = context.movieRedesign;
+    final text = context.movieRedesignText;
+    final l10n = AppLocalizations.of(context);
+    String statusOf(_AdminRowEntry entry) =>
+        entry.item.metadataStatus.toUpperCase();
+    final matched = entries.where((e) => statusOf(e) == 'MATCHED').length;
+    final pending =
+        entries
+            .where((e) => statusOf(e) != 'MATCHED' && statusOf(e) != 'FAILED')
+            .length;
+    final failed = entries.where((e) => statusOf(e) == 'FAILED').length;
+    final stats = [
+      (
+        l10n.videoRedesignStatTotal,
+        l10n.videoRedesignStatTotalEn,
+        entries.length,
+      ),
+      (l10n.videoMatched, l10n.videoRedesignStatusMatched, matched),
+      (l10n.videoPendingScrape, l10n.videoRedesignStatusPending, pending),
+      (l10n.videoMatchFailed, l10n.videoRedesignStatusFailed, failed),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 900 ? 4 : 2;
+        final gap = 10.0;
+        final cardWidth =
+            (constraints.maxWidth - gap * (columns - 1)) / columns;
+        return Wrap(
+          spacing: gap,
+          runSpacing: gap,
+          children: [
+            for (final (label, labelEn, value) in stats)
+              SizedBox(
+                width: cardWidth,
+                child: Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: palette.card,
+                    borderRadius: MovieRedesignPalette.borderRadius,
+                    border: Border.all(color: palette.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '$value',
+                        style: text.display(size: 24, height: 1.1),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        label,
+                        style: text.body(size: 13, color: palette.foreground),
+                      ),
+                      Text(labelEn, style: text.mono(size: 10)),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildHeaderActions(
     BuildContext context,
     AppLocalizations l10n,
     int activeTaskCount,
   ) {
+    final palette = context.movieRedesign;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        OutlinedButton.icon(
-          onPressed: () => context.go('/admin/storage'),
-          icon: const Icon(Icons.dns_outlined, size: 18),
-          label: Text(l10n.videoAdminLibrarySources),
+        _AdminTextAction(
+          label: l10n.videoAdminLibrarySources,
+          onTap: () => context.go('/admin/storage'),
         ),
-        _TaskProgressButton(
-          activeCount: activeTaskCount,
-          onOpen: _showTaskProgressDialog,
+        _AdminTextAction(
+          label:
+              activeTaskCount > 0
+                  ? '${l10n.videoTaskProgressDialog} $activeTaskCount'
+                  : l10n.videoTaskProgressDialog,
+          onTap: _showTaskProgressDialog,
         ),
         IconButton(
           tooltip: l10n.videoRefreshTooltip,
           onPressed: () => _controller.refresh(),
-          icon: const Icon(Icons.refresh_rounded),
+          icon: Icon(
+            Icons.refresh_rounded,
+            size: 18,
+            color: palette.mutedForeground,
+          ),
         ),
       ],
     );
@@ -131,26 +215,33 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     AppLocalizations l10n,
     MovieLibraryFilter currentFilter,
   ) {
-    final chips = <MovieLibraryFilter, String>{
-      MovieLibraryFilter.all: l10n.videoLibraryFilterAll,
-      MovieLibraryFilter.matched: l10n.videoMatched,
-      MovieLibraryFilter.pending: l10n.videoPendingScrape,
-      MovieLibraryFilter.failed: l10n.videoMatchFailed,
-    };
-    return Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        for (final entry in chips.entries)
-          ChoiceChip(
-            label: Text(entry.value),
-            selected: currentFilter == entry.key,
-            onSelected: (_) {
-              setState(() => _page = 0);
-              _controller.setFilter(entry.key);
-            },
-          ),
-      ],
+    final chips = [
+      MovieRedesignChip(
+        value: MovieLibraryFilter.all.name,
+        label: l10n.videoRedesignFilterAll,
+      ),
+      MovieRedesignChip(
+        value: MovieLibraryFilter.matched.name,
+        label: l10n.videoRedesignFilterMatched,
+      ),
+      MovieRedesignChip(
+        value: MovieLibraryFilter.pending.name,
+        label: l10n.videoRedesignFilterPending,
+      ),
+      MovieRedesignChip(
+        value: MovieLibraryFilter.failed.name,
+        label: l10n.videoRedesignFilterFailed,
+      ),
+    ];
+    return MovieRedesignFilterSortBar(
+      filters: chips,
+      filterValue: currentFilter.name,
+      onFilter: (value) {
+        setState(() => _page = 0);
+        _controller.setFilter(
+          MovieLibraryFilter.values.firstWhere((f) => f.name == value),
+        );
+      },
     );
   }
 
@@ -160,6 +251,8 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     required _AdminRowEntry entry,
     required int rowNumber,
   }) {
+    final palette = context.movieRedesign;
+    final text = context.movieRedesignText;
     final item = entry.item;
     final metaLine =
         entry.episodeCount != null
@@ -167,25 +260,20 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
             : '${item.mediaType == 'MOVIE' ? l10n.videoSectionMovies : item.mediaType} · ${item.year}';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: context.videoColors.surfaceContainerHigh.withValues(alpha: 0.62),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: context.videoColors.outlineVariant.withValues(alpha: 0.22),
-        ),
+        color: palette.card,
+        borderRadius: MovieRedesignPalette.borderRadius,
+        border: Border.all(color: palette.border),
       ),
       child: Row(
         children: [
           SizedBox(
-            width: 44,
+            width: 36,
             child: Text(
               '$rowNumber',
-              style: TextStyle(
-                color: context.videoColors.onSurfaceVariant,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
+              key: ValueKey('admin-row-number-$rowNumber'),
+              style: text.mono(size: 12),
             ),
           ),
           _PosterThumb(item: item),
@@ -198,22 +286,14 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
                   item.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.videoColors.onSurface,
-                    fontSize: 15,
-                    height: 20 / 15,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: text.body(size: 14, weight: FontWeight.w500),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   metaLine,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.videoColors.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
+                  style: text.mono(size: 12),
                 ),
               ],
             ),
@@ -223,17 +303,19 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
           const SizedBox(width: 8),
           _NfoStatusPill(status: item.nfoStatus),
           const SizedBox(width: 10),
-          FilledButton.tonal(
-            style: FilledButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              textStyle: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
+          Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: () => context.go('/video/${item.id}/metadata'),
+              borderRadius: MovieRedesignPalette.borderRadius,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Text(
+                  l10n.videoEdit,
+                  style: text.mono(size: 12, color: palette.primary),
+                ),
               ),
             ),
-            onPressed: () => context.go('/video/${item.id}/metadata'),
-            child: Text(l10n.videoEdit),
           ),
           const SizedBox(width: 6),
           _buildRowMenu(context, l10n, item),
@@ -346,10 +428,9 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
         const SizedBox(width: 8),
         Text(
           '${safePage + 1} / $pageCount',
-          style: TextStyle(
-            color: context.videoColors.onSurface,
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
+          style: context.movieRedesignText.mono(
+            size: 12,
+            color: context.movieRedesign.foreground,
           ),
         ),
         const SizedBox(width: 8),
@@ -452,11 +533,9 @@ class _PosterThumb extends StatelessWidget {
       height: 62,
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(6),
-        color: context.videoColors.surfaceContainerHighest,
-        border: Border.all(
-          color: context.videoColors.outlineVariant.withValues(alpha: 0.22),
-        ),
+        borderRadius: MovieRedesignPalette.borderRadius,
+        color: context.movieRedesign.muted,
+        border: Border.all(color: context.movieRedesign.border),
       ),
       child:
           item.posterImageUrl != null
@@ -468,13 +547,13 @@ class _PosterThumb extends StatelessWidget {
                     (context, error, stackTrace) => Icon(
                       Icons.movie_rounded,
                       size: 18,
-                      color: context.videoColors.onSurfaceVariant,
+                      color: context.movieRedesign.mutedForeground,
                     ),
               )
               : Icon(
                 Icons.movie_rounded,
                 size: 18,
-                color: context.videoColors.onSurfaceVariant,
+                color: context.movieRedesign.mutedForeground,
               ),
     );
   }
@@ -529,58 +608,50 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.10),
+        borderRadius: MovieRedesignPalette.borderRadius,
+        border: Border.all(color: color.withValues(alpha: 0.30)),
       ),
       child: Text(
         label,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-        ),
+        style: context.movieRedesignText.mono(size: 10, color: color),
       ),
     );
   }
 }
 
-class _TaskProgressButton extends StatelessWidget {
-  const _TaskProgressButton({required this.activeCount, required this.onOpen});
+/// 管理区头部单行文字动作（等宽样式，替代旧版实底按钮）。
+class _AdminTextAction extends StatelessWidget {
+  const _AdminTextAction({required this.label, required this.onTap});
 
-  final int activeCount;
-  final VoidCallback onOpen;
+  final String label;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return FilledButton.tonalIcon(
-      onPressed: onOpen,
-      icon: const Icon(Icons.task_alt_rounded, size: 18),
-      label: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(l10n.videoTaskProgressDialog),
-          if (activeCount > 0) ...[
-            const SizedBox(width: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-              decoration: BoxDecoration(
-                color: context.videoColors.primary.withValues(alpha: 0.9),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                '$activeCount',
-                style: TextStyle(
-                  color: context.videoColors.onPrimary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+    final palette = context.movieRedesign;
+    return Material(
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: MovieRedesignPalette.borderRadius,
+        side: BorderSide(color: palette.border),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: MovieRedesignPalette.borderRadius,
+        hoverColor: palette.foreground.withValues(alpha: 0.06),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          child: Text(
+            label,
+            style: context.movieRedesignText.mono(
+              size: 12,
+              color: palette.foreground,
             ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }

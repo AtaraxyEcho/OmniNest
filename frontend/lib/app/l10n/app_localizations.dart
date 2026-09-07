@@ -15821,6 +15821,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm upload'**
   String get videoRedesignConfirmUpload;
+
+  /// No description provided for @videoRedesignStatTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'Total items'**
+  String get videoRedesignStatTotal;
+
+  /// No description provided for @videoRedesignStatTotalEn.
+  ///
+  /// In en, this message translates to:
+  /// **'Total'**
+  String get videoRedesignStatTotalEn;
 }
 
 class _AppLocalizationsDelegate

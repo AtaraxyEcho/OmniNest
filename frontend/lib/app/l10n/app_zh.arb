@@ -3781,5 +3781,7 @@
   "videoRedesignVersionsEn": "Versions",
   "videoRedesignOriginalVersion": "原版",
   "videoRedesignLanguage": "语言",
-  "videoRedesignConfirmUpload": "确认上传"
+  "videoRedesignConfirmUpload": "确认上传",
+  "videoRedesignStatTotal": "总条目",
+  "videoRedesignStatTotalEn": "Total"
 }

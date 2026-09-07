@@ -8397,4 +8397,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoRedesignConfirmUpload => '确认上传';
+
+  @override
+  String get videoRedesignStatTotal => '总条目';
+
+  @override
+  String get videoRedesignStatTotalEn => 'Total';
 }

@@ -8655,4 +8655,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoRedesignConfirmUpload => 'Confirm upload';
+
+  @override
+  String get videoRedesignStatTotal => 'Total items';
+
+  @override
+  String get videoRedesignStatTotalEn => 'Total';
 }

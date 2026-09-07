@@ -3907,5 +3907,7 @@
   "videoRedesignVersionsEn": "Versions",
   "videoRedesignOriginalVersion": "Original",
   "videoRedesignLanguage": "Language",
-  "videoRedesignConfirmUpload": "Confirm upload"
+  "videoRedesignConfirmUpload": "Confirm upload",
+  "videoRedesignStatTotal": "Total items",
+  "videoRedesignStatTotalEn": "Total"
 }
