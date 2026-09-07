@@ -817,33 +817,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   Widget _buildInfoPanel(BuildContext context, PhotoItem photo) {
     final preferZh = Localizations.localeOf(context).languageCode == 'zh';
     final l10n = AppLocalizations.of(context);
-    final camera = [
-      photo.cameraMake,
-      photo.cameraModel,
-    ].whereType<String>().where((part) => part.isNotEmpty).join(' ');
-    // 设计稿固定 8 行字段，缺失值统一显示占位符。
-    final rows = <(String, String)>[
-      (
-        l10n.photosLocationInfo,
-        photo.locationDisplay(preferZh: preferZh) ?? '—',
-      ),
-      (
-        l10n.photosDateTaken,
-        photo.dateTaken != null ? _formatDate(photo.dateTaken!) : '—',
-      ),
-      (l10n.photosBrand, camera.isNotEmpty ? camera : '—'),
-      (l10n.photosLens, _nonBlank(photo.lensModel) ?? '—'),
-      (l10n.photosShutterSpeed, _nonBlank(photo.shutterSpeed) ?? '—'),
-      (
-        l10n.photosAperture,
-        _nonBlank(photo.aperture) != null ? 'f/${photo.aperture}' : '—',
-      ),
-      (l10n.photosIso, photo.iso != null ? '${photo.iso}' : '—'),
-      (
-        l10n.photosFocalLength,
-        _nonBlank(photo.focalLength) != null ? '${photo.focalLength}mm' : '—',
-      ),
-    ];
+    // 与详情页信息侧栏共用同一字段集（buildPhotoInfoEntries），有值才渲染。
+    final rows = buildPhotoInfoEntries(photo, l10n, preferZh: preferZh);
     return Positioned(
       top: 0,
       right: 0,
@@ -878,8 +853,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   ),
                 ),
                 const SizedBox(height: 32),
-                for (final row in rows)
-                  PhotoInfoRow(label: row.$1, value: row.$2),
+                if (rows.isEmpty)
+                  Text(
+                    '—',
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.35),
+                      fontSize: 12,
+                    ),
+                  )
+                else
+                  for (final row in rows)
+                    PhotoInfoRow(label: row.label, value: row.value),
                 const SizedBox(height: 16),
                 Row(
                   children: [
@@ -922,12 +906,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     );
   }
 
-  String? _nonBlank(String? value) {
-    if (value == null) return null;
-    final trimmed = value.trim();
-    return trimmed.isEmpty ? null : trimmed;
-  }
-
   // ─── 辅助方法 ───
 
   String _metaLine(PhotoItem photo, bool preferZh) {
@@ -940,18 +918,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                 '${date.day.toString().padLeft(2, '0')}';
     return [location, dateText].whereType<String>().join(' · ');
   }
-
-  String _formatDate(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-'
-        '${date.day.toString().padLeft(2, '0')}';
-  }
 }
 
 /// 前景幻灯片层：contain 原图，进入/离场由父级过渡驱动。
 ///
 /// 模糊背景在页面级（_buildBackdrop），本层不再包含 ImageFiltered，
 /// 避免逐帧动画触发全屏重滤波导致掉帧闪烁。
-class _SlideLayer extends StatelessWidget {
+///
+/// 丝滑关键：图片子树由 [RepaintBoundary] 包裹且动画全程保持同一实例
+/// （光栅缓存命中后每帧只做合成级平移/缩放/淡变，不再逐帧重绘大图），
+/// 动画用 FadeTransition/Transform 直接驱动 Layer 属性而非重建子树。
+class _SlideLayer extends StatefulWidget {
   const _SlideLayer({
     required this.item,
     required this.leaving,
@@ -964,17 +941,48 @@ class _SlideLayer extends StatelessWidget {
   final bool directionNext;
 
   @override
+  State<_SlideLayer> createState() => _SlideLayerState();
+}
+
+class _SlideLayerState extends State<_SlideLayer>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: _transitionDuration,
+    );
+    _fade = Tween<double>(
+      begin: widget.leaving ? 1.0 : 0.0,
+      end: widget.leaving ? 0.0 : 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: _curve));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final imageUrl = item.sourceUrl ?? item.coverUrl;
+    final imageUrl = widget.item.sourceUrl ?? widget.item.coverUrl;
     final cacheKey =
-        item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey;
+        widget.item.sourceUrl != null
+            ? widget.item.sourceCacheKey
+            : widget.item.coverCacheKey;
     // 原图按屏宽降采样解码：contain 显示不会超过屏宽像素，
     // 全尺寸解码位图（4K 照片约 45MB/张）会把图片缓存预算挤爆，
     // 邻居预取互相驱逐导致每次切换重新下载解码（表现为闪烁）。
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final screenSize = MediaQuery.sizeOf(context);
     final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
-    final thumbUrl = item.coverUrl;
+    final thumbUrl = widget.item.coverUrl;
     // 原图尚未进缓存时以模糊缩略图兜底，避免入场瞬间闪黑；
     // 模糊后的缩略图与背景氛围一致，原图就绪时仅清晰度提升、不产生跳变。
     Widget? placeholder;
@@ -983,7 +991,7 @@ class _SlideLayer extends StatelessWidget {
         imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
         child: CachedNetworkImage(
           imageUrl: thumbUrl,
-          cacheKey: item.coverCacheKey,
+          cacheKey: widget.item.coverCacheKey,
           fit: BoxFit.contain,
           fadeInDuration: Duration.zero,
           errorWidget:
@@ -1006,19 +1014,18 @@ class _SlideLayer extends StatelessWidget {
               ? (context, url, error) => const ColoredBox(color: Colors.black)
               : (context, url, error) => placeholder!,
     );
-    return TweenAnimationBuilder<double>(
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: _transitionDuration,
-      curve: _curve,
-      builder: (context, t, child) {
+    return AnimatedBuilder(
+      animation: _controller,
+      child: RepaintBoundary(child: SizedBox.expand(child: image)),
+      builder: (context, child) {
+        final t = _fade.value;
         final dx =
-            leaving
-                ? (directionNext ? -4.0 : 4.0) * t
-                : (directionNext ? 4.0 : -4.0) * (1 - t);
-        final scale = leaving ? 1.0 - 0.03 * t : 1.02 - 0.02 * t;
-        final opacity = leaving ? 1 - t : t;
-        return Opacity(
-          opacity: opacity.clamp(0, 1),
+            widget.leaving
+                ? (widget.directionNext ? -4.0 : 4.0) * t
+                : (widget.directionNext ? 4.0 : -4.0) * (1 - t);
+        final scale = widget.leaving ? 1.0 - 0.03 * t : 1.02 - 0.02 * t;
+        return FadeTransition(
+          opacity: _fade,
           child: Transform(
             alignment: Alignment.center,
             transform:
@@ -1029,7 +1036,6 @@ class _SlideLayer extends StatelessWidget {
           ),
         );
       },
-      child: SizedBox.expand(child: image),
     );
   }
 }

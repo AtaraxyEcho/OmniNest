@@ -116,7 +116,6 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         _loadedForPhotoId = photoId;
         _creating = false;
       });
-      unawaited(_copyToClipboard());
     } on Exception catch (error) {
       if (!mounted) return;
       setState(() {
@@ -160,7 +159,6 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         _shareUrl = _buildShareUrl(link.token);
         _creating = false;
       });
-      unawaited(_copyToClipboard());
     } on Exception {
       if (!mounted) return;
       setState(() {
@@ -168,57 +166,6 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         _error = AppLocalizations.of(context).photosShareLinkFailed;
       });
     }
-  }
-
-  String _expiryLabel(AppLocalizations l10n) {
-    switch (_expiryOption) {
-      case '1d':
-        return l10n.photosShareExpiry1d;
-      case '7d':
-        return l10n.photosShareExpiry7d;
-      case 'never':
-        return l10n.photosShareExpiryNever;
-      default:
-        return l10n.photosShareExpiry30d;
-    }
-  }
-
-  Future<void> _pickExpiry(AppLocalizations l10n) async {
-    final selected = await showDialog<String>(
-      context: context,
-      builder:
-          (ctx) => SimpleDialog(
-            backgroundColor: Colors.grey.shade900,
-            title: Text(
-              l10n.photosShareExpiryOption,
-              style: const TextStyle(color: Colors.white, fontSize: 16),
-            ),
-            children: [
-              for (final (value, label) in [
-                ('1d', l10n.photosShareExpiry1d),
-                ('7d', l10n.photosShareExpiry7d),
-                ('30d', l10n.photosShareExpiry30d),
-                ('never', l10n.photosShareExpiryNever),
-              ])
-                SimpleDialogOption(
-                  onPressed: () => Navigator.pop(ctx, value),
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      color:
-                          value == _expiryOption
-                              ? const Color(0xFF4ADE80)
-                              : Colors.white.withValues(alpha: 0.80),
-                      fontSize: 13,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-    );
-    if (selected == null || selected == _expiryOption || !mounted) return;
-    setState(() => _expiryOption = selected);
-    await _recreateLink();
   }
 
   Future<void> _togglePassword(bool enable, AppLocalizations l10n) async {
@@ -639,8 +586,12 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         const SizedBox(height: 12),
         _ShareSelectRow(
           label: l10n.photosShareExpiryOption,
-          valueLabel: _expiryLabel(l10n),
-          onTap: () => unawaited(_pickExpiry(l10n)),
+          value: _expiryOption,
+          onSelected: (value) {
+            if (value == _expiryOption) return;
+            setState(() => _expiryOption = value);
+            unawaited(_recreateLink());
+          },
         ),
         const SizedBox(height: 8),
         _ShareToggleRow(
@@ -671,23 +622,73 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   }
 }
 
-/// OPTIONS 选择行：整行可点，右侧显示当前值。
+/// OPTIONS 选择行：整行下拉，右侧显示当前档位。
 class _ShareSelectRow extends StatelessWidget {
   const _ShareSelectRow({
     required this.label,
-    required this.valueLabel,
-    required this.onTap,
+    required this.value,
+    required this.onSelected,
   });
 
   final String label;
-  final String valueLabel;
-  final VoidCallback onTap;
+  final String value;
+  final ValueChanged<String> onSelected;
+
+  List<(String, String)> _entries(AppLocalizations l10n) {
+    return [
+      ('1d', l10n.photosShareExpiry1d),
+      ('7d', l10n.photosShareExpiry7d),
+      ('30d', l10n.photosShareExpiry30d),
+      ('never', l10n.photosShareExpiryNever),
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+    final l10n = AppLocalizations.of(context);
+    final entries = _entries(l10n);
+    final current = entries.firstWhere(
+      (entry) => entry.$1 == value,
+      orElse: () => entries.first,
+    );
+    return PopupMenuButton<String>(
+      onSelected: onSelected,
+      tooltip: '',
+      color: const Color(0xFF1C1C1C),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+      ),
+      itemBuilder:
+          (context) => [
+            for (final entry in entries)
+              PopupMenuItem(
+                value: entry.$1,
+                height: 40,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entry.$2,
+                        style: TextStyle(
+                          color:
+                              entry.$1 == value
+                                  ? const Color(0xFF4ADE80)
+                                  : Colors.white.withValues(alpha: 0.80),
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    if (entry.$1 == value)
+                      const Icon(
+                        Icons.check_rounded,
+                        size: 16,
+                        color: Color(0xFF4ADE80),
+                      ),
+                  ],
+                ),
+              ),
+          ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         decoration: BoxDecoration(
@@ -707,7 +708,7 @@ class _ShareSelectRow extends StatelessWidget {
               ),
             ),
             Text(
-              valueLabel,
+              current.$2,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.45),
                 fontSize: 11,

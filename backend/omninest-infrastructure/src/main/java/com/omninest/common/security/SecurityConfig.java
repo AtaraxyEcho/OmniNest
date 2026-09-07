@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.annotation.Order;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
@@ -41,7 +42,33 @@ import org.springframework.security.web.SecurityFilterChain;
 @EnableMethodSecurity
 public class SecurityConfig {
 
+    /**
+     * 公开内容独立过滤链：分享与公开端点不解析 Bearer 凭据。
+     *
+     * <p>oauth2ResourceServer 对任何携带 Authorization 头的请求强制解码，
+     * 浏览器残留的过期令牌会让 permitAll 的公开端点也在认证阶段返回 401
+     * （认证失败先于授权判定）；本链不挂 JWT 解码，访客无凭据亦可访问。</p>
+     */
     @Bean
+    @Order(0)
+    @ConditionalOnProperty(
+            prefix = "omninest.runtime",
+            name = "role",
+            havingValue = "api",
+            matchIfMissing = true
+    )
+    SecurityFilterChain publicContentFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/api/v1/public/**", "/api/v1/s/**")
+                .csrf(AbstractHttpConfigurer::disable)
+                .formLogin(AbstractHttpConfigurer::disable)
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
+        return http.build();
+    }
+
+    @Bean
+    @Order(1)
     @ConditionalOnProperty(
             prefix = "omninest.runtime",
             name = "role",
@@ -63,8 +90,6 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/setup/status").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/setup/super-admin").permitAll()
                         .requestMatchers(HttpMethod.GET, "/setup").permitAll()
-                        .requestMatchers("/api/v1/s/**").permitAll()
-                        .requestMatchers("/api/v1/public/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/music/playback/sessions/*/stream").permitAll()
                         .requestMatchers(HttpMethod.HEAD, "/api/v1/music/playback/sessions/*/stream").permitAll()
                         .requestMatchers("/ws/**").permitAll()

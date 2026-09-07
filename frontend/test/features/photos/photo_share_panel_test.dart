@@ -87,7 +87,6 @@ void main() {
       ),
     ).thenAnswer((_) async => link);
     await _pumpPanel(tester, repository);
-    // 自动复制为异步链路，补帧等待复制态渲染。
     await tester.pump();
     await tester.pump();
 
@@ -95,12 +94,16 @@ void main() {
     expect(find.text('分享'), findsOneWidget);
     expect(find.text('Motion Shot'), findsOneWidget);
     expect(find.text('Bern'), findsNWidgets(2));
-    // 链接创建成功后自动复制，按钮进入已复制态。
-    // 链接基于前端站点地址（默认退化 origin），而非 API 地址。
+    // 链接基于前端站点地址（默认退化 origin），而非 API 地址；复制为手动操作。
     expect(
       find.text('http://localhost:8080/#/shared/photos/item/tok-1'),
       findsOneWidget,
     );
+    expect(find.text('复制'), findsOneWidget);
+    expect(find.text('✓ 已复制'), findsNothing);
+    await tester.tap(find.text('复制'));
+    await tester.pump();
+    await tester.pump();
     expect(find.text('✓ 已复制'), findsOneWidget);
     // 渠道宫格、OPTIONS 开关与管理入口。
     expect(find.text('分享至'), findsOneWidget);
