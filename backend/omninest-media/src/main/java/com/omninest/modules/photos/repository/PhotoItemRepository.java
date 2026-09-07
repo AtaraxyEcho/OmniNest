@@ -409,6 +409,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                        p.file_size,
                        p.cover_file_id,
                        p.metadata_status,
+                       p.motion_state,
                        p.created_at,
                        ROW_NUMBER() OVER (
                            PARTITION BY mp.month_start
@@ -513,6 +514,7 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
                        p.file_size,
                        p.cover_file_id,
                        p.metadata_status,
+                       p.motion_state,
                        p.created_at
                   FROM omni.photo_items p
                   JOIN omni.file_nodes f ON f.id = p.file_node_id
