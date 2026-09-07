@@ -7,6 +7,12 @@ import 'package:flutter/material.dart';
 
 import 'package:omninest/features/photos/domain/photo.dart';
 
+/// 幻灯片图片质量档位。
+///
+/// - [thumbnail]：coverUrl 按 400px 解码（网格/快速切换，秒开）；
+/// - [preview]：sourceUrl 按屏宽降采样解码（全屏真高清渐进替换）。
+enum ImageQuality { thumbnail, preview }
+
 /// 幻灯片专用解码位图缓存。
 ///
 /// 所有权模型：位图本体由 Flutter ImageCache 持有（解码后保留 stream 监听，
@@ -49,34 +55,47 @@ class SlideshowImageCache {
   ///
   /// 解码完成后：窗口内的图登记到窗口引用；窗口外（解码期间已切走并更新
   /// 窗口）不登记。任何失败/超时都归一为 null，绝不抛出。
-  Future<ui.Image?> obtain(PhotoItem item, BuildContext context) async {
+  ///
+  /// 档位：thumbnail=coverUrl@400（快速切换秒显）；
+  /// preview=sourceUrl 原图按屏宽降采样解码（真高清渐进替换）。
+  Future<ui.Image?> obtain(
+    PhotoItem item,
+    ImageQuality quality,
+    BuildContext context,
+  ) async {
     if (_disposed) return null;
     final id = item.id;
-    final cached = _decoded[id];
+    final key = '$id-${quality.name}';
+    final cached = _decoded[key];
     if (cached != null) return cached;
-    final loading = _loading[id];
+    final loading = _loading[key];
     if (loading != null) return loading;
-    final url = item.sourceUrl ?? item.coverUrl;
+    // thumbnail 档用 cover（1024 WebP 秒开）；preview 档用原图（真高清）。
+    final url =
+        quality == ImageQuality.thumbnail ? item.coverUrl : item.sourceUrl;
     if (url == null || url.isEmpty) return null;
     final dpr = MediaQuery.devicePixelRatioOf(context);
     final screenSize = MediaQuery.sizeOf(context);
-    final memCacheWidth = (screenSize.width * dpr).round().clamp(1, 8192);
+    final memCacheWidth = switch (quality) {
+      ImageQuality.thumbnail => 400,
+      ImageQuality.preview => (screenSize.width * dpr).round().clamp(1, 2560),
+    };
+    final cacheKey =
+        quality == ImageQuality.thumbnail
+            ? item.coverCacheKey
+            : item.sourceCacheKey;
     final provider = ResizeImage.resizeIfNeeded(
       memCacheWidth,
       null,
-      CachedNetworkImageProvider(
-        url,
-        cacheKey:
-            item.sourceUrl != null ? item.sourceCacheKey : item.coverCacheKey,
-      ),
+      CachedNetworkImageProvider(url, cacheKey: cacheKey),
     );
     final future = _decodeViaResolve(provider, context).timeout(_obtainTimeout);
-    _loading[id] = future;
+    _loading[key] = future;
     return future.then((image) {
       // 窗口竞态防护：解码期间可能已切走并更新窗口，窗口外的图不登记；
       // 切换调用方拿到位图后会显式 retain。
       if (image != null && !_disposed && _window.contains(id)) {
-        _decoded[id] = image;
+        _decoded[key] = image;
       }
       return image;
     });

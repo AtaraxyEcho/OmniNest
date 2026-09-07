@@ -170,7 +170,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       return;
     }
     try {
-      final image = await _imageCache.obtain(_photos[_current], context);
+      final image = await _imageCache.obtain(
+        _photos[_current],
+        ImageQuality.thumbnail,
+        context,
+      );
       if (!mounted) return;
       setState(() {
         if (image != null) {
@@ -241,7 +245,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           _photos.length;
       if (!_hasImage(_photos[index])) continue;
       unawaited(() async {
-        final image = await _imageCache.obtain(_photos[index], context);
+        final image = await _imageCache.obtain(
+          _photos[index],
+          ImageQuality.thumbnail,
+          context,
+        );
         if (image != null) {
           _imageCache.retain(_photos[index].id, image);
         }
@@ -272,7 +280,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     setState(() => _awaitingTarget = true);
 
     try {
-      final image = await _imageCache.obtain(_photos[target], context);
+      final image = await _imageCache.obtain(
+        _photos[target],
+        ImageQuality.preview,
+        context,
+      );
 
       if (!mounted) return;
 
@@ -551,34 +563,35 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 
   /// 单张模糊背景：96px 超低分辨率缩略图放大拉伸（放大即强模糊）+ 压暗。
+  ///
+  /// 返回纯内容（不含 Positioned）——定位由调用层的 Stack 负责，
+  /// Positioned 穿越 Opacity 会导致 ParentData 失配异常。
   Widget _buildBlurredCover(PhotoItem photo) {
     final thumb = photo.coverUrl;
     if (thumb == null || thumb.isEmpty) {
       return const ColoredBox(color: Colors.black);
     }
-    return Positioned.fill(
-      child: RepaintBoundary(
-        child: Transform.scale(
-          scale: 1.12,
-          child: ImageFiltered(
-            imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                CachedNetworkImage(
-                  imageUrl: thumb,
-                  cacheKey: photo.coverCacheKey,
-                  memCacheWidth: 96,
-                  fit: BoxFit.cover,
-                  filterQuality: FilterQuality.medium,
-                  fadeInDuration: Duration.zero,
-                  errorWidget:
-                      (context, url, error) =>
-                          const ColoredBox(color: Colors.black),
-                ),
-                ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
-              ],
-            ),
+    return RepaintBoundary(
+      child: Transform.scale(
+        scale: 1.12,
+        child: ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
+                imageUrl: thumb,
+                cacheKey: photo.coverCacheKey,
+                memCacheWidth: 96,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                fadeInDuration: Duration.zero,
+                errorWidget:
+                    (context, url, error) =>
+                        const ColoredBox(color: Colors.black),
+              ),
+              ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
+            ],
           ),
         ),
       ),
