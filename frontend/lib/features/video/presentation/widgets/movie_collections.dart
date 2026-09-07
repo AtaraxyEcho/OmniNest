@@ -76,7 +76,8 @@ class CollectionsSection extends ConsumerWidget {
             builder: (context, constraints) {
               final width = constraints.maxWidth;
               final columns = width >= 768 ? 3 : (width >= 640 ? 2 : 1);
-              final gap = 14.0;
+              // 原型 gap-3 sm:gap-4。
+              final gap = width >= 640 ? 16.0 : 12.0;
               final cardWidth = (width - gap * (columns - 1)) / columns;
               return Wrap(
                 spacing: gap,
