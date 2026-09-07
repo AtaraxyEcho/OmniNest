@@ -104,7 +104,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _transitionController = AnimationController(
       vsync: this,
       duration: _transitionDuration,
-    )..addStatusListener(_onTransitionStatus);
+    );
     _transitionFade = CurvedAnimation(
       parent: _transitionController,
       curve: _curve,
@@ -125,8 +125,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   /// 交叉动画完成：清除离场层、背景跟进新图、窗口整理并预热邻居、
   /// 消化等待期间记录的最终导航目标。
-  void _onTransitionStatus(AnimationStatus status) {
-    if (status != AnimationStatus.completed) return;
+  void _onTransitionCompleted() {
     setState(() {
       _previousImage = null;
       _transitioning = false;
@@ -300,25 +299,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
       _progressController.forward(from: 0);
 
-      Timer(_transitionDuration, () {
-        if (!mounted) return;
-
-        setState(() {
-          _transitioning = false;
-          // 动画完成后背景才跟进新图（切换期间背景保持旧图稳定）。
-          _backdropIndex = _current;
-        });
-
-        _imageCache.updateWindow(_photos, _current);
-        _preloadNeighbors();
-
-        // 消化等待期间记录的最终导航目标。
-        final pending = _pendingTarget;
-        _pendingTarget = null;
-        if (pending != null && pending != _current) {
-          unawaited(_goTo(pending, next: pending > _current));
-        }
-      });
+      Timer(_transitionDuration, _onTransitionCompleted);
     } catch (error, stackTrace) {
       debugPrint('Slideshow transition failed: $error');
       debugPrintStack(stackTrace: stackTrace);
