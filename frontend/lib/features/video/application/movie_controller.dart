@@ -364,6 +364,14 @@ final movieItemHistoryProvider = FutureProvider.autoDispose
       return history.where((h) => h.videoItemId == videoItemId).firstOrNull;
     });
 
+final videoFavoriteStatusProvider = FutureProvider.autoDispose
+    .family<bool, String>((ref, videoItemId) {
+      return ref
+          .watch(movieApiProvider)
+          .favoriteStatus(videoItemId)
+          .then((state) => state.favorite);
+    });
+
 final seriesFavoriteProvider = FutureProvider.autoDispose.family<bool, String>((
   ref,
   seriesId,

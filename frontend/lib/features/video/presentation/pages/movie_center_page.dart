@@ -16,7 +16,6 @@ import 'package:omninest/features/video/presentation/widgets/movie_history.dart'
 import 'package:omninest/features/video/presentation/widgets/movie_management.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_continue.dart';
-import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_detail_drawer.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_empty_state.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_filter_sort_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_poster_card.dart';
@@ -29,81 +28,61 @@ class MovieCenterPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(movieCenterControllerProvider);
-    final drawerItem = ref.watch(movieRedesignDetailProvider);
     return state.when(
       data: (data) {
         // 管理分区不再静默回退到电影：无权限时由内容区显示明确提示，
         // 避免用户点击「媒体库管理」等管理项后被悄悄带回电影页。
         final visibleState = data;
-        return Stack(
+        return Column(
           children: [
-            Column(
-              children: [
-                if (data.errorMessage != null)
-                  MaterialBanner(
-                    content: Text(data.errorMessage!),
-                    backgroundColor:
-                        Theme.of(context).colorScheme.errorContainer,
-                    actions: [
-                      TextButton(
-                        onPressed:
-                            () =>
-                                ref
-                                    .read(
-                                      movieCenterControllerProvider.notifier,
-                                    )
-                                    .clearError(),
-                        child: Text(AppLocalizations.of(context).videoClose),
-                      ),
-                    ],
+            if (data.errorMessage != null)
+              MaterialBanner(
+                content: Text(data.errorMessage!),
+                backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                actions: [
+                  TextButton(
+                    onPressed:
+                        () =>
+                            ref
+                                .read(movieCenterControllerProvider.notifier)
+                                .clearError(),
+                    child: Text(AppLocalizations.of(context).videoClose),
                   ),
-                Expanded(
-                  child: MovieShell(
-                    section: visibleState.section,
-                    childOwnsScroll: true,
-                    onSectionSelected:
-                        ref
-                            .read(movieCenterControllerProvider.notifier)
-                            .selectSection,
-                    counts: {
-                      MovieSection.movies:
-                          visibleState.dashboard.stats.movieCount,
-                      MovieSection.tvShows:
-                          visibleState.dashboard.stats.seriesCount,
-                      MovieSection.anime: visibleState.animeSeries.length,
-                      MovieSection.collections: visibleState.collections.length,
-                      MovieSection.continueWatching:
-                          visibleState.continueWatching.length,
-                      MovieSection.favorites: visibleState.favoriteItems.length,
-                      MovieSection.history: visibleState.watchHistory.length,
-                    },
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(child: _MovieSearchField(state: visibleState)),
-                      ],
-                    ),
-                    onRefresh: () async {
-                      await ref
-                          .read(movieCenterControllerProvider.notifier)
-                          .refresh();
-                    },
-                    child: _MovieContent(state: visibleState),
-                  ),
-                ),
-              ],
-            ),
-            if (drawerItem != null)
-              Positioned.fill(
-                child: MovieRedesignDetailDrawer(
-                  item: drawerItem,
-                  onClose:
-                      () =>
-                          ref
-                              .read(movieRedesignDetailProvider.notifier)
-                              .close(),
-                ),
+                ],
               ),
+            Expanded(
+              child: MovieShell(
+                section: visibleState.section,
+                childOwnsScroll: true,
+                onSectionSelected:
+                    ref
+                        .read(movieCenterControllerProvider.notifier)
+                        .selectSection,
+                counts: {
+                  MovieSection.movies: visibleState.dashboard.stats.movieCount,
+                  MovieSection.tvShows:
+                      visibleState.dashboard.stats.seriesCount,
+                  MovieSection.anime: visibleState.animeSeries.length,
+                  MovieSection.collections: visibleState.collections.length,
+                  MovieSection.continueWatching:
+                      visibleState.continueWatching.length,
+                  MovieSection.favorites: visibleState.favoriteItems.length,
+                  MovieSection.history: visibleState.watchHistory.length,
+                },
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Flexible(child: _MovieSearchField(state: visibleState)),
+                  ],
+                ),
+                onRefresh: () async {
+                  await ref
+                      .read(movieCenterControllerProvider.notifier)
+                      .refresh();
+                },
+                child: _MovieContent(state: visibleState),
+              ),
+            ),
           ],
         );
       },
@@ -288,7 +267,7 @@ MovieRedesignCardData _movieCard(
       if (item.mediaType == 'TV') {
         context.push('/video/series/${item.id}');
       } else {
-        ref.read(movieRedesignDetailProvider.notifier).open(item);
+        context.push('/video/${item.id}');
       }
     },
     onPlay: () {
