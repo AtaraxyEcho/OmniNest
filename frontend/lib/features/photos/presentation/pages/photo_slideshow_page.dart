@@ -15,6 +15,9 @@ import 'package:omninest/features/photos/platform/photo_batch_web_download.dart'
 import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 
+/// 幻灯片页面阶段：首图解码中 / 可播放 / 首图加载失败。
+enum SlideshowPhase { loading, ready, failed }
+
 const _slideshowInterval = Duration(seconds: 5);
 const _transitionDuration = Duration(milliseconds: 600);
 const _idleHideDuration = Duration(seconds: 3);
@@ -64,14 +67,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 进行中的解码任务（single-flight：同一张图只加载一次）。
   final Map<String, Future<ui.Image?>> _loadingImages = {};
 
-  /// PREPARING 阶段：目标位图未就绪，不切换 current。
-  bool _preparing = true;
-
   /// TRANSITIONING 阶段：交叉动画进行中。
   bool _transitioning = false;
 
+  /// 切换等待中：目标位图解码期间保持当前帧并忽略重复触发。
+  bool _awaitingTarget = false;
+
   /// 背景层索引：独立于 current，动画完成后再跟进新图（避免背景突跳）。
   late int _backdropIndex;
+
+  /// 页面阶段：loading（首图解码中）/ ready（可播放）/ failed（首图加载失败）。
+  SlideshowPhase _phase = SlideshowPhase.loading;
 
   @override
   void initState() {
@@ -89,15 +95,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       _windowChromeLease = ref
           .read(windowChromeControllerProvider.notifier)
           .acquireImmersive(owner: 'photos.slideshow');
-      // 首张同样走就绪门控（否则点开即播的那张是占位）。
-      unawaited(
-        _loadDecodedImage(_photos[_current]).then((_) {
-          if (!mounted) return;
-          setState(() => _preparing = false);
-          _progressController.forward(from: 0);
-          _preloadNeighbors();
-        }),
-      );
+      unawaited(_loadInitialImage());
     });
   }
 
@@ -114,6 +112,51 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 
   PhotoItem get _currentPhoto => _photos[_current];
+
+  /// 首图加载：成功进入 ready；失败进入 failed（UI 提供重试）；无图照片按占位层就绪。
+  Future<void> _loadInitialImage() async {
+    if (!_hasImage(_photos[_current])) {
+      setState(() {
+        _phase = SlideshowPhase.ready;
+        _backdropIndex = _current;
+      });
+      _progressController.forward(from: 0);
+      _preloadNeighbors();
+      return;
+    }
+    final image = await _loadDecodedImage(_photos[_current]);
+    if (!mounted) return;
+    setState(() {
+      if (image != null) {
+        // 切换目标必在窗口内，强制落缓存（preload 回调可能因窗口检查跳过写回）。
+        _decodedImages[_photos[_current].id] = image;
+        _phase = SlideshowPhase.ready;
+      } else {
+        _phase = SlideshowPhase.failed;
+      }
+    });
+    if (image != null) {
+      _progressController.forward(from: 0);
+      _preloadNeighbors();
+    }
+  }
+
+  /// 首图加载失败后的重试入口。
+  Future<void> _retryInitialLoad() async {
+    if (_phase != SlideshowPhase.failed) return;
+    setState(() => _phase = SlideshowPhase.loading);
+    await _loadInitialImage();
+  }
+
+  /// 当前缓存窗口内的幻灯片 id（current ± _preloadRadius）。
+  Set<String> _windowIds() {
+    return {
+      for (var offset = -_preloadRadius; offset <= _preloadRadius; offset++)
+        _photos[((_current + offset) % _photos.length + _photos.length) %
+                _photos.length]
+            .id,
+    };
+  }
 
   /// 播放集合随来源类型实时扩展：库/收藏跟随分页控制器，影集/标签为全量查询。
   void _ensurePlaylist() {
@@ -146,7 +189,12 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       (item.sourceUrl ?? item.coverUrl)?.isNotEmpty == true;
 
   Future<void> _goTo(int index, {required bool next}) async {
-    if (_transitioning || _preparing || _photos.isEmpty) return;
+    if (_transitioning ||
+        _awaitingTarget ||
+        _phase != SlideshowPhase.ready ||
+        _photos.isEmpty) {
+      return;
+    }
     final target = ((index % _photos.length) + _photos.length) % _photos.length;
     if (target == _current) return;
     // 无图照片（元数据条目）：无需位图，直接切换到占位层。
@@ -169,23 +217,24 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       return;
     }
     // PREPARING：目标位图就绪前不切换 current（保持当前帧等待）。
-    _preparing = true;
+    _awaitingTarget = true;
     final image = await _loadDecodedImage(_photos[target]);
     if (!mounted) {
-      _preparing = false;
+      _awaitingTarget = false;
       return;
     }
     if (image == null) {
       // 加载失败（网络错误等）：保持当前图，允许用户重试。
-      setState(() => _preparing = false);
+      setState(() => _awaitingTarget = false);
       return;
     }
     // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
+    // 切换目标必在窗口内，强制落缓存（preload 回调可能因窗口检查跳过写回）。
+    _decodedImages[_photos[target].id] = image;
     setState(() {
       _leaving = _current;
       _directionNext = next;
       _current = target;
-      _preparing = false;
       _transitioning = true;
     });
     _progressController.forward(from: 0);
@@ -286,7 +335,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
     final future = _decodeImage(provider)
         .then((image) {
-          if (image != null) {
+          // 竞态防护：解码期间可能已切走并 prune 窗口，窗口外的图不写回缓存
+          //（_goTo 切换时会强制落缓存，不受影响）。
+          if (image != null && _windowIds().contains(id)) {
             _decodedImages[id] = image;
           }
           return image;
@@ -312,15 +363,22 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
   }
 
-  /// 窗口化缓存：只保留 current ± 半径的解码位图，释放更早的图。
+  /// 窗口化缓存：只保留 current ± 半径的解码位图，窗口外显式释放 native 内存。
+  ///
+  /// 所有权约定：_decodedImages 中的 ui.Image 由本页独占持有（解码完成即从
+  /// ImageStream 移除监听、不再受 ImageCache 生命周期管理），因此窗口外
+  /// 条目必须显式 dispose。调用时机固定在动画完成后，窗口外位图必然不在显示中。
   void _pruneWindow() {
-    final keep = <String>{
-      for (var offset = -_preloadRadius; offset <= _preloadRadius; offset++)
-        _photos[((_current + offset) % _photos.length + _photos.length) %
-                _photos.length]
-            .id,
-    };
-    _decodedImages.removeWhere((id, _) => !keep.contains(id));
+    final keep = _windowIds();
+    final evicted = <ui.Image>[];
+    _decodedImages.removeWhere((id, image) {
+      if (keep.contains(id)) return false;
+      evicted.add(image);
+      return true;
+    });
+    for (final image in evicted) {
+      image.dispose();
+    }
   }
 
   void _toggleFullscreen() {
@@ -442,11 +500,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             child: Stack(
               fit: StackFit.expand,
               children: [
-                if (_decodedImages[photo.id] != null) ...[
-                  _buildBackdrop(_photos[_backdropIndex]),
-                  _buildSlides(photo),
-                ] else
-                  const Center(
+                switch (_phase) {
+                  SlideshowPhase.loading => const Center(
                     child: SizedBox.square(
                       dimension: 28,
                       child: CircularProgressIndicator(
@@ -455,6 +510,15 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                       ),
                     ),
                   ),
+                  SlideshowPhase.failed => _buildErrorRetry(context),
+                  SlideshowPhase.ready => Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _buildBackdrop(_photos[_backdropIndex]),
+                      _buildSlides(photo),
+                    ],
+                  ),
+                },
                 _buildGradients(showControls),
                 _buildTopBar(context, photo, showControls),
                 if (_photos.length > 1) ...[
@@ -850,6 +914,40 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorRetry(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            size: 44,
+            color: Color(0x66FFFFFF),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            l10n.photosImageLoadFailed,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.65),
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 16),
+          OutlinedButton.icon(
+            onPressed: () => unawaited(_retryInitialLoad()),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(l10n.coreRetry),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.white.withValues(alpha: 0.85),
+              side: BorderSide(color: Colors.white.withValues(alpha: 0.20)),
+            ),
+          ),
+        ],
       ),
     );
   }
