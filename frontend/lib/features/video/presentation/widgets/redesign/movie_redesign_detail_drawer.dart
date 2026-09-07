@@ -46,10 +46,11 @@ class _MovieRedesignDetailDrawerState
         autofocus: true,
         child: Material(
           color: Colors.transparent,
-          child: Row(
+          child: Stack(
+            fit: StackFit.expand,
             children: [
               if (wide)
-                Expanded(
+                Positioned.fill(
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: widget.onClose,
@@ -58,88 +59,91 @@ class _MovieRedesignDetailDrawerState
                     ),
                   ),
                 ),
-              Material(
-                color: palette.background,
-                child: SizedBox(
-                  width: wide ? 384 : double.infinity,
-                  height: double.infinity,
-                  child: Column(
-                    children: [
-                      _DrawerHeader(item: item, onClose: widget.onClose),
-                      Expanded(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _MetaRow(item: item),
-                              if (item.overview != null &&
-                                  item.overview!.trim().isNotEmpty) ...[
-                                const SizedBox(height: 16),
-                                Text(
-                                  item.overview!,
-                                  style: text.body(
-                                    size: 14,
-                                    height: 22 / 14,
-                                    color: palette.foreground,
+              Align(
+                alignment: Alignment.centerRight,
+                child: Material(
+                  color: palette.background,
+                  child: SizedBox(
+                    width: wide ? 384 : double.infinity,
+                    height: double.infinity,
+                    child: Column(
+                      children: [
+                        _DrawerHeader(item: item, onClose: widget.onClose),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _MetaRow(item: item),
+                                if (item.overview != null &&
+                                    item.overview!.trim().isNotEmpty) ...[
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    item.overview!,
+                                    style: text.body(
+                                      size: 14,
+                                      height: 22 / 14,
+                                      color: palette.foreground,
+                                    ),
                                   ),
-                                ),
-                              ],
-                              const SizedBox(height: 16),
-                              SizedBox(
-                                width: double.infinity,
-                                child: Material(
-                                  color: palette.primary,
-                                  borderRadius:
-                                      MovieRedesignPalette.borderRadius,
-                                  child: InkWell(
+                                ],
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: Material(
+                                    color: palette.primary,
                                     borderRadius:
                                         MovieRedesignPalette.borderRadius,
-                                    onTap: () {
-                                      widget.onClose();
-                                      context.push('/video/${item.id}/play');
-                                    },
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 10,
-                                      ),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
-                                        children: [
-                                          const Icon(
-                                            Icons.play_arrow_rounded,
-                                            size: 14,
-                                            color: Colors.white,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Text(
-                                            l10n.videoRedesignPlayNow,
-                                            style: text.body(
+                                    child: InkWell(
+                                      borderRadius:
+                                          MovieRedesignPalette.borderRadius,
+                                      onTap: () {
+                                        widget.onClose();
+                                        context.push('/video/${item.id}/play');
+                                      },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 10,
+                                        ),
+                                        child: Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            const Icon(
+                                              Icons.play_arrow_rounded,
                                               size: 14,
-                                              weight: FontWeight.w500,
-                                              color: palette.onPrimary,
+                                              color: Colors.white,
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(width: 8),
+                                            Text(
+                                              l10n.videoRedesignPlayNow,
+                                              style: text.body(
+                                                size: 14,
+                                                weight: FontWeight.w500,
+                                                color: palette.onPrimary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(height: 20),
-                              _SubtitleSection(
-                                item: item,
-                                uploading: _uploading,
-                                onUpload: _pickAndUploadSubtitle,
-                              ),
-                              const SizedBox(height: 20),
-                              _VersionsSection(item: item),
-                            ],
+                                const SizedBox(height: 20),
+                                _SubtitleSection(
+                                  item: item,
+                                  uploading: _uploading,
+                                  onUpload: _pickAndUploadSubtitle,
+                                ),
+                                const SizedBox(height: 20),
+                                _VersionsSection(item: item),
+                              ],
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),

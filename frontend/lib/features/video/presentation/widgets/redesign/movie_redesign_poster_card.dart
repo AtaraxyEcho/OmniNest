@@ -103,18 +103,23 @@ class MovieRedesignGridMetrics {
   final double childAspectRatio;
 
   /// 单元高度 = 海报宽高比 2:3 + 文本区固定高度。
-  static const double _textExtent = 64;
+  static const double _textExtent = 72;
 
-  /// 按内容宽度解析列数与间距（对应原型 grid-cols-3/4/5/6 与 gap-3 sm:gap-4）。
-  factory MovieRedesignGridMetrics.resolve(double width) {
-    final columns = switch (width) {
+  /// 列数/间距按视口宽（对应原型 md/lg/xl 与 gap-3 sm:gap-4），
+  /// 单元尺寸按内容宽（扣除侧栏后的实际网格宽度）。
+  factory MovieRedesignGridMetrics.resolve({
+    required double viewportWidth,
+    required double contentWidth,
+  }) {
+    final columns = switch (viewportWidth) {
       < 768 => 3,
       < 1024 => 4,
       < 1280 => 5,
       _ => 6,
     };
-    final spacing = movieRedesignAtSm(width) ? 16.0 : 12.0;
-    final cellWidth = (width - spacing * (columns - 1)) / columns;
+    final spacing = movieRedesignAtSm(viewportWidth) ? 16.0 : 12.0;
+    final cellWidth =
+        (contentWidth - spacing * (columns - 1)) / columns;
     final cellHeight = cellWidth * 1.5 + _textExtent;
     return MovieRedesignGridMetrics._(
       columns: columns,
@@ -381,7 +386,10 @@ class MovieRedesignPosterGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final metrics = MovieRedesignGridMetrics.resolve(constraints.maxWidth);
+        final metrics = MovieRedesignGridMetrics.resolve(
+          viewportWidth: MediaQuery.sizeOf(context).width,
+          contentWidth: constraints.maxWidth,
+        );
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
@@ -412,7 +420,8 @@ class MovieRedesignPosterSliverGrid extends StatelessWidget {
     return SliverLayoutBuilder(
       builder: (context, constraints) {
         final metrics = MovieRedesignGridMetrics.resolve(
-          constraints.crossAxisExtent,
+          viewportWidth: MediaQuery.sizeOf(context).width,
+          contentWidth: constraints.crossAxisExtent,
         );
         return SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
