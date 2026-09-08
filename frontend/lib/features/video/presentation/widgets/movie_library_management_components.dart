@@ -453,7 +453,7 @@ class _CandidateStatusBadge extends StatelessWidget {
             label,
             style: TextStyle(
               color: foreground,
-              fontSize: 11,
+              fontSize: AppTypography.labelSmall,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -514,7 +514,7 @@ class _MediaLibraryTaskProgress extends StatelessWidget {
                       l10n.videoDiscoveryRunning,
                       style: TextStyle(
                         color: context.videoColors.onSurfaceVariant,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                       ),
                     ),
                   ],

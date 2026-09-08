@@ -24,10 +24,3 @@ lib/features/profile/presentation/widgets/profile_desktop_shell.dart 2
 lib/features/profile/presentation/widgets/profile_mobile_content.dart 3
 lib/features/profile/presentation/widgets/profile_session_management_panel.dart 5
 lib/features/reader/presentation/widgets/reader_page_scaffold.dart 5
-lib/features/video/presentation/widgets/movie_admin_list.dart 8
-lib/features/video/presentation/widgets/movie_admin_tasks.dart 3
-lib/features/video/presentation/widgets/movie_library_management_components.dart 2
-lib/features/video/presentation/widgets/movie_library_review.dart 5
-lib/features/video/presentation/widgets/movie_library_source_management.dart 3
-lib/features/video/presentation/widgets/movie_library_source_rail.dart 5
-lib/features/video/presentation/widgets/movie_library_source_workspace.dart 3

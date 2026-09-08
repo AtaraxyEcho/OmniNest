@@ -304,7 +304,7 @@ class _MediaLibraryCommandBar extends StatelessWidget {
                       l10n.videoLocalLibrarySources,
                       style: TextStyle(
                         color: context.videoColors.onSurface,
-                        fontSize: 16,
+                        fontSize: AppTypography.titleMedium,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -315,7 +315,7 @@ class _MediaLibraryCommandBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.videoColors.onSurfaceVariant,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         height: 16 / 12,
                       ),
                     ),
@@ -411,7 +411,7 @@ class _MediaLibraryEmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.videoColors.onSurface,
-              fontSize: 16,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w800,
             ),
           ),

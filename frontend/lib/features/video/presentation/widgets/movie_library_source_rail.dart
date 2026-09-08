@@ -61,7 +61,7 @@ class _MediaLibrarySourceNavigator extends StatelessWidget {
                   l10n.videoLibrarySourceCount(sources.length),
                   style: TextStyle(
                     color: context.videoColors.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -185,7 +185,7 @@ class _MediaLibrarySourceItem extends StatelessWidget {
                                 ? context.videoColors.onPrimaryContainer
                                     .withValues(alpha: 0.78)
                                 : context.videoColors.onSurfaceVariant,
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -198,7 +198,7 @@ class _MediaLibrarySourceItem extends StatelessWidget {
                                 ? context.videoColors.onPrimaryContainer
                                     .withValues(alpha: 0.78)
                                 : context.videoColors.onSurfaceVariant,
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -215,7 +215,7 @@ class _MediaLibrarySourceItem extends StatelessWidget {
                                 ? context.videoColors.onPrimaryContainer
                                     .withValues(alpha: 0.72)
                                 : context.videoColors.onSurfaceVariant,
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                       ),
                     ),
                   ],
@@ -286,7 +286,7 @@ class _SourceStatusBadge extends StatelessWidget {
         label,
         style: TextStyle(
           color: foreground,
-          fontSize: 11,
+          fontSize: AppTypography.labelSmall,
           fontWeight: FontWeight.w800,
         ),
       ),

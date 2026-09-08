@@ -118,7 +118,7 @@ class _TaskProgressRow extends StatelessWidget {
                   '$taskLabel · $statusLabel',
                   style: TextStyle(
                     color: context.videoColors.onSurface,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -127,7 +127,7 @@ class _TaskProgressRow extends StatelessWidget {
                 '${task.progress}%',
                 style: TextStyle(
                   color: statusColor,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -156,7 +156,7 @@ class _TaskProgressRow extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.error,
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 height: 16 / 12,
                 fontWeight: FontWeight.w600,
               ),

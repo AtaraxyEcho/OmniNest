@@ -106,7 +106,7 @@ class _MediaLibrarySourceHeader extends StatelessWidget {
               source.name,
               style: TextStyle(
                 color: context.videoColors.onSurface,
-                fontSize: 18,
+                fontSize: AppTypography.titleLarge,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -120,7 +120,7 @@ class _MediaLibrarySourceHeader extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: context.videoColors.onSurfaceVariant,
-            fontSize: 12,
+            fontSize: AppTypography.bodySmall,
           ),
         ),
         const SizedBox(height: 8),
@@ -401,7 +401,10 @@ class _SourceMeta extends StatelessWidget {
       children: [
         Icon(icon, size: 15, color: color),
         const SizedBox(width: 5),
-        Text(label, style: TextStyle(color: color, fontSize: 11)),
+        Text(
+          label,
+          style: TextStyle(color: color, fontSize: AppTypography.labelSmall),
+        ),
       ],
     );
   }

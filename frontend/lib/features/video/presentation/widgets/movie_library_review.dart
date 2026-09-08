@@ -337,7 +337,7 @@ class _ReviewSummaryBar extends StatelessWidget {
                     l10n.videoDiscoveryTitle,
                     style: TextStyle(
                       color: context.videoColors.onSurface,
-                      fontSize: 16,
+                      fontSize: AppTypography.titleMedium,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -346,7 +346,7 @@ class _ReviewSummaryBar extends StatelessWidget {
                     l10n.videoReviewSelectionHint,
                     style: TextStyle(
                       color: context.videoColors.onSurfaceVariant,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                     ),
                   ),
                 ],
@@ -442,7 +442,7 @@ class _ReviewMetric extends StatelessWidget {
           label,
           style: TextStyle(
             color: color,
-            fontSize: 12,
+            fontSize: AppTypography.bodySmall,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -568,7 +568,7 @@ class _MediaTreeNodeTileState extends ConsumerState<_MediaTreeNodeTile> {
                     l10n.videoDiscoveryCandidates(node.candidateCount),
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
-                      fontSize: 11,
+                      fontSize: AppTypography.labelSmall,
                     ),
                   ),
                 ],
@@ -604,7 +604,7 @@ class _MediaTreeNodeTileState extends ConsumerState<_MediaTreeNodeTile> {
                     l10n.videoLoadTreeFailed,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                     ),
                   ),
                 ),

@@ -168,8 +168,12 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
                       const SizedBox(height: 4),
                       Text(
                         label,
-                        style: text.body(size: 13, color: palette.foreground),
+                        style: text.body(
+                          size: AppTypography.bodyMedium,
+                          color: palette.foreground,
+                        ),
                       ),
+                      // ignore: font_size_whitelist
                       Text(labelEn, style: text.mono(size: 10)),
                     ],
                   ),
@@ -291,7 +295,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
             child: Text(
               '$rowNumber',
               key: ValueKey('admin-row-number-$rowNumber'),
-              style: text.mono(size: 12),
+              style: text.mono(size: AppTypography.bodySmall),
             ),
           ),
           _PosterThumb(item: item),
@@ -304,14 +308,17 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
                   displayTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: text.body(size: 14, weight: FontWeight.w500),
+                  style: text.body(
+                    size: AppTypography.bodyLarge,
+                    weight: FontWeight.w500,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   metaLine,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: text.mono(size: 12),
+                  style: text.mono(size: AppTypography.bodySmall),
                 ),
               ],
             ),
@@ -330,7 +337,10 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 child: Text(
                   l10n.videoEdit,
-                  style: text.mono(size: 12, color: palette.primary),
+                  style: text.mono(
+                    size: AppTypography.bodySmall,
+                    color: palette.primary,
+                  ),
                 ),
               ),
             ),
@@ -665,6 +675,7 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label,
+        // ignore: font_size_whitelist
         style: context.movieRedesignText.mono(size: 10, color: color),
       ),
     );
@@ -728,7 +739,7 @@ Future<void> _showNfoPreview(BuildContext context, MovieVideoItem item) async {
                       style: TextStyle(
                         fontFamily: AppTypography.monoFamily,
                         fontFamilyFallback: AppTypography.monoFamilyFallback,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         color: context.videoColors.onSurface,
                       ),
                     ),
