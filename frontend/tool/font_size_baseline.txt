@@ -1,12 +1,5 @@
 # 字号治理基线：每文件允许的裸数字字号违规数（格式：路径 数量）
 # 迁移批次完成后销号递减；白名单行使用 // ignore: font_size_whitelist
-lib/features/admin/presentation/pages/admin_analytics_charts.dart 5
-lib/features/admin/presentation/pages/admin_analytics_page.dart 6
-lib/features/admin/presentation/pages/admin_operations_monitoring.dart 7
-lib/features/admin/presentation/pages/admin_operations_roles_config.dart 2
-lib/features/admin/presentation/widgets/admin_common_widgets.dart 11
-lib/features/admin/presentation/widgets/admin_shell.dart 7
-lib/features/admin/presentation/widgets/admin_shell_navigation.dart 1
 lib/features/backdrop/presentation/app_backdrop_controls.dart 5
 lib/features/backdrop/presentation/app_backdrop_settings_panel.dart 8
 lib/features/music/presentation/deck/music_deck_content.dart 2

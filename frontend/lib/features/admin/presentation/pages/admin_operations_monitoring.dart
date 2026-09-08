@@ -410,7 +410,7 @@ class _MonitoringTrendCardState extends State<_MonitoringTrendCard> {
                     widget.series.label,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       fontWeight: FontWeight.w600,
                       color: c.onSurface,
                     ),
@@ -422,7 +422,7 @@ class _MonitoringTrendCardState extends State<_MonitoringTrendCard> {
                     Text(
                       '${displayValue.toStringAsFixed(1)} ${widget.series.unit}',
                       style: TextStyle(
-                        fontSize: 16,
+                        fontSize: AppTypography.titleMedium,
                         fontWeight: FontWeight.w800,
                         color: color,
                       ),
@@ -431,7 +431,7 @@ class _MonitoringTrendCardState extends State<_MonitoringTrendCard> {
                       Text(
                         displayTimestamp,
                         style: TextStyle(
-                          fontSize: 11,
+                          fontSize: AppTypography.labelSmall,
                           color: c.onSurfaceVariant,
                         ),
                       ),
@@ -470,7 +470,10 @@ class _TrendChart extends StatelessWidget {
       return Center(
         child: Text(
           '-',
-          style: TextStyle(fontSize: 11, color: c.onSurfaceVariant),
+          style: TextStyle(
+            fontSize: AppTypography.labelSmall,
+            color: c.onSurfaceVariant,
+          ),
         ),
       );
     }
@@ -512,7 +515,10 @@ class _TrendChart extends StatelessWidget {
               getTitlesWidget:
                   (value, meta) => Text(
                     value.toStringAsFixed(value.abs() >= 100 ? 0 : 1),
-                    style: TextStyle(fontSize: 10, color: c.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: AppTypography.labelSmall,
+                      color: c.onSurfaceVariant,
+                    ),
                   ),
             ),
           ),
@@ -530,7 +536,10 @@ class _TrendChart extends StatelessWidget {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     _shortMonitoringTimestamp(points[index].timestamp),
-                    style: TextStyle(fontSize: 10, color: c.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: AppTypography.labelSmall,
+                      color: c.onSurfaceVariant,
+                    ),
                   ),
                 );
               },
@@ -549,7 +558,7 @@ class _TrendChart extends StatelessWidget {
                       return LineTooltipItem(
                         spot.y.toStringAsFixed(1),
                         TextStyle(
-                          fontSize: 11,
+                          fontSize: AppTypography.labelSmall,
                           fontWeight: FontWeight.w600,
                           color: color,
                         ),

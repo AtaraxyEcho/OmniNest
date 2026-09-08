@@ -6,8 +6,11 @@ FlLine _gridLine(Color c) => FlLine(
   dashArray: [4, 4],
 );
 
-TextStyle _labelStyle(AdminColors c) =>
-    TextStyle(fontSize: 11, color: c.onSurfaceVariant, height: 1);
+TextStyle _labelStyle(AdminColors c) => TextStyle(
+  fontSize: AppTypography.labelSmall,
+  color: c.onSurfaceVariant,
+  height: 1,
+);
 
 String _fmt(double v) {
   if (!v.isFinite || v.isNaN) return '0';
@@ -278,7 +281,7 @@ LineTouchData _touchData(
                 '${data[index].date}\n$value',
                 TextStyle(
                   color: c.onSurface,
-                  fontSize: 11,
+                  fontSize: AppTypography.labelSmall,
                   fontWeight: FontWeight.w600,
                 ),
               );
@@ -395,7 +398,7 @@ class _TaskBarChart extends StatelessWidget {
                 l10n.adminTaskThroughputTooltip(d.completed, d.failed),
                 TextStyle(
                   color: c.surface,
-                  fontSize: 11,
+                  fontSize: AppTypography.labelSmall,
                   fontWeight: FontWeight.w600,
                 ),
               );
@@ -440,7 +443,7 @@ class _SystemLoadBars extends StatelessWidget {
                     child: Text(
                       item.label,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         fontWeight: FontWeight.w700,
                         color: c.onSurfaceVariant,
                       ),
@@ -466,7 +469,7 @@ class _SystemLoadBars extends StatelessWidget {
                       '${item.value.toStringAsFixed(0)}%',
                       textAlign: TextAlign.right,
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         fontWeight: FontWeight.w800,
                         color: _ringColor(item.value, c),
                       ),

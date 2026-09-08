@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
@@ -28,7 +29,7 @@ class AdminPageHeader extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                fontSize: 28,
+                fontSize: AppTypography.headlineMedium,
                 height: 36 / 28,
                 color: c.onSurface,
                 fontWeight: FontWeight.w800,
@@ -38,7 +39,7 @@ class AdminPageHeader extends StatelessWidget {
             Text(
               subtitle,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 14,
+                fontSize: AppTypography.bodyLarge,
                 height: 21 / 14,
                 color: c.onSurfaceVariant,
               ),
@@ -105,7 +106,7 @@ class AdminMetricCard extends StatelessWidget {
               Text(
                 title,
                 style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   height: 16 / 12,
                   color: c.onSurfaceVariant,
                 ),
@@ -121,7 +122,7 @@ class AdminMetricCard extends StatelessWidget {
           Text(
             value,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              fontSize: 28,
+              fontSize: AppTypography.headlineMedium,
               height: 34 / 28,
               color: resolvedAccent,
               fontWeight: FontWeight.w800,
@@ -131,7 +132,7 @@ class AdminMetricCard extends StatelessWidget {
           Text(
             detail,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
               height: 16 / 12,
               color: c.onSurfaceVariant,
             ),
@@ -177,7 +178,7 @@ class AdminMetricMiniStat extends StatelessWidget {
         child: RichText(
           text: TextSpan(
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              fontSize: 11,
+              fontSize: AppTypography.labelSmall,
               height: 14 / 11,
               color: context.adminColors.onSurfaceVariant,
             ),
@@ -267,7 +268,7 @@ class AdminStatusPill extends StatelessWidget {
             Text(
               label,
               style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                fontSize: 11,
+                fontSize: AppTypography.labelSmall,
                 height: 14 / 11,
                 color: resolvedColor,
                 fontWeight: FontWeight.w600,
@@ -310,7 +311,7 @@ class AdminInfoPanel extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: 20,
+                        fontSize: AppTypography.titleLarge,
                         height: 28 / 20,
                         fontWeight: FontWeight.w700,
                       ),
@@ -319,7 +320,7 @@ class AdminInfoPanel extends StatelessWidget {
                     Text(
                       subtitle,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: 13,
+                        fontSize: AppTypography.bodyMedium,
                         height: 20 / 13,
                         color: context.adminColors.onSurfaceVariant,
                       ),
@@ -376,7 +377,7 @@ class AdminEmptyFeature extends StatelessWidget {
                 title,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontSize: 20,
+                  fontSize: AppTypography.titleLarge,
                   height: 28 / 20,
                   fontWeight: FontWeight.w700,
                 ),
@@ -386,7 +387,7 @@ class AdminEmptyFeature extends StatelessWidget {
                 description,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                   height: 21 / 14,
                   color: c.onSurfaceVariant,
                 ),

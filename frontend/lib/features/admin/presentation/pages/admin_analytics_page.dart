@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
@@ -212,7 +213,7 @@ class _Card extends StatelessWidget {
                         Text(
                           title,
                           style: TextStyle(
-                            fontSize: 15,
+                            fontSize: AppTypography.titleMedium,
                             fontWeight: FontWeight.w700,
                             color: c.onSurface,
                             height: 1,
@@ -222,7 +223,7 @@ class _Card extends StatelessWidget {
                         Text(
                           subtitle,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                             color: c.onSurfaceVariant,
                             height: 1,
                           ),
@@ -263,7 +264,7 @@ class _Pill extends StatelessWidget {
       child: Text(
         text,
         style: TextStyle(
-          fontSize: 10,
+          fontSize: AppTypography.labelSmall,
           fontWeight: FontWeight.w700,
           color: color,
         ),
@@ -298,7 +299,10 @@ class _Legend extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   items[i].label,
-                  style: TextStyle(fontSize: 9, color: c.onSurfaceVariant),
+                  style: TextStyle(
+                    fontSize: AppTypography.labelSmall,
+                    color: c.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -333,7 +337,10 @@ class _Empty extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             message,
-            style: TextStyle(fontSize: 10, color: c.onSurfaceVariant),
+            style: TextStyle(
+              fontSize: AppTypography.labelSmall,
+              color: c.onSurfaceVariant,
+            ),
           ),
         ],
       ),
@@ -457,7 +464,7 @@ class _LoadPanel extends StatelessWidget {
           Text(
             l10n.adminAnalyticsLive,
             style: TextStyle(
-              fontSize: 9,
+              fontSize: AppTypography.labelSmall,
               fontWeight: FontWeight.w700,
               color: c.success,
               letterSpacing: 0.8,

@@ -73,7 +73,7 @@ class _AdminNavItemState extends State<_AdminNavItem> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: foreground,
-                      fontSize: 14,
+                      fontSize: AppTypography.bodyLarge,
                       height: 20 / 14,
                       fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
                     ),

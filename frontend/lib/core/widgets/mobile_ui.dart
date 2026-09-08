@@ -1,4 +1,5 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 
 /// 移动端页面的半透明内容表面。
@@ -56,7 +57,7 @@ class MobileSectionHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.mobileColors.textPrimary,
-                  fontSize: 18,
+                  fontSize: AppTypography.titleLarge,
                   fontWeight: FontWeight.w700,
                   height: 1.25,
                 ),
@@ -69,7 +70,7 @@ class MobileSectionHeader extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.mobileColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     height: 1.35,
                   ),
                 ),
@@ -216,7 +217,7 @@ class _MobileSegment extends StatelessWidget {
                           selected
                               ? context.mobileColors.textPrimary
                               : context.mobileColors.textSecondary,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
@@ -377,7 +378,7 @@ class MobileInlineState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.mobileColors.textSecondary,
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
               height: 1.45,
             ),
           ),
@@ -413,7 +414,7 @@ class MobileSettingsGroup extends StatelessWidget {
             title,
             style: TextStyle(
               color: context.mobileColors.textSecondary,
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               fontWeight: FontWeight.w700,
               height: 1.3,
             ),
@@ -514,7 +515,7 @@ class MobileSettingsTile extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: 15,
+                            fontSize: AppTypography.titleMedium,
                             fontWeight: FontWeight.w600,
                             height: 1.25,
                           ),
@@ -527,7 +528,7 @@ class MobileSettingsTile extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: context.mobileColors.textSecondary,
-                              fontSize: 12,
+                              fontSize: AppTypography.bodySmall,
                               height: 1.35,
                             ),
                           ),

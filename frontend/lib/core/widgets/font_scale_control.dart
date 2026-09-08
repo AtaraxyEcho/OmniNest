@@ -129,6 +129,7 @@ class _FontScaleControlState extends ConsumerState<FontScaleControl> {
               style: TextStyle(
                 fontFamily: AppTypography.monoFamily,
                 fontFamilyFallback: AppTypography.monoFamilyFallback,
+                // ignore: font_size_whitelist
                 fontSize: 10,
                 letterSpacing: 2,
                 color: colors.onSurfaceVariant,
@@ -208,6 +209,7 @@ class _FontScaleCell extends StatelessWidget {
       return TextStyle(
         fontFamily: AppTypography.monoFamily,
         fontFamilyFallback: AppTypography.monoFamilyFallback,
+        // ignore: font_size_whitelist
         fontSize: 9,
         letterSpacing: 0.5,
         color: color,
@@ -249,6 +251,7 @@ class _FontScaleSheet extends ConsumerWidget {
               style: TextStyle(
                 fontFamily: AppTypography.monoFamily,
                 fontFamilyFallback: AppTypography.monoFamilyFallback,
+                // ignore: font_size_whitelist
                 fontSize: 10,
                 letterSpacing: 2,
                 color: colors.onSurfaceVariant,

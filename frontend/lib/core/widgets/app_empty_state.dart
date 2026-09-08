@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 
 class AppEmptyState extends StatelessWidget {
   const AppEmptyState({
@@ -37,7 +38,7 @@ class AppEmptyState extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               subtitle!,
-              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+              style: TextStyle(color: colors.onSurfaceVariant, fontSize: AppTypography.bodyMedium),
               textAlign: TextAlign.center,
             ),
           ],

@@ -83,7 +83,8 @@ def migrate_file(path: Path, module: str, stats: dict) -> bool:
     changed = False
 
     for i, line in enumerate(lines):
-        if "font_size_whitelist" in line:
+        previous = lines[i - 1] if i > 0 else ""
+        if "font_size_whitelist" in line or "font_size_whitelist" in previous:
             continue
         whitelist_needed = []
 
@@ -138,7 +139,7 @@ def migrate_file(path: Path, module: str, stats: dict) -> bool:
 
 
 def migrate_module(module: str) -> None:
-    target = FRONTEND / "lib" / "features" / module
+    target = FRONTEND / "lib" / ("core" if module == "core" else f"features/{module}")
     if not target.exists():
         print(f"SKIP（目录不存在）: {module}")
         return

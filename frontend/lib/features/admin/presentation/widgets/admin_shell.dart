@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
@@ -403,7 +404,7 @@ class _AdminTopBar extends ConsumerWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 16,
+                  fontSize: AppTypography.titleMedium,
                   height: 24 / 16,
                   color: context.adminColors.onSurface,
                   fontWeight: FontWeight.w800,
@@ -480,7 +481,10 @@ class _AdminSearchField extends StatelessWidget {
       autofocus: autofocus,
       onChanged:
           (query) => ref.read(adminSearchProvider.notifier).updateQuery(query),
-      style: TextStyle(color: colors.onSurface, fontSize: 13),
+      style: TextStyle(
+        color: colors.onSurface,
+        fontSize: AppTypography.bodyMedium,
+      ),
       decoration: InputDecoration(
         isDense: true,
         filled: true,
@@ -519,7 +523,7 @@ class _MobileAdminSectionSheet extends StatelessWidget {
                   _sectionGroupLabel(l10n, entry.key),
                   style: TextStyle(
                     color: context.mobileColors.textSecondary,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -573,7 +577,7 @@ class _TopBarPortalButton extends StatelessWidget {
       label: Text(AppLocalizations.of(context).adminTopBarPortal),
       style: TextButton.styleFrom(
         textStyle: TextStyle(
-          fontSize: 13,
+          fontSize: AppTypography.bodyMedium,
           height: 18 / 13,
           fontWeight: FontWeight.w700,
         ),
@@ -611,7 +615,7 @@ class _AdminSideTitle extends StatelessWidget {
                   l10n.adminShellTitle,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: 15,
+                    fontSize: AppTypography.titleMedium,
                     height: 20 / 15,
                     fontWeight: FontWeight.w800,
                   ),
@@ -620,7 +624,7 @@ class _AdminSideTitle extends StatelessWidget {
                 Text(
                   l10n.adminShellSubtitle,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    fontSize: 11,
+                    fontSize: AppTypography.labelSmall,
                     height: 14 / 11,
                     color: c.onSurfaceVariant,
                   ),
@@ -646,7 +650,7 @@ class _SidebarGroupLabel extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontSize: 11,
+          fontSize: AppTypography.labelSmall,
           height: 14 / 11,
           color: context.adminColors.onSurfaceVariant,
           fontWeight: FontWeight.w800,

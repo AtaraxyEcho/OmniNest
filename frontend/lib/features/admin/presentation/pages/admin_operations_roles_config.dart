@@ -736,13 +736,13 @@ class _ConfigHistoryDialog extends ConsumerWidget {
                   title: Text(
                     '${item.oldValue ?? l10n.adminNotSet}'
                     ' → ${item.newValue ?? l10n.adminNotSet}',
-                    style: const TextStyle(fontSize: 13),
+                    style: const TextStyle(fontSize: AppTypography.bodyMedium),
                   ),
                   subtitle: Text(
                     '${item.changeReason ?? l10n.adminNoReason}'
                     ' · ${item.createdAt}',
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                       color: adminColors.onSurfaceVariant,
                     ),
                   ),

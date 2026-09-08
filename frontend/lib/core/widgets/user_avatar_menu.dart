@@ -217,7 +217,7 @@ class _PreferenceRow extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
@@ -311,7 +311,7 @@ class _SmallOutlineButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final textStyle = TextStyle(
-      fontSize: 11,
+      fontSize: AppTypography.labelSmall,
       color: colors.onSurfaceVariant,
       fontFamily: mono ? AppTypography.monoFamily : null,
       fontFamilyFallback: mono ? AppTypography.monoFamilyFallback : null,
@@ -375,7 +375,7 @@ class _MenuActionRow extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w500,
                 color: color,
               ),
@@ -483,7 +483,7 @@ class _AvatarFallback extends StatelessWidget {
         style: TextStyle(
           color: theme.colorScheme.onPrimary,
           fontWeight: FontWeight.w700,
-          fontSize: 16,
+          fontSize: AppTypography.titleMedium,
         ),
       ),
     );
@@ -603,7 +603,7 @@ class _RoleBadge extends StatelessWidget {
         style: theme.textTheme.labelSmall?.copyWith(
           color: color,
           fontWeight: FontWeight.w600,
-          fontSize: 10,
+          fontSize: AppTypography.labelSmall,
         ),
       ),
     );
