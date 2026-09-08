@@ -73,32 +73,50 @@ class _StatsOverview extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              _StatCard(
-                label: l10n.readerStatsToday,
-                value: '${_todayMinutes(overview)}',
-                unit: minutesUnit,
-              ),
-              const SizedBox(width: 16),
-              _StatCard(
-                label: l10n.readerStatsWeek,
-                value: '${_weekMinutes(overview)}',
-                unit: minutesUnit,
-              ),
-              const SizedBox(width: 16),
-              _StatCard(
-                label: l10n.readerStatsStreak,
-                value: '${_streak(overview)}',
-                unit: l10n.readerStatsDayUnit,
-              ),
-              const SizedBox(width: 16),
-              _StatCard(
-                label: l10n.readerStatsBooksRead,
-                value: '${overview.completedCount}',
-                unit: '',
-              ),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final cards = [
+                _StatCard(
+                  label: l10n.readerStatsToday,
+                  value: '${_todayMinutes(overview)}',
+                  unit: minutesUnit,
+                ),
+                _StatCard(
+                  label: l10n.readerStatsWeek,
+                  value: '${_weekMinutes(overview)}',
+                  unit: minutesUnit,
+                ),
+                _StatCard(
+                  label: l10n.readerStatsStreak,
+                  value: '${_streak(overview)}',
+                  unit: l10n.readerStatsDayUnit,
+                ),
+                _StatCard(
+                  label: l10n.readerStatsBooksRead,
+                  value: '${overview.completedCount}',
+                  unit: '',
+                ),
+              ];
+              if (constraints.maxWidth >= 640) {
+                return Row(
+                  children: [
+                    for (var i = 0; i < cards.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 16),
+                      Expanded(child: cards[i]),
+                    ],
+                  ],
+                );
+              }
+              return GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: 2.4,
+                children: cards,
+              );
+            },
           ),
           const SizedBox(height: 40),
           _ActivityChart(overview: overview),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
-import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
@@ -9,12 +8,10 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
-import 'package:omninest/core/widgets/workbench_top_bar.dart';
-import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
-import 'package:omninest/features/reader/application/reader_controller.dart';
+import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart'
+    show kReaderSerifFamily;
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_search_overlay.dart';
 
 /// 阅读模块页面目标，对应模块内一级导航与路由
 enum ReaderPageTarget { library, bookshelf, stats, admin }
@@ -34,12 +31,26 @@ extension ReaderPageTargetX on ReaderPageTarget {
     ReaderPageTarget.stats => l10n.readerNavStats,
     ReaderPageTarget.admin => l10n.readerNavManage,
   };
+
+  IconData get icon => switch (this) {
+    ReaderPageTarget.library => Icons.import_contacts_outlined,
+    ReaderPageTarget.bookshelf => Icons.auto_stories_outlined,
+    ReaderPageTarget.stats => Icons.bar_chart_rounded,
+    ReaderPageTarget.admin => Icons.admin_panel_settings_outlined,
+  };
+
+  IconData get selectedIcon => switch (this) {
+    ReaderPageTarget.library => Icons.import_contacts_rounded,
+    ReaderPageTarget.bookshelf => Icons.auto_stories_rounded,
+    ReaderPageTarget.stats => Icons.bar_chart_rounded,
+    ReaderPageTarget.admin => Icons.admin_panel_settings_rounded,
+  };
 }
 
-/// 阅读模块页面骨架：模块内页头（下划线 Tab 导航）+ 桌面顶栏 + 内容区。
-///
-/// 取代旧 ReaderShell 的侧栏与内嵌底部导航；页签切换通过模块内路由完成，
-/// 全局壳（移动端顶栏/底部导航、桌面模块顶栏）保持既有职责。
+/// 阅读模块页面骨架，1:1 参照样例 App.tsx：
+/// 44px 顶栏（返回门户 + 「OmniNest › 阅读」衬线面包屑 + 字号/通知/头像）、
+/// 208px 左侧栏（≥1024，激活项前景色反白）、56px 底导航（<1024）、
+/// 移动端托管态使用横排页签（全局壳已占底栏）。
 class ReaderPageScaffold extends ConsumerStatefulWidget {
   const ReaderPageScaffold({
     required this.target,
@@ -47,7 +58,6 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
     this.searchController,
     this.onSearchChanged,
     this.onRefresh,
-    this.showImportAction = false,
     this.header,
     super.key,
   });
@@ -57,16 +67,13 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
   /// 页面内容（非滚动容器，由骨架负责滚动）
   final Widget child;
 
-  /// 书库搜索控制器；传入后在桌面顶栏内嵌搜索框，窄屏提供搜索弹窗入口
+  /// 书库搜索控制器；传入后在窄屏提供搜索弹窗入口
   final TextEditingController? searchController;
   final ValueChanged<String>? onSearchChanged;
 
   final Future<void> Function()? onRefresh;
 
-  /// 是否在顶栏展示快速导入按钮
-  final bool showImportAction;
-
-  /// 固定页头（置于页签下方、滚动内容上方，对应参考设计 sticky header）
+  /// 固定页头（置于内容滚动区上方，对应参考设计 sticky header）
   final Widget? header;
 
   @override
@@ -74,74 +81,106 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
 }
 
 class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
+  void _goFallback() {
+    context.go(
+      widget.target == ReaderPageTarget.library
+          ? '/portal'
+          : ReaderPageTarget.library.location,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authSessionProvider).asData?.value.user;
     final canManage = user?.role == 'SUPER_ADMIN';
     if (widget.target == ReaderPageTarget.admin && !canManage) {
-      return _ReaderAdminForbidden();
+      return const _ReaderAdminForbidden();
     }
 
     final hosted = MobileShellScope.isHosted(context);
+    final rc = context.readerColors;
+    final targets = [
+      ReaderPageTarget.library,
+      ReaderPageTarget.bookshelf,
+      ReaderPageTarget.stats,
+      if (canManage) ReaderPageTarget.admin,
+    ];
+
+    final contentArea = _ReaderPageScrollArea(
+      hosted: hosted,
+      onRefresh: widget.onRefresh,
+      header: widget.header,
+      child: widget.child,
+    );
+
+    if (hosted) {
+      return PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (didPop, result) {
+          if (didPop) return;
+          _goFallback();
+        },
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          extendBody: true,
+          body: ColoredBox(
+            color: rc.surface,
+            child: Column(
+              children: [
+                ReaderSectionTabBar(
+                  current: widget.target,
+                  canManage: canManage,
+                ),
+                contentArea,
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 840;
+        final isWide = constraints.maxWidth >= 1024;
         return PopScope(
           canPop: false,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
-            context.go(
-              widget.target == ReaderPageTarget.library
-                  ? '/portal'
-                  : ReaderPageTarget.library.location,
-            );
+            _goFallback();
           },
           child: Scaffold(
-            backgroundColor: Colors.transparent,
-            extendBody: true,
-            body: Stack(
+            backgroundColor: rc.surface,
+            body: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                ColoredBox(
-                  color: context.readerColors.surface,
-                  child: const SizedBox.expand(),
+                _ReaderModuleTopBar(
+                  target: widget.target,
+                  user: user,
+                  searchController: widget.searchController,
+                  onSearchChanged: widget.onSearchChanged,
                 ),
-                Padding(
-                  padding: EdgeInsets.only(
-                    top: hosted ? 0 : WorkbenchTopBar.totalHeightOf(context),
-                  ),
-                  child: Column(
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      ReaderSectionTabBar(
-                        current: widget.target,
-                        canManage: canManage,
-                      ),
-                      if (widget.header != null) widget.header!,
-                      Expanded(
-                        child: _ReaderPageScrollArea(
-                          isWide: isWide,
-                          hosted: hosted,
-                          onRefresh: widget.onRefresh,
-                          child: widget.child,
+                      if (isWide)
+                        _ReaderSidebar(
+                          current: widget.target,
+                          targets: targets,
                         ),
-                      ),
+                      Expanded(child: contentArea),
                     ],
                   ),
                 ),
-                if (!hosted)
-                  Positioned(
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    child: _ReaderModuleTopBar(
-                      target: widget.target,
-                      searchController: widget.searchController,
-                      onSearchChanged: widget.onSearchChanged,
-                      showImportAction: widget.showImportAction,
-                      user: user,
-                    ),
-                  ),
               ],
             ),
+            bottomNavigationBar:
+                isWide
+                    ? null
+                    : _ReaderModuleBottomNav(
+                      current: widget.target,
+                      targets: targets,
+                    ),
           ),
         );
       },
@@ -149,109 +188,239 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
   }
 }
 
-/// 桌面模块顶栏：返回门户 + 页面标题 + 快速导入 + 搜索 + 全局控件入口。
-class _ReaderModuleTopBar extends ConsumerWidget {
+/// 44px 模块顶栏：返回门户 + 「OmniNest › 阅读」衬线面包屑 + 全局控件。
+class _ReaderModuleTopBar extends StatelessWidget {
   const _ReaderModuleTopBar({
     required this.target,
     required this.user,
     this.searchController,
     this.onSearchChanged,
-    this.showImportAction = false,
   });
 
   final ReaderPageTarget target;
   final UserProfile? user;
   final TextEditingController? searchController;
   final ValueChanged<String>? onSearchChanged;
-  final bool showImportAction;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
+  Widget build(BuildContext context) {
     final rc = context.readerColors;
-    final isWide = MediaQuery.sizeOf(context).width >= 840;
-    final barContent = Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24),
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: rc.surface,
+        border: Border(bottom: BorderSide(color: rc.outlineVariant)),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
-          TextButton.icon(
-            onPressed: () => context.go('/portal'),
-            icon: Icon(
-              Icons.arrow_back_rounded,
-              size: 18,
-              color: rc.onSurfaceVariant,
-            ),
-            label: Text(
-              l10n.readerPortal,
-              style: TextStyle(
-                fontSize: 13,
-                height: 18 / 13,
-                fontWeight: FontWeight.w700,
-                color: rc.onSurfaceVariant,
+          InkWell(
+            onTap: () => context.go('/portal'),
+            borderRadius: BorderRadius.circular(2),
+            child: Container(
+              padding: const EdgeInsets.only(right: 12),
+              margin: const EdgeInsets.only(right: 12),
+              decoration: BoxDecoration(
+                border: Border(right: BorderSide(color: rc.outlineVariant)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.arrow_back_rounded,
+                    size: 14,
+                    color: rc.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    l10n.readerPortal,
+                    style: TextStyle(
+                      color: rc.onSurfaceVariant,
+                      fontSize: 12,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          SizedBox(width: 12),
           Text(
-            target.localizedLabel(l10n),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            'OmniNest',
             style: TextStyle(
               color: rc.onSurface,
-              fontSize: 16,
-              height: 24 / 16,
-              fontWeight: FontWeight.w800,
+              fontSize: 14,
+              height: 1.2,
+              fontFamily: kReaderSerifFamily,
+              fontStyle: FontStyle.italic,
             ),
           ),
-          Spacer(),
-          if (showImportAction) ...[
-            MediaImportButton(
-              subsystemDirectory: 'Reader',
-              acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip'],
-              reuseExistingFiles: true,
-              onImportComplete: () {
-                ref.read(readerCenterControllerProvider.notifier).refresh();
-              },
-              style: ImportButtonStyle.iconButton,
+          const SizedBox(width: 6),
+          Icon(Icons.chevron_right_rounded, size: 12, color: rc.outlineVariant),
+          const SizedBox(width: 6),
+          Text(
+            l10n.mobileNavReader,
+            style: TextStyle(
               color: rc.onSurfaceVariant,
+              fontSize: 14,
+              height: 1.2,
+              fontFamily: kReaderSerifFamily,
+              fontStyle: FontStyle.italic,
             ),
-            const SizedBox(width: 4),
-          ],
-          if (!isWide &&
-              onSearchChanged != null &&
-              searchController != null) ...[
-            _SearchIconButton(onSearch: onSearchChanged!, colors: rc),
-            const SizedBox(width: 8),
-          ] else if (searchController != null && onSearchChanged != null) ...[
-            SizedBox(width: 20),
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 320),
-              child: _ReaderPageSearchField(
-                controller: searchController!,
-                onChanged: onSearchChanged!,
-              ),
-            ),
-            const SizedBox(width: 16),
-          ],
-          if (isWide) ...[
-            FontScaleControl(size: 20, color: rc.onSurfaceVariant),
-            NotificationIcon(size: 20, color: rc.onSurfaceVariant),
-            const SizedBox(width: 8),
-          ],
+          ),
+          const Spacer(),
+          FontScaleControl(size: 18, color: rc.onSurfaceVariant),
+          NotificationIcon(size: 18, color: rc.onSurfaceVariant),
+          const SizedBox(width: 8),
           const UserAvatarMenu(),
         ],
       ),
     );
+  }
+}
 
-    return WorkbenchTopBar(
-      surfaceColor: rc.surface,
-      borderColor: rc.outlineVariant,
-      child: barContent,
+/// 桌面左侧栏（w-52）：导航项激活为前景色反白。
+class _ReaderSidebar extends StatelessWidget {
+  const _ReaderSidebar({required this.current, required this.targets});
+
+  final ReaderPageTarget current;
+  final List<ReaderPageTarget> targets;
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = context.readerColors;
+    return Container(
+      width: 208,
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(color: rc.outlineVariant)),
+      ),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final target in targets)
+            _SidebarNavItem(
+              target: target,
+              selected: target == current,
+              onTap: () => context.go(target.location),
+            ),
+        ],
+      ),
     );
   }
 }
 
-/// 模块内页头 Tab：下划线样式，切换通过模块内路由完成。
+class _SidebarNavItem extends StatelessWidget {
+  const _SidebarNavItem({
+    required this.target,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final ReaderPageTarget target;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(2),
+      hoverColor: rc.surfaceContainerHigh,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? rc.sidebarSelectedBg : Colors.transparent,
+          borderRadius: BorderRadius.circular(2),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              selected ? target.selectedIcon : target.icon,
+              size: 18,
+              color: selected ? rc.sidebarSelectedFg : rc.onSurfaceVariant,
+            ),
+            const SizedBox(width: 12),
+            Text(
+              target.localizedLabel(l10n),
+              style: TextStyle(
+                fontSize: 13,
+                height: 1.2,
+                color: selected ? rc.sidebarSelectedFg : rc.onSurfaceVariant,
+                fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 窄屏底导航（h-14）：图标 + 10px 标签，激活前景色。
+class _ReaderModuleBottomNav extends StatelessWidget {
+  const _ReaderModuleBottomNav({required this.current, required this.targets});
+
+  final ReaderPageTarget current;
+  final List<ReaderPageTarget> targets;
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: rc.surface,
+        border: Border(top: BorderSide(color: rc.outlineVariant)),
+      ),
+      child: SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 56,
+          child: Row(
+            children: [
+              for (final target in targets)
+                Expanded(
+                  child: InkWell(
+                    onTap: () => context.go(target.location),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          target == current ? target.selectedIcon : target.icon,
+                          size: 18,
+                          color:
+                              target == current
+                                  ? rc.onSurface
+                                  : rc.onSurfaceVariant,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          target.localizedLabel(l10n),
+                          style: TextStyle(
+                            fontSize: 10,
+                            height: 1.2,
+                            color:
+                                target == current
+                                    ? rc.onSurface
+                                    : rc.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 移动端托管态横排页签（全局壳内切换模块页面）。
 class ReaderSectionTabBar extends StatelessWidget {
   const ReaderSectionTabBar({
     required this.current,
@@ -339,7 +508,7 @@ class _ReaderSectionTab extends StatelessWidget {
           label,
           style: TextStyle(
             fontSize: 13,
-            height: 18 / 13,
+            height: 1.2,
             fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
             color: selected ? rc.onSurface : rc.onSurfaceVariant,
           ),
@@ -349,197 +518,103 @@ class _ReaderSectionTab extends StatelessWidget {
   }
 }
 
-/// 页面内容滚动容器：窄屏带下拉刷新，宽屏固定内边距。
+/// 页面内容滚动容器：横向内边距对齐样例（px-6 / lg:px-8），窄屏带下拉刷新。
 class _ReaderPageScrollArea extends StatelessWidget {
   const _ReaderPageScrollArea({
-    required this.isWide,
     required this.hosted,
     required this.child,
+    this.header,
     this.onRefresh,
   });
 
-  final bool isWide;
   final bool hosted;
   final Widget child;
+  final Widget? header;
   final Future<void> Function()? onRefresh;
 
   @override
   Widget build(BuildContext context) {
     final rc = context.readerColors;
-    if (hosted && !isWide) {
+    final wide = MediaQuery.sizeOf(context).width >= 1024;
+    final scroll = SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      padding: EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 24, 40),
+      child: child,
+    );
+    if (hosted) {
       return RefreshIndicator(
         displacement: 40,
         edgeOffset: 64,
         strokeWidth: 2.5,
-        color: context.mobileColors.musicAccent,
+        color: rc.reading,
         onRefresh: onRefresh ?? () async {},
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(
-            parent: BouncingScrollPhysics(),
-          ),
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: MediaQuery.sizeOf(context).height - 220,
-            ),
-            child: child,
-          ),
-        ),
+        child: scroll,
       );
     }
-    return RefreshIndicator(
-      strokeWidth: 2.5,
-      color: rc.primary,
-      onRefresh: onRefresh ?? () async {},
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        padding: EdgeInsets.fromLTRB(
-          isWide ? 40 : 16,
-          isWide ? 20 : 20,
-          isWide ? 40 : 16,
-          40,
-        ),
-        child: child,
-      ),
-    );
-  }
-}
-
-class _ReaderPageSearchField extends StatelessWidget {
-  const _ReaderPageSearchField({
-    required this.controller,
-    required this.onChanged,
-  });
-
-  final TextEditingController controller;
-  final ValueChanged<String> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      onChanged: onChanged,
-      style: TextStyle(
-        color: context.readerColors.onSurface,
-        fontSize: 13,
-        height: 18 / 13,
-      ),
-      decoration: InputDecoration(
-        isDense: true,
-        filled: true,
-        fillColor: context.readerColors.surfaceContainerHigh,
-        hintText: AppLocalizations.of(context).readerSearchBooksHint,
-        hintStyle: TextStyle(
-          color: context.readerColors.onSurfaceVariant,
-          fontSize: 13,
-        ),
-        prefixIcon: Icon(
-          Icons.search_rounded,
-          color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.8),
-          size: 20,
-        ),
-        prefixIconConstraints: const BoxConstraints(minWidth: 40),
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 10,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide.none,
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(999),
-          borderSide: BorderSide(
-            color: context.readerColors.primary.withValues(alpha: 0.45),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (header != null)
+          Padding(
+            padding: EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 0, 0),
+            child: header!,
+          ),
+        Expanded(
+          child: RefreshIndicator(
+            strokeWidth: 2.5,
+            color: rc.reading,
+            onRefresh: onRefresh ?? () async {},
+            child: scroll,
           ),
         ),
-      ),
+      ],
     );
-  }
-}
-
-class _SearchIconButton extends StatelessWidget {
-  const _SearchIconButton({required this.onSearch, required this.colors});
-
-  final ValueChanged<String> onSearch;
-  final ReaderColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: AppLocalizations.of(context).readerSearch,
-      icon: Icon(
-        Icons.search_rounded,
-        size: 22,
-        color: colors.onSurfaceVariant,
-      ),
-      onPressed: () => _showSearchDialog(context),
-    );
-  }
-
-  void _showSearchDialog(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final controller = TextEditingController();
-    // dispose 兜底标记：dialog future 异常中断时控制器也不会重复释放
-    var controllerDisposed = false;
-    void disposeController() {
-      if (controllerDisposed) return;
-      controllerDisposed = true;
-      controller.dispose();
-    }
-
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: l10n.readerSearch,
-      barrierColor: Colors.black54,
-      transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder:
-          (context, animation, secondaryAnimation) => Dialog(
-            backgroundColor: Colors.transparent,
-            child: ReaderSearchOverlay(
-              controller: controller,
-              colors: colors,
-              onSearch: (query) {
-                if (query.trim().isNotEmpty) {
-                  onSearch(query.trim());
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ),
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    ).whenComplete(disposeController);
   }
 }
 
 /// 管理页无权限兜底视图（页签对非管理员隐藏，直接访问路由时展示）。
 class _ReaderAdminForbidden extends StatelessWidget {
+  const _ReaderAdminForbidden();
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: context.readerColors.surface,
       body: Center(
         child: ReaderEmptyState(
           title: l10n.readerMetadataManagement,
           subtitle: l10n.readerManageHint,
           icon: Icons.admin_panel_settings_outlined,
         ),
+      ),
+    );
+  }
+}
+
+/// 等宽数字（列表编号、百分比等）。
+class ReaderTabularFigures extends StatelessWidget {
+  const ReaderTabularFigures({
+    required this.text,
+    this.color,
+    this.fontSize,
+    super.key,
+  });
+
+  final String text;
+  final Color? color;
+  final double? fontSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: color ?? context.readerColors.onSurfaceVariant,
+        fontSize: fontSize ?? 12,
+        fontFeatures: const [FontFeature.tabularFigures()],
       ),
     );
   }

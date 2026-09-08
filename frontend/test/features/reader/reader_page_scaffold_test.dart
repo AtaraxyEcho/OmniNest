@@ -95,8 +95,33 @@ void main() {
       );
       await tester.pump(const Duration(milliseconds: 300));
 
-      expect(find.text('Library'), findsWidgets);
+      // 桌面样例布局：面包屑含模块名，侧栏含三个页签
+      expect(find.text('OmniNest'), findsOneWidget);
+      expect(find.text('Library'), findsOneWidget);
+      expect(find.text('Bookshelf'), findsOneWidget);
+      expect(find.text('Stats'), findsOneWidget);
       expect(find.text('library content'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('桌面窄窗口使用样例底导航', (tester) async {
+      tester.view.physicalSize = const Size(900, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _wrap(
+          const ReaderPageScaffold(
+            target: ReaderPageTarget.library,
+            child: Text('narrow content'),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('narrow content'), findsOneWidget);
+      expect(find.text('Bookshelf'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
 
@@ -119,6 +144,7 @@ void main() {
 
       expect(find.text('mobile library content'), findsOneWidget);
       expect(find.text('Library'), findsOneWidget);
+      expect(find.text('Bookshelf'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

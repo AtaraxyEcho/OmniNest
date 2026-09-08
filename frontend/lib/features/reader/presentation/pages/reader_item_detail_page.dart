@@ -317,15 +317,32 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // 返回条
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: IconButton(
-                tooltip: l10n.coreBack,
-                onPressed: _handleBack,
-                icon: Icon(Icons.arrow_back_rounded, color: rc.onSurface),
+          // 返回条（样例 h-12 sticky back bar）
+          InkWell(
+            onTap: _handleBack,
+            child: Container(
+              height: 48,
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: rc.outlineVariant)),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.arrow_back_rounded,
+                    size: 16,
+                    color: rc.onSurfaceVariant,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    l10n.coreBack,
+                    style: TextStyle(
+                      color: rc.onSurfaceVariant,
+                      fontSize: 13,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

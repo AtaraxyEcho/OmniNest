@@ -25,7 +25,6 @@ class ReaderAdminPage extends ConsumerWidget {
     final items = stateAsync.asData?.value.items ?? const <ReaderItem>[];
     return ReaderPageScaffold(
       target: ReaderPageTarget.admin,
-      showImportAction: true,
       onRefresh: () async {
         await ref.read(readerCenterControllerProvider.notifier).refresh();
       },
