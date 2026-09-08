@@ -4409,6 +4409,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNavManage => 'Manage';
 
   @override
+  String get readerShelfEmpty =>
+      'Your shelf is empty. Add books from the library.';
+
+  @override
+  String get readerShelfEmptyHint =>
+      'Browse the library and add books to your shelf.';
+
+  @override
   String get readerNavComics => 'Comics';
 
   @override

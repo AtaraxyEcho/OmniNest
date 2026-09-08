@@ -1860,6 +1860,8 @@
   "readerNavLibrary": "Library",
   "readerNavStats": "Stats",
   "readerNavManage": "Manage",
+  "readerShelfEmpty": "Your shelf is empty. Add books from the library.",
+  "readerShelfEmptyHint": "Browse the library and add books to your shelf.",
   "readerNavComics": "Comics",
   "readerSegmentAll": "All",
   "readerSegmentBooks": "Books",

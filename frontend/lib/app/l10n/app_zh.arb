@@ -1734,6 +1734,8 @@
   "readerNavLibrary": "书库",
   "readerNavStats": "统计",
   "readerNavManage": "管理",
+  "readerShelfEmpty": "书架为空，请在书库中添加书籍。",
+  "readerShelfEmptyHint": "去书库挑选喜欢的书加入书架吧。",
   "readerNavComics": "漫画",
   "readerSegmentAll": "全部",
   "readerSegmentBooks": "图书",

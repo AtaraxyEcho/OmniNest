@@ -4269,6 +4269,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerNavManage => '管理';
 
   @override
+  String get readerShelfEmpty => '书架为空，请在书库中添加书籍。';
+
+  @override
+  String get readerShelfEmptyHint => '去书库挑选喜欢的书加入书架吧。';
+
+  @override
   String get readerNavComics => '漫画';
 
   @override

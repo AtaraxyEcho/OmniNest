@@ -8165,6 +8165,18 @@ abstract class AppLocalizations {
   /// **'Manage'**
   String get readerNavManage;
 
+  /// No description provided for @readerShelfEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Your shelf is empty. Add books from the library.'**
+  String get readerShelfEmpty;
+
+  /// No description provided for @readerShelfEmptyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse the library and add books to your shelf.'**
+  String get readerShelfEmptyHint;
+
   /// No description provided for @readerNavComics.
   ///
   /// In en, this message translates to:

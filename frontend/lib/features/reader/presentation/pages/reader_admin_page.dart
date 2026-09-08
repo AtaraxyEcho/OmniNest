@@ -3,8 +3,10 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
+import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_import_section.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_import_queue_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_metadata_section.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 
@@ -17,6 +19,7 @@ class ReaderAdminPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final stateAsync = ref.watch(readerCenterControllerProvider);
+    final importJobs = ref.watch(readerImportQueueProvider);
     final items = stateAsync.asData?.value.items ?? const <ReaderItem>[];
     return ReaderPageScaffold(
       target: ReaderPageTarget.admin,
@@ -31,6 +34,21 @@ class ReaderAdminPage extends ConsumerWidget {
             label: AppLocalizations.of(context).readerImports,
           ),
           const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            clipBehavior: Clip.none,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const ImportFromDeviceTile(),
+                for (final job in importJobs) ...[
+                  const SizedBox(width: 12),
+                  SizedBox(width: 120, child: ImportJobCard(job: job)),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           ImportSection(
             onImported:
                 () =>
@@ -42,6 +60,10 @@ class ReaderAdminPage extends ConsumerWidget {
           ),
           const SizedBox(height: 12),
           MetadataSection(items: items),
+          const SizedBox(height: 24),
+          _AdminSectionHeader(
+            label: AppLocalizations.of(context).readerHistory,
+          ),
         ],
       ),
     );

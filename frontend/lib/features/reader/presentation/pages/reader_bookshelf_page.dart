@@ -1,93 +1,96 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_bookshelf_section.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_shelf_row.dart';
 
-/// 书架页：已加入书架的条目、正在阅读与阅读报告。
-class ReaderBookshelfPage extends ConsumerStatefulWidget {
+/// 书架页：已加入书架的条目编号列表。
+class ReaderBookshelfPage extends ConsumerWidget {
   const ReaderBookshelfPage({super.key});
 
   @override
-  ConsumerState<ReaderBookshelfPage> createState() =>
-      _ReaderBookshelfPageState();
-}
-
-class _ReaderBookshelfPageState extends ConsumerState<ReaderBookshelfPage> {
-  Set<String> _importingIds = const {};
-
-  void _syncImportingIds(List<ReaderItem> items) {
-    _importingIds =
-        items.where((item) => item.isParsing).map((item) => item.id).toSet();
-  }
-
-  Future<void> _onRefresh() async {
-    await ref.read(readerCenterControllerProvider.notifier).refresh();
-    ref.invalidate(readerStatsProvider);
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rc = context.readerColors;
     final stateAsync = ref.watch(readerCenterControllerProvider);
     final state = stateAsync.asData?.value;
-    _syncImportingIds(state?.items ?? const []);
-    final statsAsync = ref.watch(readerStatsProvider);
-
+    final shelved = state?.bookshelfItems ?? const <ReaderItem>[];
     return ReaderPageScaffold(
       target: ReaderPageTarget.bookshelf,
-      onRefresh: _onRefresh,
+      onRefresh:
+          () => ref.read(readerCenterControllerProvider.notifier).refresh(),
       child: ReaderParseFeedback(
-        child: stateAsync.when(
-          loading: () => const SizedBox.shrink(),
-          error: (_, _) => const SizedBox.shrink(),
-          data: (data) {
-            final shelved = data.bookshelfItems;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
               children: [
-                ReadingNowCard(
-                  book:
-                      data.continueItems.isNotEmpty
-                          ? data.continueItems.first
-                          : null,
-                  onTap:
-                      data.continueItems.isNotEmpty
-                          ? () => _onOpenItem(data.continueItems.first)
-                          : null,
+                Text(
+                  AppLocalizations.of(context).readerNavBookshelf,
+                  style: TextStyle(
+                    color: rc.onSurface,
+                    fontSize: 28,
+                    height: 1.15,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: -0.5,
+                  ),
                 ),
-                if (data.continueItems.isNotEmpty) const SizedBox(height: 20),
-                BookshelfGrid(
-                  books: shelved,
-                  onOpenItem: _onOpenItem,
-                  onDeleteItem: _onDeleteItem,
-                  onCancelImport: _onCancelImport,
-                  importingIds: _importingIds,
+                const Spacer(),
+                Text(
+                  '${shelved.length}',
+                  style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
                 ),
-                const SizedBox(height: 20),
-                ReadingReportCard(stats: statsAsync.asData?.value),
               ],
-            );
-          },
+            ),
+            const SizedBox(height: 20),
+            if (shelved.isEmpty)
+              ReaderEmptyState(
+                title: AppLocalizations.of(context).readerShelfEmpty,
+                subtitle: AppLocalizations.of(context).readerShelfEmptyHint,
+                icon: Icons.auto_stories_outlined,
+              )
+            else
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    top: BorderSide(
+                      color: rc.outlineVariant.withValues(alpha: 0.6),
+                    ),
+                  ),
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: shelved.length,
+                  itemBuilder: (context, index) {
+                    final item = shelved[index];
+                    return Container(
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: rc.outlineVariant.withValues(alpha: 0.6),
+                          ),
+                        ),
+                      ),
+                      child: ReaderShelfRow(
+                        index: index,
+                        item: item,
+                        onTap: () => context.push('/reader/items/${item.id}'),
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
         ),
       ),
     );
-  }
-
-  void _onOpenItem(ReaderItem item) {
-    if (item.id.isEmpty) return;
-    context.push('/reader/items/${item.id}');
-  }
-
-  Future<void> _onDeleteItem(ReaderItem item) async {
-    await ref.read(readerCenterControllerProvider.notifier).deleteItem(item.id);
-  }
-
-  Future<void> _onCancelImport(ReaderItem item) async {
-    await ref
-        .read(readerCenterControllerProvider.notifier)
-        .cancelImport(item.id);
   }
 }
