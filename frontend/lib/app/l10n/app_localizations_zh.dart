@@ -8427,4 +8427,37 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get fontScalePreviewSample => '你好，OmniNest';
+
+  @override
+  String get videoDetailBack => 'BACK';
+
+  @override
+  String get videoDetailEdit => 'EDIT';
+
+  @override
+  String get videoDetailSave => 'SAVE';
+
+  @override
+  String get videoDetailPlay => 'PLAY';
+
+  @override
+  String get videoDetailTabOverview => 'overview';
+
+  @override
+  String get videoDetailTabVersions => 'versions';
+
+  @override
+  String get videoDetailTabSubtitles => 'subtitles';
+
+  @override
+  String get videoDetailCast => 'Cast';
+
+  @override
+  String get videoDetailDirector => 'DIR.';
+
+  @override
+  String get videoDetailNoVersions => '暂无可用版本';
+
+  @override
+  String get videoDetailUploadSubtitle => '上传字幕';
 }

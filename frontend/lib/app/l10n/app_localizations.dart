@@ -15881,6 +15881,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Hello, OmniNest'**
   String get fontScalePreviewSample;
+
+  /// No description provided for @videoDetailBack.
+  ///
+  /// In en, this message translates to:
+  /// **'BACK'**
+  String get videoDetailBack;
+
+  /// No description provided for @videoDetailEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'EDIT'**
+  String get videoDetailEdit;
+
+  /// No description provided for @videoDetailSave.
+  ///
+  /// In en, this message translates to:
+  /// **'SAVE'**
+  String get videoDetailSave;
+
+  /// No description provided for @videoDetailPlay.
+  ///
+  /// In en, this message translates to:
+  /// **'PLAY'**
+  String get videoDetailPlay;
+
+  /// No description provided for @videoDetailTabOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'overview'**
+  String get videoDetailTabOverview;
+
+  /// No description provided for @videoDetailTabVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'versions'**
+  String get videoDetailTabVersions;
+
+  /// No description provided for @videoDetailTabSubtitles.
+  ///
+  /// In en, this message translates to:
+  /// **'subtitles'**
+  String get videoDetailTabSubtitles;
+
+  /// No description provided for @videoDetailCast.
+  ///
+  /// In en, this message translates to:
+  /// **'Cast'**
+  String get videoDetailCast;
+
+  /// No description provided for @videoDetailDirector.
+  ///
+  /// In en, this message translates to:
+  /// **'DIR.'**
+  String get videoDetailDirector;
+
+  /// No description provided for @videoDetailNoVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'No versions available.'**
+  String get videoDetailNoVersions;
+
+  /// No description provided for @videoDetailUploadSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'UPLOAD SUBTITLE'**
+  String get videoDetailUploadSubtitle;
 }
 
 class _AppLocalizationsDelegate

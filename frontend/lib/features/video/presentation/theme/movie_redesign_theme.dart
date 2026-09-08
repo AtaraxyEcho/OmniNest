@@ -175,3 +175,65 @@ EdgeInsets movieRedesignPagePadding(double width) {
 
 /// 原型 sm: 断点（640px）判断，用于成对字号/间距切换。
 bool movieRedesignAtSm(double width) => width >= 640;
+
+/// 影片详情页暗色金调令牌（对应 Movies Module Design/components/Detail.tsx）。
+class MovieDetailTheme {
+  MovieDetailTheme._();
+
+  static const Color background = Color(0xFF0A0A0A);
+  static const Color surface = Color(0xFF111111);
+  static const Color foreground = Color(0xFFF0F0F0);
+  static const Color secondaryText = Color(0xFFA0A0A0);
+  static const Color mutedText = Color(0xFF606060);
+  static const Color border = Color(0xFF1E1E1E);
+  static const Color accent = Color(0xFFC8A96E);
+  static const Color statusPending = Color(0xFFFBBF24);
+  static const Color statusFailed = Color(0xFFF87171);
+
+  /// 展示衬线：拉丁取 Instrument Serif，中文回退 Noto Serif SC。
+  static TextStyle serif(double size, {Color? color, double? height}) {
+    return TextStyle(
+      fontFamily: 'InstrumentSerif',
+      fontFamilyFallback: const ['NotoSerifSC'],
+      fontSize: size,
+      height: height,
+      color: color ?? foreground,
+      fontWeight: FontWeight.w400,
+    );
+  }
+
+  /// 等宽标签：拉丁与数字取 JetBrains Mono，中文回退 Noto Sans SC。
+  static TextStyle mono(
+    double size, {
+    Color? color,
+    double? height,
+    double letterSpacing = 0,
+  }) {
+    return TextStyle(
+      fontFamily: 'JetBrainsMono',
+      fontFamilyFallback: const ['NotoSansSC'],
+      fontSize: size,
+      height: height,
+      color: color ?? mutedText,
+      fontWeight: FontWeight.w400,
+      letterSpacing: letterSpacing,
+    );
+  }
+
+  /// 正文：Inter 拉丁，中文回退 Noto Sans SC。
+  static TextStyle body(
+    double size, {
+    Color? color,
+    double? height,
+    FontWeight weight = FontWeight.w400,
+  }) {
+    return TextStyle(
+      fontFamily: 'Inter',
+      fontFamilyFallback: const ['NotoSansSC'],
+      fontSize: size,
+      height: height,
+      color: color ?? foreground,
+      fontWeight: weight,
+    );
+  }
+}

@@ -3917,5 +3917,16 @@
   "fontScaleComfortable": "Comfortable",
   "fontScaleLarge": "Large",
   "fontScaleResetDefault": "Reset to default",
-  "fontScalePreviewSample": "Hello, OmniNest"
+  "fontScalePreviewSample": "Hello, OmniNest",
+  "videoDetailBack": "BACK",
+  "videoDetailEdit": "EDIT",
+  "videoDetailSave": "SAVE",
+  "videoDetailPlay": "PLAY",
+  "videoDetailTabOverview": "overview",
+  "videoDetailTabVersions": "versions",
+  "videoDetailTabSubtitles": "subtitles",
+  "videoDetailCast": "Cast",
+  "videoDetailDirector": "DIR.",
+  "videoDetailNoVersions": "No versions available.",
+  "videoDetailUploadSubtitle": "UPLOAD SUBTITLE"
 }

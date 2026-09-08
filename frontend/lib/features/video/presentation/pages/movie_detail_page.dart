@@ -13,7 +13,8 @@ import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart
 
 /// 影片详情页：暗色金调整页视图（对应 Movies Module Design/components/Detail.tsx）。
 ///
-/// 结构：固定压题图（BACK / EDIT / 收藏）→ 海报+元信息（-64px 叠压）→ PLAY →
+/// 压题图与内容同处一个滚动域（-64px 海报叠压不会被滚动区上边缘裁切），
+/// 结构：压题图（BACK / EDIT / 收藏）→ 海报+元信息 → PLAY →
 /// overview / versions / subtitles 三标签。路由 `/video/:videoId`。
 class MovieDetailPage extends ConsumerWidget {
   const MovieDetailPage({required this.videoItemId, super.key});
@@ -260,77 +261,80 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
         _favoritedOverride ?? favoriteAsync.asData?.value ?? false;
     return Scaffold(
       backgroundColor: MovieDetailTheme.background,
-      body: Column(
-        children: [
-          _Backdrop(
-            backdropUrl: item.backdropImageUrl ?? item.posterImageUrl,
-            favorited: favorited,
-            canEdit: canEdit && !_saving,
-            editMode: _editMode,
-            saving: _saving,
-            onBack: () {
-              if (context.canPop()) {
-                context.pop();
-              } else {
-                context.go('/video');
-              }
-            },
-            onToggleEdit: () {
-              if (_editMode) {
-                unawaited(_saveEdits(item));
-              } else {
-                setState(() {
-                  _editMode = true;
-                });
-              }
-            },
-            onToggleFavorite: () => unawaited(_toggleFavorite(favorited)),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
+      // 压题图与内容同处一个滚动域：-64px 海报叠压不会被滚动区上边缘裁切。
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Backdrop(
+              backdropUrl: item.backdropImageUrl ?? item.posterImageUrl,
+              favorited: favorited,
+              canEdit: canEdit && !_saving,
+              editMode: _editMode,
+              saving: _saving,
+              onBack: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/video');
+                }
+              },
+              onToggleEdit: () {
+                if (_editMode) {
+                  unawaited(_saveEdits(item));
+                } else {
+                  setState(() {
+                    _editMode = true;
+                  });
+                }
+              },
+              onToggleFavorite: () => unawaited(_toggleFavorite(favorited)),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 32),
               child: Align(
                 alignment: Alignment.topLeft,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 1024),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(32, 0, 32, 48),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _PosterMetaRow(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Transform.translate(
+                        offset: const Offset(0, -64),
+                        child: _PosterMetaRow(
                           item: item,
                           editMode: _editMode,
                           titleController: _titleController,
                         ),
-                        const SizedBox(height: 32),
-                        _PlayButton(item: item),
-                        const SizedBox(height: 32),
-                        _TabBar(
-                          active: _tab,
-                          onSelect: (tab) => setState(() => _tab = tab),
+                      ),
+                      const SizedBox(height: 32),
+                      _PlayButton(item: item),
+                      const SizedBox(height: 32),
+                      _TabBar(
+                        active: _tab,
+                        onSelect: (tab) => setState(() => _tab = tab),
+                      ),
+                      const SizedBox(height: 24),
+                      switch (_tab) {
+                        _DetailTab.overview => _OverviewTab(
+                          item: item,
+                          editMode: _editMode,
+                          overviewController: _overviewController,
                         ),
-                        const SizedBox(height: 24),
-                        switch (_tab) {
-                          _DetailTab.overview => _OverviewTab(
-                            item: item,
-                            editMode: _editMode,
-                            overviewController: _overviewController,
-                          ),
-                          _DetailTab.versions => _VersionsTab(item: item),
-                          _DetailTab.subtitles => _SubtitlesTab(
-                            item: item,
-                            uploading: _uploading,
-                            onUpload: _pickAndUploadSubtitle,
-                          ),
-                        },
-                      ],
-                    ),
+                        _DetailTab.versions => _VersionsTab(item: item),
+                        _DetailTab.subtitles => _SubtitlesTab(
+                          item: item,
+                          uploading: _uploading,
+                          onUpload: _pickAndUploadSubtitle,
+                        ),
+                      },
+                    ],
                   ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -527,120 +531,89 @@ class _PosterMetaRow extends StatelessWidget {
             .map((member) => member.name)
             .firstOrNull;
     final l10n = AppLocalizations.of(context);
-    // 海报元信息高度随字体档位伸缩：占位高度放大给 PLAY 腾出流式空间，
-    // OverflowBox 解除高度上限让编辑态标题输入框按内容自然撑开。
-    final textScale =
-        MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5).toDouble();
-    return Transform.translate(
-      offset: const Offset(0, -64),
-      child: SizedBox(
-        height: 96 * textScale,
-        child: OverflowBox(
-          maxHeight: double.infinity,
-          alignment: Alignment.topCenter,
-          child: SizedBox(
-            width: MediaQuery.sizeOf(context).width - 64,
-            child: Row(
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 112,
+          height: 160,
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            border: Border.all(color: MovieDetailTheme.border),
+          ),
+          child: _CoverImage(url: item.posterImageUrl),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 64),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  width: 112,
-                  height: 160,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: MovieDetailTheme.border),
-                  ),
-                  child: _CoverImage(url: item.posterImageUrl),
-                ),
-                const SizedBox(width: 24),
-                Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.only(top: 64),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (editMode)
-                          TextField(
-                            controller: titleController,
-                            style: MovieDetailTheme.serif(
-                              30,
-                              color: MovieDetailTheme.foreground,
-                            ),
-                            decoration: const InputDecoration(
-                              isDense: true,
-                              enabledBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: MovieDetailTheme.accent,
-                                ),
-                              ),
-                              focusedBorder: UnderlineInputBorder(
-                                borderSide: BorderSide(
-                                  color: MovieDetailTheme.accent,
-                                ),
-                              ),
-                            ),
-                          )
-                        else
-                          Text(
-                            item.title,
-                            style: MovieDetailTheme.serif(30, height: 1.15),
-                          ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 16,
-                          runSpacing: 4,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            if (item.rating != null)
-                              Text(
-                                item.rating!.toStringAsFixed(1),
-                                style: MovieDetailTheme.mono(
-                                  12,
-                                  color: MovieDetailTheme.accent,
-                                ),
-                              ),
-                            Text(item.year, style: MovieDetailTheme.mono(12)),
-                            if (item.runtimeSeconds != null &&
-                                item.runtimeSeconds! > 0)
-                              Text(
-                                item.runtimeText,
-                                style: MovieDetailTheme.mono(12),
-                              ),
-                            for (final genre in item.genres.take(3))
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  border: Border.all(
-                                    color: MovieDetailTheme.border,
-                                  ),
-                                ),
-                                child: Text(
-                                  genre,
-                                  style: MovieDetailTheme.mono(12),
-                                ),
-                              ),
-                            _StatusChip(status: item.metadataStatus),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        if (director != null && director.isNotEmpty)
-                          Text(
-                            '${l10n.videoDetailDirector} ${director.toUpperCase()}',
-                            style: MovieDetailTheme.mono(12),
-                          ),
-                      ],
+                if (editMode)
+                  TextField(
+                    controller: titleController,
+                    style: MovieDetailTheme.serif(
+                      30,
+                      color: MovieDetailTheme.foreground,
                     ),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: MovieDetailTheme.accent),
+                      ),
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: MovieDetailTheme.accent),
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    item.title,
+                    style: MovieDetailTheme.serif(30, height: 1.15),
                   ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    if (item.rating != null)
+                      Text(
+                        item.rating!.toStringAsFixed(1),
+                        style: MovieDetailTheme.mono(
+                          12,
+                          color: MovieDetailTheme.accent,
+                        ),
+                      ),
+                    Text(item.year, style: MovieDetailTheme.mono(12)),
+                    if (item.runtimeSeconds != null && item.runtimeSeconds! > 0)
+                      Text(item.runtimeText, style: MovieDetailTheme.mono(12)),
+                    for (final genre in item.genres.take(3))
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: MovieDetailTheme.border),
+                        ),
+                        child: Text(genre, style: MovieDetailTheme.mono(12)),
+                      ),
+                    _StatusChip(status: item.metadataStatus),
+                  ],
                 ),
+                const SizedBox(height: 8),
+                if (director != null && director.isNotEmpty)
+                  Text(
+                    '${l10n.videoDetailDirector} ${director.toUpperCase()}',
+                    style: MovieDetailTheme.mono(12),
+                  ),
               ],
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -733,7 +706,7 @@ class _PlayButton extends ConsumerWidget {
                 ),
                 if (showProgress)
                   Text(
-                    ' ($progress%)',
+                    ' (${progress.round()}%)',
                     style: MovieDetailTheme.mono(
                       12,
                       color: MovieDetailTheme.background,

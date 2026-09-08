@@ -3791,5 +3791,16 @@
   "fontScaleComfortable": "舒适",
   "fontScaleLarge": "大",
   "fontScaleResetDefault": "恢复默认",
-  "fontScalePreviewSample": "你好，OmniNest"
+  "fontScalePreviewSample": "你好，OmniNest",
+  "videoDetailBack": "BACK",
+  "videoDetailEdit": "EDIT",
+  "videoDetailSave": "SAVE",
+  "videoDetailPlay": "PLAY",
+  "videoDetailTabOverview": "overview",
+  "videoDetailTabVersions": "versions",
+  "videoDetailTabSubtitles": "subtitles",
+  "videoDetailCast": "Cast",
+  "videoDetailDirector": "DIR.",
+  "videoDetailNoVersions": "暂无可用版本",
+  "videoDetailUploadSubtitle": "上传字幕"
 }
