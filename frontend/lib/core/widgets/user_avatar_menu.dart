@@ -6,13 +6,17 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
-import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/widgets/anchored_popover.dart';
 
 /// 右上角头像下拉菜单组件。
 ///
-/// 显示用户头像，并提供个人中心、存储、管理和退出入口。
-class UserAvatarMenu extends ConsumerWidget {
+/// 弹层结构参照 Reader 重构原型：控件下方右对齐的直角分区卡（hairline
+/// 分隔）、用户信息、主题与语言行内小描边按钮（显示切换目标，点击即切
+/// 换不关闭）、操作区整行按钮；入口为双线描边圆形头像，打开态边框转前
+/// 景色。
+class UserAvatarMenu extends ConsumerStatefulWidget {
   const UserAvatarMenu({
     super.key,
     this.size = 36,
@@ -26,41 +30,52 @@ class UserAvatarMenu extends ConsumerWidget {
   final bool directToProfile;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<UserAvatarMenu> createState() => _UserAvatarMenuState();
+}
+
+class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
+  final AnchoredPopover _popover = AnchoredPopover();
+
+  @override
+  void dispose() {
+    _popover.close();
+    super.dispose();
+  }
+
+  void _refresh() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _closeAndRun(VoidCallback action) {
+    _popover.close(onChanged: _refresh);
+    action();
+  }
+
+  /// 面板动作统一走宿主 context 导航，避免引用已卸载的面板节点。
+  void _go(String location) {
+    if (mounted) {
+      this.context.go(location);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final authState = ref.watch(authSessionProvider);
-    final themeMode = ref.watch(appearanceControllerProvider);
-    final languageCode = ref.watch(localeControllerProvider);
     final user = authState.asData?.value.user;
-    final appColors = context.globalColors;
-    final sourceTheme = Theme.of(context);
-    final sharedMenuTheme = sourceTheme.copyWith(
-      colorScheme: sourceTheme.colorScheme.copyWith(
-        surface: appColors.surface,
-        surfaceContainerLow: appColors.surfaceContainerLow,
-        surfaceContainer: appColors.surfaceContainer,
-        surfaceContainerHigh: appColors.surfaceContainerHigh,
-        surfaceContainerHighest: appColors.surfaceContainerHighest,
-        onSurface: appColors.onSurface,
-        onSurfaceVariant: appColors.onSurfaceVariant,
-        primary: appColors.primary,
-        error: appColors.error,
-        outline: appColors.outline,
-        outlineVariant: appColors.outlineVariant,
-      ),
-    );
-
     final displayName = user?.displayName ?? user?.username ?? '?';
     final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
     final avatarUrl = user?.avatarUrl;
-    final role = user?.role ?? 'MEMBER';
 
-    final avatar = _AvatarWidget(
-      avatarUrl: avatarUrl,
-      initial: initial,
-      size: size,
-    );
-    if (directToProfile) {
+    if (widget.directToProfile) {
+      final avatar = _AvatarWidget(
+        avatarUrl: avatarUrl,
+        initial: initial,
+        size: widget.size,
+        emphasized: false,
+      );
       return SizedBox.square(
         dimension: 48,
         child: Tooltip(
@@ -74,250 +89,337 @@ class UserAvatarMenu extends ConsumerWidget {
         ),
       );
     }
-    return Theme(
-      data: sharedMenuTheme,
-      child: PopupMenuButton<_MenuAction>(
-        tooltip: l10n.coreProfile,
-        offset: const Offset(0, 48),
-        color: appColors.surfaceContainerLow,
-        surfaceTintColor: Colors.transparent,
-        elevation: 8,
-        constraints: const BoxConstraints(minWidth: 260, maxWidth: 300),
-        menuPadding: const EdgeInsets.symmetric(vertical: 6),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        onSelected: (action) => _handleAction(context, ref, action),
-        itemBuilder:
-            (context) => [
-              // 用户信息头部（不可点击）
-              PopupMenuItem<_MenuAction>(
-                enabled: false,
-                padding: EdgeInsets.zero,
-                child: _UserHeader(
-                  displayName: displayName,
-                  username: user?.username ?? '',
-                  role: role,
-                  avatarUrl: avatarUrl,
-                  initial: initial,
-                ),
-              ),
-              const PopupMenuDivider(),
-              // 个人中心
-              PopupMenuItem<_MenuAction>(
-                value: _MenuAction.profile,
-                child: _MenuItem(
-                  icon: Icons.person_outline_rounded,
-                  title: l10n.coreProfile,
-                ),
-              ),
-              const PopupMenuDivider(),
-              PopupMenuItem<_MenuAction>(
-                value: _MenuAction.themeSystem,
-                child: _MenuItem(
-                  icon: Icons.brightness_auto_outlined,
-                  title: l10n.settingsThemeSystem,
-                  selected: themeMode == ThemeMode.system,
-                ),
-              ),
-              PopupMenuItem<_MenuAction>(
-                value: _MenuAction.themeLight,
-                child: _MenuItem(
-                  icon: Icons.light_mode_outlined,
-                  title: l10n.settingsThemeLight,
-                  selected: themeMode == ThemeMode.light,
-                ),
-              ),
-              PopupMenuItem<_MenuAction>(
-                value: _MenuAction.themeDark,
-                child: _MenuItem(
-                  icon: Icons.dark_mode_outlined,
-                  title: l10n.settingsThemeDark,
-                  selected: themeMode == ThemeMode.dark,
-                ),
-              ),
-              // 语言开关：开启为中文界面，关闭为英文界面
-              PopupMenuItem<_MenuAction>(
-                value: _MenuAction.language,
-                child: _LanguageToggleItem(isChinese: languageCode == 'zh'),
-              ),
-              const PopupMenuDivider(),
-              // 存储空间
-              PopupMenuItem<_MenuAction>(
-                value: _MenuAction.storage,
-                child: _MenuItem(
-                  icon: Icons.cloud_outlined,
-                  title: l10n.coreStorage,
-                ),
-              ),
-              // 管理后台（仅管理员可见）
-              if (role == 'SUPER_ADMIN' || role == 'ADMIN')
-                PopupMenuItem<_MenuAction>(
-                  value: _MenuAction.admin,
-                  child: _MenuItem(
-                    icon: Icons.admin_panel_settings_outlined,
-                    title: l10n.coreAdmin,
-                  ),
-                ),
-              const PopupMenuDivider(),
-              // 退出登录
-              PopupMenuItem<_MenuAction>(
-                value: _MenuAction.signOut,
-                child: _MenuItem(
-                  icon: Icons.logout_rounded,
-                  title: l10n.coreSignOut,
-                  isDestructive: true,
-                ),
-              ),
-            ],
+
+    final open = _popover.isOpen;
+    final avatar = _AvatarWidget(
+      avatarUrl: avatarUrl,
+      initial: initial,
+      size: widget.size,
+      emphasized: open,
+    );
+    return Tooltip(
+      message: l10n.coreProfile,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () {
+          if (open) {
+            _popover.close(onChanged: _refresh);
+          } else {
+            _popover.open(context, _buildPanel, onChanged: _refresh);
+          }
+        },
         child: avatar,
       ),
     );
   }
 
-  void _handleAction(BuildContext context, WidgetRef ref, _MenuAction action) {
-    switch (action) {
-      case _MenuAction.profile:
-        context.go('/profile');
-      case _MenuAction.themeSystem:
-        unawaited(
-          ref
-              .read(appearanceControllerProvider.notifier)
-              .setThemeMode(ThemeMode.system),
+  Widget _buildPanel(BuildContext context) {
+    return Consumer(
+      builder: (context, ref, _) {
+        final l10n = AppLocalizations.of(context);
+        final colors = Theme.of(context).colorScheme;
+        final themeMode = ref.watch(appearanceControllerProvider);
+        final languageCode = ref.watch(localeControllerProvider);
+        final user = ref.watch(
+          authSessionProvider.select((state) => state.asData?.value.user),
         );
-      case _MenuAction.themeLight:
-        unawaited(
-          ref
-              .read(appearanceControllerProvider.notifier)
-              .setThemeMode(ThemeMode.light),
+        final displayName = user?.displayName ?? user?.username ?? '?';
+        final initial =
+            displayName.isNotEmpty ? displayName[0].toUpperCase() : '?';
+        final role = user?.role ?? 'MEMBER';
+        return Material(
+          color: colors.surfaceContainerLow,
+          shadowColor: colors.shadow.withValues(alpha: 0.55),
+          elevation: 6,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.zero,
+            side: BorderSide(color: colors.outlineVariant),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 232, maxWidth: 280),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _UserHeader(
+                  displayName: displayName,
+                  username: user?.username ?? '',
+                  role: role,
+                  avatarUrl: user?.avatarUrl,
+                  initial: initial,
+                ),
+                _MenuDivider(),
+                _PreferenceRow(
+                  label: l10n.settingsAppearance,
+                  trailing: _ThemeCycleButton(themeMode: themeMode),
+                ),
+                _MenuDivider(),
+                _PreferenceRow(
+                  label: l10n.settingsLanguage,
+                  trailing: _LanguageCycleButton(languageCode: languageCode),
+                ),
+                _MenuDivider(),
+                _MenuActionRow(
+                  icon: Icons.person_outline_rounded,
+                  label: l10n.coreProfile,
+                  onTap: () => _closeAndRun(() => _go('/profile')),
+                ),
+                _MenuActionRow(
+                  icon: Icons.cloud_outlined,
+                  label: l10n.coreStorage,
+                  onTap: () => _closeAndRun(() => _go('/files')),
+                ),
+                if (role == 'SUPER_ADMIN' || role == 'ADMIN')
+                  _MenuActionRow(
+                    icon: Icons.admin_panel_settings_outlined,
+                    label: l10n.coreAdmin,
+                    onTap: () => _closeAndRun(() => _go('/admin')),
+                  ),
+                _MenuActionRow(
+                  icon: Icons.logout_rounded,
+                  label: l10n.coreSignOut,
+                  destructive: true,
+                  onTap:
+                      () => _closeAndRun(
+                        () =>
+                            ref
+                                .read(authSessionProvider.notifier)
+                                .clearSession(),
+                      ),
+                ),
+              ],
+            ),
+          ),
         );
-      case _MenuAction.themeDark:
-        unawaited(
-          ref
-              .read(appearanceControllerProvider.notifier)
-              .setThemeMode(ThemeMode.dark),
-        );
-      case _MenuAction.language:
-        final current = ref.read(localeControllerProvider);
-        unawaited(
-          ref
-              .read(localeControllerProvider.notifier)
-              .setLanguage(current == 'zh' ? 'en' : 'zh'),
-        );
-      case _MenuAction.storage:
-        context.go('/files');
-      case _MenuAction.admin:
-        context.go('/admin');
-      case _MenuAction.signOut:
-        ref.read(authSessionProvider.notifier).clearSession();
-    }
-  }
-}
-
-enum _MenuAction {
-  profile,
-  themeSystem,
-  themeLight,
-  themeDark,
-  language,
-  storage,
-  admin,
-  signOut,
-}
-
-/// 菜单项组件。
-class _MenuItem extends StatelessWidget {
-  const _MenuItem({
-    required this.icon,
-    required this.title,
-    this.isDestructive = false,
-    this.selected = false,
-  });
-
-  final IconData icon;
-  final String title;
-  final bool isDestructive;
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    final color = isDestructive ? colors.error : colors.onSurface;
-    return ListTile(
-      leading: Icon(icon, size: 20, color: color),
-      title: Text(
-        title,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: color,
-        ),
-      ),
-      trailing:
-          selected
-              ? Icon(Icons.check_rounded, size: 18, color: colors.primary)
-              : null,
-      dense: true,
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-      contentPadding: EdgeInsets.zero,
+      },
     );
   }
 }
 
-/// 语言开关行：开关开启表示中文界面，关闭表示英文界面。
-/// 行内 Switch 仅承载状态展示，点击统一交给菜单选中逻辑处理。
-class _LanguageToggleItem extends StatelessWidget {
-  const _LanguageToggleItem({required this.isChinese});
+/// 偏好行：左侧灰字标签 + 右侧行内小描边切换按钮。
+class _PreferenceRow extends StatelessWidget {
+  const _PreferenceRow({required this.label, required this.trailing});
 
-  final bool isChinese;
+  final String label;
+  final Widget trailing;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final colors = Theme.of(context).colorScheme;
-    return ListTile(
-      leading: Icon(Icons.language_rounded, size: 20, color: colors.onSurface),
-      title: Text(
-        l10n.settingsLanguage,
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: colors.onSurface,
-        ),
-      ),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
         children: [
-          Text(
-            isChinese
-                ? l10n.settingsLanguageChinese
-                : l10n.settingsLanguageEnglish,
-            style: TextStyle(fontSize: 12, color: colors.onSurfaceVariant),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
           ),
-          const SizedBox(width: 8),
-          IgnorePointer(child: Switch(value: isChinese, onChanged: (_) {})),
+          trailing,
         ],
       ),
-      dense: true,
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-      contentPadding: EdgeInsets.zero,
+    );
+  }
+}
+
+/// 主题循环小描边按钮：显示切换目标（跟随系统 → 浅色 → 深色 → 跟随系统）。
+class _ThemeCycleButton extends ConsumerWidget {
+  const _ThemeCycleButton({required this.themeMode});
+
+  final ThemeMode themeMode;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final (next, icon, label) = switch (themeMode) {
+      ThemeMode.system => (
+        ThemeMode.light,
+        Icons.light_mode_outlined,
+        l10n.settingsThemeLight,
+      ),
+      ThemeMode.light => (
+        ThemeMode.dark,
+        Icons.dark_mode_outlined,
+        l10n.settingsThemeDark,
+      ),
+      ThemeMode.dark => (
+        ThemeMode.system,
+        Icons.brightness_auto_outlined,
+        l10n.settingsThemeSystem,
+      ),
+    };
+    return _SmallOutlineButton(
+      icon: icon,
+      label: label,
+      mono: false,
+      onTap:
+          () => unawaited(
+            ref.read(appearanceControllerProvider.notifier).setThemeMode(next),
+          ),
+    );
+  }
+}
+
+/// 语言循环小描边按钮：显示切换目标（中文 ↔ English）。
+class _LanguageCycleButton extends ConsumerWidget {
+  const _LanguageCycleButton({required this.languageCode});
+
+  final String languageCode;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final next = languageCode == 'zh' ? 'en' : 'zh';
+    final label =
+        next == 'en'
+            ? l10n.settingsLanguageEnglish
+            : l10n.settingsLanguageChinese;
+    return _SmallOutlineButton(
+      icon: null,
+      label: label,
+      mono: true,
+      onTap:
+          () => unawaited(
+            ref.read(localeControllerProvider.notifier).setLanguage(next),
+          ),
+    );
+  }
+}
+
+/// h-6 行内小描边按钮，点击切换偏好且不关闭面板。
+class _SmallOutlineButton extends StatelessWidget {
+  const _SmallOutlineButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    required this.mono,
+  });
+
+  final IconData? icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool mono;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final textStyle = TextStyle(
+      fontSize: 11,
+      color: colors.onSurfaceVariant,
+      fontFamily: mono ? AppTypography.monoFamily : null,
+      fontFamilyFallback: mono ? AppTypography.monoFamilyFallback : null,
+    );
+    return Material(
+      color: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.zero,
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      child: InkWell(
+        borderRadius: BorderRadius.zero,
+        onTap: onTap,
+        child: Container(
+          height: 24,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          alignment: Alignment.center,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (icon != null) ...[
+                Icon(icon, size: 12, color: colors.onSurfaceVariant),
+                const SizedBox(width: 4),
+              ],
+              Text(label, style: textStyle),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 操作行：整行点击，hover 加底色。
+class _MenuActionRow extends StatelessWidget {
+  const _MenuActionRow({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final color = destructive ? colors.error : colors.onSurface;
+    return InkWell(
+      borderRadius: BorderRadius.zero,
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(width: 10),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color: color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// hairline 分隔线。
+class _MenuDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: Theme.of(
+        context,
+      ).colorScheme.outlineVariant.withValues(alpha: 0.55),
     );
   }
 }
 
 /// 头像显示组件，优先网络图片，降级为首字母渐变。
+/// [emphasized] 为打开态：双线描边并转前景色。
 class _AvatarWidget extends StatelessWidget {
   const _AvatarWidget({
     required this.avatarUrl,
     required this.initial,
     this.size = 36,
+    this.emphasized = false,
   });
 
   final String? avatarUrl;
   final String initial;
   final double size;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final borderColor =
+        emphasized
+            ? theme.colorScheme.onSurface
+            : theme.colorScheme.outlineVariant.withValues(alpha: 0.32);
+    final borderWidth = size >= 28 ? 2.0 : 1.0;
     final content =
         avatarUrl != null && avatarUrl!.isNotEmpty
             ? Image.network(
@@ -326,7 +428,7 @@ class _AvatarWidget extends StatelessWidget {
               errorBuilder: (_, _, _) => _AvatarFallback(initial: initial),
             )
             : _AvatarFallback(initial: initial);
-    // 显式 ClipOval 保证任意平台上头像均为正圆，边框以覆盖层绘制。
+    // 显式 ClipOval 保证任意平台上头像均为正圆，双线描边以覆盖层绘制。
     return SizedBox(
       width: size,
       height: size,
@@ -344,11 +446,7 @@ class _AvatarWidget extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: theme.colorScheme.outlineVariant.withValues(
-                    alpha: 0.32,
-                  ),
-                ),
+                border: Border.all(color: borderColor, width: borderWidth),
               ),
             ),
           ),
