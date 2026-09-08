@@ -5739,6 +5739,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoCollectionEmpty => '合集为空';
 
   @override
+  String get videoCollectionAddMovies => '添加影片';
+
+  @override
+  String get videoCollectionPickerTitle => '选择影片';
+
+  @override
+  String get videoCollectionPickerSearchHint => '搜索标题';
+
+  @override
+  String get videoCollectionAlreadyAdded => '已在合集中';
+
+  @override
+  String get videoCollectionPickerEmpty => '没有匹配的影片';
+
+  @override
   String videoLoadFailedWith(Object error) {
     return '加载失败: $error';
   }

@@ -5912,6 +5912,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoCollectionEmpty => 'Collection is empty';
 
   @override
+  String get videoCollectionAddMovies => 'Add Movies';
+
+  @override
+  String get videoCollectionPickerTitle => 'Select Movies';
+
+  @override
+  String get videoCollectionPickerSearchHint => 'Search titles';
+
+  @override
+  String get videoCollectionAlreadyAdded => 'Already in collection';
+
+  @override
+  String get videoCollectionPickerEmpty => 'No matching movies';
+
+  @override
   String videoLoadFailedWith(Object error) {
     return 'Load failed: $error';
   }

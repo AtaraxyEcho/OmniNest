@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
@@ -290,6 +292,14 @@ Future<void> _showCollectionItems(
             ),
           ),
           actions: [
+            TextButton.icon(
+              onPressed:
+                  () => _showMoviePickerDialog(dialogContext, collection),
+              icon: const Icon(Icons.add),
+              label: Text(
+                AppLocalizations.of(dialogContext).videoCollectionAddMovies,
+              ),
+            ),
             TextButton(
               onPressed: () => Navigator.pop(dialogContext),
               child: Text(AppLocalizations.of(context).videoClose),
@@ -297,4 +307,172 @@ Future<void> _showCollectionItems(
           ],
         ),
   );
+}
+
+Future<void> _showMoviePickerDialog(
+  BuildContext context,
+  MovieCollection collection,
+) async {
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => _MoviePickerDialog(collection: collection),
+  );
+}
+
+/// 合集添加影片选择器：候选为最近更新的电影，支持本地标题过滤；
+/// 已在合集中的条目置灰，支持连续添加多个。
+class _MoviePickerDialog extends ConsumerStatefulWidget {
+  const _MoviePickerDialog({required this.collection});
+
+  final MovieCollection collection;
+
+  @override
+  ConsumerState<_MoviePickerDialog> createState() => _MoviePickerDialogState();
+}
+
+class _MoviePickerDialogState extends ConsumerState<_MoviePickerDialog> {
+  late final Future<List<MovieVideoItem>> _candidates;
+  final Set<String> _adding = {};
+  String _query = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _candidates =
+        ref.read(movieCenterControllerProvider.notifier).loadMovieCandidates();
+  }
+
+  Future<void> _addMovie(MovieVideoItem item) async {
+    if (_adding.contains(item.id)) {
+      return;
+    }
+    setState(() => _adding.add(item.id));
+    try {
+      await ref
+          .read(movieCenterControllerProvider.notifier)
+          .addCollectionItem(
+            collectionId: widget.collection.id,
+            videoItemId: item.id,
+          );
+    } on Object catch (error) {
+      if (!mounted) {
+        return;
+      }
+      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      return;
+    } finally {
+      if (mounted) {
+        setState(() => _adding.remove(item.id));
+      }
+    }
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(collectionItemsProvider(widget.collection.id));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final existingIds =
+        ref
+            .watch(collectionItemsProvider(widget.collection.id))
+            .asData
+            ?.value
+            .map((item) => item.id)
+            .toSet() ??
+        <String>{};
+    return AlertDialog(
+      backgroundColor: context.videoColors.surfaceContainerHigh,
+      title: Text(l10n.videoCollectionPickerTitle),
+      content: SizedBox(
+        width: 480,
+        height: 480,
+        child: Column(
+          children: [
+            TextField(
+              onChanged: (value) => setState(() => _query = value),
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search),
+                hintText: l10n.videoCollectionPickerSearchHint,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: FutureBuilder<List<MovieVideoItem>>(
+                future: _candidates,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState != ConnectionState.done) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  if (snapshot.hasError) {
+                    return Center(
+                      child: Text(
+                        AppLocalizations.of(
+                          context,
+                        ).videoLoadFailedWith(snapshot.error.toString()),
+                      ),
+                    );
+                  }
+                  final query = _query.trim().toLowerCase();
+                  final movies =
+                      snapshot.data
+                          ?.where(
+                            (item) =>
+                                query.isEmpty ||
+                                item.title.toLowerCase().contains(query) ||
+                                (item.originalTitle ?? '')
+                                    .toLowerCase()
+                                    .contains(query),
+                          )
+                          .toList() ??
+                      const <MovieVideoItem>[];
+                  if (movies.isEmpty) {
+                    return Center(child: Text(l10n.videoCollectionPickerEmpty));
+                  }
+                  return ListView.builder(
+                    itemCount: movies.length,
+                    itemBuilder: (context, index) {
+                      final item = movies[index];
+                      final added = existingIds.contains(item.id);
+                      final busy = _adding.contains(item.id);
+                      return ListTile(
+                        title: Text(item.title),
+                        subtitle: Text(item.year),
+                        trailing:
+                            added
+                                ? Tooltip(
+                                  message: l10n.videoCollectionAlreadyAdded,
+                                  child: const Icon(Icons.check),
+                                )
+                                : busy
+                                ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                                : const Icon(Icons.add_circle_outline),
+                        onTap:
+                            added || busy
+                                ? null
+                                : () => unawaited(_addMovie(item)),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(l10n.videoClose),
+        ),
+      ],
+    );
+  }
 }

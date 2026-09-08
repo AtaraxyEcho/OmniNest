@@ -805,6 +805,14 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     return _api.collectionItems(collectionId);
   }
 
+  /// 拉取合集添加选择器的电影候选列表（最近更新前 100 部）。
+  ///
+  /// 剧集/动漫为系列实体，后端合集条目仅支持视频条目，故只返回电影。
+  Future<List<MovieVideoItem>> loadMovieCandidates() async {
+    final page = await _api.libraryPage(mediaType: 'MOVIE', page: 0, size: 100);
+    return page.items.where((item) => item.mediaType == 'MOVIE').toList();
+  }
+
   Future<void> addCollectionItem({
     required String collectionId,
     required String videoItemId,

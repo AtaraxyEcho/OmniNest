@@ -2487,6 +2487,11 @@
   "videoCollectionNameEmpty": "合集名称不能为空",
   "videoCollectionCreated": "合集已创建",
   "videoCollectionEmpty": "合集为空",
+  "videoCollectionAddMovies": "添加影片",
+  "videoCollectionPickerTitle": "选择影片",
+  "videoCollectionPickerSearchHint": "搜索标题",
+  "videoCollectionAlreadyAdded": "已在合集中",
+  "videoCollectionPickerEmpty": "没有匹配的影片",
   "videoLoadFailedWith": "加载失败: {error}",
   "@videoLoadFailedWith": {
     "placeholders": {

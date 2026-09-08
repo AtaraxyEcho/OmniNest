@@ -2613,6 +2613,11 @@
   "videoCollectionNameEmpty": "Collection name cannot be empty",
   "videoCollectionCreated": "Collection created",
   "videoCollectionEmpty": "Collection is empty",
+  "videoCollectionAddMovies": "Add Movies",
+  "videoCollectionPickerTitle": "Select Movies",
+  "videoCollectionPickerSearchHint": "Search titles",
+  "videoCollectionAlreadyAdded": "Already in collection",
+  "videoCollectionPickerEmpty": "No matching movies",
   "videoLoadFailedWith": "Load failed: {error}",
   "@videoLoadFailedWith": {
     "placeholders": {

@@ -10853,6 +10853,36 @@ abstract class AppLocalizations {
   /// **'Collection is empty'**
   String get videoCollectionEmpty;
 
+  /// No description provided for @videoCollectionAddMovies.
+  ///
+  /// In en, this message translates to:
+  /// **'Add Movies'**
+  String get videoCollectionAddMovies;
+
+  /// No description provided for @videoCollectionPickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Select Movies'**
+  String get videoCollectionPickerTitle;
+
+  /// No description provided for @videoCollectionPickerSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search titles'**
+  String get videoCollectionPickerSearchHint;
+
+  /// No description provided for @videoCollectionAlreadyAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Already in collection'**
+  String get videoCollectionAlreadyAdded;
+
+  /// No description provided for @videoCollectionPickerEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching movies'**
+  String get videoCollectionPickerEmpty;
+
   /// No description provided for @videoLoadFailedWith.
   ///
   /// In en, this message translates to:
