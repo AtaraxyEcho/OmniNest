@@ -8150,8 +8150,20 @@ abstract class AppLocalizations {
   /// No description provided for @readerNavLibrary.
   ///
   /// In en, this message translates to:
-  /// **'Books'**
+  /// **'Library'**
   String get readerNavLibrary;
+
+  /// No description provided for @readerNavStats.
+  ///
+  /// In en, this message translates to:
+  /// **'Stats'**
+  String get readerNavStats;
+
+  /// No description provided for @readerNavManage.
+  ///
+  /// In en, this message translates to:
+  /// **'Manage'**
+  String get readerNavManage;
 
   /// No description provided for @readerNavComics.
   ///

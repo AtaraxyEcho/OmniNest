@@ -47,9 +47,12 @@ final readerItemDetailProvider = FutureProvider.autoDispose
       return ref.watch(readerApiProvider).detail(itemId);
     });
 
-/// 阅读统计
+/// 阅读统计（读取前先重放离线队列，保证进度上传后再统计）
 final readerStatsProvider = FutureProvider<ReaderReadingStats>((ref) async {
-  return ref.watch(readerApiProvider).getStats();
+  final api = ref.watch(readerApiProvider);
+  await ReaderSyncQueue.retryFailed();
+  await ReaderSyncQueue.flush(api: api);
+  return api.getStats();
 });
 
 /// 阅读中心控制器
@@ -69,14 +72,12 @@ class BookshelfToggleResult {
 
 // ─── State ──────────────────────────────────────────────────────
 
-/// 阅读中心页面状态
+/// 阅读中心数据状态（书库/书架/统计/管理四个页面共享）
 class ReaderCenterState {
   const ReaderCenterState({
     required this.dashboard,
     required this.items,
-    required this.section,
     required this.searchQuery,
-    required this.bookmarks,
     this.sortBy = ReaderSortBy.recent,
     this.librarySegment = ReaderLibrarySegment.all,
     this.errorMessage,
@@ -86,65 +87,37 @@ class ReaderCenterState {
   factory ReaderCenterState.empty() => ReaderCenterState(
     dashboard: ReaderDashboard.empty(),
     items: const [],
-    section: ReaderSection.bookshelf,
     searchQuery: '',
-    bookmarks: const [],
   );
 
   final ReaderDashboard dashboard;
   final List<ReaderItem> items;
-  final ReaderSection section;
   final String searchQuery;
   final ReaderSortBy sortBy;
-  final List<ReaderBookmark> bookmarks;
   final ReaderLibrarySegment librarySegment;
   final String? errorMessage;
 
   /// 继续阅读列表（来自仪表盘）
   List<ReaderItem> get continueItems => dashboard.continueReading;
 
-  /// 当前分区是否展示书架网格
-  bool get canShowShelf => switch (section) {
-    ReaderSection.bookshelf ||
-    ReaderSection.books ||
-    ReaderSection.comics ||
-    ReaderSection.history => true,
-    ReaderSection.bookmarks ||
-    ReaderSection.notes ||
-    ReaderSection.imports ||
-    ReaderSection.metadata => false,
-  };
+  /// 书架页条目：已加入书架的条目（个人 + 共享）
+  List<ReaderItem> get bookshelfItems =>
+      items.where((i) => i.addedToBookshelf).toList();
 
-  /// 经过分区过滤 + 分段过滤 + 排序 + 搜索后的可见条目
+  /// 书库页条目：分段过滤 + 排序 + 搜索后的可见条目
   List<ReaderItem> get visibleItems {
-    // 按分区过滤
-    var source = switch (section) {
-      // 书架：仅显示已加入书架的条目（个人 + 共享）
-      ReaderSection.bookshelf =>
-        items.where((i) => i.addedToBookshelf).toList(),
-      // 书库：显示所有条目（由 librarySegment 二次过滤）
-      ReaderSection.books => items,
-      ReaderSection.notes => items,
-      _ => items,
+    var source = switch (librarySegment) {
+      ReaderLibrarySegment.all => items,
+      ReaderLibrarySegment.books => items.where((i) => !i.isComic).toList(),
+      ReaderLibrarySegment.comics => items.where((i) => i.isComic).toList(),
     };
 
-    // 书库分段过滤（移动端书库内的 全部/图书/漫画 切换）
-    if (section == ReaderSection.books) {
-      source = switch (librarySegment) {
-        ReaderLibrarySegment.all => source,
-        ReaderLibrarySegment.books => source.where((i) => !i.isComic).toList(),
-        ReaderLibrarySegment.comics => source.where((i) => i.isComic).toList(),
-      };
-    }
-
-    // 排序
     final sorted = switch (sortBy) {
       ReaderSortBy.recent => source,
       ReaderSortBy.title => [...source]
         ..sort((a, b) => a.title.compareTo(b.title)),
     };
 
-    // 搜索过滤
     final query = searchQuery.trim().toLowerCase();
     if (query.isEmpty) return sorted;
     return sorted
@@ -160,10 +133,8 @@ class ReaderCenterState {
   ReaderCenterState copyWith({
     ReaderDashboard? dashboard,
     List<ReaderItem>? items,
-    ReaderSection? section,
     String? searchQuery,
     ReaderSortBy? sortBy,
-    List<ReaderBookmark>? bookmarks,
     ReaderLibrarySegment? librarySegment,
     String? errorMessage,
     bool clearError = false,
@@ -171,10 +142,8 @@ class ReaderCenterState {
     return ReaderCenterState(
       dashboard: dashboard ?? this.dashboard,
       items: items ?? this.items,
-      section: section ?? this.section,
       searchQuery: searchQuery ?? this.searchQuery,
       sortBy: sortBy ?? this.sortBy,
-      bookmarks: bookmarks ?? this.bookmarks,
       librarySegment: librarySegment ?? this.librarySegment,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
     );
@@ -194,10 +163,8 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
 
   /// 加载全部数据，部分失败不阻塞整体
   Future<ReaderCenterState> _loadState({
-    ReaderSection section = ReaderSection.bookshelf,
     String searchQuery = '',
     ReaderSortBy sortBy = ReaderSortBy.recent,
-    bool loadBookmarks = true,
   }) async {
     // 错误随本次加载局部收集，实例字段会被并发 refresh 互相污染
     final partialErrors = <String>[];
@@ -208,38 +175,13 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     final dashboard = results[0] as ReaderDashboard;
     final items = results[1] as List<ReaderItem>;
 
-    // 书签按条目加载（API 仅支持单条目查询）；实时刷新复用现有列表
-    final bookmarks =
-        loadBookmarks
-            ? await _loadAllBookmarks(items, partialErrors)
-            : state.asData?.value.bookmarks ?? const <ReaderBookmark>[];
-
     return ReaderCenterState(
       dashboard: dashboard,
       items: items,
-      section: section,
       searchQuery: searchQuery,
       sortBy: sortBy,
-      bookmarks: bookmarks,
       errorMessage: partialErrors.isEmpty ? null : partialErrors.join('；'),
     );
-  }
-
-  /// 批量加载所有条目的书签
-  Future<List<ReaderBookmark>> _loadAllBookmarks(
-    List<ReaderItem> items,
-    List<String> partialErrors,
-  ) async {
-    if (items.isEmpty) return const [];
-    final futures = items.map(
-      (item) => _safe(
-        () => _api.bookmarks(item.id),
-        <ReaderBookmark>[],
-        partialErrors,
-      ),
-    );
-    final results = await Future.wait(futures);
-    return results.expand((list) => list).toList();
   }
 
   /// 安全执行异步调用，失败时记录到调用方传入的错误列表并返回 fallback
@@ -274,27 +216,21 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
 
   /// 刷新全部数据
   Future<void> refresh() async {
-    await _refreshState(strict: false, loadBookmarks: true);
+    await _refreshState(strict: false);
   }
 
-  /// 严格刷新实时事件涉及的阅读数据并保留当前分区与筛选。
+  /// 严格刷新实时事件涉及的阅读数据并保留当前筛选。
   ///
-  /// 由导入监控循环周期调用；书签不会因解析变化，复用现有列表，
-  /// 避免每轮触发按条目的书签 N+1 请求风暴。
+  /// 由导入监控循环周期调用，避免每轮触发多余请求。
   Future<void> refreshForRealtime() async {
-    await _refreshState(strict: true, loadBookmarks: false);
+    await _refreshState(strict: true);
   }
 
-  Future<void> _refreshState({
-    required bool strict,
-    bool loadBookmarks = true,
-  }) async {
+  Future<void> _refreshState({required bool strict}) async {
     final current = state.asData?.value;
     final next = await _loadState(
-      section: current?.section ?? ReaderSection.bookshelf,
       searchQuery: current?.searchQuery ?? '',
       sortBy: current?.sortBy ?? ReaderSortBy.recent,
-      loadBookmarks: loadBookmarks,
     );
     if (strict && next.errorMessage != null) {
       throw StateError(next.errorMessage!);
@@ -303,29 +239,6 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     state = AsyncData(
       next.copyWith(
         librarySegment: current?.librarySegment ?? ReaderLibrarySegment.all,
-      ),
-    );
-  }
-
-  /// 切换分区
-  void selectSection(ReaderSection section) {
-    final current = state.asData?.value;
-    if (current == null) return;
-    // 漫画归一化：comics 统一映射为 books + comics 分段
-    // 这样移动端和桌面端数据流一致，visibleItems 由 section + librarySegment 共同决定
-    final normalizedSection =
-        section == ReaderSection.comics ? ReaderSection.books : section;
-    final segment =
-        section == ReaderSection.comics
-            ? ReaderLibrarySegment.comics
-            : (section == ReaderSection.books
-                ? current.librarySegment
-                : ReaderLibrarySegment.all);
-    state = AsyncData(
-      current.copyWith(
-        section: normalizedSection,
-        librarySegment: segment,
-        searchQuery: '',
       ),
     );
   }
@@ -363,10 +276,6 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
         state = AsyncData(
           current.copyWith(
             items: current.items.where((i) => i.id != itemId).toList(),
-            bookmarks:
-                current.bookmarks
-                    .where((b) => b.readerItemId != itemId)
-                    .toList(),
           ),
         );
       }
@@ -544,13 +453,6 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
       throw lastError;
     }
     return null;
-  }
-
-  /// 重放离线队列后加载阅读统计。
-  Future<ReaderReadingStats> syncAndLoadStats() async {
-    await ReaderSyncQueue.retryFailed();
-    await ReaderSyncQueue.flush(api: _api);
-    return _api.getStats();
   }
 
   /// 使用文件节点设置条目封面。

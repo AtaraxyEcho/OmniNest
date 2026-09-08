@@ -33,6 +33,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
     required this.comicMuted,
     required this.coverGradientStart,
     required this.coverGradientEnd,
+    required this.reading,
   });
 
   final Color surface;
@@ -64,6 +65,9 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
   final Color comicMuted;
   final Color coverGradientStart;
   final Color coverGradientEnd;
+
+  /// 阅读强调色（琥珀棕），用于进度线、完成徽标等阅读语义元素
+  final Color reading;
 
   /// 从全局主题色派生 Reader 模块专属色
   factory ReaderColors.fromGlobal(GlobalThemeColors base) {
@@ -99,6 +103,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
       comicMuted: const Color(0xB3FFFFFF),
       coverGradientStart: base.surfaceContainerLowest,
       coverGradientEnd: base.primaryContainer,
+      reading: isDark ? const Color(0xFFC8923E) : const Color(0xFFB87A35),
     );
   }
 
@@ -135,6 +140,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
     Color? comicMuted,
     Color? coverGradientStart,
     Color? coverGradientEnd,
+    Color? reading,
   }) {
     return ReaderColors(
       surface: surface ?? this.surface,
@@ -168,6 +174,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
       comicMuted: comicMuted ?? this.comicMuted,
       coverGradientStart: coverGradientStart ?? this.coverGradientStart,
       coverGradientEnd: coverGradientEnd ?? this.coverGradientEnd,
+      reading: reading ?? this.reading,
     );
   }
 
@@ -220,6 +227,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
           Color.lerp(coverGradientStart, other.coverGradientStart, t)!,
       coverGradientEnd:
           Color.lerp(coverGradientEnd, other.coverGradientEnd, t)!,
+      reading: Color.lerp(reading, other.reading, t)!,
     );
   }
 }

@@ -4400,7 +4400,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerNavBookshelf => 'Bookshelf';
 
   @override
-  String get readerNavLibrary => 'Books';
+  String get readerNavLibrary => 'Library';
+
+  @override
+  String get readerNavStats => 'Stats';
+
+  @override
+  String get readerNavManage => 'Manage';
 
   @override
   String get readerNavComics => 'Comics';

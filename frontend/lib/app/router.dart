@@ -34,6 +34,9 @@ import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/portal/presentation/pages/portal_page.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart';
+import 'package:omninest/features/reader/presentation/pages/reader_bookshelf_page.dart';
+import 'package:omninest/features/reader/presentation/pages/reader_stats_page.dart';
+import 'package:omninest/features/reader/presentation/pages/reader_admin_page.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_item_detail_page.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_metadata_edit_page.dart';
@@ -131,6 +134,18 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               _animatedRoute('/reader', (state) => const ReaderCenterPage()),
+              _animatedRoute(
+                '/reader/bookshelf',
+                (state) => const ReaderBookshelfPage(),
+              ),
+              _animatedRoute(
+                '/reader/stats',
+                (state) => const ReaderStatsPage(),
+              ),
+              _animatedRoute(
+                '/reader/admin',
+                (state) => const ReaderAdminPage(),
+              ),
             ],
           ),
         ],
@@ -344,6 +359,9 @@ const Set<String> _shellOwnedPaths = <String>{
   '/photos',
   '/video',
   '/reader',
+  '/reader/bookshelf',
+  '/reader/stats',
+  '/reader/admin',
 };
 
 /// 使用 Navigator 托管的页面过渡，避免动画监听器持有已失活的路由子树。

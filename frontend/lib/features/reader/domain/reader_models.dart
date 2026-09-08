@@ -95,28 +95,10 @@ class ReaderImportCandidate {
   final String sizeDisplay;
 }
 
-/// 阅读中心页面分区
-enum ReaderSection {
-  bookshelf,
-  books,
-  comics,
-  bookmarks,
-  notes,
-  history,
-  imports,
-  metadata;
-
-  /// 是否需要管理员角色才能访问
-  bool get requiresManagementRole => switch (this) {
-    ReaderSection.metadata => true,
-    _ => false,
-  };
-}
-
 /// 阅读排序方式
 enum ReaderSortBy { recent, title }
 
-/// 书库分段（移动端书库内的内容类型筛选）
+/// 书库分段（书库内的内容类型筛选）
 enum ReaderLibrarySegment {
   /// 全部内容
   all,
@@ -127,14 +109,3 @@ enum ReaderLibrarySegment {
   /// 仅漫画
   comics,
 }
-
-/// 侧边栏分组
-enum ReaderSidebarGroup { library, personal, tools, management }
-
-/// 侧边栏分组与分区映射
-const Map<ReaderSidebarGroup, List<ReaderSection>> readerSidebarGroups = {
-  ReaderSidebarGroup.library: [ReaderSection.bookshelf, ReaderSection.books],
-  ReaderSidebarGroup.personal: [ReaderSection.bookmarks, ReaderSection.notes],
-  ReaderSidebarGroup.tools: [ReaderSection.history, ReaderSection.imports],
-  ReaderSidebarGroup.management: [ReaderSection.metadata],
-};

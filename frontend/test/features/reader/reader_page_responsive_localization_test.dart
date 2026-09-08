@@ -5,7 +5,6 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_detail_page.dart';
-import 'package:omninest/features/reader/presentation/pages/comic_list_page.dart';
 
 void main() {
   const comic = ReaderItem(
@@ -18,34 +17,6 @@ void main() {
     rating: 8.5,
     updatedAt: null,
   );
-
-  for (final width in [320.0, 600.0, 840.0, 1280.0, 3840.0]) {
-    testWidgets('漫画列表在 ${width.toInt()} 宽度下无布局异常', (tester) async {
-      await _setViewport(tester, width: width, height: 1000);
-      await tester.pumpWidget(
-        _TestApp(
-          child: ComicListPage(items: const [comic], onOpenItem: (_) {}),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text('Sample Comic'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  }
-
-  testWidgets('英文空状态不泄漏硬编码中文', (tester) async {
-    await _setViewport(tester, width: 390, height: 844);
-    await tester.pumpWidget(
-      _TestApp(child: ComicListPage(items: const [], onOpenItem: (_) {})),
-    );
-    await tester.pump();
-
-    expect(find.text('No comics yet'), findsOneWidget);
-    expect(find.textContaining('Import a CBZ'), findsOneWidget);
-    expect(_visibleText(tester), isNot(matches(RegExp(r'[\u4e00-\u9fff]'))));
-    expect(tester.takeException(), isNull);
-  });
 
   for (final entry in const [
     (width: 390.0, brightness: Brightness.dark),

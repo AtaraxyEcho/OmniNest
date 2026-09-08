@@ -4260,7 +4260,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerNavBookshelf => '书架';
 
   @override
-  String get readerNavLibrary => '书籍';
+  String get readerNavLibrary => '书库';
+
+  @override
+  String get readerNavStats => '统计';
+
+  @override
+  String get readerNavManage => '管理';
 
   @override
   String get readerNavComics => '漫画';

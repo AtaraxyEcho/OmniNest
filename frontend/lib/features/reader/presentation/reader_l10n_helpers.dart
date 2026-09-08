@@ -16,20 +16,6 @@ String readerTypeLabel(AppLocalizations l10n, String itemType) {
   };
 }
 
-/// 将 ReaderSection 映射到本地化标签。
-String readerSectionLabel(AppLocalizations l10n, ReaderSection s) {
-  return switch (s) {
-    ReaderSection.bookshelf => l10n.readerNavBookshelf,
-    ReaderSection.books => l10n.readerNavLibrary,
-    ReaderSection.comics => l10n.readerNavComics,
-    ReaderSection.bookmarks => l10n.readerNavBookmarks,
-    ReaderSection.notes => l10n.readerNavNotes,
-    ReaderSection.history => l10n.readerHistory,
-    ReaderSection.imports => l10n.readerImports,
-    ReaderSection.metadata => l10n.readerMetadataManagement,
-  };
-}
-
 /// 将 ReaderSortBy 映射到本地化标签。
 String readerSortLabel(AppLocalizations l10n, ReaderSortBy s) {
   return switch (s) {
