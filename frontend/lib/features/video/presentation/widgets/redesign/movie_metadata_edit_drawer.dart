@@ -346,6 +346,7 @@ class _MovieMetadataEditPanelState
     final palette = context.movieDetailPalette;
     return TextField(
       controller: controller,
+      cursorColor: MovieDetailTheme.accent,
       onChanged: onChanged,
       style: text.body(size: 14, color: palette.foreground),
       decoration: InputDecoration(
