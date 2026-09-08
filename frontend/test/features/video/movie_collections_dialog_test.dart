@@ -16,9 +16,7 @@ import 'package:omninest/features/video/presentation/widgets/movie_collections.d
 
 void main() {
   testWidgets('合集弹窗在条目数据到达后自动渲染列表', (tester) async {
-    final adapter = _CollectionApiAdapter(
-      items: [_movie('movie-1', '盗梦空间')],
-    );
+    final adapter = _CollectionApiAdapter(items: [_movie('movie-1', '盗梦空间')]);
     await tester.pumpWidget(_host(adapter));
 
     await tester.tap(find.text('周末片单'));
@@ -41,9 +39,7 @@ void main() {
   });
 
   testWidgets('移除合集条目后弹窗列表即时更新', (tester) async {
-    final adapter = _CollectionApiAdapter(
-      items: [_movie('movie-1', '盗梦空间')],
-    );
+    final adapter = _CollectionApiAdapter(items: [_movie('movie-1', '盗梦空间')]);
     await tester.pumpWidget(_host(adapter));
 
     await tester.tap(find.text('周末片单'));
@@ -114,7 +110,7 @@ class _CollectionApiAdapter implements HttpClientAdapter {
   _CollectionApiAdapter({required List<Map<String, Object>> items})
     : _items = List.of(items);
 
-  List<Map<String, Object>> _items;
+  final List<Map<String, Object>> _items;
   int removeCalls = 0;
 
   @override

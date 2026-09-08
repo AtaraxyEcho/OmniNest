@@ -454,10 +454,9 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
             animeSeries: next.animeSeries,
             recentItems: next.recentItems,
             continueWatching: next.continueWatching,
-            favoriteItems: next.favoriteItems,
-            watchHistory: next.watchHistory,
-            collections: next.collections,
-            tasks: next.tasks,
+            // 懒加载分区列表（收藏/历史/合集/任务）保留刷新前旧值：
+            // loadedSections 仍重置，重进分区时重新拉取；避免 realtime
+            // 高频刷新把未在展示的分区清成空列表。
             moviePage: next.moviePage,
             movieHasMore: next.movieHasMore,
             movieLoadingMore: false,
