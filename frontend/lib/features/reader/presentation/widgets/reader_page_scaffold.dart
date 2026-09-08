@@ -185,7 +185,7 @@ class _ReaderModuleTopBar extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 12),
-            Flexible(
+            Expanded(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -227,7 +227,6 @@ class _ReaderModuleTopBar extends StatelessWidget {
                 ],
               ),
             ),
-            const Spacer(),
             FontScaleControl(size: 20, color: rc.onSurfaceVariant),
             const SizedBox(width: 12),
             NotificationIcon(size: 20, color: rc.onSurfaceVariant),
