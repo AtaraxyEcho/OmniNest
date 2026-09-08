@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/application/reader_comic_image_provider.dart';
@@ -93,7 +94,10 @@ class _ComicImportConfirmPageState
           children: [
             Text(
               widget.fileName,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              style: const TextStyle(
+                fontSize: AppTypography.titleMedium,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -153,7 +157,10 @@ class _ComicImportConfirmPageState
       children: [
         Text(
           AppLocalizations.of(context).readerComicCatalogPreview,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: AppTypography.titleLarge,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 8),
         Card(
@@ -184,7 +191,10 @@ class _ComicImportConfirmPageState
       children: [
         Text(
           AppLocalizations.of(context).readerComicPagePreview,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          style: const TextStyle(
+            fontSize: AppTypography.titleLarge,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 8),
         GridView.builder(

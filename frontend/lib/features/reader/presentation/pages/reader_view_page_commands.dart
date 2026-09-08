@@ -102,7 +102,12 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         );
         return;
       case ReaderCommand.resetTypography:
-        onSettingsChanged(_settings.copyWith(fontSize: 18, lineHeight: 1.8));
+        onSettingsChanged(
+          _settings.copyWith(
+            fontSize: AppTypography.titleLarge,
+            lineHeight: 1.8,
+          ),
+        );
         return;
       case ReaderCommand.nextPage:
         _pageTurnController.next();

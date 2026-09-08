@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 
 /// 新版空态：居中图标 + 主文案 + 等宽副文案。
@@ -28,7 +29,13 @@ class MovieRedesignEmptyState extends StatelessWidget {
             color: palette.mutedForeground.withValues(alpha: 0.40),
           ),
           const SizedBox(height: 12),
-          Text(title, style: text.body(size: 14, weight: FontWeight.w500)),
+          Text(
+            title,
+            style: text.body(
+              size: AppTypography.bodyLarge,
+              weight: FontWeight.w500,
+            ),
+          ),
           if (subtitle != null && subtitle!.isNotEmpty) ...[
             const SizedBox(height: 4),
             Text(

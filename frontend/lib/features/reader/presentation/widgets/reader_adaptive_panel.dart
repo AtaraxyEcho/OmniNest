@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -46,7 +47,7 @@ class ReaderAdaptivePanelFrame extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: settings.onSurfaceColor,
-                        fontSize: 16,
+                        fontSize: AppTypography.titleMedium,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

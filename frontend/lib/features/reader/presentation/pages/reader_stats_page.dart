@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
@@ -173,6 +174,7 @@ class _StatCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: rc.onSurfaceVariant,
+                // ignore: font_size_whitelist
                 fontSize: 9,
                 height: 1.2,
                 letterSpacing: 2,
@@ -188,7 +190,7 @@ class _StatCard extends StatelessWidget {
                   value,
                   style: TextStyle(
                     color: rc.onSurface,
-                    fontSize: 30,
+                    fontSize: AppTypography.headlineLarge,
                     height: 1,
                     fontFamily: kReaderSerifFamily,
                     fontFeatures: const [FontFeature.tabularFigures()],
@@ -200,7 +202,7 @@ class _StatCard extends StatelessWidget {
                     unit,
                     style: TextStyle(
                       color: rc.onSurfaceVariant,
-                      fontSize: 11,
+                      fontSize: AppTypography.labelSmall,
                       height: 1.2,
                     ),
                   ),
@@ -241,6 +243,7 @@ class _ActivityChart extends StatelessWidget {
               l10n.readerStatsLast14,
               style: TextStyle(
                 color: rc.onSurfaceVariant,
+                // ignore: font_size_whitelist
                 fontSize: 9,
                 height: 1.2,
                 fontFeatures: const [FontFeature.tabularFigures()],
@@ -272,6 +275,7 @@ class _ActivityChart extends StatelessWidget {
                 _formatDay(days.first.date),
                 style: TextStyle(
                   color: rc.onSurfaceVariant,
+                  // ignore: font_size_whitelist
                   fontSize: 9,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -280,6 +284,7 @@ class _ActivityChart extends StatelessWidget {
                 _formatDay(days.last.date),
                 style: TextStyle(
                   color: rc.onSurfaceVariant,
+                  // ignore: font_size_whitelist
                   fontSize: 9,
                   fontFeatures: const [FontFeature.tabularFigures()],
                 ),
@@ -348,6 +353,7 @@ class _SectionLabel extends StatelessWidget {
       label.toUpperCase(),
       style: TextStyle(
         color: context.readerColors.onSurfaceVariant,
+        // ignore: font_size_whitelist
         fontSize: 10,
         height: 1.2,
         letterSpacing: 2.4,
@@ -391,7 +397,7 @@ class _LibraryBreakdown extends StatelessWidget {
                     row.$1,
                     style: TextStyle(
                       color: rc.onSurfaceVariant,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       height: 1.2,
                     ),
                   ),
@@ -400,7 +406,7 @@ class _LibraryBreakdown extends StatelessWidget {
                   '${row.$2}',
                   style: TextStyle(
                     color: rc.onSurface,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),
@@ -445,7 +451,10 @@ class _InProgressList extends StatelessWidget {
         if (items.isEmpty)
           Text(
             l10n.readerEmptyHint,
-            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+            style: TextStyle(
+              color: rc.onSurfaceVariant,
+              fontSize: AppTypography.bodySmall,
+            ),
           )
         else
           for (final item in items)
@@ -463,7 +472,7 @@ class _InProgressList extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: rc.onSurface,
-                            fontSize: 13,
+                            fontSize: AppTypography.bodyMedium,
                             height: 1.3,
                             fontWeight: FontWeight.w600,
                           ),
@@ -473,7 +482,7 @@ class _InProgressList extends StatelessWidget {
                             item.authorName!,
                             style: TextStyle(
                               color: rc.onSurfaceVariant,
-                              fontSize: 11,
+                              fontSize: AppTypography.labelSmall,
                               height: 1.2,
                             ),
                           ),
@@ -504,6 +513,7 @@ class _InProgressList extends StatelessWidget {
                       textAlign: TextAlign.right,
                       style: TextStyle(
                         color: rc.onSurfaceVariant,
+                        // ignore: font_size_whitelist
                         fontSize: 10,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),

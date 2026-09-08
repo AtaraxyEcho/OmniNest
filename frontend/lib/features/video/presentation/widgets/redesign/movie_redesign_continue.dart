@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_progress_bar.dart';
@@ -44,7 +45,12 @@ class MovieRedesignContinueStrip extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.baseline,
             textBaseline: TextBaseline.alphabetic,
             children: [
-              Text(title, style: context.movieRedesignText.display(size: 18)),
+              Text(
+                title,
+                style: context.movieRedesignText.display(
+                  size: AppTypography.titleLarge,
+                ),
+              ),
               if (subtitleEn != null) ...[
                 const SizedBox(width: 8),
                 Text(

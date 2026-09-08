@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
@@ -224,7 +225,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
           l10n.readerSettingsTitle,
           style: TextStyle(
             color: settings.onSurfaceColor,
-            fontSize: 16,
+            fontSize: AppTypography.titleMedium,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -241,7 +242,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
           l10n.readerReadingMode,
           style: TextStyle(
             color: settings.onSurfaceVariantColor,
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -297,7 +298,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
           l10n.readerPageTransition,
           style: TextStyle(
             color: settings.onSurfaceVariantColor,
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -335,7 +336,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
               l10n.readerFontSize,
               style: TextStyle(
                 color: settings.onSurfaceVariantColor,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -344,7 +345,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
               '${settings.fontSize.round()}px',
               style: TextStyle(
                 color: settings.accentColor,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -386,7 +387,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
               l10n.readerLineHeight,
               style: TextStyle(
                 color: settings.onSurfaceVariantColor,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -395,7 +396,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
               settings.lineHeight.toStringAsFixed(1),
               style: TextStyle(
                 color: settings.accentColor,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -436,7 +437,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
           l10n.readerFontFamily,
           style: TextStyle(
             color: settings.onSurfaceVariantColor,
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -491,7 +492,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
           l10n.readerTheme,
           style: TextStyle(
             color: settings.onSurfaceVariantColor,
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -537,7 +538,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
             l10n.readerImmersiveMode,
             style: TextStyle(
               color: settings.onSurfaceVariantColor,
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -607,7 +608,7 @@ class _ReadingModeOption extends StatelessWidget {
                 style: TextStyle(
                   color:
                       selected ? color : surfaceColor.withValues(alpha: 0.70),
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -664,7 +665,7 @@ class _FontOption extends StatelessWidget {
             style: TextStyle(
               fontFamily: fontFamily,
               color: selected ? color : surfaceColor.withValues(alpha: 0.70),
-              fontSize: 15,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -723,7 +724,7 @@ class _ThemeOption extends StatelessWidget {
               localizedName,
               style: TextStyle(
                 color: labelColor,
-                fontSize: 11,
+                fontSize: AppTypography.labelSmall,
                 fontWeight: FontWeight.w600,
               ),
             ),

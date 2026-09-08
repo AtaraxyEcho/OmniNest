@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -63,7 +64,7 @@ class ReaderReturnToProgressControl extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w500,
                           color: settings.surfaceColor.withValues(alpha: 0.90),
                         ),

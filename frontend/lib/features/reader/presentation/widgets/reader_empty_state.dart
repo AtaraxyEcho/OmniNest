@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 
 class ReaderEmptyState extends StatelessWidget {
@@ -48,7 +49,7 @@ class ReaderEmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.readerColors.onSurface,
-              fontSize: 16,
+              fontSize: AppTypography.titleMedium,
               height: 22 / 16,
               fontWeight: FontWeight.w700,
             ),
@@ -59,7 +60,7 @@ class ReaderEmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.readerColors.onSurfaceVariant,
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               height: 18 / 13,
             ),
           ),

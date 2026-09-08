@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -258,7 +259,7 @@ class _LibraryHeader extends StatelessWidget {
               '$itemCount',
               style: TextStyle(
                 color: rc.onSurfaceVariant,
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
@@ -304,13 +305,20 @@ class _SearchAndFilterRow extends StatelessWidget {
           child: TextField(
             controller: searchController,
             onChanged: onSearchChanged,
-            style: TextStyle(color: rc.onSurface, fontSize: 13, height: 1.2),
+            style: TextStyle(
+              color: rc.onSurface,
+              fontSize: AppTypography.bodyMedium,
+              height: 1.2,
+            ),
             decoration: InputDecoration(
               isDense: true,
               filled: true,
               fillColor: rc.surfaceContainerHigh,
               hintText: l10n.readerSearchBooksHint,
-              hintStyle: TextStyle(color: rc.onSurfaceVariant, fontSize: 13),
+              hintStyle: TextStyle(
+                color: rc.onSurfaceVariant,
+                fontSize: AppTypography.bodyMedium,
+              ),
               prefixIcon: Icon(
                 Icons.search_rounded,
                 size: 18,
@@ -381,7 +389,7 @@ class _FilterTabs extends StatelessWidget {
                     ReaderLibrarySegment.comics => l10n.readerSegmentComics,
                   },
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     height: 1.2,
                     fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
                     color: selected ? rc.onSurface : rc.onSurfaceVariant,
@@ -412,6 +420,7 @@ class _ContinueSection extends StatelessWidget {
           l10n.readerContinueReading,
           style: TextStyle(
             color: rc.onSurfaceVariant,
+            // ignore: font_size_whitelist
             fontSize: 10,
             height: 1.2,
             letterSpacing: 2.4,

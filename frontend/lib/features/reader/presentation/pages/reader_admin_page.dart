@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
@@ -77,7 +78,7 @@ class _AdminSectionHeader extends StatelessWidget {
       label,
       style: TextStyle(
         color: context.readerColors.onSurface,
-        fontSize: 15,
+        fontSize: AppTypography.titleMedium,
         height: 20 / 15,
         fontWeight: FontWeight.w700,
       ),
@@ -108,7 +109,10 @@ class _RecentReading extends ConsumerWidget {
     if (items.isEmpty) {
       return Text(
         AppLocalizations.of(context).readerEmptyHint,
-        style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+        style: TextStyle(
+          color: rc.onSurfaceVariant,
+          fontSize: AppTypography.bodySmall,
+        ),
       );
     }
     return Column(
@@ -123,13 +127,19 @@ class _RecentReading extends ConsumerWidget {
                     item.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: rc.onSurface, fontSize: 13),
+                    style: TextStyle(
+                      color: rc.onSurface,
+                      fontSize: AppTypography.bodyMedium,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Text(
                   '${((item.progressPercent ?? 0) * 100).round()}%',
-                  style: TextStyle(color: rc.onSurfaceVariant, fontSize: 11),
+                  style: TextStyle(
+                    color: rc.onSurfaceVariant,
+                    fontSize: AppTypography.labelSmall,
+                  ),
                 ),
               ],
             ),

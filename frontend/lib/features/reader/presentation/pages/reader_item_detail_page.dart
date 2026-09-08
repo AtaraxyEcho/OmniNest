@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -335,6 +336,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                 readerTypeLabel(l10n, item.itemType),
                 style: TextStyle(
                   color: rc.onSurfaceVariant,
+                  // ignore: font_size_whitelist
                   fontSize: 10,
                   height: 1.2,
                   letterSpacing: 2.4,
@@ -346,7 +348,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                 item.title,
                 style: TextStyle(
                   color: rc.onSurface,
-                  fontSize: 26,
+                  fontSize: AppTypography.headlineMedium,
                   height: 1.25,
                   fontFamily: kReaderSerifFamily,
                 ),
@@ -357,7 +359,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                   item.authorName!,
                   style: TextStyle(
                     color: rc.onSurfaceVariant,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     height: 1.3,
                   ),
                 ),
@@ -369,7 +371,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                     l10n.readerDetailProgress,
                     style: TextStyle(
                       color: rc.onSurfaceVariant,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                       height: 1.2,
                     ),
                   ),
@@ -380,7 +382,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                         : '${(progress * 100).round()}%',
                     style: TextStyle(
                       color: complete ? rc.reading : rc.onSurface,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                       height: 1.2,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -561,7 +563,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                   child: Text(
                     entry.value,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       height: 1.2,
                       fontWeight:
                           _tab == entry.key ? FontWeight.w600 : FontWeight.w400,
@@ -623,7 +625,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
               : l10n.readerNoDescription,
           style: TextStyle(
             color: rc.onSurface.withValues(alpha: 0.8),
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
             height: 1.7,
           ),
         ),
@@ -641,7 +643,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                     row.$1,
                     style: TextStyle(
                       color: rc.onSurfaceVariant,
-                      fontSize: 11,
+                      fontSize: AppTypography.labelSmall,
                       height: 1.2,
                     ),
                   ),
@@ -651,7 +653,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                     row.$2,
                     style: TextStyle(
                       color: rc.onSurface,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       height: 1.3,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -671,7 +673,10 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
     if (chapters.isEmpty) {
       return Text(
         l10n.readerNoDescription,
-        style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+        style: TextStyle(
+          color: rc.onSurfaceVariant,
+          fontSize: AppTypography.bodySmall,
+        ),
       );
     }
     final currentChapterId =
@@ -694,6 +699,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                       '${i + 1}'.padLeft(2, '0'),
                       style: TextStyle(
                         color: rc.onSurfaceVariant,
+                        // ignore: font_size_whitelist
                         fontSize: 10,
                         fontFeatures: const [FontFeature.tabularFigures()],
                       ),
@@ -707,7 +713,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: rc.onSurface,
-                        fontSize: 13,
+                        fontSize: AppTypography.bodyMedium,
                         height: 1.3,
                         fontWeight:
                             'chapter_$i' == currentChapterId
@@ -732,6 +738,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                     _estimateMinutes(chapters[i].charCount),
                     style: TextStyle(
                       color: rc.onSurfaceVariant,
+                      // ignore: font_size_whitelist
                       fontSize: 10,
                       fontFeatures: const [FontFeature.tabularFigures()],
                     ),
@@ -760,13 +767,19 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
       error:
           (_, _) => Text(
             l10n.readerOperationFailed,
-            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+            style: TextStyle(
+              color: rc.onSurfaceVariant,
+              fontSize: AppTypography.bodySmall,
+            ),
           ),
       data: (annotations) {
         if (annotations.isEmpty) {
           return Text(
             l10n.readerDetailNoAnn,
-            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+            style: TextStyle(
+              color: rc.onSurfaceVariant,
+              fontSize: AppTypography.bodySmall,
+            ),
           );
         }
         return Column(
@@ -789,7 +802,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                         ann.highlightText ?? '',
                         style: TextStyle(
                           color: rc.onSurface,
-                          fontSize: 13,
+                          fontSize: AppTypography.bodyMedium,
                           height: 1.6,
                           fontStyle: FontStyle.italic,
                         ),
@@ -800,7 +813,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                           ann.note!,
                           style: TextStyle(
                             color: rc.onSurfaceVariant,
-                            fontSize: 11,
+                            fontSize: AppTypography.labelSmall,
                             height: 1.4,
                           ),
                         ),
@@ -834,13 +847,19 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
       error:
           (_, _) => Text(
             l10n.readerOperationFailed,
-            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+            style: TextStyle(
+              color: rc.onSurfaceVariant,
+              fontSize: AppTypography.bodySmall,
+            ),
           ),
       data: (bookmarks) {
         if (bookmarks.isEmpty) {
           return Text(
             l10n.readerDetailNoBm,
-            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+            style: TextStyle(
+              color: rc.onSurfaceVariant,
+              fontSize: AppTypography.bodySmall,
+            ),
           );
         }
         return Column(
@@ -866,7 +885,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: rc.onSurface,
-                            fontSize: 13,
+                            fontSize: AppTypography.bodyMedium,
                             height: 1.3,
                           ),
                         ),
@@ -876,6 +895,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                           _formatDateTime(bookmark.createdAt!),
                           style: TextStyle(
                             color: rc.onSurfaceVariant,
+                            // ignore: font_size_whitelist
                             fontSize: 10,
                           ),
                         ),
@@ -1034,7 +1054,7 @@ class _DetailBackBar extends StatelessWidget {
                   l10n.coreBack,
                   style: TextStyle(
                     color: rc.onSurfaceVariant,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     height: 1.2,
                   ),
                 ),

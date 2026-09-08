@@ -70,6 +70,7 @@ class MovieRedesignStatusLabel extends StatelessWidget {
       ),
       child: Text(
         label,
+        // ignore: font_size_whitelist
         style: context.movieRedesignText.mono(size: 10, color: color),
       ),
     );

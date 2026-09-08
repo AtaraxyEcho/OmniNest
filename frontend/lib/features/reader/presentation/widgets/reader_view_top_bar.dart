@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -156,7 +157,7 @@ class ReaderViewTopBar extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: settings.onSurfaceColor,
-            fontSize: 15,
+            fontSize: AppTypography.titleMedium,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -167,7 +168,7 @@ class ReaderViewTopBar extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: settings.onSurfaceVariantColor,
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
             ),
           ),
       ],

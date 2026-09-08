@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -206,7 +207,10 @@ class _MovieMetadataEditPanelState
                       child: Text(
                         l10n.videoDetailEdit,
                         style: text
-                            .mono(size: 16, color: palette.foreground)
+                            .mono(
+                              size: AppTypography.titleMedium,
+                              color: palette.foreground,
+                            )
                             .copyWith(letterSpacing: 2),
                       ),
                     ),
@@ -333,6 +337,7 @@ class _MovieMetadataEditPanelState
     return Text(
       label,
       style: text
+          // ignore: font_size_whitelist
           .mono(size: 10, color: MovieDetailTheme.mutedText)
           .copyWith(letterSpacing: 1),
     );
@@ -348,7 +353,10 @@ class _MovieMetadataEditPanelState
       controller: controller,
       cursorColor: MovieDetailTheme.accent,
       onChanged: onChanged,
-      style: text.body(size: 14, color: palette.foreground),
+      style: text.body(
+        size: AppTypography.bodyLarge,
+        color: palette.foreground,
+      ),
       decoration: InputDecoration(
         filled: true,
         fillColor: MovieDetailTheme.surface,

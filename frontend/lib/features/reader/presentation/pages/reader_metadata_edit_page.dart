@@ -1,3 +1,4 @@
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 import 'dart:typed_data';
 
@@ -406,12 +407,15 @@ class _ReaderMetadataEditPageState
       controller: controller,
       maxLines: maxLines,
       keyboardType: keyboardType,
-      style: TextStyle(color: context.readerColors.onSurface, fontSize: 14),
+      style: TextStyle(
+        color: context.readerColors.onSurface,
+        fontSize: AppTypography.bodyLarge,
+      ),
       decoration: InputDecoration(
         labelText: label,
         labelStyle: TextStyle(
           color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.8),
-          fontSize: 13,
+          fontSize: AppTypography.bodyMedium,
         ),
         filled: true,
         fillColor: context.readerColors.surfaceContainerHigh.withValues(
@@ -587,7 +591,7 @@ class _FilePickerDialog extends StatelessWidget {
                     title,
                     style: TextStyle(
                       color: context.readerColors.onSurface,
-                      fontSize: 16,
+                      fontSize: AppTypography.titleMedium,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -622,7 +626,7 @@ class _FilePickerDialog extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.readerColors.onSurface,
-                        fontSize: 14,
+                        fontSize: AppTypography.bodyLarge,
                       ),
                     ),
                     onTap: () => Navigator.pop(context, file),

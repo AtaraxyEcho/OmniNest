@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/features/video/domain/movie_models.dart'
     hide SubtitleTrack;
@@ -429,7 +430,7 @@ class MoviePlayerBottomBar extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: colors.playerControlForeground,
-            fontSize: 12,
+            fontSize: AppTypography.bodySmall,
             fontWeight: FontWeight.w600,
             fontFeatures: const [FontFeature.tabularFigures()],
           ),

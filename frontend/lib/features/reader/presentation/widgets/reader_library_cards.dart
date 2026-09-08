@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
@@ -69,7 +70,7 @@ class _ReaderContinueCardState extends State<ReaderContinueCard> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: rc.onSurface,
-                            fontSize: 13,
+                            fontSize: AppTypography.bodyMedium,
                             height: 1.3,
                             fontWeight: FontWeight.w600,
                           ),
@@ -83,7 +84,7 @@ class _ReaderContinueCardState extends State<ReaderContinueCard> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: rc.onSurfaceVariant,
-                            fontSize: 11,
+                            fontSize: AppTypography.labelSmall,
                             height: 1.2,
                           ),
                         ),
@@ -102,6 +103,7 @@ class _ReaderContinueCardState extends State<ReaderContinueCard> {
                           '${(progress * 100).round()}%',
                           style: TextStyle(
                             color: rc.onSurfaceVariant,
+                            // ignore: font_size_whitelist
                             fontSize: 10,
                             height: 1.2,
                             fontFeatures: const [FontFeature.tabularFigures()],
@@ -218,7 +220,7 @@ class ReaderLibraryGridCard extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: rc.onSurface,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     height: 1.3,
                     fontWeight: FontWeight.w600,
                   ),
@@ -230,7 +232,7 @@ class ReaderLibraryGridCard extends ConsumerWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: rc.onSurfaceVariant,
-                    fontSize: 11,
+                    fontSize: AppTypography.labelSmall,
                     height: 1.2,
                   ),
                 ),
@@ -382,6 +384,7 @@ class _ParseStatusBadge extends StatelessWidget {
             : l10n.readerComicImportPartialFailed,
         style: const TextStyle(
           color: Colors.white,
+          // ignore: font_size_whitelist
           fontSize: 9,
           height: 1.2,
           fontWeight: FontWeight.w600,

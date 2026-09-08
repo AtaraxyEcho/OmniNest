@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
@@ -35,7 +36,7 @@ class ReaderShelfRow extends StatelessWidget {
                   textAlign: TextAlign.right,
                   style: TextStyle(
                     color: rc.onSurfaceVariant,
-                    fontSize: 11,
+                    fontSize: AppTypography.labelSmall,
                     height: 1.2,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -58,7 +59,7 @@ class ReaderShelfRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: rc.onSurface,
-                        fontSize: 15,
+                        fontSize: AppTypography.titleMedium,
                         height: 1.3,
                         fontWeight: FontWeight.w600,
                       ),
@@ -72,7 +73,7 @@ class ReaderShelfRow extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: rc.onSurfaceVariant,
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                         height: 1.2,
                       ),
                     ),
@@ -131,6 +132,7 @@ class _ProgressCell extends StatelessWidget {
             '${(p * 100).round()}%',
             style: TextStyle(
               color: rc.onSurfaceVariant,
+              // ignore: font_size_whitelist
               fontSize: 10,
               height: 1,
               fontFeatures: const [FontFeature.tabularFigures()],
@@ -141,6 +143,7 @@ class _ProgressCell extends StatelessWidget {
     }
     return Text(
       '—',
+      // ignore: font_size_whitelist
       style: TextStyle(color: rc.onSurfaceVariant, fontSize: 10, height: 1),
     );
   }
@@ -162,6 +165,7 @@ class _KindBadge extends StatelessWidget {
         label,
         style: TextStyle(
           color: rc.onSurfaceVariant,
+          // ignore: font_size_whitelist
           fontSize: 9,
           height: 1.2,
           letterSpacing: 0.5,

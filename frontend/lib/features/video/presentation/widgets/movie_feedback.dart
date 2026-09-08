@@ -1,4 +1,5 @@
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -177,7 +178,7 @@ class _MovieAsyncButtonState extends State<MovieAsyncButton> {
                     _errorMessage!,
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.error,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                       height: 16 / 12,
                     ),
                   ),
@@ -316,7 +317,7 @@ class _MovieAsyncActionRowState extends State<MovieAsyncActionRow> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.videoColors.onSurfaceVariant,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       height: 18 / 13,
                     ),
                   ),
@@ -336,7 +337,7 @@ class _MovieAsyncActionRowState extends State<MovieAsyncActionRow> {
                             _errorMessage!,
                             style: TextStyle(
                               color: theme.colorScheme.error,
-                              fontSize: 12,
+                              fontSize: AppTypography.bodySmall,
                               height: 16 / 12,
                             ),
                           ),
@@ -365,7 +366,7 @@ class _MovieAsyncActionRowState extends State<MovieAsyncActionRow> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   textStyle: const TextStyle(
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

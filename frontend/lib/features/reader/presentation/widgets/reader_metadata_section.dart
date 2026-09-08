@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -23,7 +24,7 @@ class MetadataSection extends StatelessWidget {
               l10n.readerMetadataManagement,
               style: TextStyle(
                 color: context.readerColors.onSurface,
-                fontSize: 22,
+                fontSize: AppTypography.headlineSmall,
                 height: 28 / 22,
                 fontWeight: FontWeight.w800,
               ),
@@ -39,7 +40,7 @@ class MetadataSection extends StatelessWidget {
                 l10n.readerBookCount(items.length),
                 style: TextStyle(
                   color: context.readerColors.onSurfaceVariant,
-                  fontSize: 11,
+                  fontSize: AppTypography.labelSmall,
                   height: 14 / 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -52,7 +53,7 @@ class MetadataSection extends StatelessWidget {
           l10n.readerMetadataDesc,
           style: TextStyle(
             color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.8),
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
             height: 18 / 13,
           ),
         ),
@@ -90,7 +91,7 @@ class MetadataSection extends StatelessWidget {
             l10n.readerNoBookEntries,
             style: TextStyle(
               color: context.readerColors.onSurfaceVariant,
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -101,7 +102,7 @@ class MetadataSection extends StatelessWidget {
               color: context.readerColors.onSurfaceVariant.withValues(
                 alpha: 0.7,
               ),
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
             ),
           ),
         ],
@@ -193,7 +194,7 @@ class _MetadataRowState extends State<_MetadataRow> {
                           _hovered
                               ? context.readerColors.primary
                               : context.readerColors.onSurface,
-                      fontSize: 14,
+                      fontSize: AppTypography.bodyLarge,
                       height: 18 / 14,
                       fontWeight: FontWeight.w700,
                     ),
@@ -205,7 +206,7 @@ class _MetadataRowState extends State<_MetadataRow> {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: statusColor.withValues(alpha: 0.8),
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                       height: 16 / 12,
                       fontWeight: FontWeight.w600,
                     ),
@@ -236,7 +237,7 @@ class _MetadataRowState extends State<_MetadataRow> {
                       l10n.readerEdit,
                       style: TextStyle(
                         color: context.readerColors.primary,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -258,7 +259,7 @@ class _MetadataRowState extends State<_MetadataRow> {
             : item.title.trim().substring(0, 1).toUpperCase(),
         style: TextStyle(
           color: context.readerColors.onSurfaceVariant,
-          fontSize: 18,
+          fontSize: AppTypography.titleLarge,
           fontWeight: FontWeight.w800,
         ),
       ),

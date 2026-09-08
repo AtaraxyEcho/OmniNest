@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
@@ -125,7 +126,7 @@ Future<void> _showCreateCollectionDialog(
                 controller: nameController,
                 style: TextStyle(
                   color: context.videoColors.onSurface,
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                 ),
                 decoration: movieInputDecoration(
                   context,
@@ -137,7 +138,7 @@ Future<void> _showCreateCollectionDialog(
                 controller: descriptionController,
                 style: TextStyle(
                   color: context.videoColors.onSurface,
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                 ),
                 decoration: movieInputDecoration(
                   context,

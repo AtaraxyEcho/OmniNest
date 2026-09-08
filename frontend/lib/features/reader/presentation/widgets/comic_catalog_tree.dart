@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
 
 /// 漫画可折叠目录树。
@@ -291,7 +292,7 @@ class _ComicCatalogTreeState extends State<ComicCatalogTree> {
                     child: Text(
                       '${node.pageCount}',
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
@@ -348,6 +349,7 @@ class _ComicCatalogTreeState extends State<ComicCatalogTree> {
       child: Text(
         label,
         style: TextStyle(
+          // ignore: font_size_whitelist
           fontSize: 10,
           color: Theme.of(context).colorScheme.onSurfaceVariant,
         ),

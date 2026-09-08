@@ -270,8 +270,12 @@ class _MovieMobileTopBar extends StatelessWidget {
           const SizedBox(width: 2),
           Icon(Icons.movie_outlined, size: 16, color: palette.primary),
           const SizedBox(width: 6),
-          Text('OmniNest', style: text.display(size: 16, height: 1.0)),
+          Text(
+            'OmniNest',
+            style: text.display(size: AppTypography.titleMedium, height: 1.0),
+          ),
           const SizedBox(width: 6),
+          // ignore: font_size_whitelist
           Text(l10n.portalDockMovies, style: text.mono(size: 10)),
           const Spacer(),
           Consumer(
@@ -482,11 +486,14 @@ class _MovieMobileDrawer extends StatelessWidget {
                     const SizedBox(width: 8),
                     Text(
                       'OmniNest',
-                      style: context.movieRedesignText.display(size: 18),
+                      style: context.movieRedesignText.display(
+                        size: AppTypography.titleLarge,
+                      ),
                     ),
                     const SizedBox(width: 8),
                     Text(
                       l10n.portalDockMovies,
+                      // ignore: font_size_whitelist
                       style: context.movieRedesignText.mono(size: 10),
                     ),
                     const Spacer(),

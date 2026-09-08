@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 右下角全书进度指示器。
@@ -43,7 +44,7 @@ class ReaderProgressIndicator extends StatelessWidget {
           text,
           style: TextStyle(
             color: settings.onSurfaceVariantColor.withValues(alpha: 0.70),
-            fontSize: 11,
+            fontSize: AppTypography.labelSmall,
             fontWeight: FontWeight.w600,
             height: 1.2,
           ),

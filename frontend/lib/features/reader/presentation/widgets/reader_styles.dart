@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 
 /// 根据内容宽度计算文字缩放因子。
 /// 960px 以下不缩放，2560px 以上最大 1.25x。
@@ -59,7 +60,7 @@ class ReaderBadge extends StatelessWidget {
         label,
         style: TextStyle(
           color: foregroundColor ?? color,
-          fontSize: 11,
+          fontSize: AppTypography.labelSmall,
           height: 14 / 11,
           fontWeight: FontWeight.w700,
         ),

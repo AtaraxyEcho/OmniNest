@@ -296,6 +296,7 @@ class _MetaDot extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4),
+      // ignore: font_size_whitelist
       child: Text('·', style: context.movieRedesignText.mono(size: 10)),
     );
   }

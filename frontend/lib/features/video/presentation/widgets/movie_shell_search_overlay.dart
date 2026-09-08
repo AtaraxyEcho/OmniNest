@@ -35,7 +35,7 @@ class _MovieSearchOverlayState extends State<_MovieSearchOverlay> {
                   l10n.videoSearchMovies,
                   style: TextStyle(
                     color: context.videoColors.onSurface,
-                    fontSize: 18,
+                    fontSize: AppTypography.titleLarge,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -56,7 +56,7 @@ class _MovieSearchOverlayState extends State<_MovieSearchOverlay> {
             autofocus: true,
             style: TextStyle(
               color: context.videoColors.onSurface,
-              fontSize: 15,
+              fontSize: AppTypography.titleMedium,
             ),
             decoration: InputDecoration(
               hintText: l10n.videoSearchMovieHint,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/domain/reader_chapter_hierarchy.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
@@ -119,7 +120,7 @@ class ChapterPanelState extends State<ChapterPanel>
                     AppLocalizations.of(context).readerChapterList,
                     style: TextStyle(
                       color: widget.settings.onSurfaceColor,
-                      fontSize: 16,
+                      fontSize: AppTypography.titleMedium,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -230,7 +231,7 @@ class ChapterPanelState extends State<ChapterPanel>
                                 ),
                                 style: TextStyle(
                                   color: widget.settings.onSurfaceVariantColor,
-                                  fontSize: 11,
+                                  fontSize: AppTypography.labelSmall,
                                 ),
                               ),
                             ),

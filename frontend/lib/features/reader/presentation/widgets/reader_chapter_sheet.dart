@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -193,7 +194,7 @@ class _ChapterSheetState extends State<_ChapterSheet> {
                   AppLocalizations.of(context).readerChapterList,
                   style: TextStyle(
                     color: widget.settings.onSurfaceColor,
-                    fontSize: 16,
+                    fontSize: AppTypography.titleMedium,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -202,7 +203,7 @@ class _ChapterSheetState extends State<_ChapterSheet> {
                   '${widget.entries.length}',
                   style: TextStyle(
                     color: widget.settings.onSurfaceVariantColor,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                   ),
                 ),
               ],
@@ -284,7 +285,7 @@ class _ChapterSheetState extends State<_ChapterSheet> {
                                             widget
                                                 .settings
                                                 .onSurfaceVariantColor,
-                                        fontSize: 11,
+                                        fontSize: AppTypography.labelSmall,
                                       ),
                                     ),
                                   ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -40,7 +41,7 @@ class ReadingReportCard extends StatelessWidget {
                   AppLocalizations.of(context).readerReadingReport,
                   style: TextStyle(
                     color: rc.onSurface,
-                    fontSize: 14,
+                    fontSize: AppTypography.bodyLarge,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -108,7 +109,7 @@ class _StatItem extends StatelessWidget {
             value,
             style: TextStyle(
               color: color,
-              fontSize: 16,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -117,7 +118,7 @@ class _StatItem extends StatelessWidget {
             label,
             style: TextStyle(
               color: context.readerColors.onSurfaceVariant,
-              fontSize: 11,
+              fontSize: AppTypography.labelSmall,
             ),
           ),
         ],

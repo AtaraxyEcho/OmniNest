@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 阅读器快捷键说明列表。
@@ -54,7 +55,7 @@ class ReaderShortcutPanel extends StatelessWidget {
                   entry.$1,
                   style: TextStyle(
                     color: settings.accentColor,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w700,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
@@ -66,7 +67,7 @@ class ReaderShortcutPanel extends StatelessWidget {
                   entry.$2,
                   style: TextStyle(
                     color: settings.onSurfaceColor,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     height: 1.45,
                   ),
                 ),

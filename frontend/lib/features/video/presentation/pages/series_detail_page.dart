@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -65,7 +66,7 @@ class SeriesDetailPage extends ConsumerWidget {
                           'RETRY',
                           style: TextStyle(
                             fontFamily: 'JetBrainsMono',
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                             color: MovieDetailTheme.secondaryText,
                           ),
                         ),
@@ -333,7 +334,10 @@ class _Backdrop extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         l10n.videoDetailBack,
-                        style: MovieDetailTheme.mono(12, color: Colors.white),
+                        style: MovieDetailTheme.mono(
+                          AppTypography.bodySmall,
+                          color: Colors.white,
+                        ),
                       ),
                     ],
                   ),
@@ -374,7 +378,7 @@ class MovieDetailBackTextStyle extends TextStyle {
         inherit: true,
         fontFamily: 'JetBrainsMono',
         fontFamilyFallback: const ['NotoSansSC'],
-        fontSize: 12,
+        fontSize: AppTypography.bodySmall,
         color: MovieDetailTheme.secondaryText,
       );
 }
@@ -408,7 +412,10 @@ class _SeriesPosterMetaRow extends StatelessWidget {
               children: [
                 Text(
                   series.title,
-                  style: MovieDetailTheme.serif(30, height: 1.15),
+                  style: MovieDetailTheme.serif(
+                    AppTypography.headlineLarge,
+                    height: 1.15,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -424,12 +431,15 @@ class _SeriesPosterMetaRow extends StatelessWidget {
                           color: MovieDetailTheme.accent,
                         ),
                       ),
-                    Text(series.year, style: MovieDetailTheme.mono(12)),
+                    Text(
+                      series.year,
+                      style: MovieDetailTheme.mono(AppTypography.bodySmall),
+                    ),
                     Text(
                       AppLocalizations.of(
                         context,
                       ).videoDetailSeasonCount(seasonCount),
-                      style: MovieDetailTheme.mono(12),
+                      style: MovieDetailTheme.mono(AppTypography.bodySmall),
                     ),
                     for (final genre in series.genres.take(3))
                       Container(
@@ -440,7 +450,10 @@ class _SeriesPosterMetaRow extends StatelessWidget {
                         decoration: BoxDecoration(
                           border: Border.all(color: MovieDetailTheme.border),
                         ),
-                        child: Text(genre, style: MovieDetailTheme.mono(12)),
+                        child: Text(
+                          genre,
+                          style: MovieDetailTheme.mono(AppTypography.bodySmall),
+                        ),
                       ),
                     _SeriesStatusChip(status: series.metadataStatus),
                   ],
@@ -518,7 +531,10 @@ class _SeriesStatusChip extends StatelessWidget {
         color:
             hasBackground ? color.withValues(alpha: 0.10) : Colors.transparent,
       ),
-      child: Text(normalized, style: MovieDetailTheme.mono(12, color: color)),
+      child: Text(
+        normalized,
+        style: MovieDetailTheme.mono(AppTypography.bodySmall, color: color),
+      ),
     );
   }
 }
@@ -609,7 +625,10 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Text(label, style: MovieDetailTheme.mono(12, letterSpacing: 2));
+    return Text(
+      label,
+      style: MovieDetailTheme.mono(AppTypography.bodySmall, letterSpacing: 2),
+    );
   }
 }
 
@@ -668,7 +687,9 @@ class _SeriesCastGrid extends StatelessWidget {
                               member.character!,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: MovieDetailTheme.mono(12),
+                              style: MovieDetailTheme.mono(
+                                AppTypography.bodySmall,
+                              ),
                             ),
                         ],
                       ),
@@ -725,7 +746,10 @@ class _CastInitials extends StatelessWidget {
     return Center(
       child: Text(
         initial,
-        style: MovieDetailTheme.mono(16, color: MovieDetailTheme.accent),
+        style: MovieDetailTheme.mono(
+          AppTypography.titleMedium,
+          color: MovieDetailTheme.accent,
+        ),
       ),
     );
   }
@@ -739,7 +763,7 @@ class _SeriesEpisodesHeader extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     return Text(
       l10n.videoDetailEpisodesHeader,
-      style: MovieDetailTheme.mono(12, letterSpacing: 2),
+      style: MovieDetailTheme.mono(AppTypography.bodySmall, letterSpacing: 2),
     );
   }
 }
@@ -790,7 +814,10 @@ class _SeasonAccordion extends ConsumerWidget {
                               'S${season.seasonNumber.toString().padLeft(2, '0')}'
                               ' — ${season.title ?? l10n.videoSectionTvShows}',
                               style: text
-                                  .mono(size: 12, color: palette.foreground)
+                                  .mono(
+                                    size: AppTypography.bodySmall,
+                                    color: palette.foreground,
+                                  )
                                   .copyWith(letterSpacing: 1),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
@@ -802,7 +829,7 @@ class _SeasonAccordion extends ConsumerWidget {
                               l10n.videoSeriesEpisodeCount(
                                 season.episodeCount!,
                               ),
-                              style: text.mono(size: 12),
+                              style: text.mono(size: AppTypography.bodySmall),
                             ),
                           const SizedBox(width: 8),
                           Icon(
@@ -866,7 +893,7 @@ class _SeasonEpisodeList extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             child: Text(
               movieErrorMessage(error),
-              style: MovieDetailTheme.mono(12),
+              style: MovieDetailTheme.mono(AppTypography.bodySmall),
             ),
           ),
       data: (seasonDetail) {
@@ -876,7 +903,7 @@ class _SeasonEpisodeList extends ConsumerWidget {
             padding: const EdgeInsets.all(12),
             child: Text(
               AppLocalizations.of(context).videoCollectionEmpty,
-              style: MovieDetailTheme.mono(12),
+              style: MovieDetailTheme.mono(AppTypography.bodySmall),
             ),
           );
         }
@@ -948,7 +975,7 @@ class _EpisodeRow extends StatelessWidget {
                         episode.overview!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: MovieDetailTheme.mono(12),
+                        style: MovieDetailTheme.mono(AppTypography.bodySmall),
                       ),
                     ],
                   ],

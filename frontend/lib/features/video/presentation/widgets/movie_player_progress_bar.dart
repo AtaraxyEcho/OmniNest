@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 
@@ -226,7 +227,7 @@ class _TimePreview extends StatelessWidget {
             maxLines: 1,
             style: TextStyle(
               color: context.videoColors.playerControlForeground,
-              fontSize: 11,
+              fontSize: AppTypography.labelSmall,
               fontWeight: FontWeight.w600,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),

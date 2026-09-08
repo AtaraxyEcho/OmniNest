@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_handler.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -127,7 +128,7 @@ class _ReaderAnnotationPanelState extends State<ReaderAnnotationPanel> {
             '${l10n.readerAnnotations}（${filtered.length}）',
             style: TextStyle(
               color: textColor,
-              fontSize: 16,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -142,12 +143,12 @@ class _ReaderAnnotationPanelState extends State<ReaderAnnotationPanel> {
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       child: TextField(
         onChanged: (v) => setState(() => _searchQuery = v),
-        style: TextStyle(color: textColor, fontSize: 14),
+        style: TextStyle(color: textColor, fontSize: AppTypography.bodyLarge),
         decoration: InputDecoration(
           hintText: l10n.readerSearchAnnotationsHint,
           hintStyle: TextStyle(
             color: textColor.withValues(alpha: 0.40),
-            fontSize: 14,
+            fontSize: AppTypography.bodyLarge,
           ),
           prefixIcon: Icon(
             Icons.search,
@@ -203,7 +204,9 @@ class _ReaderAnnotationPanelState extends State<ReaderAnnotationPanel> {
         style: ButtonStyle(
           visualDensity: VisualDensity.compact,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-          textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 13)),
+          textStyle: const WidgetStatePropertyAll(
+            TextStyle(fontSize: AppTypography.bodyMedium),
+          ),
           foregroundColor: WidgetStateProperty.resolveWith((states) {
             return states.contains(WidgetState.selected)
                 ? widget.settings.surfaceColor
@@ -265,7 +268,7 @@ class _ReaderAnnotationPanelState extends State<ReaderAnnotationPanel> {
             l10n.readerNoAnnotations,
             style: TextStyle(
               color: textColor.withValues(alpha: 0.45),
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
             ),
           ),
         ],
@@ -322,7 +325,7 @@ class _AnnotationCard extends StatelessWidget {
                 chapterTitle!,
                 style: TextStyle(
                   color: textColor.withValues(alpha: 0.50),
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -331,7 +334,11 @@ class _AnnotationCard extends StatelessWidget {
             if (_hasNote) ...[
               Text(
                 annotation.note!,
-                style: TextStyle(color: textColor, fontSize: 14, height: 1.5),
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: AppTypography.bodyLarge,
+                  height: 1.5,
+                ),
               ),
               const SizedBox(height: 10),
             ],
@@ -365,7 +372,7 @@ class _AnnotationCard extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
           color: textColor,
-          fontSize: 13,
+          fontSize: AppTypography.bodyMedium,
           height: 1.5,
           fontStyle: FontStyle.italic,
         ),

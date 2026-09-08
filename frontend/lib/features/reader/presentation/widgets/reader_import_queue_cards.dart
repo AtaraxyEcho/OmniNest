@@ -3,6 +3,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
@@ -78,7 +79,7 @@ class _ImportFromDeviceButtonState
         AppLocalizations.of(context).readerAddBook,
         style: TextStyle(
           color: rc.onSurface,
-          fontSize: 13,
+          fontSize: AppTypography.bodyMedium,
           height: 1.2,
           fontWeight: FontWeight.w600,
         ),
@@ -137,7 +138,7 @@ class ImportJobRow extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: rc.onSurface,
-                          fontSize: 13,
+                          fontSize: AppTypography.bodyMedium,
                           height: 1.3,
                           fontWeight: FontWeight.w600,
                         ),
@@ -148,7 +149,7 @@ class ImportJobRow extends ConsumerWidget {
                       label,
                       style: TextStyle(
                         color: failed ? rc.danger : rc.onSurfaceVariant,
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                         height: 1.2,
                         fontWeight: FontWeight.w600,
                       ),

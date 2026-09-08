@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/video/domain/movie_models.dart'
@@ -502,7 +503,7 @@ class _PlayerPanelFrame extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: colors.playerControlForeground,
-                          fontSize: 16,
+                          fontSize: AppTypography.titleMedium,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -532,7 +533,7 @@ class _PlayerPanelFrame extends StatelessWidget {
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               color: colors.playerControlMuted,
-                              fontSize: 14,
+                              fontSize: AppTypography.bodyLarge,
                             ),
                           ),
                         ),
@@ -589,7 +590,7 @@ class _PlayerChoiceTile extends StatelessWidget {
               selected
                   ? colors.playerControlForeground
                   : colors.playerControlMuted,
-          fontSize: 14,
+          fontSize: AppTypography.bodyLarge,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         ),
       ),
@@ -603,7 +604,7 @@ class _PlayerChoiceTile extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: colors.playerControlMuted.withValues(alpha: 0.72),
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                 ),
               )
               : null,
@@ -689,7 +690,7 @@ class _TrackMetadataLine extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: colors.playerControlMuted.withValues(alpha: 0.72),
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
             ),
           ),
         ),
@@ -708,6 +709,7 @@ class _TrackMetadataLine extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: colors.playerControlMuted,
+                  // ignore: font_size_whitelist
                   fontSize: 10,
                   fontWeight: FontWeight.w600,
                 ),

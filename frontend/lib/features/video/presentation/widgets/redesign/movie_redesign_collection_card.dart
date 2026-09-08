@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 
 /// 合集卡片数据。
@@ -106,7 +107,7 @@ class _MovieRedesignCollectionCardState
                       AppLocalizations.of(
                         context,
                       ).videoRedesignItemsCount(data.count),
-                      style: text.mono(size: 12),
+                      style: text.mono(size: AppTypography.bodySmall),
                     ),
                   ],
                 ),

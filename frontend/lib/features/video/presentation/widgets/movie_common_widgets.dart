@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 
 class MovieDetailBackButton extends StatelessWidget {
@@ -20,7 +21,10 @@ class MovieDetailBackButton extends StatelessWidget {
         minimumSize: const Size(0, 40),
         padding: const EdgeInsets.symmetric(horizontal: 12),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        textStyle: const TextStyle(
+          fontSize: AppTypography.bodyMedium,
+          fontWeight: FontWeight.w700,
+        ),
       ),
       icon: const Icon(Icons.arrow_back_rounded, size: 18),
       label: Text(AppLocalizations.of(context).videoBackToLibrary),
@@ -51,7 +55,7 @@ class MovieSectionHeading extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: context.videoColors.onSurface,
-                  fontSize: 24,
+                  fontSize: AppTypography.headlineSmall,
                   height: 32 / 24,
                   fontWeight: FontWeight.w800,
                 ),
@@ -61,7 +65,7 @@ class MovieSectionHeading extends StatelessWidget {
                 subtitle,
                 style: TextStyle(
                   color: context.videoColors.onSurfaceVariant,
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                   height: 20 / 14,
                   fontWeight: FontWeight.w500,
                 ),
@@ -118,7 +122,7 @@ class MovieNoticePanel extends StatelessWidget {
                   message,
                   style: TextStyle(
                     color: context.videoColors.onSurfaceVariant,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     height: 18 / 13,
                   ),
                 ),
@@ -160,7 +164,7 @@ class EmptyMovieState extends StatelessWidget {
             message,
             style: TextStyle(
               color: context.videoColors.onSurfaceVariant,
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
               height: 20 / 14,
             ),
           ),

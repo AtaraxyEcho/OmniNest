@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """通用字号迁移：把目标模块的硬编码 fontSize 字面量替换为语义 token。
 
-用法：python tool/migrate_font_sizes.py <module> [module ...]
+用法：python tool/migrate_font_sizes.py <module> [module ...] [--exclude-file=名字 ...]
 模块名对应 lib/features/<module>；import 自动按字典序插入（part 文件的
 import 加到宿主 library，part of 非文件名形式时跳过并报告）；
 值映射到 'WHITELIST' 时保留原字面量并在上一行插入 ignore 标记。
@@ -40,9 +40,21 @@ MAPPING = {
     "48": "displayLarge",
     "56": "displayLarge",
     "58": "WHITELIST",
+    # 原型保真：reader/video 已验收原型中的微字规格（9/10）保留原值
+    "KEEP": "KEEP",
 }
 
+MICRO_KEEP_VALUES = {"9", "10"}
+
+def effective_token(value: str, keep_micro: bool) -> str:
+    if keep_micro and value in MICRO_KEEP_VALUES:
+        return "KEEP"
+    return MAPPING.get(value)
+
 PATTERN = re.compile(r"fontSize:\s*([0-9]+(?:\.[0-9]+)?)")
+VIDEO_HELPER_PATTERN = re.compile(
+    r"(?:serif|display|body|mono)\(\s*(?:size:\s*)?([0-9]+(?:\.[0-9]+)?)"
+)
 PART_OF_PATTERN = re.compile(r"^part of '([^']+)';", flags=re.MULTILINE)
 
 
@@ -72,11 +84,15 @@ def insert_import(text: str) -> str:
     return "\n".join(lines)
 
 
-def migrate_file(path: Path, module: str, stats: dict) -> bool:
+def migrate_file(path: Path, module: str, stats: dict, excludes: set) -> bool:
     original = path.read_text(encoding="utf-8-sig")
-    if "fontSize:" not in original:
-        return False
     is_part = bool(PART_OF_PATTERN.search(original))
+    is_video = module == "video"
+    has_sizes = "fontSize:" in original or (
+        is_video and VIDEO_HELPER_PATTERN.search(original)
+    )
+    if not has_sizes:
+        return False
 
     lines = original.split("\n")
     marked_indexes: list = []
@@ -90,24 +106,41 @@ def migrate_file(path: Path, module: str, stats: dict) -> bool:
 
         def replace(match: re.Match) -> str:
             value = match.group(1)
-            token = MAPPING.get(value)
+            token = effective_token(value, stats["keep_micro"])
             if token is None:
                 stats["unmapped"].append(f"{module}: fontSize: {value}")
                 return match.group(0)
             stats["counts"][value] = stats["counts"].get(value, 0) + 1
-            if token == "WHITELIST":
+            if token in ("WHITELIST", "KEEP"):
                 whitelist_needed.append(True)
                 return match.group(0)
             return f"fontSize: AppTypography.{token}"
 
+        def replace_helper(match: re.Match) -> str:
+            value = match.group(1)
+            token = effective_token(value, stats["keep_micro"])
+            if token is None:
+                stats["unmapped"].append(f"{module}: helper size: {value}")
+                return match.group(0)
+            stats["counts"][value] = stats["counts"].get(value, 0) + 1
+            if token in ("WHITELIST", "KEEP"):
+                whitelist_needed.append(True)
+                return match.group(0)
+            prefix = match.group(0)[: match.start(1) - match.start(0)]
+            return prefix + f"AppTypography.{token}"
+
         new_line = PATTERN.sub(replace, line)
+        if is_video:
+            new_line = VIDEO_HELPER_PATTERN.sub(replace_helper, new_line)
         if new_line != line:
             lines[i] = new_line
             changed = True
         if whitelist_needed:
             marked_indexes.append(i)
 
-    if not changed:
+    # 白名单标记（KEEP/WHITELIST）即使无内容变更也需落盘。
+    needs_write = changed or bool(marked_indexes)
+    if not needs_write:
         return False
 
     for i in sorted(set(marked_indexes), reverse=True):
@@ -121,15 +154,20 @@ def migrate_file(path: Path, module: str, stats: dict) -> bool:
                 f"{path}（part of 非文件名形式，需手工处理）"
             )
             return False
+        if host_match.group(1) in excludes:
+            print(f"EXCLUDED part（宿主在途重写）: {path.name} → {host_match.group(1)}")
+            return False
         host = path.parent / host_match.group(1)
         path.write_text(migrated, encoding="utf-8")
-        host.write_text(insert_import(host.read_text(encoding="utf-8")), encoding="utf-8")
+        if changed:
+            host.write_text(insert_import(host.read_text(encoding="utf-8")), encoding="utf-8")
         stats["hosts"].append(
             str(host.relative_to(FRONTEND)).replace("\\", "/")
             + f" ← part: {path.name}"
         )
     else:
-        migrated = insert_import(migrated)
+        if changed:
+            migrated = insert_import(migrated)
         path.write_text(migrated, encoding="utf-8")
 
     stats["changed_files"].append(
@@ -138,12 +176,13 @@ def migrate_file(path: Path, module: str, stats: dict) -> bool:
     return True
 
 
-def migrate_module(module: str) -> None:
+def migrate_module(module: str, excludes: set) -> None:
     target = FRONTEND / "lib" / ("core" if module == "core" else f"features/{module}")
     if not target.exists():
         print(f"SKIP（目录不存在）: {module}")
         return
     stats: dict = {
+        "keep_micro": module in ("reader", "video"),
         "counts": {},
         "changed_files": [],
         "skipped_parts": [],
@@ -151,7 +190,10 @@ def migrate_module(module: str) -> None:
         "unmapped": [],
     }
     for path in sorted(target.rglob("*.dart")):
-        migrate_file(path, module, stats)
+        if path.name in excludes:
+            print(f"EXCLUDED（在途重写，暂缓）: {path.name}")
+            continue
+        migrate_file(path, module, stats, excludes)
 
     print(f"== {module} ==")
     print(f"changed files: {len(stats['changed_files'])}")
@@ -180,8 +222,14 @@ def main() -> None:
     if len(sys.argv) < 2:
         print("用法: python tool/migrate_font_sizes.py <module> [module ...]")
         sys.exit(1)
-    for module in sys.argv[1:]:
-        migrate_module(module)
+    modules = [a for a in sys.argv[1:] if not a.startswith("--exclude-file=")]
+    excludes = {
+        a.split("=", 1)[1]
+        for a in sys.argv[1:]
+        if a.startswith("--exclude-file=")
+    }
+    for module in modules:
+        migrate_module(module, excludes)
 
 
 if __name__ == "__main__":

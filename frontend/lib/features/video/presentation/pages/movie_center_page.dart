@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -126,7 +127,7 @@ class _MovieSearchField extends ConsumerWidget {
           fontFamily: 'JetBrainsMono',
           fontFamilyFallback: const ['NotoSansSC'],
           color: palette.foreground,
-          fontSize: 13,
+          fontSize: AppTypography.bodyMedium,
           height: 18 / 13,
         ),
         decoration: InputDecoration(
@@ -140,7 +141,7 @@ class _MovieSearchField extends ConsumerWidget {
             fontFamily: 'JetBrainsMono',
             fontFamilyFallback: const ['NotoSansSC'],
             color: palette.mutedForeground,
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
           ),
           prefixIcon: Icon(
             Icons.search_rounded,
@@ -251,7 +252,7 @@ class _ManagementAccessDenied extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 14,
+                fontSize: AppTypography.bodyLarge,
                 fontWeight: FontWeight.w600,
               ),
             ),

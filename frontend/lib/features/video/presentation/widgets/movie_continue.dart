@@ -1,5 +1,6 @@
-﻿import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:flutter/material.dart';
@@ -125,7 +126,7 @@ class ContinueCard extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: context.videoColors.onSurface,
-                fontSize: 15,
+                fontSize: AppTypography.titleMedium,
                 height: 20 / 15,
                 fontWeight: FontWeight.w800,
               ),
@@ -147,7 +148,7 @@ class ContinueCard extends StatelessWidget {
                 color: context.videoColors.onSurfaceVariant.withValues(
                   alpha: 0.72,
                 ),
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 height: 16 / 12,
                 fontWeight: FontWeight.w600,
               ),

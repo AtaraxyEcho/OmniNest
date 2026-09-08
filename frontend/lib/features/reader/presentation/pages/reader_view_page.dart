@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -982,7 +983,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
                         _currentChapterTitle,
                         style: TextStyle(
                           color: _settings.onSurfaceVariantColor,
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,

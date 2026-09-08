@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 
@@ -112,7 +113,7 @@ class SpeedButton extends StatelessWidget {
           '${speed.toStringAsFixed(speed == speed.roundToDouble() ? 0 : 2)}x',
           style: TextStyle(
             color: colors.playerControlForeground,
-            fontSize: 12,
+            fontSize: AppTypography.bodySmall,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -141,7 +142,7 @@ class InfoRow extends StatelessWidget {
               label,
               style: TextStyle(
                 color: colors.playerControlMuted.withValues(alpha: 0.72),
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
               ),
             ),
           ),
@@ -152,7 +153,7 @@ class InfoRow extends StatelessWidget {
               textAlign: TextAlign.end,
               style: TextStyle(
                 color: colors.playerControlForeground,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 fontWeight: FontWeight.w600,
               ),
             ),

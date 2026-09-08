@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 
 class StreamNotice extends StatelessWidget {
@@ -58,7 +59,7 @@ class StreamNotice extends StatelessWidget {
                     reason,
                     style: const TextStyle(
                       color: Colors.white,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       height: 1.4,
                     ),
                   ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 
@@ -10,7 +11,10 @@ ButtonStyle movieFilledButtonStyle(BuildContext context) {
     backgroundColor: c.primaryContainer,
     foregroundColor: c.onPrimaryContainer,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+    textStyle: const TextStyle(
+      fontSize: AppTypography.bodyMedium,
+      fontWeight: FontWeight.w800,
+    ),
   );
 }
 
@@ -22,7 +26,10 @@ ButtonStyle movieOutlinedButtonStyle(BuildContext context) {
     foregroundColor: c.onSurface,
     side: BorderSide(color: c.outlineVariant.withValues(alpha: 0.46)),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+    textStyle: const TextStyle(
+      fontSize: AppTypography.bodyMedium,
+      fontWeight: FontWeight.w800,
+    ),
   );
 }
 

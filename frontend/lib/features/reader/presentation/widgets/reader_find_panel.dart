@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 在当前已加载章节中搜索并返回字符偏移。
@@ -61,7 +62,7 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
     final after = widget.plainText.substring(matchEnd, end);
     final normalStyle = TextStyle(
       color: widget.settings.onSurfaceColor,
-      fontSize: 13,
+      fontSize: AppTypography.bodyMedium,
       height: 1.45,
     );
     return TextSpan(

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -101,7 +102,7 @@ class ReaderContentImage extends StatelessWidget {
                   block.caption!,
                   style: TextStyle(
                     color: settings.onSurfaceVariantColor,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontStyle: FontStyle.italic,
                   ),
                   textAlign: TextAlign.center,
@@ -183,7 +184,7 @@ class ReaderContentImage extends StatelessWidget {
                   block.alt!,
                   style: TextStyle(
                     color: settings.onSurfaceVariantColor,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                   ),
                   textAlign: TextAlign.center,
                   maxLines: 2,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -134,7 +135,7 @@ class CoverFallback extends StatelessWidget {
                   : item.title.trim().substring(0, 1).toUpperCase(),
               style: TextStyle(
                 color: context.readerColors.onSurface,
-                fontSize: 56,
+                fontSize: AppTypography.displayLarge,
                 height: 1,
                 fontWeight: FontWeight.w800,
               ),
@@ -144,7 +145,7 @@ class CoverFallback extends StatelessWidget {
               readerTypeLabel(AppLocalizations.of(context), item.itemType),
               style: TextStyle(
                 color: context.readerColors.onSurfaceVariant,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 height: 18 / 13,
                 fontWeight: FontWeight.w600,
               ),
@@ -339,7 +340,7 @@ class MinimalChapterTile extends StatelessWidget {
                     color: context.readerColors.onSurface.withValues(
                       alpha: 0.4,
                     ),
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

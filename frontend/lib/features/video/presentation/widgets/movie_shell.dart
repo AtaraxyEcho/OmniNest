@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -323,8 +324,12 @@ class MovieTopBar extends StatelessWidget {
             const SizedBox(width: 8),
             Icon(Icons.movie_outlined, size: 16, color: palette.primary),
             const SizedBox(width: 6),
-            Text('OmniNest', style: text.display(size: 16, height: 1.0)),
+            Text(
+              'OmniNest',
+              style: text.display(size: AppTypography.titleMedium, height: 1.0),
+            ),
             const SizedBox(width: 6),
+            // ignore: font_size_whitelist
             Text(l10n.portalDockMovies, style: text.mono(size: 10)),
           ],
           const SizedBox(width: 16),
@@ -441,6 +446,7 @@ class _MovieGroupLabel extends StatelessWidget {
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: context.movieRedesignText
+              // ignore: font_size_whitelist
               .mono(size: 9, color: palette.mutedForeground)
               .copyWith(letterSpacing: 2),
         ),
@@ -512,6 +518,7 @@ class _MovieNavItem extends StatelessWidget {
                 padding: const EdgeInsets.only(right: 16),
                 child: Text(
                   count.toString(),
+                  // ignore: font_size_whitelist
                   style: text.mono(size: 10, color: palette.mutedForeground),
                 ),
               ),

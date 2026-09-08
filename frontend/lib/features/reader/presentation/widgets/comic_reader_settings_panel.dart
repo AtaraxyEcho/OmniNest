@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -108,7 +109,11 @@ class _SectionLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Text(
       label,
-      style: TextStyle(color: color, fontSize: 13, fontWeight: FontWeight.w600),
+      style: TextStyle(
+        color: color,
+        fontSize: AppTypography.bodyMedium,
+        fontWeight: FontWeight.w600,
+      ),
     );
   }
 }

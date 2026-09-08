@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -45,7 +46,10 @@ class ReaderBookshelfPage extends ConsumerWidget {
               const Spacer(),
               Text(
                 '${shelved.length}',
-                style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+                style: TextStyle(
+                  color: rc.onSurfaceVariant,
+                  fontSize: AppTypography.bodySmall,
+                ),
               ),
             ],
           ),

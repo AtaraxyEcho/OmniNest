@@ -303,7 +303,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
             l10n.readerNoContent,
             style: TextStyle(
               color: widget.settings.onSurfaceVariantColor,
-              fontSize: 15,
+              fontSize: AppTypography.titleMedium,
             ),
           ),
         ),

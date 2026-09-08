@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -86,7 +87,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         color: context.readerColors.onSurface,
-                        fontSize: 24,
+                        fontSize: AppTypography.headlineSmall,
                         height: 1.3,
                         fontWeight: FontWeight.w800,
                       ),
@@ -101,7 +102,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
                           color: context.readerColors.onSurface.withValues(
                             alpha: 0.6,
                           ),
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                           height: 1.4,
                         ),
                       ),
@@ -204,7 +205,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
               c.label,
               style: TextStyle(
                 color: c.color,
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -238,7 +239,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
               genre,
               style: TextStyle(
                 color: context.readerColors.onSurfaceVariant,
-                fontSize: 11,
+                fontSize: AppTypography.labelSmall,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -368,7 +369,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
           l10n.readerDescription,
           style: TextStyle(
             color: context.readerColors.onSurface,
-            fontSize: 14,
+            fontSize: AppTypography.bodyLarge,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -386,7 +387,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
             overflow: _showFullDescription ? null : TextOverflow.ellipsis,
             style: TextStyle(
               color: context.readerColors.onSurfaceVariant,
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               height: 1.7,
             ),
           ),
@@ -405,7 +406,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
                     : l10n.readerExpandFull,
                 style: TextStyle(
                   color: context.readerColors.primary,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -440,7 +441,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
               AppLocalizations.of(context).readerTableOfContents,
               style: TextStyle(
                 color: context.readerColors.onSurface,
-                fontSize: 14,
+                fontSize: AppTypography.bodyLarge,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -450,7 +451,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
                 AppLocalizations.of(context).readerTotalChapters(leafCount),
                 style: TextStyle(
                   color: context.readerColors.onSurfaceVariant,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                 ),
               ),
             ],
@@ -482,7 +483,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
           AppLocalizations.of(context).readerComicSources,
           style: TextStyle(
             color: context.readerColors.onSurface,
-            fontSize: 14,
+            fontSize: AppTypography.bodyLarge,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -555,7 +556,7 @@ class _ComicSourceTileState extends State<_ComicSourceTile> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.readerColors.onSurface,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -566,7 +567,7 @@ class _ComicSourceTileState extends State<_ComicSourceTile> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.readerColors.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     height: 1.35,
                   ),
                 ),
@@ -732,7 +733,7 @@ class _ComicDetailCover extends StatelessWidget {
               : item.title.trim().substring(0, 1).toUpperCase(),
           style: TextStyle(
             color: context.readerColors.comicText,
-            fontSize: 48,
+            fontSize: AppTypography.displayLarge,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -784,7 +785,7 @@ class _ImportStatusBanner extends StatelessWidget {
             child: Text(
               message,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 color: color,
                 fontWeight: FontWeight.w500,
               ),

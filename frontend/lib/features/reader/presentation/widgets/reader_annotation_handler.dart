@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/application/reader_data_manager.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_panel.dart';
@@ -185,7 +186,7 @@ class ReaderAnnotationHandler {
                           child: Text(
                             selectedText,
                             style: const TextStyle(
-                              fontSize: 13,
+                              fontSize: AppTypography.bodyMedium,
                               fontStyle: FontStyle.italic,
                             ),
                           ),

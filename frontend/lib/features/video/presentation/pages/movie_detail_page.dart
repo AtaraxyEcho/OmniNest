@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
@@ -68,7 +69,7 @@ class MovieDetailPage extends ConsumerWidget {
                           'RETRY',
                           style: TextStyle(
                             fontFamily: 'JetBrainsMono',
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                             color: MovieDetailTheme.secondaryText,
                           ),
                         ),
@@ -426,7 +427,10 @@ class _Backdrop extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         l10n.videoDetailBack,
-                        style: MovieDetailTheme.mono(12, color: Colors.white),
+                        style: MovieDetailTheme.mono(
+                          AppTypography.bodySmall,
+                          color: Colors.white,
+                        ),
                       ),
                     ],
                   ),
@@ -515,7 +519,7 @@ class MovieDetailBackTextStyle extends TextStyle {
         inherit: true,
         fontFamily: 'JetBrainsMono',
         fontFamilyFallback: const ['NotoSansSC'],
-        fontSize: 12,
+        fontSize: AppTypography.bodySmall,
         color: MovieDetailTheme.secondaryText,
       );
 }
@@ -578,7 +582,10 @@ class _PosterMetaRow extends StatelessWidget {
                 else
                   Text(
                     item.title,
-                    style: MovieDetailTheme.serif(30, height: 1.15),
+                    style: MovieDetailTheme.serif(
+                      AppTypography.headlineLarge,
+                      height: 1.15,
+                    ),
                   ),
                 const SizedBox(height: 8),
                 Wrap(
@@ -594,9 +601,15 @@ class _PosterMetaRow extends StatelessWidget {
                           color: MovieDetailTheme.accent,
                         ),
                       ),
-                    Text(item.year, style: MovieDetailTheme.mono(12)),
+                    Text(
+                      item.year,
+                      style: MovieDetailTheme.mono(AppTypography.bodySmall),
+                    ),
                     if (item.runtimeSeconds != null && item.runtimeSeconds! > 0)
-                      Text(item.runtimeText, style: MovieDetailTheme.mono(12)),
+                      Text(
+                        item.runtimeText,
+                        style: MovieDetailTheme.mono(AppTypography.bodySmall),
+                      ),
                     for (final genre in item.genres.take(3))
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -606,7 +619,10 @@ class _PosterMetaRow extends StatelessWidget {
                         decoration: BoxDecoration(
                           border: Border.all(color: MovieDetailTheme.border),
                         ),
-                        child: Text(genre, style: MovieDetailTheme.mono(12)),
+                        child: Text(
+                          genre,
+                          style: MovieDetailTheme.mono(AppTypography.bodySmall),
+                        ),
                       ),
                     _StatusChip(status: item.metadataStatus),
                   ],
@@ -615,7 +631,7 @@ class _PosterMetaRow extends StatelessWidget {
                 if (director != null && director.isNotEmpty)
                   Text(
                     '${l10n.videoDetailDirector} ${director.toUpperCase()}',
-                    style: MovieDetailTheme.mono(12),
+                    style: MovieDetailTheme.mono(AppTypography.bodySmall),
                   ),
               ],
             ),
@@ -674,7 +690,10 @@ class _StatusChip extends StatelessWidget {
         color:
             hasBackground ? color.withValues(alpha: 0.10) : Colors.transparent,
       ),
-      child: Text(normalized, style: MovieDetailTheme.mono(12, color: color)),
+      child: Text(
+        normalized,
+        style: MovieDetailTheme.mono(AppTypography.bodySmall, color: color),
+      ),
     );
   }
 }
@@ -865,7 +884,13 @@ class _OverviewTab extends StatelessWidget {
           ),
         if (item.castMembers.isNotEmpty) ...[
           const SizedBox(height: 32),
-          Text('CAST', style: MovieDetailTheme.mono(12, letterSpacing: 2)),
+          Text(
+            'CAST',
+            style: MovieDetailTheme.mono(
+              AppTypography.bodySmall,
+              letterSpacing: 2,
+            ),
+          ),
           const SizedBox(height: 16),
           LayoutBuilder(
             builder: (context, constraints) {
@@ -916,7 +941,9 @@ class _OverviewTab extends StatelessWidget {
                                       member.character!,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
-                                      style: MovieDetailTheme.mono(12),
+                                      style: MovieDetailTheme.mono(
+                                        AppTypography.bodySmall,
+                                      ),
                                     ),
                                 ],
                               ),
@@ -948,13 +975,15 @@ class _VersionsTab extends ConsumerWidget {
       loading:
           () => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
       error:
-          (error, _) =>
-              Text(movieErrorMessage(error), style: MovieDetailTheme.mono(12)),
+          (error, _) => Text(
+            movieErrorMessage(error),
+            style: MovieDetailTheme.mono(AppTypography.bodySmall),
+          ),
       data: (versions) {
         if (versions.isEmpty) {
           return Text(
             l10n.videoDetailNoVersions,
-            style: MovieDetailTheme.mono(12),
+            style: MovieDetailTheme.mono(AppTypography.bodySmall),
           );
         }
         return Column(
@@ -993,7 +1022,9 @@ class _VersionsTab extends ConsumerWidget {
                                   version.containerFormat!.trim().isNotEmpty)
                                 version.containerFormat!.trim().toLowerCase(),
                             ].join(' · '),
-                            style: MovieDetailTheme.mono(12),
+                            style: MovieDetailTheme.mono(
+                              AppTypography.bodySmall,
+                            ),
                           ),
                         ],
                       ),
@@ -1074,13 +1105,13 @@ class _SubtitlesTab extends ConsumerWidget {
           error:
               (error, _) => Text(
                 movieErrorMessage(error),
-                style: MovieDetailTheme.mono(12),
+                style: MovieDetailTheme.mono(AppTypography.bodySmall),
               ),
           data: (tracks) {
             if (tracks.isEmpty) {
               return Text(
                 l10n.videoRedesignNoSubtitles,
-                style: MovieDetailTheme.mono(12),
+                style: MovieDetailTheme.mono(AppTypography.bodySmall),
               );
             }
             return Column(
@@ -1110,14 +1141,14 @@ class _SubtitlesTab extends ConsumerWidget {
                         const SizedBox(width: 16),
                         Text(
                           _formatOf(track.url) ?? '',
-                          style: MovieDetailTheme.mono(12),
+                          style: MovieDetailTheme.mono(AppTypography.bodySmall),
                         ),
                         const SizedBox(width: 16),
                         Text(
                           track.embedded
                               ? l10n.videoRedesignSubtitleEmbedded
                               : l10n.videoRedesignSubtitleExternal,
-                          style: MovieDetailTheme.mono(12),
+                          style: MovieDetailTheme.mono(AppTypography.bodySmall),
                         ),
                       ],
                     ),
@@ -1181,11 +1212,15 @@ class _SubtitleLanguageDialogState extends State<_SubtitleLanguageDialog> {
             children: [
               Text(
                 widget.fileName,
-                style: MovieDetailTheme.mono(12, color: palette.foreground),
+                style: MovieDetailTheme.mono(
+                  AppTypography.bodySmall,
+                  color: palette.foreground,
+                ),
               ),
               const SizedBox(height: 16),
               Text(
                 l10n.videoRedesignLanguage,
+                // ignore: font_size_whitelist
                 style: MovieDetailTheme.mono(10),
               ),
               const SizedBox(height: 4),
@@ -1206,7 +1241,12 @@ class _SubtitleLanguageDialogState extends State<_SubtitleLanguageDialog> {
                       for (final (value, label) in _languageOptions)
                         DropdownMenuItem(
                           value: value,
-                          child: Text(label, style: MovieDetailTheme.mono(12)),
+                          child: Text(
+                            label,
+                            style: MovieDetailTheme.mono(
+                              AppTypography.bodySmall,
+                            ),
+                          ),
                         ),
                     ],
                     onChanged: (value) {
@@ -1293,7 +1333,10 @@ class _CastInitials extends StatelessWidget {
     return Center(
       child: Text(
         initial,
-        style: MovieDetailTheme.mono(16, color: MovieDetailTheme.accent),
+        style: MovieDetailTheme.mono(
+          AppTypography.titleMedium,
+          color: MovieDetailTheme.accent,
+        ),
       ),
     );
   }

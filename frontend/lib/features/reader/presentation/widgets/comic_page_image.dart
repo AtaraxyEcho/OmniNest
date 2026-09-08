@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/application/reader_comic_image_provider.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
 
@@ -185,7 +186,10 @@ class _ImageFailure extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               message,
-              style: TextStyle(color: Colors.grey[400], fontSize: 13),
+              style: TextStyle(
+                color: Colors.grey[400],
+                fontSize: AppTypography.bodyMedium,
+              ),
             ),
             if (onRetry != null) ...[
               const SizedBox(height: 8),

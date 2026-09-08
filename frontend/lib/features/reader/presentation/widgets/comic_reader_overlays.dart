@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_catalog_tree.dart';
@@ -47,7 +48,7 @@ class ComicReaderTopBar extends StatelessWidget {
                   constraints.maxWidth,
                   MediaQuery.sizeOf(context).height,
                 ),
-                fontSize: 16,
+                fontSize: AppTypography.titleMedium,
               );
               return SizedBox(
                 height: 56,
@@ -70,7 +71,7 @@ class ComicReaderTopBar extends StatelessWidget {
                           catalogTitle,
                           style: TextStyle(
                             color: settings.onSurfaceColor,
-                            fontSize: 15,
+                            fontSize: AppTypography.titleMedium,
                             fontWeight: FontWeight.w700,
                           ),
                           maxLines: 1,
@@ -234,7 +235,7 @@ class ComicReaderBottomBar extends StatelessWidget {
                   constraints.maxWidth,
                   MediaQuery.sizeOf(context).height,
                 ),
-                fontSize: 16,
+                fontSize: AppTypography.titleMedium,
               );
               final compact = layout.density == ReaderControlDensity.compact;
               return Padding(
@@ -274,7 +275,7 @@ class ComicReaderBottomBar extends StatelessWidget {
                               overflow: TextOverflow.ellipsis,
                               style: TextStyle(
                                 color: settings.onSurfaceColor,
-                                fontSize: 13,
+                                fontSize: AppTypography.bodyMedium,
                                 fontWeight: FontWeight.w700,
                                 fontFeatures: const [
                                   FontFeature.tabularFigures(),
@@ -417,7 +418,7 @@ class ComicPageIndicator extends StatelessWidget {
                     : '${currentPageIndex + 1} / $totalPages',
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   fontWeight: FontWeight.w700,
                   fontFeatures: [FontFeature.tabularFigures()],
                 ),

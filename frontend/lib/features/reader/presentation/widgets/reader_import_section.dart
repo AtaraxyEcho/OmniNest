@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
@@ -62,7 +63,7 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
               AppLocalizations.of(context).readerPendingImport,
               style: TextStyle(
                 color: context.readerColors.onSurface,
-                fontSize: 18,
+                fontSize: AppTypography.titleLarge,
                 height: 24 / 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -80,7 +81,7 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
                 ).readerPendingImportCount(candidates.length),
                 style: TextStyle(
                   color: context.readerColors.onSurfaceVariant,
-                  fontSize: 11,
+                  fontSize: AppTypography.labelSmall,
                   height: 14 / 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -93,7 +94,7 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
           AppLocalizations.of(context).readerPendingImportDesc,
           style: TextStyle(
             color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.8),
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
             height: 18 / 13,
           ),
         ),
@@ -255,7 +256,7 @@ class CandidateTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.readerColors.onSurface,
-                    fontSize: 14,
+                    fontSize: AppTypography.bodyLarge,
                     height: 18 / 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -283,7 +284,7 @@ class CandidateTile extends StatelessWidget {
                             icon: Icon(Icons.expand_more_rounded, size: 14),
                             style: TextStyle(
                               color: context.readerColors.onSurfaceVariant,
-                              fontSize: 11,
+                              fontSize: AppTypography.labelSmall,
                               fontWeight: FontWeight.w600,
                             ),
                             dropdownColor:
@@ -320,7 +321,7 @@ class CandidateTile extends StatelessWidget {
                         _contentKindLabel(context, selectedType),
                         style: TextStyle(
                           color: context.readerColors.onSurfaceVariant,
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySmall,
                           height: 16 / 12,
                         ),
                       ),
@@ -328,7 +329,7 @@ class CandidateTile extends StatelessWidget {
                       '  ·  ${candidate.sizeDisplay}',
                       style: TextStyle(
                         color: context.readerColors.onSurfaceVariant,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         height: 16 / 12,
                       ),
                     ),
@@ -363,7 +364,9 @@ class CandidateTile extends StatelessWidget {
                       )
                       : Text(
                         AppLocalizations.of(context).filesImport,
-                        style: const TextStyle(fontSize: 13),
+                        style: const TextStyle(
+                          fontSize: AppTypography.bodyMedium,
+                        ),
                       ),
             ),
           ),
@@ -412,7 +415,7 @@ class _ReparseSectionState extends ConsumerState<ReparseSection> {
               AppLocalizations.of(context).readerReparse,
               style: TextStyle(
                 color: context.readerColors.onSurface,
-                fontSize: 18,
+                fontSize: AppTypography.titleLarge,
                 height: 24 / 18,
                 fontWeight: FontWeight.w700,
               ),
@@ -428,7 +431,7 @@ class _ReparseSectionState extends ConsumerState<ReparseSection> {
                 AppLocalizations.of(context).readerBookCount(items.length),
                 style: TextStyle(
                   color: context.readerColors.onSurfaceVariant,
-                  fontSize: 11,
+                  fontSize: AppTypography.labelSmall,
                   height: 14 / 11,
                   fontWeight: FontWeight.w700,
                 ),
@@ -441,7 +444,7 @@ class _ReparseSectionState extends ConsumerState<ReparseSection> {
           AppLocalizations.of(context).readerReparseDesc,
           style: TextStyle(
             color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.8),
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
             height: 18 / 13,
           ),
         ),
@@ -551,7 +554,7 @@ class _ReparseTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.readerColors.onSurface,
-                    fontSize: 14,
+                    fontSize: AppTypography.bodyLarge,
                     height: 18 / 14,
                     fontWeight: FontWeight.w600,
                   ),
@@ -561,7 +564,7 @@ class _ReparseTile extends StatelessWidget {
                   '${readerTypeLabel(AppLocalizations.of(context), item.itemType)}  ·  ${item.authorName ?? AppLocalizations.of(context).readerUnknownAuthor}',
                   style: TextStyle(
                     color: context.readerColors.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     height: 16 / 12,
                   ),
                 ),
@@ -596,7 +599,9 @@ class _ReparseTile extends StatelessWidget {
                       )
                       : Text(
                         AppLocalizations.of(context).readerReparse,
-                        style: const TextStyle(fontSize: 13),
+                        style: const TextStyle(
+                          fontSize: AppTypography.bodyMedium,
+                        ),
                       ),
             ),
           ),

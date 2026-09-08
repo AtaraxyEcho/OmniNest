@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 
 class ReaderSectionHeader extends StatelessWidget {
@@ -28,7 +29,7 @@ class ReaderSectionHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.readerColors.onSurface,
-                  fontSize: 24,
+                  fontSize: AppTypography.headlineSmall,
                   height: 30 / 24,
                   fontWeight: FontWeight.w800,
                 ),
@@ -40,7 +41,7 @@ class ReaderSectionHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.readerColors.onSurfaceVariant,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   height: 16 / 12,
                   fontWeight: FontWeight.w500,
                 ),

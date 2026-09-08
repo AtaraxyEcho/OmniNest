@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 
 /// 新版分区标题：衬线中文主标题 + 英文辅助小字 + 条目计数 + 副标题 + 底部分隔线。
@@ -67,7 +68,10 @@ class MovieRedesignSectionHeader extends StatelessWidget {
                 const SizedBox(width: 10),
                 Text(
                   l10n.videoRedesignItemsCount(count!),
-                  style: text.mono(size: 12, color: palette.mutedForeground),
+                  style: text.mono(
+                    size: AppTypography.bodySmall,
+                    color: palette.mutedForeground,
+                  ),
                 ),
               ],
             ],

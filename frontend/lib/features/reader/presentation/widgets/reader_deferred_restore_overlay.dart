@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 延迟显示阅读位置恢复遮罩，避免缓存命中时闪烁加载画面。
@@ -60,7 +61,7 @@ class _ReaderDeferredRestoreOverlayState
             Text(
               AppLocalizations.of(context).readerRestoringProgress,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 color: settings.onSurfaceColor.withValues(alpha: 0.64),
               ),
             ),

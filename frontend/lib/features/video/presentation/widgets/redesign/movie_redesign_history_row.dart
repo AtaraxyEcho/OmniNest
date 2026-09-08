@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 
 /// 观看历史行数据：标题、副信息、缩略图与时间文案由调用方组装。
@@ -100,14 +101,17 @@ class _MovieRedesignHistoryRowState extends State<MovieRedesignHistoryRow> {
                         entry.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: text.body(size: 14, weight: FontWeight.w500),
+                        style: text.body(
+                          size: AppTypography.bodyLarge,
+                          weight: FontWeight.w500,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         entry.subtitle,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: text.mono(size: 12),
+                        style: text.mono(size: AppTypography.bodySmall),
                       ),
                     ],
                   ),
@@ -117,18 +121,27 @@ class _MovieRedesignHistoryRowState extends State<MovieRedesignHistoryRow> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
                     children: [
-                      Text(entry.timeText, style: text.mono(size: 12)),
+                      Text(
+                        entry.timeText,
+                        style: text.mono(size: AppTypography.bodySmall),
+                      ),
                       const SizedBox(height: 2),
                       Text(
                         entry.progressText,
-                        style: text.mono(size: 12, color: palette.primary),
+                        style: text.mono(
+                          size: AppTypography.bodySmall,
+                          color: palette.primary,
+                        ),
                       ),
                     ],
                   ),
                 ] else
                   Text(
                     entry.progressText,
-                    style: text.mono(size: 12, color: palette.primary),
+                    style: text.mono(
+                      size: AppTypography.bodySmall,
+                      color: palette.primary,
+                    ),
                   ),
                 if (entry.onDelete != null)
                   AnimatedOpacity(
