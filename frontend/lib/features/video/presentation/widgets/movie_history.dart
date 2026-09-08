@@ -84,7 +84,7 @@ class HistorySection extends StatelessWidget {
                   onTap:
                       item.videoItemId.isEmpty
                           ? null
-                          : () => context.go('/video/${item.videoItemId}/play'),
+                          : () => context.push('/video/${item.videoItemId}'),
                   onDelete: onDelete == null ? null : () => onDelete!(item),
                 ),
             ],

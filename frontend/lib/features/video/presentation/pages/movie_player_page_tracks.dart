@@ -66,6 +66,12 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
     _loadedUrl = playbackUrl;
     final generation = ++_openGeneration;
 
+    // 续播：未看完且有历史进度时从上次位置起播（已完成则从头）。
+    final history =
+        ref.read(movieItemHistoryProvider(widget.videoItemId)).asData?.value;
+    final resumeSeconds =
+        history == null || history.completed ? 0 : history.positionSeconds;
+
     // 取消上一次的 tracks 监听
     _tracksSub?.cancel();
 
@@ -74,8 +80,14 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
         return;
       }
       try {
-        debugPrint('[_openIfNeeded] 正在打开播放器...');
-        await _player.open(Media(playbackUrl), play: true);
+        debugPrint('[_openIfNeeded] 正在打开播放器... resumeSeconds=$resumeSeconds');
+        await _player.open(
+          Media(
+            playbackUrl,
+            start: resumeSeconds > 0 ? Duration(seconds: resumeSeconds) : null,
+          ),
+          play: true,
+        );
         if (!mounted || generation != _openGeneration) {
           return;
         }
