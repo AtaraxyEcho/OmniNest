@@ -50,6 +50,7 @@ class ReaderItem {
     required this.title,
     required this.itemType,
     required this.updatedAt,
+    this.createdAt,
     this.fileNodeId,
     this.authorName,
     this.coverUrl,
@@ -84,6 +85,7 @@ class ReaderItem {
       language: json['language']?.toString(),
       rating: _nullableDouble(json['rating']),
       progressPercent: _nullableDouble(json['progressPercent']),
+      createdAt: _parseDateTime(json['createdAt']),
       updatedAt: _parseDateTime(json['updatedAt']),
       addedToBookshelf: _asBool(json['addedToBookshelf']),
       spaceType: json['spaceType']?.toString() ?? 'PERSONAL',
@@ -100,6 +102,7 @@ class ReaderItem {
   }
 
   final String id;
+  final DateTime? createdAt;
   final String? fileNodeId;
   final String itemType;
   final String title;

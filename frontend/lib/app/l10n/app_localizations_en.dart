@@ -2621,6 +2621,81 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get adminTopBarPortal => 'Portal';
+
+  @override
+  String get adminShellTitle => 'OmniNest Admin';
+
+  @override
+  String get adminShellSubtitle => 'Central Console';
+
+  @override
+  String get adminRolePillLabel => 'Admin';
+
+  @override
+  String get adminRoleSuperAdmin => 'Super Admin';
+
+  @override
+  String get adminRoleAdmin => 'Admin';
+
+  @override
+  String get adminRoleMember => 'Member';
+
+  @override
+  String get adminRoleGuest => 'Guest';
+
+  @override
+  String get adminUserStatusActive => 'Active';
+
+  @override
+  String get adminUserStatusDisabled => 'Disabled';
+
+  @override
+  String adminStorageUsed(Object size) {
+    return 'Used $size';
+  }
+
+  @override
+  String adminStorageFileCount(Object count) {
+    return '$count files';
+  }
+
+  @override
+  String adminOverviewTasksTotal(Object count) {
+    return '$count tasks';
+  }
+
+  @override
+  String adminAnalyticsDays(Object days) {
+    return '${days}d';
+  }
+
+  @override
+  String get adminAnalyticsLive => 'LIVE';
+
+  @override
+  String adminTaskThroughputTooltip(Object completed, Object failed) {
+    return '$completed done · $failed err';
+  }
+
+  @override
+  String get adminLoadCpu => 'CPU';
+
+  @override
+  String get adminLoadMemory => 'MEM';
+
+  @override
+  String get adminLoadDisk => 'DISK';
+
+  @override
+  String get adminLoadJvm => 'JVM';
+
+  @override
+  String adminMonitoringStepMinutes(Object minutes) {
+    return '${minutes}min step';
+  }
+
+  @override
   String get adminSystemMonitoring => 'System Monitoring';
 
   @override
@@ -4210,18 +4285,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStatusDisabled => 'Disabled';
 
   @override
-  String get adminRoleSuperAdmin => 'Super Admin';
-
-  @override
-  String get adminRoleAdmin => 'Admin';
-
-  @override
-  String get adminRoleMember => 'Member';
-
-  @override
-  String get adminRoleGuest => 'Guest';
-
-  @override
   String get adminGroupOverview => 'Overview';
 
   @override
@@ -4436,6 +4499,54 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerStatsDayUnit => 'days';
+
+  @override
+  String get readerDetailInfo => 'About';
+
+  @override
+  String get readerDetailChapters => 'Chapters';
+
+  @override
+  String get readerDetailAnnotations => 'Annotations';
+
+  @override
+  String get readerDetailBookmarks => 'Bookmarks';
+
+  @override
+  String get readerDetailProgress => 'Progress';
+
+  @override
+  String get readerDetailComplete => 'Complete';
+
+  @override
+  String get readerDetailType => 'Type';
+
+  @override
+  String get readerDetailLanguage => 'Language';
+
+  @override
+  String get readerDetailAdded => 'Added';
+
+  @override
+  String get readerDetailLastRead => 'Last read';
+
+  @override
+  String get readerDetailWords => 'Words';
+
+  @override
+  String get readerDetailMinRead => 'min read';
+
+  @override
+  String get readerDetailEditMeta => 'Edit metadata';
+
+  @override
+  String get readerDetailReparse => 'Reparse';
+
+  @override
+  String get readerDetailNoAnn => 'No annotations yet.';
+
+  @override
+  String get readerDetailNoBm => 'No bookmarks yet.';
 
   @override
   String get readerNavComics => 'Comics';

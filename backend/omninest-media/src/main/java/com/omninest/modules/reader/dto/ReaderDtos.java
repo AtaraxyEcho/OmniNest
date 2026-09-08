@@ -34,6 +34,7 @@ public final class ReaderDtos {
             String publisher,
             String language,
             BigDecimal rating,
+            Instant createdAt,
             Instant updatedAt,
             boolean addedToBookshelf,
             /** 当前用户阅读进度（0-1），未阅读时为 null */

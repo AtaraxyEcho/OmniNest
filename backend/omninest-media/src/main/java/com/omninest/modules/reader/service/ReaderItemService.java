@@ -606,6 +606,7 @@ public class ReaderItemService {
                 item.getPublisher(),
                 item.getLanguage(),
                 item.getRating(),
+                item.getCreatedAt(),
                 item.getUpdatedAt(),
                 addedToBookshelf,
                 progressPercent,

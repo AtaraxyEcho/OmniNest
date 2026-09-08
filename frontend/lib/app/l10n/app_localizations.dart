@@ -4897,6 +4897,132 @@ abstract class AppLocalizations {
   /// **'{percent}% used'**
   String adminPercentUsed(Object percent);
 
+  /// No description provided for @adminTopBarPortal.
+  ///
+  /// In en, this message translates to:
+  /// **'Portal'**
+  String get adminTopBarPortal;
+
+  /// No description provided for @adminShellTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'OmniNest Admin'**
+  String get adminShellTitle;
+
+  /// No description provided for @adminShellSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Central Console'**
+  String get adminShellSubtitle;
+
+  /// No description provided for @adminRolePillLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin'**
+  String get adminRolePillLabel;
+
+  /// No description provided for @adminRoleSuperAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Super Admin'**
+  String get adminRoleSuperAdmin;
+
+  /// No description provided for @adminRoleAdmin.
+  ///
+  /// In en, this message translates to:
+  /// **'Admin'**
+  String get adminRoleAdmin;
+
+  /// No description provided for @adminRoleMember.
+  ///
+  /// In en, this message translates to:
+  /// **'Member'**
+  String get adminRoleMember;
+
+  /// No description provided for @adminRoleGuest.
+  ///
+  /// In en, this message translates to:
+  /// **'Guest'**
+  String get adminRoleGuest;
+
+  /// No description provided for @adminUserStatusActive.
+  ///
+  /// In en, this message translates to:
+  /// **'Active'**
+  String get adminUserStatusActive;
+
+  /// No description provided for @adminUserStatusDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabled'**
+  String get adminUserStatusDisabled;
+
+  /// No description provided for @adminStorageUsed.
+  ///
+  /// In en, this message translates to:
+  /// **'Used {size}'**
+  String adminStorageUsed(Object size);
+
+  /// No description provided for @adminStorageFileCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} files'**
+  String adminStorageFileCount(Object count);
+
+  /// No description provided for @adminOverviewTasksTotal.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} tasks'**
+  String adminOverviewTasksTotal(Object count);
+
+  /// No description provided for @adminAnalyticsDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days}d'**
+  String adminAnalyticsDays(Object days);
+
+  /// No description provided for @adminAnalyticsLive.
+  ///
+  /// In en, this message translates to:
+  /// **'LIVE'**
+  String get adminAnalyticsLive;
+
+  /// No description provided for @adminTaskThroughputTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'{completed} done · {failed} err'**
+  String adminTaskThroughputTooltip(Object completed, Object failed);
+
+  /// No description provided for @adminLoadCpu.
+  ///
+  /// In en, this message translates to:
+  /// **'CPU'**
+  String get adminLoadCpu;
+
+  /// No description provided for @adminLoadMemory.
+  ///
+  /// In en, this message translates to:
+  /// **'MEM'**
+  String get adminLoadMemory;
+
+  /// No description provided for @adminLoadDisk.
+  ///
+  /// In en, this message translates to:
+  /// **'DISK'**
+  String get adminLoadDisk;
+
+  /// No description provided for @adminLoadJvm.
+  ///
+  /// In en, this message translates to:
+  /// **'JVM'**
+  String get adminLoadJvm;
+
+  /// No description provided for @adminMonitoringStepMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}min step'**
+  String adminMonitoringStepMinutes(Object minutes);
+
   /// No description provided for @adminSystemMonitoring.
   ///
   /// In en, this message translates to:
@@ -7799,30 +7925,6 @@ abstract class AppLocalizations {
   /// **'Disabled'**
   String get adminStatusDisabled;
 
-  /// No description provided for @adminRoleSuperAdmin.
-  ///
-  /// In en, this message translates to:
-  /// **'Super Admin'**
-  String get adminRoleSuperAdmin;
-
-  /// No description provided for @adminRoleAdmin.
-  ///
-  /// In en, this message translates to:
-  /// **'Admin'**
-  String get adminRoleAdmin;
-
-  /// No description provided for @adminRoleMember.
-  ///
-  /// In en, this message translates to:
-  /// **'Member'**
-  String get adminRoleMember;
-
-  /// No description provided for @adminRoleGuest.
-  ///
-  /// In en, this message translates to:
-  /// **'Guest'**
-  String get adminRoleGuest;
-
   /// No description provided for @adminGroupOverview.
   ///
   /// In en, this message translates to:
@@ -8218,6 +8320,102 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'days'**
   String get readerStatsDayUnit;
+
+  /// No description provided for @readerDetailInfo.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get readerDetailInfo;
+
+  /// No description provided for @readerDetailChapters.
+  ///
+  /// In en, this message translates to:
+  /// **'Chapters'**
+  String get readerDetailChapters;
+
+  /// No description provided for @readerDetailAnnotations.
+  ///
+  /// In en, this message translates to:
+  /// **'Annotations'**
+  String get readerDetailAnnotations;
+
+  /// No description provided for @readerDetailBookmarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmarks'**
+  String get readerDetailBookmarks;
+
+  /// No description provided for @readerDetailProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress'**
+  String get readerDetailProgress;
+
+  /// No description provided for @readerDetailComplete.
+  ///
+  /// In en, this message translates to:
+  /// **'Complete'**
+  String get readerDetailComplete;
+
+  /// No description provided for @readerDetailType.
+  ///
+  /// In en, this message translates to:
+  /// **'Type'**
+  String get readerDetailType;
+
+  /// No description provided for @readerDetailLanguage.
+  ///
+  /// In en, this message translates to:
+  /// **'Language'**
+  String get readerDetailLanguage;
+
+  /// No description provided for @readerDetailAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Added'**
+  String get readerDetailAdded;
+
+  /// No description provided for @readerDetailLastRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Last read'**
+  String get readerDetailLastRead;
+
+  /// No description provided for @readerDetailWords.
+  ///
+  /// In en, this message translates to:
+  /// **'Words'**
+  String get readerDetailWords;
+
+  /// No description provided for @readerDetailMinRead.
+  ///
+  /// In en, this message translates to:
+  /// **'min read'**
+  String get readerDetailMinRead;
+
+  /// No description provided for @readerDetailEditMeta.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit metadata'**
+  String get readerDetailEditMeta;
+
+  /// No description provided for @readerDetailReparse.
+  ///
+  /// In en, this message translates to:
+  /// **'Reparse'**
+  String get readerDetailReparse;
+
+  /// No description provided for @readerDetailNoAnn.
+  ///
+  /// In en, this message translates to:
+  /// **'No annotations yet.'**
+  String get readerDetailNoAnn;
+
+  /// No description provided for @readerDetailNoBm.
+  ///
+  /// In en, this message translates to:
+  /// **'No bookmarks yet.'**
+  String get readerDetailNoBm;
 
   /// No description provided for @readerNavComics.
   ///

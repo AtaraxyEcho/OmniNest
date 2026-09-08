@@ -185,7 +185,7 @@ class ReaderDashboardServiceTest {
     private ReaderItemDto createMockDto(UUID id) {
         return new ReaderItemDto(
             id, "EPUB", "TEXT", "Test Book", null, null, null, null,
-            null, null, Instant.now(), false, null, "PERSONAL", 0,
+            null, null, Instant.now(), Instant.now(), false, null, "PERSONAL", 0,
             "READY", null, null
         );
     }

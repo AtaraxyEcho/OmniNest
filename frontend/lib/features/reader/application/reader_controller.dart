@@ -41,6 +41,18 @@ final readerDashboardProvider = FutureProvider<ReaderDashboard>((ref) async {
   return ref.watch(readerApiProvider).dashboard();
 });
 
+/// 条目批注（详情页批注页签）
+final readerItemAnnotationsProvider = FutureProvider.autoDispose
+    .family<List<ReaderAnnotation>, String>((ref, itemId) {
+      return ref.watch(readerApiProvider).annotations(itemId);
+    });
+
+/// 条目书签（详情页书签页签）
+final readerItemBookmarksProvider = FutureProvider.autoDispose
+    .family<List<ReaderBookmark>, String>((ref, itemId) {
+      return ref.watch(readerApiProvider).bookmarks(itemId);
+    });
+
 /// 条目详情（含进度）
 final readerItemDetailProvider = FutureProvider.autoDispose
     .family<ReaderItemDetail, String>((ref, itemId) {

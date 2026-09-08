@@ -2557,6 +2557,81 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get adminTopBarPortal => '门户';
+
+  @override
+  String get adminShellTitle => 'OmniNest 管理台';
+
+  @override
+  String get adminShellSubtitle => '集中管控中枢';
+
+  @override
+  String get adminRolePillLabel => '管理';
+
+  @override
+  String get adminRoleSuperAdmin => '超级管理员';
+
+  @override
+  String get adminRoleAdmin => '管理员';
+
+  @override
+  String get adminRoleMember => '成员';
+
+  @override
+  String get adminRoleGuest => '访客';
+
+  @override
+  String get adminUserStatusActive => '启用';
+
+  @override
+  String get adminUserStatusDisabled => '禁用';
+
+  @override
+  String adminStorageUsed(Object size) {
+    return '已用 $size';
+  }
+
+  @override
+  String adminStorageFileCount(Object count) {
+    return '$count 个文件';
+  }
+
+  @override
+  String adminOverviewTasksTotal(Object count) {
+    return '$count 个任务';
+  }
+
+  @override
+  String adminAnalyticsDays(Object days) {
+    return '$days 天';
+  }
+
+  @override
+  String get adminAnalyticsLive => '实时';
+
+  @override
+  String adminTaskThroughputTooltip(Object completed, Object failed) {
+    return '$completed 完成 · $failed 失败';
+  }
+
+  @override
+  String get adminLoadCpu => 'CPU';
+
+  @override
+  String get adminLoadMemory => '内存';
+
+  @override
+  String get adminLoadDisk => '磁盘';
+
+  @override
+  String get adminLoadJvm => 'JVM';
+
+  @override
+  String adminMonitoringStepMinutes(Object minutes) {
+    return '$minutes 分钟粒度';
+  }
+
+  @override
   String get adminSystemMonitoring => '系统监控';
 
   @override
@@ -4082,18 +4157,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStatusDisabled => '禁用';
 
   @override
-  String get adminRoleSuperAdmin => '超级管理员';
-
-  @override
-  String get adminRoleAdmin => '管理员';
-
-  @override
-  String get adminRoleMember => '成员';
-
-  @override
-  String get adminRoleGuest => '访客';
-
-  @override
   String get adminGroupOverview => '总览';
 
   @override
@@ -4294,6 +4357,54 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerStatsDayUnit => '天';
+
+  @override
+  String get readerDetailInfo => '简介';
+
+  @override
+  String get readerDetailChapters => '章节';
+
+  @override
+  String get readerDetailAnnotations => '批注';
+
+  @override
+  String get readerDetailBookmarks => '书签';
+
+  @override
+  String get readerDetailProgress => '进度';
+
+  @override
+  String get readerDetailComplete => '已读完';
+
+  @override
+  String get readerDetailType => '类型';
+
+  @override
+  String get readerDetailLanguage => '语言';
+
+  @override
+  String get readerDetailAdded => '添加时间';
+
+  @override
+  String get readerDetailLastRead => '上次阅读';
+
+  @override
+  String get readerDetailWords => '字数';
+
+  @override
+  String get readerDetailMinRead => '分钟';
+
+  @override
+  String get readerDetailEditMeta => '编辑元数据';
+
+  @override
+  String get readerDetailReparse => '重新解析';
+
+  @override
+  String get readerDetailNoAnn => '暂无批注。';
+
+  @override
+  String get readerDetailNoBm => '暂无书签。';
 
   @override
   String get readerNavComics => '漫画';

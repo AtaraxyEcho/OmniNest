@@ -9,14 +9,17 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_comic_service.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
-import 'package:omninest/features/reader/domain/reader_chapter_hierarchy.dart';
+import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/domain/reader_status_constants.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_detail_page.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_item_detail_widgets.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
+/// 阅读条目详情页：Hero（封面/进度/阅读动作）+ 简介/章节/批注/书签页签。
+///
+/// 文本条目按参考设计重绘；漫画条目延用 ComicDetailPage（来源与目录管理）。
 class ReaderItemDetailPage extends ConsumerStatefulWidget {
   const ReaderItemDetailPage({required this.itemId, super.key});
 
@@ -44,7 +47,6 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
 
     return detailAsync.when(
       data: (detail) {
-        // 漫画条目使用专用详情页
         final isComic = detail.item.isComic;
         if (isComic) {
           return _ComicDetailWrapper(item: detail.item, itemId: widget.itemId);
@@ -67,69 +69,25 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
 
         // 从本地解析获取章节列表（后端不返回章节）
         final parsedBook = bookAsync.asData?.value;
-        final chapters =
-            parsedBook?.chapters
-                .asMap()
-                .entries
-                .map(
-                  (e) => ReaderChapter.fromParsed(
-                    e.key,
-                    e.value.title,
-                    contentPath: e.value.contentPath,
-                    level: e.value.level,
-                  ),
-                )
-                .toList() ??
-            <ReaderChapter>[];
-        if (chapters.isEmpty) {
-          return Scaffold(
-            backgroundColor: context.readerColors.surface,
-            body: AppErrorView(
-              message: AppLocalizations.of(context).readerChapterLoadFailed,
-              onBack: _handleBack,
-              onRetry: () => ref.invalidate(parsedBookProvider(widget.itemId)),
-            ),
-          );
-        }
-
-        // 使用解析的元数据覆盖 API 数据（如果 API 数据是临时文件名）
         final effectiveItem = _buildEffectiveItem(detail.item, parsedBook);
 
         return Scaffold(
           backgroundColor: context.readerColors.surface,
-          body: _DetailContent(
-            detail: ReaderItemDetail(
-              item: effectiveItem,
-              progress: detail.progress,
-              chapters: chapters,
-            ),
+          body: _TextDetailContent(
+            item: effectiveItem,
+            progress: detail.progress,
+            chapters: parsedBook?.chapters ?? const [],
             bookshelfBusy: _bookshelfBusy,
-            onToggleBookshelf: () async {
-              setState(() => _bookshelfBusy = true);
-              try {
-                await ref
-                    .read(readerCenterControllerProvider.notifier)
-                    .toggleBookshelf(detail.item.id);
-                if (mounted) {
-                  ref.invalidate(readerItemDetailProvider(widget.itemId));
-                  ref.invalidate(readerCenterControllerProvider);
-                }
-              } on Exception {
-                if (context.mounted) {
-                  final l10n = AppLocalizations.of(context);
-                  showReaderSnackBar(context, l10n.readerOperationFailed);
-                }
-              } finally {
-                if (mounted) {
-                  setState(() => _bookshelfBusy = false);
-                }
-              }
-            },
-            onReadChapter: (chapter) {
+            onToggleBookshelf: _toggleBookshelf,
+            onReadChapter: (chapterId) {
               context.push(
-                '/reader/items/${detail.item.id}/chapters/${chapter.id}',
+                '/reader/items/${detail.item.id}/chapters/$chapterId',
               );
             },
+            onEditMetadata:
+                () => context.push('/reader/items/${detail.item.id}/metadata'),
+            onReparse: _reparse,
+            onDelete: _deleteItem,
           ),
         );
       },
@@ -151,14 +109,80 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
     );
   }
 
+  Future<void> _toggleBookshelf() async {
+    setState(() => _bookshelfBusy = true);
+    try {
+      await ref
+          .read(readerCenterControllerProvider.notifier)
+          .toggleBookshelf(widget.itemId);
+      if (mounted) {
+        ref.invalidate(readerItemDetailProvider(widget.itemId));
+        ref.invalidate(readerCenterControllerProvider);
+      }
+    } on Exception {
+      if (!mounted) return;
+      showReaderSnackBar(
+        context,
+        AppLocalizations.of(context).readerOperationFailed,
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _bookshelfBusy = false);
+      }
+    }
+  }
+
+  Future<void> _reparse() async {
+    try {
+      await ref
+          .read(readerCenterControllerProvider.notifier)
+          .reparseItem(widget.itemId);
+      if (mounted) {
+        ref.invalidate(readerItemDetailProvider(widget.itemId));
+      }
+    } on Exception {
+      if (!mounted) return;
+      showReaderSnackBar(
+        context,
+        AppLocalizations.of(context).readerOperationFailed,
+      );
+    }
+  }
+
+  Future<void> _deleteItem() async {
+    final itemTitle =
+        ref
+            .read(readerItemDetailProvider(widget.itemId))
+            .asData
+            ?.value
+            .item
+            .title ??
+        '';
+    try {
+      await ref
+          .read(readerCenterControllerProvider.notifier)
+          .deleteItem(widget.itemId);
+      if (!mounted) return;
+      showReaderSnackBar(
+        context,
+        AppLocalizations.of(context).readerDeletedItem(itemTitle),
+      );
+      context.go('/reader');
+    } on Exception {
+      if (!mounted) return;
+      showReaderSnackBar(
+        context,
+        AppLocalizations.of(context).readerDeleteItemFailed,
+      );
+    }
+  }
+
   /// 使用解析的元数据覆盖 API 数据（如果 API 数据是临时文件名）
   ReaderItem _buildEffectiveItem(ReaderItem apiItem, ParsedBook? parsedBook) {
     if (parsedBook == null) return apiItem;
 
     final parsedTitle = parsedBook.title;
     final parsedAuthor = parsedBook.author;
-
-    // 如果解析出的标题与 API 标题不同，说明 API 存的是文件名
     final needsTitleUpdate =
         parsedTitle != null &&
         parsedTitle.isNotEmpty &&
@@ -172,6 +196,7 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
 
     return ReaderItem(
       id: apiItem.id,
+      createdAt: apiItem.createdAt,
       fileNodeId: apiItem.fileNodeId,
       itemType: apiItem.itemType,
       title: needsTitleUpdate ? parsedTitle : apiItem.title,
@@ -198,26 +223,55 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
   }
 }
 
-class _DetailContent extends StatefulWidget {
-  const _DetailContent({
-    required this.detail,
+enum _DetailTab { info, chapters, annotations, bookmarks }
+
+class _TextDetailContent extends ConsumerStatefulWidget {
+  const _TextDetailContent({
+    required this.item,
+    required this.progress,
+    required this.chapters,
     required this.bookshelfBusy,
     required this.onToggleBookshelf,
     required this.onReadChapter,
+    required this.onEditMetadata,
+    required this.onReparse,
+    required this.onDelete,
   });
 
-  final ReaderItemDetail detail;
+  final ReaderItem item;
+  final ReaderProgress? progress;
+  final List<ParsedChapter> chapters;
   final bool bookshelfBusy;
   final VoidCallback onToggleBookshelf;
-  final ValueChanged<ReaderChapter> onReadChapter;
+  final ValueChanged<String> onReadChapter;
+  final VoidCallback onEditMetadata;
+  final VoidCallback onReparse;
+  final VoidCallback onDelete;
 
   @override
-  State<_DetailContent> createState() => _DetailContentState();
+  ConsumerState<_TextDetailContent> createState() => _TextDetailContentState();
 }
 
-class _DetailContentState extends State<_DetailContent> {
-  bool _showFullDescription = false;
-  final ScrollController _chapterScrollController = ScrollController();
+class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
+  _DetailTab _tab = _DetailTab.info;
+  ReaderProgressSnapshot? _progressSnapshot;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProgressSnapshot();
+  }
+
+  Future<void> _loadProgressSnapshot() async {
+    final local = ReaderProgressSnapshot.fromLocal(
+      await ReaderLocalProgress.loadLatest(widget.item.id),
+    );
+    final server = ReaderProgressSnapshot.fromServer(widget.progress);
+    if (!mounted) return;
+    setState(() {
+      _progressSnapshot = ReaderProgressSnapshot.latest(local, server);
+    });
+  }
 
   void _handleBack() {
     if (context.canPop()) {
@@ -227,449 +281,672 @@ class _DetailContentState extends State<_DetailContent> {
     context.go('/reader');
   }
 
-  bool _showAllChapters = true;
-
-  /// 已折叠的卷标题 ID 集合（默认全部展开）
-  final Set<String> _collapsedVolumes = {};
-
-  static const _collapsedMaxLines = 3;
-
-  /// 切换卷标题的展开/折叠状态
-  void _toggleVolume(String volumeId) {
-    setState(() {
-      if (_collapsedVolumes.contains(volumeId)) {
-        _collapsedVolumes.remove(volumeId);
-      } else {
-        _collapsedVolumes.add(volumeId);
-      }
-    });
+  List<ReaderChapter> _readerChapters() {
+    return widget.chapters
+        .asMap()
+        .entries
+        .map(
+          (e) => ReaderChapter.fromParsed(
+            e.key,
+            e.value.title,
+            contentPath: e.value.contentPath,
+            level: e.value.level,
+          ),
+        )
+        .toList();
   }
 
-  /// 判断某卷标题是否包含子章节
-  bool _hasChildren(ReaderChapter volume, List<ReaderChapter> allChapters) {
-    return ReaderChapterHierarchy.hasChildren(allChapters, volume);
-  }
-
-  @override
-  void dispose() {
-    _chapterScrollController.dispose();
-    super.dispose();
+  void _startReading() {
+    final chapters = _readerChapters();
+    final chapter = ReaderProgressSnapshot.resolveChapter(
+      chapters,
+      _progressSnapshot,
+    );
+    if (chapter != null) {
+      widget.onReadChapter(chapter.id);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.detail.item;
-    final chapters = widget.detail.chapters;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final layout = ReaderDetailLayout.resolve(constraints.maxWidth);
-        final information = _buildBookInformation(
-          item,
-          isDesktop: layout.isDesktop,
-        );
-        final description = _buildDescriptionSection(item);
-        final directory =
-            chapters.isEmpty
-                ? const SizedBox.shrink()
-                : _buildChapterSection(chapters, layout);
-
-        return SafeArea(
-          child: SingleChildScrollView(
-            padding: EdgeInsets.only(
-              top: layout.isDesktop ? 20 : 8,
-              bottom: 12,
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // 返回条
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                tooltip: l10n.coreBack,
+                onPressed: _handleBack,
+                icon: Icon(Icons.arrow_back_rounded, color: rc.onSurface),
+              ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: layout.horizontalPadding,
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 860),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHero(context),
+                      const SizedBox(height: 32),
+                      _buildTabBar(context),
+                      const SizedBox(height: 24),
+                      _buildTabContent(context),
+                    ],
                   ),
-                  child: _buildTopBar(context),
                 ),
-                SizedBox(height: layout.isDesktop ? 20 : 12),
-                Center(
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: layout.maxContentWidth,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHero(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final item = widget.item;
+    final progress = (item.progressPercent ?? 0).clamp(0.0, 1.0);
+    final complete = progress >= 1;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 144,
+          height: 216,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: ReaderBookCover(item: item, size: ReaderCoverSize.large),
+          ),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                readerTypeLabel(l10n, item.itemType),
+                style: TextStyle(
+                  color: rc.onSurfaceVariant,
+                  fontSize: 10,
+                  height: 1.2,
+                  letterSpacing: 2.4,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                item.title,
+                style: TextStyle(
+                  color: rc.onSurface,
+                  fontSize: 24,
+                  height: 1.25,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              if (item.authorName?.isNotEmpty == true) ...[
+                const SizedBox(height: 4),
+                Text(
+                  item.authorName!,
+                  style: TextStyle(
+                    color: rc.onSurfaceVariant,
+                    fontSize: 13,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Text(
+                    l10n.readerDetailProgress,
+                    style: TextStyle(
+                      color: rc.onSurfaceVariant,
+                      fontSize: 12,
+                      height: 1.2,
                     ),
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: layout.horizontalPadding,
+                  ),
+                  const Spacer(),
+                  Text(
+                    complete
+                        ? l10n.readerDetailComplete
+                        : '${(progress * 100).round()}%',
+                    style: TextStyle(
+                      color: complete ? rc.reading : rc.onSurface,
+                      fontSize: 12,
+                      height: 1.2,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Container(
+                height: 2,
+                color: rc.outlineVariant,
+                alignment: Alignment.centerLeft,
+                child: FractionallySizedBox(
+                  widthFactor: progress,
+                  child: Container(height: 2, color: rc.reading),
+                ),
+              ),
+              const SizedBox(height: 20),
+              _buildActionRow(context),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionRow(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final hasProgress = _progressSnapshot?.hasReadableProgress == true;
+    final primaryLabel =
+        hasProgress ? l10n.readerContinueReading : l10n.readerStartReading;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        FilledButton.icon(
+          onPressed: widget.chapters.isEmpty ? null : () => _startReading(),
+          icon: const Icon(Icons.play_arrow_rounded, size: 18),
+          label: Text(primaryLabel),
+          style: FilledButton.styleFrom(
+            backgroundColor: rc.primary,
+            foregroundColor: rc.surface,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(2),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          ),
+        ),
+        OutlinedButton.icon(
+          onPressed: widget.bookshelfBusy ? null : widget.onToggleBookshelf,
+          icon: Icon(
+            Icons.bookmark_rounded,
+            size: 18,
+            color:
+                widget.item.addedToBookshelf
+                    ? rc.onSurface
+                    : rc.onSurfaceVariant,
+          ),
+          label: Text(
+            widget.item.addedToBookshelf
+                ? l10n.readerAddedToBookshelf
+                : l10n.readerAddToBookshelf,
+          ),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(
+              color:
+                  widget.item.addedToBookshelf
+                      ? rc.onSurface
+                      : rc.outlineVariant,
+            ),
+            foregroundColor:
+                widget.item.addedToBookshelf
+                    ? rc.onSurface
+                    : rc.onSurfaceVariant,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(2),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          ),
+        ),
+        PopupMenuButton<String>(
+          tooltip: AppLocalizations.of(context).coreMore,
+          icon: Icon(Icons.more_horiz_rounded, color: rc.onSurfaceVariant),
+          onSelected: (value) {
+            if (value == 'metadata') widget.onEditMetadata();
+            if (value == 'reparse') widget.onReparse();
+            if (value == 'delete') _confirmDelete(context);
+          },
+          itemBuilder:
+              (context) => [
+                PopupMenuItem(
+                  value: 'metadata',
+                  child: Text(l10n.readerDetailEditMeta),
+                ),
+                PopupMenuItem(
+                  value: 'reparse',
+                  child: Text(l10n.readerDetailReparse),
+                ),
+                PopupMenuItem(
+                  value: 'delete',
+                  child: Text(
+                    l10n.readerDeleteBook,
+                    style: TextStyle(color: rc.danger),
+                  ),
+                ),
+              ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(l10n.readerConfirmDelete),
+            content: Text(l10n.readerConfirmDeleteMsg(widget.item.title)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(l10n.coreCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: context.readerColors.danger,
+                ),
+                child: Text(l10n.filesDelete),
+              ),
+            ],
+          ),
+    );
+    if (confirmed == true) {
+      widget.onDelete();
+    }
+  }
+
+  Widget _buildTabBar(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final tabs = {
+      _DetailTab.info: l10n.readerDetailInfo,
+      _DetailTab.chapters: l10n.readerDetailChapters,
+      _DetailTab.annotations: l10n.readerDetailAnnotations,
+      _DetailTab.bookmarks: l10n.readerDetailBookmarks,
+    };
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: rc.outlineVariant.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final entry in tabs.entries)
+              InkWell(
+                onTap: () => setState(() => _tab = entry.key),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  height: 40,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color:
+                            _tab == entry.key
+                                ? rc.onSurface
+                                : Colors.transparent,
+                        width: 2,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (layout.isDesktop)
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                DetailCover(
-                                  item: item,
-                                  width: layout.coverWidth,
-                                  height: layout.coverHeight,
-                                ),
-                                SizedBox(width: layout.summaryGap),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      information,
-                                      SizedBox(height: layout.sectionGap),
-                                      Divider(
-                                        color: context
-                                            .readerColors
-                                            .outlineVariant
-                                            .withValues(alpha: 0.30),
-                                      ),
-                                      SizedBox(height: layout.sectionGap),
-                                      description,
-                                      if (chapters.isNotEmpty) ...[
-                                        SizedBox(height: layout.sectionGap),
-                                        directory,
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            )
-                          else ...[
-                            Align(
-                              child: DetailCover(
-                                item: item,
-                                width: layout.coverWidth,
-                                height: layout.coverHeight,
-                              ),
-                            ),
-                            SizedBox(height: layout.summaryGap),
-                            information,
-                            SizedBox(height: layout.sectionGap),
-                            Divider(
-                              color: context.readerColors.outlineVariant
-                                  .withValues(alpha: 0.30),
-                            ),
-                            SizedBox(height: layout.sectionGap),
-                            description,
-                            if (chapters.isNotEmpty) ...[
-                              SizedBox(height: layout.sectionGap),
-                              directory,
-                            ],
-                          ],
-                          const SizedBox(height: 40),
-                        ],
-                      ),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    entry.value,
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.2,
+                      fontWeight:
+                          _tab == entry.key ? FontWeight.w600 : FontWeight.w400,
+                      color:
+                          _tab == entry.key
+                              ? rc.onSurface
+                              : rc.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabContent(BuildContext context) {
+    switch (_tab) {
+      case _DetailTab.info:
+        return _buildInfoTab(context);
+      case _DetailTab.chapters:
+        return _buildChaptersTab(context);
+      case _DetailTab.annotations:
+        return _buildAnnotationsTab(context);
+      case _DetailTab.bookmarks:
+        return _buildBookmarksTab(context);
+    }
+  }
+
+  Widget _buildInfoTab(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final item = widget.item;
+    final wordCount = widget.chapters.fold<int>(
+      0,
+      (sum, c) => sum + c.charCount,
+    );
+    final lastReadAt = _progressSnapshot?.updatedAt ?? item.updatedAt;
+    final rows = <(String, String)>[
+      (l10n.readerDetailType, readerTypeLabel(l10n, item.itemType)),
+      if (item.language?.isNotEmpty == true)
+        (l10n.readerDetailLanguage, item.language!.toUpperCase()),
+      (
+        l10n.readerDetailWords,
+        '${wordCount >= 1000 ? '${wordCount ~/ 1000}k' : wordCount}',
+      ),
+      if (item.createdAt != null)
+        (l10n.readerDetailAdded, _formatDateTime(item.createdAt!)),
+      if (lastReadAt != null)
+        (l10n.readerDetailLastRead, _formatDateTime(lastReadAt)),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          item.description?.isNotEmpty == true
+              ? item.description!
+              : l10n.readerNoDescription,
+          style: TextStyle(
+            color: rc.onSurface.withValues(alpha: 0.8),
+            fontSize: 13,
+            height: 1.7,
+          ),
+        ),
+        const SizedBox(height: 24),
+        for (final row in rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                SizedBox(
+                  width: 110,
+                  child: Text(
+                    row.$1,
+                    style: TextStyle(
+                      color: rc.onSurfaceVariant,
+                      fontSize: 11,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    row.$2,
+                    style: TextStyle(
+                      color: rc.onSurface,
+                      fontSize: 13,
+                      height: 1.3,
+                      fontFeatures: const [FontFeature.tabularFigures()],
                     ),
                   ),
                 ),
               ],
             ),
           ),
+      ],
+    );
+  }
+
+  Widget _buildChaptersTab(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final chapters = widget.chapters;
+    if (chapters.isEmpty) {
+      return Text(
+        l10n.readerNoDescription,
+        style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+      );
+    }
+    final currentChapterId =
+        _progressSnapshot?.hasReadableProgress == true
+            ? _progressSnapshot!.chapterId
+            : null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < chapters.length; i++)
+          InkWell(
+            onTap: () => widget.onReadChapter('chapter_$i'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 22,
+                    child: Text(
+                      '${i + 1}'.padLeft(2, '0'),
+                      style: TextStyle(
+                        color: rc.onSurfaceVariant,
+                        fontSize: 10,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Text(
+                      chapters[i].title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: rc.onSurface,
+                        fontSize: 13,
+                        height: 1.3,
+                        fontWeight:
+                            'chapter_$i' == currentChapterId
+                                ? FontWeight.w700
+                                : FontWeight.w400,
+                      ),
+                    ),
+                  ),
+                  if ('chapter_$i' == currentChapterId) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: rc.reading,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    _estimateMinutes(chapters[i].charCount),
+                    style: TextStyle(
+                      color: rc.onSurfaceVariant,
+                      fontSize: 10,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  String _estimateMinutes(int charCount) {
+    final minutes = (charCount / 500).ceil().clamp(1, 999);
+    return '$minutes ${AppLocalizations.of(context).readerDetailMinRead}';
+  }
+
+  Widget _buildAnnotationsTab(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final annotationsAsync = ref.watch(
+      readerItemAnnotationsProvider(widget.item.id),
+    );
+    return annotationsAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error:
+          (_, _) => Text(
+            l10n.readerOperationFailed,
+            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+          ),
+      data: (annotations) {
+        if (annotations.isEmpty) {
+          return Text(
+            l10n.readerDetailNoAnn,
+            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final ann in annotations)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Container(
+                  decoration: BoxDecoration(
+                    border: Border(
+                      left: BorderSide(color: _parseColor(ann.color), width: 2),
+                    ),
+                  ),
+                  padding: const EdgeInsets.only(left: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        ann.highlightText ?? '',
+                        style: TextStyle(
+                          color: rc.onSurface,
+                          fontSize: 13,
+                          height: 1.6,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                      if (ann.note?.isNotEmpty == true) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          ann.note!,
+                          style: TextStyle(
+                            color: rc.onSurfaceVariant,
+                            fontSize: 11,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+          ],
         );
       },
     );
   }
 
-  Widget _buildBookInformation(ReaderItem item, {required bool isDesktop}) {
-    final alignment = isDesktop ? TextAlign.left : TextAlign.center;
-    final wrapAlignment =
-        isDesktop ? WrapAlignment.start : WrapAlignment.center;
-    return Column(
-      crossAxisAlignment:
-          isDesktop ? CrossAxisAlignment.start : CrossAxisAlignment.center,
-      children: [
-        Text(
-          item.title,
-          textAlign: alignment,
-          style: TextStyle(
-            color: context.readerColors.onSurface,
-            fontSize: isDesktop ? 30 : 24,
-            height: 1.25,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        if (item.authorName?.isNotEmpty == true) ...[
-          const SizedBox(height: 8),
-          Text(
-            item.authorName!,
-            textAlign: alignment,
-            style: TextStyle(
-              color: context.readerColors.onSurfaceVariant,
-              fontSize: 15,
-              height: 1.4,
-            ),
-          ),
-        ],
-        const SizedBox(height: 18),
-        _buildCapsuleRow(item, alignment: wrapAlignment),
-        if (item.genres?.isNotEmpty == true) ...[
-          const SizedBox(height: 10),
-          _buildGenreTags(item.genres!, alignment: wrapAlignment),
-        ],
-        const SizedBox(height: 28),
-        FutureBuilder<Map<String, dynamic>?>(
-          future: ReaderLocalProgress.loadLatest(item.id),
-          builder: (context, snapshot) {
-            return ReaderDetailActions(
-              detail: widget.detail,
-              bookshelfBusy: widget.bookshelfBusy,
-              onToggleBookshelf: widget.onToggleBookshelf,
-              onReadChapter: widget.onReadChapter,
-              localPayload: snapshot.data,
-              alignment: isDesktop ? Alignment.centerLeft : Alignment.center,
-            );
-          },
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTopBar(BuildContext context) {
-    return Row(
-      children: [
-        IconButton(
-          tooltip: AppLocalizations.of(context).coreBack,
-          onPressed: _handleBack,
-          icon: Icon(
-            Icons.arrow_back_rounded,
-            color: context.readerColors.onSurface,
-          ),
-          style: IconButton.styleFrom(backgroundColor: Colors.transparent),
-        ),
-        Spacer(),
-      ],
-    );
-  }
-
-  Widget _buildCapsuleRow(ReaderItem item, {required WrapAlignment alignment}) {
-    final capsules = <CapsuleData>[
-      CapsuleData(
-        readerTypeLabel(AppLocalizations.of(context), item.itemType),
-        context.readerColors.primary,
-      ),
-      if (item.rating != null && item.rating! > 0)
-        CapsuleData(
-          '${item.rating!.toStringAsFixed(1)} ★',
-          context.readerColors.success,
-        ),
-      if (item.publisher?.isNotEmpty == true)
-        CapsuleData(item.publisher!, context.readerColors.tertiary),
-      if (item.serialStatus?.isNotEmpty == true)
-        CapsuleData(item.serialStatus!, context.readerColors.success),
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      alignment: alignment,
-      children: [
-        for (final c in capsules)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: c.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              c.label,
-              style: TextStyle(
-                color: c.color,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildGenreTags(
-    List<String> genres, {
-    required WrapAlignment alignment,
-  }) {
-    return Wrap(
-      spacing: 6,
-      runSpacing: 4,
-      alignment: alignment,
-      children: [
-        for (final genre in genres)
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: context.readerColors.surfaceContainerHighest.withValues(
-                alpha: 0.6,
-              ),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: context.readerColors.outlineVariant.withValues(
-                  alpha: 0.24,
-                ),
-              ),
-            ),
-            child: Text(
-              genre,
-              style: TextStyle(
-                color: context.readerColors.onSurfaceVariant,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildDescriptionSection(ReaderItem item) {
-    final l10n = AppLocalizations.of(context);
-    final desc =
-        item.description?.isNotEmpty == true
-            ? item.description!
-            : l10n.readerNoDescription;
-    // 120 字符阈值：约两行半中文字（每行约 25 字），超过时显示展开按钮
-    final hasLongDesc = desc.length > 120;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.readerDescription,
-          style: TextStyle(
-            color: context.readerColors.onSurface,
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        SizedBox(height: 8),
-        Text(
-          desc,
-          maxLines: _showFullDescription ? null : _collapsedMaxLines,
-          overflow: _showFullDescription ? null : TextOverflow.ellipsis,
-          style: TextStyle(
-            color: context.readerColors.onSurfaceVariant,
-            fontSize: 14,
-            height: 1.75,
-          ),
-        ),
-        if (hasLongDesc)
-          TextButton(
-            onPressed:
-                () => setState(
-                  () => _showFullDescription = !_showFullDescription,
-                ),
-            style: TextButton.styleFrom(
-              padding: const EdgeInsets.only(top: 6),
-              minimumSize: const Size(0, 32),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              foregroundColor: context.readerColors.primary,
-            ),
-            child: Text(
-              _showFullDescription
-                  ? AppLocalizations.of(context).readerCollapse
-                  : AppLocalizations.of(context).readerExpandFull,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildChapterSection(
-    List<ReaderChapter> chapters,
-    ReaderDetailLayout layout,
-  ) {
-    final hierarchyVisible = ReaderChapterHierarchy.visibleChapters(
-      chapters,
-      _collapsedVolumes,
-    );
-    final visibleChapters =
-        _showAllChapters
-            ? hierarchyVisible
-            : hierarchyVisible.take(layout.previewChapterCount).toList();
-
-    Widget chapterTile(ReaderChapter chapter) {
-      return MinimalChapterTile(
-        chapter: chapter,
-        onTap: () => widget.onReadChapter(chapter),
-        isParent: _hasChildren(chapter, chapters),
-        isExpanded: !_collapsedVolumes.contains(chapter.id),
-        onToggleExpand: () => _toggleVolume(chapter.id),
-      );
+  Color _parseColor(String? colorStr) {
+    final hex = colorStr?.replaceAll('#', '');
+    if (hex == null || hex.length != 6) {
+      return context.readerColors.reading;
     }
+    return Color(int.parse('FF$hex', radix: 16));
+  }
 
-    final chapterList =
-        _showAllChapters
-            ? ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: layout.directoryMaxHeight),
-              child: Scrollbar(
-                controller: _chapterScrollController,
-                thumbVisibility: layout.isDesktop,
-                child: ListView.builder(
-                  controller: _chapterScrollController,
-                  shrinkWrap: true,
-                  padding: EdgeInsets.zero,
-                  itemCount: visibleChapters.length,
-                  itemBuilder:
-                      (context, index) => chapterTile(visibleChapters[index]),
+  Widget _buildBookmarksTab(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final bookmarksAsync = ref.watch(
+      readerItemBookmarksProvider(widget.item.id),
+    );
+    return bookmarksAsync.when(
+      loading: () => const SizedBox.shrink(),
+      error:
+          (_, _) => Text(
+            l10n.readerOperationFailed,
+            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+          ),
+      data: (bookmarks) {
+        if (bookmarks.isEmpty) {
+          return Text(
+            l10n.readerDetailNoBm,
+            style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+          );
+        }
+        return Column(
+          children: [
+            for (final bookmark in bookmarks)
+              InkWell(
+                onTap:
+                    () => widget.onReadChapter(
+                      _resolveBookmarkChapterId(bookmark),
+                    ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Row(
+                    children: [
+                      Icon(Icons.bookmark_rounded, size: 14, color: rc.reading),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          bookmark.note?.isNotEmpty == true
+                              ? bookmark.note!
+                              : widget.item.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: rc.onSurface,
+                            fontSize: 13,
+                            height: 1.3,
+                          ),
+                        ),
+                      ),
+                      if (bookmark.createdAt != null)
+                        Text(
+                          _formatDateTime(bookmark.createdAt!),
+                          style: TextStyle(
+                            color: rc.onSurfaceVariant,
+                            fontSize: 10,
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
-            )
-            : Column(
-              children: [
-                for (final chapter in visibleChapters) chapterTile(chapter),
-              ],
-            );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: () => setState(() => _showAllChapters = !_showAllChapters),
-          borderRadius: BorderRadius.circular(8),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Row(
-              children: [
-                Text(
-                  AppLocalizations.of(context).readerTableOfContents,
-                  style: TextStyle(
-                    color: context.readerColors.onSurface,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Text(
-                  AppLocalizations.of(
-                    context,
-                  ).readerTotalChapters(chapters.length),
-                  style: TextStyle(
-                    color: context.readerColors.onSurfaceVariant,
-                    fontSize: 12,
-                  ),
-                ),
-                const Spacer(),
-                Icon(
-                  _showAllChapters
-                      ? Icons.expand_less_rounded
-                      : Icons.expand_more_rounded,
-                  color: context.readerColors.onSurfaceVariant,
-                  size: 20,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        AnimatedSize(
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeInOut,
-          alignment: Alignment.topCenter,
-          child: chapterList,
-        ),
-      ],
+          ],
+        );
+      },
     );
+  }
+
+  String _resolveBookmarkChapterId(ReaderBookmark bookmark) {
+    final snapshotChapterId = _progressSnapshot?.chapterId;
+    if (snapshotChapterId != null && snapshotChapterId.isNotEmpty) {
+      return snapshotChapterId;
+    }
+    return 'chapter_0';
+  }
+
+  String _formatDateTime(DateTime time) {
+    final y = time.year.toString();
+    final m = time.month.toString().padLeft(2, '0');
+    final d = time.day.toString().padLeft(2, '0');
+    final hh = time.hour.toString().padLeft(2, '0');
+    final mm = time.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
   }
 }
 
