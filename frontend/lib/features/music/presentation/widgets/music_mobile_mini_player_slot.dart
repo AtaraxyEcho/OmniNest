@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
@@ -171,7 +172,7 @@ class _MusicMobileMiniPlayerSlotState
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           color: colors.onSurface,
-                                          fontSize: 13,
+                                          fontSize: AppTypography.bodyMedium,
                                           fontWeight: FontWeight.w700,
                                         ),
                                       ),
@@ -182,7 +183,7 @@ class _MusicMobileMiniPlayerSlotState
                                         overflow: TextOverflow.ellipsis,
                                         style: TextStyle(
                                           color: colors.onSurfaceVariant,
-                                          fontSize: 11,
+                                          fontSize: AppTypography.labelSmall,
                                         ),
                                       ),
                                     ],

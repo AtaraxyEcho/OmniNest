@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 
@@ -206,7 +207,7 @@ class _ProfileNavigation extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: colors.onSurfaceVariant,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                       ),
                     ),
                   ],
@@ -259,7 +260,7 @@ class _ProfileNavigation extends StatelessWidget {
                   _roleLabel(l10n),
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                   ),
                 ),
               ),

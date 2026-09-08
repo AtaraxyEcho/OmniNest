@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
@@ -229,7 +230,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.musicColors.onSurface,
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -243,7 +244,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.musicColors.onSurfaceVariant,
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                       ),
                     ),
                   ),
@@ -307,7 +308,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.musicColors.onSurface,
-                        fontSize: 16,
+                        fontSize: AppTypography.titleMedium,
                         fontWeight: FontWeight.w700,
                       ),
                     ),

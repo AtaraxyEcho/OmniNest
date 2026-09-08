@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -48,12 +49,15 @@ class MusicDeckSearchField extends StatelessWidget {
             controller: controller,
             focusNode: focusNode,
             onChanged: onChanged,
-            style: TextStyle(color: colors.onSurface, fontSize: 13),
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: AppTypography.bodyMedium,
+            ),
             decoration: InputDecoration(
               hintText: l10n.musicSearchHint,
               hintStyle: TextStyle(
                 color: colors.onSurfaceVariant,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
               ),
               prefixIcon: Icon(
                 Icons.search_rounded,
@@ -323,7 +327,10 @@ class _SearchSourceGroup extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
               child: Text(
                 failure!,
-                style: const TextStyle(color: Color(0xFFFFB4AB), fontSize: 12),
+                style: const TextStyle(
+                  color: Color(0xFFFFB4AB),
+                  fontSize: AppTypography.bodySmall,
+                ),
               ),
             )
           else if (!loading && items.isEmpty)
@@ -333,7 +340,7 @@ class _SearchSourceGroup extends StatelessWidget {
                 l10n.musicDeckNoSearchResults,
                 style: TextStyle(
                   color: context.musicColors.onSurfaceVariant,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                 ),
               ),
             )
@@ -373,7 +380,10 @@ class _SearchTrackRow extends StatelessWidget {
           track.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: context.musicColors.onSurface, fontSize: 13),
+          style: TextStyle(
+            color: context.musicColors.onSurface,
+            fontSize: AppTypography.bodyMedium,
+          ),
         ),
         subtitle: Text(
           '${track.artistName} · ${track.albumTitle}',
@@ -381,7 +391,7 @@ class _SearchTrackRow extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: context.musicColors.onSurfaceVariant,
-            fontSize: 11,
+            fontSize: AppTypography.labelSmall,
           ),
         ),
         trailing: MusicPlaybackButton(

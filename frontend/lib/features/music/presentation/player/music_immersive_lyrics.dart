@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
@@ -78,7 +79,7 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics> {
           AppLocalizations.of(context).musicNotPlaying,
           style: TextStyle(
             color: widget.palette.muted,
-            fontSize: 18 * widget.scale,
+            fontSize: AppTypography.titleLarge * widget.scale,
           ),
         ),
       );
@@ -90,7 +91,7 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics> {
           textAlign: TextAlign.center,
           style: TextStyle(
             color: widget.palette.text,
-            fontSize: 34 * widget.scale,
+            fontSize: AppTypography.displaySmall * widget.scale,
             fontWeight: FontWeight.w800,
           ),
         ),

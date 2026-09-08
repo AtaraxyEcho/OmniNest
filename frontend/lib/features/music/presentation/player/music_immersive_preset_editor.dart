@@ -61,7 +61,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                         l10n.portalMusicVisualizerEdit,
                         style: TextStyle(
                           color: widget.palette.text,
-                          fontSize: 18,
+                          fontSize: AppTypography.titleLarge,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -589,7 +589,7 @@ class _VisualEditorSection extends StatelessWidget {
               title,
               style: TextStyle(
                 color: palette.text.withValues(alpha: 0.82),
-                fontSize: 14,
+                fontSize: AppTypography.bodyLarge,
                 fontWeight: FontWeight.w800,
               ),
             ),

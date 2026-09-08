@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 
@@ -189,7 +190,7 @@ class _MusicDeckCreatePlaylistDialogState
                   : l10n.musicCreatePlaylist,
               style: TextStyle(
                 color: colors.onSurface,
-                fontSize: 20,
+                fontSize: AppTypography.titleLarge,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -290,7 +291,7 @@ class _MusicDeckCreatePlaylistDialogState
           textAlign: TextAlign.center,
           style: TextStyle(
             color: context.musicColors.onSurfaceVariant,
-            fontSize: 11,
+            fontSize: AppTypography.labelSmall,
             height: 1.35,
           ),
         ),

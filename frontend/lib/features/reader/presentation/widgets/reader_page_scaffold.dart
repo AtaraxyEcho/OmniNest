@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -55,6 +56,8 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
     required this.child,
     this.onRefresh,
     this.header,
+    this.headerPadding,
+    this.enablePopGuard = true,
     super.key,
   });
 
@@ -67,6 +70,12 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
 
   /// 固定页头（置于内容滚动区上方，对应参考设计 sticky header）
   final Widget? header;
+
+  /// 页头内边距；默认随书库等页头缩进，全宽页头（详情返回条）传 EdgeInsets.zero
+  final EdgeInsetsGeometry? headerPadding;
+
+  /// 是否拦截系统返回（模块主页面 true）；详情等推入页传 false 以保留自然返回
+  final bool enablePopGuard;
 
   @override
   ConsumerState<ReaderPageScaffold> createState() => _ReaderPageScaffoldState();
@@ -100,6 +109,7 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
     final contentArea = _ReaderPageScrollArea(
       onRefresh: widget.onRefresh,
       header: widget.header,
+      headerPadding: widget.headerPadding,
       child: widget.child,
     );
 
@@ -107,7 +117,7 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1024;
         return PopScope(
-          canPop: false,
+          canPop: !widget.enablePopGuard,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
             _goFallback();
@@ -177,7 +187,7 @@ class _ReaderModuleTopBar extends StatelessWidget {
               label: Text(
                 l10n.readerPortal,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   height: 18 / 13,
                   fontWeight: FontWeight.w700,
                   color: rc.onSurfaceVariant,
@@ -196,7 +206,7 @@ class _ReaderModuleTopBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: rc.onSurface,
-                        fontSize: 14,
+                        fontSize: AppTypography.bodyLarge,
                         height: 1.2,
                         fontFamily: kReaderSerifFamily,
                         fontStyle: FontStyle.italic,
@@ -217,7 +227,7 @@ class _ReaderModuleTopBar extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: rc.onSurfaceVariant,
-                        fontSize: 14,
+                        fontSize: AppTypography.bodyLarge,
                         height: 1.2,
                         fontFamily: kReaderSerifFamily,
                         fontStyle: FontStyle.italic,
@@ -306,7 +316,7 @@ class _SidebarNavItem extends StatelessWidget {
             Text(
               target.localizedLabel(l10n),
               style: TextStyle(
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 height: 1.2,
                 color: selected ? rc.sidebarSelectedFg : rc.onSurfaceVariant,
                 fontWeight: selected ? FontWeight.w500 : FontWeight.w400,
@@ -360,6 +370,7 @@ class _ReaderModuleBottomNav extends StatelessWidget {
                         Text(
                           target.localizedLabel(l10n),
                           style: TextStyle(
+                            // ignore: font_size_whitelist
                             fontSize: 10,
                             height: 1.2,
                             color:
@@ -385,11 +396,13 @@ class _ReaderPageScrollArea extends StatelessWidget {
   const _ReaderPageScrollArea({
     required this.child,
     this.header,
+    this.headerPadding,
     this.onRefresh,
   });
 
   final Widget child;
   final Widget? header;
+  final EdgeInsetsGeometry? headerPadding;
   final Future<void> Function()? onRefresh;
 
   @override
@@ -408,7 +421,9 @@ class _ReaderPageScrollArea extends StatelessWidget {
       children: [
         if (header != null)
           Padding(
-            padding: EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 0, 0),
+            padding:
+                headerPadding ??
+                EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 0, 0),
             child: header!,
           ),
         Expanded(

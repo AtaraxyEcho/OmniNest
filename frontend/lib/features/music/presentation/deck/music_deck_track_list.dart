@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
@@ -170,7 +171,7 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: foreground,
-                            fontSize: 14,
+                            fontSize: AppTypography.bodyLarge,
                             fontWeight:
                                 widget.selected
                                     ? FontWeight.w700
@@ -184,7 +185,7 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: colors.onSurfaceVariant,
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                           ),
                         ),
                       ],
@@ -200,7 +201,7 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySmall,
                         ),
                       ),
                     ),
@@ -216,7 +217,7 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                         textAlign: TextAlign.end,
                         style: TextStyle(
                           color: colors.onSurfaceVariant,
-                          fontSize: 11,
+                          fontSize: AppTypography.labelSmall,
                         ),
                       ),
                     ),
@@ -314,7 +315,7 @@ class _MusicDeckEmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: colors.onSurface,
-                fontSize: 18,
+                fontSize: AppTypography.titleLarge,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -324,7 +325,7 @@ class _MusicDeckEmptyState extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: colors.onSurfaceVariant,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 height: 1.5,
               ),
             ),

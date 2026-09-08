@@ -20,7 +20,7 @@ class _ContentHeader extends StatelessWidget {
           title,
           style: TextStyle(
             color: context.musicColors.onSurface,
-            fontSize: 24,
+            fontSize: AppTypography.headlineSmall,
             fontWeight: FontWeight.w800,
           ),
         ),
@@ -31,7 +31,7 @@ class _ContentHeader extends StatelessWidget {
           overflow: TextOverflow.ellipsis,
           style: TextStyle(
             color: context.musicColors.onSurfaceVariant,
-            fontSize: 12,
+            fontSize: AppTypography.bodySmall,
             height: 1.4,
           ),
         ),
@@ -122,7 +122,7 @@ class _CollectionDetailHeader extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: context.musicColors.onSurfaceVariant,
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                           ),
                         ),
                       ),
@@ -236,7 +236,7 @@ class _SectionTitle extends StatelessWidget {
             title,
             style: TextStyle(
               color: context.musicColors.onSurface,
-              fontSize: 18,
+              fontSize: AppTypography.titleLarge,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -270,7 +270,7 @@ class _InlineEmpty extends StatelessWidget {
           textAlign: TextAlign.center,
           style: TextStyle(
             color: context.musicColors.onSurfaceVariant,
-            fontSize: 13,
+            fontSize: AppTypography.bodyMedium,
           ),
         ),
       ),
@@ -298,7 +298,7 @@ class _PartialFailureBanner extends StatelessWidget {
               message,
               style: TextStyle(
                 color: context.musicColors.onSurface,
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
               ),
             ),
           ),

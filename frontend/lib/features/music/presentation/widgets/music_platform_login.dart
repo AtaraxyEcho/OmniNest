@@ -72,7 +72,7 @@ class PlatformLoginSheet extends ConsumerWidget {
                         'Platform Accounts',
                         style: TextStyle(
                           color: colors.onSurface,
-                          fontSize: 18,
+                          fontSize: AppTypography.titleLarge,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -174,7 +174,7 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
                     'Scan QR code with Netease Cloud Music app to log in',
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -204,7 +204,7 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
                       label: Text(
                         _loadingQr ? 'Generating...' : 'Scan QR Login',
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -291,7 +291,7 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                     'Log in at y.qq.com in your browser, then copy the full cookie and paste below.',
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -299,7 +299,7 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                     'Must include qm_keyst or qqmusic_key for playback.',
                     style: TextStyle(
                       color: colors.onSurfaceVariant.withValues(alpha: 0.65),
-                      fontSize: 11,
+                      fontSize: AppTypography.labelSmall,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -308,7 +308,7 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                     maxLines: 3,
                     style: TextStyle(
                       color: colors.onSurface,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       fontFamily: AppTypography.monoFamily,
                       fontFamilyFallback: AppTypography.monoFamilyFallback,
                     ),
@@ -346,7 +346,10 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                     const SizedBox(height: 8),
                     Text(
                       _error!,
-                      style: TextStyle(color: colors.danger, fontSize: 12),
+                      style: TextStyle(
+                        color: colors.danger,
+                        fontSize: AppTypography.bodySmall,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 14),
@@ -376,7 +379,7 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                       label: Text(
                         _verifying ? 'Verifying...' : 'Verify & Save',
                         style: const TextStyle(
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -433,7 +436,7 @@ class _PlatformCard extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: colors.onSurface,
-                  fontSize: 15,
+                  fontSize: AppTypography.titleMedium,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -490,7 +493,7 @@ class _LoggedInInfo extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: colors.onSurface,
-                        fontSize: 15,
+                        fontSize: AppTypography.titleMedium,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -510,7 +513,7 @@ class _LoggedInInfo extends StatelessWidget {
                         'VIP',
                         style: TextStyle(
                           color: accentColor,
-                          fontSize: 10,
+                          fontSize: AppTypography.labelSmall,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -523,7 +526,7 @@ class _LoggedInInfo extends StatelessWidget {
                 'ID: ${user.userId}',
                 style: TextStyle(
                   color: colors.onSurfaceVariant.withValues(alpha: 0.6),
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                 ),
               ),
             ],
@@ -538,7 +541,10 @@ class _LoggedInInfo extends StatelessWidget {
           onPressed: onLogout,
           child: const Text(
             'Logout',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              fontSize: AppTypography.bodyMedium,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
       ],
@@ -682,14 +688,17 @@ class _QrLoginDialogState extends ConsumerState<_QrLoginDialog> {
               l10n.musicQrLoginTitle,
               style: TextStyle(
                 color: colors.onSurface,
-                fontSize: 18,
+                fontSize: AppTypography.titleLarge,
                 fontWeight: FontWeight.w800,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               l10n.musicQrLoginInstruction,
-              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 13),
+              style: TextStyle(
+                color: colors.onSurfaceVariant,
+                fontSize: AppTypography.bodyMedium,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -726,7 +735,7 @@ class _QrLoginDialogState extends ConsumerState<_QrLoginDialog> {
                                 _displayStatus == _QrLoginDisplayStatus.error
                             ? colors.danger
                             : colors.onSurfaceVariant,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

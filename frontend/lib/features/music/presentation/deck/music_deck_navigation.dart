@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_models.dart';
@@ -51,7 +52,7 @@ class MusicDeckNavigation extends StatelessWidget {
                       l10n.musicDeckTitle,
                       style: TextStyle(
                         color: colors.onSurface,
-                        fontSize: 16,
+                        fontSize: AppTypography.titleMedium,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -103,7 +104,7 @@ class MusicDeckNavigation extends StatelessWidget {
                             l10n.musicDeckAccounts,
                             style: TextStyle(
                               color: colors.onSurfaceVariant,
-                              fontSize: 12,
+                              fontSize: AppTypography.bodySmall,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -168,7 +169,7 @@ class _MusicDeckDestination extends StatelessWidget {
                             selected
                                 ? colors.onSurface
                                 : colors.onSurfaceVariant,
-                        fontSize: 13,
+                        fontSize: AppTypography.bodyMedium,
                         fontWeight:
                             selected ? FontWeight.w700 : FontWeight.w500,
                       ),

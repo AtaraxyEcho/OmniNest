@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
 
@@ -128,10 +129,10 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
             }
             return null;
           },
-      style: const TextStyle(fontSize: 14),
+      style: const TextStyle(fontSize: AppTypography.bodyLarge),
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: const TextStyle(fontSize: 13),
+        labelStyle: const TextStyle(fontSize: AppTypography.bodyMedium),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 14,
           vertical: 12,

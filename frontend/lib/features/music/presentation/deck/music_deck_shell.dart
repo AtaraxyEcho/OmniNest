@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/theme/motion_token.dart';
@@ -300,7 +301,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                       _section.label(l10n),
                       style: TextStyle(
                         color: colors.onSurface,
-                        fontSize: 19,
+                        fontSize: AppTypography.titleLarge,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -581,7 +582,7 @@ class _SourceFilterButton extends StatelessWidget {
                 const SizedBox(width: 7),
                 Text(
                   AppLocalizations.of(context).musicDeckSources,
-                  style: const TextStyle(fontSize: 12),
+                  style: const TextStyle(fontSize: AppTypography.bodySmall),
                 ),
               ],
             ),
@@ -667,7 +668,7 @@ class _WideNowPanel extends ConsumerWidget {
             AppLocalizations.of(context).musicDeckNowPlaying,
             style: TextStyle(
               color: colors.onSurface,
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -686,7 +687,7 @@ class _WideNowPanel extends ConsumerWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: colors.onSurface,
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -696,14 +697,17 @@ class _WideNowPanel extends ConsumerWidget {
                 AppLocalizations.of(context).musicDeckSelectTrack,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: colors.onSurfaceVariant, fontSize: 11),
+            style: TextStyle(
+              color: colors.onSurfaceVariant,
+              fontSize: AppTypography.labelSmall,
+            ),
           ),
           const Spacer(),
           Text(
             AppLocalizations.of(context).musicDeckConnectedSources,
             style: TextStyle(
               color: colors.onSurfaceVariant,
-              fontSize: 11,
+              fontSize: AppTypography.labelSmall,
               fontWeight: FontWeight.w700,
             ),
           ),

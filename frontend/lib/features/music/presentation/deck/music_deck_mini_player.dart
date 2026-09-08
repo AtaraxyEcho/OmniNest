@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -161,7 +162,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _palette(context).text,
-                        fontSize: 13,
+                        fontSize: AppTypography.bodyMedium,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -173,7 +174,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: _palette(context).muted,
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                       ),
                     ),
                   ],
@@ -366,7 +367,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: _palette(context).text,
-                                  fontSize: 13,
+                                  fontSize: AppTypography.bodyMedium,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -377,7 +378,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                                 overflow: TextOverflow.ellipsis,
                                 style: TextStyle(
                                   color: _palette(context).muted,
-                                  fontSize: 11,
+                                  fontSize: AppTypography.labelSmall,
                                 ),
                               ),
                             ],
@@ -453,7 +454,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
 
   TextStyle get _timeStyle => TextStyle(
     color: _palette(context).muted,
-    fontSize: 10,
+    fontSize: AppTypography.labelSmall,
     fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
   );
 

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -491,7 +492,7 @@ class _ProfileIdentityHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.mobileColors.textPrimary,
-                  fontSize: 23,
+                  fontSize: AppTypography.headlineSmall,
                   fontWeight: FontWeight.w800,
                   height: 1.2,
                 ),
@@ -503,7 +504,7 @@ class _ProfileIdentityHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.mobileColors.textSecondary,
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   height: 1.35,
                 ),
               ),
@@ -529,7 +530,7 @@ class _AvatarFallback extends StatelessWidget {
           initial,
           style: TextStyle(
             color: context.mobileColors.textPrimary,
-            fontSize: 28,
+            fontSize: AppTypography.headlineMedium,
             fontWeight: FontWeight.w800,
           ),
         ),

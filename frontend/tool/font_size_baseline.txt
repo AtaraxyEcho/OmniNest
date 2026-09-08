@@ -1,26 +1,2 @@
 # 字号治理基线：每文件允许的裸数字字号违规数（格式：路径 数量）
 # 迁移批次完成后销号递减；白名单行使用 // ignore: font_size_whitelist
-lib/features/music/presentation/deck/music_deck_content.dart 2
-lib/features/music/presentation/deck/music_deck_content_support.dart 6
-lib/features/music/presentation/deck/music_deck_cover_grid.dart 3
-lib/features/music/presentation/deck/music_deck_create_playlist_dialog.dart 2
-lib/features/music/presentation/deck/music_deck_mini_player.dart 5
-lib/features/music/presentation/deck/music_deck_navigation.dart 3
-lib/features/music/presentation/deck/music_deck_primitives.dart 1
-lib/features/music/presentation/deck/music_deck_queue_sheet.dart 1
-lib/features/music/presentation/deck/music_deck_search.dart 6
-lib/features/music/presentation/deck/music_deck_shell.dart 6
-lib/features/music/presentation/deck/music_deck_track_list.dart 6
-lib/features/music/presentation/player/music_immersive_controls.dart 1
-lib/features/music/presentation/player/music_immersive_lyrics.dart 2
-lib/features/music/presentation/player/music_immersive_preset_editor.dart 2
-lib/features/music/presentation/player/music_mobile_now_playing.dart 4
-lib/features/music/presentation/widgets/music_mobile_mini_player_slot.dart 2
-lib/features/music/presentation/widgets/music_platform_login.dart 16
-lib/features/profile/presentation/widgets/change_password_dialog.dart 2
-lib/features/profile/presentation/widgets/profile_account_panel.dart 3
-lib/features/profile/presentation/widgets/profile_desktop_preferences.dart 5
-lib/features/profile/presentation/widgets/profile_desktop_shell.dart 2
-lib/features/profile/presentation/widgets/profile_mobile_content.dart 3
-lib/features/profile/presentation/widgets/profile_session_management_panel.dart 5
-lib/features/reader/presentation/widgets/reader_page_scaffold.dart 5

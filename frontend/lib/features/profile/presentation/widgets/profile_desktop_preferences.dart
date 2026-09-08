@@ -1,6 +1,7 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
@@ -68,7 +69,7 @@ class _ProfileWeatherCityCardState extends State<ProfileWeatherCityCard> {
           Text(
             l10n.profileWeatherCityHint,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
               color: colors.onSurfaceVariant.withValues(alpha: 0.7),
             ),
           ),
@@ -77,7 +78,10 @@ class _ProfileWeatherCityCardState extends State<ProfileWeatherCityCard> {
             TextField(
               controller: _controller,
               autofocus: true,
-              style: TextStyle(fontSize: 14, color: colors.onSurface),
+              style: TextStyle(
+                fontSize: AppTypography.bodyLarge,
+                color: colors.onSurface,
+              ),
               decoration: InputDecoration(
                 hintText: l10n.profileWeatherCityPlaceholder,
                 isDense: true,
@@ -277,7 +281,7 @@ class _PreferenceHeader extends StatelessWidget {
           child: Text(
             title,
             style: TextStyle(
-              fontSize: 15,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w700,
               color: colors.onSurface,
             ),
@@ -328,7 +332,7 @@ class _PreferenceSwitchTile extends StatelessWidget {
               Text(
                 title,
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                   fontWeight: FontWeight.w600,
                   color: colors.onSurface,
                 ),
@@ -338,7 +342,7 @@ class _PreferenceSwitchTile extends StatelessWidget {
                 Text(
                   subtitle!,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     color: colors.onSurfaceVariant,
                   ),
                 ),

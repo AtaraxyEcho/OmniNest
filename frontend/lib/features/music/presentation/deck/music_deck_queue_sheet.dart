@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
@@ -37,7 +38,7 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                   AppLocalizations.of(context).musicQueueTitle,
                   style: TextStyle(
                     color: context.musicColors.onSurface,
-                    fontSize: 18,
+                    fontSize: AppTypography.titleLarge,
                     fontWeight: FontWeight.w800,
                   ),
                 ),

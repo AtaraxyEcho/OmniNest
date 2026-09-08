@@ -240,7 +240,7 @@ class _GlassMusicProgress extends StatelessWidget {
   TextStyle _timeStyle() {
     return TextStyle(
       color: palette.text.withValues(alpha: 0.70),
-      fontSize: 11,
+      fontSize: AppTypography.labelSmall,
       fontFeatures: const [ui.FontFeature.tabularFigures()],
     );
   }

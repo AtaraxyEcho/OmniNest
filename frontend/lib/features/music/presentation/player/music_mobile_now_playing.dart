@@ -1,10 +1,11 @@
-﻿import 'dart:async';
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -77,7 +78,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Colors.white,
-                            fontSize: 15,
+                            fontSize: AppTypography.titleMedium,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
@@ -471,7 +472,7 @@ class _MobileTrackHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.mobileColors.textPrimary,
-                  fontSize: 24,
+                  fontSize: AppTypography.headlineSmall,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -484,7 +485,7 @@ class _MobileTrackHeader extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.64),
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                 ),
               ),
             ],
@@ -646,7 +647,7 @@ class _MobilePlaybackControls extends StatelessWidget {
 
   TextStyle get _timeStyle => TextStyle(
     color: Colors.white.withValues(alpha: 0.58),
-    fontSize: 11,
+    fontSize: AppTypography.labelSmall,
     fontFeatures: const <FontFeature>[FontFeature.tabularFigures()],
   );
 

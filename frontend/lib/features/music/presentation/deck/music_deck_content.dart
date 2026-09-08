@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/widgets/skeleton_shimmer.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
@@ -328,7 +329,7 @@ class _NowPlayingFocusStrip extends ConsumerWidget {
                             : l10n.musicDeckNowPlaying,
                         style: TextStyle(
                           color: context.musicColors.primary,
-                          fontSize: 10,
+                          fontSize: AppTypography.labelSmall,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
@@ -744,7 +745,7 @@ class _LocalManagementContent extends ConsumerWidget {
             ),
             style: TextStyle(
               color: context.musicColors.onSurfaceVariant,
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
             ),
           ),
         ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 
@@ -151,7 +152,7 @@ class _AccountHeader extends StatelessWidget {
                       role,
                       style: TextStyle(
                         color: colors.onPrimaryContainer,
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -206,7 +207,7 @@ class _AccountAvatar extends StatelessWidget {
         initial,
         style: TextStyle(
           color: colors.onPrimaryContainer,
-          fontSize: 26,
+          fontSize: AppTypography.headlineMedium,
           fontWeight: FontWeight.w700,
         ),
       ),
@@ -237,7 +238,7 @@ class _DetailItem extends StatelessWidget {
             label,
             style: TextStyle(
               color: colors.onSurfaceVariant,
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
               fontWeight: FontWeight.w600,
             ),
           ),
