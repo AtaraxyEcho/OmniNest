@@ -450,6 +450,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
           .copyWith(
             dashboard: next.dashboard,
             movies: next.movies,
+            tvSeries: next.tvSeries,
             animeSeries: next.animeSeries,
             recentItems: next.recentItems,
             continueWatching: next.continueWatching,
@@ -1102,18 +1103,13 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         ..add(section);
       final stillLoading = Set<MovieSection>.from(latest.loadingSections)
         ..remove(section);
-      final dashboard = MovieDashboard(
-        stats: latest.dashboard.stats,
-        recentlyAdded: latest.dashboard.recentlyAdded,
-        continueWatching: latest.dashboard.continueWatching,
-        series:
-            section == MovieSection.tvShows ? series : latest.dashboard.series,
-      );
+      // 剧集/动漫各写独立系列字段，互不覆盖；侧边栏计数与分区网格同源。
+      final updated =
+          section == MovieSection.tvShows
+              ? latest.copyWith(tvSeries: series)
+              : latest.copyWith(animeSeries: series);
       state = AsyncData(
-        latest.copyWith(
-          dashboard: dashboard,
-          animeSeries:
-              section == MovieSection.anime ? series : latest.animeSeries,
+        updated.copyWith(
           loadedSections: loaded,
           loadingSections: stillLoading,
           clearError: episodesLoaded,
@@ -1166,12 +1162,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     final tvSeries = results[2] as List<MovieSeries>;
     final animeList = results[3] as List<MovieSeries>;
     return MovieCenterState(
-      dashboard: MovieDashboard(
-        stats: dashboard.stats,
-        recentlyAdded: dashboard.recentlyAdded,
-        continueWatching: dashboard.continueWatching,
-        series: [...tvSeries, ...animeList],
-      ),
+      dashboard: dashboard,
       movies: moviePage.items,
       recentItems: dashboard.recentlyAdded,
       continueWatching: dashboard.continueWatching,
@@ -1179,6 +1170,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       watchHistory: const [],
       collections: const [],
       tasks: const [],
+      tvSeries: tvSeries,
       animeSeries: animeList,
       moviePage: moviePage.page,
       movieHasMore: moviePage.page + 1 < moviePage.totalPages,

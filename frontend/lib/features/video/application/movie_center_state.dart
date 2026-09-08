@@ -39,6 +39,7 @@ class MovieCenterState {
   const MovieCenterState({
     required this.dashboard,
     required this.movies,
+    this.tvSeries = const [],
     this.animeSeries = const [],
     required this.recentItems,
     required this.continueWatching,
@@ -70,6 +71,7 @@ class MovieCenterState {
 
   final MovieDashboard dashboard;
   final List<MovieVideoItem> movies;
+  final List<MovieSeries> tvSeries;
   final List<MovieSeries> animeSeries;
   final List<MovieVideoItem> recentItems;
   final List<MovieContinueWatching> continueWatching;
@@ -135,8 +137,7 @@ class MovieCenterState {
   }
 
   List<MovieSeries> get filteredSeries {
-    var result =
-        dashboard.series.where((s) => s.seriesType != 'ANIME').toList();
+    var result = tvSeries.toList();
     if (selectedGenres.isNotEmpty) {
       result =
           result.where((s) => s.genres.any(selectedGenres.contains)).toList();
@@ -288,6 +289,7 @@ class MovieCenterState {
   MovieCenterState copyWith({
     MovieDashboard? dashboard,
     List<MovieVideoItem>? movies,
+    List<MovieSeries>? tvSeries,
     List<MovieSeries>? animeSeries,
     List<MovieVideoItem>? recentItems,
     List<MovieContinueWatching>? continueWatching,
@@ -323,6 +325,7 @@ class MovieCenterState {
     return MovieCenterState(
       dashboard: dashboard ?? this.dashboard,
       movies: movies ?? this.movies,
+      tvSeries: tvSeries ?? this.tvSeries,
       animeSeries: animeSeries ?? this.animeSeries,
       recentItems: recentItems ?? this.recentItems,
       continueWatching: continueWatching ?? this.continueWatching,

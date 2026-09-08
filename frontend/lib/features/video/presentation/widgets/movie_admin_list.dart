@@ -467,10 +467,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
   List<_AdminRowEntry> _buildEntries(List<MovieVideoItem> items) {
     final state = ref.read(movieCenterControllerProvider).asData?.value;
     final seriesById = <String, MovieSeries>{
-      for (final series in [
-        ...?state?.animeSeries,
-        ...?state?.dashboard.series,
-      ])
+      for (final series in [...?state?.tvSeries, ...?state?.animeSeries])
         series.id: series,
     };
     final seriesMap = <String, List<MovieVideoItem>>{};
