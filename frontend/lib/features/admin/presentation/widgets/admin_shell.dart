@@ -274,7 +274,7 @@ class _AdminSidebarState extends State<AdminSidebar>
   Widget build(BuildContext context) {
     final c = context.adminColors;
     return Container(
-      width: 280,
+      width: 220,
       padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
       decoration: BoxDecoration(
         color: c.surfaceContainerLow.withValues(alpha: 0.88),

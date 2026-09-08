@@ -19,7 +19,7 @@ class _FileSidebar extends ConsumerWidget {
     final user = ref.watch(authSessionProvider).asData?.value.user;
     final isSuperAdmin = user?.role == 'SUPER_ADMIN';
     return Container(
-      width: 280,
+      width: 220,
       padding: const EdgeInsets.fromLTRB(16, 22, 16, 22),
       decoration: BoxDecoration(
         color: context.filesColors.surfaceContainerLow.withValues(alpha: 0.9),
