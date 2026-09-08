@@ -265,6 +265,15 @@ public final class MovieDtos {
     ) {
     }
 
+    /**
+     * 手动更新剧集标题与简介的请求。
+     */
+    public record UpdateSeriesMetadataRequest(
+            String title,
+            String overview
+    ) {
+    }
+
     public record MovieWatchHistoryDto(
             UUID id,
             UUID videoItemId,

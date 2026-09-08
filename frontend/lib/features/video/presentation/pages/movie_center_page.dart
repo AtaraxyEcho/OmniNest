@@ -678,6 +678,8 @@ class _FavoritesSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    // 影片收藏与系列（剧集/动漫）收藏合并展示；系列卡点击进系列详情。
+    final totalCount = state.favoriteItems.length + state.favoriteSeries.length;
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
@@ -689,15 +691,12 @@ class _FavoritesSection extends ConsumerWidget {
             child: MovieRedesignSectionHeader(
               title: l10n.videoSectionFavorites,
               subtitleEn: l10n.videoRedesignSubFavorites,
-              count:
-                  state.favoriteItems.isEmpty
-                      ? null
-                      : state.favoriteItems.length,
+              count: totalCount == 0 ? null : totalCount,
               subtitle: l10n.videoFavoritesSubtitle,
             ),
           ),
         ),
-        if (state.favoriteItems.isEmpty)
+        if (totalCount == 0)
           SliverPadding(
             padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
@@ -715,6 +714,10 @@ class _FavoritesSection extends ConsumerWidget {
               items: [
                 for (final item in state.favoriteItems)
                   _movieCard(context, ref, item),
+                for (final series in state.favoriteSeries)
+                  MovieRedesignCardData.fromSeries(series).copyWith(
+                    onTap: () => context.push('/video/series/${series.id}'),
+                  ),
               ],
             ),
           ),

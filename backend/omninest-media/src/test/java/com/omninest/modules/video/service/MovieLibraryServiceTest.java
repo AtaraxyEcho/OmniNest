@@ -12,6 +12,8 @@ import static org.mockito.Mockito.when;
 import com.omninest.modules.media.domain.AssetType;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FileContentAvailabilityQueryService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
@@ -22,8 +24,11 @@ import com.omninest.modules.media.service.MediaPlaybackProgressService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.repository.ContentAssetRepository;
 import com.omninest.modules.video.domain.MediaMovie;
+import com.omninest.modules.video.domain.MediaSeriesFavorite;
+import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.dto.MovieDtos.MovieMetadataUpdateRequest;
+import com.omninest.modules.video.dto.MovieDtos.UpdateSeriesMetadataRequest;
 import com.omninest.modules.video.repository.MediaMovieRepository;
 import com.omninest.modules.video.repository.MediaSeriesFavoriteRepository;
 import com.omninest.modules.video.repository.MediaTvEpisodeRepository;
@@ -37,6 +42,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.function.Supplier;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -55,6 +61,7 @@ class MovieLibraryServiceTest {
     private static final UUID MOVIE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
     private static final UUID LOGICAL_MOVIE_ID = UUID.fromString("50000000-0000-0000-0000-000000000001");
     private static final UUID FILE_NODE_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
+    private static final UUID SERIES_ID = UUID.fromString("60000000-0000-0000-0000-000000000001");
 
     private final MediaVideoItemRepository videoItemRepository = mock(MediaVideoItemRepository.class);
     private final MediaTvSeriesRepository tvSeriesRepository = mock(MediaTvSeriesRepository.class);
@@ -146,6 +153,7 @@ class MovieLibraryServiceTest {
         when(videoFavoriteRepository.countByOwnerUserId(OWNER_ID)).thenReturn(2L);
         when(watchHistoryRepository.countByOwnerUserId(OWNER_ID)).thenReturn(3L);
         when(videoCollectionRepository.countByOwnerUserId(OWNER_ID)).thenReturn(1L);
+        when(seriesFavoriteRepository.countByOwnerUserId(OWNER_ID)).thenReturn(1L);
         when(progressService.countIncomplete(OWNER_ID, MediaPlaybackType.VIDEO)).thenReturn(1L);
         when(videoItemRepository.findReadableOriginals(eq(OWNER_ID), eq(Set.of()), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(movie)));
@@ -161,7 +169,7 @@ class MovieLibraryServiceTest {
         assertThat(dashboard.stats().episodeCount()).isZero();
         assertThat(dashboard.stats().seriesCount()).isZero();
         assertThat(dashboard.stats().scrapeFailedCount()).isZero();
-        assertThat(dashboard.stats().favoritesCount()).isEqualTo(2);
+        assertThat(dashboard.stats().favoritesCount()).isEqualTo(3);
         assertThat(dashboard.stats().historyCount()).isEqualTo(3);
         assertThat(dashboard.stats().collectionsCount()).isEqualTo(1);
         assertThat(dashboard.stats().continueWatchingCount()).isEqualTo(1);
@@ -273,6 +281,66 @@ class MovieLibraryServiceTest {
                 eq(false),
                 any(FilePurgeOrigin.class),
                 isNull()
+        );
+    }
+
+    @Test
+    void favoriteSeriesReturnsReadableSeriesInFavoriteOrder() {
+        MediaSeriesFavorite newest = new MediaSeriesFavorite();
+        newest.setOwnerUserId(OWNER_ID);
+        newest.setSeriesId(SERIES_ID);
+        MediaSeriesFavorite oldest = new MediaSeriesFavorite();
+        oldest.setOwnerUserId(OWNER_ID);
+        oldest.setSeriesId(MOVIE_ID);
+        when(seriesFavoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
+                .thenReturn(List.of(newest, oldest));
+        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+        MediaTvSeries series = new MediaTvSeries();
+        series.setId(SERIES_ID);
+        series.setOwnerUserId(OWNER_ID);
+        series.setTitle("Diablo");
+        when(tvSeriesRepository.findActiveReadableByIdIn(any(), eq(OWNER_ID), eq(Set.of())))
+                .thenReturn(List.of(series));
+        when(contentAssetService.primarySeriesAssets(OWNER_ID, List.of(SERIES_ID)))
+                .thenReturn(Map.of());
+        when(seriesFavoriteRepository.findByOwnerUserIdAndSeriesIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of());
+
+        var result = movieLibraryService.favoriteSeries(OWNER_ID);
+
+        assertThat(result).singleElement().extracting("id").isEqualTo(SERIES_ID);
+    }
+
+    @Test
+    void updateSeriesMetadataTrimsTitleAndRecordsSyncEvent() {
+        MediaTvSeries series = new MediaTvSeries();
+        series.setId(SERIES_ID);
+        series.setOwnerUserId(OWNER_ID);
+        series.setTitle("Old Title");
+        when(mediaContentAccessService.requireReadableSeries(OWNER_ID, SERIES_ID)).thenReturn(series);
+        when(tvSeriesRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(contentAssetService.primarySeriesAssets(OWNER_ID, List.of(SERIES_ID)))
+                .thenReturn(Map.of());
+        when(seriesFavoriteRepository.findByOwnerUserIdAndSeriesIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of());
+
+        var updated = movieLibraryService.updateSeriesMetadata(
+                OWNER_ID,
+                SERIES_ID,
+                new UpdateSeriesMetadataRequest("  新标题 ", "新简介")
+        );
+
+        assertThat(updated.title()).isEqualTo("新标题");
+        assertThat(series.getOverview()).isEqualTo("新简介");
+        verify(tvSeriesRepository).save(series);
+        verify(syncEventService).record(
+                eq(OWNER_ID),
+                eq(SyncScope.VIDEO),
+                eq("VIDEO_SERIES"),
+                eq(SERIES_ID.toString()),
+                eq(SyncAction.UPDATED),
+                any(),
+                any()
         );
     }
 

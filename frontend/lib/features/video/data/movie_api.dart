@@ -75,6 +75,25 @@ class MovieApi {
     return parseList(response.data).map(_videoItemFromJson).toList();
   }
 
+  Future<List<MovieSeries>> favoriteSeries() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/video/favorites/series',
+    );
+    return parseList(response.data).map(_seriesFromJson).toList();
+  }
+
+  Future<MovieSeries> updateSeriesMetadata({
+    required String seriesId,
+    required String title,
+    String? overview,
+  }) async {
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
+      '/admin/video/series/$seriesId/metadata',
+      data: {'title': title, 'overview': overview},
+    );
+    return _seriesFromJson(parseData(response.data));
+  }
+
   Future<List<MovieWatchHistory>> history() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/video/history',

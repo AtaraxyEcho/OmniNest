@@ -813,6 +813,34 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     return page.items.where((item) => item.mediaType == 'MOVIE').toList();
   }
 
+  /// 收藏分区同时拉取影片收藏与系列（剧集/动漫）收藏。
+  Future<List<Object>> _loadFavoriteLists() async {
+    final favorites = await Future.wait([
+      _api.favorites(),
+      _api.favoriteSeries(),
+    ]);
+    return [favorites[0], favorites[1]];
+  }
+
+  /// 更新系列（剧集/动漫）标题与简介。
+  Future<void> updateSeriesMetadata({
+    required String seriesId,
+    required String title,
+    String? overview,
+  }) async {
+    try {
+      await _api.updateSeriesMetadata(
+        seriesId: seriesId,
+        title: title,
+        overview: overview,
+      );
+      await refresh();
+    } on Exception catch (error) {
+      _setError(describeUserFacingError(error).message);
+      rethrow;
+    }
+  }
+
   Future<void> addCollectionItem({
     required String collectionId,
     required String videoItemId,
@@ -1000,7 +1028,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       final result = await switch (section) {
         MovieSection.recent => _api.recent(),
         MovieSection.continueWatching => _api.continueWatching(),
-        MovieSection.favorites => _api.favorites(),
+        MovieSection.favorites => _loadFavoriteLists(),
         MovieSection.history => _api.history(),
         MovieSection.collections => _api.collections(),
         MovieSection.management => _api.tasks(),
@@ -1029,7 +1057,8 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
           loadingSections: stillLoading,
         ),
         MovieSection.favorites => latest.copyWith(
-          favoriteItems: result as List<MovieVideoItem>,
+          favoriteItems: (result as List<Object>)[0] as List<MovieVideoItem>,
+          favoriteSeries: result[1] as List<MovieSeries>,
           loadedSections: loaded,
           loadingSections: stillLoading,
         ),

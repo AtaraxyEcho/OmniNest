@@ -44,6 +44,7 @@ class MovieCenterState {
     required this.recentItems,
     required this.continueWatching,
     required this.favoriteItems,
+    this.favoriteSeries = const [],
     required this.watchHistory,
     required this.collections,
     required this.tasks,
@@ -76,6 +77,7 @@ class MovieCenterState {
   final List<MovieVideoItem> recentItems;
   final List<MovieContinueWatching> continueWatching;
   final List<MovieVideoItem> favoriteItems;
+  final List<MovieSeries> favoriteSeries;
   final List<MovieWatchHistory> watchHistory;
   final List<MovieCollection> collections;
   final List<MovieTask> tasks;
@@ -294,6 +296,7 @@ class MovieCenterState {
     List<MovieVideoItem>? recentItems,
     List<MovieContinueWatching>? continueWatching,
     List<MovieVideoItem>? favoriteItems,
+    List<MovieSeries>? favoriteSeries,
     List<MovieWatchHistory>? watchHistory,
     List<MovieCollection>? collections,
     List<MovieTask>? tasks,
@@ -330,6 +333,7 @@ class MovieCenterState {
       recentItems: recentItems ?? this.recentItems,
       continueWatching: continueWatching ?? this.continueWatching,
       favoriteItems: favoriteItems ?? this.favoriteItems,
+      favoriteSeries: favoriteSeries ?? this.favoriteSeries,
       watchHistory: watchHistory ?? this.watchHistory,
       collections: collections ?? this.collections,
       tasks: tasks ?? this.tasks,

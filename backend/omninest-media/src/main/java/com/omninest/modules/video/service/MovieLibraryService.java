@@ -15,6 +15,7 @@ import com.omninest.modules.media.domain.MediaPlaybackType;
 import com.omninest.modules.media.service.MediaPlaybackProgressService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.domain.MediaMovie;
+import com.omninest.modules.video.domain.MediaSeriesFavorite;
 import com.omninest.modules.video.domain.MediaTvEpisode;
 import com.omninest.modules.video.domain.MediaTvSeason;
 import com.omninest.modules.video.domain.MediaTvSeries;
@@ -33,6 +34,7 @@ import com.omninest.modules.video.dto.MovieDtos.MovieSeasonDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieSeasonDetailDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieSeriesDetailDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieSeriesDto;
+import com.omninest.modules.video.dto.MovieDtos.UpdateSeriesMetadataRequest;
 import com.omninest.modules.video.dto.MovieDtos.MovieStatsDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieVideoItemDto;
 import com.omninest.modules.video.repository.MediaMovieRepository;
@@ -116,7 +118,8 @@ public class MovieLibraryService {
                 videoItemRepository.countReadableOriginalSeries(ownerUserId, readableLibraryIds),
                 videoItemRepository.countReadableOriginalsByMetadataStatus(
                         ownerUserId, readableLibraryIds, MetadataStatus.FAILED.getValue()),
-                videoFavoriteRepository.countByOwnerUserId(ownerUserId),
+                videoFavoriteRepository.countByOwnerUserId(ownerUserId)
+                        + seriesFavoriteRepository.countByOwnerUserId(ownerUserId),
                 watchHistoryRepository.countByOwnerUserId(ownerUserId),
                 videoCollectionRepository.countByOwnerUserId(ownerUserId),
                 progressService.countIncomplete(ownerUserId, MediaPlaybackType.VIDEO)
@@ -241,6 +244,74 @@ public class MovieLibraryService {
         List<MediaTvSeries> items = tvSeriesRepository
                 .findActiveReadableBySeriesType(ownerUserId, readableLibraryIds, seriesType);
         return toSeriesDtos(ownerUserId, items);
+    }
+
+    /**
+     * 查询当前用户收藏的系列（剧集与动漫），按收藏时间倒序。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 收藏的系列列表
+     */
+    @Transactional(readOnly = true)
+    public List<MovieSeriesDto> favoriteSeries(UUID ownerUserId) {
+        List<MediaSeriesFavorite> favorites =
+                seriesFavoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId);
+        if (favorites.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> seriesIds = favorites.stream().map(MediaSeriesFavorite::getSeriesId).toList();
+        Set<UUID> readableLibraryIds = mediaLibraryAccessService.findReadableLibraryIds(ownerUserId);
+        Map<UUID, MediaTvSeries> seriesIndex = tvSeriesRepository
+                .findActiveReadableByIdIn(seriesIds, ownerUserId, readableLibraryIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        MediaTvSeries::getId,
+                        series -> series,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+        List<MediaTvSeries> series = favorites.stream()
+                .map(favorite -> seriesIndex.get(favorite.getSeriesId()))
+                .filter(Objects::nonNull)
+                .toList();
+        return toSeriesDtos(ownerUserId, series);
+    }
+
+    /**
+     * 手动更新系列标题与简介。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param seriesId 系列 ID
+     * @param request 更新请求
+     * @return 更新后的系列
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public MovieSeriesDto updateSeriesMetadata(
+            UUID ownerUserId,
+            UUID seriesId,
+            UpdateSeriesMetadataRequest request
+    ) {
+        MediaTvSeries series = mediaContentAccessService.requireReadableSeries(ownerUserId, seriesId);
+        String title = request.title() == null ? "" : request.title().trim();
+        if (title.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "剧集标题不能为空");
+        }
+        series.setTitle(title);
+        if (request.overview() != null) {
+            series.setOverview(request.overview());
+        }
+        series.setUpdatedAt(Instant.now());
+        tvSeriesRepository.save(series);
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.VIDEO,
+                "VIDEO_SERIES",
+                seriesId.toString(),
+                SyncAction.UPDATED,
+                series.getVersion(),
+                Map.of("manualEdited", true)
+        );
+        return toSeriesDtos(ownerUserId, List.of(series)).getFirst();
     }
 
     @Transactional(readOnly = true)

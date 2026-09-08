@@ -17,6 +17,7 @@ import com.omninest.modules.video.dto.MovieDtos.MovieMetadataUpdateRequest;
 import com.omninest.modules.video.dto.MovieDtos.MovieScanRequest;
 import com.omninest.modules.video.dto.MovieDtos.MovieSeasonDetailDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieSeriesDto;
+import com.omninest.modules.video.dto.MovieDtos.UpdateSeriesMetadataRequest;
 import com.omninest.modules.video.dto.MovieDtos.MovieSeriesDetailDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieTaskDto;
 import com.omninest.modules.video.dto.MovieDtos.MovieVideoItemDto;
@@ -133,6 +134,13 @@ public class VideoLibraryController {
         return ApiResponse.success(movieEngagementService.favorites(currentUserContext.requireCurrentUserId()));
     }
 
+    @Operation(summary = "获取收藏系列", description = "返回用户收藏的剧集与动漫，按收藏时间倒序")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/video/favorites/series")
+    ApiResponse<List<MovieSeriesDto>> favoriteSeries() {
+        return ApiResponse.success(movieLibraryService.favoriteSeries(currentUserContext.requireCurrentUserId()));
+    }
+
     @Operation(summary = "获取收藏状态", description = "查询指定视频的收藏状态")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/video/items/{videoItemId}/favorite/status")
@@ -193,6 +201,20 @@ public class VideoLibraryController {
     @GetMapping("/api/v1/video/series/{seriesId}")
     ApiResponse<MovieSeriesDetailDto> seriesDetail(@PathVariable UUID seriesId) {
         return ApiResponse.success(movieLibraryService.seriesDetail(currentUserContext.requireCurrentUserId(), seriesId));
+    }
+
+    @Operation(summary = "更新剧集元数据", description = "手动更新剧集的标题与简介")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PutMapping("/api/v1/admin/video/series/{seriesId}/metadata")
+    ApiResponse<MovieSeriesDto> updateSeriesMetadata(
+            @PathVariable UUID seriesId,
+            @Valid @RequestBody UpdateSeriesMetadataRequest request
+    ) {
+        return ApiResponse.success(movieLibraryService.updateSeriesMetadata(
+                currentUserContext.requireCurrentUserId(),
+                seriesId,
+                request
+        ));
     }
 
     @Operation(summary = "获取季详情", description = "返回指定剧集的指定季详细信息")

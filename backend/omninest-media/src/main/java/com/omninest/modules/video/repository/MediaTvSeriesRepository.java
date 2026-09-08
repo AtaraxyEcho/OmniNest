@@ -138,6 +138,29 @@ public interface MediaTvSeriesRepository extends JpaRepository<MediaTvSeries, UU
             @Param("librarySourceIds") Collection<UUID> librarySourceIds
     );
 
+    /**
+     * 按系列 ID 集合批量查询当前用户可访问且至少包含一个活动剧集文件的系列。
+     *
+     * @param ids 系列 ID 集合
+     * @param requesterUserId 请求者用户 ID
+     * @param librarySourceIds 可访问的库来源 ID 集合
+     * @return 活动系列列表
+     */
+    @Query("""
+            select distinct series from MediaTvSeries series
+            join MediaVideoItem item on item.seriesId = series.id
+            join FileNode file on item.fileNodeId = file.id
+            where series.id in :ids
+              and file.deleted = false
+              and ((series.librarySourceId is null and series.ownerUserId = :requesterUserId)
+                   or series.librarySourceId in :librarySourceIds)
+            """)
+    List<MediaTvSeries> findActiveReadableByIdIn(
+            @Param("ids") Collection<UUID> ids,
+            @Param("requesterUserId") UUID requesterUserId,
+            @Param("librarySourceIds") Collection<UUID> librarySourceIds
+    );
+
     List<MediaTvSeries> findAllByIdInAndOwnerUserId(Collection<UUID> ids, UUID ownerUserId);
 
     void deleteByOwnerUserIdAndIdIn(UUID ownerUserId, Collection<UUID> ids);

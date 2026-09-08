@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -110,8 +111,61 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
   String? _openSeasonId;
   bool? _favoritedOverride;
   bool _resolvingPlay = false;
+  bool _editMode = false;
+  bool _saving = false;
+  String? _initializedForId;
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _overviewController = TextEditingController();
 
   MovieSeries get series => widget.detail.series;
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _overviewController.dispose();
+    super.dispose();
+  }
+
+  /// 进入编辑态时按当前系列初始化输入框（按系列 id 防重初始化）。
+  void _ensureControllers(MovieSeries series) {
+    if (_initializedForId == series.id) {
+      return;
+    }
+    _initializedForId = series.id;
+    _titleController.text = series.title;
+    _overviewController.text = series.overview ?? '';
+  }
+
+  Future<void> _saveEdits(MovieSeries series) async {
+    final title = _titleController.text.trim();
+    if (title.isEmpty || _saving) {
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      // 走控制器以联动中心数据刷新（剧集/动漫列表标题等）。
+      await ref
+          .read(movieCenterControllerProvider.notifier)
+          .updateSeriesMetadata(
+            seriesId: series.id,
+            title: title,
+            overview: _overviewController.text.trim(),
+          );
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(movieSeriesDetailProvider(series.id));
+      setState(() => _editMode = false);
+    } on Exception catch (error) {
+      if (mounted) {
+        showMovieFeedback(context, movieErrorMessage(error), isError: true);
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
 
   List<MovieSeason> get _sortedSeasons {
     final seasons = [...widget.detail.seasons]
@@ -181,6 +235,9 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
 
   @override
   Widget build(BuildContext context) {
+    _ensureControllers(series);
+    final user = ref.watch(authSessionProvider).asData?.value.user;
+    final canEdit = user?.permissions.contains('media:write') ?? false;
     final favoriteAsync = ref.watch(seriesFavoriteProvider(series.id));
     final favorited =
         _favoritedOverride ?? favoriteAsync.asData?.value ?? false;
@@ -194,11 +251,23 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
             _Backdrop(
               backdropUrl: series.backdropImageUrl ?? series.posterImageUrl,
               favorited: favorited,
+              canEdit: canEdit && !_saving,
+              editMode: _editMode,
+              saving: _saving,
               onBack: () {
                 if (context.canPop()) {
                   context.pop();
                 } else {
                   context.go('/video');
+                }
+              },
+              onToggleEdit: () {
+                if (_editMode) {
+                  unawaited(_saveEdits(series));
+                } else {
+                  setState(() {
+                    _editMode = true;
+                  });
                 }
               },
               onToggleFavorite: () => unawaited(_toggleFavorite(favorited)),
@@ -217,6 +286,8 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
                         child: _SeriesPosterMetaRow(
                           series: series,
                           seasonCount: widget.detail.seasons.length,
+                          editMode: _editMode,
+                          titleController: _titleController,
                         ),
                       ),
                       const SizedBox(height: 32),
@@ -225,7 +296,11 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
                         busy: _resolvingPlay,
                       ),
                       const SizedBox(height: 32),
-                      _SeriesOverviewText(overview: series.overview ?? ''),
+                      _SeriesOverviewText(
+                        overview: series.overview ?? '',
+                        editMode: _editMode,
+                        overviewController: _overviewController,
+                      ),
                       if (widget.detail.cast.isNotEmpty) ...[
                         const SizedBox(height: 32),
                         const _SeriesCastHeader(),
@@ -263,13 +338,21 @@ class _Backdrop extends StatelessWidget {
   const _Backdrop({
     required this.backdropUrl,
     required this.favorited,
+    required this.canEdit,
+    required this.editMode,
+    required this.saving,
     required this.onBack,
+    required this.onToggleEdit,
     required this.onToggleFavorite,
   });
 
   final String? backdropUrl;
   final bool favorited;
+  final bool canEdit;
+  final bool editMode;
+  final bool saving;
   final VoidCallback onBack;
+  final VoidCallback onToggleEdit;
   final VoidCallback onToggleFavorite;
 
   @override
@@ -346,23 +429,71 @@ class _Backdrop extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 12,
+            top: 16,
             right: 20,
-            child: Material(
-              color: Colors.black.withValues(alpha: 0.45),
-              shape: const CircleBorder(),
-              child: InkWell(
-                onTap: onToggleFavorite,
-                customBorder: const CircleBorder(),
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Icon(
-                    favorited ? Icons.star_rounded : Icons.star_outline_rounded,
-                    size: 22,
-                    color: favorited ? MovieDetailTheme.accent : Colors.white,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (canEdit)
+                  Material(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    borderRadius: MovieRedesignPalette.borderRadius,
+                    child: InkWell(
+                      onTap: onToggleEdit,
+                      borderRadius: MovieRedesignPalette.borderRadius,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: MovieRedesignPalette.borderRadius,
+                          border: Border.all(
+                            width: 1.2,
+                            color:
+                                editMode
+                                    ? MovieDetailTheme.accent
+                                    : Colors.white24,
+                          ),
+                        ),
+                        child: Text(
+                          saving
+                              ? '…'
+                              : editMode
+                              ? l10n.videoDetailSave
+                              : l10n.videoDetailEdit,
+                          style: MovieDetailTheme.mono(
+                            12,
+                            color:
+                                editMode
+                                    ? MovieDetailTheme.accent
+                                    : Colors.white,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                const SizedBox(width: 10),
+                Material(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: onToggleFavorite,
+                    customBorder: const CircleBorder(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
+                        favorited
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        size: 22,
+                        color:
+                            favorited ? MovieDetailTheme.accent : Colors.white,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+              ],
             ),
           ),
         ],
@@ -384,10 +515,17 @@ class MovieDetailBackTextStyle extends TextStyle {
 }
 
 class _SeriesPosterMetaRow extends StatelessWidget {
-  const _SeriesPosterMetaRow({required this.series, required this.seasonCount});
+  const _SeriesPosterMetaRow({
+    required this.series,
+    required this.seasonCount,
+    required this.editMode,
+    required this.titleController,
+  });
 
   final MovieSeries series;
   final int seasonCount;
+  final bool editMode;
+  final TextEditingController titleController;
 
   @override
   Widget build(BuildContext context) {
@@ -410,13 +548,31 @@ class _SeriesPosterMetaRow extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  series.title,
-                  style: MovieDetailTheme.serif(
-                    AppTypography.headlineLarge,
-                    height: 1.15,
+                if (editMode)
+                  TextField(
+                    controller: titleController,
+                    style: MovieDetailTheme.serif(
+                      30,
+                      color: MovieDetailTheme.foreground,
+                    ),
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      enabledBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: MovieDetailTheme.accent),
+                      ),
+                      focusedBorder: UnderlineInputBorder(
+                        borderSide: BorderSide(color: MovieDetailTheme.accent),
+                      ),
+                    ),
+                  )
+                else
+                  Text(
+                    series.title,
+                    style: MovieDetailTheme.serif(
+                      AppTypography.headlineLarge,
+                      height: 1.15,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 16,
@@ -595,12 +751,46 @@ class _PlayGlyph extends CustomPainter {
 }
 
 class _SeriesOverviewText extends StatelessWidget {
-  const _SeriesOverviewText({required this.overview});
+  const _SeriesOverviewText({
+    required this.overview,
+    required this.editMode,
+    required this.overviewController,
+  });
 
   final String overview;
+  final bool editMode;
+  final TextEditingController overviewController;
 
   @override
   Widget build(BuildContext context) {
+    if (editMode) {
+      return TextField(
+        controller: overviewController,
+        minLines: 2,
+        maxLines: 5,
+        cursorColor: MovieDetailTheme.accent,
+        style: MovieDetailTheme.body(
+          14,
+          color: MovieDetailTheme.secondaryText,
+          height: 1.6,
+        ),
+        decoration: InputDecoration(
+          filled: true,
+          fillColor: MovieDetailTheme.surface,
+          enabledBorder: OutlineInputBorder(
+            borderSide: BorderSide(
+              color: MovieDetailTheme.accent.withValues(alpha: 0.30),
+            ),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderSide: BorderSide(
+              color: MovieDetailTheme.accent.withValues(alpha: 0.30),
+            ),
+          ),
+          contentPadding: const EdgeInsets.all(12),
+        ),
+      );
+    }
     if (overview.trim().isEmpty) {
       return const SizedBox.shrink();
     }

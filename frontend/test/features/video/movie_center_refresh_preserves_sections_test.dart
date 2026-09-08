@@ -46,6 +46,7 @@ void main() {
         container.read(movieCenterControllerProvider).requireValue;
     // 刷新后未在展示的收藏列表保留旧值，不再被清成空列表。
     expect(afterRefresh.favoriteItems.map((item) => item.id), ['movie-1']);
+    expect(afterRefresh.favoriteSeries.map((item) => item.id), ['series-1']);
     expect(afterRefresh.loadedSections, {MovieSection.movies});
 
     // loadedSections 已重置：重进收藏分区必须重新拉取。
@@ -84,6 +85,7 @@ class _RefreshApiAdapter implements HttpClientAdapter {
   ) async {
     final data = switch (options.path) {
       '/video/favorites' => _favorites(),
+      '/video/favorites/series' => <Object>[_series('series-1')],
       '/video/dashboard' => _dashboard(),
       '/video/library/page' => _libraryPage(),
       '/video/series/by-type' => <Object>[],
@@ -101,6 +103,16 @@ class _RefreshApiAdapter implements HttpClientAdapter {
   List<Object> _favorites() {
     favoritesRequests++;
     return [_movie('movie-1')];
+  }
+
+  Map<String, Object> _series(String id) {
+    return {
+      'id': id,
+      'title': id,
+      'metadataStatus': 'MATCHED',
+      'seriesType': 'TV',
+      'metadata': <String, Object>{},
+    };
   }
 
   Map<String, Object> _dashboard() {

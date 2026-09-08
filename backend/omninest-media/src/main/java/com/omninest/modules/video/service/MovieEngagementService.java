@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.CollectionType;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -52,6 +53,7 @@ public class MovieEngagementService {
     private final MediaSyncEventService syncEventService;
     private final MediaLibraryAccessService mediaLibraryAccessService;
     private final MediaContentAccessService mediaContentAccessService;
+    private final ReadThroughCache readThroughCache;
 
     @Transactional(readOnly = true)
     public List<MovieVideoItemDto> favorites(UUID ownerUserId) {
@@ -99,6 +101,7 @@ public class MovieEngagementService {
         if (!favorite) {
             existing.ifPresent(favoriteRepository::delete);
         }
+        invalidateDashboardCache(ownerUserId);
         recordEvent(ownerUserId, "VIDEO_ITEM", videoItemId, SyncAction.UPDATED, Map.of("favorite", favorite));
         return new MovieFavoriteStateDto(videoItemId, favorite);
     }
@@ -175,6 +178,7 @@ public class MovieEngagementService {
         collection.setCoverFileId(request.coverFileId());
         collection.setCollectionType(CollectionType.MANUAL.getValue());
         MediaVideoCollection saved = collectionRepository.save(collection);
+        invalidateDashboardCache(ownerUserId);
         recordEvent(ownerUserId, "VIDEO_COLLECTION", saved.getId(), SyncAction.CREATED, Map.of());
         return toCollectionDto(saved, 0);
     }
@@ -195,6 +199,7 @@ public class MovieEngagementService {
                 });
         collectionRepository.save(collection);
         long itemCount = collectionItemRepository.countByOwnerUserIdAndCollectionId(ownerUserId, collectionId);
+        invalidateDashboardCache(ownerUserId);
         recordEvent(ownerUserId, "VIDEO_COLLECTION", collectionId, SyncAction.UPDATED, Map.of());
         return toCollectionDto(collection, itemCount);
     }
@@ -256,6 +261,7 @@ public class MovieEngagementService {
             newFavorite = true;
         }
         recordEvent(ownerUserId, "VIDEO_SERIES", seriesId, SyncAction.UPDATED, Map.of("favorite", newFavorite));
+        invalidateDashboardCache(ownerUserId);
         return newFavorite;
     }
 
@@ -271,6 +277,7 @@ public class MovieEngagementService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "合集不存在"));
         collectionItemRepository.deleteByOwnerUserIdAndCollectionId(ownerUserId, collectionId);
         collectionRepository.delete(collection);
+        invalidateDashboardCache(ownerUserId);
         recordEvent(ownerUserId, "VIDEO_COLLECTION", collectionId, SyncAction.DELETED, Map.of());
     }
 
@@ -279,6 +286,7 @@ public class MovieEngagementService {
         collectionRepository.findByIdAndOwnerUserId(collectionId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "合集不存在"));
         collectionItemRepository.deleteByOwnerUserIdAndCollectionIdAndVideoItemId(ownerUserId, collectionId, videoItemId);
+        invalidateDashboardCache(ownerUserId);
         recordEvent(ownerUserId, "VIDEO_COLLECTION", collectionId, SyncAction.UPDATED, Map.of());
     }
 
@@ -292,6 +300,17 @@ public class MovieEngagementService {
     public void clearHistory(UUID ownerUserId) {
         historyRepository.deleteByOwnerUserId(ownerUserId);
         syncEventService.invalidate(ownerUserId, SyncScope.VIDEO, "VIDEO_HISTORY", Map.of());
+    }
+
+    /**
+     * 失效指定用户的视频仪表盘缓存。
+     *
+     * <p>收藏与合集变更都会改变 dashboard 的收藏/合集计数统计。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     */
+    private void invalidateDashboardCache(UUID ownerUserId) {
+        readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
     }
 
     private MediaVideoItem findVideo(UUID ownerUserId, UUID videoItemId) {
