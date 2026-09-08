@@ -67,7 +67,7 @@ Build the JAR used by the application image:
 mvn -q -pl omninest-app -am -DskipTests package
 ```
 
-For an empty database, Flyway applies `V001__init_schema.sql` and `V002__builtin_catalog.sql`. These two scripts form the current baseline. While the current version still permits baseline rewrites, structural changes and built-in catalog changes should be synchronized to the corresponding file. Manually executable scripts are under `omninest-app/src/main/resources/db/manual/`.
+For an empty database, Flyway applies `V001__init_schema.sql` and `V002__builtin_catalog.sql`. These two scripts form the current baseline. While the current version still permits baseline rewrites, structural changes and built-in catalog changes should be synchronized to the corresponding file.
 
 ## API and tasks
 

@@ -85,7 +85,6 @@ deploy/ai-sidecar/ 图片分析侧车服务、模型适配与容器定义
 - schema 为 `omni`，表和字段使用小写蛇形。业务表不额外添加 `omni_` 前缀。主键为 `id uuid primary key`，公共时间字段为 `created_at`、`updated_at`，重要业务表使用 `version` 乐观锁。
 - 禁止声明数据库外键；迁移不得包含 `REFERENCES`、`FOREIGN KEY`、`ON DELETE` 或 `ON UPDATE`。关联、级联与一致性由应用层服务维护。
 - 当前数据库基线由 `V001__init_schema.sql` 和 `V002__builtin_catalog.sql` 构成。当前项目未进入历史迁移不可变阶段时，结构修改必须同步重写 V001，内置角色、权限、字典和默认配置修改必须同步重写 V002；不得自行新增 V003。进入已发布且已有环境执行过迁移的阶段后，历史迁移不可改写，新增变更必须采用递增迁移，并先更新本规则与发布说明。
-- 任何数据库调整必须同步编写 `backend/omninest-app/src/main/resources/db/manual/` 下可人工执行、幂等且标注适用版本的脚本，说明执行前置条件、影响、校验与回滚方式。
 - 业务代码查询优先使用 Specification、Criteria API、QueryDSL 或类型安全方式。禁止字符串拼接 SQL/JPQL；简单固定查询可使用 `@Query`。避免 N+1，批量更新和删除使用 bulk operation。
 - 动态排序字段必须白名单。禁止 `SELECT *`、存储过程和触发器承载业务逻辑。
 - 需要跨请求执行、进度跟踪、失败重试、恢复、调度或后台持续运行的耗时业务任务，必须先在数据库创建任务记录并在事务提交后投递 RabbitMQ。局部、短时且不需要上述能力的异步操作不得机械地引入消息队列。默认重试为 1 分钟、5 分钟、15 分钟，最多 3 次；不可重试业务错误直接失败；DLQ 保存 payload、错误摘要、堆栈摘要、最后执行机器和任务上下文。
@@ -171,7 +170,7 @@ showReaderSnackBar(context, l10n.readerImportSuccess(fileName));
 
 - 后端按风险使用 JUnit 5、Mockito 与 Testcontainers。重点覆盖权限隔离、JWT、分享、SSRF、限流、事务提交后投递、任务重试/DLQ、文件路径边界和 Provider 能力差异。
 - 前端按风险使用单元、Widget、Golden 与必要的集成测试。涉及异步 Widget、导入、上传、下载、轮询、路由、选择、Provider autoDispose 时，必须覆盖任务未完成即退出页面、Timer/Stream 活跃时退出、请求 A/B 竞态、连续点击和反复进入退出。
-- Flutter 代码修改至少执行对应 Widget/单元测试、`dart format`、`flutter analyze`；后端代码修改至少执行相关 Maven 测试；数据库变化额外校验 V001/V002 与 `backend/omninest-app/src/main/resources/db/manual`。
+- Flutter 代码修改至少执行对应 Widget/单元测试、`dart format`、`flutter analyze`；后端代码修改至少执行相关 Maven 测试；数据库变化额外校验 V001/V002。
 - 无法执行验证时，最终回复必须逐项说明未执行命令、阻塞原因、已完成的静态检查和剩余风险。不得将未执行验证描述为通过。
 - 禁止通过关闭 lint、删除测试、吞异常、全局变量、滥用 keepAlive、永久保活所有 Provider 或裸 Map 来掩盖问题。DTO/JSON 边界可使用受限的 `Map<String, dynamic>`，但必须在 data 层尽快转换为明确模型，不得将其扩散到 domain、application 状态或 presentation 业务逻辑。
 
