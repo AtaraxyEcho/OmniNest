@@ -36,6 +36,7 @@ import 'package:omninest/features/files/presentation/widgets/file_drop_upload_su
 import 'package:omninest/features/files/presentation/widgets/external_storage_account_dialog.dart';
 import 'package:omninest/features/files/presentation/widgets/share_link_sheet.dart';
 import 'package:omninest/features/files/presentation/widgets/upload_panel.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
 
 part 'file_browser_page_navigation.dart';
 part 'file_browser_page_workspace.dart';

@@ -992,7 +992,7 @@
       "percent": {}
     }
   },
-  "adminTopBarPortal": "门户",
+  "adminTopBarPortal": "Portal",
   "adminShellTitle": "OmniNest 管理台",
   "adminShellSubtitle": "集中管控中枢",
   "adminRolePillLabel": "管理",

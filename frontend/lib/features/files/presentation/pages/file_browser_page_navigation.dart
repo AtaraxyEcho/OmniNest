@@ -76,18 +76,7 @@ class _SideHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: context.filesColors.brandTeal,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(
-              Icons.folder_outlined,
-              color: context.filesColors.onSurface,
-            ),
-          ),
+          const BrandLogo(size: 40, radius: 12),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -167,7 +156,7 @@ class _FileNavItemState extends State<_FileNavItem> {
             ? context.filesColors.sidebarSelectedFg
             : context.filesColors.sidebarOnSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 7),
+      padding: const EdgeInsets.only(bottom: 6),
       child: MouseRegion(
         onEnter: (_) => setState(() => _hovering = true),
         onExit: (_) => setState(() => _hovering = false),
@@ -179,7 +168,7 @@ class _FileNavItemState extends State<_FileNavItem> {
           onTap: widget.enabled ? widget.onTap : null,
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 160),
-            height: 44,
+            height: 40,
             decoration: BoxDecoration(
               color:
                   selected
@@ -202,7 +191,7 @@ class _FileNavItemState extends State<_FileNavItem> {
             child: Row(
               children: [
                 const SizedBox(width: 14),
-                Icon(widget.section.icon, size: 20, color: foreground),
+                Icon(widget.section.icon, size: 18, color: foreground),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -210,9 +199,9 @@ class _FileNavItemState extends State<_FileNavItem> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: AppTypography.bodyLarge,
-                      height: 20 / 14,
-                      fontWeight: FontWeight.w700,
+                      fontSize: AppTypography.bodyMedium,
+                      height: 18 / 13,
+                      fontWeight: FontWeight.w600,
                       color: foreground,
                     ),
                   ),

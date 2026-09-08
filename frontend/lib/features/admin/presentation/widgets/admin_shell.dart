@@ -17,6 +17,7 @@ import 'package:omninest/features/admin/application/admin_console_controller.dar
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
 
 part 'admin_shell_navigation.dart';
 
@@ -597,15 +598,7 @@ class _AdminSideTitle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: c.primaryContainer,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: Icon(Icons.shield_outlined, color: c.primary, size: 22),
-          ),
+          const BrandLogo(size: 40, radius: 12),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

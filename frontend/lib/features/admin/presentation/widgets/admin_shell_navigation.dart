@@ -27,7 +27,7 @@ class _AdminNavItemState extends State<_AdminNavItem> {
             ? Theme.of(context).colorScheme.onPrimaryContainer
             : adminColors.onSurfaceVariant;
     return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
+      padding: const EdgeInsets.only(bottom: 6),
       child: MouseRegion(
         cursor: SystemMouseCursors.click,
         onEnter: (_) => setState(() => _hovered = true),
@@ -43,7 +43,7 @@ class _AdminNavItemState extends State<_AdminNavItem> {
           child: AnimatedContainer(
             duration: MotionToken.fast,
             curve: MotionToken.curve,
-            height: 42,
+            height: 40,
             decoration: BoxDecoration(
               color:
                   selected
@@ -64,7 +64,7 @@ class _AdminNavItemState extends State<_AdminNavItem> {
             child: Row(
               children: [
                 const SizedBox(width: 14),
-                Icon(_iconFor(widget.section), size: 20, color: foreground),
+                Icon(_iconFor(widget.section), size: 18, color: foreground),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
