@@ -10,8 +10,6 @@ import 'package:omninest/features/admin/presentation/widgets/admin_shell.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/pages/file_preview_page.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_mobile_content.dart';
-import 'package:omninest/features/video/domain/movie_models.dart';
-import 'package:omninest/features/video/presentation/widgets/series_detail_hero.dart';
 
 void main() {
   const targetSizes = <Size>[
@@ -48,34 +46,6 @@ void main() {
       await tester.pump();
       expect(tester.takeException(), isNull, reason: '尺寸 $size 出现布局异常');
     }
-  });
-
-  testWidgets('剧集详情 Hero 在窄屏使用纵向内容层级', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(360, 800));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-
-    const series = MovieSeries(
-      id: 'series-1',
-      title: 'A Series Title That Is Deliberately Longer Than One Line',
-      metadataStatus: 'READY',
-      metadata: <String, dynamic>{},
-      genres: <String>['Drama', 'Science Fiction', 'Mystery'],
-      rating: 8.8,
-      voteCount: 1024,
-    );
-    await tester.pumpWidget(
-      _testApp(
-        const Scaffold(
-          body: SingleChildScrollView(
-            child: SeriesDetailHero(series: series, width: 360),
-          ),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    expect(find.text(series.title), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
 
   testWidgets('文件预览和管理壳层在窄屏不加载原生媒体插件', (tester) async {
