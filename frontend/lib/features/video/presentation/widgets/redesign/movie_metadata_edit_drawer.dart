@@ -185,8 +185,8 @@ class _MovieMetadataEditPanelState
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.movieRedesign;
-    final text = context.movieRedesignText;
+    final palette = context.movieDetailPalette;
+    final text = context.movieDetailText;
     final l10n = AppLocalizations.of(context);
     return Material(
       color: MovieDetailTheme.background,
@@ -343,7 +343,7 @@ class _MovieMetadataEditPanelState
     required TextEditingController controller,
     ValueChanged<String>? onChanged,
   }) {
-    final palette = context.movieRedesign;
+    final palette = context.movieDetailPalette;
     return TextField(
       controller: controller,
       onChanged: onChanged,

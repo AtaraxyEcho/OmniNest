@@ -760,8 +760,8 @@ class _SeasonAccordion extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final palette = context.movieRedesign;
-    final text = context.movieRedesignText;
+    final palette = context.movieDetailPalette;
+    final text = context.movieDetailText;
     final l10n = AppLocalizations.of(context);
     return Column(
       children: [

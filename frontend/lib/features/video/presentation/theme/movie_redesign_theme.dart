@@ -237,3 +237,11 @@ class MovieDetailTheme {
     );
   }
 }
+
+/// 详情页族（影片/剧集/编辑抽屉）固定使用暗色调色板：
+/// 页面底色硬编码暗色，不随应用主题切换。
+extension MovieDetailFixedPaletteX on BuildContext {
+  MovieRedesignPalette get movieDetailPalette => MovieRedesignPalette.dark;
+  MovieRedesignText get movieDetailText =>
+      MovieRedesignText(MovieRedesignPalette.dark);
+}

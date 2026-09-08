@@ -1160,7 +1160,7 @@ class _SubtitleLanguageDialogState extends State<_SubtitleLanguageDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final palette = context.movieRedesign;
+    final palette = context.movieDetailPalette;
     final l10n = AppLocalizations.of(context);
     return Dialog(
       backgroundColor: palette.card,
