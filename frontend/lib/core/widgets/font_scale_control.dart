@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
+import 'package:omninest/core/widgets/hover_scale.dart';
 
 /// 顶栏字体档位快捷入口。
 ///
@@ -29,7 +30,6 @@ class FontScaleControl extends ConsumerStatefulWidget {
 
 class _FontScaleControlState extends ConsumerState<FontScaleControl> {
   final AnchoredPopover _popover = AnchoredPopover();
-  bool _hovered = false;
 
   @override
   void dispose() {
@@ -49,13 +49,12 @@ class _FontScaleControlState extends ConsumerState<FontScaleControl> {
     final open = _popover.isOpen;
     final idleColor = widget.color ?? colors.onSurfaceVariant;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+    return HoverScale(
       child: Tooltip(
         message: AppLocalizations.of(context).fontScaleTitle,
         child: InkWell(
           borderRadius: BorderRadius.zero,
+          hoverColor: Colors.transparent,
           onTap: _toggle,
           child: Container(
             width: 32,
@@ -72,12 +71,7 @@ class _FontScaleControlState extends ConsumerState<FontScaleControl> {
                 fontFamily: 'InstrumentSerif',
                 fontFamilyFallback: const ['NotoSerifSC'],
                 fontSize: widget.size,
-                color:
-                    open
-                        ? colors.onSurface
-                        : _hovered
-                        ? colors.onSurface
-                        : idleColor,
+                color: open ? colors.onSurface : idleColor,
                 fontWeight: FontWeight.w400,
               ),
             ),

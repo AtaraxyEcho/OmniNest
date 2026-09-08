@@ -9,6 +9,7 @@ import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
+import 'package:omninest/core/widgets/hover_scale.dart';
 
 /// 右上角头像下拉菜单组件。
 ///
@@ -19,11 +20,11 @@ import 'package:omninest/core/widgets/anchored_popover.dart';
 class UserAvatarMenu extends ConsumerStatefulWidget {
   const UserAvatarMenu({
     super.key,
-    this.size = 36,
+    this.size = 32,
     this.directToProfile = false,
   });
 
-  /// 头像尺寸（宽高），默认 36。
+  /// 头像尺寸（宽高），默认 32，与移动端全局顶部栏一致。
   final double size;
 
   /// 是否直接进入个人中心，移动端全局顶部栏使用该模式。
@@ -97,18 +98,21 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
       size: widget.size,
       emphasized: open,
     );
-    return Tooltip(
-      message: l10n.coreProfile,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(999),
-        onTap: () {
-          if (open) {
-            _popover.close(onChanged: _refresh);
-          } else {
-            _popover.open(context, _buildPanel, onChanged: _refresh);
-          }
-        },
-        child: avatar,
+    return HoverScale(
+      child: Tooltip(
+        message: l10n.coreProfile,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          hoverColor: Colors.transparent,
+          onTap: () {
+            if (open) {
+              _popover.close(onChanged: _refresh);
+            } else {
+              _popover.open(context, _buildPanel, onChanged: _refresh);
+            }
+          },
+          child: avatar,
+        ),
       ),
     );
   }
