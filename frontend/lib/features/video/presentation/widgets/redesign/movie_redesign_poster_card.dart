@@ -102,7 +102,7 @@ class MovieRedesignGridMetrics {
   final double spacing;
   final double childAspectRatio;
 
-  /// 单元高度 = 海报宽高比 2:3 + 文本区固定高度。
+  /// 单元高度 = 海报宽高比 2:3 + 文本区固定高度（随字体档位放大）。
   static const double _textExtent = 72;
 
   /// 列数/间距按视口宽（对应原型 md/lg/xl 与 gap-3 sm:gap-4），
@@ -110,6 +110,7 @@ class MovieRedesignGridMetrics {
   factory MovieRedesignGridMetrics.resolve({
     required double viewportWidth,
     required double contentWidth,
+    double textScale = 1.0,
   }) {
     final columns = switch (viewportWidth) {
       < 768 => 3,
@@ -118,9 +119,8 @@ class MovieRedesignGridMetrics {
       _ => 6,
     };
     final spacing = movieRedesignAtSm(viewportWidth) ? 16.0 : 12.0;
-    final cellWidth =
-        (contentWidth - spacing * (columns - 1)) / columns;
-    final cellHeight = cellWidth * 1.5 + _textExtent;
+    final cellWidth = (contentWidth - spacing * (columns - 1)) / columns;
+    final cellHeight = cellWidth * 1.5 + _textExtent * textScale;
     return MovieRedesignGridMetrics._(
       columns: columns,
       spacing: spacing,
@@ -389,6 +389,10 @@ class MovieRedesignPosterGrid extends StatelessWidget {
         final metrics = MovieRedesignGridMetrics.resolve(
           viewportWidth: MediaQuery.sizeOf(context).width,
           contentWidth: constraints.maxWidth,
+          textScale:
+              MediaQuery.textScalerOf(
+                context,
+              ).scale(1).clamp(1.0, 1.5).toDouble(),
         );
         return GridView.builder(
           shrinkWrap: true,
@@ -422,6 +426,10 @@ class MovieRedesignPosterSliverGrid extends StatelessWidget {
         final metrics = MovieRedesignGridMetrics.resolve(
           viewportWidth: MediaQuery.sizeOf(context).width,
           contentWidth: constraints.crossAxisExtent,
+          textScale:
+              MediaQuery.textScalerOf(
+                context,
+              ).scale(1).clamp(1.0, 1.5).toDouble(),
         );
         return SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
