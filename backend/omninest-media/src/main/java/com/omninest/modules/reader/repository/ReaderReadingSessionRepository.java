@@ -39,6 +39,32 @@ public interface ReaderReadingSessionRepository extends JpaRepository<ReaderRead
             @Param("offset") String utcOffset);
 
     /**
+     * 按本地日聚合最近阅读分钟数。
+     */
+    @Query(value = """
+            SELECT (started_at + CAST(:offset AS INTERVAL))::date AS day,
+                   COALESCE(SUM(duration_seconds), 0) / 60 AS minutes
+            FROM omni.reader_reading_sessions
+            WHERE owner_user_id = :ownerUserId
+              AND started_at >= :since
+            GROUP BY 1
+            ORDER BY 1
+            """, nativeQuery = true)
+    List<DailyMinutesView> sumDailyMinutesSince(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("since") Instant since,
+            @Param("offset") String utcOffset);
+
+    /**
+     * 每日阅读分钟数聚合行。
+     */
+    interface DailyMinutesView {
+        LocalDate getDay();
+
+        long getMinutes();
+    }
+
+    /**
      * 删除指定条目的所有阅读会话记录。
      */
     @Modifying

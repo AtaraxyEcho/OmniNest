@@ -4275,6 +4275,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerShelfEmptyHint => '去书库挑选喜欢的书加入书架吧。';
 
   @override
+  String get readerStatsActivity => '阅读记录';
+
+  @override
+  String get readerStatsLast14 => '最近 14 天';
+
+  @override
+  String get readerStatsCompleted => '已完成';
+
+  @override
+  String get readerStatsInProgress => '进行中';
+
+  @override
+  String get readerStatsInLibrary => '书库';
+
+  @override
+  String get readerStatsBooksRead => '已读书籍';
+
+  @override
+  String get readerStatsDayUnit => '天';
+
+  @override
   String get readerNavComics => '漫画';
 
   @override

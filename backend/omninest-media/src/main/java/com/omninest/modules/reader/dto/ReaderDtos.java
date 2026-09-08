@@ -8,6 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
 
@@ -131,6 +132,23 @@ public final class ReaderDtos {
             int totalMinutesThisWeek,
             int currentStreak,
             int totalBooksRead
+    ) {
+    }
+
+    /** 每日阅读分钟数（按用户本地时区聚合）。 */
+    public record ReaderDailyMinutesDto(
+            LocalDate date,
+            int minutes
+    ) {
+    }
+
+    /** 阅读统计概览：柱状图数据、完成/在读计数与在读列表。 */
+    public record ReaderStatsOverviewDto(
+            List<ReaderDailyMinutesDto> dailyMinutes,
+            long completedCount,
+            long inProgressCount,
+            long totalItems,
+            List<ReaderItemDto> inProgressItems
     ) {
     }
 

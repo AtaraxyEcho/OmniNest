@@ -8177,6 +8177,48 @@ abstract class AppLocalizations {
   /// **'Browse the library and add books to your shelf.'**
   String get readerShelfEmptyHint;
 
+  /// No description provided for @readerStatsActivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading Activity'**
+  String get readerStatsActivity;
+
+  /// No description provided for @readerStatsLast14.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 14 days'**
+  String get readerStatsLast14;
+
+  /// No description provided for @readerStatsCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get readerStatsCompleted;
+
+  /// No description provided for @readerStatsInProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'In Progress'**
+  String get readerStatsInProgress;
+
+  /// No description provided for @readerStatsInLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'In Library'**
+  String get readerStatsInLibrary;
+
+  /// No description provided for @readerStatsBooksRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Books Read'**
+  String get readerStatsBooksRead;
+
+  /// No description provided for @readerStatsDayUnit.
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get readerStatsDayUnit;
+
   /// No description provided for @readerNavComics.
   ///
   /// In en, this message translates to:

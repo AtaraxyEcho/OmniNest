@@ -2,19 +2,31 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.reader.domain.ReaderItem;
+import com.omninest.modules.reader.domain.ReaderProgress;
 import com.omninest.modules.reader.domain.ReaderReadingSession;
+import com.omninest.modules.reader.dto.ReaderDtos.ReaderDailyMinutesDto;
+import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderReadingStatsDto;
+import com.omninest.modules.reader.dto.ReaderDtos.ReaderStatsOverviewDto;
 import com.omninest.modules.reader.dto.ReaderDtos.RecordSessionRequest;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
+import com.omninest.modules.reader.repository.ReaderProgressRepository;
 import com.omninest.modules.reader.repository.ReaderReadingSessionRepository;
 
+import java.math.BigDecimal;
 import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -31,6 +43,8 @@ public class ReaderStatsService {
 
     private final ReaderReadingSessionRepository sessionRepository;
     private final ReaderItemRepository itemRepository;
+    private final ReaderProgressRepository progressRepository;
+    private final ReaderItemService itemService;
 
     /**
      * 记录一次阅读会话。
@@ -141,5 +155,65 @@ public class ReaderStatsService {
             }
         }
         return streak;
+    }
+
+    /**
+     * 获取阅读统计概览：最近 N 天每日分钟数、完成/在读计数与在读列表。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param days        统计天数，夹紧到 [7, 30]
+     * @return 统计概览 DTO
+     */
+    @Transactional(readOnly = true)
+    public ReaderStatsOverviewDto getStatsOverview(UUID ownerUserId, int days) {
+        int safeDays = Math.max(7, Math.min(days, 30));
+        ZoneId zone = ZoneId.systemDefault();
+        String utcOffset = zone.getRules().getOffset(Instant.now()).getId();
+        LocalDate today = LocalDate.now(zone);
+        Instant since = today.minusDays(safeDays - 1L).atStartOfDay(zone).toInstant();
+
+        // 每日分钟数：先填零再累加聚合结果，保证连续日期轴
+        Map<LocalDate, Long> minutesByDay = new LinkedHashMap<>();
+        for (int i = safeDays - 1; i >= 0; i--) {
+            minutesByDay.put(today.minusDays(i), 0L);
+        }
+        for (ReaderReadingSessionRepository.DailyMinutesView row :
+                sessionRepository.sumDailyMinutesSince(ownerUserId, since, utcOffset)) {
+            minutesByDay.computeIfPresent(row.getDay(), (key, value) -> value + row.getMinutes());
+        }
+        List<ReaderDailyMinutesDto> dailyMinutes = minutesByDay.entrySet().stream()
+                .map(entry -> new ReaderDailyMinutesDto(entry.getKey(), entry.getValue().intValue()))
+                .toList();
+
+        long completedCount = progressRepository.countByOwnerUserIdAndProgressPercentGreaterThanEqual(
+                ownerUserId, BigDecimal.ONE);
+        List<ReaderProgress> inProgress = progressRepository
+                .findByOwnerUserIdAndProgressPercentGreaterThanAndProgressPercentLessThan(
+                        ownerUserId, BigDecimal.ZERO, BigDecimal.ONE)
+                .stream()
+                .sorted(Comparator.comparing(
+                        ReaderProgress::getUpdatedAt, Comparator.nullsLast(Comparator.naturalOrder())).reversed())
+                .toList();
+        Map<UUID, ReaderProgress> progressMap = inProgress.stream()
+                .collect(Collectors.toMap(ReaderProgress::getReaderItemId, p -> p));
+        List<UUID> inProgressIds = inProgress.stream()
+                .map(ReaderProgress::getReaderItemId)
+                .limit(12)
+                .toList();
+        Map<UUID, ReaderItem> itemsById = itemRepository.findAllById(inProgressIds).stream()
+                .collect(Collectors.toMap(ReaderItem::getId, item -> item));
+        List<ReaderItemDto> inProgressItems = inProgressIds.stream()
+                .map(itemsById::get)
+                .filter(Objects::nonNull)
+                .map(item -> itemService.toDto(item, false, null, progressMap))
+                .toList();
+
+        return new ReaderStatsOverviewDto(
+                dailyMinutes,
+                completedCount,
+                inProgress.size(),
+                itemRepository.countByOwnerUserId(ownerUserId),
+                inProgressItems
+        );
     }
 }

@@ -23,6 +23,17 @@ public interface ReaderProgressRepository extends JpaRepository<ReaderProgress, 
      */
     List<ReaderProgress> findByOwnerUserIdAndReaderItemIdIn(UUID ownerUserId, Collection<UUID> readerItemIds);
 
+    /**
+     * 统计用户已完成（进度 >= 指定值）的阅读条目数。
+     */
+    long countByOwnerUserIdAndProgressPercentGreaterThanEqual(UUID ownerUserId, BigDecimal percent);
+
+    /**
+     * 查询用户阅读中（low < 进度 < high）的进度记录。
+     */
+    List<ReaderProgress> findByOwnerUserIdAndProgressPercentGreaterThanAndProgressPercentLessThan(
+            UUID ownerUserId, BigDecimal low, BigDecimal high);
+
     void deleteByOwnerUserIdAndReaderItemIdIn(UUID ownerUserId, Collection<UUID> readerItemIds);
 
     void deleteByReaderItemIdIn(Collection<UUID> readerItemIds);

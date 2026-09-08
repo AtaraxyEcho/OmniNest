@@ -1118,6 +1118,58 @@
       "percent": {}
     }
   },
+  "adminTopBarPortal": "Portal",
+  "adminShellTitle": "OmniNest Admin",
+  "adminShellSubtitle": "Central Console",
+  "adminRolePillLabel": "Admin",
+  "adminRoleSuperAdmin": "Super Admin",
+  "adminRoleAdmin": "Admin",
+  "adminRoleMember": "Member",
+  "adminRoleGuest": "Guest",
+  "adminUserStatusActive": "Active",
+  "adminUserStatusDisabled": "Disabled",
+  "adminStorageUsed": "Used {size}",
+  "@adminStorageUsed": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "adminStorageFileCount": "{count} files",
+  "@adminStorageFileCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminOverviewTasksTotal": "{count} tasks",
+  "@adminOverviewTasksTotal": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminAnalyticsDays": "{days}d",
+  "@adminAnalyticsDays": {
+    "placeholders": {
+      "days": {}
+    }
+  },
+  "adminAnalyticsLive": "LIVE",
+  "adminTaskThroughputTooltip": "{completed} done · {failed} err",
+  "@adminTaskThroughputTooltip": {
+    "placeholders": {
+      "completed": {},
+      "failed": {}
+    }
+  },
+  "adminLoadCpu": "CPU",
+  "adminLoadMemory": "MEM",
+  "adminLoadDisk": "DISK",
+  "adminLoadJvm": "JVM",
+  "adminMonitoringStepMinutes": "{minutes}min step",
+  "@adminMonitoringStepMinutes": {
+    "placeholders": {
+      "minutes": {}
+    }
+  },
   "adminSystemMonitoring": "System Monitoring",
   "adminMonitoringSubtitle": "View service status, resource usage, component health, alerts and admin operation records.",
   "adminRunning": "Running",
@@ -1862,6 +1914,13 @@
   "readerNavManage": "Manage",
   "readerShelfEmpty": "Your shelf is empty. Add books from the library.",
   "readerShelfEmptyHint": "Browse the library and add books to your shelf.",
+  "readerStatsActivity": "Reading Activity",
+  "readerStatsLast14": "Last 14 days",
+  "readerStatsCompleted": "Completed",
+  "readerStatsInProgress": "In Progress",
+  "readerStatsInLibrary": "In Library",
+  "readerStatsBooksRead": "Books Read",
+  "readerStatsDayUnit": "days",
   "readerNavComics": "Comics",
   "readerSegmentAll": "All",
   "readerSegmentBooks": "Books",

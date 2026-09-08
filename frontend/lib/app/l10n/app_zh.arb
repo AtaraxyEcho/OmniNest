@@ -992,6 +992,58 @@
       "percent": {}
     }
   },
+  "adminTopBarPortal": "门户",
+  "adminShellTitle": "OmniNest 管理台",
+  "adminShellSubtitle": "集中管控中枢",
+  "adminRolePillLabel": "管理",
+  "adminRoleSuperAdmin": "超级管理员",
+  "adminRoleAdmin": "管理员",
+  "adminRoleMember": "成员",
+  "adminRoleGuest": "访客",
+  "adminUserStatusActive": "启用",
+  "adminUserStatusDisabled": "禁用",
+  "adminStorageUsed": "已用 {size}",
+  "@adminStorageUsed": {
+    "placeholders": {
+      "size": {}
+    }
+  },
+  "adminStorageFileCount": "{count} 个文件",
+  "@adminStorageFileCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminOverviewTasksTotal": "{count} 个任务",
+  "@adminOverviewTasksTotal": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "adminAnalyticsDays": "{days} 天",
+  "@adminAnalyticsDays": {
+    "placeholders": {
+      "days": {}
+    }
+  },
+  "adminAnalyticsLive": "实时",
+  "adminTaskThroughputTooltip": "{completed} 完成 · {failed} 失败",
+  "@adminTaskThroughputTooltip": {
+    "placeholders": {
+      "completed": {},
+      "failed": {}
+    }
+  },
+  "adminLoadCpu": "CPU",
+  "adminLoadMemory": "内存",
+  "adminLoadDisk": "磁盘",
+  "adminLoadJvm": "JVM",
+  "adminMonitoringStepMinutes": "{minutes} 分钟粒度",
+  "@adminMonitoringStepMinutes": {
+    "placeholders": {
+      "minutes": {}
+    }
+  },
   "adminSystemMonitoring": "系统监控",
   "adminMonitoringSubtitle": "查看服务状态、资源使用率、组件健康、告警和管理员操作记录。",
   "adminRunning": "运行正常",
@@ -1736,6 +1788,13 @@
   "readerNavManage": "管理",
   "readerShelfEmpty": "书架为空，请在书库中添加书籍。",
   "readerShelfEmptyHint": "去书库挑选喜欢的书加入书架吧。",
+  "readerStatsActivity": "阅读记录",
+  "readerStatsLast14": "最近 14 天",
+  "readerStatsCompleted": "已完成",
+  "readerStatsInProgress": "进行中",
+  "readerStatsInLibrary": "书库",
+  "readerStatsBooksRead": "已读书籍",
+  "readerStatsDayUnit": "天",
   "readerNavComics": "漫画",
   "readerSegmentAll": "全部",
   "readerSegmentBooks": "图书",

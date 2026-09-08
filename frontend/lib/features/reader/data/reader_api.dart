@@ -579,6 +579,15 @@ class ReaderApi {
     return ReaderReadingStats.fromJson(parseData(response.data));
   }
 
+  /// 阅读统计概览（统计页）：每日分钟数、完成/在读计数与在读列表。
+  Future<ReaderStatsOverview> getStatsOverview({int days = 14}) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/reader/stats/overview',
+      queryParameters: {'days': days},
+    );
+    return ReaderStatsOverview.fromJson(parseData(response.data));
+  }
+
   /// 更新条目元数据（用户级，仅限自己的条目）
   Future<void> updateItemMetadata({
     required String itemId,

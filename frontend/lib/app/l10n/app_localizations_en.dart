@@ -4417,6 +4417,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Browse the library and add books to your shelf.';
 
   @override
+  String get readerStatsActivity => 'Reading Activity';
+
+  @override
+  String get readerStatsLast14 => 'Last 14 days';
+
+  @override
+  String get readerStatsCompleted => 'Completed';
+
+  @override
+  String get readerStatsInProgress => 'In Progress';
+
+  @override
+  String get readerStatsInLibrary => 'In Library';
+
+  @override
+  String get readerStatsBooksRead => 'Books Read';
+
+  @override
+  String get readerStatsDayUnit => 'days';
+
+  @override
   String get readerNavComics => 'Comics';
 
   @override

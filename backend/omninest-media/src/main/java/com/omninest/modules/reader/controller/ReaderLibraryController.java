@@ -16,6 +16,7 @@ import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDetailDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderNoteDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderReadingStatsDto;
+import com.omninest.modules.reader.dto.ReaderDtos.ReaderStatsOverviewDto;
 import com.omninest.modules.reader.dto.ReaderDtos.RecordSessionRequest;
 import com.omninest.modules.reader.dto.ReaderDtos.UpdateAnnotationRequest;
 import com.omninest.modules.reader.dto.ReaderDtos.UpdateItemMetadataRequest;
@@ -345,6 +346,18 @@ public class ReaderLibraryController {
     @GetMapping("/api/v1/reader/stats")
     ApiResponse<ReaderReadingStatsDto> getStats() {
         return ApiResponse.success(readerStatsService.getStats(currentUserContext.requireCurrentUserId()));
+    }
+
+    /**
+     * 获取阅读统计概览（统计页）：每日分钟数、完成/在读计数与在读列表。
+     */
+    @Operation(summary = "获取阅读统计概览", description = "返回最近 N 天每日阅读时长、完成/在读计数与在读条目列表")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/reader/stats/overview")
+    ApiResponse<ReaderStatsOverviewDto> getStatsOverview(
+            @RequestParam(name = "days", defaultValue = "14") int days) {
+        return ApiResponse.success(
+                readerStatsService.getStatsOverview(currentUserContext.requireCurrentUserId(), days));
     }
 
     // ==================== Admin ====================
