@@ -161,56 +161,54 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rc = context.readerColors;
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(border: Border.all(color: rc.outlineVariant)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label.toUpperCase(),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                color: rc.onSurfaceVariant,
-                // ignore: font_size_whitelist
-                fontSize: 9,
-                height: 1.2,
-                letterSpacing: 2,
-                fontWeight: FontWeight.w600,
-              ),
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(border: Border.all(color: rc.outlineVariant)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: rc.onSurfaceVariant,
+              // ignore: font_size_whitelist
+              fontSize: 9,
+              height: 1.2,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w600,
             ),
-            const SizedBox(height: 12),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
+          ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  color: rc.onSurface,
+                  fontSize: AppTypography.headlineLarge,
+                  height: 1,
+                  fontFamily: kReaderSerifFamily,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+              if (unit.isNotEmpty) ...[
+                const SizedBox(width: 6),
                 Text(
-                  value,
+                  unit,
                   style: TextStyle(
-                    color: rc.onSurface,
-                    fontSize: AppTypography.headlineLarge,
-                    height: 1,
-                    fontFamily: kReaderSerifFamily,
-                    fontFeatures: const [FontFeature.tabularFigures()],
+                    color: rc.onSurfaceVariant,
+                    fontSize: AppTypography.labelSmall,
+                    height: 1.2,
                   ),
                 ),
-                if (unit.isNotEmpty) ...[
-                  const SizedBox(width: 6),
-                  Text(
-                    unit,
-                    style: TextStyle(
-                      color: rc.onSurfaceVariant,
-                      fontSize: AppTypography.labelSmall,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
               ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
