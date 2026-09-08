@@ -1,7 +1,8 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
@@ -135,7 +136,7 @@ class _StatusFilterBar extends StatelessWidget {
                 onSelected: (_) => onSelected(value),
                 selectedColor: colors.primaryContainer,
                 labelStyle: TextStyle(
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   fontWeight:
                       selected == value ? FontWeight.w700 : FontWeight.w500,
                   color:
@@ -171,7 +172,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             l10n.tasksEmpty,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w600,
               color: colors.onSurfaceVariant.withValues(alpha: 0.5),
             ),
@@ -180,7 +181,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             l10n.tasksEmptyHint,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               color: colors.onSurfaceVariant.withValues(alpha: 0.4),
             ),
           ),

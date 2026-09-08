@@ -1,7 +1,5 @@
 # 字号治理基线：每文件允许的裸数字字号违规数（格式：路径 数量）
 # 迁移批次完成后销号递减；白名单行使用 // ignore: font_size_whitelist
-lib/features/backdrop/presentation/app_backdrop_controls.dart 5
-lib/features/backdrop/presentation/app_backdrop_settings_panel.dart 8
 lib/features/music/presentation/deck/music_deck_content.dart 2
 lib/features/music/presentation/deck/music_deck_content_support.dart 6
 lib/features/music/presentation/deck/music_deck_cover_grid.dart 3
@@ -19,9 +17,6 @@ lib/features/music/presentation/player/music_immersive_preset_editor.dart 2
 lib/features/music/presentation/player/music_mobile_now_playing.dart 4
 lib/features/music/presentation/widgets/music_mobile_mini_player_slot.dart 2
 lib/features/music/presentation/widgets/music_platform_login.dart 16
-lib/features/notifications/presentation/pages/notification_page.dart 6
-lib/features/notifications/presentation/pages/notification_settings_page.dart 3
-lib/features/notifications/presentation/widgets/notification_icon.dart 1
 lib/features/profile/presentation/widgets/change_password_dialog.dart 2
 lib/features/profile/presentation/widgets/profile_account_panel.dart 3
 lib/features/profile/presentation/widgets/profile_desktop_preferences.dart 5
@@ -69,11 +64,6 @@ lib/features/reader/presentation/widgets/reader_view_bottom_bar.dart 1
 lib/features/reader/presentation/widgets/reader_view_content.dart 1
 lib/features/reader/presentation/widgets/reader_view_settings.dart 13
 lib/features/reader/presentation/widgets/reader_view_top_bar.dart 2
-lib/features/search/presentation/pages/search_page.dart 3
-lib/features/search/presentation/widgets/search_result_tile.dart 2
-lib/features/setup/presentation/pages/initial_setup_page.dart 1
-lib/features/tasks/presentation/pages/tasks_page.dart 3
-lib/features/tasks/presentation/widgets/task_card.dart 7
 lib/features/video/presentation/pages/movie_center_page.dart 3
 lib/features/video/presentation/pages/movie_detail_page.dart 22
 lib/features/video/presentation/pages/series_detail_page.dart 17

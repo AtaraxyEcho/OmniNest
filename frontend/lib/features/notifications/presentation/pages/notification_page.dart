@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
@@ -259,7 +260,7 @@ class _NotificationTile extends StatelessWidget {
           title: Text(
             notification.title ?? l10n.notificationNoTitle,
             style: TextStyle(
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
               fontWeight: isUnread ? FontWeight.w700 : FontWeight.w500,
               color: colors.onSurface,
             ),
@@ -275,7 +276,7 @@ class _NotificationTile extends StatelessWidget {
                 Text(
                   notification.message!,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     color: colors.onSurfaceVariant.withValues(alpha: 0.8),
                   ),
                   maxLines: 2,
@@ -291,7 +292,7 @@ class _NotificationTile extends StatelessWidget {
                   Text(
                     _formatTime(context, notification.createdAt),
                     style: TextStyle(
-                      fontSize: 11,
+                      fontSize: AppTypography.labelSmall,
                       color: colors.onSurfaceVariant.withValues(alpha: 0.72),
                     ),
                   ),
@@ -309,7 +310,7 @@ class _NotificationTile extends StatelessWidget {
                     child: Text(
                       _typeLabel(context, notification.type),
                       style: TextStyle(
-                        fontSize: 10,
+                        fontSize: AppTypography.labelSmall,
                         fontWeight: FontWeight.w600,
                         color: _typeColor(notification.type),
                       ),
@@ -380,7 +381,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             l10n.notificationEmpty,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w600,
               color: colors.onSurfaceVariant.withValues(alpha: 0.5),
             ),
@@ -389,7 +390,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             l10n.notificationEmptyHint,
             style: TextStyle(
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               color: colors.onSurfaceVariant.withValues(alpha: 0.4),
             ),
           ),

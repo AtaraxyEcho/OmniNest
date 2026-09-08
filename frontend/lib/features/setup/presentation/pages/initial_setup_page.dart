@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/app_exception.dart';
@@ -588,9 +589,9 @@ class _SetupSummary extends StatelessWidget {
           const SizedBox(height: 24),
           Text(
             'OmniNest',
-            style: Theme.of(
-              context,
-            ).textTheme.displayLarge?.copyWith(fontSize: 48),
+            style: Theme.of(context).textTheme.displayLarge?.copyWith(
+              fontSize: AppTypography.displayLarge,
+            ),
           ),
           const SizedBox(height: 16),
           ConstrainedBox(

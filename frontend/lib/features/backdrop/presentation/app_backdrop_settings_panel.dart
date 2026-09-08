@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
@@ -139,7 +140,7 @@ class _AppBackdropSettingsContentState
                       l10n.portalLocalBackdropTitle,
                       style: TextStyle(
                         color: widget.palette.text,
-                        fontSize: 18,
+                        fontSize: AppTypography.titleLarge,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -148,7 +149,7 @@ class _AppBackdropSettingsContentState
                       l10n.portalLocalBackdropSubtitle,
                       style: TextStyle(
                         color: widget.palette.muted,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                       ),
                     ),
                   ],
@@ -207,7 +208,10 @@ class _AppBackdropSettingsContentState
                 padding: const EdgeInsets.only(top: 9),
                 child: Text(
                   l10n.portalLocalBackdropCount(widget.state.backdrops.length),
-                  style: TextStyle(color: widget.palette.muted, fontSize: 12),
+                  style: TextStyle(
+                    color: widget.palette.muted,
+                    fontSize: AppTypography.bodySmall,
+                  ),
                 ),
               ),
             ],
@@ -223,7 +227,10 @@ class _AppBackdropSettingsContentState
             const SizedBox(height: 10),
             Text(
               _messageText(l10n, widget.state.message!),
-              style: TextStyle(color: widget.palette.accentAlt, fontSize: 12),
+              style: TextStyle(
+                color: widget.palette.accentAlt,
+                fontSize: AppTypography.bodySmall,
+              ),
             ),
           ],
           const SizedBox(height: 18),
@@ -340,12 +347,12 @@ class _AppBackdropSettingsContentState
             backgroundColor: const Color(0xFF101820),
             titleTextStyle: TextStyle(
               color: widget.palette.text,
-              fontSize: 18,
+              fontSize: AppTypography.titleLarge,
               fontWeight: FontWeight.w800,
             ),
             contentTextStyle: TextStyle(
               color: widget.palette.muted,
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               height: 1.55,
             ),
             title: Text(l10n.portalLocalBackdropClearAllTitle),
@@ -403,7 +410,7 @@ class _BackdropFilterBar extends StatelessWidget {
                   showCheckmark: false,
                   labelStyle: TextStyle(
                     color: Colors.black,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w700,
                   ),
                   selectedColor: palette.accent,
@@ -558,7 +565,7 @@ class _BackdropTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: palette.text,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

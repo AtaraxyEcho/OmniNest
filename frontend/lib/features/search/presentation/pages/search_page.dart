@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -69,7 +70,10 @@ class _SearchPageState extends ConsumerState<SearchPage> {
               onChanged:
                   (q) => ref.read(searchQueryProvider.notifier).updateQuery(q),
               onSubmitted: (_) => ref.invalidate(searchResultsProvider),
-              style: TextStyle(color: colors.onSurface, fontSize: 15),
+              style: TextStyle(
+                color: colors.onSurface,
+                fontSize: AppTypography.titleMedium,
+              ),
               decoration: InputDecoration(
                 hintText: l10n.searchHint,
                 hintStyle: TextStyle(
@@ -238,7 +242,7 @@ class _SearchGroup extends StatelessWidget {
           child: Text(
             _typeLabel(l10n, type),
             style: TextStyle(
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               fontWeight: FontWeight.w700,
               color: context.globalColors.onSurfaceVariant,
             ),
@@ -283,7 +287,7 @@ class _EmptyState extends StatelessWidget {
           Text(
             hasQuery ? l10n.searchEmptyResult : l10n.searchEmptyQuery,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w600,
               color: colors.onSurfaceVariant.withValues(alpha: 0.5),
             ),

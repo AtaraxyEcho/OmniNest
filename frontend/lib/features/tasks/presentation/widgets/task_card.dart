@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -37,7 +38,7 @@ class TaskCard extends StatelessWidget {
                     Text(
                       task.taskType,
                       style: TextStyle(
-                        fontSize: 14,
+                        fontSize: AppTypography.bodyLarge,
                         fontWeight: FontWeight.w700,
                         color: colors.onSurface,
                       ),
@@ -47,7 +48,7 @@ class TaskCard extends StatelessWidget {
                       Text(
                         task.routingKey!,
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySmall,
                           color: colors.onSurfaceVariant.withValues(alpha: 0.7),
                         ),
                       ),
@@ -69,7 +70,7 @@ class TaskCard extends StatelessWidget {
               child: Text(
                 task.errorMessage!,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   color: colors.error.withValues(alpha: 0.8),
                 ),
                 maxLines: 2,
@@ -85,7 +86,7 @@ class TaskCard extends StatelessWidget {
                   child: Text(
                     _phaseLabel(l10n, task.phase),
                     style: TextStyle(
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                       color: colors.onSurfaceVariant,
                     ),
                     maxLines: 1,
@@ -95,7 +96,7 @@ class TaskCard extends StatelessWidget {
                 Text(
                   '${task.progress.clamp(0, 100)}%',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w600,
                     color: colors.onSurfaceVariant,
                   ),
@@ -162,7 +163,10 @@ class _TaskFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.globalColors;
-    final textStyle = TextStyle(fontSize: 11, color: colors.onSurfaceVariant);
+    final textStyle = TextStyle(
+      fontSize: AppTypography.labelSmall,
+      color: colors.onSurfaceVariant,
+    );
     final textScale = MediaQuery.textScalerOf(context).scale(1);
     final compact = MediaQuery.sizeOf(context).width < 420 || textScale > 1.4;
     final retryButton =
@@ -247,7 +251,7 @@ class _StatusBadge extends StatelessWidget {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: AppTypography.labelSmall,
           fontWeight: FontWeight.w600,
           color: color,
         ),

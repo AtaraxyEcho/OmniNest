@@ -28,6 +28,7 @@ class NotificationIcon extends ConsumerWidget {
           label: Text(
             unreadCount > 99 ? '99+' : '$unreadCount',
             style: TextStyle(
+              // ignore: font_size_whitelist
               fontSize: 9,
               fontWeight: FontWeight.w700,
               color: colors.onError,

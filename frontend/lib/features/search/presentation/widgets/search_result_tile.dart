@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
 
@@ -31,7 +32,7 @@ class SearchResultTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          fontSize: 14,
+          fontSize: AppTypography.bodyLarge,
           fontWeight: FontWeight.w600,
           color: colors.onSurface,
         ),
@@ -41,7 +42,7 @@ class SearchResultTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          fontSize: 12,
+          fontSize: AppTypography.bodySmall,
           color: colors.onSurfaceVariant.withValues(alpha: 0.7),
         ),
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
@@ -44,7 +45,7 @@ class AppBackdropActionButton extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: palette.text,
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -102,7 +103,10 @@ class AppBackdropControls extends StatelessWidget {
                 ),
                 subtitle: Text(
                   l10n.portalLocalBackdropEnableHint,
-                  style: TextStyle(color: palette.muted, fontSize: 12),
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: AppTypography.bodySmall,
+                  ),
                 ),
               ),
               SwitchListTile(
@@ -118,7 +122,10 @@ class AppBackdropControls extends StatelessWidget {
                 ),
                 subtitle: Text(
                   l10n.portalLocalBackdropSeparateDevicesHint,
-                  style: TextStyle(color: palette.muted, fontSize: 12),
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: AppTypography.bodySmall,
+                  ),
                 ),
               ),
               AnimatedSwitcher(
@@ -202,7 +209,7 @@ class AppBackdropControls extends StatelessWidget {
                 l10n.portalLocalBackdropLocalOnly,
                 style: TextStyle(
                   color: palette.muted,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   height: 1.55,
                 ),
               ),
@@ -245,7 +252,7 @@ class _BackdropTargetNotice extends StatelessWidget {
                   : l10n.portalLocalBackdropCurrentDesktop,
               style: TextStyle(
                 color: palette.muted,
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w600,
               ),
             ),
