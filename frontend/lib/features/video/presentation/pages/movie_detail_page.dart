@@ -827,6 +827,7 @@ class _OverviewTab extends StatelessWidget {
           TextField(
             controller: overviewController,
             maxLines: 5,
+            cursorColor: MovieDetailTheme.accent,
             style: MovieDetailTheme.body(
               14,
               color: MovieDetailTheme.secondaryText,
@@ -846,7 +847,6 @@ class _OverviewTab extends StatelessWidget {
                 ),
               ),
               contentPadding: const EdgeInsets.all(12),
-              cursorColor: MovieDetailTheme.accent,
             ),
           )
         else if (overview.isNotEmpty)
