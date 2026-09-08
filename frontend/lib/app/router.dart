@@ -133,19 +133,13 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
-              _animatedRoute('/reader', (state) => const ReaderCenterPage()),
-              _animatedRoute(
+              _readerRoute('/reader', (state) => const ReaderCenterPage()),
+              _readerRoute(
                 '/reader/bookshelf',
                 (state) => const ReaderBookshelfPage(),
               ),
-              _animatedRoute(
-                '/reader/stats',
-                (state) => const ReaderStatsPage(),
-              ),
-              _animatedRoute(
-                '/reader/admin',
-                (state) => const ReaderAdminPage(),
-              ),
+              _readerRoute('/reader/stats', (state) => const ReaderStatsPage()),
+              _readerRoute('/reader/admin', (state) => const ReaderAdminPage()),
             ],
           ),
         ],
@@ -325,6 +319,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
 });
 
 /// 构建带淡入+微滑过渡的 GoRoute。
+/// 阅读模块内部页面路由：无过渡动画（样例切视图即时切换）。
+GoRoute _readerRoute(
+  String path,
+  Widget Function(GoRouterState state) builder,
+) {
+  return GoRoute(
+    path: path,
+    pageBuilder: (context, state) {
+      final child = _routeSurface(path, builder(state));
+      return NoTransitionPage<void>(key: state.pageKey, child: child);
+    },
+  );
+}
+
 GoRoute _animatedRoute(
   String path,
   Widget Function(GoRouterState state) builder,

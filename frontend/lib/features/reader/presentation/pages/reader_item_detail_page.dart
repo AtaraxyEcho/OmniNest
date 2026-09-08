@@ -316,31 +316,37 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // 返回条（样例 h-12 sticky back bar）
-          InkWell(
-            onTap: _handleBack,
-            child: Container(
-              height: 48,
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              decoration: BoxDecoration(
-                border: Border(bottom: BorderSide(color: rc.outlineVariant)),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.arrow_back_rounded,
-                    size: 16,
-                    color: rc.onSurfaceVariant,
+          Container(
+            decoration: BoxDecoration(
+              border: Border(bottom: BorderSide(color: rc.outlineVariant)),
+            ),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: InkWell(
+                onTap: _handleBack,
+                child: Container(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.arrow_back_rounded,
+                        size: 16,
+                        color: rc.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        l10n.coreBack,
+                        style: TextStyle(
+                          color: rc.onSurfaceVariant,
+                          fontSize: 13,
+                          height: 1.2,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    l10n.coreBack,
-                    style: TextStyle(
-                      color: rc.onSurfaceVariant,
-                      fontSize: 13,
-                      height: 1.2,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),

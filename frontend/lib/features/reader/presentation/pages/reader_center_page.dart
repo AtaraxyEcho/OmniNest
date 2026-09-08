@@ -115,7 +115,7 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
           const SizedBox(height: 28),
           _ContinueSection(
             items: data.continueItems.take(6).toList(),
-            onOpenItem: _onOpenItem,
+            onOpenItem: _openContinueReading,
           ),
         ],
         const SizedBox(height: 32),
@@ -136,22 +136,27 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
     );
   }
 
-  Future<void> _onOpenItem(ReaderItem item) async {
+  /// 书库/书架卡片：一律先进入详情页。
+  void _onOpenItem(ReaderItem item) {
     if (item.id.isEmpty) {
-      if (mounted) {
-        showReaderSnackBar(
-          context,
-          AppLocalizations.of(context).readerOperationFailed,
-        );
-      }
+      showReaderSnackBar(
+        context,
+        AppLocalizations.of(context).readerOperationFailed,
+      );
       return;
     }
-    // 漫画先进入详情页，阅读清单就绪后再由用户进入阅读器。
-    if (item.isComic) {
-      context.push('/reader/items/${item.id}');
-      return;
-    }
+    context.push('/reader/items/${item.id}');
+  }
 
+  /// 继续阅读卡：直接打开阅读器（定位到上次章节），返回时回到当前页。
+  Future<void> _openContinueReading(ReaderItem item) async {
+    if (item.id.isEmpty) {
+      showReaderSnackBar(
+        context,
+        AppLocalizations.of(context).readerOperationFailed,
+      );
+      return;
+    }
     final localSnapshot = ReaderProgressSnapshot.fromLocal(
       await ReaderLocalProgress.loadLatest(item.id),
     );
