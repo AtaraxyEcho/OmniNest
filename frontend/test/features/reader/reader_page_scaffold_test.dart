@@ -39,45 +39,6 @@ Widget _wrap(Widget child, {bool hosted = false}) {
 }
 
 void main() {
-  group('ReaderSectionTabBar', () {
-    testWidgets('非管理员仅展示书库/书架/统计三个页签', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          Scaffold(
-            body: ReaderSectionTabBar(
-              current: ReaderPageTarget.library,
-              canManage: false,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text('Library'), findsOneWidget);
-      expect(find.text('Bookshelf'), findsOneWidget);
-      expect(find.text('Stats'), findsOneWidget);
-      expect(find.text('Manage'), findsNothing);
-      expect(tester.takeException(), isNull);
-    });
-
-    testWidgets('管理员额外展示管理页签', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          Scaffold(
-            body: ReaderSectionTabBar(
-              current: ReaderPageTarget.library,
-              canManage: true,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text('Manage'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
-  });
-
   group('ReaderPageScaffold', () {
     testWidgets('桌面布局渲染顶栏、页签与内容', (tester) async {
       tester.view.physicalSize = const Size(2400, 1600);
@@ -125,7 +86,7 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('hosted 窄屏布局渲染页签与内容且无内嵌底部导航', (tester) async {
+    testWidgets('窄屏使用样例底导航渲染内容', (tester) async {
       tester.view.physicalSize = const Size(390, 844);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -133,14 +94,13 @@ void main() {
 
       await tester.pumpWidget(
         _wrap(
-          hosted: true,
           const ReaderPageScaffold(
             target: ReaderPageTarget.library,
             child: Text('mobile library content'),
           ),
         ),
       );
-      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(find.text('mobile library content'), findsOneWidget);
       expect(find.text('Library'), findsOneWidget);

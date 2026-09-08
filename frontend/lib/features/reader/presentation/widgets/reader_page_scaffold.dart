@@ -8,8 +8,6 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
-import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart'
-    show kReaderSerifFamily;
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 
 /// 阅读模块页面目标，对应模块内一级导航与路由

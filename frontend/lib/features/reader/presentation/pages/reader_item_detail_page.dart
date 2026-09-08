@@ -14,8 +14,6 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/domain/reader_status_constants.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_detail_page.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
-import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart'
-    show kReaderSerifFamily;
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 

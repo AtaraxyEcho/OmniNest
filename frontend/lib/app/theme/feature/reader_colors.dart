@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 
+/// 参考设计标题衬线字体（中文回退系统字体，保持正体）。
+const String kReaderSerifFamily = 'InstrumentSerif';
+
 @immutable
 class ReaderColors extends ThemeExtension<ReaderColors> {
   const ReaderColors({

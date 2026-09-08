@@ -8,8 +8,6 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
-import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart'
-    show kReaderSerifFamily;
 import 'package:omninest/features/reader/presentation/widgets/reader_shelf_row.dart';
 
 /// 书架页：已加入书架的条目编号列表。

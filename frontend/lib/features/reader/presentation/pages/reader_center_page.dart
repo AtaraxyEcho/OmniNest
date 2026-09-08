@@ -17,9 +17,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedb
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
 /// 书库页：全部条目网格，支持分段过滤、排序与搜索。
-/// 参考设计标题衬线字体（中文回退系统字体，保持正体）。
-const String kReaderSerifFamily = 'InstrumentSerif';
-
 class ReaderCenterPage extends ConsumerStatefulWidget {
   const ReaderCenterPage({super.key});
 

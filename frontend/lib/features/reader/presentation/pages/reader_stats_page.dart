@@ -4,8 +4,6 @@ import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
-import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart'
-    show kReaderSerifFamily;
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 
 /// 统计页：统计卡、14 天活动柱状图、书库构成与在读列表。
