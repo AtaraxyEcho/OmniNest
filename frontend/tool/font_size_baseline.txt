@@ -115,7 +115,7 @@ lib/features/reader/presentation/widgets/reader_content_image.dart 2
 lib/features/reader/presentation/widgets/reader_deferred_restore_overlay.dart 1
 lib/features/reader/presentation/widgets/reader_empty_state.dart 2
 lib/features/reader/presentation/widgets/reader_find_panel.dart 1
-lib/features/reader/presentation/widgets/reader_import_queue_cards.dart 4
+lib/features/reader/presentation/widgets/reader_import_queue_cards.dart 3
 lib/features/reader/presentation/widgets/reader_import_section.dart 14
 lib/features/reader/presentation/widgets/reader_item_detail_widgets.dart 3
 lib/features/reader/presentation/widgets/reader_library_cards.dart 6
