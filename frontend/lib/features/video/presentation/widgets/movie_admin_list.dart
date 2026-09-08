@@ -262,12 +262,16 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     final item = entry.item;
     final categoryLabel =
         entry.episodeCount != null
-            ? (entry.isAnime ? l10n.videoSectionAnime : l10n.videoSectionTvShows)
-            : (item.mediaType == 'MOVIE' ? l10n.videoSectionMovies : item.mediaType);
+            ? (entry.isAnime
+                ? l10n.videoSectionAnime
+                : l10n.videoSectionTvShows)
+            : (item.mediaType == 'MOVIE'
+                ? l10n.videoSectionMovies
+                : item.mediaType);
     final displayTitle =
         entry.seriesTitle?.trim().isNotEmpty == true
-        ? entry.seriesTitle!.trim()
-        : item.title;
+            ? entry.seriesTitle!.trim()
+            : item.title;
     final metaLine =
         entry.episodeCount != null
             ? '$categoryLabel · ${l10n.videoSeriesEpisodeCount(entry.episodeCount!)}'
@@ -320,7 +324,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
           Material(
             color: Colors.transparent,
             child: InkWell(
-              onTap: () => context.go('/video/${item.id}/metadata'),
+              onTap: () => showMovieMetadataEditor(context, item),
               borderRadius: MovieRedesignPalette.borderRadius,
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -481,9 +485,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     }
     MovieVideoItem pickRepresentative(List<MovieVideoItem> episodes) {
       // 代表集：优先展示有进度的分集，其次第一集，避免总落在第 1 集之外。
-      final withProgress = episodes.where(
-        (e) => e.metadataStatus != 'MATCHED',
-      );
+      final withProgress = episodes.where((e) => e.metadataStatus != 'MATCHED');
       return withProgress.isNotEmpty ? withProgress.first : episodes.first;
     }
 

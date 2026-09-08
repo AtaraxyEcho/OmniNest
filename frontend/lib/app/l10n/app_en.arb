@@ -3937,5 +3937,9 @@
       }
     }
   },
-  "videoDetailEpisodesHeader": "EPISODES"
+  "videoDetailEpisodesHeader": "EPISODES",
+  "videoMetaFieldOriginalTitle": "Original title",
+  "videoMetaFieldYear": "Year",
+  "videoMetaFieldRuntimeMinutes": "Runtime (minutes)",
+  "videoMetaFieldOverview": "Overview"
 }

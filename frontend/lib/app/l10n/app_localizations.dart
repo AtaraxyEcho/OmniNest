@@ -15959,6 +15959,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'EPISODES'**
   String get videoDetailEpisodesHeader;
+
+  /// No description provided for @videoMetaFieldOriginalTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Original title'**
+  String get videoMetaFieldOriginalTitle;
+
+  /// No description provided for @videoMetaFieldYear.
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get videoMetaFieldYear;
+
+  /// No description provided for @videoMetaFieldRuntimeMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'Runtime (minutes)'**
+  String get videoMetaFieldRuntimeMinutes;
+
+  /// No description provided for @videoMetaFieldOverview.
+  ///
+  /// In en, this message translates to:
+  /// **'Overview'**
+  String get videoMetaFieldOverview;
 }
 
 class _AppLocalizationsDelegate

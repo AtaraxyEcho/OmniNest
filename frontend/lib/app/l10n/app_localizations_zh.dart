@@ -8468,4 +8468,16 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoDetailEpisodesHeader => '剧集列表';
+
+  @override
+  String get videoMetaFieldOriginalTitle => '原名';
+
+  @override
+  String get videoMetaFieldYear => '年份';
+
+  @override
+  String get videoMetaFieldRuntimeMinutes => '时长（分钟）';
+
+  @override
+  String get videoMetaFieldOverview => '简介';
 }

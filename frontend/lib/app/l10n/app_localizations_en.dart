@@ -8726,4 +8726,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoDetailEpisodesHeader => 'EPISODES';
+
+  @override
+  String get videoMetaFieldOriginalTitle => 'Original title';
+
+  @override
+  String get videoMetaFieldYear => 'Year';
+
+  @override
+  String get videoMetaFieldRuntimeMinutes => 'Runtime (minutes)';
+
+  @override
+  String get videoMetaFieldOverview => 'Overview';
 }

@@ -45,7 +45,6 @@ import 'package:omninest/features/setup/presentation/pages/initial_setup_page.da
 import 'package:omninest/features/tasks/presentation/pages/tasks_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_detail_page.dart';
-import 'package:omninest/features/video/presentation/pages/movie_metadata_edit_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_player_page.dart';
 import 'package:omninest/features/video/presentation/pages/series_detail_page.dart';
 
@@ -150,12 +149,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/video/:videoId/play',
         (state) =>
             MoviePlayerPage(videoItemId: state.pathParameters['videoId'] ?? ''),
-      ),
-      _animatedRoute(
-        '/video/:videoId/metadata',
-        (state) => MovieMetadataEditPage(
-          videoItemId: state.pathParameters['videoId'] ?? '',
-        ),
       ),
       _animatedRoute(
         '/music/now-playing',

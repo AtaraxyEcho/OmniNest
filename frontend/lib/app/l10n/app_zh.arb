@@ -3811,5 +3811,9 @@
       }
     }
   },
-  "videoDetailEpisodesHeader": "剧集列表"
+  "videoDetailEpisodesHeader": "剧集列表",
+  "videoMetaFieldOriginalTitle": "原名",
+  "videoMetaFieldYear": "年份",
+  "videoMetaFieldRuntimeMinutes": "时长（分钟）",
+  "videoMetaFieldOverview": "简介"
 }
