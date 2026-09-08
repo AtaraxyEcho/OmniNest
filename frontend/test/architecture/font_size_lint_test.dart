@@ -30,7 +30,12 @@ void main() {
       var count = 0;
       for (var i = 0; i < lines.length; i++) {
         final line = lines[i];
-        if (line.contains(whitelistMarker)) {
+        // 对齐 Dart analyzer 惯例：ignore 标记写在违规行行尾或上一行均生效。
+        final previousLine = i > 0 ? lines[i - 1] : '';
+        final isWhitelisted =
+            line.contains(whitelistMarker) ||
+            previousLine.contains(whitelistMarker);
+        if (isWhitelisted) {
           continue;
         }
         final isViolation =
