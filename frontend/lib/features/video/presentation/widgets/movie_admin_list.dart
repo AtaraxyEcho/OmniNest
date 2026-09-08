@@ -260,9 +260,17 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
     final palette = context.movieRedesign;
     final text = context.movieRedesignText;
     final item = entry.item;
+    final categoryLabel =
+        entry.episodeCount != null
+            ? (entry.isAnime ? l10n.videoSectionAnime : l10n.videoSectionTvShows)
+            : (item.mediaType == 'MOVIE' ? l10n.videoSectionMovies : item.mediaType);
+    final displayTitle =
+        entry.seriesTitle?.trim().isNotEmpty == true
+        ? entry.seriesTitle!.trim()
+        : item.title;
     final metaLine =
         entry.episodeCount != null
-            ? '${l10n.videoSectionTvShows} · ${l10n.videoSeriesEpisodeCount(entry.episodeCount!)}'
+            ? '$categoryLabel · ${l10n.videoSeriesEpisodeCount(entry.episodeCount!)}'
             : '${item.mediaType == 'MOVIE' ? l10n.videoSectionMovies : item.mediaType} · ${item.year}';
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -289,7 +297,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.title,
+                  displayTitle,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: text.body(size: 14, weight: FontWeight.w500),
@@ -453,6 +461,14 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
   }
 
   List<_AdminRowEntry> _buildEntries(List<MovieVideoItem> items) {
+    final state = ref.read(movieCenterControllerProvider).asData?.value;
+    final seriesById = <String, MovieSeries>{
+      for (final series in [
+        ...?state?.animeSeries,
+        ...?state?.dashboard.series,
+      ])
+        series.id: series,
+    };
     final seriesMap = <String, List<MovieVideoItem>>{};
     final standalone = <MovieVideoItem>[];
     for (final item in items) {
@@ -463,12 +479,31 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
         standalone.add(item);
       }
     }
+    MovieVideoItem pickRepresentative(List<MovieVideoItem> episodes) {
+      // 代表集：优先展示有进度的分集，其次第一集，避免总落在第 1 集之外。
+      final withProgress = episodes.where(
+        (e) => e.metadataStatus != 'MATCHED',
+      );
+      return withProgress.isNotEmpty ? withProgress.first : episodes.first;
+    }
+
     return <_AdminRowEntry>[
       for (final entry in seriesMap.entries)
-        _AdminRowEntry(
-          item: entry.value.first,
-          episodeCount: entry.value.length,
-        ),
+        () {
+          final series = seriesById[entry.key];
+          final episodes = entry.value;
+          episodes.sort((a, b) {
+            final aNum = a.episodeNumber ?? 0;
+            final bNum = b.episodeNumber ?? 0;
+            return aNum.compareTo(bNum);
+          });
+          return _AdminRowEntry(
+            item: pickRepresentative(episodes),
+            episodeCount: episodes.length,
+            seriesTitle: series?.title,
+            isAnime: series?.seriesType == 'ANIME',
+          );
+        }(),
       for (final item in standalone) _AdminRowEntry(item: item),
     ];
   }
@@ -521,10 +556,19 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
 }
 
 class _AdminRowEntry {
-  const _AdminRowEntry({required this.item, this.episodeCount});
+  const _AdminRowEntry({
+    required this.item,
+    this.episodeCount,
+    this.seriesTitle,
+    this.isAnime = false,
+  });
 
   final MovieVideoItem item;
   final int? episodeCount;
+
+  /// 多集分组行的系列名与动漫归类（单文件条目为空）。
+  final String? seriesTitle;
+  final bool isAnime;
 }
 
 class _PosterThumb extends StatelessWidget {

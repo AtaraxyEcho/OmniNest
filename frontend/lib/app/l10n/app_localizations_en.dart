@@ -8718,4 +8718,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoDetailUploadSubtitle => 'UPLOAD SUBTITLE';
+
+  @override
+  String videoDetailSeasonCount(int count) {
+    return '$count seasons';
+  }
+
+  @override
+  String get videoDetailEpisodesHeader => 'EPISODES';
 }

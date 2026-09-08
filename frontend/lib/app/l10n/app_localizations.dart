@@ -15947,6 +15947,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'UPLOAD SUBTITLE'**
   String get videoDetailUploadSubtitle;
+
+  /// No description provided for @videoDetailSeasonCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} seasons'**
+  String videoDetailSeasonCount(int count);
+
+  /// No description provided for @videoDetailEpisodesHeader.
+  ///
+  /// In en, this message translates to:
+  /// **'EPISODES'**
+  String get videoDetailEpisodesHeader;
 }
 
 class _AppLocalizationsDelegate

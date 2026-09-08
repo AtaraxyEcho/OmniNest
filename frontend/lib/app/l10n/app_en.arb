@@ -3928,5 +3928,14 @@
   "videoDetailCast": "Cast",
   "videoDetailDirector": "DIR.",
   "videoDetailNoVersions": "No versions available.",
-  "videoDetailUploadSubtitle": "UPLOAD SUBTITLE"
+  "videoDetailUploadSubtitle": "UPLOAD SUBTITLE",
+  "videoDetailSeasonCount": "{count} seasons",
+  "@videoDetailSeasonCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "videoDetailEpisodesHeader": "EPISODES"
 }

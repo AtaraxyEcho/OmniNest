@@ -8460,4 +8460,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoDetailUploadSubtitle => '上传字幕';
+
+  @override
+  String videoDetailSeasonCount(int count) {
+    return '$count 季';
+  }
+
+  @override
+  String get videoDetailEpisodesHeader => '剧集列表';
 }
