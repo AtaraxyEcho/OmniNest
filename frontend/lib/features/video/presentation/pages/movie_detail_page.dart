@@ -846,6 +846,7 @@ class _OverviewTab extends StatelessWidget {
                 ),
               ),
               contentPadding: const EdgeInsets.all(12),
+              cursorColor: MovieDetailTheme.accent,
             ),
           )
         else if (overview.isNotEmpty)
