@@ -1153,11 +1153,25 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
           totalPages: 0,
         ),
       ),
+      // 预取两类系列列表：侧边栏计数与剧集/动漫分区首屏即有稳定数据
+      // （后端 dashboard 的 series 字段恒为空，不能作为计数来源）。
+      _safe(() => _api.seriesByType(seriesType: 'TV'), const <MovieSeries>[]),
+      _safe(
+        () => _api.seriesByType(seriesType: 'ANIME'),
+        const <MovieSeries>[],
+      ),
     ]);
     final dashboard = results[0] as MovieDashboard;
     final moviePage = results[1] as MediaPage<MovieVideoItem>;
+    final tvSeries = results[2] as List<MovieSeries>;
+    final animeList = results[3] as List<MovieSeries>;
     return MovieCenterState(
-      dashboard: dashboard,
+      dashboard: MovieDashboard(
+        stats: dashboard.stats,
+        recentlyAdded: dashboard.recentlyAdded,
+        continueWatching: dashboard.continueWatching,
+        series: [...tvSeries, ...animeList],
+      ),
       movies: moviePage.items,
       recentItems: dashboard.recentlyAdded,
       continueWatching: dashboard.continueWatching,
@@ -1165,9 +1179,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       watchHistory: const [],
       collections: const [],
       tasks: const [],
-      animeSeries: dashboard.series
-          .where((series) => series.seriesType == 'ANIME')
-          .toList(growable: false),
+      animeSeries: animeList,
       moviePage: moviePage.page,
       movieHasMore: moviePage.page + 1 < moviePage.totalPages,
       loadedSections: const {MovieSection.movies},

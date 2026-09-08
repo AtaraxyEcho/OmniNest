@@ -31,10 +31,17 @@ void main() {
 
       expect(first.movies.map((item) => item.id), ['movie-1']);
       expect(first.movieHasMore, isTrue);
-      expect(adapter.requestedPaths, [
+      // 初始加载现会并行预取剧集/动漫系列列表。
+      expect(adapter.requestedPaths.take(2), [
         '/video/dashboard',
         '/video/library/page',
       ]);
+      expect(
+        adapter.requestedPaths.skip(2).toSet().difference({
+          '/video/series/by-type',
+        }),
+        isEmpty,
+      );
 
       await container
           .read(movieCenterControllerProvider.notifier)
@@ -72,6 +79,7 @@ class _MovieLibraryAdapter implements HttpClientAdapter {
         'series': <Object>[],
       },
       '/video/library/page' => _libraryPage(options),
+      '/video/series/by-type' => <Object>[],
       _ => throw StateError('未处理的测试请求: ${options.path}'),
     };
     return ResponseBody.fromString(
