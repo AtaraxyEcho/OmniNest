@@ -88,12 +88,16 @@ class _AdminNavItemState extends State<_AdminNavItem> {
   }
 }
 
-class _SidebarStorageStatus extends StatelessWidget {
+class _SidebarStorageStatus extends ConsumerWidget {
   const _SidebarStorageStatus();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final c = context.adminColors;
+    final l10n = AppLocalizations.of(context);
+    // 与概览页共用同一 summary provider，避免重复请求。
+    final storage =
+        ref.watch(adminConsoleControllerProvider).asData?.value.storage;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: c.surfaceContainerHigh.withValues(alpha: 0.72),
@@ -110,16 +114,26 @@ class _SidebarStorageStatus extends StatelessWidget {
                 Icon(Icons.storage_outlined, size: 18, color: c.onSurface),
                 const SizedBox(width: 8),
                 Text(
-                  AppLocalizations.of(context).adminStorageOverview,
+                  l10n.adminStorageOverview,
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            const LinearProgressIndicator(value: 0.36, minHeight: 6),
-            const SizedBox(height: 10),
             Text(
-              AppLocalizations.of(context).adminPercentUsed('36'),
+              storage == null
+                  ? '—'
+                  : l10n.adminStorageUsed(formatFileSize(storage.usedBytes)),
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                color: c.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              storage == null
+                  ? '—'
+                  : l10n.adminStorageFileCount(storage.fileCount),
               style: Theme.of(
                 context,
               ).textTheme.labelMedium?.copyWith(color: c.onSurfaceVariant),

@@ -83,14 +83,6 @@ class AdminUserStatus {
 
   static const active = 'ACTIVE';
   static const disabled = 'DISABLED';
-
-  static String label(String status) {
-    return switch (status) {
-      active => '启用',
-      disabled => '禁用',
-      _ => status,
-    };
-  }
 }
 
 class AdminCreateUserInput {
@@ -132,14 +124,4 @@ class AdminRoles {
 
   static const manageableRoles = [admin, member, guest];
   static const allRoles = [superAdmin, admin, member, guest];
-
-  static String label(String role) {
-    return switch (role) {
-      superAdmin => '超级管理员',
-      admin => '管理员',
-      member => '成员',
-      guest => '访客',
-      _ => role,
-    };
-  }
 }

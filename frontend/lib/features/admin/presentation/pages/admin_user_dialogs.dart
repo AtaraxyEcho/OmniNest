@@ -301,7 +301,7 @@ class _EditUserRolesDialogState extends ConsumerState<_EditUserRolesDialog> {
                 for (final role in AdminRoles.manageableRoles)
                   FilterChip(
                     selected: _roles.contains(role),
-                    label: Text(AdminRoles.label(role)),
+                    label: Text(adminRoleDisplayName(l10n, role)),
                     onSelected: (selected) {
                       setState(() {
                         if (selected) {
@@ -457,7 +457,7 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
                     for (final role in AdminRoles.manageableRoles)
                       ChoiceChip(
                         selected: _role == role,
-                        label: Text(AdminRoles.label(role)),
+                        label: Text(adminRoleDisplayName(l10n, role)),
                         onSelected: (_) => setState(() => _role = role),
                       ),
                   ],

@@ -492,6 +492,10 @@ class AdminMonitoringMetric {
   final String status;
 }
 
+/// 存储管理聚合视图。
+///
+/// [fromJson] 只解析 `/admin/storage` 返回的桶清单；[locations] 与
+/// [trustedMounts] 来自独立端点，由 AdminOperationsApi.storage() 组装填充。
 class AdminStorageManagementView {
   const AdminStorageManagementView({
     required this.buckets,
@@ -506,7 +510,11 @@ class AdminStorageManagementView {
   }
 
   final List<AdminBucketItem> buckets;
+
+  /// 本地只读存储位置，来自 `/admin/storage/locations`。
   final List<AdminStorageLocation> locations;
+
+  /// 部署可信挂载，来自 `/admin/storage/mounts`。
   final List<AdminTrustedMount> trustedMounts;
 }
 

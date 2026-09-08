@@ -5,12 +5,14 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/features/admin/application/admin_console_controller.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
@@ -373,6 +375,7 @@ class _AdminTopBar extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.adminColors;
+    final l10n = AppLocalizations.of(context);
     return WorkbenchTopBar(
       surfaceColor: c.surface,
       borderColor: c.outlineVariant,
@@ -384,8 +387,8 @@ class _AdminTopBar extends ConsumerWidget {
               _TopBarPortalButton(onPressed: () => context.go('/portal')),
               const SizedBox(width: 12),
               AdminStatusPill(
-                label: 'Admin',
-                color: context.adminColors.tertiary,
+                label: l10n.adminRolePillLabel,
+                color: c.tertiary,
               ),
               const SizedBox(width: 12),
             ] else
@@ -412,7 +415,6 @@ class _AdminTopBar extends ConsumerWidget {
                 constraints: const BoxConstraints(maxWidth: 320),
                 child: _AdminSearchField(ref: ref),
               ),
-              const SizedBox(width: 16),
               const SizedBox(width: 16),
               const FontScaleControl(size: 20),
               const NotificationIcon(size: 20),
@@ -568,7 +570,7 @@ class _TopBarPortalButton extends StatelessWidget {
     return TextButton.icon(
       onPressed: onPressed,
       icon: Icon(Icons.arrow_back_rounded, size: 18),
-      label: const Text('Portal'),
+      label: Text(AppLocalizations.of(context).adminTopBarPortal),
       style: TextButton.styleFrom(
         textStyle: TextStyle(
           fontSize: 13,
@@ -586,6 +588,7 @@ class _AdminSideTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.adminColors;
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: Row(
@@ -605,7 +608,7 @@ class _AdminSideTitle extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'OmniNest Admin',
+                  l10n.adminShellTitle,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     fontSize: 15,
@@ -615,7 +618,7 @@ class _AdminSideTitle extends StatelessWidget {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Central Console',
+                  l10n.adminShellSubtitle,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     fontSize: 11,
                     height: 14 / 11,

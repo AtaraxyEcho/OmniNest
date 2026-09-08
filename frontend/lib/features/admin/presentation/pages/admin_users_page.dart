@@ -9,6 +9,26 @@ import 'package:omninest/features/admin/presentation/widgets/admin_common_widget
 
 part 'admin_user_dialogs.dart';
 
+/// 角色编码到本地化名称的映射，未知编码原样返回。
+String adminRoleDisplayName(AppLocalizations l10n, String role) {
+  return switch (role) {
+    AdminRoles.superAdmin => l10n.adminRoleSuperAdmin,
+    AdminRoles.admin => l10n.adminRoleAdmin,
+    AdminRoles.member => l10n.adminRoleMember,
+    AdminRoles.guest => l10n.adminRoleGuest,
+    _ => role,
+  };
+}
+
+/// 用户状态到本地化名称的映射，未知状态原样返回。
+String adminUserStatusDisplayName(AppLocalizations l10n, String status) {
+  return switch (status) {
+    AdminUserStatus.active => l10n.adminUserStatusActive,
+    AdminUserStatus.disabled => l10n.adminUserStatusDisabled,
+    _ => status,
+  };
+}
+
 class AdminUsersPage extends StatelessWidget {
   const AdminUsersPage({required this.state, super.key});
 
@@ -132,7 +152,7 @@ class _UserManagementPanel extends ConsumerWidget {
                 for (final role in AdminRoles.allRoles)
                   FilterChip(
                     selected: state.roleFilter == role,
-                    label: Text(AdminRoles.label(role)),
+                    label: Text(adminRoleDisplayName(l10n, role)),
                     onSelected:
                         (_) => ref
                             .read(adminUserControllerProvider.notifier)
@@ -289,7 +309,10 @@ class _UserRow extends ConsumerWidget {
                         // 状态标签（仅在宽屏时放在同行）
                         if (isWide)
                           AdminStatusPill(
-                            label: AdminUserStatus.label(user.status),
+                            label: adminUserStatusDisplayName(
+                              l10n,
+                              user.status,
+                            ),
                             color:
                                 user.isActive
                                     ? adminColors.success
@@ -347,7 +370,7 @@ class _UserRow extends ConsumerWidget {
                 const SizedBox(height: 12),
                 // 非宽屏模式下，状态标签单独一行
                 AdminStatusPill(
-                  label: AdminUserStatus.label(user.status),
+                  label: adminUserStatusDisplayName(l10n, user.status),
                   color:
                       user.isActive ? adminColors.success : adminColors.error,
                 ),
@@ -472,7 +495,7 @@ class _RoleChip extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
         child: Text(
-          AdminRoles.label(role),
+          adminRoleDisplayName(AppLocalizations.of(context), role),
           style: Theme.of(
             context,
           ).textTheme.labelMedium?.copyWith(color: color),

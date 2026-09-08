@@ -390,8 +390,9 @@ class _TaskBarChart extends StatelessWidget {
               final d = data[group.x.toInt()];
               final hasData = d.completed > 0 || d.failed > 0 || d.running > 0;
               if (!hasData) return null;
+              final l10n = AppLocalizations.of(context);
               return BarTooltipItem(
-                '${d.completed} done · ${d.failed} err',
+                l10n.adminTaskThroughputTooltip(d.completed, d.failed),
                 TextStyle(
                   color: c.surface,
                   fontSize: 11,
@@ -418,11 +419,12 @@ class _SystemLoadBars extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.adminColors;
+    final l10n = AppLocalizations.of(context);
     final items = [
-      (label: 'CPU', value: load.cpuUsage),
-      (label: 'MEM', value: load.memoryUsage),
-      (label: 'DISK', value: load.diskUsage),
-      (label: 'JVM', value: load.jvmHeapUsage),
+      (label: l10n.adminLoadCpu, value: load.cpuUsage),
+      (label: l10n.adminLoadMemory, value: load.memoryUsage),
+      (label: l10n.adminLoadDisk, value: load.diskUsage),
+      (label: l10n.adminLoadJvm, value: load.jvmHeapUsage),
     ];
     return Center(
       child: ConstrainedBox(

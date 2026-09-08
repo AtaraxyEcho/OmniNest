@@ -21,6 +21,7 @@ class AdminColors extends ThemeExtension<AdminColors> {
     required this.error,
     required this.outlineVariant,
     required this.success,
+    required this.warning,
     required this.info,
   });
 
@@ -39,6 +40,7 @@ class AdminColors extends ThemeExtension<AdminColors> {
   final Color error;
   final Color outlineVariant;
   final Color success;
+  final Color warning;
   final Color info;
 
   /// 从全局主题色派生 Admin 模块专属色
@@ -59,6 +61,7 @@ class AdminColors extends ThemeExtension<AdminColors> {
       error: base.error,
       outlineVariant: base.outlineVariant,
       success: base.success,
+      warning: base.warning,
       info: base.info,
     );
   }
@@ -80,6 +83,7 @@ class AdminColors extends ThemeExtension<AdminColors> {
     Color? error,
     Color? outlineVariant,
     Color? success,
+    Color? warning,
     Color? info,
   }) {
     return AdminColors(
@@ -100,6 +104,7 @@ class AdminColors extends ThemeExtension<AdminColors> {
       error: error ?? this.error,
       outlineVariant: outlineVariant ?? this.outlineVariant,
       success: success ?? this.success,
+      warning: warning ?? this.warning,
       info: info ?? this.info,
     );
   }
@@ -134,6 +139,7 @@ class AdminColors extends ThemeExtension<AdminColors> {
       error: Color.lerp(error, other.error, t)!,
       outlineVariant: Color.lerp(outlineVariant, other.outlineVariant, t)!,
       success: Color.lerp(success, other.success, t)!,
+      warning: Color.lerp(warning, other.warning, t)!,
       info: Color.lerp(info, other.info, t)!,
     );
   }

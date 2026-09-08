@@ -9,30 +9,28 @@ import 'dart:math' as math;
 import 'package:data_table_2/data_table_2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 
 export 'package:omninest/app/widgets/app_dropdown.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
 
 /// 状态标签语义色。
 enum AdminTagTone { success, warning, error, info, neutral }
 
-/// 语义色对应的标签配色：前景取语义基色并在暗色主题下提亮，背景为
+/// 语义色对应的标签配色：前景取 Admin 主题扩展的语义基色，背景为
 /// 前景低透明底色，附同色描边，保证明暗两套主题下的可读性一致。
 extension AdminTagToneColor on AdminTagTone {
-  Color _base(BuildContext context) => switch (this) {
-    AdminTagTone.success =>
-      Theme.of(context).brightness == Brightness.dark
-          ? Colors.green.shade400
-          : Colors.green.shade700,
-    AdminTagTone.warning =>
-      Theme.of(context).brightness == Brightness.dark
-          ? Colors.orange.shade400
-          : Colors.orange.shade800,
-    AdminTagTone.error => Theme.of(context).colorScheme.error,
-    AdminTagTone.info => Theme.of(context).colorScheme.primary,
-    AdminTagTone.neutral => Theme.of(context).colorScheme.onSurfaceVariant,
-  };
+  Color _base(BuildContext context) {
+    final adminColors = context.adminColors;
+    return switch (this) {
+      AdminTagTone.success => adminColors.success,
+      AdminTagTone.warning => adminColors.warning,
+      AdminTagTone.error => adminColors.error,
+      AdminTagTone.info => adminColors.info,
+      AdminTagTone.neutral => adminColors.onSurfaceVariant,
+    };
+  }
 
   Color foreground(BuildContext context) => _base(context);
 

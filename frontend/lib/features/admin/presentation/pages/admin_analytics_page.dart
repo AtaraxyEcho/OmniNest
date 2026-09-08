@@ -113,10 +113,14 @@ class _DaysSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SegmentedButton<int>(
       segments: [
         for (final days in _kDayOptions)
-          ButtonSegment<int>(value: days, label: Text('${days}d')),
+          ButtonSegment<int>(
+            value: days,
+            label: Text(l10n.adminAnalyticsDays(days)),
+          ),
       ],
       selected: <int>{selected},
       showSelectedIcon: false,
@@ -451,7 +455,7 @@ class _LoadPanel extends StatelessWidget {
           ),
           const SizedBox(width: 4),
           Text(
-            'LIVE',
+            l10n.adminAnalyticsLive,
             style: TextStyle(
               fontSize: 9,
               fontWeight: FontWeight.w700,

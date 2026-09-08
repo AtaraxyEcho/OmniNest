@@ -254,7 +254,9 @@ class _ActivityAndHealth extends ConsumerWidget {
         final activity = AdminInfoPanel(
           title: l10n.adminActivityChart,
           subtitle: l10n.adminActivityChartSubtitle,
-          trailing: AdminStatusPill(label: '${summary.tasks.total} tasks'),
+          trailing: AdminStatusPill(
+            label: l10n.adminOverviewTasksTotal(summary.tasks.total),
+          ),
           children: [
             SizedBox(
               height: 260,

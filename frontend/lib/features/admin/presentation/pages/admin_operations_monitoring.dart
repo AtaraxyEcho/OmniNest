@@ -169,7 +169,7 @@ class _AdminMonitoringPageState extends State<AdminMonitoringPage>
                 progress: overview.cpuUsage / 100,
                 supporting: [
                   AdminMetricMiniStat(
-                    label: 'JVM',
+                    label: l10n.adminLoadJvm,
                     value: '${overview.jvmHeapUsage.toStringAsFixed(1)}%',
                     color: _usageColor(overview.jvmHeapUsage, adminColors),
                   ),
@@ -322,7 +322,7 @@ class _MonitoringTrendPanel extends StatelessWidget {
     return AdminInfoPanel(
       title: l10n.adminTrendCharts,
       subtitle: l10n.adminTrendChartsSubtitle,
-      trailing: const AdminStatusPill(label: '5min step'),
+      trailing: AdminStatusPill(label: l10n.adminMonitoringStepMinutes(5)),
       children:
           series.isEmpty
               ? [_EmptyText(l10n.adminNoTrendData)]
