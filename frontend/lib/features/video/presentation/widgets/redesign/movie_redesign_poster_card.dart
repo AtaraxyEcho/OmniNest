@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_progress_bar.dart';
@@ -148,7 +147,6 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
     final data = widget.data;
     final palette = context.movieRedesign;
     final text = context.movieRedesignText;
-    final l10n = AppLocalizations.of(context);
     final onPlay = data.onPlay;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -163,64 +161,42 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
               color: palette.muted,
               borderRadius: MovieRedesignPalette.borderRadius,
               clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  AnimatedScale(
-                    duration: const Duration(milliseconds: 500),
-                    curve: Curves.easeOut,
-                    scale: _hovered ? 1.05 : 1.0,
-                    child: _PosterImage(posterUrl: data.posterUrl),
-                  ),
-                  if (onPlay != null)
-                    AnimatedOpacity(
-                      duration: const Duration(milliseconds: 300),
-                      opacity: _hovered ? 1 : 0,
-                      child: Container(
-                        color: Colors.black.withValues(alpha: 0.55),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            AnimatedScale(
+              child: InkWell(
+                onTap: data.onTap,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    AnimatedScale(
+                      duration: const Duration(milliseconds: 500),
+                      curve: Curves.easeOut,
+                      scale: _hovered ? 1.05 : 1.0,
+                      child: _PosterImage(posterUrl: data.posterUrl),
+                    ),
+                    if (onPlay != null)
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 300),
+                        opacity: _hovered ? 1 : 0,
+                        child: Container(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          child: Center(
+                            child: AnimatedScale(
                               duration: const Duration(milliseconds: 200),
                               curve: Curves.easeOut,
                               scale: _hovered ? 1.0 : 0.75,
                               child: _PlayButton(onPlay: onPlay),
                             ),
-                            const SizedBox(height: 8),
-                            Material(
-                              color: Colors.transparent,
-                              child: InkWell(
-                                onTap: data.onTap,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 2,
-                                  ),
-                                  child: Text(
-                                    l10n.videoRedesignDetail,
-                                    style: text.mono(
-                                      size: 10,
-                                      color: Colors.white.withValues(
-                                        alpha: 0.70,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                  if (data.progressPercent != null)
-                    Align(
-                      alignment: Alignment.bottomCenter,
-                      child: MovieRedesignProgressBar(
-                        value: data.progressPercent! / 100,
+                    if (data.progressPercent != null)
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: MovieRedesignProgressBar(
+                          value: data.progressPercent! / 100,
+                        ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

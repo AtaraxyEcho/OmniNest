@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -881,26 +882,37 @@ class _OverviewTab extends StatelessWidget {
                             ),
                           ),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: [
-                            Text(
-                              member.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: MovieDetailTheme.body(
-                                14,
-                                color: MovieDetailTheme.foreground,
+                            _CastAvatar(
+                              name: member.name,
+                              profileUrl: member.profilePath,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    member.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: MovieDetailTheme.body(
+                                      14,
+                                      color: MovieDetailTheme.foreground,
+                                    ),
+                                  ),
+                                  if (member.character != null &&
+                                      member.character!.isNotEmpty)
+                                    Text(
+                                      member.character!,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: MovieDetailTheme.mono(12),
+                                    ),
+                                ],
                               ),
                             ),
-                            if (member.character != null &&
-                                member.character!.isNotEmpty)
-                              Text(
-                                member.character!,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: MovieDetailTheme.mono(12),
-                              ),
                           ],
                         ),
                       ),
@@ -1225,6 +1237,55 @@ class _SubtitleLanguageDialogState extends State<_SubtitleLanguageDialog> {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// CAST 头像：48px 圆形，刮削图缺失时回退姓名首字母。
+class _CastAvatar extends StatelessWidget {
+  const _CastAvatar({required this.name, this.profileUrl});
+
+  final String name;
+  final String? profileUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final url = profileUrl;
+    return Container(
+      width: 48,
+      height: 48,
+      clipBehavior: Clip.antiAlias,
+      decoration: const BoxDecoration(
+        shape: BoxShape.circle,
+        color: MovieDetailTheme.surface,
+      ),
+      child:
+          url != null && url.isNotEmpty
+              ? CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.cover,
+                memCacheWidth: 96,
+                errorWidget:
+                    (context, error, stackTrace) => _CastInitials(name: name),
+              )
+              : _CastInitials(name: name),
+    );
+  }
+}
+
+class _CastInitials extends StatelessWidget {
+  const _CastInitials({required this.name});
+
+  final String name;
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
+    return Center(
+      child: Text(
+        initial,
+        style: MovieDetailTheme.mono(16, color: MovieDetailTheme.accent),
       ),
     );
   }
