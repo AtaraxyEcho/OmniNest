@@ -64,6 +64,9 @@ class _MovieMetadataEditPanelState
   late final TextEditingController _overviewController;
   bool _saving = false;
 
+  bool _hydrated = false;
+  bool _userEdited = false;
+
   @override
   void initState() {
     super.initState();
@@ -80,6 +83,41 @@ class _MovieMetadataEditPanelState
               : '',
     );
     _overviewController = TextEditingController(text: item.overview ?? '');
+    // 列表 DTO 不含简介等字段：打开后拉取完整详情回填（用户已输入则不覆盖）。
+    _hydrateFromDetail();
+  }
+
+  Future<void> _hydrateFromDetail() async {
+    try {
+      final detail = await ref.read(movieDetailProvider(widget.item.id).future);
+      if (!mounted || _userEdited || _hydrated) {
+        return;
+      }
+      setState(() {
+        _hydrated = true;
+        if (_titleController.text.isEmpty) {
+          _titleController.text = detail.title;
+        }
+        if (_originalTitleController.text.isEmpty &&
+            detail.originalTitle != null) {
+          _originalTitleController.text = detail.originalTitle!;
+        }
+        if (_yearController.text.isEmpty) {
+          _yearController.text = detail.year;
+        }
+        if (_runtimeController.text.isEmpty &&
+            detail.runtimeSeconds != null &&
+            detail.runtimeSeconds! > 0) {
+          _runtimeController.text =
+              (detail.runtimeSeconds! / 60).round().toString();
+        }
+        if (_overviewController.text.isEmpty && detail.overview != null) {
+          _overviewController.text = detail.overview!;
+        }
+      });
+    } on Exception {
+      // 回填失败保持列表级数据，用户仍可手动编辑。
+    }
   }
 
   @override
@@ -90,6 +128,10 @@ class _MovieMetadataEditPanelState
     _runtimeController.dispose();
     _overviewController.dispose();
     super.dispose();
+  }
+
+  void _markEdited() {
+    _userEdited = true;
   }
 
   Future<void> _save() async {
@@ -163,10 +205,9 @@ class _MovieMetadataEditPanelState
                     Expanded(
                       child: Text(
                         l10n.videoDetailEdit,
-                        style: text.mono(
-                          size: 16,
-                          color: palette.foreground,
-                        ).copyWith(letterSpacing: 2),
+                        style: text
+                            .mono(size: 16, color: palette.foreground)
+                            .copyWith(letterSpacing: 2),
                       ),
                     ),
                     IconButton(
@@ -189,7 +230,11 @@ class _MovieMetadataEditPanelState
                     children: [
                       _fieldLabel(text, l10n.videoSourceName),
                       const SizedBox(height: 4),
-                      _drawerTextField(text, controller: _titleController),
+                      _drawerTextField(
+                        text,
+                        controller: _titleController,
+                        onChanged: (_) => _markEdited(),
+                      ),
                       const SizedBox(height: 14),
                       _fieldLabel(text, l10n.videoMetaFieldOriginalTitle),
                       const SizedBox(height: 4),
@@ -200,11 +245,19 @@ class _MovieMetadataEditPanelState
                       const SizedBox(height: 14),
                       _fieldLabel(text, l10n.videoMetaFieldYear),
                       const SizedBox(height: 4),
-                      _drawerTextField(text, controller: _yearController),
+                      _drawerTextField(
+                        text,
+                        controller: _yearController,
+                        onChanged: (_) => _markEdited(),
+                      ),
                       const SizedBox(height: 14),
                       _fieldLabel(text, l10n.videoMetaFieldRuntimeMinutes),
                       const SizedBox(height: 4),
-                      _drawerTextField(text, controller: _runtimeController),
+                      _drawerTextField(
+                        text,
+                        controller: _runtimeController,
+                        onChanged: (_) => _markEdited(),
+                      ),
                       const SizedBox(height: 14),
                       _fieldLabel(text, l10n.videoMetaFieldOverview),
                       const SizedBox(height: 4),
@@ -253,10 +306,12 @@ class _MovieMetadataEditPanelState
                                         )
                                         : Text(
                                           l10n.videoDetailSave,
-                                          style: text.mono(
-                                            size: 14,
-                                            color: palette.onPrimary,
-                                          ).copyWith(letterSpacing: 2),
+                                          style: text
+                                              .mono(
+                                                size: 14,
+                                                color: palette.onPrimary,
+                                              )
+                                              .copyWith(letterSpacing: 2),
                                         ),
                               ),
                             ),
@@ -277,20 +332,21 @@ class _MovieMetadataEditPanelState
   Widget _fieldLabel(MovieRedesignText text, String label) {
     return Text(
       label,
-      style: text.mono(
-        size: 10,
-        color: MovieDetailTheme.mutedText,
-      ).copyWith(letterSpacing: 1),
+      style: text
+          .mono(size: 10, color: MovieDetailTheme.mutedText)
+          .copyWith(letterSpacing: 1),
     );
   }
 
   Widget _drawerTextField(
     MovieRedesignText text, {
     required TextEditingController controller,
+    ValueChanged<String>? onChanged,
   }) {
     final palette = context.movieRedesign;
     return TextField(
       controller: controller,
+      onChanged: onChanged,
       style: text.body(size: 14, color: palette.foreground),
       decoration: InputDecoration(
         filled: true,
