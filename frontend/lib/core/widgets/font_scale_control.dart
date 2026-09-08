@@ -62,12 +62,7 @@ class _FontScaleControlState extends ConsumerState<FontScaleControl> {
             height: 32,
             decoration: BoxDecoration(
               border: Border.all(
-                color:
-                    open
-                        ? colors.onSurface
-                        : _hovered
-                        ? colors.outlineVariant
-                        : Colors.transparent,
+                color: open ? colors.onSurface : Colors.transparent,
               ),
             ),
             alignment: Alignment.center,
@@ -77,7 +72,12 @@ class _FontScaleControlState extends ConsumerState<FontScaleControl> {
                 fontFamily: 'InstrumentSerif',
                 fontFamilyFallback: const ['NotoSerifSC'],
                 fontSize: widget.size,
-                color: open ? colors.onSurface : idleColor,
+                color:
+                    open
+                        ? colors.onSurface
+                        : _hovered
+                        ? colors.onSurface
+                        : idleColor,
                 fontWeight: FontWeight.w400,
               ),
             ),
