@@ -980,9 +980,14 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
 
     final generation = (_sectionLoadGenerations[section] ?? 0) + 1;
     _sectionLoadGenerations[section] = generation;
-    final loading = Set<MovieSection>.from(current.loadingSections)
-      ..add(section);
-    state = AsyncData(current.copyWith(loadingSections: loading));
+    // 首次加载展示骨架；已加载分区的强制刷新静默进行（实时事件高频触发，
+    // 不能让影片管理等分区反复整块打回骨架）。
+    final firstLoad = !current.loadedSections.contains(section);
+    if (firstLoad) {
+      final loading = Set<MovieSection>.from(current.loadingSections)
+        ..add(section);
+      state = AsyncData(current.copyWith(loadingSections: loading));
+    }
     try {
       final result = await switch (section) {
         MovieSection.recent => _api.recent(),
@@ -1068,9 +1073,12 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     }
     final generation = (_sectionLoadGenerations[section] ?? 0) + 1;
     _sectionLoadGenerations[section] = generation;
-    final loading = Set<MovieSection>.from(current.loadingSections)
-      ..add(section);
-    state = AsyncData(current.copyWith(loadingSections: loading));
+    // 同上：首次加载才展示骨架，强制刷新静默合并。
+    if (!current.loadedSections.contains(section)) {
+      final loading = Set<MovieSection>.from(current.loadingSections)
+        ..add(section);
+      state = AsyncData(current.copyWith(loadingSections: loading));
+    }
     try {
       final series = await _api.seriesByType(
         seriesType: section == MovieSection.anime ? 'ANIME' : 'TV',

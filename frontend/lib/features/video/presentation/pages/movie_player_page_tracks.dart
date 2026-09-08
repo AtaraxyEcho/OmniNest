@@ -67,11 +67,14 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
     final generation = ++_openGeneration;
 
     // 续播：直接使用播放计划自带的已存进度（同步可得，无历史接口竞态）；
+    // 仅主条目套用进度，播放器内切集不携带主条目位置；
     // 进度接近片尾（≥95%）视为已看完，从头播放。
+    final isMainItem = plan.videoItemId == widget.videoItemId;
     final totalSeconds = plan.durationSeconds;
     final savedSeconds = plan.positionSeconds;
     final resumeSeconds =
-        savedSeconds > 0 &&
+        isMainItem &&
+                savedSeconds > 0 &&
                 (totalSeconds <= 0 || savedSeconds < totalSeconds * 0.95)
             ? savedSeconds
             : 0;

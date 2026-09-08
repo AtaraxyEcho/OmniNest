@@ -60,9 +60,14 @@ class MovieCenterPage extends ConsumerWidget {
                         .selectSection,
                 counts: {
                   MovieSection.movies: visibleState.dashboard.stats.movieCount,
-                  MovieSection.tvShows:
-                      visibleState.dashboard.stats.seriesCount,
-                  MovieSection.anime: visibleState.animeSeries.length,
+                  // 剧集/动漫分别按 seriesType 统计，避免后端 seriesCount
+                  // 混算动漫导致「无 TV 却有剧集数」与懒加载 0↔1 闪烁。
+                  MovieSection.tvShows: visibleState.dashboard.series
+                      .where((s) => s.seriesType != 'ANIME')
+                      .length,
+                  MovieSection.anime: visibleState.dashboard.series
+                      .where((s) => s.seriesType == 'ANIME')
+                      .length,
                   MovieSection.collections: visibleState.collections.length,
                   MovieSection.continueWatching:
                       visibleState.continueWatching.length,
