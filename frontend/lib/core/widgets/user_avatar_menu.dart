@@ -56,7 +56,7 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
   /// 面板动作统一走宿主 context 导航，避免引用已卸载的面板节点。
   void _go(String location) {
     if (mounted) {
-      this.context.go(location);
+      context.go(location);
     }
   }
 
