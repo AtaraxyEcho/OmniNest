@@ -2,6 +2,7 @@ package com.omninest.modules.reader.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
@@ -70,9 +71,9 @@ class ReaderDashboardServiceTest {
             .thenReturn(Collections.emptyList());
         when(fileMetadataQueryService.findAllByIds(anyList()))
             .thenReturn(Collections.emptyList());
-        when(itemService.toDto(eq(inProgressItem), eq(false), eq(Collections.emptyMap())))
+        when(itemService.toDto(eq(inProgressItem), eq(false), anyMap(), anyMap()))
             .thenReturn(createMockDto(ITEM_IN_PROGRESS));
-        when(itemService.toDto(eq(completedItem), eq(false), eq(Collections.emptyMap())))
+        when(itemService.toDto(eq(completedItem), eq(false), anyMap(), anyMap()))
             .thenReturn(createMockDto(ITEM_COMPLETED));
 
         // When: 获取仪表盘数据
@@ -100,7 +101,7 @@ class ReaderDashboardServiceTest {
             .thenReturn(Collections.emptyList());
         when(fileMetadataQueryService.findAllByIds(anyList()))
             .thenReturn(Collections.emptyList());
-        when(itemService.toDto(eq(completedItem), eq(false), eq(Collections.emptyMap())))
+        when(itemService.toDto(eq(completedItem), eq(false), anyMap(), anyMap()))
             .thenReturn(createMockDto(ITEM_COMPLETED));
 
         // When: 获取仪表盘数据
@@ -127,7 +128,7 @@ class ReaderDashboardServiceTest {
             .thenReturn(Collections.emptyList());
         when(fileMetadataQueryService.findAllByIds(anyList()))
             .thenReturn(Collections.emptyList());
-        when(itemService.toDto(eq(notStartedItem), eq(false), eq(Collections.emptyMap())))
+        when(itemService.toDto(eq(notStartedItem), eq(false), anyMap(), anyMap()))
             .thenReturn(createMockDto(ITEM_IN_PROGRESS));
 
         // When: 获取仪表盘数据
@@ -153,7 +154,7 @@ class ReaderDashboardServiceTest {
             .thenReturn(Collections.emptyList());
         when(fileMetadataQueryService.findAllByIds(anyList()))
             .thenReturn(Collections.emptyList());
-        when(itemService.toDto(eq(noProgressItem), eq(false), eq(Collections.emptyMap())))
+        when(itemService.toDto(eq(noProgressItem), eq(false), anyMap(), anyMap()))
             .thenReturn(createMockDto(ITEM_IN_PROGRESS));
 
         // When: 获取仪表盘数据
@@ -184,7 +185,8 @@ class ReaderDashboardServiceTest {
     private ReaderItemDto createMockDto(UUID id) {
         return new ReaderItemDto(
             id, "EPUB", "TEXT", "Test Book", null, null, null, null,
-            null, null, Instant.now(), false, "PERSONAL", 0, "READY", null, null
+            null, null, Instant.now(), false, null, "PERSONAL", 0,
+            "READY", null, null
         );
     }
 }

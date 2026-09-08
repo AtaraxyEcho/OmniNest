@@ -93,13 +93,13 @@ public class ReaderDashboardService {
                 })
                 .sorted(Comparator.comparing(ReaderItem::getUpdatedAt).reversed())
                 .limit(12)
-                .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap))
+                .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap, progressMap))
                 .toList();
 
         // 最近条目：按 updatedAt 降序取前 12
         List<ReaderItemDto> recentItems = allItems.stream()
                 .limit(12)
-                .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap))
+                .map(item -> toDto(ownerUserId, item, bookshelfItemIds, spaceTypeMap, progressMap))
                 .toList();
 
         ReaderOverviewDto overview = new ReaderOverviewDto(totalItems, continueReading.size());
@@ -107,10 +107,16 @@ public class ReaderDashboardService {
     }
 
     /**
-     * 实体转 DTO（使用预加载的书架集合和空间类型映射，避免逐条查询）。
+     * 实体转 DTO（使用预加载的书架集合、空间类型与进度映射，避免逐条查询）。
      */
-    private ReaderItemDto toDto(UUID ownerUserId, ReaderItem item, Set<UUID> bookshelfItemIds, Map<UUID, String> spaceTypeMap) {
+    private ReaderItemDto toDto(
+            UUID ownerUserId,
+            ReaderItem item,
+            Set<UUID> bookshelfItemIds,
+            Map<UUID, String> spaceTypeMap,
+            Map<UUID, ReaderProgress> progressMap
+    ) {
         boolean onBookshelf = bookshelfItemIds.contains(item.getId());
-        return itemService.toDto(item, onBookshelf, spaceTypeMap);
+        return itemService.toDto(item, onBookshelf, spaceTypeMap, progressMap);
     }
 }

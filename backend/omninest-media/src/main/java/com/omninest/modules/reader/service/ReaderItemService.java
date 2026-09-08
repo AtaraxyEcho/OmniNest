@@ -23,6 +23,7 @@ import com.omninest.modules.reader.domain.ReaderBookshelf;
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderItemSource;
 import com.omninest.modules.reader.domain.ReaderPageAsset;
+import com.omninest.modules.reader.domain.ReaderProgress;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDetailDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderItemDto;
 import com.omninest.modules.reader.dto.ReaderDtos.ReaderProgressDto;
@@ -154,8 +155,23 @@ public class ReaderItemService {
                         file -> file.spaceType().getValue()
                 ));
 
+        // 批量查询阅读进度（1 次查询替代 N 次）
+        Map<UUID, ReaderProgress> progressMap = items.isEmpty()
+                ? Map.of()
+                : progressRepository.findByOwnerUserIdAndReaderItemIdIn(ownerUserId, itemIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                ReaderProgress::getReaderItemId,
+                                p -> p
+                        ));
+
         return items.stream()
-                .map(item -> toDto(item, bookshelfItemIds.contains(item.getId()), spaceTypeMap))
+                .map(item -> toDto(
+                        item,
+                        bookshelfItemIds.contains(item.getId()),
+                        spaceTypeMap,
+                        progressMap
+                ))
                 .toList();
     }
 
@@ -169,24 +185,32 @@ public class ReaderItemService {
     public ReaderItemDetailDto getItemDetail(UUID ownerUserId, UUID itemId) {
         ReaderItem item = requireItem(ownerUserId, itemId);
         boolean onBookshelf = bookshelfRepository.existsByOwnerUserIdAndReaderItemId(ownerUserId, itemId);
-        ReaderItemDto itemDto = toDto(item, onBookshelf);
-        ReaderProgressDto progressDto = progressRepository.findByOwnerUserIdAndReaderItemId(ownerUserId, itemId)
-                .map(p -> new ReaderProgressDto(
-                        p.getCharOffset(),
-                        p.getProgressPercent(),
-                        p.getReadingMode(),
-                        p.getChapterId(),
-                        p.getPageId(),
-                        p.getPageIndex(),
-                        p.getPageFingerprint(),
-                        p.getSourceId(),
-                        p.getSourcePageIndex(),
-                        p.getCatalogKey(),
-                        p.getManifestVersion(),
-                        p.getIntraPageOffset(),
-                        p.getUpdatedAt()
-                ))
+        ReaderProgress progress = progressRepository
+                .findByOwnerUserIdAndReaderItemId(ownerUserId, itemId)
                 .orElse(null);
+        ReaderItemDto itemDto = toDto(
+                item,
+                onBookshelf,
+                null,
+                progress == null ? Map.of() : Map.of(item.getId(), progress)
+        );
+        ReaderProgressDto progressDto = progress == null
+                ? null
+                : new ReaderProgressDto(
+                        progress.getCharOffset(),
+                        progress.getProgressPercent(),
+                        progress.getReadingMode(),
+                        progress.getChapterId(),
+                        progress.getPageId(),
+                        progress.getPageIndex(),
+                        progress.getPageFingerprint(),
+                        progress.getSourceId(),
+                        progress.getSourcePageIndex(),
+                        progress.getCatalogKey(),
+                        progress.getManifestVersion(),
+                        progress.getIntraPageOffset(),
+                        progress.getUpdatedAt()
+                );
         return new ReaderItemDetailDto(itemDto, progressDto);
     }
 
@@ -520,40 +544,10 @@ public class ReaderItemService {
     }
 
     /**
-     * 实体转 DTO。
+     * 实体转 DTO（无预加载数据，进度为空）。
      */
     public ReaderItemDto toDto(ReaderItem item, boolean addedToBookshelf) {
-        String coverUrl = item.getCoverFileId() != null
-                ? "/files/" + item.getCoverFileId() + "/download-url"
-                : null;
-
-        // 查询文件所属空间类型
-        String spaceType = "PERSONAL";
-        if (item.getFileNodeId() != null) {
-            spaceType = fileMetadataQueryService.findById(item.getFileNodeId())
-                    .map(file -> file.spaceType().getValue())
-                    .orElse("PERSONAL");
-        }
-
-        return new ReaderItemDto(
-                item.getId(),
-                item.getItemType(),
-                item.getContentKind(),
-                item.getTitle(),
-                item.getAuthorName(),
-                coverUrl,
-                item.getDescription(),
-                item.getPublisher(),
-                item.getLanguage(),
-                item.getRating(),
-                item.getUpdatedAt(),
-                addedToBookshelf,
-                spaceType,
-                item.getManifestVersion(),
-                item.getImportStatus(),
-                item.getParseErrorCode(),
-                item.getParseErrorMessage()
-        );
+        return toDto(item, addedToBookshelf, null, null);
     }
 
     /**
@@ -565,15 +559,41 @@ public class ReaderItemService {
      * @return 条目 DTO
      */
     public ReaderItemDto toDto(ReaderItem item, boolean addedToBookshelf, Map<UUID, String> spaceTypeMap) {
+        return toDto(item, addedToBookshelf, spaceTypeMap, null);
+    }
+
+    /**
+     * 实体转 DTO（使用预加载的空间类型映射与进度映射，避免逐条查询）。
+     *
+     * @param item          阅读条目
+     * @param addedToBookshelf 是否已加入书架
+     * @param spaceTypeMap  文件节点 ID → 空间类型值 的预加载映射
+     * @param progressMap   阅读条目 ID → 进度 的预加载映射，可为 null
+     * @return 条目 DTO
+     */
+    public ReaderItemDto toDto(
+            ReaderItem item,
+            boolean addedToBookshelf,
+            Map<UUID, String> spaceTypeMap,
+            Map<UUID, ? extends ReaderProgress> progressMap
+    ) {
         String coverUrl = item.getCoverFileId() != null
                 ? "/files/" + item.getCoverFileId() + "/download-url"
                 : null;
 
         // 从预加载映射获取空间类型，默认 PERSONAL
         String spaceType = "PERSONAL";
-        if (item.getFileNodeId() != null && spaceTypeMap.containsKey(item.getFileNodeId())) {
+        if (item.getFileNodeId() != null && spaceTypeMap != null && spaceTypeMap.containsKey(item.getFileNodeId())) {
             spaceType = spaceTypeMap.get(item.getFileNodeId());
+        } else if (item.getFileNodeId() != null) {
+            spaceType = fileMetadataQueryService.findById(item.getFileNodeId())
+                    .map(file -> file.spaceType().getValue())
+                    .orElse("PERSONAL");
         }
+        ReaderProgress progress = progressMap != null ? progressMap.get(item.getId()) : null;
+        Double progressPercent = progress != null && progress.getProgressPercent() != null
+                ? progress.getProgressPercent().doubleValue()
+                : null;
 
         return new ReaderItemDto(
                 item.getId(),
@@ -588,6 +608,7 @@ public class ReaderItemService {
                 item.getRating(),
                 item.getUpdatedAt(),
                 addedToBookshelf,
+                progressPercent,
                 spaceType,
                 item.getManifestVersion(),
                 item.getImportStatus(),

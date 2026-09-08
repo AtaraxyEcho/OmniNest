@@ -35,6 +35,8 @@ public final class ReaderDtos {
             BigDecimal rating,
             Instant updatedAt,
             boolean addedToBookshelf,
+            /** 当前用户阅读进度（0-1），未阅读时为 null */
+            Double progressPercent,
             String spaceType,
             int manifestVersion,
             /** 导入状态：READY / PARSING / PARTIAL_FAILED / FAILED */
