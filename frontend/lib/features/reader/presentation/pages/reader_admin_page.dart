@@ -33,20 +33,15 @@ class ReaderAdminPage extends ConsumerWidget {
             label: AppLocalizations.of(context).readerImports,
           ),
           const SizedBox(height: 12),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            clipBehavior: Clip.none,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const ImportFromDeviceTile(),
-                for (final job in importJobs) ...[
-                  const SizedBox(width: 12),
-                  SizedBox(width: 120, child: ImportJobCard(job: job)),
-                ],
-              ],
-            ),
-          ),
+          const ImportFromDeviceButton(),
+          if (importJobs.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            for (final job in importJobs)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: ImportJobRow(job: job),
+              ),
+          ],
           const SizedBox(height: 16),
           ImportSection(
             onImported:

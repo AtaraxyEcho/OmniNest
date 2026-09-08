@@ -8,16 +8,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
-/// 从设备选择阅读文件并加入导入队列的入口卡。
-class ImportFromDeviceTile extends ConsumerStatefulWidget {
-  const ImportFromDeviceTile({super.key});
+/// 「从设备导入」按钮：选择阅读文件并加入导入队列。
+class ImportFromDeviceButton extends ConsumerStatefulWidget {
+  const ImportFromDeviceButton({super.key});
 
   @override
-  ConsumerState<ImportFromDeviceTile> createState() =>
-      _ImportFromDeviceTileState();
+  ConsumerState<ImportFromDeviceButton> createState() =>
+      _ImportFromDeviceButtonState();
 }
 
-class _ImportFromDeviceTileState extends ConsumerState<ImportFromDeviceTile> {
+class _ImportFromDeviceButtonState
+    extends ConsumerState<ImportFromDeviceButton> {
   Future<void> _pickAndUpload() async {
     final l10n = AppLocalizations.of(context);
     try {
@@ -69,62 +70,31 @@ class _ImportFromDeviceTileState extends ConsumerState<ImportFromDeviceTile> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _pickAndUpload,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          AspectRatio(
-            aspectRatio: 2 / 3,
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: context.readerColors.outlineVariant),
-                color: context.readerColors.surfaceContainerHighest.withValues(
-                  alpha: 0.28,
-                ),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.add_rounded,
-                    color: context.readerColors.onSurfaceVariant,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    AppLocalizations.of(context).readerAddBook,
-                    style: TextStyle(
-                      color: context.readerColors.onSurfaceVariant,
-                      fontSize: 11,
-                      height: 14 / 11,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            AppLocalizations.of(context).readerAddBook,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              color: context.readerColors.onSurfaceVariant,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
+    final rc = context.readerColors;
+    return OutlinedButton.icon(
+      onPressed: _pickAndUpload,
+      icon: Icon(Icons.upload_file_rounded, size: 18, color: rc.onSurface),
+      label: Text(
+        AppLocalizations.of(context).readerAddBook,
+        style: TextStyle(
+          color: rc.onSurface,
+          fontSize: 13,
+          height: 1.2,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: rc.outlineVariant),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
   }
 }
 
-/// 导入队列中的单个上传任务卡。
-class ImportJobCard extends ConsumerWidget {
-  const ImportJobCard({required this.job, super.key});
+/// 导入队列中的单个上传任务行：文件名 + 状态 + 进度 + 重试/取消。
+class ImportJobRow extends ConsumerWidget {
+  const ImportJobRow({required this.job, super.key});
 
   final ReaderImportJob job;
 
@@ -140,87 +110,89 @@ class ImportJobCard extends ConsumerWidget {
       ReaderImportJobStatus.failed => l10n.readerImportFailed,
       ReaderImportJobStatus.cancelled => l10n.readerImportCancelled,
     };
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AspectRatio(
-          aspectRatio: 2 / 3,
-          child: Container(
-            clipBehavior: Clip.antiAlias,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              color: rc.surfaceContainerHighest,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    failed ? Icons.error_outline_rounded : Icons.book_outlined,
-                    color: failed ? rc.danger : rc.primary,
-                    size: 30,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    label,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: rc.onSurface,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  if (!failed)
-                    LinearProgressIndicator(
-                      value: job.progress > 0 ? job.progress : null,
-                    ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 4,
-                    children: [
-                      if (failed)
-                        IconButton(
-                          onPressed:
-                              () => ref
-                                  .read(readerImportQueueProvider.notifier)
-                                  .retry(job.id),
-                          icon: const Icon(Icons.refresh_rounded),
-                          tooltip: l10n.coreRetry,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        border: Border.all(color: rc.outlineVariant),
+        borderRadius: BorderRadius.circular(2),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            failed ? Icons.error_outline_rounded : Icons.book_outlined,
+            size: 20,
+            color: failed ? rc.danger : rc.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        job.fileName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: rc.onSurface,
+                          fontSize: 13,
+                          height: 1.3,
+                          fontWeight: FontWeight.w600,
                         ),
-                      IconButton(
-                        onPressed:
-                            () => ref
-                                .read(readerImportQueueProvider.notifier)
-                                .cancel(job.id),
-                        icon: Icon(
-                          failed ? Icons.close_rounded : Icons.stop_rounded,
-                        ),
-                        tooltip:
-                            failed ? l10n.coreClose : l10n.readerCancelImport,
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      label,
+                      style: TextStyle(
+                        color: failed ? rc.danger : rc.onSurfaceVariant,
+                        fontSize: 11,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+                if (!failed) ...[
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: job.progress > 0 ? job.progress : null,
+                      minHeight: 2,
+                      backgroundColor: rc.surfaceContainerHigh,
+                      color: rc.reading,
+                    ),
                   ),
                 ],
-              ),
+              ],
             ),
           ),
-        ),
-        const SizedBox(height: 8),
-        Text(
-          job.fileName,
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: rc.onSurfaceVariant,
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
+          const SizedBox(width: 12),
+          if (failed)
+            IconButton(
+              onPressed:
+                  () => ref
+                      .read(readerImportQueueProvider.notifier)
+                      .retry(job.id),
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              tooltip: l10n.coreRetry,
+            ),
+          IconButton(
+            onPressed:
+                () =>
+                    ref.read(readerImportQueueProvider.notifier).cancel(job.id),
+            icon: Icon(
+              failed ? Icons.close_rounded : Icons.stop_rounded,
+              size: 18,
+              color: rc.onSurfaceVariant,
+            ),
+            tooltip: failed ? l10n.coreClose : l10n.readerCancelImport,
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
