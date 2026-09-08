@@ -9,6 +9,8 @@ import 'package:omninest/features/reader/presentation/widgets/reader_import_sect
 import 'package:omninest/features/reader/presentation/widgets/reader_import_queue_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_metadata_section.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
+import 'package:omninest/features/reader/presentation/pages/reader_stats_page.dart'
+    show readerStatsOverviewProvider;
 
 /// 内容管理页（仅管理员）：元数据管理、导入与最近阅读。
 ///
@@ -64,6 +66,8 @@ class ReaderAdminPage extends ConsumerWidget {
           _AdminSectionHeader(
             label: AppLocalizations.of(context).readerHistory,
           ),
+          const SizedBox(height: 8),
+          const _RecentReading(),
         ],
       ),
     );
@@ -85,6 +89,50 @@ class _AdminSectionHeader extends StatelessWidget {
         height: 20 / 15,
         fontWeight: FontWeight.w700,
       ),
+    );
+  }
+}
+
+/// 管理页"最近阅读"区：展示进行中条目（复用统计概览数据）。
+class _RecentReading extends ConsumerWidget {
+  const _RecentReading();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rc = context.readerColors;
+    final overviewAsync = ref.watch(readerStatsOverviewProvider);
+    final items =
+        overviewAsync.asData?.value.inProgressItems ?? const <ReaderItem>[];
+    if (items.isEmpty) {
+      return Text(
+        AppLocalizations.of(context).readerEmptyHint,
+        style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+      );
+    }
+    return Column(
+      children: [
+        for (final item in items)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: rc.onSurface, fontSize: 13),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${((item.progressPercent ?? 0) * 100).round()}%',
+                  style: TextStyle(color: rc.onSurfaceVariant, fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
