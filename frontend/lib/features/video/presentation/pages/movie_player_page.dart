@@ -169,8 +169,17 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
 
   Future<void> _syncAndRefreshHistory() async {
     await _syncCurrentProgress();
-    if (mounted) {
-      ref.invalidate(movieCenterControllerProvider);
+    if (!mounted) {
+      return;
+    }
+    // 原地静默刷新：保留当前视图（避免返回继续观看时整页骨架闪动），
+    // 刷新失败可忽略——进度已由 _syncCurrentProgress 落库。
+    try {
+      await ref
+          .read(movieCenterControllerProvider.notifier)
+          .refreshForRealtime();
+    } on Exception catch (error) {
+      debugPrint('[_syncAndRefreshHistory] 静默刷新失败: $error');
     }
   }
 
