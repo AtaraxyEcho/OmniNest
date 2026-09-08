@@ -179,7 +179,12 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
     if (!mounted) {
       return;
     }
-    context.go('/video/${widget.videoItemId}');
+    // 返回来源页（详情页 / 继续观看等）；深链直入播放器时兜底回影视中心。
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/video');
+    }
   }
 
   @override

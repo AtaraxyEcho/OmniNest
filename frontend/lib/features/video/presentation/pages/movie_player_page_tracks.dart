@@ -66,11 +66,15 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
     _loadedUrl = playbackUrl;
     final generation = ++_openGeneration;
 
-    // 续播：未看完且有历史进度时从上次位置起播（已完成则从头）。
-    final history =
-        ref.read(movieItemHistoryProvider(widget.videoItemId)).asData?.value;
+    // 续播：直接使用播放计划自带的已存进度（同步可得，无历史接口竞态）；
+    // 进度接近片尾（≥95%）视为已看完，从头播放。
+    final totalSeconds = plan.durationSeconds;
+    final savedSeconds = plan.positionSeconds;
     final resumeSeconds =
-        history == null || history.completed ? 0 : history.positionSeconds;
+        savedSeconds > 0 &&
+                (totalSeconds <= 0 || savedSeconds < totalSeconds * 0.95)
+            ? savedSeconds
+            : 0;
 
     // 取消上一次的 tracks 监听
     _tracksSub?.cancel();
