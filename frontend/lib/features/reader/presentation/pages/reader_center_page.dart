@@ -10,7 +10,6 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
-import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
@@ -30,44 +29,6 @@ class ReaderCenterPage extends ConsumerStatefulWidget {
 
 class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
   final TextEditingController _searchController = TextEditingController();
-  VoidCallback? _routeListener;
-  GoRouter? _router;
-  DateTime _lastRefresh = DateTime.fromMillisecondsSinceEpoch(0);
-
-  @override
-  void initState() {
-    super.initState();
-    // 模块内页签切换会重建本页：已有数据时做节流刷新，保证书库数据新鲜。
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final hasData =
-          ref.read(readerCenterControllerProvider).asData?.value != null;
-      final now = DateTime.now();
-      if (hasData && now.difference(_lastRefresh).inMilliseconds > 500) {
-        _lastRefresh = now;
-        ref.read(readerCenterControllerProvider.notifier).refresh();
-      }
-    });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final router = GoRouter.of(context);
-      _router = router;
-      void listener() {
-        final path = router.routeInformationProvider.value.uri.path;
-        if (path == '/reader' && mounted) {
-          final now = DateTime.now();
-          if (now.difference(_lastRefresh).inMilliseconds > 500) {
-            _lastRefresh = now;
-            ref.read(readerCenterControllerProvider.notifier).refresh();
-          }
-        }
-      }
-
-      _routeListener = listener;
-      router.routeInformationProvider.addListener(listener);
-    });
-  }
-
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -82,9 +43,6 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
 
   @override
   void dispose() {
-    if (_routeListener != null && _router != null) {
-      _router!.routeInformationProvider.removeListener(_routeListener!);
-    }
     _searchController.dispose();
     super.dispose();
   }
@@ -98,10 +56,6 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
     final stateAsync = ref.watch(readerCenterControllerProvider);
     return ReaderPageScaffold(
       target: ReaderPageTarget.library,
-      searchController: _searchController,
-      onSearchChanged: (value) {
-        ref.read(readerCenterControllerProvider.notifier).setSearchQuery(value);
-      },
       onRefresh: _onRefresh,
       header:
           stateAsync.asData?.value == null
@@ -110,7 +64,6 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
                 itemCount: stateAsync.asData!.value.visibleItems.length,
                 searchController: _searchController,
                 segment: stateAsync.asData!.value.librarySegment,
-                sortBy: stateAsync.asData!.value.sortBy,
                 onSearchChanged: (value) {
                   ref
                       .read(readerCenterControllerProvider.notifier)
@@ -120,11 +73,6 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
                     (segment) => ref
                         .read(readerCenterControllerProvider.notifier)
                         .selectLibrarySegment(segment),
-                onSortChanged:
-                    (sortBy) => ref
-                        .read(readerCenterControllerProvider.notifier)
-                        .setSortBy(sortBy),
-                onRefresh: _onRefresh,
               ),
       child: ReaderParseFeedback(
         child: stateAsync.when(
@@ -271,21 +219,15 @@ class _LibraryHeader extends StatelessWidget {
     required this.itemCount,
     required this.searchController,
     required this.segment,
-    required this.sortBy,
     required this.onSearchChanged,
     required this.onSegmentChanged,
-    required this.onSortChanged,
-    required this.onRefresh,
   });
 
   final int itemCount;
   final TextEditingController searchController;
   final ReaderLibrarySegment segment;
-  final ReaderSortBy sortBy;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<ReaderLibrarySegment> onSegmentChanged;
-  final ValueChanged<ReaderSortBy> onSortChanged;
-  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -302,7 +244,7 @@ class _LibraryHeader extends StatelessWidget {
               l10n.readerNavLibrary,
               style: TextStyle(
                 color: rc.onSurface,
-                fontSize: 30,
+                fontSize: MediaQuery.sizeOf(context).width >= 1024 ? 36 : 30,
                 height: 1.15,
                 fontFamily: kReaderSerifFamily,
                 fontStyle: FontStyle.italic,
@@ -324,11 +266,8 @@ class _LibraryHeader extends StatelessWidget {
         _SearchAndFilterRow(
           searchController: searchController,
           segment: segment,
-          sortBy: sortBy,
           onSearchChanged: onSearchChanged,
           onSegmentChanged: onSegmentChanged,
-          onSortChanged: onSortChanged,
-          onRefresh: onRefresh,
         ),
       ],
     );
@@ -340,20 +279,14 @@ class _SearchAndFilterRow extends StatelessWidget {
   const _SearchAndFilterRow({
     required this.searchController,
     required this.segment,
-    required this.sortBy,
     required this.onSearchChanged,
     required this.onSegmentChanged,
-    required this.onSortChanged,
-    required this.onRefresh,
   });
 
   final TextEditingController searchController;
   final ReaderLibrarySegment segment;
-  final ReaderSortBy sortBy;
   final ValueChanged<String> onSearchChanged;
   final ValueChanged<ReaderLibrarySegment> onSegmentChanged;
-  final ValueChanged<ReaderSortBy> onSortChanged;
-  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -402,11 +335,6 @@ class _SearchAndFilterRow extends StatelessWidget {
           ),
         ),
         _FilterTabs(segment: segment, onChanged: onSegmentChanged),
-        _SortAndRefresh(
-          sortBy: sortBy,
-          onSortChanged: onSortChanged,
-          onRefresh: onRefresh,
-        ),
         const SizedBox(height: 16),
         Container(height: 1, color: rc.outlineVariant.withValues(alpha: 0.6)),
       ],
@@ -460,70 +388,6 @@ class _FilterTabs extends StatelessWidget {
               ),
             );
           }).toList(),
-    );
-  }
-}
-
-/// 排序下拉 + 刷新按钮。
-class _SortAndRefresh extends StatelessWidget {
-  const _SortAndRefresh({
-    required this.sortBy,
-    required this.onSortChanged,
-    required this.onRefresh,
-  });
-
-  final ReaderSortBy sortBy;
-  final ValueChanged<ReaderSortBy> onSortChanged;
-  final VoidCallback onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    final rc = context.readerColors;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        DropdownButtonHideUnderline(
-          child: DropdownButton<ReaderSortBy>(
-            value: sortBy,
-            isDense: true,
-            icon: Icon(
-              Icons.unfold_more_rounded,
-              color: rc.onSurfaceVariant,
-              size: 16,
-            ),
-            style: TextStyle(
-              color: rc.onSurface,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-            dropdownColor: rc.surfaceContainerHigh,
-            items:
-                ReaderSortBy.values
-                    .map(
-                      (s) => DropdownMenuItem(
-                        value: s,
-                        child: Text(
-                          readerSortLabel(AppLocalizations.of(context), s),
-                        ),
-                      ),
-                    )
-                    .toList(),
-            onChanged: (v) {
-              if (v != null) onSortChanged(v);
-            },
-          ),
-        ),
-        const SizedBox(width: 6),
-        IconButton(
-          tooltip: AppLocalizations.of(context).readerRefresh,
-          onPressed: onRefresh,
-          icon: Icon(
-            Icons.refresh_rounded,
-            color: rc.onSurfaceVariant,
-            size: 20,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -655,10 +519,9 @@ class _LibraryGridState extends State<_LibraryGrid> {
   }
 
   int _columnCount(double width) {
-    if (width >= 1400) return 6;
-    if (width >= 1000) return 5;
+    if (width >= 1280) return 6;
+    if (width >= 1024) return 5;
     if (width >= 640) return 4;
-    if (width >= 480) return 3;
     return 3;
   }
 

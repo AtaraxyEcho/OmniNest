@@ -67,6 +67,13 @@ final readerStatsProvider = FutureProvider<ReaderReadingStats>((ref) async {
   return api.getStats();
 });
 
+/// 阅读统计概览（统计页与管理页历史区）：每日分钟数、完成/在读计数与在读列表。
+final readerStatsOverviewProvider = FutureProvider<ReaderStatsOverview>((
+  ref,
+) async {
+  return ref.watch(readerApiProvider).getStatsOverview(days: 14);
+});
+
 /// 阅读中心控制器
 final readerCenterControllerProvider =
     AsyncNotifierProvider<ReaderCenterController, ReaderCenterState>(

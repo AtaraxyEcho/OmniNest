@@ -37,7 +37,7 @@ class ReaderBookshelfPage extends ConsumerWidget {
                 AppLocalizations.of(context).readerNavBookshelf,
                 style: TextStyle(
                   color: rc.onSurface,
-                  fontSize: 30,
+                  fontSize: MediaQuery.sizeOf(context).width >= 1024 ? 36 : 30,
                   height: 1.15,
                   fontFamily: kReaderSerifFamily,
                   fontStyle: FontStyle.italic,

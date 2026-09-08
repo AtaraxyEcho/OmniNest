@@ -6,7 +6,6 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
-import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart'
@@ -55,8 +54,6 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
   const ReaderPageScaffold({
     required this.target,
     required this.child,
-    this.searchController,
-    this.onSearchChanged,
     this.onRefresh,
     this.header,
     super.key,
@@ -66,10 +63,6 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
 
   /// 页面内容（非滚动容器，由骨架负责滚动）
   final Widget child;
-
-  /// 书库搜索控制器；传入后在窄屏提供搜索弹窗入口
-  final TextEditingController? searchController;
-  final ValueChanged<String>? onSearchChanged;
 
   final Future<void> Function()? onRefresh;
 
@@ -97,7 +90,6 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
       return const _ReaderAdminForbidden();
     }
 
-    final hosted = MobileShellScope.isHosted(context);
     final rc = context.readerColors;
     final targets = [
       ReaderPageTarget.library,
@@ -107,37 +99,10 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
     ];
 
     final contentArea = _ReaderPageScrollArea(
-      hosted: hosted,
       onRefresh: widget.onRefresh,
       header: widget.header,
       child: widget.child,
     );
-
-    if (hosted) {
-      return PopScope(
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) return;
-          _goFallback();
-        },
-        child: Scaffold(
-          backgroundColor: Colors.transparent,
-          extendBody: true,
-          body: ColoredBox(
-            color: rc.surface,
-            child: Column(
-              children: [
-                ReaderSectionTabBar(
-                  current: widget.target,
-                  canManage: canManage,
-                ),
-                contentArea,
-              ],
-            ),
-          ),
-        ),
-      );
-    }
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -153,12 +118,7 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
             body: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ReaderModuleTopBar(
-                  target: widget.target,
-                  user: user,
-                  searchController: widget.searchController,
-                  onSearchChanged: widget.onSearchChanged,
-                ),
+                _ReaderModuleTopBar(target: widget.target, user: user),
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -190,22 +150,16 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
 
 /// 44px 模块顶栏：返回门户 + 「OmniNest › 阅读」衬线面包屑 + 全局控件。
 class _ReaderModuleTopBar extends StatelessWidget {
-  const _ReaderModuleTopBar({
-    required this.target,
-    required this.user,
-    this.searchController,
-    this.onSearchChanged,
-  });
+  const _ReaderModuleTopBar({required this.target, required this.user});
 
   final ReaderPageTarget target;
   final UserProfile? user;
-  final TextEditingController? searchController;
-  final ValueChanged<String>? onSearchChanged;
 
   @override
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final l10n = AppLocalizations.of(context);
+    final narrow = MediaQuery.sizeOf(context).width < 640;
     return Container(
       height: 44,
       decoration: BoxDecoration(
@@ -233,39 +187,59 @@ class _ReaderModuleTopBar extends StatelessWidget {
                     color: rc.onSurfaceVariant,
                   ),
                   const SizedBox(width: 6),
-                  Text(
-                    l10n.readerPortal,
-                    style: TextStyle(
-                      color: rc.onSurfaceVariant,
-                      fontSize: 12,
-                      height: 1.2,
+                  if (!narrow)
+                    Text(
+                      l10n.readerPortal,
+                      style: TextStyle(
+                        color: rc.onSurfaceVariant,
+                        fontSize: 12,
+                        height: 1.2,
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
           ),
-          Text(
-            'OmniNest',
-            style: TextStyle(
-              color: rc.onSurface,
-              fontSize: 14,
-              height: 1.2,
-              fontFamily: kReaderSerifFamily,
-              fontStyle: FontStyle.italic,
-            ),
-          ),
-          const SizedBox(width: 6),
-          Icon(Icons.chevron_right_rounded, size: 12, color: rc.outlineVariant),
-          const SizedBox(width: 6),
-          Text(
-            l10n.mobileNavReader,
-            style: TextStyle(
-              color: rc.onSurfaceVariant,
-              fontSize: 14,
-              height: 1.2,
-              fontFamily: kReaderSerifFamily,
-              fontStyle: FontStyle.italic,
+          Flexible(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(
+                  child: Text(
+                    'OmniNest',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: rc.onSurface,
+                      fontSize: 14,
+                      height: 1.2,
+                      fontFamily: kReaderSerifFamily,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  size: 12,
+                  color: rc.outlineVariant,
+                ),
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    l10n.mobileNavReader,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: rc.onSurfaceVariant,
+                      fontSize: 14,
+                      height: 1.2,
+                      fontFamily: kReaderSerifFamily,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const Spacer(),
@@ -420,114 +394,14 @@ class _ReaderModuleBottomNav extends StatelessWidget {
   }
 }
 
-/// 移动端托管态横排页签（全局壳内切换模块页面）。
-class ReaderSectionTabBar extends StatelessWidget {
-  const ReaderSectionTabBar({
-    required this.current,
-    required this.canManage,
-    this.onChanged,
-    super.key,
-  });
-
-  final ReaderPageTarget current;
-  final bool canManage;
-
-  /// 覆盖默认的路由跳转（测试或特殊导航场景使用）
-  final ValueChanged<ReaderPageTarget>? onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final rc = context.readerColors;
-    final targets = [
-      ReaderPageTarget.library,
-      ReaderPageTarget.bookshelf,
-      ReaderPageTarget.stats,
-      if (canManage) ReaderPageTarget.admin,
-    ];
-    return Container(
-      decoration: BoxDecoration(
-        border: Border(
-          bottom: BorderSide(color: rc.outlineVariant.withValues(alpha: 0.4)),
-        ),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Row(
-          children: [
-            for (final target in targets)
-              _ReaderSectionTab(
-                target: target,
-                selected: target == current,
-                onTap: () {
-                  if (target == current) return;
-                  if (onChanged != null) {
-                    onChanged!(target);
-                  } else {
-                    context.go(target.location);
-                  }
-                },
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ReaderSectionTab extends StatelessWidget {
-  const _ReaderSectionTab({
-    required this.target,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final ReaderPageTarget target;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final rc = context.readerColors;
-    final label = target.localizedLabel(AppLocalizations.of(context));
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        height: 40,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(
-              color: selected ? rc.onSurface : Colors.transparent,
-              width: 2,
-            ),
-          ),
-        ),
-        alignment: Alignment.center,
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 13,
-            height: 1.2,
-            fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
-            color: selected ? rc.onSurface : rc.onSurfaceVariant,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// 页面内容滚动容器：横向内边距对齐样例（px-6 / lg:px-8），窄屏带下拉刷新。
 class _ReaderPageScrollArea extends StatelessWidget {
   const _ReaderPageScrollArea({
-    required this.hosted,
     required this.child,
     this.header,
     this.onRefresh,
   });
 
-  final bool hosted;
   final Widget child;
   final Widget? header;
   final Future<void> Function()? onRefresh;
@@ -543,16 +417,6 @@ class _ReaderPageScrollArea extends StatelessWidget {
       padding: EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 24, 40),
       child: child,
     );
-    if (hosted) {
-      return RefreshIndicator(
-        displacement: 40,
-        edgeOffset: 64,
-        strokeWidth: 2.5,
-        color: rc.reading,
-        onRefresh: onRefresh ?? () async {},
-        child: scroll,
-      );
-    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

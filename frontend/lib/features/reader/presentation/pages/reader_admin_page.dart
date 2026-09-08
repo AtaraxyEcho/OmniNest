@@ -9,8 +9,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_import_sect
 import 'package:omninest/features/reader/presentation/widgets/reader_import_queue_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_metadata_section.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
-import 'package:omninest/features/reader/presentation/pages/reader_stats_page.dart'
-    show readerStatsOverviewProvider;
 
 /// 内容管理页（仅管理员）：元数据管理、导入与最近阅读。
 ///
@@ -92,16 +90,26 @@ class _AdminSectionHeader extends StatelessWidget {
   }
 }
 
-/// 管理页"最近阅读"区：展示进行中条目（复用统计概览数据）。
+/// 管理页"最近阅读"区：展示进行中条目（从条目列表本地过滤）。
 class _RecentReading extends ConsumerWidget {
   const _RecentReading();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final rc = context.readerColors;
-    final overviewAsync = ref.watch(readerStatsOverviewProvider);
     final items =
-        overviewAsync.asData?.value.inProgressItems ?? const <ReaderItem>[];
+        ref
+            .watch(readerCenterControllerProvider)
+            .asData
+            ?.value
+            .items
+            .where(
+              (item) =>
+                  (item.progressPercent ?? 0) > 0 &&
+                  (item.progressPercent ?? 0) < 1,
+            )
+            .toList() ??
+        const <ReaderItem>[];
     if (items.isEmpty) {
       return Text(
         AppLocalizations.of(context).readerEmptyHint,

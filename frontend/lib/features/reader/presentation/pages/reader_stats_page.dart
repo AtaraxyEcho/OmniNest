@@ -8,13 +8,6 @@ import 'package:omninest/features/reader/presentation/pages/reader_center_page.d
     show kReaderSerifFamily;
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 
-/// 阅读统计概览数据（统计页）。
-final readerStatsOverviewProvider = FutureProvider<ReaderStatsOverview>((
-  ref,
-) async {
-  return ref.watch(readerApiProvider).getStatsOverview(days: 14);
-});
-
 /// 统计页：统计卡、14 天活动柱状图、书库构成与在读列表。
 class ReaderStatsPage extends ConsumerWidget {
   const ReaderStatsPage({super.key});
@@ -35,7 +28,7 @@ class ReaderStatsPage extends ConsumerWidget {
             AppLocalizations.of(context).readerStatsTitle,
             style: TextStyle(
               color: rc.onSurface,
-              fontSize: 30,
+              fontSize: MediaQuery.sizeOf(context).width >= 1024 ? 36 : 30,
               height: 1.15,
               fontFamily: kReaderSerifFamily,
               fontStyle: FontStyle.italic,
@@ -97,7 +90,7 @@ class _StatsOverview extends StatelessWidget {
                   unit: '',
                 ),
               ];
-              if (constraints.maxWidth >= 640) {
+              if (constraints.maxWidth >= 1024) {
                 return Row(
                   children: [
                     for (var i = 0; i < cards.length; i++) ...[
