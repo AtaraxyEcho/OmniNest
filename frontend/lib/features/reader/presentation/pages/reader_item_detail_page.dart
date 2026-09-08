@@ -15,6 +15,7 @@ import 'package:omninest/features/reader/domain/reader_status_constants.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_detail_page.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
 /// 阅读条目详情页：Hero（封面/进度/阅读动作）+ 简介/章节/批注/书签页签。
@@ -45,35 +46,38 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
   Widget build(BuildContext context) {
     final detailAsync = ref.watch(readerItemDetailProvider(widget.itemId));
 
-    return detailAsync.when(
-      data: (detail) {
-        final isComic = detail.item.isComic;
-        if (isComic) {
-          return _ComicDetailWrapper(item: detail.item, itemId: widget.itemId);
-        }
+    // 详情视图渲染在模块内容区域内（顶栏/侧栏/底导航保持可见），返回条为固定页头。
+    return ReaderPageScaffold(
+      target: ReaderPageTarget.library,
+      enablePopGuard: false,
+      headerPadding: EdgeInsets.zero,
+      header: _DetailBackBar(onTap: _handleBack),
+      child: detailAsync.when(
+        data: (detail) {
+          final isComic = detail.item.isComic;
+          if (isComic) {
+            return _ComicDetailWrapper(
+              item: detail.item,
+              itemId: widget.itemId,
+            );
+          }
 
-        final bookAsync = ref.watch(parsedBookProvider(widget.itemId));
-        if (bookAsync.isLoading) {
-          return _BookPreparationScaffold(onBack: _handleBack);
-        }
-        if (bookAsync.hasError) {
-          return Scaffold(
-            backgroundColor: context.readerColors.surface,
-            body: AppErrorView(
+          final bookAsync = ref.watch(parsedBookProvider(widget.itemId));
+          if (bookAsync.isLoading) {
+            return AppLoading.detail();
+          }
+          if (bookAsync.hasError) {
+            return AppErrorView(
               message: AppLocalizations.of(context).readerChapterLoadFailed,
-              onBack: _handleBack,
               onRetry: () => ref.invalidate(parsedBookProvider(widget.itemId)),
-            ),
-          );
-        }
+            );
+          }
 
-        // 从本地解析获取章节列表（后端不返回章节）
-        final parsedBook = bookAsync.asData?.value;
-        final effectiveItem = _buildEffectiveItem(detail.item, parsedBook);
+          // 从本地解析获取章节列表（后端不返回章节）
+          final parsedBook = bookAsync.asData?.value;
+          final effectiveItem = _buildEffectiveItem(detail.item, parsedBook);
 
-        return Scaffold(
-          backgroundColor: context.readerColors.surface,
-          body: _TextDetailContent(
+          return _TextDetailContent(
             item: effectiveItem,
             progress: detail.progress,
             chapters: parsedBook?.chapters ?? const [],
@@ -88,24 +92,16 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
                 () => context.push('/reader/items/${detail.item.id}/metadata'),
             onReparse: _reparse,
             onDelete: _deleteItem,
-          ),
-        );
-      },
-      error:
-          (error, stackTrace) => Scaffold(
-            backgroundColor: context.readerColors.surface,
-            body: AppErrorView(
+          );
+        },
+        error:
+            (error, stackTrace) => AppErrorView(
               message: error.toString(),
-              onBack: _handleBack,
               onRetry:
                   () => ref.invalidate(readerItemDetailProvider(widget.itemId)),
             ),
-          ),
-      loading:
-          () => Scaffold(
-            backgroundColor: context.readerColors.surface,
-            body: AppLoading.detail(),
-          ),
+        loading: () => AppLoading.detail(),
+      ),
     );
   }
 
@@ -273,14 +269,6 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
     });
   }
 
-  void _handleBack() {
-    if (context.canPop()) {
-      context.pop();
-      return;
-    }
-    context.go('/reader');
-  }
-
   List<ReaderChapter> _readerChapters() {
     return widget.chapters
         .asMap()
@@ -309,69 +297,15 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
 
   @override
   Widget build(BuildContext context) {
-    final rc = context.readerColors;
-    final l10n = AppLocalizations.of(context);
-    return SafeArea(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // 返回条（样例 h-12 sticky back bar）
-          Container(
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: rc.outlineVariant)),
-            ),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: InkWell(
-                onTap: _handleBack,
-                child: Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.arrow_back_rounded,
-                        size: 16,
-                        color: rc.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        l10n.coreBack,
-                        style: TextStyle(
-                          color: rc.onSurfaceVariant,
-                          fontSize: 13,
-                          height: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-              child: Center(
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 860),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      _buildHero(context),
-                      const SizedBox(height: 32),
-                      _buildTabBar(context),
-                      const SizedBox(height: 24),
-                      _buildTabContent(context),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHero(context),
+        const SizedBox(height: 32),
+        _buildTabBar(context),
+        const SizedBox(height: 24),
+        _buildTabContent(context),
+      ],
     );
   }
 
@@ -980,23 +914,25 @@ class _ComicDetailWrapper extends ConsumerWidget {
   final ReaderItem item;
   final String itemId;
 
+  void _handleBack(BuildContext context) {
+    if (context.canPop()) {
+      context.pop();
+      return;
+    }
+    context.go('/reader');
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final monitor = ref.watch(comicManifestMonitorProvider(itemId));
     final manifest = monitor.asData?.value.manifest;
     if (manifest == null && monitor.asData?.value.refreshError == null) {
-      return Scaffold(
-        backgroundColor: context.readerColors.surface,
-        body: const Center(child: CircularProgressIndicator()),
-      );
+      return const Center(child: CircularProgressIndicator());
     }
     if (manifest == null) {
-      return Scaffold(
-        backgroundColor: context.readerColors.surface,
-        body: AppErrorView(
-          message: AppLocalizations.of(context).readerRefreshFailed,
-          onRetry: () => ref.invalidate(comicManifestMonitorProvider(itemId)),
-        ),
+      return AppErrorView(
+        message: AppLocalizations.of(context).readerRefreshFailed,
+        onRetry: () => ref.invalidate(comicManifestMonitorProvider(itemId)),
       );
     }
     final terminal =
@@ -1009,14 +945,20 @@ class _ComicDetailWrapper extends ConsumerWidget {
         }
       });
     }
-    return ComicDetailPage(
-      item: item,
-      chapters: manifest.catalog,
-      sources: manifest.sources,
-      canRead: manifest.pages.isNotEmpty,
-      parseProgress: manifest.parseTask?.progress,
-      onRetrySource: (source) => _retryComicSource(context, ref, source),
-      onDeleteSource: (source) => _deleteComicSource(context, ref, source),
+    return ReaderPageScaffold(
+      target: ReaderPageTarget.library,
+      enablePopGuard: false,
+      headerPadding: EdgeInsets.zero,
+      header: _DetailBackBar(onTap: () => _handleBack(context)),
+      child: ComicDetailPage(
+        item: item,
+        chapters: manifest.catalog,
+        sources: manifest.sources,
+        canRead: manifest.pages.isNotEmpty,
+        parseProgress: manifest.parseTask?.progress,
+        onRetrySource: (source) => _retryComicSource(context, ref, source),
+        onDeleteSource: (source) => _deleteComicSource(context, ref, source),
+      ),
     );
   }
 
@@ -1056,28 +998,49 @@ class _ComicDetailWrapper extends ConsumerWidget {
   }
 }
 
-class _BookPreparationScaffold extends StatelessWidget {
-  const _BookPreparationScaffold({required this.onBack});
+/// 详情页固定页头返回条：通栏底边框，点击区域仅按钮内容。
+class _DetailBackBar extends StatelessWidget {
+  const _DetailBackBar({required this.onTap});
 
-  final VoidCallback onBack;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: context.readerColors.surface,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            const Positioned.fill(child: AppLoading.detail()),
-            Align(
-              alignment: Alignment.topLeft,
-              child: IconButton(
-                tooltip: AppLocalizations.of(context).coreBack,
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: rc.outlineVariant)),
+      ),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: InkWell(
+          onTap: onTap,
+          child: Container(
+            height: 48,
+            padding: EdgeInsets.symmetric(
+              horizontal: MediaQuery.sizeOf(context).width >= 1024 ? 32 : 24,
             ),
-          ],
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.arrow_back_rounded,
+                  size: 16,
+                  color: rc.onSurfaceVariant,
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.coreBack,
+                  style: TextStyle(
+                    color: rc.onSurfaceVariant,
+                    fontSize: 13,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

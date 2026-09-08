@@ -140,6 +140,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               ),
               _readerRoute('/reader/stats', (state) => const ReaderStatsPage()),
               _readerRoute('/reader/admin', (state) => const ReaderAdminPage()),
+              _readerRoute(
+                '/reader/items/:itemId',
+                (state) => ReaderItemDetailPage(
+                  itemId: state.pathParameters['itemId']!,
+                ),
+              ),
             ],
           ),
         ],
@@ -257,11 +263,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         },
       ),
       _animatedRoute(
-        '/reader/items/:itemId',
-        (state) =>
-            ReaderItemDetailPage(itemId: state.pathParameters['itemId']!),
-      ),
-      _animatedRoute(
         '/reader/items/:itemId/chapters/:chapterId',
         (state) => ReaderViewPage(
           itemId: state.pathParameters['itemId']!,
@@ -327,8 +328,7 @@ GoRoute _readerRoute(
   return GoRoute(
     path: path,
     pageBuilder: (context, state) {
-      final child = _routeSurface(path, builder(state));
-      return NoTransitionPage<void>(key: state.pageKey, child: child);
+      return NoTransitionPage<void>(key: state.pageKey, child: builder(state));
     },
   );
 }
