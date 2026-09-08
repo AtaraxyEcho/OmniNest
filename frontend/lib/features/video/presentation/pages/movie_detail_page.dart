@@ -404,16 +404,18 @@ class _Backdrop extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 20,
-            left: 24,
+            top: 16,
+            left: 20,
             child: Material(
-              color: Colors.transparent,
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(18),
               child: InkWell(
                 onTap: onBack,
+                borderRadius: BorderRadius.circular(18),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
+                    horizontal: 12,
+                    vertical: 7,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -422,10 +424,7 @@ class _Backdrop extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         l10n.videoDetailBack,
-                        style: MovieDetailTheme.mono(
-                          12,
-                          color: MovieDetailTheme.secondaryText,
-                        ),
+                        style: MovieDetailTheme.mono(12, color: Colors.white),
                       ),
                     ],
                   ),
@@ -434,39 +433,37 @@ class _Backdrop extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 14,
-            right: 24,
+            top: 16,
+            right: 20,
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 if (canEdit)
                   Material(
-                    color: Colors.transparent,
+                    color: Colors.black.withValues(alpha: 0.45),
+                    borderRadius: MovieRedesignPalette.borderRadius,
                     child: InkWell(
                       onTap: onToggleEdit,
                       borderRadius: MovieRedesignPalette.borderRadius,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 12,
-                          vertical: 6,
+                          vertical: 7,
                         ),
                         decoration: BoxDecoration(
                           borderRadius: MovieRedesignPalette.borderRadius,
                           border: Border.all(
+                            width: 1.2,
                             color:
                                 editMode
                                     ? MovieDetailTheme.accent
-                                    : MovieDetailTheme.border,
+                                    : Colors.white24,
                           ),
-                          color:
-                              editMode
-                                  ? MovieDetailTheme.accent.withValues(
-                                    alpha: 0.10,
-                                  )
-                                  : Colors.transparent,
                         ),
                         child: Text(
-                          saving || editMode
+                          saving
+                              ? '…'
+                              : editMode
                               ? l10n.videoDetailSave
                               : l10n.videoDetailEdit,
                           style: MovieDetailTheme.mono(
@@ -474,22 +471,30 @@ class _Backdrop extends StatelessWidget {
                             color:
                                 editMode
                                     ? MovieDetailTheme.accent
-                                    : MovieDetailTheme.mutedText,
+                                    : Colors.white,
                           ),
                         ),
                       ),
                     ),
                   ),
-                const SizedBox(width: 12),
-                IconButton(
-                  onPressed: onToggleFavorite,
-                  icon: Icon(
-                    favorited ? Icons.star_rounded : Icons.star_outline_rounded,
-                    size: 24,
-                    color:
+                const SizedBox(width: 10),
+                Material(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  shape: const CircleBorder(),
+                  child: InkWell(
+                    onTap: onToggleFavorite,
+                    customBorder: const CircleBorder(),
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Icon(
                         favorited
-                            ? MovieDetailTheme.accent
-                            : MovieDetailTheme.mutedText,
+                            ? Icons.star_rounded
+                            : Icons.star_outline_rounded,
+                        size: 22,
+                        color:
+                            favorited ? MovieDetailTheme.accent : Colors.white,
+                      ),
+                    ),
                   ),
                 ),
               ],

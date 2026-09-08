@@ -313,16 +313,18 @@ class _Backdrop extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 20,
-            left: 24,
+            top: 16,
+            left: 20,
             child: Material(
-              color: Colors.transparent,
+              color: Colors.black.withValues(alpha: 0.45),
+              borderRadius: BorderRadius.circular(18),
               child: InkWell(
                 onTap: onBack,
+                borderRadius: BorderRadius.circular(18),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 2,
+                    horizontal: 12,
+                    vertical: 7,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -331,10 +333,7 @@ class _Backdrop extends StatelessWidget {
                       const SizedBox(width: 8),
                       Text(
                         l10n.videoDetailBack,
-                        style: MovieDetailTheme.mono(
-                          12,
-                          color: MovieDetailTheme.secondaryText,
-                        ),
+                        style: MovieDetailTheme.mono(12, color: Colors.white),
                       ),
                     ],
                   ),
@@ -343,17 +342,22 @@ class _Backdrop extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 14,
-            right: 24,
-            child: IconButton(
-              onPressed: onToggleFavorite,
-              icon: Icon(
-                favorited ? Icons.star_rounded : Icons.star_outline_rounded,
-                size: 24,
-                color:
-                    favorited
-                        ? MovieDetailTheme.accent
-                        : MovieDetailTheme.mutedText,
+            top: 12,
+            right: 20,
+            child: Material(
+              color: Colors.black.withValues(alpha: 0.45),
+              shape: const CircleBorder(),
+              child: InkWell(
+                onTap: onToggleFavorite,
+                customBorder: const CircleBorder(),
+                child: Padding(
+                  padding: const EdgeInsets.all(6),
+                  child: Icon(
+                    favorited ? Icons.star_rounded : Icons.star_outline_rounded,
+                    size: 22,
+                    color: favorited ? MovieDetailTheme.accent : Colors.white,
+                  ),
+                ),
               ),
             ),
           ),
