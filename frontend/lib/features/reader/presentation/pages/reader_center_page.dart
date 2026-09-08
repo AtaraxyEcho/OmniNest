@@ -18,6 +18,9 @@ import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedb
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
 /// 书库页：全部条目网格，支持分段过滤、排序与搜索。
+/// 参考设计标题衬线字体（中文回退系统字体，保持正体）。
+const String kReaderSerifFamily = 'InstrumentSerif';
+
 class ReaderCenterPage extends ConsumerStatefulWidget {
   const ReaderCenterPage({super.key});
 
@@ -100,6 +103,29 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
         ref.read(readerCenterControllerProvider.notifier).setSearchQuery(value);
       },
       onRefresh: _onRefresh,
+      header:
+          stateAsync.asData?.value == null
+              ? null
+              : _LibraryHeader(
+                itemCount: stateAsync.asData!.value.visibleItems.length,
+                searchController: _searchController,
+                segment: stateAsync.asData!.value.librarySegment,
+                sortBy: stateAsync.asData!.value.sortBy,
+                onSearchChanged: (value) {
+                  ref
+                      .read(readerCenterControllerProvider.notifier)
+                      .setSearchQuery(value);
+                },
+                onSegmentChanged:
+                    (segment) => ref
+                        .read(readerCenterControllerProvider.notifier)
+                        .selectLibrarySegment(segment),
+                onSortChanged:
+                    (sortBy) => ref
+                        .read(readerCenterControllerProvider.notifier)
+                        .setSortBy(sortBy),
+                onRefresh: _onRefresh,
+              ),
       child: ReaderParseFeedback(
         child: stateAsync.when(
           data: _buildContent,
@@ -140,25 +166,6 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
               ),
             ],
           ),
-        _LibraryHeader(
-          itemCount: visibleItems.length,
-          searchController: _searchController,
-          segment: data.librarySegment,
-          sortBy: data.sortBy,
-          onSearchChanged:
-              (value) => ref
-                  .read(readerCenterControllerProvider.notifier)
-                  .setSearchQuery(value),
-          onSegmentChanged:
-              (segment) => ref
-                  .read(readerCenterControllerProvider.notifier)
-                  .selectLibrarySegment(segment),
-          onSortChanged:
-              (sortBy) => ref
-                  .read(readerCenterControllerProvider.notifier)
-                  .setSortBy(sortBy),
-          onRefresh: _onRefresh,
-        ),
         if (showContinue) ...[
           const SizedBox(height: 28),
           _ContinueSection(
@@ -295,9 +302,10 @@ class _LibraryHeader extends StatelessWidget {
               l10n.readerNavLibrary,
               style: TextStyle(
                 color: rc.onSurface,
-                fontSize: 28,
+                fontSize: 30,
                 height: 1.15,
-                fontWeight: FontWeight.w600,
+                fontFamily: kReaderSerifFamily,
+                fontStyle: FontStyle.italic,
                 letterSpacing: -0.5,
               ),
             ),
@@ -399,6 +407,8 @@ class _SearchAndFilterRow extends StatelessWidget {
           onSortChanged: onSortChanged,
           onRefresh: onRefresh,
         ),
+        const SizedBox(height: 16),
+        Container(height: 1, color: rc.outlineVariant.withValues(alpha: 0.6)),
       ],
     );
   }

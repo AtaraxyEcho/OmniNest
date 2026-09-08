@@ -8285,6 +8285,12 @@ abstract class AppLocalizations {
   /// **'Reading Activity'**
   String get readerStatsActivity;
 
+  /// No description provided for @readerStatsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Statistics'**
+  String get readerStatsTitle;
+
   /// No description provided for @readerStatsLast14.
   ///
   /// In en, this message translates to:

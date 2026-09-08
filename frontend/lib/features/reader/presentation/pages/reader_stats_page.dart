@@ -4,6 +4,8 @@ import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart'
+    show kReaderSerifFamily;
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 
 /// 阅读统计概览数据（统计页）。
@@ -20,11 +22,30 @@ class ReaderStatsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final overviewAsync = ref.watch(readerStatsOverviewProvider);
+    final rc = context.readerColors;
     return ReaderPageScaffold(
       target: ReaderPageTarget.stats,
       onRefresh: () async {
         ref.invalidate(readerStatsOverviewProvider);
       },
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            AppLocalizations.of(context).readerStatsTitle,
+            style: TextStyle(
+              color: rc.onSurface,
+              fontSize: 30,
+              height: 1.15,
+              fontFamily: kReaderSerifFamily,
+              fontStyle: FontStyle.italic,
+              letterSpacing: -0.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Container(height: 1, color: rc.outlineVariant.withValues(alpha: 0.6)),
+        ],
+      ),
       child: overviewAsync.when(
         loading:
             () => const SizedBox(
@@ -160,7 +181,7 @@ class _StatCard extends StatelessWidget {
                     color: rc.onSurface,
                     fontSize: 30,
                     height: 1,
-                    fontWeight: FontWeight.w600,
+                    fontFamily: kReaderSerifFamily,
                     fontFeatures: const [FontFeature.tabularFigures()],
                   ),
                 ),

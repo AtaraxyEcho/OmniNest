@@ -8,6 +8,8 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
+import 'package:omninest/features/reader/presentation/pages/reader_center_page.dart'
+    show kReaderSerifFamily;
 import 'package:omninest/features/reader/presentation/widgets/reader_shelf_row.dart';
 
 /// 书架页：已加入书架的条目编号列表。
@@ -24,32 +26,39 @@ class ReaderBookshelfPage extends ConsumerWidget {
       target: ReaderPageTarget.bookshelf,
       onRefresh:
           () => ref.read(readerCenterControllerProvider.notifier).refresh(),
+      header: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                AppLocalizations.of(context).readerNavBookshelf,
+                style: TextStyle(
+                  color: rc.onSurface,
+                  fontSize: 30,
+                  height: 1.15,
+                  fontFamily: kReaderSerifFamily,
+                  fontStyle: FontStyle.italic,
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${shelved.length}',
+                style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(height: 1, color: rc.outlineVariant.withValues(alpha: 0.6)),
+        ],
+      ),
       child: ReaderParseFeedback(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text(
-                  AppLocalizations.of(context).readerNavBookshelf,
-                  style: TextStyle(
-                    color: rc.onSurface,
-                    fontSize: 28,
-                    height: 1.15,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: -0.5,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  '${shelved.length}',
-                  style: TextStyle(color: rc.onSurfaceVariant, fontSize: 12),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
             if (shelved.isEmpty)
               ReaderEmptyState(
                 title: AppLocalizations.of(context).readerShelfEmpty,

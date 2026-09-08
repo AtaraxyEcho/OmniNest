@@ -8,7 +8,6 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
-import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
@@ -49,6 +48,7 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
     this.onSearchChanged,
     this.onRefresh,
     this.showImportAction = false,
+    this.header,
     super.key,
   });
 
@@ -65,6 +65,9 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
 
   /// 是否在顶栏展示快速导入按钮
   final bool showImportAction;
+
+  /// 固定页头（置于页签下方、滚动内容上方，对应参考设计 sticky header）
+  final Widget? header;
 
   @override
   ConsumerState<ReaderPageScaffold> createState() => _ReaderPageScaffoldState();
@@ -98,17 +101,10 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
             extendBody: true,
             body: Stack(
               children: [
-                if (hosted)
-                  const MobilePageSurface(
-                    exposeBackdrop: true,
-                    backdropOpacity: 0.56,
-                    child: SizedBox.expand(),
-                  )
-                else
-                  ColoredBox(
-                    color: Theme.of(context).colorScheme.surface,
-                    child: const SizedBox.expand(),
-                  ),
+                ColoredBox(
+                  color: context.readerColors.surface,
+                  child: const SizedBox.expand(),
+                ),
                 Padding(
                   padding: EdgeInsets.only(
                     top: hosted ? 0 : WorkbenchTopBar.totalHeightOf(context),
@@ -119,6 +115,7 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
                         current: widget.target,
                         canManage: canManage,
                       ),
+                      if (widget.header != null) widget.header!,
                       Expanded(
                         child: _ReaderPageScrollArea(
                           isWide: isWide,

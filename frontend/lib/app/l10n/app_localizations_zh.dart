@@ -4341,6 +4341,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerStatsActivity => '阅读记录';
 
   @override
+  String get readerStatsTitle => '阅读统计';
+
+  @override
   String get readerStatsLast14 => '最近 14 天';
 
   @override

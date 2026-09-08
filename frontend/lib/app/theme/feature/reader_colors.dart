@@ -69,42 +69,79 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
   /// 阅读强调色（琥珀棕），用于进度线、完成徽标等阅读语义元素
   final Color reading;
 
-  /// 从全局主题色派生 Reader 模块专属色
+  /// 参考设计纸感亮色 token（米白纸面 / 墨黑前景 / 琥珀强调）
+  static const ReaderColors _light = ReaderColors(
+    surface: Color(0xFFF6F5F1),
+    surfaceContainerLow: Color(0xFFFDFCF9),
+    surfaceContainer: Color(0xFFF1EFE9),
+    surfaceContainerHigh: Color(0xFFECEAE5),
+    surfaceContainerHighest: Color(0xFFE2DFD9),
+    outlineVariant: Color(0xFFE2DFD9),
+    primary: Color(0xFF0F0E0C),
+    onPrimaryContainer: Color(0xFFF6F5F1),
+    primaryContainer: Color(0xFFECEAE5),
+    sidebarSelectedBg: Color(0xFF0F0E0C),
+    sidebarSelectedBorder: Color(0xFF0F0E0C),
+    sidebarSelectedFg: Color(0xFFF6F5F1),
+    sidebarHoverBg: Color(0x140F0E0C),
+    tertiary: Color(0xFFB87A35),
+    onSurface: Color(0xFF0F0E0C),
+    onSurfaceVariant: Color(0xFF87847C),
+    success: Color(0xFF4C8C72),
+    warning: Color(0xFFB08830),
+    danger: Color(0xFFA8452E),
+    overlay: Color(0xFF0F0E0C),
+    overlayLight: Color(0x140F0E0C),
+    badgeBg: Color(0xFFECEAE5),
+    badgeText: Color(0xFF0F0E0C),
+    star: Color(0xFFB87A35),
+    comicBg: Color(0xFF000000),
+    comicText: Color(0xFFFFFFFF),
+    comicMuted: Color(0xB3FFFFFF),
+    coverGradientStart: Color(0xFFFDFCF9),
+    coverGradientEnd: Color(0xFFECEAE5),
+    reading: Color(0xFFB87A35),
+  );
+
+  /// 参考设计纸感暗色 token（暖黑纸面 / 米白前景 / 琥珀强调）
+  static const ReaderColors _dark = ReaderColors(
+    surface: Color(0xFF0F0E0C),
+    surfaceContainerLow: Color(0xFF1A1916),
+    surfaceContainer: Color(0xFF171511),
+    surfaceContainerHigh: Color(0xFF252320),
+    surfaceContainerHighest: Color(0xFF2C2925),
+    outlineVariant: Color(0xFF2C2925),
+    primary: Color(0xFFEEEDE9),
+    onPrimaryContainer: Color(0xFF0F0E0C),
+    primaryContainer: Color(0xFF252320),
+    sidebarSelectedBg: Color(0xFFEEEDE9),
+    sidebarSelectedBorder: Color(0xFFEEEDE9),
+    sidebarSelectedFg: Color(0xFF0F0E0C),
+    sidebarHoverBg: Color(0x14EEEDE9),
+    tertiary: Color(0xFFC8923E),
+    onSurface: Color(0xFFEEEDE9),
+    onSurfaceVariant: Color(0xFF6E6C64),
+    success: Color(0xFF5A9C7E),
+    warning: Color(0xFFC8923E),
+    danger: Color(0xFFC45A3D),
+    overlay: Color(0xFF000000),
+    overlayLight: Color(0x14000000),
+    badgeBg: Color(0xFF252320),
+    badgeText: Color(0xFFEEEDE9),
+    star: Color(0xFFC8923E),
+    comicBg: Color(0xFF000000),
+    comicText: Color(0xFFFFFFFF),
+    comicMuted: Color(0xB3FFFFFF),
+    coverGradientStart: Color(0xFF1A1916),
+    coverGradientEnd: Color(0xFF252320),
+    reading: Color(0xFFC8923E),
+  );
+
+  /// Reader 模块固定使用参考设计的纸感配色，全局主题只决定亮暗方向。
   factory ReaderColors.fromGlobal(GlobalThemeColors base) {
     final isDark =
         ThemeData.estimateBrightnessForColor(base.surface) == Brightness.dark;
-    return ReaderColors(
-      surface: base.surface,
-      surfaceContainerLow: base.surfaceContainerLow,
-      surfaceContainer: base.surfaceContainer,
-      surfaceContainerHigh: base.surfaceContainerHigh,
-      surfaceContainerHighest: base.surfaceContainerHighest,
-      outlineVariant: base.outlineVariant,
-      primary: base.primary,
-      onPrimaryContainer: base.onPrimaryContainer,
-      primaryContainer: base.primaryContainer,
-      sidebarSelectedBg: base.primary.withValues(alpha: isDark ? 0.20 : 0.12),
-      sidebarSelectedBorder: base.primary,
-      sidebarSelectedFg: base.primary,
-      sidebarHoverBg: base.primary.withValues(alpha: isDark ? 0.12 : 0.07),
-      tertiary: base.accentWarm,
-      onSurface: base.onSurface,
-      onSurfaceVariant: base.onSurfaceVariant,
-      success: base.success,
-      warning: base.warning,
-      danger: base.error,
-      overlay: base.overlay,
-      overlayLight: base.overlayLight,
-      badgeBg: base.badgeBg,
-      badgeText: base.badgeText,
-      star: base.star,
-      comicBg: const Color(0xFF000000),
-      comicText: const Color(0xFFFFFFFF),
-      comicMuted: const Color(0xB3FFFFFF),
-      coverGradientStart: base.surfaceContainerLowest,
-      coverGradientEnd: base.primaryContainer,
-      reading: isDark ? const Color(0xFFC8923E) : const Color(0xFFB87A35),
-    );
+    return isDark ? _dark : _light;
   }
 
   static const List<ReaderColors> values = [];

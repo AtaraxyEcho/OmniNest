@@ -1915,6 +1915,7 @@
   "readerShelfEmpty": "Your shelf is empty. Add books from the library.",
   "readerShelfEmptyHint": "Browse the library and add books to your shelf.",
   "readerStatsActivity": "Reading Activity",
+  "readerStatsTitle": "Statistics",
   "readerStatsLast14": "Last 14 days",
   "readerStatsCompleted": "Completed",
   "readerStatsInProgress": "In Progress",

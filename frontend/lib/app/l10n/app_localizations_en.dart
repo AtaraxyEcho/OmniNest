@@ -4483,6 +4483,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerStatsActivity => 'Reading Activity';
 
   @override
+  String get readerStatsTitle => 'Statistics';
+
+  @override
   String get readerStatsLast14 => 'Last 14 days';
 
   @override
