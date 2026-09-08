@@ -126,7 +126,7 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: AppTypography.bodySmall,
+                                fontSize: AppTypography.bodyLarge,
                                 fontWeight: FontWeight.w500,
                                 height: 1.35,
                               ),

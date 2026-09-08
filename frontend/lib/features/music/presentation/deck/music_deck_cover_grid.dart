@@ -230,7 +230,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.musicColors.onSurface,
-                  fontSize: AppTypography.bodyMedium,
+                  fontSize: AppTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -244,7 +244,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.musicColors.onSurfaceVariant,
-                        fontSize: AppTypography.labelSmall,
+                        fontSize: AppTypography.bodySmall,
                       ),
                     ),
                   ),
