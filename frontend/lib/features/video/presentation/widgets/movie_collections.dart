@@ -195,7 +195,6 @@ Future<void> _showCollectionItems(
   WidgetRef ref,
   MovieCollection collection,
 ) async {
-  final itemsAsync = ref.read(collectionItemsProvider(collection.id));
   await showDialog<void>(
     context: context,
     builder:
@@ -205,66 +204,89 @@ Future<void> _showCollectionItems(
           content: SizedBox(
             width: 500,
             height: 400,
-            child: itemsAsync.when(
-              data:
-                  (items) =>
-                      items.isEmpty
-                          ? Center(
-                            child: Text(
-                              AppLocalizations.of(context).videoCollectionEmpty,
-                            ),
-                          )
-                          : ListView.builder(
-                            itemCount: items.length,
-                            itemBuilder: (context, index) {
-                              final item = items[index];
-                              return ListTile(
-                                title: Text(item.title),
-                                subtitle: Text(item.year),
-                                trailing: IconButton(
-                                  tooltip:
-                                      AppLocalizations.of(context).coreDelete,
-                                  icon: const Icon(Icons.remove_circle_outline),
-                                  onPressed: () async {
-                                    if (!context.mounted) return;
-                                    try {
-                                      await ref
-                                          .read(
-                                            movieCenterControllerProvider
-                                                .notifier,
-                                          )
-                                          .removeCollectionItem(
-                                            collectionId: collection.id,
-                                            videoItemId: item.id,
-                                          );
-                                    } on Object catch (error) {
-                                      if (context.mounted) {
-                                        showMovieFeedback(
-                                          context,
-                                          movieErrorMessage(error),
-                                          isError: true,
-                                        );
-                                      }
-                                      return;
-                                    }
-                                    if (!context.mounted) return;
-                                    ref.invalidate(
-                                      collectionItemsProvider(collection.id),
-                                    );
-                                  },
+            // 弹窗内容订阅合集条目数据源：autoDispose 提供器在弹窗存续期间
+            // 保活，数据与错误到达时自动重建；一次性 read 快照会永远停留
+            // 在加载态。
+            child: Consumer(
+              builder: (dialogContext, dialogRef, _) {
+                final itemsAsync = dialogRef.watch(
+                  collectionItemsProvider(collection.id),
+                );
+                return itemsAsync.when(
+                  data:
+                      (items) =>
+                          items.isEmpty
+                              ? Center(
+                                child: Text(
+                                  AppLocalizations.of(
+                                    dialogContext,
+                                  ).videoCollectionEmpty,
                                 ),
-                              );
-                            },
-                          ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error:
-                  (e, _) => Center(
-                    child: Text(
-                      AppLocalizations.of(
-                        context,
-                      ).videoLoadFailedWith(e.toString()),
-                    ),
-                  ),
+                              )
+                              : ListView.builder(
+                                itemCount: items.length,
+                                itemBuilder: (context, index) {
+                                  final item = items[index];
+                                  return ListTile(
+                                    title: Text(item.title),
+                                    subtitle: Text(item.year),
+                                    trailing: IconButton(
+                                      tooltip:
+                                          AppLocalizations.of(
+                                            dialogContext,
+                                          ).coreDelete,
+                                      icon: const Icon(
+                                        Icons.remove_circle_outline,
+                                      ),
+                                      onPressed: () async {
+                                        if (!dialogContext.mounted) {
+                                          return;
+                                        }
+                                        try {
+                                          await ref
+                                              .read(
+                                                movieCenterControllerProvider
+                                                    .notifier,
+                                              )
+                                              .removeCollectionItem(
+                                                collectionId: collection.id,
+                                                videoItemId: item.id,
+                                              );
+                                        } on Object catch (error) {
+                                          if (dialogContext.mounted) {
+                                            showMovieFeedback(
+                                              dialogContext,
+                                              movieErrorMessage(error),
+                                              isError: true,
+                                            );
+                                          }
+                                          return;
+                                        }
+                                        if (!dialogContext.mounted) {
+                                          return;
+                                        }
+                                        dialogRef.invalidate(
+                                          collectionItemsProvider(
+                                            collection.id,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  );
+                                },
+                              ),
+                  loading:
+                      () => const Center(child: CircularProgressIndicator()),
+                  error:
+                      (e, _) => Center(
+                        child: Text(
+                          AppLocalizations.of(
+                            dialogContext,
+                          ).videoLoadFailedWith(e.toString()),
+                        ),
+                      ),
+                );
+              },
             ),
           ),
           actions: [
