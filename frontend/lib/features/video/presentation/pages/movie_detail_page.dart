@@ -140,8 +140,9 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
     }
     setState(() => _saving = true);
     try {
+      // 走控制器以联动中心数据刷新，避免列表页标题停留旧值。
       await ref
-          .read(movieApiProvider)
+          .read(movieCenterControllerProvider.notifier)
           .updateMetadata(
             videoItemId: item.id,
             title: title,
@@ -173,9 +174,10 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
     final next = !current;
     setState(() => _favoritedOverride = next);
     try {
+      // 走控制器刷新收藏列表等中心数据，收藏分区 pop 回来即时反映。
       await ref
-          .read(movieApiProvider)
-          .favorite(videoItemId: widget.item.id, favorite: next);
+          .read(movieCenterControllerProvider.notifier)
+          .toggleFavorite(widget.item, favorite: next);
       if (!mounted) {
         return;
       }
