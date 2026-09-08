@@ -164,9 +164,7 @@ class _ReaderModuleTopBar extends StatelessWidget {
         color: rc.surface,
         border: Border(bottom: BorderSide(color: rc.outlineVariant)),
       ),
-      padding: EdgeInsets.symmetric(
-        horizontal: MediaQuery.sizeOf(context).width >= 1024 ? 20 : 16,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Row(
         children: [
           InkWell(
@@ -243,15 +241,10 @@ class _ReaderModuleTopBar extends StatelessWidget {
             ),
           ),
           const Spacer(),
-          FontScaleControl(size: 14, color: rc.onSurfaceVariant),
-          const SizedBox(width: 4),
-          SizedBox(
-            width: 32,
-            height: 32,
-            child: NotificationIcon(size: 16, color: rc.onSurfaceVariant),
-          ),
-          const SizedBox(width: 4),
-          const UserAvatarMenu(size: 28),
+          FontScaleControl(size: 18, color: rc.onSurfaceVariant),
+          NotificationIcon(size: 18, color: rc.onSurfaceVariant),
+          const SizedBox(width: 8),
+          const UserAvatarMenu(),
         ],
       ),
     );
