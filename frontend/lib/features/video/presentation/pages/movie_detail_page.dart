@@ -527,12 +527,16 @@ class _PosterMetaRow extends StatelessWidget {
             .map((member) => member.name)
             .firstOrNull;
     final l10n = AppLocalizations.of(context);
+    // 海报元信息高度随字体档位伸缩：占位高度放大给 PLAY 腾出流式空间，
+    // OverflowBox 解除高度上限让编辑态标题输入框按内容自然撑开。
+    final textScale =
+        MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.5).toDouble();
     return Transform.translate(
       offset: const Offset(0, -64),
       child: SizedBox(
-        height: 96,
+        height: 96 * textScale,
         child: OverflowBox(
-          maxHeight: 160,
+          maxHeight: double.infinity,
           alignment: Alignment.topCenter,
           child: SizedBox(
             width: MediaQuery.sizeOf(context).width - 64,
@@ -553,6 +557,7 @@ class _PosterMetaRow extends StatelessWidget {
                   child: Padding(
                     padding: const EdgeInsets.only(top: 64),
                     child: Column(
+                      mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (editMode)
