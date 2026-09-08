@@ -144,7 +144,7 @@ class _PortalEnvironmentHeader extends ConsumerWidget {
                     MaterialLocalizations.of(context).formatShortDate(now),
                     style: TextStyle(
                       color: secondary,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       fontWeight: FontWeight.w600,
                       shadows: shadows,
                     ),
@@ -156,7 +156,7 @@ class _PortalEnvironmentHeader extends ConsumerWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: primary,
-                      fontSize: 28,
+                      fontSize: AppTypography.headlineMedium,
                       fontWeight: FontWeight.w700,
                       height: 1.15,
                       shadows: shadows,
@@ -174,7 +174,7 @@ class _PortalEnvironmentHeader extends ConsumerWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: secondary,
-                            fontSize: 13,
+                            fontSize: AppTypography.bodyMedium,
                             shadows: shadows,
                           ),
                         ),
@@ -185,7 +185,7 @@ class _PortalEnvironmentHeader extends ConsumerWidget {
                           l10n.portalWeatherDisconnected,
                           style: TextStyle(
                             color: secondary,
-                            fontSize: 13,
+                            fontSize: AppTypography.bodyMedium,
                             shadows: shadows,
                           ),
                         ),
@@ -251,13 +251,19 @@ class _PortalWeatherReading extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(icon, style: TextStyle(fontSize: 28, shadows: shadows)),
+          Text(
+            icon,
+            style: TextStyle(
+              fontSize: AppTypography.headlineMedium,
+              shadows: shadows,
+            ),
+          ),
           const SizedBox(width: 6),
           Text(
             '$temperature°',
             style: TextStyle(
               color: foreground,
-              fontSize: 26,
+              fontSize: AppTypography.headlineMedium,
               fontWeight: FontWeight.w700,
               shadows: shadows,
             ),
@@ -341,7 +347,7 @@ class _PortalPrimaryAction extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: context.mobileColors.textPrimary,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -599,7 +605,7 @@ class _PortalContinueTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.mobileColors.textPrimary,
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w700,
                           height: 1.25,
                         ),
@@ -611,7 +617,7 @@ class _PortalContinueTile extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.mobileColors.textSecondary,
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySmall,
                         ),
                       ),
                     ],
@@ -800,7 +806,7 @@ class _PortalSystemRow extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.mobileColors.textPrimary,
-                    fontSize: 14,
+                    fontSize: AppTypography.bodyLarge,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -814,7 +820,7 @@ class _PortalSystemRow extends StatelessWidget {
                   textAlign: TextAlign.end,
                   style: TextStyle(
                     color: context.mobileColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                   ),
                 ),
               ),

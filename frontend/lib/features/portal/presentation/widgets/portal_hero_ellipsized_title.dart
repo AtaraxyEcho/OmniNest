@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 
 /// Portal Hero 区域的单行省略标题。
 class PortalHeroEllipsizedTitle extends StatelessWidget {
@@ -43,7 +44,7 @@ class PortalHeroEllipsizedTitle extends StatelessWidget {
           ),
           textStyle: const TextStyle(
             color: Colors.white,
-            fontSize: 12,
+            fontSize: AppTypography.bodySmall,
             fontWeight: FontWeight.w600,
           ),
           child: titleText,

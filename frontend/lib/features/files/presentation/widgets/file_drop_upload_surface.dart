@@ -4,6 +4,7 @@ import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 
 /// 接收桌面文件拖放并转交给现有上传队列。
@@ -73,7 +74,7 @@ class _FileDropUploadSurfaceState extends State<FileDropUploadSurface> {
                           AppLocalizations.of(context).filesDropToUpload,
                           style: TextStyle(
                             color: context.filesColors.onSurface,
-                            fontSize: 16,
+                            fontSize: AppTypography.titleMedium,
                             fontWeight: FontWeight.w700,
                           ),
                         ),

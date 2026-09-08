@@ -123,6 +123,7 @@ class _StatusRail extends StatelessWidget {
             now.day.toString().padLeft(2, '0'),
             style: TextStyle(
               color: palette.text,
+              // ignore: font_size_whitelist
               fontSize: 58,
               height: 0.9,
               fontWeight: FontWeight.w800,
@@ -190,7 +191,10 @@ class _AttentionPanel extends StatelessWidget {
                 children: [
                   Text(
                     l10n.portalVisualStatusTitle,
-                    style: TextStyle(color: palette.muted, fontSize: 12),
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: AppTypography.bodySmall,
+                    ),
                   ),
                   const SizedBox(height: 14),
                   if (activeModule != PortalFocusModule.music) ...[
@@ -285,7 +289,7 @@ class _NoticeTile extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: palette.text,
-                    fontSize: 14,
+                    fontSize: AppTypography.bodyLarge,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -303,7 +307,10 @@ class _NoticeTile extends StatelessWidget {
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: palette.muted, fontSize: 12),
+            style: TextStyle(
+              color: palette.muted,
+              fontSize: AppTypography.bodySmall,
+            ),
           ),
           if (detail != null) ...[
             const SizedBox(height: 3),
@@ -313,7 +320,7 @@ class _NoticeTile extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: palette.muted.withValues(alpha: 0.82),
-                fontSize: 11,
+                fontSize: AppTypography.labelSmall,
                 height: 1.35,
               ),
             ),

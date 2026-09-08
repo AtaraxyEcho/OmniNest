@@ -74,7 +74,7 @@ class _SharedWithMeWorkspaceState
                     child: Text(
                       l10n.filesLoadFailed(e.toString()),
                       style: TextStyle(
-                        fontSize: 13,
+                        fontSize: AppTypography.bodyMedium,
                         color: context.filesColors.error,
                       ),
                     ),
@@ -262,7 +262,7 @@ class _OfflineDownloadWorkspace extends ConsumerWidget {
               borderRadius: BorderRadius.circular(10),
             ),
             textStyle: const TextStyle(
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
               fontWeight: FontWeight.w700,
             ),
           ),

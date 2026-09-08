@@ -30,7 +30,7 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 textStyle: const TextStyle(
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -932,7 +932,7 @@ class _InfoRowState extends State<_InfoRow> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: AppTypography.bodyLarge,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

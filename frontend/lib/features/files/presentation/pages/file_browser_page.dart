@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -561,7 +562,7 @@ class _FileTopBar extends ConsumerWidget {
               label: const Text(
                 'Portal',
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   height: 18 / 13,
                   fontWeight: FontWeight.w700,
                 ),
@@ -574,7 +575,7 @@ class _FileTopBar extends ConsumerWidget {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 15,
+                  fontSize: AppTypography.titleMedium,
                   height: 24 / 15,
                   fontWeight: FontWeight.w800,
                   color: context.filesColors.primary,

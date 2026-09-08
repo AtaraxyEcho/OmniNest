@@ -382,7 +382,7 @@ class _PortalModulePreviewShell extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: palette.text,
-                        fontSize: 13,
+                        fontSize: AppTypography.bodyMedium,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
@@ -587,7 +587,7 @@ class _PortalFocusPreviewCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: palette.text,
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
@@ -596,7 +596,10 @@ class _PortalFocusPreviewCard extends StatelessWidget {
                     entry.subtitle,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: palette.muted, fontSize: 10.5),
+                    style: TextStyle(
+                      color: palette.muted,
+                      fontSize: AppTypography.labelSmall,
+                    ),
                   ),
                 ],
               ),
@@ -633,7 +636,10 @@ class _PortalFocusEmptyPreview extends StatelessWidget {
               item.subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: palette.muted, fontSize: 12),
+              style: TextStyle(
+                color: palette.muted,
+                fontSize: AppTypography.bodySmall,
+              ),
             ),
           ),
         ],

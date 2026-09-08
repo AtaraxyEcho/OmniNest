@@ -117,7 +117,10 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
             widget.file.name,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontSize: AppTypography.titleMedium,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ),
         IconButton(
@@ -152,7 +155,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
               Text(
                 l10n.filesAdvancedOptions,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   color: context.filesColors.onSurfaceVariant,
                 ),
               ),
@@ -219,7 +222,10 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
           const SizedBox(height: 8),
           Text(
             '${l10n.filesCreateFailed}：${shareState.error}',
-            style: TextStyle(color: context.filesColors.error, fontSize: 13),
+            style: TextStyle(
+              color: context.filesColors.error,
+              fontSize: AppTypography.bodyMedium,
+            ),
           ),
         ],
       ],
@@ -240,7 +246,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                 ? l10n.filesPasswordRequired
                 : l10n.filesNoPasswordAnyone,
             style: TextStyle(
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
               color: context.filesColors.onSurfaceVariant,
             ),
           ),
@@ -313,7 +319,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         fontFamily: AppTypography.monoFamily,
                         fontFamilyFallback: AppTypography.monoFamilyFallback,
                       ),
@@ -346,7 +352,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                     Text(
                       l10n.filesSharePasswordLabel(share.generatedPassword!),
                       style: TextStyle(
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         fontFamily: AppTypography.monoFamily,
                         fontFamilyFallback: AppTypography.monoFamilyFallback,
                         fontWeight: FontWeight.w600,
@@ -381,7 +387,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                     Text(
                       '${share.accessCount}/${share.maxAccessCount}',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                         color: context.filesColors.onSurfaceVariant,
                       ),
                     ),
@@ -397,7 +403,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                     Text(
                       _formatCompactDate(share.expiresAt!),
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: AppTypography.labelSmall,
                         color: context.filesColors.onSurfaceVariant,
                       ),
                     ),
@@ -441,7 +447,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
       child: Text(
         label,
         style: TextStyle(
-          fontSize: 11,
+          fontSize: AppTypography.labelSmall,
           color: color,
           fontWeight: FontWeight.w600,
         ),
@@ -453,7 +459,10 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
     return OutlinedButton.icon(
       onPressed: onTap,
       icon: Icon(icon, size: 15),
-      label: Text(label, style: const TextStyle(fontSize: 13)),
+      label: Text(
+        label,
+        style: const TextStyle(fontSize: AppTypography.bodyMedium),
+      ),
       style: OutlinedButton.styleFrom(
         shape: const StadiumBorder(),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),

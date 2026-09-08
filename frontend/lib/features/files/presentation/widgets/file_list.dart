@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
@@ -365,7 +366,7 @@ class _FileRowState extends State<_FileRow> {
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
-                            fontSize: 14,
+                            fontSize: AppTypography.bodyLarge,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -752,7 +753,7 @@ class _SwipeAction extends StatelessWidget {
           Text(
             label,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: AppTypography.labelSmall,
               height: 1,
               fontWeight: FontWeight.w600,
               color: color,

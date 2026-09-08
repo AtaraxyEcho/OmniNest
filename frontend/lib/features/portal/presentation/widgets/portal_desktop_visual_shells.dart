@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_fullscreen_control.dart';
@@ -122,7 +123,10 @@ class _PortalLocalBackdropButton extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   l10n.portalLocalBackdropShort,
-                  style: TextStyle(color: palette.text, fontSize: 13),
+                  style: TextStyle(
+                    color: palette.text,
+                    fontSize: AppTypography.bodyMedium,
+                  ),
                 ),
               ],
             ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -187,7 +188,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
             Text(
               AppLocalizations.of(context).filesShareAccessError,
               style: TextStyle(
-                fontSize: 16,
+                fontSize: AppTypography.titleMedium,
                 fontWeight: FontWeight.w700,
                 color: context.filesColors.onSurface,
               ),
@@ -198,7 +199,7 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: context.filesColors.onSurfaceVariant,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
               ),
             ),
             const SizedBox(height: 20),
@@ -263,7 +264,7 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
               AppLocalizations.of(context).filesPasswordAccess,
               style: TextStyle(
                 color: context.filesColors.onSurface,
-                fontSize: 16,
+                fontSize: AppTypography.titleMedium,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -272,7 +273,7 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
               AppLocalizations.of(context).filesEnterSharePassword,
               style: TextStyle(
                 color: context.filesColors.onSurfaceVariant,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
               ),
             ),
             const SizedBox(height: 20),
@@ -382,7 +383,7 @@ class _PreviewCard extends StatelessWidget {
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 18,
+                fontSize: AppTypography.titleLarge,
                 fontWeight: FontWeight.w700,
                 color: context.filesColors.onSurface,
               ),
@@ -392,7 +393,7 @@ class _PreviewCard extends StatelessWidget {
             Text(
               _formatSize(preview.sizeBytes),
               style: TextStyle(
-                fontSize: 14,
+                fontSize: AppTypography.bodyLarge,
                 color: context.filesColors.onSurfaceVariant,
               ),
             ),
@@ -417,7 +418,7 @@ class _PreviewCard extends StatelessWidget {
             Text(
               'Powered by OmniNest',
               style: TextStyle(
-                fontSize: 11,
+                fontSize: AppTypography.labelSmall,
                 color: Theme.of(
                   context,
                 ).colorScheme.onSurfaceVariant.withValues(alpha: 0.5),

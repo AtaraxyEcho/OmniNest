@@ -128,7 +128,7 @@ class _FileSidebarGroupLabel extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          fontSize: 12,
+          fontSize: AppTypography.bodySmall,
           height: 18 / 12,
           color: context.filesColors.sidebarOnSurfaceVariant,
           fontWeight: FontWeight.w800,
@@ -210,7 +210,7 @@ class _FileNavItemState extends State<_FileNavItem> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      fontSize: 14,
+                      fontSize: AppTypography.bodyLarge,
                       height: 20 / 14,
                       fontWeight: FontWeight.w700,
                       color: foreground,

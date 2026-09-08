@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/reader_cover_ui.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 
@@ -307,7 +308,7 @@ class PortalVisualTopBar extends StatelessWidget {
             'OmniNest',
             style: TextStyle(
               color: palette.text,
-              fontSize: 16,
+              fontSize: AppTypography.titleMedium,
               fontWeight: FontWeight.w800,
             ),
           ),
@@ -345,7 +346,7 @@ class PortalVisualTopBar extends StatelessWidget {
                             l10n.portalSearch,
                             style: TextStyle(
                               color: palette.muted,
-                              fontSize: 13,
+                              fontSize: AppTypography.bodyMedium,
                             ),
                           ),
                         ],
@@ -498,7 +499,7 @@ class PortalGradientCover extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: hasImage ? Colors.white : palette.text,
-                            fontSize: 20,
+                            fontSize: AppTypography.titleLarge,
                             fontWeight: FontWeight.w800,
                           ),
                         ),
@@ -512,7 +513,7 @@ class PortalGradientCover extends StatelessWidget {
                                 hasImage
                                     ? Colors.white.withValues(alpha: 0.78)
                                     : palette.muted,
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                           ),
                         ),
                       ],
@@ -767,7 +768,10 @@ class PortalMetricLine extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: palette.muted, fontSize: 13),
+              style: TextStyle(
+                color: palette.muted,
+                fontSize: AppTypography.bodyMedium,
+              ),
             ),
           ),
           const SizedBox(width: 8),
@@ -780,7 +784,7 @@ class PortalMetricLine extends StatelessWidget {
               textAlign: TextAlign.end,
               style: TextStyle(
                 color: palette.text,
-                fontSize: 14,
+                fontSize: AppTypography.bodyLarge,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -855,7 +859,10 @@ class PortalQuickLinks extends StatelessWidget {
                           const SizedBox(width: 8),
                           Text(
                             entry.$2,
-                            style: TextStyle(color: palette.text, fontSize: 13),
+                            style: TextStyle(
+                              color: palette.text,
+                              fontSize: AppTypography.bodyMedium,
+                            ),
                           ),
                         ],
                       ),

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_weather_profile.dart';
 
@@ -369,7 +370,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
               child: Text(
                 '${w.tempMax}° / ${w.tempMin}°',
                 style: TextStyle(
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                   color: atm.textSecondary,
                   fontWeight: FontWeight.w500,
                 ),
@@ -412,7 +413,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
             child: Text(
               tip.text,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 color: atm.textColor,
                 fontWeight: FontWeight.w500,
               ),
@@ -457,14 +458,14 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                   style: TextStyle(
                     color: c,
                     fontWeight: FontWeight.w700,
-                    fontSize: 14,
+                    fontSize: AppTypography.bodyLarge,
                   ),
                 ),
                 Text(
                   'PM2.5 ${widget.weather.pm2p5} μg/m³',
                   style: TextStyle(
                     color: c.withValues(alpha: 0.8),
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                   ),
                 ),
               ],
@@ -552,7 +553,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                             child: Text(
                               item.label,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: AppTypography.labelSmall,
                                 color: atm.textSecondary,
                                 fontWeight: FontWeight.w500,
                               ),
@@ -565,7 +566,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                       Text(
                         item.value,
                         style: TextStyle(
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w600,
                           color: atm.textColor,
                         ),
@@ -604,7 +605,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                 Text(
                   hasDayNight ? w.textDay : l10n.portalWeatherSunriseLabel,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     color: atm.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
@@ -613,7 +614,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                 Text(
                   hasDayNight ? '${w.tempMax}°' : w.sunrise,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: AppTypography.titleMedium,
                     fontWeight: FontWeight.w600,
                     color: atm.textColor,
                   ),
@@ -635,7 +636,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                 Text(
                   hasDayNight ? w.textNight : l10n.portalWeatherSunsetLabel,
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     color: atm.textSecondary,
                     fontWeight: FontWeight.w500,
                   ),
@@ -644,7 +645,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                 Text(
                   hasDayNight ? '${w.tempMin}°' : w.sunset,
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: AppTypography.titleMedium,
                     fontWeight: FontWeight.w600,
                     color: atm.textColor,
                   ),

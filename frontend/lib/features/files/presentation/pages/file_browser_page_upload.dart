@@ -1,4 +1,4 @@
-﻿part of 'file_browser_page.dart';
+part of 'file_browser_page.dart';
 
 class _InlineUploadQueueCard extends StatefulWidget {
   const _InlineUploadQueueCard({
@@ -417,7 +417,7 @@ class _FileToolbar extends ConsumerWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.mobileColors.textPrimary,
-                          fontSize: 13,
+                          fontSize: AppTypography.bodyMedium,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -587,7 +587,7 @@ class _CategoryCapsuleState extends State<_CategoryCapsule>
               Text(
                 widget.label,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   fontWeight:
                       widget.isActive ? FontWeight.w600 : FontWeight.w400,
                   color: widget.isActive ? c.primary : c.onSurfaceVariant,
@@ -682,7 +682,7 @@ class _Breadcrumbs extends ConsumerWidget {
                   child: Text(
                     state.breadcrumbs[index].name,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       fontWeight: FontWeight.w700,
                       color: c.primary,
                     ),
@@ -702,7 +702,7 @@ class _Breadcrumbs extends ConsumerWidget {
                   child: Text(
                     state.breadcrumbs[index].name,
                     style: TextStyle(
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       fontWeight: FontWeight.w400,
                       color: c.onSurfaceVariant,
                     ),

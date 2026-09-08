@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
 /// Portal 动态背景上的局部半透明卡片。
@@ -182,7 +183,7 @@ class _PortalGlassDockButtonState extends State<_PortalGlassDockButton> {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 9,
+                    fontSize: AppTypography.labelSmall,
                     fontWeight: FontWeight.w700,
                   ),
                 ),

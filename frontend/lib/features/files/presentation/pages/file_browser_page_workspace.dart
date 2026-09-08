@@ -279,7 +279,10 @@ class _FileNodeWorkspace extends ConsumerWidget {
             const SizedBox(height: 16),
             Text(
               AppLocalizations.of(context).importUploading,
-              style: TextStyle(fontSize: 13, color: c.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: AppTypography.bodyMedium,
+                color: c.onSurfaceVariant,
+              ),
             ),
           ],
         ),
@@ -542,7 +545,7 @@ class _BatchSelectionBar extends ConsumerWidget {
                 l10n.filesSelectedCount(state.selectionCount),
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                 ),
               ),
               const SizedBox(width: 16),

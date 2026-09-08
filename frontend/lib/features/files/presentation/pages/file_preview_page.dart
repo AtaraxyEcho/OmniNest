@@ -67,7 +67,7 @@ class _FilePreviewPageState extends ConsumerState<FilePreviewPage> {
                 child: Text(
                   formatFileSize(widget.file.sizeBytes),
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     color: context.filesColors.onSurfaceVariant,
                   ),
                 ),
@@ -321,7 +321,10 @@ class _AudioPlayerBodyState extends State<_AudioPlayerBody> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      fontSize: AppTypography.titleMedium,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 24),
                   // 进度条
@@ -347,14 +350,14 @@ class _AudioPlayerBodyState extends State<_AudioPlayerBody> {
                         Text(
                           _formatDuration(_position),
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                             color: context.filesColors.onSurfaceVariant,
                           ),
                         ),
                         Text(
                           _formatDuration(_duration),
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                             color: context.filesColors.onSurfaceVariant,
                           ),
                         ),
@@ -502,7 +505,7 @@ class _TextPreview extends ConsumerWidget {
                 style: const TextStyle(
                   fontFamily: AppTypography.monoFamily,
                   fontFamilyFallback: AppTypography.monoFamilyFallback,
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   height: 1.5,
                 ),
               ),
@@ -551,13 +554,16 @@ class _PdfPreview extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: AppTypography.titleMedium,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   AppLocalizations.of(context).filesPdfUnsupported,
                   style: TextStyle(
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     color: context.filesColors.onSurfaceVariant,
                   ),
                   textAlign: TextAlign.center,
@@ -601,7 +607,10 @@ class _UnsupportedPreview extends StatelessWidget {
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: AppTypography.titleMedium,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 _InfoRow(
@@ -645,12 +654,17 @@ class _InfoRow extends StatelessWidget {
             child: Text(
               label,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
                 color: context.filesColors.onSurfaceVariant,
               ),
             ),
           ),
-          Expanded(child: Text(value, style: TextStyle(fontSize: 13))),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(fontSize: AppTypography.bodyMedium),
+            ),
+          ),
         ],
       ),
     );

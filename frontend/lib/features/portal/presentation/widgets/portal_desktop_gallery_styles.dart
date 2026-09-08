@@ -219,7 +219,10 @@ class _PortalDesktopFailureBanner extends StatelessWidget {
                 message,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: palette.text, fontSize: 13),
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: AppTypography.bodyMedium,
+                ),
               ),
             ),
             const SizedBox(width: 8),
@@ -282,7 +285,7 @@ class _HeroCopy extends StatelessWidget {
               eyebrow,
               style: TextStyle(
                 color: palette.muted,
-                fontSize: 12 * fontScale,
+                fontSize: AppTypography.bodySmall * fontScale,
                 letterSpacing: 1.2,
                 fontWeight: FontWeight.w700,
               ),
@@ -294,7 +297,7 @@ class _HeroCopy extends StatelessWidget {
                 title,
                 style: TextStyle(
                   color: palette.text,
-                  fontSize: 48 * fontScale,
+                  fontSize: AppTypography.displayLarge * fontScale,
                   height: 1.06,
                   letterSpacing: 0,
                   fontWeight: FontWeight.w800,
@@ -319,7 +322,7 @@ class _HeroCopy extends StatelessWidget {
                 style: TextStyle(
                   color: palette.muted,
                   height: 1.68,
-                  fontSize: 14 * fontScale,
+                  fontSize: AppTypography.bodyLarge * fontScale,
                 ),
               ),
             ),
@@ -351,7 +354,7 @@ class _HeroCopy extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: palette.text,
-                              fontSize: 14 * fontScale,
+                              fontSize: AppTypography.bodyLarge * fontScale,
                               fontWeight: FontWeight.w700,
                             ),
                           ),

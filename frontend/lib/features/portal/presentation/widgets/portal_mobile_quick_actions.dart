@@ -124,7 +124,7 @@ class _MobileQuickActionChip extends StatelessWidget {
                 action.label,
                 style: TextStyle(
                   color: scheme.onSurface,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   fontWeight: FontWeight.w700,
                 ),
               ),

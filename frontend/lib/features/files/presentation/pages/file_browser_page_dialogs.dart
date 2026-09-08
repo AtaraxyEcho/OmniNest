@@ -21,7 +21,7 @@ class _PageHeader extends StatelessWidget {
             Text(
               title,
               style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                fontSize: 32,
+                fontSize: AppTypography.headlineLarge,
                 height: 40 / 32,
                 color: context.filesColors.primary,
                 fontWeight: FontWeight.w800,
@@ -31,7 +31,7 @@ class _PageHeader extends StatelessWidget {
             Text(
               subtitle,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 14,
+                fontSize: AppTypography.bodyLarge,
                 height: 21 / 14,
                 color: context.filesColors.onSurfaceVariant,
               ),
@@ -73,7 +73,7 @@ ButtonStyle _fileHeaderActionButtonStyle() {
       RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
     ),
     textStyle: const WidgetStatePropertyAll(
-      TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+      TextStyle(fontSize: AppTypography.bodyLarge, fontWeight: FontWeight.w700),
     ),
   );
 }

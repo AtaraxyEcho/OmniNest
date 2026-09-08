@@ -146,7 +146,10 @@ class _WeatherContent extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(weather.weatherIcon, style: const TextStyle(fontSize: 18)),
+            Text(
+              weather.weatherIcon,
+              style: const TextStyle(fontSize: AppTypography.titleLarge),
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Column(
@@ -198,7 +201,7 @@ class _WeatherContent extends StatelessWidget {
               Text(
                 'AQI ${weather.aqi} · PM2.5 ${weather.pm2p5} · ${weather.aqiCategory}',
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   color: aqiColor,
                   fontWeight: FontWeight.w600,
                 ),
