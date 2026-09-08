@@ -1,55 +1,78 @@
 import 'package:flutter/material.dart';
 
-class AppTypography {
-  const AppTypography._();
-
+/// 全局排版 token。
+///
+/// 字号常量以 Photos 阶梯为基准定稿（11 值、三族：caption/body/title/
+/// display），是业务字号与 Material `textTheme` 的唯一来源；内容语义
+/// （时间戳、eyebrow 等）由业务组件表达，不进入字号命名。
+abstract final class AppTypography {
   /// 全局西文字体。中文字符经 [fontFamilyFallback] 回落至中文字体渲染。
-  static const fontFamily = 'Inter';
+  static const String fontFamily = 'Inter';
 
   /// 全局字形回落链，承接西文字体缺失的中文与 CJK 标点。
-  static const fontFamilyFallback = <String>['NotoSansSC'];
+  static const List<String> fontFamilyFallback = <String>['NotoSansSC'];
 
   /// 等宽场景（代码、链接、路径）统一使用的字体。
-  static const monoFamily = 'JetBrainsMono';
+  static const String monoFamily = 'JetBrainsMono';
 
   /// 等宽字体回落链：代码中的中文回落中文字体，其余回落平台等宽字体。
-  static const monoFamilyFallback = <String>['NotoSansSC', 'monospace'];
+  static const List<String> monoFamilyFallback = <String>[
+    'NotoSansSC',
+    'monospace',
+  ];
 
-  static const displayLarge = TextStyle(
-    fontSize: 48,
-    height: 56 / 48,
-    fontWeight: FontWeight.w700,
-  );
-  static const headlineLarge = TextStyle(
-    fontSize: 32,
-    height: 40 / 32,
-    fontWeight: FontWeight.w600,
-  );
-  static const headlineMedium = TextStyle(
-    fontSize: 24,
-    height: 32 / 24,
-    fontWeight: FontWeight.w600,
-  );
-  static const bodyLarge = TextStyle(
-    fontSize: 18,
-    height: 28 / 18,
-    fontWeight: FontWeight.w400,
-  );
-  static const bodyMedium = TextStyle(
-    fontSize: 16,
-    height: 24 / 16,
-    fontWeight: FontWeight.w400,
-  );
-  static const bodySmall = TextStyle(
-    fontSize: 14,
-    height: 20 / 14,
-    fontWeight: FontWeight.w400,
-  );
-  static const labelMedium = TextStyle(
-    fontSize: 12,
-    height: 16 / 12,
-    fontWeight: FontWeight.w600,
-  );
+  /// 衬线展示字体（模块页头、Hero 标题），中文回落 Noto Serif SC。
+  static const String serifFamily = 'InstrumentSerif';
+
+  /// 衬线展示字体的中文回落链。
+  static const List<String> serifFamilyFallback = <String>['NotoSerifSC'];
+
+  // ── 字号语义 token（勿在业务代码写裸数字字号）──────────────────────
+
+  /// Portal Hero 等巨字。
+  static const double displayLarge = 48;
+
+  /// 预留展示档。
+  static const double displayMedium = 45;
+
+  /// 特大页头。
+  static const double displaySmall = 36;
+
+  /// 模块页头（衬线伴生档）。
+  static const double headlineLarge = 32;
+
+  /// 区块页头 / 指标值。
+  static const double headlineMedium = 28;
+
+  /// 卡片区头 / 空态大字。
+  static const double headlineSmall = 24;
+
+  /// 面板 / 弹窗标题。
+  static const double titleLarge = 20;
+
+  /// 列表 / 卡片强调标题。
+  static const double titleMedium = 16;
+
+  /// 次级标题 / 小节标题。
+  static const double titleSmall = 14;
+
+  /// 列表项标题 / 正文。
+  static const double bodyLarge = 14;
+
+  /// 密集正文默认。
+  static const double bodyMedium = 13;
+
+  /// 副标题 / 描述。
+  static const double bodySmall = 12;
+
+  /// eyebrow / 时间戳等辅助文字。
+  static const double labelSmall = 11;
+
+  /// 按钮等强调标签。
+  static const double labelLarge = 14;
+
+  /// 中等标签。
+  static const double labelMedium = 12;
 
   /// 根据系统文字缩放设置缩放字号，确保可访问性。
   /// [base] 为设计稿字号，[context] 用于读取 MediaQuery.textScaler。

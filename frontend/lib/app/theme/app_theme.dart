@@ -104,20 +104,88 @@ class OmniNestTheme {
       surfaceContainerHigh: colors.surfaceContainerHigh,
       surfaceContainerHighest: colors.surfaceContainerHighest,
     );
-    // 显式补齐默认排版全部字级后统一字距归零：Material 3 默认字距
-    // （0.1~0.5）按拉丁字形调校，对中文正文与按钮文案产生松散不齐的
-    // 观感；AppTypography 覆盖字级随后合并，随全局一并归零。
+    // 显式赋值全部 15 个 M3 角色并统一字距归零：字号取 AppTypography
+    // 语义 token（Photos 阶梯定稿），Material 组件与业务排版同源；
+    // M3 默认字距（0.1~0.5）按拉丁字形调校，对中文正文与按钮文案产生
+    // 松散不齐的观感，随全局一并归零。
     final textTheme = _zeroLetterSpacing(
       ThemeData(brightness: brightness).textTheme
           .merge(
             const TextTheme(
-              displayLarge: AppTypography.displayLarge,
-              headlineLarge: AppTypography.headlineLarge,
-              headlineMedium: AppTypography.headlineMedium,
-              bodyLarge: AppTypography.bodyLarge,
-              bodyMedium: AppTypography.bodyMedium,
-              bodySmall: AppTypography.bodySmall,
-              labelMedium: AppTypography.labelMedium,
+              displayLarge: TextStyle(
+                fontSize: AppTypography.displayLarge,
+                height: 1.17,
+                fontWeight: FontWeight.w700,
+              ),
+              displayMedium: TextStyle(
+                fontSize: AppTypography.displayMedium,
+                height: 1.16,
+                fontWeight: FontWeight.w400,
+              ),
+              displaySmall: TextStyle(
+                fontSize: AppTypography.displaySmall,
+                height: 1.22,
+                fontWeight: FontWeight.w400,
+              ),
+              headlineLarge: TextStyle(
+                fontSize: AppTypography.headlineLarge,
+                height: 1.25,
+                fontWeight: FontWeight.w600,
+              ),
+              headlineMedium: TextStyle(
+                fontSize: AppTypography.headlineMedium,
+                height: 1.22,
+                fontWeight: FontWeight.w600,
+              ),
+              headlineSmall: TextStyle(
+                fontSize: AppTypography.headlineSmall,
+                height: 1.33,
+                fontWeight: FontWeight.w600,
+              ),
+              titleLarge: TextStyle(
+                fontSize: AppTypography.titleLarge,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
+              titleMedium: TextStyle(
+                fontSize: AppTypography.titleMedium,
+                height: 1.5,
+                fontWeight: FontWeight.w500,
+              ),
+              titleSmall: TextStyle(
+                fontSize: AppTypography.titleSmall,
+                height: 1.43,
+                fontWeight: FontWeight.w500,
+              ),
+              bodyLarge: TextStyle(
+                fontSize: AppTypography.bodyLarge,
+                height: 1.43,
+                fontWeight: FontWeight.w400,
+              ),
+              bodyMedium: TextStyle(
+                fontSize: AppTypography.bodyMedium,
+                height: 1.4,
+                fontWeight: FontWeight.w400,
+              ),
+              bodySmall: TextStyle(
+                fontSize: AppTypography.bodySmall,
+                height: 1.33,
+                fontWeight: FontWeight.w400,
+              ),
+              labelLarge: TextStyle(
+                fontSize: AppTypography.labelLarge,
+                height: 1.14,
+                fontWeight: FontWeight.w500,
+              ),
+              labelMedium: TextStyle(
+                fontSize: AppTypography.labelMedium,
+                fontWeight: FontWeight.w600,
+              ),
+              labelSmall: TextStyle(
+                fontSize: AppTypography.labelSmall,
+                height: 1.27,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           )
           .apply(
