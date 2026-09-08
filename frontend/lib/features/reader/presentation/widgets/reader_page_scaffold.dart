@@ -7,6 +7,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
+import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 
@@ -146,7 +147,8 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
   }
 }
 
-/// 44px 模块顶栏：返回门户 + 「OmniNest › 阅读」衬线面包屑 + 全局控件。
+/// 模块顶栏：与其他模块一致的 WorkbenchTopBar 结构，
+/// 左侧为返回门户与「OmniNest › 阅读」衬线面包屑，右侧控件自然尺寸内联排布。
 class _ReaderModuleTopBar extends StatelessWidget {
   const _ReaderModuleTopBar({required this.target, required this.user});
 
@@ -157,95 +159,82 @@ class _ReaderModuleTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final l10n = AppLocalizations.of(context);
-    final narrow = MediaQuery.sizeOf(context).width < 640;
-    return Container(
-      height: 44,
-      decoration: BoxDecoration(
-        color: rc.surface,
-        border: Border(bottom: BorderSide(color: rc.outlineVariant)),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Row(
-        children: [
-          InkWell(
-            onTap: () => context.go('/portal'),
-            borderRadius: BorderRadius.circular(2),
-            child: Container(
-              padding: const EdgeInsets.only(right: 12),
-              margin: const EdgeInsets.only(right: 12),
-              decoration: BoxDecoration(
-                border: Border(right: BorderSide(color: rc.outlineVariant)),
+    final wide = MediaQuery.sizeOf(context).width >= 1024;
+    return WorkbenchTopBar(
+      surfaceColor: rc.surface,
+      borderColor: rc.outlineVariant,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: wide ? 20 : 16),
+        child: Row(
+          children: [
+            TextButton.icon(
+              onPressed: () => context.go('/portal'),
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                size: 18,
+                color: rc.onSurfaceVariant,
               ),
+              label: Text(
+                l10n.readerPortal,
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 18 / 13,
+                  fontWeight: FontWeight.w700,
+                  color: rc.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.arrow_back_rounded,
-                    size: 14,
-                    color: rc.onSurfaceVariant,
-                  ),
-                  const SizedBox(width: 6),
-                  if (!narrow)
-                    Text(
-                      l10n.readerPortal,
+                  Flexible(
+                    child: Text(
+                      'OmniNest',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: TextStyle(
-                        color: rc.onSurfaceVariant,
-                        fontSize: 12,
+                        color: rc.onSurface,
+                        fontSize: 14,
                         height: 1.2,
+                        fontFamily: kReaderSerifFamily,
+                        fontStyle: FontStyle.italic,
                       ),
                     ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    size: 12,
+                    color: rc.outlineVariant,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      l10n.mobileNavReader,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: rc.onSurfaceVariant,
+                        fontSize: 14,
+                        height: 1.2,
+                        fontFamily: kReaderSerifFamily,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
-          ),
-          Flexible(
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Flexible(
-                  child: Text(
-                    'OmniNest',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: rc.onSurface,
-                      fontSize: 14,
-                      height: 1.2,
-                      fontFamily: kReaderSerifFamily,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Icon(
-                  Icons.chevron_right_rounded,
-                  size: 12,
-                  color: rc.outlineVariant,
-                ),
-                const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    l10n.mobileNavReader,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: rc.onSurfaceVariant,
-                      fontSize: 14,
-                      height: 1.2,
-                      fontFamily: kReaderSerifFamily,
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const Spacer(),
-          FontScaleControl(size: 18, color: rc.onSurfaceVariant),
-          NotificationIcon(size: 18, color: rc.onSurfaceVariant),
-          const SizedBox(width: 8),
-          const UserAvatarMenu(),
-        ],
+            const Spacer(),
+            FontScaleControl(size: 20, color: rc.onSurfaceVariant),
+            const SizedBox(width: 12),
+            NotificationIcon(size: 20, color: rc.onSurfaceVariant),
+            const SizedBox(width: 12),
+            const UserAvatarMenu(),
+          ],
+        ),
       ),
     );
   }
