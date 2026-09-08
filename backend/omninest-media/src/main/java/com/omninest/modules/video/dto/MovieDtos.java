@@ -26,11 +26,21 @@ public final class MovieDtos {
     ) {
     }
 
+    /**
+     * 影视库统计聚合。
+     *
+     * <p>收藏、历史、合集与继续观看计数来自服务端权威统计，
+     * 供客户端侧边栏在不加载对应分区列表时也能展示准确徽标。</p>
+     */
     public record MovieStatsDto(
             long movieCount,
             long episodeCount,
             long seriesCount,
-            long scrapeFailedCount
+            long scrapeFailedCount,
+            long favoritesCount,
+            long historyCount,
+            long collectionsCount,
+            long continueWatchingCount
     ) {
     }
 

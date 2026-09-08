@@ -13,6 +13,14 @@ import org.springframework.data.repository.query.Param;
 public interface MediaVideoFavoriteRepository extends JpaRepository<MediaVideoFavorite, UUID> {
     boolean existsByOwnerUserIdAndVideoItemId(UUID ownerUserId, UUID videoItemId);
 
+    /**
+     * 统计用户收藏的影片条目总数。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 收藏总数
+     */
+    long countByOwnerUserId(UUID ownerUserId);
+
     Optional<MediaVideoFavorite> findByOwnerUserIdAndVideoItemId(UUID ownerUserId, UUID videoItemId);
 
     List<MediaVideoFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);

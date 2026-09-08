@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.video.domain.MediaType;
@@ -56,6 +57,7 @@ public class MovieScrapeService {
     private final List<MetadataProvider> metadataProviders;
     private final DomainEventPublisher publisher;
     private final FilePermissionService filePermissionService;
+    private final ReadThroughCache readThroughCache;
 
     /**
      * 仅登记待补充元数据的视频条目，不调用元数据提供器，也不创建刮削任务。
@@ -69,7 +71,12 @@ public class MovieScrapeService {
         FileDescriptor file = resolveVideoFile(ownerUserId, fileNodeId);
         FileNameGuess guess = fileNameParser.parse(file.name());
         return videoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, fileNodeId)
-                .orElseGet(() -> videoItemRepository.save(pendingVideo(ownerUserId, file, guess)));
+                .orElseGet(() -> {
+                    MediaVideoItem created = videoItemRepository.save(pendingVideo(ownerUserId, file, guess));
+                    // 新登记条目改变影视库统计，需失效 dashboard 缓存。
+                    readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
+                    return created;
+                });
     }
 
     @Transactional(rollbackFor = Exception.class)

@@ -15,6 +15,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * 统一媒体播放进度服务测试。
@@ -26,9 +27,11 @@ class MediaPlaybackProgressServiceTest {
 
     private final MediaPlaybackProgressRepository repository = mock(MediaPlaybackProgressRepository.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
+    private final ApplicationEventPublisher applicationEventPublisher = mock(ApplicationEventPublisher.class);
     private final MediaPlaybackProgressService service = new MediaPlaybackProgressService(
             repository,
-            syncEventService
+            syncEventService,
+            applicationEventPublisher
     );
 
     @Test

@@ -1,5 +1,6 @@
 package com.omninest.modules.music.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.PurgeContext;
@@ -43,6 +44,7 @@ class MusicFileCleanupServiceTest {
     private final MusicArtistRepository artistRepository = Mockito.mock(MusicArtistRepository.class);
     private final MusicPlaylistRepository playlistRepository = Mockito.mock(MusicPlaylistRepository.class);
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
+    private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
     private final MusicFileCleanupService service = new MusicFileCleanupService(
             trackRepository,
             playbackCleanupService,
@@ -52,7 +54,8 @@ class MusicFileCleanupServiceTest {
             albumRepository,
             artistRepository,
             playlistRepository,
-            syncEventService
+            syncEventService,
+            readThroughCache
     );
 
     @Test

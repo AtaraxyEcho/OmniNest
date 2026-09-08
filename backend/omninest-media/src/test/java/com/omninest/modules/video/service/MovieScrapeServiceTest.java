@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
@@ -50,10 +51,11 @@ class MovieScrapeServiceTest {
     private final DomainEventPublisher publisher = Mockito.mock(DomainEventPublisher.class);
     private final FilePermissionService filePermissionService =
             Mockito.mock(FilePermissionService.class);
+    private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
     private final MovieScrapeService scrapeService =
             new MovieScrapeService(fileMetadataQueryService, taskRecordService, videoItemRepository,
                     tvSeriesRepository, tvSeasonRepository, fileNameParser, List.of(), publisher,
-                    filePermissionService);
+                    filePermissionService, readThroughCache);
 
     @Test
     void createsScrapeTaskForVideoFile() {

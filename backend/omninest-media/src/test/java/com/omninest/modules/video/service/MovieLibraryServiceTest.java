@@ -30,6 +30,9 @@ import com.omninest.modules.video.repository.MediaTvEpisodeRepository;
 import com.omninest.modules.video.repository.MediaTvSeasonRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import com.omninest.modules.video.repository.MediaVideoCollectionRepository;
+import com.omninest.modules.video.repository.MediaVideoFavoriteRepository;
+import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.function.Supplier;
@@ -71,6 +74,9 @@ class MovieLibraryServiceTest {
     private final MediaLibraryAccessService mediaLibraryAccessService = mock(MediaLibraryAccessService.class);
     private final MediaContentAccessService mediaContentAccessService = mock(MediaContentAccessService.class);
     private final MediaSeriesFavoriteRepository seriesFavoriteRepository = mock(MediaSeriesFavoriteRepository.class);
+    private final MediaVideoFavoriteRepository videoFavoriteRepository = mock(MediaVideoFavoriteRepository.class);
+    private final MediaWatchHistoryRepository watchHistoryRepository = mock(MediaWatchHistoryRepository.class);
+    private final MediaVideoCollectionRepository videoCollectionRepository = mock(MediaVideoCollectionRepository.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class, invocation -> {
         if ("getOrLoad".equals(invocation.getMethod().getName())) {
             Supplier<?> loader = invocation.getArgument(2);
@@ -110,7 +116,10 @@ class MovieLibraryServiceTest {
                     mediaLibraryAccessService,
                     mediaContentAccessService,
                     seriesFavoriteRepository,
-                    mediaPlaybackTokenService
+                    mediaPlaybackTokenService,
+                    videoFavoriteRepository,
+                    watchHistoryRepository,
+                    videoCollectionRepository
             );
 
     @Test
@@ -134,6 +143,10 @@ class MovieLibraryServiceTest {
         when(videoItemRepository.countReadableOriginalSeries(OWNER_ID, Set.of())).thenReturn(0L);
         when(videoItemRepository.countReadableOriginalsByMetadataStatus(OWNER_ID, Set.of(), "FAILED"))
                 .thenReturn(0L);
+        when(videoFavoriteRepository.countByOwnerUserId(OWNER_ID)).thenReturn(2L);
+        when(watchHistoryRepository.countByOwnerUserId(OWNER_ID)).thenReturn(3L);
+        when(videoCollectionRepository.countByOwnerUserId(OWNER_ID)).thenReturn(1L);
+        when(progressService.countIncomplete(OWNER_ID, MediaPlaybackType.VIDEO)).thenReturn(1L);
         when(videoItemRepository.findReadableOriginals(eq(OWNER_ID), eq(Set.of()), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(movie)));
         when(progressService.latest(OWNER_ID, MediaPlaybackType.VIDEO)).thenReturn(List.of(progress));
@@ -148,6 +161,10 @@ class MovieLibraryServiceTest {
         assertThat(dashboard.stats().episodeCount()).isZero();
         assertThat(dashboard.stats().seriesCount()).isZero();
         assertThat(dashboard.stats().scrapeFailedCount()).isZero();
+        assertThat(dashboard.stats().favoritesCount()).isEqualTo(2);
+        assertThat(dashboard.stats().historyCount()).isEqualTo(3);
+        assertThat(dashboard.stats().collectionsCount()).isEqualTo(1);
+        assertThat(dashboard.stats().continueWatchingCount()).isEqualTo(1);
         assertThat(dashboard.recentlyAdded()).isNotEmpty();
         assertThat(dashboard.recentlyAdded()).first().extracting("title").isEqualTo("Inception");
         assertThat(dashboard.continueWatching()).singleElement().extracting("progressPercent").isEqualTo(16.67);

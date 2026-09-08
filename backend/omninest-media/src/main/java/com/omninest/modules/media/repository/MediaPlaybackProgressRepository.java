@@ -97,6 +97,15 @@ public interface MediaPlaybackProgressRepository extends JpaRepository<MediaPlay
     );
 
     /**
+     * 统计用户未播完的进度条目数（继续观看口径）。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param mediaType 媒体类型
+     * @return 未完成进度总数
+     */
+    long countByOwnerUserIdAndMediaTypeAndCompletedFalse(UUID ownerUserId, String mediaType);
+
+    /**
      * 按稳定键前缀查询最近进度。
      *
      * @param ownerUserId 当前用户 ID

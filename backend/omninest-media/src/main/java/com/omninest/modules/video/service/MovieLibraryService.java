@@ -40,7 +40,10 @@ import com.omninest.modules.video.repository.MediaSeriesFavoriteRepository;
 import com.omninest.modules.video.repository.MediaTvEpisodeRepository;
 import com.omninest.modules.video.repository.MediaTvSeasonRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
+import com.omninest.modules.video.repository.MediaVideoCollectionRepository;
+import com.omninest.modules.video.repository.MediaVideoFavoriteRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -88,6 +91,9 @@ public class MovieLibraryService {
     private final MediaContentAccessService mediaContentAccessService;
     private final MediaSeriesFavoriteRepository seriesFavoriteRepository;
     private final MediaPlaybackTokenService mediaPlaybackTokenService;
+    private final MediaVideoFavoriteRepository videoFavoriteRepository;
+    private final MediaWatchHistoryRepository watchHistoryRepository;
+    private final MediaVideoCollectionRepository videoCollectionRepository;
 
     @Transactional(readOnly = true)
     public MovieDashboardDto dashboard(UUID ownerUserId) {
@@ -109,7 +115,11 @@ public class MovieLibraryService {
                         ownerUserId, readableLibraryIds, MediaType.EPISODE.getValue()),
                 videoItemRepository.countReadableOriginalSeries(ownerUserId, readableLibraryIds),
                 videoItemRepository.countReadableOriginalsByMetadataStatus(
-                        ownerUserId, readableLibraryIds, MetadataStatus.FAILED.getValue())
+                        ownerUserId, readableLibraryIds, MetadataStatus.FAILED.getValue()),
+                videoFavoriteRepository.countByOwnerUserId(ownerUserId),
+                watchHistoryRepository.countByOwnerUserId(ownerUserId),
+                videoCollectionRepository.countByOwnerUserId(ownerUserId),
+                progressService.countIncomplete(ownerUserId, MediaPlaybackType.VIDEO)
         );
         PageRequest recentPage = PageRequest.of(
                 0,
@@ -367,7 +377,17 @@ public class MovieLibraryService {
         item.setMetadataStatus(newStatus);
         videoItemRepository.save(item);
         recordVideoEvent(ownerUserId, item, SyncAction.UPDATED);
+        invalidateDashboardCache(ownerUserId);
         return videoItemDtoConverter.toVideoDto(ownerUserId, item);
+    }
+
+    /**
+     * 失效指定用户的视频仪表盘缓存。
+     *
+     * @param ownerUserId 所有者用户 ID
+     */
+    private void invalidateDashboardCache(UUID ownerUserId) {
+        readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
     }
 
     @Transactional(rollbackFor = Exception.class)

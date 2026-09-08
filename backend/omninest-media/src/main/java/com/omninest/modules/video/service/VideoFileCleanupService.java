@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
@@ -74,6 +75,7 @@ public class VideoFileCleanupService implements
     private final MediaSeriesFavoriteRepository seriesFavoriteRepository;
     private final MediaVideoCollectionRepository videoCollectionRepository;
     private final MediaSyncEventService syncEventService;
+    private final ReadThroughCache readThroughCache;
 
     /**
      * 查询目标文件的视频条目引用。
@@ -239,6 +241,8 @@ public class VideoFileCleanupService implements
         videoItemRepository.deleteAllInBatch(videos);
         cleanupOrphanedMovieParents(ownerUserId, movieIds);
         cleanupOrphanedTvParents(ownerUserId, episodeIds, seriesIds);
+        // 条目删除改变影视库各类统计，需失效 dashboard 缓存。
+        readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
     }
 
     private void cleanupOrphanedMovieParents(UUID ownerUserId, Set<UUID> movieIds) {

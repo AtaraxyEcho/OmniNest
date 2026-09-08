@@ -6,12 +6,20 @@ class MovieStats {
     required this.episodeCount,
     required this.seriesCount,
     required this.scrapeFailedCount,
+    this.favoritesCount = 0,
+    this.historyCount = 0,
+    this.collectionsCount = 0,
+    this.continueWatchingCount = 0,
   });
 
   final int movieCount;
   final int episodeCount;
   final int seriesCount;
   final int scrapeFailedCount;
+  final int favoritesCount;
+  final int historyCount;
+  final int collectionsCount;
+  final int continueWatchingCount;
 
   factory MovieStats.fromJson(Map<String, dynamic> json) {
     return MovieStats(
@@ -19,6 +27,10 @@ class MovieStats {
       episodeCount: MovieJson.asInt(json['episodeCount']),
       seriesCount: MovieJson.asInt(json['seriesCount']),
       scrapeFailedCount: MovieJson.asInt(json['scrapeFailedCount']),
+      favoritesCount: MovieJson.asInt(json['favoritesCount']),
+      historyCount: MovieJson.asInt(json['historyCount']),
+      collectionsCount: MovieJson.asInt(json['collectionsCount']),
+      continueWatchingCount: MovieJson.asInt(json['continueWatchingCount']),
     );
   }
 }

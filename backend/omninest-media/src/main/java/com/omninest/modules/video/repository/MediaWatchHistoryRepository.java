@@ -13,6 +13,14 @@ import org.springframework.data.repository.query.Param;
 public interface MediaWatchHistoryRepository extends JpaRepository<MediaWatchHistory, UUID> {
     List<MediaWatchHistory> findByOwnerUserIdOrderByPlayedAtDesc(UUID ownerUserId);
 
+    /**
+     * 统计用户观看历史总数。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 历史记录总数
+     */
+    long countByOwnerUserId(UUID ownerUserId);
+
     Optional<MediaWatchHistory> findFirstByOwnerUserIdAndVideoItemIdOrderByPlayedAtDesc(UUID ownerUserId, UUID videoItemId);
 
     @Modifying

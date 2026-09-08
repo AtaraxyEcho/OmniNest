@@ -1,5 +1,6 @@
 package com.omninest.modules.music.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.file.domain.NodeType;
@@ -77,6 +78,7 @@ public class MusicAdminService {
     private final NotificationPublisher notificationService;
     private final TaskRecordService taskRecordService;
     private final MediaSyncEventService syncEventService;
+    private final ReadThroughCache readThroughCache;
     private final PlatformTransactionManager transactionManager;
     private TransactionTemplate transactionTemplate;
 
@@ -202,6 +204,8 @@ public class MusicAdminService {
             job.setScannedFiles(imported);
             job.setMessage("音乐库扫描完成，已处理 " + imported + " 个音频文件");
             taskRecordService.markCompleted(jobId, Map.of("imported", imported));
+            // 扫描入库改变音乐仪表盘统计与最近列表，需失效缓存。
+            readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
             syncEventService.invalidate(
                     ownerUserId,
                     SyncScope.MUSIC,
@@ -293,6 +297,8 @@ public class MusicAdminService {
                 .findFirst()
                 .orElse(null);
         importAudioFile(ownerUserId, file, sidecarLyrics);
+        // 单曲导入改变音乐仪表盘统计与最近列表，需失效缓存。
+        readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
         syncEventService.invalidate(
                 ownerUserId,
                 SyncScope.MUSIC,

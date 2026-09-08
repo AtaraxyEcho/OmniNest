@@ -5,6 +5,7 @@ import com.omninest.modules.video.domain.MediaType;
 import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.modules.video.domain.SeriesType;
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.media.service.MediaSyncEventService;
@@ -69,6 +70,7 @@ public class MovieScrapeExecutionService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final MediaSyncEventService syncEventService;
     private final FileLifecycleGuard fileLifecycleGuard;
+    private final ReadThroughCache readThroughCache;
 
     @Transactional(rollbackFor = Exception.class)
     public void execute(MediaScrapeRequestedEvent event) {
@@ -144,6 +146,8 @@ public class MovieScrapeExecutionService {
     }
 
     private void recordVideoUpdated(UUID ownerUserId, MediaVideoItem item, SyncAction action) {
+        // 元数据状态流转影响 scrapeFailedCount 统计，需同步失效 dashboard 缓存。
+        readThroughCache.invalidate("omninest:dashboard:video:" + ownerUserId);
         syncEventService.record(
                 ownerUserId,
                 SyncScope.VIDEO,

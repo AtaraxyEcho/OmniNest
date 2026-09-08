@@ -8,6 +8,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
@@ -68,6 +69,7 @@ class MusicAdminServiceTest {
     private final TaskRecordService taskRecordService =
             mock(TaskRecordService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
+    private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final MusicAdminService adminService = new MusicAdminService(
             scanJobRepository,
@@ -84,6 +86,7 @@ class MusicAdminServiceTest {
             notificationService,
             taskRecordService,
             syncEventService,
+            readThroughCache,
             transactionManager
     );
 

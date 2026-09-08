@@ -4,6 +4,7 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
 import com.omninest.modules.media.domain.MediaPlaybackType;
+import com.omninest.modules.media.event.MediaProgressChangedEvent;
 import com.omninest.modules.media.repository.MediaPlaybackProgressRepository;
 import java.time.Instant;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class MediaPlaybackProgressService {
     private final MediaPlaybackProgressRepository repository;
     private final MediaSyncEventService syncEventService;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     /**
      * 查询指定媒体进度。
@@ -57,6 +60,21 @@ public class MediaPlaybackProgressService {
     @Transactional(readOnly = true)
     public List<MediaPlaybackProgress> latest(UUID ownerUserId, MediaPlaybackType mediaType) {
         return repository.findTop12ByOwnerUserIdAndMediaTypeOrderByUpdatedAtDesc(
+                ownerUserId,
+                mediaType.value()
+        );
+    }
+
+    /**
+     * 统计指定用户未播完的进度总数（继续观看口径）。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param mediaType 媒体类型
+     * @return 未完成进度总数
+     */
+    @Transactional(readOnly = true)
+    public long countIncomplete(UUID ownerUserId, MediaPlaybackType mediaType) {
+        return repository.countByOwnerUserIdAndMediaTypeAndCompletedFalse(
                 ownerUserId,
                 mediaType.value()
         );
@@ -178,6 +196,7 @@ public class MediaPlaybackProgressService {
                             "deviceId", safeDeviceId
                     )
             );
+            applicationEventPublisher.publishEvent(new MediaProgressChangedEvent(ownerUserId, mediaType));
         }
         return saved;
     }

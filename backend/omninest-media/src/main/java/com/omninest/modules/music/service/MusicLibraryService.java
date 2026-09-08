@@ -353,6 +353,8 @@ public class MusicLibraryService {
 
     private void savePlayHistory(UUID ownerUserId, MusicPlayHistory history) {
         playHistoryRepository.save(history);
+        // 播放历史改变音乐仪表盘的历史计数与最近播放列表，需失效缓存。
+        readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
         syncEventService.record(
                 ownerUserId,
                 SyncScope.MUSIC,

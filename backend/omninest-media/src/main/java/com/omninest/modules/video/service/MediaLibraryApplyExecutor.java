@@ -1,9 +1,12 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.LocalMediaScanEntry;
 import com.omninest.modules.file.service.LocalMediaIndexService;
+import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaScanBatch;
 import com.omninest.modules.video.domain.MediaScanCandidate;
@@ -43,6 +46,8 @@ public class MediaLibraryApplyExecutor {
     private final LocalMediaLibraryClassifier classifier;
     private final AdaptiveChunkPolicy chunkPolicy;
     private final TaskRecordService taskRecordService;
+    private final ReadThroughCache readThroughCache;
+    private final MediaSyncEventService syncEventService;
     private final PlatformTransactionManager transactionManager;
 
     /** 执行按需入库任务。 */
@@ -293,6 +298,15 @@ public class MediaLibraryApplyExecutor {
             result.put("appliedCount", applied);
             result.put("failedCount", failed);
             result.put("externalMetadataRequestCount", 0);
+            // 入库改变了影视库统计与最近添加，需立即失效 dashboard 缓存，
+            // 并广播库级同步事件让各端实时感知新入库内容。
+            readThroughCache.invalidate("omninest:dashboard:video:" + event.ownerUserId());
+            syncEventService.invalidate(
+                    event.ownerUserId(),
+                    SyncScope.VIDEO,
+                    "VIDEO_LIBRARY",
+                    Map.of("source", "APPLY", "applied", applied)
+            );
             taskRecordService.markCompleted(event.taskId(), result);
         });
         log.info(

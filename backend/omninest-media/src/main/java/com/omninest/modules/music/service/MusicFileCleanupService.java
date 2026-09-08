@@ -1,5 +1,6 @@
 package com.omninest.modules.music.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.FileBusinessReference;
@@ -59,6 +60,7 @@ public class MusicFileCleanupService implements
     private final MusicArtistRepository artistRepository;
     private final MusicPlaylistRepository playlistRepository;
     private final MediaSyncEventService syncEventService;
+    private final ReadThroughCache readThroughCache;
 
     /**
      * 查询目标文件的本地音乐曲目引用。
@@ -223,6 +225,8 @@ public class MusicFileCleanupService implements
 
         trackRepository.deleteAllInBatch(tracks);
         cleanupOrphanedParents(ownerUserId, albumIds, artistIds);
+        // 曲目删除改变音乐仪表盘统计与最近列表，需失效缓存。
+        readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
     }
 
     private void cleanupOrphanedParents(UUID ownerUserId, Set<UUID> albumIds, Set<UUID> artistIds) {

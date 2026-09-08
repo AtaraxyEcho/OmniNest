@@ -10,6 +10,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface MediaVideoCollectionRepository extends JpaRepository<MediaVideoCollection, UUID> {
     List<MediaVideoCollection> findByOwnerUserIdOrderByUpdatedAtDesc(UUID ownerUserId);
 
+    /**
+     * 统计用户创建的合集总数。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @return 合集总数
+     */
+    long countByOwnerUserId(UUID ownerUserId);
+
     Optional<MediaVideoCollection> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     List<MediaVideoCollection> findByOwnerUserIdAndCoverFileIdIn(UUID ownerUserId, Collection<UUID> fileIds);

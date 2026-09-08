@@ -10,6 +10,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.video.domain.MediaMovie;
 import com.omninest.modules.video.domain.MediaTvEpisode;
 import com.omninest.modules.video.domain.MediaTvSeason;
@@ -64,6 +65,7 @@ class MovieScrapeExecutionServiceTest {
     private final DerivedAssetStorageService derivedAssetStorageService = Mockito.mock(DerivedAssetStorageService.class);
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
     private final FileLifecycleGuard fileLifecycleGuard = Mockito.mock(FileLifecycleGuard.class);
+    private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
     private final MovieScrapeExecutionService executionService =
             new MovieScrapeExecutionService(
                     configService,
@@ -79,7 +81,8 @@ class MovieScrapeExecutionServiceTest {
                     notificationService,
                     derivedAssetStorageService,
                     syncEventService,
-                    fileLifecycleGuard
+                    fileLifecycleGuard,
+                    readThroughCache
             );
 
     @BeforeEach

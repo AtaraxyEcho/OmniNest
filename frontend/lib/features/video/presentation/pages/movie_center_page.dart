@@ -64,11 +64,16 @@ class MovieCenterPage extends ConsumerWidget {
                   // 且与各自分区网格数据同源，避免计数被清零或漂移。
                   MovieSection.tvShows: visibleState.tvSeries.length,
                   MovieSection.anime: visibleState.animeSeries.length,
-                  MovieSection.collections: visibleState.collections.length,
+                  // 收藏/历史/合集/继续观看读服务端权威统计，
+                  // 分区列表仍懒加载，徽标不受访问与否影响。
+                  MovieSection.collections:
+                      visibleState.dashboard.stats.collectionsCount,
                   MovieSection.continueWatching:
-                      visibleState.continueWatching.length,
-                  MovieSection.favorites: visibleState.favoriteItems.length,
-                  MovieSection.history: visibleState.watchHistory.length,
+                      visibleState.dashboard.stats.continueWatchingCount,
+                  MovieSection.favorites:
+                      visibleState.dashboard.stats.favoritesCount,
+                  MovieSection.history:
+                      visibleState.dashboard.stats.historyCount,
                 },
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,

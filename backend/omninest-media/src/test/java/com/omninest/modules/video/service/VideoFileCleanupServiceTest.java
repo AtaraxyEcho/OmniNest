@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.PurgeContext;
@@ -63,6 +64,7 @@ class VideoFileCleanupServiceTest {
     private final MediaVideoCollectionRepository videoCollectionRepository =
             Mockito.mock(MediaVideoCollectionRepository.class);
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
+    private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
     private final VideoFileCleanupService service = new VideoFileCleanupService(
             videoItemRepository,
             playbackCleanupService,
@@ -78,7 +80,8 @@ class VideoFileCleanupServiceTest {
             tvSeriesRepository,
             seriesFavoriteRepository,
             videoCollectionRepository,
-            syncEventService
+            syncEventService,
+            readThroughCache
     );
 
     @Test
