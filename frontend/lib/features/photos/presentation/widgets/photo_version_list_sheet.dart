@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/domain/photo_edit_version.dart';
 
@@ -26,7 +27,7 @@ class PhotoVersionListSheet extends StatelessWidget {
               AppLocalizations.of(context).photosEditVersionHistory,
               style: TextStyle(
                 color: context.photosColors.onSurface,
-                fontSize: 16,
+                fontSize: AppTypography.titleMedium,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -54,7 +55,7 @@ class PhotoVersionListSheet extends StatelessWidget {
                         'v${version.versionNumber}',
                         style: TextStyle(
                           color: context.photosColors.primaryContainer,
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySmall,
                           fontWeight: FontWeight.w700,
                         ),
                       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -104,7 +105,7 @@ class PhotoViewerTopBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: titleColor,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -113,7 +114,10 @@ class PhotoViewerTopBar extends StatelessWidget {
                     viewerShortDate(date),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: dateColor, fontSize: 11),
+                    style: TextStyle(
+                      color: dateColor,
+                      fontSize: AppTypography.labelSmall,
+                    ),
                   ),
               ],
             ),
@@ -299,7 +303,7 @@ class PhotoViewerSlideshowBadge extends StatelessWidget {
             AppLocalizations.of(context).photosSlideshowBadge(current, total),
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.80),
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
             ),
           ),
         ],

@@ -49,7 +49,7 @@ class _BatchActionBar extends StatelessWidget {
             ).photosSelectedCount(state.selectedPhotoIds.length),
             style: TextStyle(
               color: context.photosColors.onSurface,
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
               fontWeight: FontWeight.w600,
             ),
           ),
@@ -278,7 +278,7 @@ class _BatchAction extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: context.photosColors.onSurfaceVariant,
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   fontWeight: FontWeight.w600,
                 ),
               ),

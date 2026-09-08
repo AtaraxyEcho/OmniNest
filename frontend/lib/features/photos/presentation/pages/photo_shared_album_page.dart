@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -166,7 +167,7 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
               AppLocalizations.of(context).photosSharedAlbumPasswordRequired,
               style: TextStyle(
                 color: context.photosColors.onSurface,
-                fontSize: 16,
+                fontSize: AppTypography.titleMedium,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -175,7 +176,7 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
               AppLocalizations.of(context).photosSharedAlbumPasswordHint,
               style: TextStyle(
                 color: context.photosColors.onSurfaceVariant,
-                fontSize: 13,
+                fontSize: AppTypography.bodyMedium,
               ),
             ),
             SizedBox(height: 20),
@@ -266,7 +267,7 @@ class _SharedAlbumContent extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.photosColors.onSurface,
-                        fontSize: 16,
+                        fontSize: AppTypography.titleMedium,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -278,7 +279,7 @@ class _SharedAlbumContent extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           color: context.photosColors.onSurfaceVariant,
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySmall,
                         ),
                       ),
                   ],
@@ -290,7 +291,7 @@ class _SharedAlbumContent extends StatelessWidget {
                 ).photosPhotoCount(album.photos.length),
                 style: TextStyle(
                   color: context.photosColors.onSurfaceVariant,
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                 ),
               ),
             ],
@@ -380,7 +381,7 @@ class _SharedAlbumContent extends StatelessWidget {
             AppLocalizations.of(context).photosSharedPoweredBy,
             style: TextStyle(
               color: context.photosColors.onSurfaceVariant,
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
             ),
           ),
         ),

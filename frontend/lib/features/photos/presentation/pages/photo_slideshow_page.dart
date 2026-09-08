@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
@@ -763,7 +764,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   l10n.photosModuleDisplayName,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.70),
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     letterSpacing: 0.04,
                   ),
                 ),
@@ -773,7 +774,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   '${_photos.length.toString().padLeft(2, '0')}',
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.50),
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     letterSpacing: 0.08,
                     fontWeight: FontWeight.w300,
                   ),
@@ -917,7 +918,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   photo.title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 22,
+                    fontSize: AppTypography.headlineSmall,
                     fontWeight: FontWeight.w300,
                     letterSpacing: -0.01,
                   ),
@@ -926,7 +927,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   _metaLine(photo, preferZh),
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.45),
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     letterSpacing: 0.06,
                     fontWeight: FontWeight.w300,
                   ),
@@ -962,7 +963,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                             : AppLocalizations.of(context).photosStripShow,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.50),
-                          fontSize: 11,
+                          fontSize: AppTypography.labelSmall,
                           letterSpacing: 0.08,
                         ),
                       ),
@@ -1002,7 +1003,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             l10n.photosImageLoadFailed,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.65),
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
             ),
           ),
           const SizedBox(height: 16),

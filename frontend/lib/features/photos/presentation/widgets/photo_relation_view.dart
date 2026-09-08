@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
@@ -336,7 +337,7 @@ class _DimensionList extends StatelessWidget {
                   label,
                   style: TextStyle(
                     color: colors.onSurface,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -369,7 +370,10 @@ class _DimensionList extends StatelessWidget {
                     dimension: type,
                   ),
                 ),
-                style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+                style: TextStyle(
+                  color: colors.onSurfaceVariant,
+                  fontSize: AppTypography.bodySmall,
+                ),
               ),
             ),
         ],
@@ -414,7 +418,7 @@ class _EntityTile extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: colors.onSurface,
-                      fontSize: 13,
+                      fontSize: AppTypography.bodyMedium,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
@@ -423,7 +427,7 @@ class _EntityTile extends StatelessWidget {
                   '${entity.weight}',
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                   ),
                 ),
               ],
@@ -465,14 +469,17 @@ class _EntityDetail extends ConsumerWidget {
           selected!.label,
           style: TextStyle(
             color: colors.onSurface,
-            fontSize: 18,
+            fontSize: AppTypography.titleLarge,
             fontWeight: FontWeight.w800,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           l10n.photosAlbumPhotoCount(selected!.weight),
-          style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+          style: TextStyle(
+            color: colors.onSurfaceVariant,
+            fontSize: AppTypography.bodySmall,
+          ),
         ),
         if (related.isNotEmpty) ...[
           const SizedBox(height: 14),
@@ -480,7 +487,7 @@ class _EntityDetail extends ConsumerWidget {
             l10n.photosRelCooccurTitle,
             style: TextStyle(
               color: colors.onSurface,
-              fontSize: 13,
+              fontSize: AppTypography.bodyMedium,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -571,7 +578,10 @@ class _EntityDetail extends ConsumerWidget {
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Text(
                   describeUserFacingError(error).displayMessage,
-                  style: TextStyle(color: colors.danger, fontSize: 12),
+                  style: TextStyle(
+                    color: colors.danger,
+                    fontSize: AppTypography.bodySmall,
+                  ),
                 ),
               ),
         ),
@@ -667,7 +677,10 @@ class _CompactRelationBody extends StatelessWidget {
                   dimension: currentDimension,
                 ),
               ),
-              style: TextStyle(color: colors.onSurfaceVariant, fontSize: 12),
+              style: TextStyle(
+                color: colors.onSurfaceVariant,
+                fontSize: AppTypography.bodySmall,
+              ),
             ),
           ),
       ],

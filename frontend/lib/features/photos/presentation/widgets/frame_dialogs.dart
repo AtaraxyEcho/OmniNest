@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
 
@@ -29,7 +30,10 @@ Future<bool> showFrameConfirmDialog(
           title: _frameDialogTitle(context, title),
           content: Text(
             body,
-            style: TextStyle(color: colors.sub, fontSize: 14),
+            style: TextStyle(
+              color: colors.sub,
+              fontSize: AppTypography.bodyLarge,
+            ),
           ),
           actions: [
             _frameCancelAction(ctx, context),
@@ -67,7 +71,10 @@ Future<String?> showFramePromptDialog(
                   controller: controller,
                   autofocus: true,
                   obscureText: obscureText,
-                  style: TextStyle(color: ctx.frameColors.ink, fontSize: 14),
+                  style: TextStyle(
+                    color: ctx.frameColors.ink,
+                    fontSize: AppTypography.bodyLarge,
+                  ),
                   decoration: _frameFieldDecoration(ctx, hint: hint),
                 ),
                 actions: [
@@ -117,7 +124,10 @@ Future<T?> showFrameChoiceDialog<T>(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: Text(
                       emptyMessage ?? l10n.photosNoAlbums,
-                      style: TextStyle(color: colors.sub, fontSize: 13),
+                      style: TextStyle(
+                        color: colors.sub,
+                        fontSize: AppTypography.bodyMedium,
+                      ),
                     ),
                   )
                   : ConstrainedBox(
@@ -150,7 +160,7 @@ Future<T?> showFrameChoiceDialog<T>(
                                           overflow: TextOverflow.ellipsis,
                                           style: TextStyle(
                                             color: colors.ink,
-                                            fontSize: 14,
+                                            fontSize: AppTypography.bodyLarge,
                                             fontWeight: FontWeight.w500,
                                           ),
                                         ),
@@ -161,7 +171,7 @@ Future<T?> showFrameChoiceDialog<T>(
                                             overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                               color: colors.muted,
-                                              fontSize: 12,
+                                              fontSize: AppTypography.bodySmall,
                                             ),
                                           ),
                                       ],
@@ -203,7 +213,7 @@ Future<(String, String)?> showFrameNewAlbumDialog(BuildContext context) {
                             autofocus: true,
                             style: TextStyle(
                               color: ctx.frameColors.ink,
-                              fontSize: 14,
+                              fontSize: AppTypography.bodyLarge,
                             ),
                             decoration: _frameFieldDecoration(
                               ctx,
@@ -215,7 +225,7 @@ Future<(String, String)?> showFrameNewAlbumDialog(BuildContext context) {
                             controller: descController,
                             style: TextStyle(
                               color: ctx.frameColors.ink,
-                              fontSize: 14,
+                              fontSize: AppTypography.bodyLarge,
                             ),
                             decoration: _frameFieldDecoration(
                               ctx,
@@ -281,7 +291,7 @@ Text _frameDialogTitle(BuildContext context, String title) {
       fontFamily: FramePalette.serifFamily,
       fontFamilyFallback: FramePalette.serifFallback,
       color: colors.ink,
-      fontSize: 18,
+      fontSize: AppTypography.titleLarge,
     ),
   );
 }

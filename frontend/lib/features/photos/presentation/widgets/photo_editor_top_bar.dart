@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
@@ -54,7 +55,7 @@ class PhotoEditorTopBar extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: context.photosColors.onSurface,
-                fontSize: 16,
+                fontSize: AppTypography.titleMedium,
                 fontWeight: FontWeight.w700,
               ),
             ),

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
@@ -635,7 +636,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                                 textAlign: TextAlign.center,
                                 style: TextStyle(
                                   color: context.photosColors.onSurfaceVariant,
-                                  fontSize: 16,
+                                  fontSize: AppTypography.titleMedium,
                                 ),
                               ),
                             ],
@@ -741,7 +742,7 @@ class _MotionBadge extends StatelessWidget {
                   label,
                   style: TextStyle(
                     color: foreground,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w700,
                     letterSpacing: 1.2,
                   ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
@@ -33,7 +34,7 @@ class PhotoInfoPanel extends ConsumerWidget {
   /// 眉题/分区标题样式。
   static const TextStyle _eyebrowStyle = TextStyle(
     color: Color(0x4DFFFFFF),
-    fontSize: 10,
+    fontSize: AppTypography.labelSmall,
     letterSpacing: 0.14,
   );
 
@@ -64,7 +65,7 @@ class PhotoInfoPanel extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 color: Colors.white,
-                fontSize: 20,
+                fontSize: AppTypography.titleLarge,
                 fontWeight: FontWeight.w300,
               ),
             ),
@@ -74,7 +75,7 @@ class PhotoInfoPanel extends ConsumerWidget {
                 '—',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.35),
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                 ),
               )
             else
@@ -159,7 +160,7 @@ class PhotoInfoPanel extends ConsumerWidget {
           _localizedPhotoAnalysisNamespace(context, entry.key),
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.45),
-            fontSize: 11,
+            fontSize: AppTypography.labelSmall,
             fontWeight: FontWeight.w700,
           ),
         ),
@@ -198,7 +199,7 @@ class PhotoInfoPanel extends ConsumerWidget {
         description,
         style: TextStyle(
           color: Colors.white.withValues(alpha: 0.75),
-          fontSize: 13,
+          fontSize: AppTypography.bodyMedium,
           height: 18 / 13,
         ),
       ),
@@ -322,7 +323,13 @@ class _InfoPill extends StatelessWidget {
                 Icon(icon, size: 14, color: foreground),
                 const SizedBox(width: 4),
               ],
-              Text(text, style: TextStyle(color: foreground, fontSize: 12)),
+              Text(
+                text,
+                style: TextStyle(
+                  color: foreground,
+                  fontSize: AppTypography.bodySmall,
+                ),
+              ),
               if (action != null && icon == null) ...[
                 const SizedBox(width: 4),
                 Icon(Icons.close_rounded, size: 14, color: foreground),

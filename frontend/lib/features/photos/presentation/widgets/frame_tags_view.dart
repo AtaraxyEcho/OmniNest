@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.dart';
@@ -39,7 +40,10 @@ class _FrameTagsViewState extends ConsumerState<FrameTagsView> {
           (error, _) => Center(
             child: Text(
               AppLocalizations.of(context).photosOperationFailed,
-              style: TextStyle(color: colors.sub, fontSize: 14),
+              style: TextStyle(
+                color: colors.sub,
+                fontSize: AppTypography.bodyLarge,
+              ),
             ),
           ),
       data:
@@ -71,7 +75,7 @@ class _FrameTagsViewState extends ConsumerState<FrameTagsView> {
                   fontFamily: FramePalette.serifFamily,
                   fontFamilyFallback: FramePalette.serifFallback,
                   color: colors.ink,
-                  fontSize: 24,
+                  fontSize: AppTypography.headlineSmall,
                 ),
               ),
               const SizedBox(height: 16),
@@ -109,7 +113,10 @@ class _FrameTagsViewState extends ConsumerState<FrameTagsView> {
                     child: Text(
                       l10n.photosTagsSelectHint,
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: colors.muted, fontSize: 13),
+                      style: TextStyle(
+                        color: colors.muted,
+                        fontSize: AppTypography.bodyMedium,
+                      ),
                     ),
                   )
                   : _TagPhotos(
@@ -164,7 +171,10 @@ class _TagPhotos extends ConsumerWidget {
             padding: const EdgeInsets.all(16),
             child: Text(
               AppLocalizations.of(context).photosOperationFailed,
-              style: TextStyle(color: colors.sub, fontSize: 13),
+              style: TextStyle(
+                color: colors.sub,
+                fontSize: AppTypography.bodyMedium,
+              ),
             ),
           ),
       data:
@@ -183,7 +193,7 @@ class _TagPhotos extends ConsumerWidget {
                         fontFamily: FramePalette.serifFamily,
                         fontFamilyFallback: FramePalette.serifFallback,
                         color: colors.ink,
-                        fontSize: 20,
+                        fontSize: AppTypography.titleLarge,
                       ),
                     ),
                     const SizedBox(width: 10),
@@ -191,7 +201,10 @@ class _TagPhotos extends ConsumerWidget {
                       AppLocalizations.of(
                         context,
                       ).photosTagsPhotoCount(photos.length),
-                      style: TextStyle(color: colors.muted, fontSize: 12),
+                      style: TextStyle(
+                        color: colors.muted,
+                        fontSize: AppTypography.bodySmall,
+                      ),
                     ),
                   ],
                 ),
@@ -244,7 +257,7 @@ class _TagChip extends StatelessWidget {
             tag,
             style: TextStyle(
               color: selected ? colors.accent : colors.sub,
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
               fontWeight: FontWeight.w500,
             ),
           ),

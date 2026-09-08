@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
@@ -218,7 +219,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                   l10n.photosShareEyebrow,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.30),
-                    fontSize: 10,
+                    fontSize: AppTypography.labelSmall,
                     letterSpacing: 0.14,
                   ),
                 ),
@@ -227,7 +228,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                   widget.photo.title,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 20,
+                    fontSize: AppTypography.titleLarge,
                     fontWeight: FontWeight.w300,
                   ),
                 ),
@@ -258,7 +259,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                     child: Text(
                       l10n.photosShareDone,
                       style: const TextStyle(
-                        fontSize: 13,
+                        fontSize: AppTypography.bodyMedium,
                         letterSpacing: 0.04,
                         fontWeight: FontWeight.w300,
                       ),
@@ -312,7 +313,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                   location,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.60),
-                    fontSize: 11,
+                    fontSize: AppTypography.labelSmall,
                     letterSpacing: 0.05,
                   ),
                 ),
@@ -332,7 +333,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           l10n.photosShareLinkEyebrow,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.30),
-            fontSize: 10,
+            fontSize: AppTypography.labelSmall,
             letterSpacing: 0.10,
           ),
         ),
@@ -361,7 +362,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                         _error != null
                             ? Theme.of(context).colorScheme.error
                             : Colors.white.withValues(alpha: 0.50),
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                   ),
                 ),
               ),
@@ -394,7 +395,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
               ),
               child: Text(
                 copied ? l10n.photosShareCopied : l10n.photosShareCopy,
-                style: const TextStyle(fontSize: 12, letterSpacing: 0.04),
+                style: const TextStyle(
+                  fontSize: AppTypography.bodySmall,
+                  letterSpacing: 0.04,
+                ),
               ),
             ),
           ],
@@ -406,7 +410,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
             l10n.photosShareManage,
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.40),
-              fontSize: 11,
+              fontSize: AppTypography.labelSmall,
             ),
           ),
         ),
@@ -490,7 +494,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           l10n.photosShareToEyebrow,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.30),
-            fontSize: 10,
+            fontSize: AppTypography.labelSmall,
             letterSpacing: 0.10,
           ),
         ),
@@ -526,7 +530,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
               label,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.40),
-                fontSize: 10,
+                fontSize: AppTypography.labelSmall,
                 letterSpacing: 0.04,
               ),
             ),
@@ -544,7 +548,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           l10n.photosShareOptionsEyebrow,
           style: TextStyle(
             color: Colors.white.withValues(alpha: 0.30),
-            fontSize: 10,
+            fontSize: AppTypography.labelSmall,
             letterSpacing: 0.10,
           ),
         ),
@@ -640,7 +644,7 @@ class _ShareSelectRow extends StatelessWidget {
                               entry.$1 == value
                                   ? const Color(0xFF4ADE80)
                                   : Colors.white.withValues(alpha: 0.80),
-                          fontSize: 13,
+                          fontSize: AppTypography.bodyMedium,
                         ),
                       ),
                     ),
@@ -668,7 +672,7 @@ class _ShareSelectRow extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.75),
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                 ),
               ),
             ),
@@ -676,7 +680,7 @@ class _ShareSelectRow extends StatelessWidget {
               current.$2,
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.45),
-                fontSize: 11,
+                fontSize: AppTypography.labelSmall,
               ),
             ),
             const SizedBox(width: 4),
@@ -727,7 +731,7 @@ class _ShareToggleRow extends StatelessWidget {
                     label,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.75),
-                      fontSize: 12,
+                      fontSize: AppTypography.bodySmall,
                     ),
                   ),
                   const SizedBox(height: 1),
@@ -737,7 +741,7 @@ class _ShareToggleRow extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: Colors.white.withValues(alpha: 0.30),
-                      fontSize: 11,
+                      fontSize: AppTypography.labelSmall,
                     ),
                   ),
                 ],

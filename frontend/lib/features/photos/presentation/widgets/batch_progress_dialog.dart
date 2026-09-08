@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/application/photo_batch_task_monitor.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
@@ -80,7 +81,7 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
           fontFamily: FramePalette.serifFamily,
           fontFamilyFallback: FramePalette.serifFallback,
           color: colors.ink,
-          fontSize: 18,
+          fontSize: AppTypography.titleLarge,
         ),
       ),
       content: Column(
@@ -128,7 +129,10 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
             const SizedBox(height: 12),
             Text(
               '${task.processedItems} / ${task.totalItems}',
-              style: TextStyle(color: colors.sub, fontSize: 13),
+              style: TextStyle(
+                color: colors.sub,
+                fontSize: AppTypography.bodyMedium,
+              ),
             ),
           ],
           if (snapshot?.refreshError != null) ...[

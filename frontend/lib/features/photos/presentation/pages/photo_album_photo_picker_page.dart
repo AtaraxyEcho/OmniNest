@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -98,7 +99,7 @@ class _PhotoAlbumPhotoPickerPageState
                     l10n.photosAddPhotos,
                     style: TextStyle(
                       color: context.photosColors.onSurface,
-                      fontSize: 16,
+                      fontSize: AppTypography.titleMedium,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -107,7 +108,7 @@ class _PhotoAlbumPhotoPickerPageState
                   l10n.photosPickerAddCount(state.selectedIds.length),
                   style: TextStyle(
                     color: context.photosColors.onSurfaceVariant,
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyMedium,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -133,7 +134,7 @@ class _PhotoAlbumPhotoPickerPageState
                         l10n.photosPickerNoCandidates,
                         style: TextStyle(
                           color: context.photosColors.onSurfaceVariant,
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                         ),
                       ),
                     )
@@ -228,7 +229,7 @@ class _PhotoAlbumPhotoPickerPageState
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.error,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                   ),
                 ),
               ),

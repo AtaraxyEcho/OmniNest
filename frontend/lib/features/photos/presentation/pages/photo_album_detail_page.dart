@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -363,7 +364,7 @@ class _AddPhotoTile extends StatelessWidget {
               AppLocalizations.of(context).photosAddPhotos,
               style: TextStyle(
                 color: context.photosColors.onSurfaceVariant,
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -426,7 +427,7 @@ class _AlbumTopBar extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: context.photosColors.onSurface,
-                    fontSize: 16,
+                    fontSize: AppTypography.titleMedium,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -436,7 +437,7 @@ class _AlbumTopBar extends StatelessWidget {
                   ).photosAlbumPhotoCountLabel(album.photoCount),
                   style: TextStyle(
                     color: context.photosColors.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                   ),
                 ),
               ],

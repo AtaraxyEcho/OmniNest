@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 
 /// Frame 风格视图空态：线性图标 + 主提示 + 弱化说明，居中展示。
@@ -28,14 +29,20 @@ class FrameEmptyView extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: TextStyle(color: colors.sub, fontSize: 14),
+              style: TextStyle(
+                color: colors.sub,
+                fontSize: AppTypography.bodyLarge,
+              ),
             ),
             if (hint != null) ...[
               const SizedBox(height: 4),
               Text(
                 hint!,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: colors.muted, fontSize: 12),
+                style: TextStyle(
+                  color: colors.muted,
+                  fontSize: AppTypography.bodySmall,
+                ),
               ),
             ],
           ],

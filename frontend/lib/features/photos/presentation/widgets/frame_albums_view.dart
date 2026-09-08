@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
@@ -46,7 +47,7 @@ class FrameAlbumsView extends StatelessWidget {
                           fontFamily: FramePalette.serifFamily,
                           fontFamilyFallback: FramePalette.serifFallback,
                           color: colors.ink,
-                          fontSize: 24,
+                          fontSize: AppTypography.headlineSmall,
                         ),
                       ),
                       const Spacer(),
@@ -59,7 +60,10 @@ class FrameAlbumsView extends StatelessWidget {
                       padding: const EdgeInsets.only(top: 8),
                       child: Text(
                         l10n.photosNoAlbums,
-                        style: TextStyle(color: colors.muted, fontSize: 13),
+                        style: TextStyle(
+                          color: colors.muted,
+                          fontSize: AppTypography.bodyMedium,
+                        ),
                       ),
                     )
                   else
@@ -131,7 +135,10 @@ class _NewAlbumButton extends StatelessWidget {
                 const SizedBox(width: 8),
                 Text(
                   AppLocalizations.of(context).photosNewAlbum,
-                  style: TextStyle(color: colors.onBtn, fontSize: 14),
+                  style: TextStyle(
+                    color: colors.onBtn,
+                    fontSize: AppTypography.bodyLarge,
+                  ),
                 ),
               ],
             ),
@@ -223,7 +230,7 @@ class _FrameAlbumCardState extends State<_FrameAlbumCard> {
                       _hovering
                           ? context.frameColors.accent
                           : context.frameColors.ink,
-                  fontSize: 14,
+                  fontSize: AppTypography.bodyLarge,
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -234,7 +241,7 @@ class _FrameAlbumCardState extends State<_FrameAlbumCard> {
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: context.frameColors.muted,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                 ),
               ),
             ],

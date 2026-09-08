@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/features/photos/application/photo_center_models.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
@@ -114,7 +115,7 @@ class FrameSidebar extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: colors.ink,
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -122,7 +123,10 @@ class FrameSidebar extends StatelessWidget {
             l10n.photosFrameStatsMeta(albumCount, trashCount),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: colors.muted, fontSize: 12),
+            style: TextStyle(
+              color: colors.muted,
+              fontSize: AppTypography.bodySmall,
+            ),
           ),
         ],
       ),
@@ -159,7 +163,7 @@ class _FrameLogo extends StatelessWidget {
                 fontFamily: FramePalette.serifFamily,
                 fontFamilyFallback: FramePalette.serifFallback,
                 color: colors.ink,
-                fontSize: 18,
+                fontSize: AppTypography.titleLarge,
                 height: 1,
               ),
             ),
@@ -262,7 +266,7 @@ class _FrameNavItemState extends State<_FrameNavItem> {
                       duration: stateDuration,
                       style: TextStyle(
                         color: foreground,
-                        fontSize: 13,
+                        fontSize: AppTypography.bodyMedium,
                         fontWeight: FontWeight.w400,
                         letterSpacing: 0.13,
                       ),

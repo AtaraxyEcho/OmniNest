@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -80,7 +81,7 @@ class _PhotoPeriodPageState extends ConsumerState<PhotoPeriodPage> {
                   title,
                   style: TextStyle(
                     color: context.photosColors.onSurface,
-                    fontSize: 18,
+                    fontSize: AppTypography.titleLarge,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -99,7 +100,7 @@ class _PhotoPeriodPageState extends ConsumerState<PhotoPeriodPage> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: context.photosColors.onSurfaceVariant,
-                            fontSize: 14,
+                            fontSize: AppTypography.bodyLarge,
                           ),
                         ),
                         const SizedBox(height: 12),
@@ -126,7 +127,7 @@ class _PhotoPeriodPageState extends ConsumerState<PhotoPeriodPage> {
                       AppLocalizations.of(context).photosNoPhotos,
                       style: TextStyle(
                         color: context.photosColors.onSurfaceVariant,
-                        fontSize: 14,
+                        fontSize: AppTypography.bodyLarge,
                       ),
                     ),
                   ),

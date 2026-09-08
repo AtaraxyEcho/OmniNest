@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -69,7 +70,7 @@ class PhotoBrowsePage extends ConsumerWidget {
                       AppLocalizations.of(context).photosAllPhotos,
                       style: TextStyle(
                         color: context.photosColors.onSurface,
-                        fontSize: 18,
+                        fontSize: AppTypography.titleLarge,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -87,7 +88,7 @@ class PhotoBrowsePage extends ConsumerWidget {
                           AppLocalizations.of(context).photosNoPhotos,
                           style: TextStyle(
                             color: context.photosColors.onSurfaceVariant,
-                            fontSize: 14,
+                            fontSize: AppTypography.bodyLarge,
                           ),
                         ),
                       ),
@@ -162,7 +163,7 @@ class PhotoBrowsePage extends ConsumerWidget {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             color: Theme.of(context).colorScheme.error,
-                            fontSize: 12,
+                            fontSize: AppTypography.bodySmall,
                           ),
                         ),
                       ),

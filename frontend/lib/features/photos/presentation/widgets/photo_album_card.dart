@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
@@ -91,7 +92,7 @@ class PhotoAlbumCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
                         color: context.photosColors.onSurface,
-                        fontSize: 14,
+                        fontSize: AppTypography.bodyLarge,
                         height: 18 / 14,
                         fontWeight: FontWeight.w700,
                       ),
@@ -103,7 +104,7 @@ class PhotoAlbumCard extends StatelessWidget {
                       ).photosAlbumPhotoCountLabel(album.photoCount),
                       style: TextStyle(
                         color: context.photosColors.onSurfaceVariant,
-                        fontSize: 12,
+                        fontSize: AppTypography.bodySmall,
                         height: 16 / 12,
                       ),
                     ),

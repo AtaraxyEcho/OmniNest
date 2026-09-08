@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_album_card.dart';
@@ -105,7 +106,7 @@ class CreateAlbumTile extends StatelessWidget {
                 AppLocalizations.of(context).photosNewAlbum,
                 style: TextStyle(
                   color: context.photosColors.primaryContainer,
-                  fontSize: 13,
+                  fontSize: AppTypography.bodyMedium,
                   fontWeight: FontWeight.w600,
                 ),
               ),

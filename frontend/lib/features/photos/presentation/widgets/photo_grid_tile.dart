@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
@@ -125,7 +126,7 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 12,
+                                fontSize: AppTypography.bodySmall,
                                 fontWeight: FontWeight.w500,
                                 height: 1.35,
                               ),
@@ -136,7 +137,7 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
                                 maxLines: 1,
                                 style: TextStyle(
                                   color: Colors.white.withValues(alpha: 0.55),
-                                  fontSize: 12,
+                                  fontSize: AppTypography.bodySmall,
                                 ),
                               ),
                           ],

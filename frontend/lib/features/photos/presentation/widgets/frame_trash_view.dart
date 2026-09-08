@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/application/photo_center_models.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
@@ -95,7 +96,7 @@ class _FrameTrashViewState extends State<FrameTrashView> {
                                 fontFamily: FramePalette.serifFamily,
                                 fontFamilyFallback: FramePalette.serifFallback,
                                 color: colors.ink,
-                                fontSize: 24,
+                                fontSize: AppTypography.headlineSmall,
                               ),
                             ),
                             const SizedBox(height: 4),
@@ -103,7 +104,7 @@ class _FrameTrashViewState extends State<FrameTrashView> {
                               l10n.photosTrashSubtitle(widget.photos.length),
                               style: TextStyle(
                                 color: colors.muted,
-                                fontSize: 12,
+                                fontSize: AppTypography.bodySmall,
                               ),
                             ),
                           ],
@@ -121,7 +122,7 @@ class _FrameTrashViewState extends State<FrameTrashView> {
                         widget.errorMessage!,
                         style: TextStyle(
                           color: const Color(0xFFEF4444),
-                          fontSize: 13,
+                          fontSize: AppTypography.bodyMedium,
                         ),
                       ),
                     )
@@ -203,7 +204,10 @@ class _EmptyTrashButtonState extends State<_EmptyTrashButton> {
           ),
           child: Text(
             AppLocalizations.of(context).photosEmptyTrash,
-            style: const TextStyle(color: Color(0xFFEF4444), fontSize: 14),
+            style: const TextStyle(
+              color: Color(0xFFEF4444),
+              fontSize: AppTypography.bodyLarge,
+            ),
           ),
         ),
       ),
@@ -317,7 +321,10 @@ class _TrashTileState extends State<_TrashTile> {
             photo.title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: colors.muted, fontSize: 12),
+            style: TextStyle(
+              color: colors.muted,
+              fontSize: AppTypography.bodySmall,
+            ),
           ),
         ),
       ],
@@ -363,7 +370,7 @@ class _TrashPillButton extends StatelessWidget {
                 label,
                 style: TextStyle(
                   color: foreground,
-                  fontSize: 12,
+                  fontSize: AppTypography.bodySmall,
                   fontWeight: FontWeight.w500,
                 ),
               ),

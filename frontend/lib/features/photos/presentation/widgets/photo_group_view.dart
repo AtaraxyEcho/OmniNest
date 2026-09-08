@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
@@ -112,7 +113,7 @@ class _PhotoGroupViewState extends ConsumerState<PhotoGroupView> {
                             AppLocalizations.of(context).photosNoGroupData,
                             style: TextStyle(
                               color: context.photosColors.onSurfaceVariant,
-                              fontSize: 15,
+                              fontSize: AppTypography.titleMedium,
                               fontWeight: FontWeight.w500,
                             ),
                           ),
@@ -158,7 +159,7 @@ class _GroupInitialState extends ConsumerWidget {
             textAlign: TextAlign.center,
             style: TextStyle(
               color: context.photosColors.onSurfaceVariant,
-              fontSize: 14,
+              fontSize: AppTypography.bodyLarge,
             ),
           ),
           const SizedBox(height: 12),
@@ -238,7 +239,7 @@ class _GroupSection extends StatelessWidget {
                 group.groupKey,
                 style: TextStyle(
                   color: context.photosColors.onSurface,
-                  fontSize: 15,
+                  fontSize: AppTypography.titleMedium,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -255,7 +256,7 @@ class _GroupSection extends StatelessWidget {
                   '${group.photoCount}',
                   style: TextStyle(
                     color: context.photosColors.primaryContainer,
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w600,
                   ),
                 ),

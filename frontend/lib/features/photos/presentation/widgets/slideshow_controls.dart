@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 
 /// 幻灯片控制覆盖层
@@ -118,7 +119,7 @@ class SlideshowControls extends StatelessWidget {
                   '${currentIndex + 1} / $totalCount',
                   style: TextStyle(
                     color: context.photosColors.slideshowText,
-                    fontSize: 14,
+                    fontSize: AppTypography.bodyLarge,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -140,7 +141,7 @@ class SlideshowControls extends StatelessWidget {
                         AppLocalizations.of(context).photosSlideshow3s,
                         style: TextStyle(
                           color: context.photosColors.slideshowText,
-                          fontSize: 13,
+                          fontSize: AppTypography.bodyMedium,
                         ),
                       ),
                     ),
@@ -150,7 +151,7 @@ class SlideshowControls extends StatelessWidget {
                         AppLocalizations.of(context).photosSlideshow5s,
                         style: TextStyle(
                           color: context.photosColors.slideshowText,
-                          fontSize: 13,
+                          fontSize: AppTypography.bodyMedium,
                         ),
                       ),
                     ),
@@ -160,7 +161,7 @@ class SlideshowControls extends StatelessWidget {
                         AppLocalizations.of(context).photosSlideshow10s,
                         style: TextStyle(
                           color: context.photosColors.slideshowText,
-                          fontSize: 13,
+                          fontSize: AppTypography.bodyMedium,
                         ),
                       ),
                     ),

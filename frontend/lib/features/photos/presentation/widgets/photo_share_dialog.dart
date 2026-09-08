@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
@@ -36,7 +37,7 @@ Future<(String, String)?> showPhotoShareDialog(
                           fontFamily: FramePalette.serifFamily,
                           fontFamilyFallback: FramePalette.serifFallback,
                           color: ctx.frameColors.ink,
-                          fontSize: 18,
+                          fontSize: AppTypography.titleLarge,
                         ),
                       ),
                       content: SizedBox(
@@ -51,7 +52,7 @@ Future<(String, String)?> showPhotoShareDialog(
                               obscureText: true,
                               style: TextStyle(
                                 color: ctx.frameColors.ink,
-                                fontSize: 14,
+                                fontSize: AppTypography.bodyLarge,
                               ),
                               decoration: InputDecoration(
                                 hintText:
@@ -91,7 +92,7 @@ Future<(String, String)?> showPhotoShareDialog(
                               AppLocalizations.of(context).photosShareExpiry,
                               style: TextStyle(
                                 color: ctx.frameColors.sub,
-                                fontSize: 12,
+                                fontSize: AppTypography.bodySmall,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -124,7 +125,7 @@ Future<(String, String)?> showPhotoShareDialog(
                                 ).photosExistingShareLinks,
                                 style: TextStyle(
                                   color: ctx.frameColors.sub,
-                                  fontSize: 12,
+                                  fontSize: AppTypography.bodySmall,
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -145,7 +146,8 @@ Future<(String, String)?> showPhotoShareDialog(
                                               overflow: TextOverflow.ellipsis,
                                               style: TextStyle(
                                                 color: ctx.frameColors.ink,
-                                                fontSize: 13,
+                                                fontSize:
+                                                    AppTypography.bodyMedium,
                                               ),
                                             ),
                                             Text(
@@ -156,7 +158,8 @@ Future<(String, String)?> showPhotoShareDialog(
                                               ),
                                               style: TextStyle(
                                                 color: ctx.frameColors.muted,
-                                                fontSize: 11,
+                                                fontSize:
+                                                    AppTypography.labelSmall,
                                               ),
                                             ),
                                           ],
@@ -264,7 +267,7 @@ class _ExpiryChip extends StatelessWidget {
             label,
             style: TextStyle(
               color: selected ? colors.accent : colors.sub,
-              fontSize: 12,
+              fontSize: AppTypography.bodySmall,
               fontWeight: FontWeight.w500,
             ),
           ),

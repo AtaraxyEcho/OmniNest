@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.dart';
@@ -209,7 +210,7 @@ class _LocationCardState extends State<_LocationCard> {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 14,
+                          fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -217,7 +218,7 @@ class _LocationCardState extends State<_LocationCard> {
                         widget.countLabel,
                         style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.60),
-                          fontSize: 12,
+                          fontSize: AppTypography.bodySmall,
                         ),
                       ),
                     ],
@@ -261,7 +262,10 @@ class _LocationDetail extends StatelessWidget {
             icon: Icon(Icons.arrow_back_rounded, size: 18, color: colors.sub),
             label: Text(
               AppLocalizations.of(context).photosLocationsBack,
-              style: TextStyle(color: colors.sub, fontSize: 13),
+              style: TextStyle(
+                color: colors.sub,
+                fontSize: AppTypography.bodyMedium,
+              ),
             ),
           ),
         ),
@@ -277,7 +281,7 @@ class _LocationDetail extends StatelessWidget {
                   fontFamily: FramePalette.serifFamily,
                   fontFamilyFallback: FramePalette.serifFallback,
                   color: colors.ink,
-                  fontSize: 20,
+                  fontSize: AppTypography.titleLarge,
                 ),
               ),
               const SizedBox(width: 10),
@@ -285,7 +289,10 @@ class _LocationDetail extends StatelessWidget {
                 AppLocalizations.of(
                   context,
                 ).photosTagsPhotoCount(photos.length),
-                style: TextStyle(color: colors.muted, fontSize: 12),
+                style: TextStyle(
+                  color: colors.muted,
+                  fontSize: AppTypography.bodySmall,
+                ),
               ),
             ],
           ),

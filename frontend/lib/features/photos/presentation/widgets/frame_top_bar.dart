@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/responsive_search_field.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
@@ -54,7 +55,7 @@ class FrameTopBar extends ConsumerWidget {
       onChanged: onSearchChanged,
       hintText: l10n.photosSearchHint,
       maxWidth: searchExpanded ? double.infinity : 262,
-      style: TextStyle(fontSize: 14),
+      style: TextStyle(fontSize: AppTypography.bodyLarge),
       // 设计稿搜索框高 34px（py-1.5 + text-sm 行高 20px + 1px 边框），
       // 与顶栏 34px 图标按钮一致；prefixIcon 默认 48x48 最小约束
       // 会托高输入框，必须显式收窄才能压到目标高度。
@@ -104,7 +105,7 @@ class FrameTopBar extends ConsumerWidget {
                 fontFamily: FramePalette.serifFamily,
                 fontFamilyFallback: FramePalette.serifFallback,
                 color: colors.ink,
-                fontSize: 20,
+                fontSize: AppTypography.titleLarge,
               ),
             ),
           const Spacer(),

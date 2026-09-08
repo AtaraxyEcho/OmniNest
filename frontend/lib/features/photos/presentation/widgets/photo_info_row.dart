@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
 /// 照片信息行：左标签右数值、底部分隔线（设计稿 Photo Info 行样式）。
@@ -39,7 +40,7 @@ class PhotoInfoRow extends StatelessWidget {
             label,
             style: TextStyle(
               color: labelColor,
-              fontSize: 11,
+              fontSize: AppTypography.labelSmall,
               letterSpacing: 0.04,
             ),
           ),
@@ -49,7 +50,7 @@ class PhotoInfoRow extends StatelessWidget {
               textAlign: TextAlign.right,
               style: TextStyle(
                 color: valueColor,
-                fontSize: 12,
+                fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w300,
               ),
             ),
@@ -113,7 +114,7 @@ class PhotoPanelActionButton extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.80),
-                    fontSize: 12,
+                    fontSize: AppTypography.bodySmall,
                     letterSpacing: 0.04,
                   ),
                 ),
