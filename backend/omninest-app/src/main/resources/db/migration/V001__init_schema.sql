@@ -219,6 +219,54 @@ COMMENT ON COLUMN "omni"."auth_users"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "omni"."auth_users"."version" IS '乐观锁版本号';
 COMMENT ON TABLE "omni"."auth_users" IS '认证用户表，保存内置登录账号、状态和容量信息';
 
+CREATE TABLE "omni"."backdrop_assets" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "owner_user_id" uuid NOT NULL,
+  "title" varchar(200) NOT NULL,
+  "media_type" varchar(16) NOT NULL,
+  "file_node_id" uuid NOT NULL,
+  "thumb_file_id" uuid,
+  "width" int4,
+  "height" int4,
+  "duration_ms" int4,
+  "file_size" int8 NOT NULL,
+  "sha256" varchar(64) NOT NULL,
+  "status" varchar(16) NOT NULL DEFAULT 'PROCESSING',
+  "fail_reason" varchar(200),
+  "version" int8 NOT NULL DEFAULT 0,
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
+  CONSTRAINT "chk_backdrop_assets_media_type" CHECK (media_type IN ('image', 'gif', 'video')),
+  CONSTRAINT "chk_backdrop_assets_status" CHECK (status IN ('PROCESSING', 'READY', 'FAILED'))
+)
+;
+COMMENT ON COLUMN "omni"."backdrop_assets"."id" IS '背景素材唯一标识，主键';
+COMMENT ON COLUMN "omni"."backdrop_assets"."owner_user_id" IS '所属用户ID，关联auth_users';
+COMMENT ON COLUMN "omni"."backdrop_assets"."title" IS '素材展示标题';
+COMMENT ON COLUMN "omni"."backdrop_assets"."media_type" IS '媒体类型：image / gif / video';
+COMMENT ON COLUMN "omni"."backdrop_assets"."file_node_id" IS '原始素材文件节点ID，关联file_nodes';
+COMMENT ON COLUMN "omni"."backdrop_assets"."thumb_file_id" IS '缩略图文件节点ID，关联file_nodes，GIF和视频为空';
+COMMENT ON COLUMN "omni"."backdrop_assets"."width" IS '客户端上报的展示宽度，非可信字段';
+COMMENT ON COLUMN "omni"."backdrop_assets"."height" IS '客户端上报的展示高度，非可信字段';
+COMMENT ON COLUMN "omni"."backdrop_assets"."duration_ms" IS '客户端上报的展示时长（毫秒），非可信字段';
+COMMENT ON COLUMN "omni"."backdrop_assets"."file_size" IS '素材文件大小，单位字节';
+COMMENT ON COLUMN "omni"."backdrop_assets"."sha256" IS '服务端计算的SHA256，用户级去重键';
+COMMENT ON COLUMN "omni"."backdrop_assets"."status" IS '素材状态：PROCESSING / READY / FAILED';
+COMMENT ON COLUMN "omni"."backdrop_assets"."fail_reason" IS '失败原因摘要，仅供展示与排障';
+COMMENT ON COLUMN "omni"."backdrop_assets"."version" IS '乐观锁版本号';
+COMMENT ON COLUMN "omni"."backdrop_assets"."created_at" IS '创建时间';
+COMMENT ON COLUMN "omni"."backdrop_assets"."updated_at" IS '更新时间';
+COMMENT ON TABLE "omni"."backdrop_assets" IS '跨端背景素材表，保存服务端背景库的素材元数据与生命周期状态';
+
+CREATE UNIQUE INDEX "uq_backdrop_assets_owner_sha" ON "omni"."backdrop_assets" USING btree (
+  "owner_user_id",
+  "sha256"
+);
+CREATE INDEX "idx_backdrop_assets_owner_updated" ON "omni"."backdrop_assets" USING btree (
+  "owner_user_id",
+  "updated_at" DESC
+);
+
 CREATE TABLE "omni"."config_entries" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "config_key" varchar(160) NOT NULL,

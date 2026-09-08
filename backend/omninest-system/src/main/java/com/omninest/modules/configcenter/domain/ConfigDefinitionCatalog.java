@@ -218,6 +218,16 @@ public final class ConfigDefinitionCatalog {
                 "config.integration.photoAi.endpoint", "图像分析服务地址", false, 512));
         add(values, number("photo.ai.timeout", "30", "photo", ConfigSurface.INTEGRATION,
                 "config.integration.photoAi.timeout", "图像分析请求超时（秒）", 3, 120));
+        // 背景库。
+        add(values, number("backdrop.max-image-bytes", "20971520", "backdrop", ConfigSurface.GENERAL,
+                "config.backdrop.maxImageBytes", "背景图片单文件大小上限（字节）", 1024 * 1024, 128 * 1024 * 1024));
+        add(values, number("backdrop.max-video-bytes", "67108864", "backdrop", ConfigSurface.GENERAL,
+                "config.backdrop.maxVideoBytes", "背景视频单文件大小上限（字节）", 1024 * 1024, 128 * 1024 * 1024));
+        add(values, number("backdrop.max-assets-per-user", "30", "backdrop", ConfigSurface.GENERAL,
+                "config.backdrop.maxAssetsPerUser", "每用户背景素材数量上限", 1, 200));
+        add(values, number("backdrop.upload.rate-per-hour", "20", "backdrop", ConfigSurface.GENERAL,
+                "config.backdrop.uploadRatePerHour", "每用户每小时上传次数上限", 1, 1000));
+
         add(values, string("weather.qweather.project", "", "weather", ConfigSurface.INTEGRATION,
                 "config.integration.qweather.projectId", "和风天气项目 ID", false, 255));
         add(values, string("weather.qweather.credential", "", "weather", ConfigSurface.INTEGRATION,

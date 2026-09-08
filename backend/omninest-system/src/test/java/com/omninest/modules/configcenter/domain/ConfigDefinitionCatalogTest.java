@@ -10,14 +10,26 @@ class ConfigDefinitionCatalogTest {
     void catalogContainsOnlyTheApprovedRuntimeSettings() {
         var definitions = ConfigDefinitionCatalog.definitions();
 
-        assertThat(definitions).hasSize(59);
+        assertThat(definitions).hasSize(63);
         assertThat(definitions).extracting(ConfigDefinition::key).doesNotHaveDuplicates();
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.GENERAL)
-                .hasSize(20);
+                .hasSize(24);
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.INTEGRATION)
                 .hasSize(39);
+    }
+
+    @Test
+    void backdropDefinitionsExposeQuotaAndUploadLimits() {
+        assertThat(ConfigDefinitionCatalog.find("backdrop.max-image-bytes"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("20971520"));
+        assertThat(ConfigDefinitionCatalog.find("backdrop.max-video-bytes"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("67108864"));
+        assertThat(ConfigDefinitionCatalog.find("backdrop.max-assets-per-user"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("30"));
+        assertThat(ConfigDefinitionCatalog.find("backdrop.upload.rate-per-hour"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("20"));
     }
 
     @Test

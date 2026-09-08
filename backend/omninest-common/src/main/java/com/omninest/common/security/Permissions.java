@@ -18,6 +18,8 @@ public final class Permissions {
     public static final String PHOTO_READ = "photo:read";
     public static final String PHOTO_WRITE = "photo:write";
     public static final String PHOTO_ADMIN = "photo:admin";
+    public static final String BACKDROP_READ = "backdrop:read";
+    public static final String BACKDROP_WRITE = "backdrop:write";
     public static final String TASK_READ = "task:read";
     public static final String SYSTEM_CONFIG_READ = "system:config:read";
     public static final String SYSTEM_CONFIG_MANAGE = "system:config:manage";
@@ -35,6 +37,8 @@ public final class Permissions {
             PHOTO_READ,
             PHOTO_WRITE,
             PHOTO_ADMIN,
+            BACKDROP_READ,
+            BACKDROP_WRITE,
             TASK_READ,
             SYSTEM_CONFIG_READ,
             SYSTEM_CONFIG_MANAGE,

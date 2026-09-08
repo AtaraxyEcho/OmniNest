@@ -77,6 +77,10 @@ INSERT INTO omni.config_entries (
     ('photo.ai.enabled', 'true', 'BOOLEAN', 'photo', 'HOT', '是否启用图像分析', false),
     ('photo.ai.url', 'http://localhost:8090', 'STRING', 'photo', 'HOT', '图像分析服务地址', false),
     ('photo.ai.timeout', '30', 'NUMBER', 'photo', 'HOT', '图像分析请求超时（秒）', false),
+    ('backdrop.max-image-bytes', '20971520', 'NUMBER', 'backdrop', 'HOT', '背景图片单文件大小上限（字节）', false),
+    ('backdrop.max-video-bytes', '67108864', 'NUMBER', 'backdrop', 'HOT', '背景视频单文件大小上限（字节）', false),
+    ('backdrop.max-assets-per-user', '30', 'NUMBER', 'backdrop', 'HOT', '每用户背景素材数量上限', false),
+    ('backdrop.upload.rate-per-hour', '20', 'NUMBER', 'backdrop', 'HOT', '每用户每小时上传次数上限', false),
     ('weather.qweather.project', '', 'STRING', 'weather', 'HOT', '和风天气项目 ID', false),
     ('weather.qweather.credential', '', 'STRING', 'weather', 'HOT', '和风天气凭据 ID', false),
     ('weather.qweather.url', 'https://devapi.qweather.com', 'STRING', 'weather', 'HOT', '和风天气 API 地址', false),
@@ -102,6 +106,8 @@ INSERT INTO omni.auth_permissions (id, code, name, module, description, enabled)
     ('a1b2c3d4-3333-3333-3333-333333333333', 'photo:read', '读取照片', 'photo', '允许查看照片和相册。', true),
     ('a1b2c3d4-4444-4444-4444-444444444444', 'photo:write', '管理照片', 'photo', '允许导入和修改照片。', true),
     ('b2c3d4e4-1111-1111-1111-111111111111', 'photo:admin', '照片管理', 'photo', '允许执行扫描、缩略图重生成等照片管理操作。', true),
+    ('a1b2c3d4-8888-8888-8888-888888888888', 'backdrop:read', '读取背景库', 'backdrop', '允许查看背景库素材。', true),
+    ('a1b2c3d4-9999-9999-9999-999999999999', 'backdrop:write', '管理背景库', 'backdrop', '允许上传、修改和删除背景素材。', true),
     ('6d1b54bd-c1f3-403b-8428-082821e6de03', 'task:read', '读取任务', 'task', '允许查看任务状态。', true),
     ('4fc5ebd6-ae43-4125-9196-b3c2e15741f3', 'system:config:read', '读取系统配置', 'system', '允许读取系统配置。', true),
     ('80dd01d7-9e38-47ec-b644-fcf7d4bcd024', 'system:config:manage', '管理系统配置', 'system', '允许修改系统配置。', true),
@@ -120,7 +126,8 @@ SELECT '53e2e138-59b7-4fa6-988f-58554f34b8d3', permission.id
 FROM omni.auth_permissions permission
 WHERE permission.code IN (
     'profile:read', 'profile:write', 'file:read', 'file:write',
-    'media:read', 'media:write', 'photo:read', 'photo:write', 'task:read'
+    'media:read', 'media:write', 'photo:read', 'photo:write', 'task:read',
+    'backdrop:read', 'backdrop:write'
 );
 
 -- 管理员包含成员权限和用户管理权限，但不包含系统配置修改权限。
@@ -130,7 +137,8 @@ FROM omni.auth_permissions permission
 WHERE permission.code IN (
     'profile:read', 'profile:write', 'file:read', 'file:write',
     'media:read', 'media:write', 'photo:read', 'photo:write', 'photo:admin', 'task:read',
-    'media:library:manage', 'system:config:read', 'system:user:read', 'system:user:manage'
+    'media:library:manage', 'system:config:read', 'system:user:read', 'system:user:manage',
+    'backdrop:read', 'backdrop:write'
 );
 
 -- 超级管理员拥有当前目录中的全部权限。

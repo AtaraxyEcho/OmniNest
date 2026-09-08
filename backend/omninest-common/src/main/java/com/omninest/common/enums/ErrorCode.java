@@ -57,7 +57,16 @@ public enum ErrorCode {
     READING_PROGRESS_INVALID(6002, "阅读进度不合法"),
 
     // ==================== 用户偏好 7xxx ====================
-    PREFERENCE_VERSION_CONFLICT(7001, "用户偏好版本冲突");
+    PREFERENCE_VERSION_CONFLICT(7001, "用户偏好版本冲突"),
+
+    // ==================== 背景 8xxx ====================
+    BACKDROP_NOT_FOUND(8001, "背景素材不存在"),
+    BACKDROP_UNSUPPORTED_FORMAT(8002, "背景素材格式不支持"),
+    BACKDROP_QUOTA_EXCEEDED(8003, "背景库配额不足"),
+    BACKDROP_FILE_TOO_LARGE(8004, "背景素材文件过大"),
+    BACKDROP_SCAN_UNAVAILABLE(8005, "安全扫描服务不可用"),
+    BACKDROP_MALWARE_DETECTED(8006, "背景素材检测到安全威胁"),
+    BACKDROP_SCAN_FAILED(8007, "背景素材安全扫描失败");
 
     private final Integer code;
     private final String message;
