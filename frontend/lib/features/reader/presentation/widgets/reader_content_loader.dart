@@ -48,6 +48,18 @@ class ChapterData {
   int get layoutVersion => _layoutVersion;
   int _layoutVersion = 0;
 
+  /// 是否已完成整章精确测高（邻章可仅有 phase-one 估算）。
+  bool get hasPreciseHeights => _hasPreciseHeights;
+  bool _hasPreciseHeights = false;
+
+  void markPreciseHeights() {
+    _hasPreciseHeights = true;
+  }
+
+  void clearPreciseHeights() {
+    _hasPreciseHeights = false;
+  }
+
   /// 邻章就绪后丢弃 HTML 正文，仅保留标题与 blocks，降低窗口内存。
   void dropHtmlBody() {
     if (_content.content.isEmpty) {
@@ -480,6 +492,9 @@ class ReaderContentLoader {
         pageWidth: pageWidth,
         settings: settings,
         textScale: textScale,
+        // 活动章立即精测；邻章仅 phase-one，成为锚点后再精测。
+        schedulePrecise:
+            _activeChapterId == null || chapterId == _activeChapterId,
       );
       return cached;
     }
@@ -499,6 +514,8 @@ class ReaderContentLoader {
         pageWidth: pageWidth,
         settings: settings,
         textScale: textScale,
+        schedulePrecise:
+            _activeChapterId == null || chapterId == _activeChapterId,
       );
       // 预取的邻章解析完成后即可丢 HTML，blocks 已足够滚动渲染。
       // 尚无活动章时保留 HTML，避免首次加载正文被清空。
@@ -593,6 +610,7 @@ class ReaderContentLoader {
     required double pageWidth,
     required ReaderViewSettings settings,
     required double textScale,
+    bool schedulePrecise = true,
   }) {
     if (!prepareScrollLayout || data.cumulativeHeights.isNotEmpty) {
       return;
@@ -625,14 +643,16 @@ class ReaderContentLoader {
     }
     data.updateCumulativeHeights(estimated);
     _notifyLayoutInvalidated();
-    unawaited(
-      _schedulePreciseHeights(
-        data,
-        pageWidth: pageWidth,
-        settings: settings,
-        textScale: textScale,
-      ),
-    );
+    if (schedulePrecise) {
+      unawaited(
+        _schedulePreciseHeights(
+          data,
+          pageWidth: pageWidth,
+          settings: settings,
+          textScale: textScale,
+        ),
+      );
+    }
   }
 
   /// 第二阶段：分批精确测量并替换估算值。
@@ -667,6 +687,31 @@ class ReaderContentLoader {
         }
       }
     }
+    if (generation == _heightsGeneration) {
+      data.markPreciseHeights();
+      _notifyLayoutInvalidated();
+    }
+  }
+
+  /// 对仅有估算高度的章节触发整章精确测高（成为锚点/接近窗口时）。
+  void ensurePreciseHeights(
+    String chapterId, {
+    required double pageWidth,
+    required ReaderViewSettings settings,
+    double textScale = 1.0,
+  }) {
+    final data = getByChapterId(chapterId);
+    if (data == null || data.hasPreciseHeights || data.blocks.isEmpty) {
+      return;
+    }
+    unawaited(
+      _schedulePreciseHeights(
+        data,
+        pageWidth: pageWidth,
+        settings: settings,
+        textScale: textScale,
+      ),
+    );
   }
 
   bool _shouldRetainChapter(String chapterId) {
@@ -816,6 +861,11 @@ class ReaderContentLoader {
           )
           : const <double>[],
     );
+    if (prepareScrollLayout) {
+      data.markPreciseHeights();
+    } else {
+      data.clearPreciseHeights();
+    }
 
     // 失效分页导航器（旧 settings 的闭包已过期）
     data.invalidatePageNavigator();
@@ -906,6 +956,9 @@ class ReaderContentLoader {
   }
 
   /// 为窗口内邻章准备滚动测高。
+  ///
+  /// 锚点章：phase-one + 整章精确测高。
+  /// 邻章：仅 phase-one 估算，成为锚点后再 ensurePreciseHeights。
   void ensureScrollLayoutForNeighbors(
     String anchorChapterId, {
     required double pageWidth,
@@ -918,16 +971,27 @@ class ReaderContentLoader {
       ...neighborChapterIds(anchorChapterId, radius: radius),
     ]) {
       final data = getByChapterId(id);
-      if (data == null || data.cumulativeHeights.isNotEmpty) {
+      if (data == null) {
         continue;
       }
-      _prepareScrollMetricsIfNeeded(
-        data,
-        prepareScrollLayout: true,
-        pageWidth: pageWidth,
-        settings: settings,
-        textScale: textScale,
-      );
+      final isAnchor = id == anchorChapterId;
+      if (data.cumulativeHeights.isEmpty) {
+        _prepareScrollMetricsIfNeeded(
+          data,
+          prepareScrollLayout: true,
+          pageWidth: pageWidth,
+          settings: settings,
+          textScale: textScale,
+          schedulePrecise: isAnchor,
+        );
+      } else if (isAnchor && !data.hasPreciseHeights) {
+        ensurePreciseHeights(
+          id,
+          pageWidth: pageWidth,
+          settings: settings,
+          textScale: textScale,
+        );
+      }
     }
   }
 

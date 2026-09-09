@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
+import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart';
@@ -556,9 +558,19 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       anchorChapterId: currentChapterId,
       allChapterIds: loader.chapterIds,
       estimateHeight: (chapterId) {
-        // 邻章尚未加载时用「平均行高 × 估算行数」占位，避免固定 240 跳变。
-        // 精测完成后由 prefix 补偿抵消剩余误差。
-        return fontSize * lineHeight * 20;
+        // 优先用解析期 charCount 折算行数；无元数据时退回固定行数占位。
+        final lineHeightPx = fontSize * lineHeight;
+        final chars = _charCountForChapter(loader, chapterId);
+        if (chars == null || chars <= 0) {
+          return lineHeightPx * 20;
+        }
+        final fontSizeEff = math.max(12.0, fontSize);
+        final charsPerLine = math.max(
+          16,
+          (pageWidth / (fontSizeEff * 0.95)).floor(),
+        );
+        final lines = (chars / charsPerLine).ceil();
+        return lineHeightPx * math.max(8, lines) + 36;
       },
       resolve: (chapterId) {
         final data = loader.get(chapterId, settings);
@@ -631,6 +643,28 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       );
     }
     return hash;
+  }
+
+  /// 从解析元数据取章节字数；chapterIds 与 parsed.chapters 按序对齐。
+  int? _charCountForChapter(ReaderContentLoader loader, String chapterId) {
+    final parsed = ref.read(parsedBookProvider(itemId)).value;
+    if (parsed == null || parsed.chapters.isEmpty) {
+      return null;
+    }
+    final index = loader.chapterIds.indexOf(chapterId);
+    if (index < 0 || index >= parsed.chapters.length) {
+      // 兼容 chapter_N 形式 id。
+      final match = RegExp(r'^chapter_(\d+)$').firstMatch(chapterId);
+      if (match == null) {
+        return null;
+      }
+      final n = int.tryParse(match.group(1)!);
+      if (n == null || n < 0 || n >= parsed.chapters.length) {
+        return null;
+      }
+      return parsed.chapters[n].charCount;
+    }
+    return parsed.chapters[index].charCount;
   }
 
   /// 前缀章高度变化时补偿滚动偏移，避免测高收敛导致视口跳动。

@@ -59,6 +59,7 @@ class _ReaderContinuousScrollViewState
     extends State<ReaderContinuousScrollView> {
   final Map<int, TapGestureRecognizer> _recognizers = {};
   final Map<String, int> _imageRetryCounts = {};
+  final Map<String, _ProjectedChapterCache> _projectionCache = {};
   late final FocusNode _selectionFocusNode;
   String _selectedText = '';
   Offset? _pointerDownPosition;
@@ -248,12 +249,11 @@ class _ReaderContinuousScrollViewState
     if (blockIndex < 0 || blockIndex >= entry.blocks.length) {
       return const SizedBox.shrink();
     }
-    final annotations =
-        widget.annotationsByChapter[entry.chapterId] ?? const [];
-    final projected =
-        ReaderContentAnnotationProjector.apply([
-          entry.blocks[blockIndex],
-        ], annotations).first;
+    final blocks = _blocksForRender(entry);
+    if (blockIndex >= blocks.length) {
+      return const SizedBox.shrink();
+    }
+    final projected = blocks[blockIndex];
     return switch (projected) {
       HeadingBlock(:final text, :final level) => _buildHeading(text, level),
       ParagraphBlock(:final lines, :final hasTrailingSpacing) => Column(
@@ -270,6 +270,50 @@ class _ReaderContinuousScrollViewState
       ListBlock block => _buildList(block),
       TableBlock block => _buildTable(block),
     };
+  }
+
+  /// 整章批注投影缓存：blocks 身份或批注签名变化时才重算。
+  List<ContentBlock> _blocksForRender(ContinuousChapterEntry entry) {
+    final annotations =
+        widget.annotationsByChapter[entry.chapterId] ?? const <ReaderAnnotation>[];
+    final signature = _annotationSignature(annotations);
+    final cached = _projectionCache[entry.chapterId];
+    if (cached != null &&
+        identical(cached.sourceBlocks, entry.blocks) &&
+        cached.annotationSignature == signature) {
+      return cached.projected;
+    }
+    final List<ContentBlock> projected;
+    if (annotations.isEmpty) {
+      projected = entry.blocks;
+    } else {
+      projected = ReaderContentAnnotationProjector.apply(
+        entry.blocks,
+        annotations,
+      );
+    }
+    _projectionCache[entry.chapterId] = _ProjectedChapterCache(
+      sourceBlocks: entry.blocks,
+      annotationSignature: signature,
+      projected: projected,
+    );
+    // 窗口收缩时清理远章缓存，避免泄漏。
+    if (_projectionCache.length > 8) {
+      final live = widget.controller.entries.map((e) => e.chapterId).toSet();
+      _projectionCache.removeWhere((id, _) => !live.contains(id));
+    }
+    return projected;
+  }
+
+  static int _annotationSignature(List<ReaderAnnotation> annotations) {
+    if (annotations.isEmpty) {
+      return 0;
+    }
+    var hash = annotations.length;
+    for (final a in annotations) {
+      hash = Object.hash(hash, a.id, a.startOffset, a.endOffset);
+    }
+    return hash;
   }
 
   Widget _buildHeading(String text, int level) {
@@ -614,6 +658,18 @@ class _ReaderContinuousScrollViewState
     _pointerMoved = false;
     _selectionWasActiveOnPointerDown = false;
   }
+}
+
+class _ProjectedChapterCache {
+  const _ProjectedChapterCache({
+    required this.sourceBlocks,
+    required this.annotationSignature,
+    required this.projected,
+  });
+
+  final List<ContentBlock> sourceBlocks;
+  final int annotationSignature;
+  final List<ContentBlock> projected;
 }
 
 class _ChapterHeaderDelegate extends SliverPersistentHeaderDelegate {
