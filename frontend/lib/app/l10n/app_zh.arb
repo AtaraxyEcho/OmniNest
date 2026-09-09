@@ -1004,6 +1004,7 @@
   "portalLocalBackdropAlignTop": "顶部",
   "portalLocalBackdropAlignCenter": "居中",
   "portalLocalBackdropAlignBottom": "底部",
+  "portalLocalBackdropClearVideoCache": "清除视频缓存",
   "portalLocalBackdropFilterAll": "全部",
   "portalLocalBackdropFilterJpeg": "JPG",
   "portalLocalBackdropFilterPng": "PNG",

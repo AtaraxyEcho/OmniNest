@@ -2567,6 +2567,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalLocalBackdropAlignBottom => '底部';
 
   @override
+  String get portalLocalBackdropClearVideoCache => '清除视频缓存';
+
+  @override
   String get portalLocalBackdropFilterAll => '全部';
 
   @override

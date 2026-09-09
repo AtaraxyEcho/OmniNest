@@ -112,6 +112,33 @@ class AppBackdropLocalVideoCache {
     }
   }
 
+  /// 清空全部服务端视频壁纸本地缓存;返回删除的文件数。
+  Future<int> evictAll() async {
+    _readyById.clear();
+    try {
+      final root = await _ensureRoot();
+      if (!await root.exists()) {
+        return 0;
+      }
+      var removed = 0;
+      await for (final entity in root.list(followLinks: false)) {
+        if (entity is File && entity.path.endsWith('.mp4')) {
+          await entity.delete();
+          removed++;
+        }
+      }
+      return removed;
+    } on Object catch (error) {
+      if (kDebugMode) {
+        debugPrint('背景视频本地缓存批量清理失败: $error');
+      }
+      return 0;
+    }
+  }
+
+  /// 当前已缓存的素材数量。
+  int get cachedCount => _readyById.length;
+
   void dispose() {
     _dio.close(force: true);
   }

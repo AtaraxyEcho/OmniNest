@@ -1130,6 +1130,7 @@
   "portalLocalBackdropAlignTop": "Top",
   "portalLocalBackdropAlignCenter": "Center",
   "portalLocalBackdropAlignBottom": "Bottom",
+  "portalLocalBackdropClearVideoCache": "Clear video cache",
   "portalLocalBackdropFilterAll": "All",
   "portalLocalBackdropFilterJpeg": "JPG",
   "portalLocalBackdropFilterPng": "PNG",

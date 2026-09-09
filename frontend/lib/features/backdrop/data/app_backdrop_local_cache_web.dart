@@ -9,5 +9,9 @@ class AppBackdropLocalVideoCache {
 
   Future<void> evict(String assetId) async {}
 
+  Future<int> evictAll() async => 0;
+
+  int get cachedCount => 0;
+
   void dispose() {}
 }

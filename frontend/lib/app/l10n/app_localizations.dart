@@ -4909,6 +4909,12 @@ abstract class AppLocalizations {
   /// **'Bottom'**
   String get portalLocalBackdropAlignBottom;
 
+  /// No description provided for @portalLocalBackdropClearVideoCache.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear video cache'**
+  String get portalLocalBackdropClearVideoCache;
+
   /// No description provided for @portalLocalBackdropFilterAll.
   ///
   /// In en, this message translates to:

@@ -2635,6 +2635,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropAlignBottom => 'Bottom';
 
   @override
+  String get portalLocalBackdropClearVideoCache => 'Clear video cache';
+
+  @override
   String get portalLocalBackdropFilterAll => 'All';
 
   @override

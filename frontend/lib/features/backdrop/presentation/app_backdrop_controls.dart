@@ -233,7 +233,16 @@ class AppBackdropControls extends StatelessWidget {
                       (value) => notifier.setAlignment(value.first),
                 ),
               ],
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
+              if (state.selectedBackdrop?.isVideo == true) ...[
+                AppBackdropActionButton(
+                  palette: palette,
+                  icon: Icons.cleaning_services_rounded,
+                  label: l10n.portalLocalBackdropClearVideoCache,
+                  onTap: () => notifier.clearLocalVideoCache(),
+                ),
+                const SizedBox(height: 8),
+              ],
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: settings.videoMuted,
