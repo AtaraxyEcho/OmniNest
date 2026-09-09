@@ -70,6 +70,17 @@ class TaskRecordServiceTest {
     }
 
     @Test
+    void updateProgress_refreshesHeartbeatToPreventFalseRecovery() {
+        TaskRecord record = taskRecord(1);
+        Mockito.when(taskRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
+
+        service.updateProgress(record.getId(), 2);
+
+        // 进度推进必须同步刷新心跳，否则长任务会被心跳恢复调度误判死亡并重投双跑。
+        Assertions.assertThat(record.getHeartbeatAt()).isNotNull();
+    }
+
+    @Test
     void deleteTerminalTaskBatchUpdatedBeforeDeletesBoundedIds() {
         Instant cutoff = Instant.parse("2026-06-01T00:00:00Z");
         List<String> statuses = List.of(

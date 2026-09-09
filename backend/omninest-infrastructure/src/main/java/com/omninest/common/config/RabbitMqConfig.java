@@ -348,6 +348,8 @@ public class RabbitMqConfig {
         factory.setPrefetchCount(consumerPrefetch());
         factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
         factory.setMessageConverter(rabbitMessageConverter);
+        // 监听异常与转换失败的消息直接进死信队列，避免毒消息无限 requeue 热循环。
+        factory.setDefaultRequeueRejected(false);
         return factory;
     }
 
@@ -361,6 +363,7 @@ public class RabbitMqConfig {
         factory.setPrefetchCount(1);
         factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
         factory.setMessageConverter(rabbitMessageConverter);
+        factory.setDefaultRequeueRejected(false);
         return factory;
     }
 
@@ -374,6 +377,7 @@ public class RabbitMqConfig {
         factory.setPrefetchCount(1);
         factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
         factory.setMessageConverter(rabbitMessageConverter);
+        factory.setDefaultRequeueRejected(false);
         return factory;
     }
 

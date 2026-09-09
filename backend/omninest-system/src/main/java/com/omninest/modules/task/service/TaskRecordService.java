@@ -337,6 +337,9 @@ public class TaskRecordService {
     /**
      * 更新任务进度。
      *
+     * <p>进度写入同时刷新心跳：转码、下载、导入等长任务在耗时阶段只推进
+     * 进度，若心跳冻结会被心跳恢复调度误判死亡并重投，造成同一任务双跑。</p>
+     *
      * @param taskId 任务 ID
      * @param progress 进度值
      */
@@ -349,6 +352,7 @@ public class TaskRecordService {
         int previousProgress = record.getProgress();
         int normalizedProgress = Math.max(0, Math.min(100, progress));
         record.setProgress(normalizedProgress);
+        record.setHeartbeatAt(Instant.now());
         taskRecordRepository.save(record);
         if (progressBucket(previousProgress) != progressBucket(normalizedProgress) || normalizedProgress == 100) {
             recordEvent(record, SyncAction.PROGRESS);

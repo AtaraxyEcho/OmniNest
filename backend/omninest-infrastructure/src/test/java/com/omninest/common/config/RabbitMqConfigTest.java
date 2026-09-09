@@ -6,11 +6,14 @@ import java.util.Map;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.support.converter.MessageConversionException;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * RabbitMQ 消息容量、过期时间和兼容队列声明测试。
@@ -39,6 +42,31 @@ class RabbitMqConfigTest {
         Assertions.assertThat(message.getMessageProperties().getContentLength())
                 .isEqualTo(message.getBody().length);
         Assertions.assertThat(message.getMessageProperties().getExpiration()).isEqualTo("300000");
+    }
+
+    @Test
+    void taskListenerFactoriesRejectWithoutRequeueWhileBroadcastKeepsDefault() {
+        ConnectionFactory connectionFactory = Mockito.mock(ConnectionFactory.class);
+        MessageConverter converter = config.rabbitMessageConverter();
+
+        // MANUAL 确认的任务队列：监听异常直接进死信，杜绝毒消息无限 requeue。
+        Assertions.assertThat(ReflectionTestUtils.getField(
+                        config.rabbitListenerContainerFactory(connectionFactory, converter),
+                        "defaultRequeueRejected"))
+                .isEqualTo(Boolean.FALSE);
+        Assertions.assertThat(ReflectionTestUtils.getField(
+                        config.transcodeListenerContainerFactory(connectionFactory, converter),
+                        "defaultRequeueRejected"))
+                .isEqualTo(Boolean.FALSE);
+        Assertions.assertThat(ReflectionTestUtils.getField(
+                        config.localMediaTaskListenerContainerFactory(connectionFactory, converter),
+                        "defaultRequeueRejected"))
+                .isEqualTo(Boolean.FALSE);
+        // 广播队列自动确认，保持容器默认行为。
+        Assertions.assertThat(ReflectionTestUtils.getField(
+                        config.broadcastListenerContainerFactory(connectionFactory, converter),
+                        "defaultRequeueRejected"))
+                .isNull();
     }
 
     @Test
