@@ -273,12 +273,24 @@ class AppBackdropRepository {
       mobileBackdropId: mobileId,
       clearMobileBackdropId: mobileId == null,
     );
-    final hasUsableSelection =
+    // 非设备分离时保持三槽位一致,避免 desktop/mobile 残留旧 ID 造成选中抖动。
+    final aligned =
         normalized.separateDeviceBackdrops
-            ? desktopId != null || mobileId != null
-            : sharedId != null;
-    return normalized.copyWith(
-      enabled: normalized.enabled && hasUsableSelection,
+            ? normalized
+            : normalized.copyWith(
+              selectedBackdropId: sharedId,
+              clearSelectedBackdropId: sharedId == null,
+              desktopBackdropId: sharedId,
+              clearDesktopBackdropId: sharedId == null,
+              mobileBackdropId: sharedId,
+              clearMobileBackdropId: sharedId == null,
+            );
+    final hasUsableSelection =
+        aligned.separateDeviceBackdrops
+            ? aligned.desktopBackdropId != null || aligned.mobileBackdropId != null
+            : aligned.selectedBackdropId != null;
+    return aligned.copyWith(
+      enabled: aligned.enabled && hasUsableSelection,
     );
   }
 

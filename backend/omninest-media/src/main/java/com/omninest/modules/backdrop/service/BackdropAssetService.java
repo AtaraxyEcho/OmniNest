@@ -61,6 +61,10 @@ public class BackdropAssetService {
     private static final String RESERVATION_SOURCE_TYPE = "BACKDROP_UPLOAD";
     private static final String ORIGINAL_BASE_NAME = "original";
     private static final String THUMBNAIL_BASE_NAME = "thumbnail";
+
+    private static String originalFileName(String extension) {
+        return ORIGINAL_BASE_NAME + "." + extension;
+    }
     private static final String DEFAULT_TITLE = "背景素材";
     private static final Set<String> IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "webp", "gif");
     private static final Set<String> VIDEO_EXTENSIONS = Set.of("mp4", "webm", "mov", "m4v");
@@ -195,7 +199,7 @@ public class BackdropAssetService {
                 createAssetRow(ownerUserId, assetId, file.getOriginalFilename(), media, writtenBytes, sha256);
                 publishedNodeId = derivedAssetStorageService.store(
                         ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
-                        ORIGINAL_BASE_NAME + media.extension(), media.mimeType(), stagingFile);
+                        originalFileName(media.extension()), media.mimeType(), stagingFile);
                 ImageDimensions dimensions = readImageDimensions(stagingFile, media);
                 UUID thumbNodeId = generateAndStoreThumbnail(
                         ownerUserId, assetId, stagingFile, media, publishedNodeId);
@@ -304,7 +308,7 @@ public class BackdropAssetService {
             deleteDerivedQuietly(ownerUserId, existing.getThumbFileId());
             UUID fileNodeId = derivedAssetStorageService.store(
                     ownerUserId, RESOURCE_TYPE, existing.getId(), ASSET_TYPE_ORIGINAL,
-                    ORIGINAL_BASE_NAME + media.extension(), media.mimeType(), stagingFile);
+                    originalFileName(media.extension()), media.mimeType(), stagingFile);
             existing.setFileNodeId(fileNodeId);
             ImageDimensions dimensions = readImageDimensions(stagingFile, media);
             if (dimensions != null) {
