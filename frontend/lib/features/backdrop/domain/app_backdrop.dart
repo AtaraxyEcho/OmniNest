@@ -24,6 +24,10 @@ const String bundledDefaultWallpaperId = 'bundled-default-wallpaper-v1';
 const String bundledDefaultWallpaperWebAsset =
     'assets/backdrops/default_wallpaper.mp4';
 
+/// 内置动态壁纸的海报帧(背景库瓦片预览与静态回退使用)。
+const String bundledDefaultWallpaperPosterAsset =
+    'assets/backdrops/default_wallpaper_poster.jpg';
+
 /// 应用背景来源类型。
 enum AppBackdropSourceType {
   bundled('bundled'),

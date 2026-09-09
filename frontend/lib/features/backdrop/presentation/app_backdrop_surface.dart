@@ -119,6 +119,9 @@ class AppBackdropSurface extends ConsumerWidget {
         fit: fit,
       );
     }
+    if (asset.sourceType == AppBackdropSourceType.bundled) {
+      return Image.asset(bundledDefaultWallpaperPosterAsset, fit: fit);
+    }
     return const _AppBackdropFallback(icon: Icons.movie_creation_outlined);
   }
 }

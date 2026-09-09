@@ -49,11 +49,9 @@ class _AppBackdropSettingsDialog extends ConsumerWidget {
         ),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surfaceContainerHigh,
+            color: const Color(0xF20A1117),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: Theme.of(context).colorScheme.outlineVariant,
-            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.36),
@@ -354,15 +352,14 @@ class _AppBackdropSettingsContentState
       barrierColor: Colors.black54,
       builder:
           (dialogContext) => AlertDialog(
-            backgroundColor:
-                Theme.of(dialogContext).colorScheme.surfaceContainerHigh,
+            backgroundColor: const Color(0xFF101820),
             titleTextStyle: TextStyle(
-              color: Theme.of(dialogContext).colorScheme.onSurface,
+              color: widget.palette.text,
               fontSize: AppTypography.titleLarge,
               fontWeight: FontWeight.w800,
             ),
             contentTextStyle: TextStyle(
-              color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
+              color: widget.palette.muted,
               fontSize: AppTypography.bodyMedium,
               height: 1.55,
             ),
@@ -420,19 +417,13 @@ class _BackdropFilterBar extends StatelessWidget {
                   onSelected: (_) => onChanged(option.key),
                   showCheckmark: false,
                   labelStyle: TextStyle(
-                    color:
-                        value == option.key
-                            ? Theme.of(context).colorScheme.onPrimary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                    color: Colors.black,
                     fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w700,
                   ),
                   selectedColor: palette.accent,
-                  backgroundColor:
-                      Theme.of(context).colorScheme.surfaceContainerHighest,
-                  side: BorderSide(
-                    color: Theme.of(context).colorScheme.outlineVariant,
-                  ),
+                  backgroundColor: Colors.white.withValues(alpha: 0.86),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
@@ -646,6 +637,9 @@ class _BackdropTilePreview extends StatelessWidget {
         );
       }
       return const _BackdropVideoPlaceholder();
+    }
+    if (backdrop.isVideo) {
+      return Image.asset(bundledDefaultWallpaperPosterAsset, fit: BoxFit.cover);
     }
     return const _BackdropVideoPlaceholder();
   }
