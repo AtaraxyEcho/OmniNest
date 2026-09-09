@@ -59,6 +59,19 @@ class MediaScrapeConsumerTest {
     }
 
     @Test
+    void handleMarksCancelledWhenSourceFileRemoved() throws IOException {
+        MediaScrapeRequestedEvent event = event();
+        Mockito.doThrow(new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"))
+                .when(executionService).execute(event);
+
+        consumer.handle(event, message(), channel);
+
+        Mockito.verify(taskRecordService).markCancelled(TASK_ID);
+        Mockito.verify(channel).basicAck(1L, false);
+        Mockito.verifyNoInteractions(mediaScrapeRetryService);
+    }
+
+    @Test
     void handleDelegatesRetryableFailureToRetryServiceAndAcknowledges() throws IOException {
         MediaScrapeRequestedEvent event = event();
         IllegalStateException failure = new IllegalStateException("metadata provider unavailable");

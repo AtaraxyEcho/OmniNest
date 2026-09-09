@@ -3,6 +3,7 @@ package com.omninest.modules.video.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -128,6 +129,75 @@ class MovieScrapeServiceTest {
         assertThat(result.status()).isEqualTo("RUNNING");
         verify(taskRecordService, never()).createQueuedTask(
                 any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void reusesActiveFileNodeTaskOnRepeatedScrape() {
+        MediaVideoItem item = new MediaVideoItem();
+        item.setOwnerUserId(OWNER_ID);
+        item.setFileNodeId(FILE_ID);
+        item.setMediaType(MediaType.MOVIE.getValue());
+        TaskRecord activeTask = new TaskRecord();
+        activeTask.setId(TASK_ID);
+        activeTask.setStatus("QUEUED");
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
+        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.of(item));
+        when(taskRecordService.findActiveResourceTask(
+                eq(OWNER_ID), eq("MEDIA_SCRAPE"), eq("FILE_NODE"), eq(FILE_ID), any()))
+                .thenReturn(Optional.of(activeTask));
+
+        var result = scrapeService.createScrapeTask(OWNER_ID, FILE_ID, false);
+
+        assertThat(result.taskId()).isEqualTo(TASK_ID);
+        assertThat(result.status()).isEqualTo("QUEUED");
+        assertThat(result.message()).contains("已有刮削任务正在执行");
+        verify(taskRecordService, never()).createQueuedTask(
+                any(), any(), any(), any(), any(), any(), any(), any());
+        Mockito.verifyNoInteractions(taskDispatchService);
+    }
+
+    @Test
+    void deduplicatesByMovieResourceAfterScraped() {
+        UUID movieId = UUID.fromString("60000000-0000-0000-0000-000000000001");
+        MediaVideoItem item = new MediaVideoItem();
+        item.setOwnerUserId(OWNER_ID);
+        item.setFileNodeId(FILE_ID);
+        item.setMediaType(MediaType.MOVIE.getValue());
+        item.setMovieId(movieId);
+        TaskRecord activeTask = new TaskRecord();
+        activeTask.setId(TASK_ID);
+        activeTask.setStatus("RUNNING");
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
+        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.of(item));
+        when(taskRecordService.findActiveResourceTask(
+                eq(OWNER_ID), eq("MEDIA_SCRAPE"), eq("MEDIA_MOVIE"), eq(movieId), any()))
+                .thenReturn(Optional.of(activeTask));
+
+        var result = scrapeService.createScrapeTask(OWNER_ID, FILE_ID, false);
+
+        assertThat(result.taskId()).isEqualTo(TASK_ID);
+        verify(taskRecordService, never()).createQueuedTask(
+                any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void outboxFailureAbortsTaskCreationAtomically() {
+        when(fileMetadataQueryService.findOwnedActive(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.of(file("Inception.2010.1080p.mkv", "video/x-matroska")));
+        when(videoItemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID))
+                .thenReturn(Optional.empty());
+        when(videoItemRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        Mockito.doThrow(new IllegalStateException("broker down"))
+                .when(taskDispatchService)
+                .enqueue(any(), anyString(), anyString(), any());
+
+        // enqueue 在同一事务内执行：异常上抛使任务记录与投递行一并回滚，不产生僵尸 QUEUED。
+        assertThatThrownBy(() -> scrapeService.createScrapeTask(OWNER_ID, FILE_ID, false))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     private FileDescriptor file(String name, String mimeType) {
