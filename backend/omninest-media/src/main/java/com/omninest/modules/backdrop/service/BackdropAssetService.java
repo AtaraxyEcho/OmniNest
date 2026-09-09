@@ -186,16 +186,21 @@ public class BackdropAssetService {
             }
             storageQuotaService.reserve(
                     ownerUserId, RESERVATION_SOURCE_TYPE, assetId, writtenBytes, Instant.now().plus(RESERVATION_TTL));
+            UUID publishedNodeId = null;
             try {
                 createAssetRow(ownerUserId, assetId, file.getOriginalFilename(), media, writtenBytes, sha256);
-                publishOriginalAndThumbnail(ownerUserId, assetId, stagingFile, media);
-                BackdropAsset ready = markReady(ownerUserId, assetId);
+                publishedNodeId = derivedAssetStorageService.store(
+                        ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
+                        ORIGINAL_BASE_NAME + media.extension(), media.mimeType(), stagingFile);
+                UUID thumbNodeId = generateAndStoreThumbnail(ownerUserId, assetId, stagingFile, media);
+                BackdropAsset ready = finalizePublishedAsset(
+                        ownerUserId, assetId, publishedNodeId, thumbNodeId);
                 storageQuotaService.settleReservation(RESERVATION_SOURCE_TYPE, assetId, writtenBytes);
                 log.info("背景素材上传完成: userId={}, assetId={}, mediaType={}, size={}",
                         ownerUserId, assetId, media.mediaType(), writtenBytes);
                 return toDto(ready);
             } catch (RuntimeException ex) {
-                compensateFailedUpload(ownerUserId, assetId);
+                compensateFailedUpload(ownerUserId, assetId, publishedNodeId);
                 if (ex instanceof BusinessException businessException) {
                     throw businessException;
                 }
@@ -289,20 +294,18 @@ public class BackdropAssetService {
         });
     }
 
-    private void publishOriginalAndThumbnail(
-            UUID ownerUserId, UUID assetId, Path stagingFile, DetectedMedia media) {
-        UUID fileNodeId = derivedAssetStorageService.store(
-                ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
-                ORIGINAL_BASE_NAME + media.extension(), media.mimeType(), stagingFile);
+    /**
+     * 发布收尾:基于 freshly 加载的实例做且仅做一次 merge 保存,写入节点引用与 READY 状态。
+     * 关键约束:实体带 @Version,连续对同一游离引用多次 save 会因版本不递增触发 StaleObjectState。
+     */
+    private BackdropAsset finalizePublishedAsset(
+            UUID ownerUserId, UUID assetId, UUID fileNodeId, UUID thumbFileId) {
         BackdropAsset asset = backdropAssetRepository.findById(assetId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
         asset.setFileNodeId(fileNodeId);
-        backdropAssetRepository.save(asset);
-        UUID thumbFileId = generateAndStoreThumbnail(ownerUserId, assetId, stagingFile, media);
-        if (thumbFileId != null) {
-            asset.setThumbFileId(thumbFileId);
-            backdropAssetRepository.save(asset);
-        }
+        asset.setThumbFileId(thumbFileId);
+        asset.setStatus(BackdropAssetStatus.READY);
+        return backdropAssetRepository.save(asset);
     }
 
     private UUID generateAndStoreThumbnail(
@@ -328,16 +331,10 @@ public class BackdropAssetService {
         }
     }
 
-    private BackdropAsset markReady(UUID ownerUserId, UUID assetId) {
-        BackdropAsset asset = backdropAssetRepository.findById(assetId)
-                .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
-        asset.setStatus(BackdropAssetStatus.READY);
-        return backdropAssetRepository.save(asset);
-    }
-
-    private void compensateFailedUpload(UUID ownerUserId, UUID assetId) {
+    private void compensateFailedUpload(UUID ownerUserId, UUID assetId, UUID publishedNodeId) {
         safeReleaseReservation(assetId);
         try {
+            deleteDerivedQuietly(ownerUserId, publishedNodeId);
             backdropAssetRepository.findById(assetId).ifPresent(asset -> {
                 deleteDerivedQuietly(ownerUserId, asset.getFileNodeId());
                 deleteDerivedQuietly(ownerUserId, asset.getThumbFileId());
