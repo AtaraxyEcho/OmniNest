@@ -10,12 +10,15 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.rclone.RcloneGateway;
 import com.omninest.common.storage.LocalExternalStorageSettings;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
 import com.omninest.modules.file.domain.StorageExternalAccount;
 import com.omninest.modules.file.domain.StorageImportTask;
+import com.omninest.modules.file.dto.CreateImportTaskRequest;
 import com.omninest.modules.file.dto.ExternalFileListDto;
+import com.omninest.modules.file.event.ExternalImportRequestedEvent;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
@@ -25,6 +28,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * ExternalStorageService 单元测试。
@@ -147,5 +151,38 @@ class ExternalStorageServiceTest {
         account.setEncryptedCredentials("{\"accessKey\":\"test\",\"secretKey\":\"test\"}");
         account.setStatus(status);
         return account;
+    }
+
+    @Test
+    void createImportTaskEnqueuesThroughOutboxWithSystemTaskId() {
+        when(accountRepository.findByIdAndOwnerUserId(ACCOUNT_ID, OWNER_ID))
+                .thenReturn(Optional.of(buildAccount("WEBDAV", ExternalStorageStatus.ACTIVE.getValue())));
+        when(importTaskRepository.save(any(StorageImportTask.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.createImportTask(OWNER_ID, ACCOUNT_ID,
+                new CreateImportTaskRequest("/photos/vacation", null, null, null));
+
+        ArgumentCaptor<UUID> recordIdCaptor = ArgumentCaptor.forClass(UUID.class);
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(taskRecordService).createQueuedTask(
+                recordIdCaptor.capture(),
+                eq(OWNER_ID),
+                eq("EXTERNAL_IMPORT"),
+                eq(QueueNames.EXTERNAL_IMPORT_ROUTING_KEY),
+                payloadCaptor.capture()
+        );
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<ExternalImportRequestedEvent> eventCaptor =
+                ArgumentCaptor.forClass(ExternalImportRequestedEvent.class);
+        verify(taskDispatchService).enqueue(
+                eq(recordIdCaptor.getValue()),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.EXTERNAL_IMPORT_ROUTING_KEY),
+                eventCaptor.capture()
+        );
+        assertThat(eventCaptor.getValue().taskId().toString())
+                .isEqualTo(payloadCaptor.getValue().get("importTaskId"));
     }
 }

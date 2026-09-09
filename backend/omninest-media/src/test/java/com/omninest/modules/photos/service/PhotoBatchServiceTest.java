@@ -23,9 +23,12 @@ import com.omninest.modules.photos.config.PhotoBatchDownloadProperties;
 import com.omninest.modules.photos.domain.PhotoBatchTask;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.domain.PhotoTag;
+import com.omninest.modules.photos.dto.PhotoDtos;
+import com.omninest.modules.photos.event.PhotoBatchEvent;
 import com.omninest.modules.photos.repository.PhotoBatchTaskRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
+import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.ByteArrayInputStream;
@@ -41,6 +44,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import org.mockito.ArgumentCaptor;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.junit.jupiter.api.BeforeEach;
@@ -90,6 +94,26 @@ class PhotoBatchServiceTest {
     @BeforeEach
     void setUpTaskClaim() {
         when(taskRecordService.claimForExecution(any(UUID.class), any(String.class))).thenReturn(true);
+    }
+
+    @Test
+    void createBatchTaskEnqueuesThroughOutbox() {
+        when(batchTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.createBatchTask(
+                OWNER_ID,
+                new PhotoDtos.CreateBatchTaskRequest("TAG", List.of(PHOTO_ID), null));
+
+        ArgumentCaptor<PhotoBatchEvent> eventCaptor = ArgumentCaptor.forClass(PhotoBatchEvent.class);
+        verify(taskDispatchService).enqueue(
+                any(UUID.class),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.PHOTO_BATCH_ROUTING_KEY),
+                eventCaptor.capture()
+        );
+        assertThat(eventCaptor.getValue().ownerUserId()).isEqualTo(OWNER_ID);
+        verify(taskRecordService).createQueuedTask(
+                any(UUID.class), eq(OWNER_ID), eq("PHOTO_BATCH_TAG"), any(), any());
     }
 
     @Test

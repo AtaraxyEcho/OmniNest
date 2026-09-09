@@ -7,17 +7,21 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.dto.MovieDtos.MovieScanRequest;
+import com.omninest.modules.video.event.TranscodeRequestedEvent;
 import com.omninest.modules.video.repository.MediaTaskRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * 影视任务编排服务测试。
@@ -28,6 +32,7 @@ class MovieTaskServiceTest {
 
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID FILE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID ITEM_ID = UUID.fromString("70000000-0000-0000-0000-000000000001");
 
     private final MediaTaskRepository mediaTaskRepository = mock(MediaTaskRepository.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
@@ -66,5 +71,72 @@ class MovieTaskServiceTest {
 
         assertThat(result.message()).contains("发现 1 个视频");
         verify(scrapeService).registerPendingVideo(OWNER_ID, FILE_ID);
+    }
+
+    @Test
+    void createTranscodeTaskEnqueuesThroughOutbox() {
+        MediaVideoItem videoItem = videoItem();
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, ITEM_ID)).thenReturn(videoItem);
+
+        var result = service.createTranscodeTask(OWNER_ID, ITEM_ID, false);
+
+        ArgumentCaptor<TranscodeRequestedEvent> eventCaptor =
+                ArgumentCaptor.forClass(TranscodeRequestedEvent.class);
+        verify(taskDispatchService).enqueue(
+                eq(result.taskId()),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.VIDEO_TRANSCODE_ROUTING_KEY),
+                eventCaptor.capture()
+        );
+        assertThat(eventCaptor.getValue().videoItemId()).isEqualTo(ITEM_ID);
+        assertThat(eventCaptor.getValue().ownerUserId()).isEqualTo(OWNER_ID);
+        assertThat(eventCaptor.getValue().audioOnly()).isFalse();
+        assertThat(eventCaptor.getValue().webOptimize()).isFalse();
+        assertThat(result.status()).isEqualTo("QUEUED");
+    }
+
+    @Test
+    void createAudioExtractTaskEnqueuesAudioOnlyEvent() {
+        MediaVideoItem videoItem = videoItem();
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, ITEM_ID)).thenReturn(videoItem);
+
+        var result = service.createTranscodeTask(OWNER_ID, ITEM_ID, true);
+
+        ArgumentCaptor<TranscodeRequestedEvent> eventCaptor =
+                ArgumentCaptor.forClass(TranscodeRequestedEvent.class);
+        verify(taskDispatchService).enqueue(
+                eq(result.taskId()),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.VIDEO_TRANSCODE_ROUTING_KEY),
+                eventCaptor.capture()
+        );
+        assertThat(eventCaptor.getValue().audioOnly()).isTrue();
+        assertThat(result.message()).contains("音频提取");
+    }
+
+    @Test
+    void createWebOptimizeTaskEnqueuesWebOptimizeEvent() {
+        MediaVideoItem videoItem = videoItem();
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, ITEM_ID)).thenReturn(videoItem);
+
+        var result = service.createWebOptimizeTask(OWNER_ID, ITEM_ID);
+
+        ArgumentCaptor<TranscodeRequestedEvent> eventCaptor =
+                ArgumentCaptor.forClass(TranscodeRequestedEvent.class);
+        verify(taskDispatchService).enqueue(
+                eq(result.taskId()),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.VIDEO_TRANSCODE_ROUTING_KEY),
+                eventCaptor.capture()
+        );
+        assertThat(eventCaptor.getValue().webOptimize()).isTrue();
+        assertThat(eventCaptor.getValue().audioOnly()).isFalse();
+    }
+
+    private MediaVideoItem videoItem() {
+        MediaVideoItem videoItem = new MediaVideoItem();
+        videoItem.setOwnerUserId(OWNER_ID);
+        videoItem.setFileNodeId(FILE_ID);
+        return videoItem;
     }
 }
