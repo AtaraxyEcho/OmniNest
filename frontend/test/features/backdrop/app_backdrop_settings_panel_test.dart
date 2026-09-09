@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
@@ -28,6 +30,17 @@ void main() {
         appBackdropRepositoryProvider.overrideWithValue(repository),
         appBackdropBundledAssetInstallerProvider.overrideWithValue(
           _NoopBundledAssetInstaller(),
+        ),
+        authSessionProvider.overrideWith(
+          () => _MutableSessionNotifier(
+            AuthSessionState(
+              user: UserProfile(
+                id: 'owner-user',
+                username: 'owner',
+                role: 'MEMBER',
+              ),
+            ),
+          ),
         ),
         appBackdropApiProvider.overrideWithValue(api),
         backdropPreferencesProvider.overrideWith(
@@ -99,6 +112,15 @@ void main() {
 class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   @override
   Future<AppBackdropAsset?> install() async => null;
+}
+
+class _MutableSessionNotifier extends AuthSessionNotifier {
+  _MutableSessionNotifier(this.initialState);
+
+  final AuthSessionState initialState;
+
+  @override
+  Future<AuthSessionState> build() async => initialState;
 }
 
 class _MockBackdropApi extends Mock implements BackdropApi {}

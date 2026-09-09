@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -60,15 +61,23 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   Future<AppBackdropState> build() async {
     final repository = ref.watch(appBackdropRepositoryProvider);
     ref.watch(appBackdropSelectionTargetProvider);
+    final session = await ref.watch(authSessionProvider.future);
+    final userId = session.user?.id;
     await _registerBundledBackdrop(repository);
     // 等待服务端设置落到本地镜像(离线时为缓存),再装配状态。
     await ref.watch(backdropPreferencesProvider.future);
-    await refreshServerAssets();
+    if (userId != null) {
+      await refreshServerAssets();
+    }
     return _loadCurrentState(repository);
   }
 
-  /// 拉取服务端素材并写入本地缓存;离线时保留缓存内容。
+  /// 拉取服务端素材并写入本地缓存;未登录(如安装引导阶段)与离线时保留缓存内容。
   Future<void> refreshServerAssets() async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return;
+    }
     final repository = ref.read(appBackdropRepositoryProvider);
     try {
       final assets = await ref.read(appBackdropApiProvider).list();
@@ -83,6 +92,10 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   /// 唤起文件选择并逐个上传。
   /// 网络类失败自动重试一次;全部结束后刷新列表并记录失败条目。
   Future<void> addBackdropFiles() async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return;
+    }
     final current = state.asData?.value;
     if (current?.uploading == true) {
       return;
