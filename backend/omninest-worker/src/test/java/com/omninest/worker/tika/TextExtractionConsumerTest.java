@@ -1,10 +1,12 @@
 package com.omninest.worker.tika;
 
+import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.search.service.FileSearchIndexService;
+import com.omninest.worker.file.FilePostProcessingTaskTracker;
 import com.rabbitmq.client.Channel;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -25,9 +27,11 @@ import org.springframework.amqp.core.MessageProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 /**
@@ -47,6 +51,9 @@ class TextExtractionConsumerTest {
     private FileLifecycleGuard fileLifecycleGuard;
 
     @Mock
+    private FilePostProcessingTaskTracker taskTracker;
+
+    @Mock
     private Channel channel;
 
     @InjectMocks
@@ -58,6 +65,8 @@ class TextExtractionConsumerTest {
     @BeforeEach
     void allowFileProcessing() {
         when(fileLifecycleGuard.isOwnedProcessable(any(), any())).thenReturn(true);
+        lenient().when(taskTracker.begin(any(), anyString(), any(), anyString()))
+                .thenReturn(new FilePostProcessingTaskTracker.TrackedTask(UUID.randomUUID(), true));
     }
 
     /**
@@ -109,7 +118,7 @@ class TextExtractionConsumerTest {
     }
 
     @Test
-    @DisplayName("对象存储抛出异常时不应调用索引服务")
+    @DisplayName("对象存储抛出异常时经任务跟踪器失败处理且不调用索引服务")
     void handle_whenStorageThrows_shouldNotCallIndexService() throws IOException {
         FileUploadedEvent event = createEvent("broken.pdf", "application/pdf");
         when(objectStorageClient.getObject(any(ObjectStorageKey.class)))
@@ -120,14 +129,21 @@ class TextExtractionConsumerTest {
         verify(fileSearchIndexService, never()).indexFile(
                 any(), any(), any(), any()
         );
-        verify(channel).basicNack(1L, false, false);
+        verify(taskTracker).handleFailure(
+                eq("TEXT_EXTRACTION"),
+                eq(QueueNames.TEXT_EXTRACTION_ROUTING_KEY),
+                any(),
+                eq(event),
+                any()
+        );
+        verify(channel).basicAck(1L, false);
     }
 
     @Test
-    @DisplayName("提取的文本为空白时不应调用索引服务")
+    @DisplayName("解析失败时经任务跟踪器失败处理且不调用索引服务")
     void handle_withBlankExtractedText_shouldNotCallIndexService() throws IOException {
         FileUploadedEvent event = createEvent("empty.pdf", "application/pdf");
-        // 空输入流导致 Tika 解析异常，触发 nack
+        // 空输入流无法解析出文本内容，触发异常并进入跟踪器失败处理
         InputStream emptyStream = new ByteArrayInputStream(new byte[0]);
         when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(emptyStream);
 
@@ -136,7 +152,14 @@ class TextExtractionConsumerTest {
         verify(fileSearchIndexService, never()).indexFile(
                 any(), any(), any(), any()
         );
-        verify(channel).basicNack(1L, false, false);
+        verify(taskTracker).handleFailure(
+                eq("TEXT_EXTRACTION"),
+                eq(QueueNames.TEXT_EXTRACTION_ROUTING_KEY),
+                any(),
+                eq(event),
+                any()
+        );
+        verify(channel).basicAck(1L, false);
     }
 
     @Test
