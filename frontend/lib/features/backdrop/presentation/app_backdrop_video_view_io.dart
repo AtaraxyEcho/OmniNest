@@ -4,13 +4,15 @@ import 'package:media_kit_video/media_kit_video.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
 
 /// IO 平台(桌面/移动)的背景视频视图,基于 media_kit 播放会话。
-/// source 可以是本机文件路径(内置壁纸)或服务端签名 URL。
+/// source 可以是本机文件路径(内置壁纸)或服务端签名 URL;
+/// 播放失败时切换到 [fallbackSource](内置壁纸)后重试,仍失败则收敛为空视图。
 class AppBackdropVideoView extends ConsumerStatefulWidget {
   const AppBackdropVideoView({
     required this.source,
     required this.fit,
     required this.playing,
     required this.muted,
+    this.fallbackSource,
     super.key,
   });
 
@@ -18,6 +20,9 @@ class AppBackdropVideoView extends ConsumerStatefulWidget {
   final BoxFit fit;
   final bool playing;
   final bool muted;
+
+  /// 主源播放失败时的备用地址(通常为内置壁纸本机文件)。
+  final String? fallbackSource;
 
   @override
   ConsumerState<AppBackdropVideoView> createState() =>
@@ -28,6 +33,14 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
     with WidgetsBindingObserver {
   bool? _lastLayoutUsable;
   String? _lastSessionSignature;
+  bool _usingFallback = false;
+
+  String get _effectiveSource {
+    if (_usingFallback && widget.fallbackSource != null) {
+      return widget.fallbackSource!;
+    }
+    return widget.source;
+  }
 
   @override
   void initState() {
@@ -56,8 +69,18 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
             constraints.maxHeight.isFinite &&
             constraints.maxWidth > 1 &&
             constraints.maxHeight > 1;
+        // 主源打开失败且有备用源时切换;会话以路径变化驱动重新打开。
+        if (session.openError != null &&
+            !_usingFallback &&
+            widget.fallbackSource != null &&
+            widget.fallbackSource != widget.source) {
+          _usingFallback = true;
+          _lastSessionSignature = null;
+          logFallbackOnce();
+        }
+        final source = _effectiveSource;
         _syncSession(
-          source: widget.source,
+          source: source,
           muted: widget.muted,
           active: widget.playing && hasUsableLayout,
           layoutUsable: hasUsableLayout,
@@ -79,6 +102,16 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
         );
       },
     );
+  }
+
+  bool _fallbackLogged = false;
+
+  void logFallbackOnce() {
+    if (_fallbackLogged) {
+      return;
+    }
+    _fallbackLogged = true;
+    debugPrint('背景视频主源打开失败,回退内置壁纸');
   }
 
   void _syncSession({
