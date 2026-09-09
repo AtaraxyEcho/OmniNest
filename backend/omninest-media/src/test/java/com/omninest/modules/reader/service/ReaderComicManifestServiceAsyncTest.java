@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.file.domain.SpaceType;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -23,6 +22,7 @@ import com.omninest.modules.reader.repository.ReaderCatalogNodeRepository;
 import com.omninest.modules.reader.repository.ReaderItemRepository;
 import com.omninest.modules.reader.repository.ReaderItemSourceRepository;
 import com.omninest.modules.reader.repository.ReaderPageRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.List;
 import java.util.Optional;
@@ -67,7 +67,7 @@ class ReaderComicManifestServiceAsyncTest {
     @Mock
     private ReaderEpubArchiveStager epubArchiveStager;
     @Mock
-    private DomainEventPublisher domainEventPublisher;
+    private TaskDispatchService taskDispatchService;
     @Mock
     private TaskRecordService taskRecordService;
     @Mock
@@ -131,9 +131,15 @@ class ReaderComicManifestServiceAsyncTest {
                 any()
         );
 
+        ArgumentCaptor<UUID> dispatchTaskIdCaptor = ArgumentCaptor.forClass(UUID.class);
         ArgumentCaptor<ComicParseTaskEvent> eventCaptor = ArgumentCaptor.forClass(ComicParseTaskEvent.class);
-        verify(domainEventPublisher).publishTask(eq(QueueNames.COMIC_PARSE_ROUTING_KEY), eventCaptor.capture());
+        verify(taskDispatchService).enqueue(
+                dispatchTaskIdCaptor.capture(),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.COMIC_PARSE_ROUTING_KEY),
+                eventCaptor.capture());
         ComicParseTaskEvent event = eventCaptor.getValue();
+        assertThat(event.taskId()).isEqualTo(dispatchTaskIdCaptor.getValue());
         assertThat(event.ownerUserId()).isEqualTo(OWNER_ID);
         assertThat(event.itemId()).isEqualTo(ITEM_ID);
         assertThat(event.sourceId()).isEqualTo(savedSource.getId());
@@ -165,7 +171,9 @@ class ReaderComicManifestServiceAsyncTest {
                 eq(FILE_NODE_ID),
                 any()
         );
-        verify(domainEventPublisher).publishTask(
+        verify(taskDispatchService).enqueue(
+                any(UUID.class),
+                eq(QueueNames.TASK_EXCHANGE),
                 eq(QueueNames.COMIC_PARSE_ROUTING_KEY),
                 any(ComicParseTaskEvent.class)
         );
@@ -186,7 +194,7 @@ class ReaderComicManifestServiceAsyncTest {
         assertThat(item.getImportStatus()).isEqualTo("PARSING");
         verify(sourceRepository, never()).save(source);
         verify(taskRecordService, never()).createQueuedTask(any(), any(), any(), any(), any());
-        verify(domainEventPublisher, never()).publishTask(any(), any());
+        verify(taskDispatchService, never()).enqueue(any(), any(), any(), any());
     }
 
     @Test

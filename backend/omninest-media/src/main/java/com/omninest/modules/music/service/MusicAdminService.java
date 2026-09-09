@@ -6,7 +6,6 @@ import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
@@ -32,6 +31,7 @@ import com.omninest.modules.music.repository.MusicArtistRepository;
 import com.omninest.modules.music.repository.MusicScanJobRepository;
 import com.omninest.modules.music.repository.MusicTrackRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -51,8 +51,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 音乐扫描、导入与曲目管理服务。
@@ -74,9 +72,9 @@ public class MusicAdminService {
     private final MusicMetadataExtractor metadataExtractor;
     private final MusicLibraryService musicLibraryService;
     private final FilePermissionService filePermissionService;
-    private final DomainEventPublisher eventPublisher;
     private final NotificationPublisher notificationService;
     private final TaskRecordService taskRecordService;
+    private final TaskDispatchService taskDispatchService;
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
     private final PlatformTransactionManager transactionManager;
@@ -112,23 +110,16 @@ public class MusicAdminService {
         job.setMessage("音乐库扫描任务已排队");
         scanJobRepository.save(job);
 
-        publishMusicScanTaskAfterCommit(job.getId(), ownerUserId);
+        MusicScanEvent event = new MusicScanEvent(job.getId(), ownerUserId);
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                job.getId(),
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.MUSIC_SCAN_ROUTING_KEY,
+                event
+        );
 
         return toDto(job);
-    }
-
-    private void publishMusicScanTaskAfterCommit(UUID jobId, UUID ownerUserId) {
-        MusicScanEvent event = new MusicScanEvent(jobId, ownerUserId);
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            eventPublisher.publishTask(QueueNames.MUSIC_SCAN_ROUTING_KEY, event);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(QueueNames.MUSIC_SCAN_ROUTING_KEY, event);
-            }
-        });
     }
 
     /**

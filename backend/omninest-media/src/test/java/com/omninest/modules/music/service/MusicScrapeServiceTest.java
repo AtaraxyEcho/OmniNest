@@ -11,7 +11,6 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.cache.ReadThroughCache;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileQueryService;
@@ -32,6 +31,7 @@ import com.omninest.modules.music.repository.MusicPlayHistoryRepository;
 import com.omninest.modules.music.repository.MusicScanJobRepository;
 import com.omninest.modules.music.repository.MusicTrackRepository;
 import com.omninest.modules.notification.service.NotificationService;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -74,8 +74,8 @@ class MusicScrapeServiceTest {
             mock(NotificationService.class);
     private final DerivedAssetStorageService derivedAssetStorageService =
             mock(DerivedAssetStorageService.class);
-    private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
+    private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final MusicScrapeService scrapeService = new MusicScrapeService(
             trackRepository,
             favoriteRepository,
@@ -85,8 +85,8 @@ class MusicScrapeServiceTest {
             catalogService,
             derivedAssetStorageService,
             List.of(metadataProvider),
-            eventPublisher,
-            taskRecordService
+            taskRecordService,
+            taskDispatchService
     );
 
     @BeforeEach
@@ -109,7 +109,11 @@ class MusicScrapeServiceTest {
                 eq(QueueNames.MUSIC_SCRAPE_ROUTING_KEY),
                 any()
         );
-        verify(eventPublisher).publishTask(eq(QueueNames.MUSIC_SCRAPE_ROUTING_KEY), any(MusicScrapeEvent.class));
+        verify(taskDispatchService).enqueue(
+                eq(dto.id()),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.MUSIC_SCRAPE_ROUTING_KEY),
+                any(MusicScrapeEvent.class));
     }
 
     @Test

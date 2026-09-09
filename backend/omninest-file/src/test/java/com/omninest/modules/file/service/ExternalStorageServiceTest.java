@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.rclone.RcloneGateway;
 import com.omninest.common.storage.LocalExternalStorageSettings;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
@@ -19,6 +18,7 @@ import com.omninest.modules.file.domain.StorageImportTask;
 import com.omninest.modules.file.dto.ExternalFileListDto;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.List;
 import java.util.Map;
@@ -42,12 +42,12 @@ class ExternalStorageServiceTest {
             mock(StorageExternalAccountRepository.class);
     private final StorageImportTaskRepository importTaskRepository =
             mock(StorageImportTaskRepository.class);
-    private final DomainEventPublisher domainEventPublisher = mock(DomainEventPublisher.class);
+    private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
 
     private final ExternalStorageService service = new ExternalStorageService(
             rcloneGateway, localStorageSettings, accountRepository,
-            importTaskRepository, domainEventPublisher, taskRecordService
+            importTaskRepository, taskDispatchService, taskRecordService
     );
 
     @Test

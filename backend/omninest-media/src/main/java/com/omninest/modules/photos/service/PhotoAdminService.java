@@ -5,7 +5,6 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileContentStream;
@@ -29,6 +28,7 @@ import com.omninest.modules.photos.event.PhotoScanEvent;
 import com.omninest.modules.photos.event.PhotoThumbnailRegenerationEvent;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoScanJobRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -50,8 +50,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 照片管理服务，负责扫描导入和候选文件查询。
@@ -80,7 +78,7 @@ public class PhotoAdminService {
     private final PhotoThumbnailService thumbnailService;
     private final FilePermissionService filePermissionService;
     private final NotificationPublisher notificationService;
-    private final DomainEventPublisher eventPublisher;
+    private final TaskDispatchService taskDispatchService;
     private final PhotoRawPreviewService rawPreviewService;
     private final PhotosRuntimeConfigService photosRuntimeConfigService;
     private final FileQueryService fileQueryService;
@@ -125,15 +123,14 @@ public class PhotoAdminService {
         job.setMessage("扫描任务已排队");
         scanJobRepository.save(job);
 
-        // 事务提交后再发布消息，避免 Worker 在事务提交前查询导致"任务不存在"
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(
-                        QueueNames.PHOTO_SCAN_ROUTING_KEY,
-                        new PhotoScanEvent(job.getId(), ownerUserId));
-            }
-        });
+        PhotoScanEvent event = new PhotoScanEvent(job.getId(), ownerUserId);
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.PHOTO_SCAN_ROUTING_KEY,
+                event
+        );
 
         return toDto(job);
     }
@@ -348,28 +345,25 @@ public class PhotoAdminService {
 
         photoItemRepository.save(photo);
 
-        // 事务提交后再发布消息，避免 Worker 在事务提交前查询导致"照片不存在"
         UUID savedPhotoId = photo.getId();
-        final String detectedMotionKind = motionKind;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(
-                        QueueNames.PHOTO_INDEX_ROUTING_KEY,
-                        new PhotoIndexEvent(savedPhotoId, ownerUserId)
-                );
-                if (!raw && file.currentObjectId() != null) {
-                    // 封面不再同步生成，补投缩略图任务（含 active-task 去重）。
-                    filePostProcessingTaskService.enqueueThumbnailIfAbsent(
-                            thumbnailEvent(file, ownerUserId));
-                    if (detectedMotionKind != null) {
-                        // 动态照片补投运动视频提取任务（含 active-task 去重）。
-                        filePostProcessingTaskService.enqueuePhotoMotionIfAbsent(
-                                thumbnailEvent(file, ownerUserId));
-                    }
-                }
+        // 照片记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"；
+        // 索引事件无独立任务记录，Outbox 任务标识复用照片 ID。
+        taskDispatchService.enqueue(
+                savedPhotoId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.PHOTO_INDEX_ROUTING_KEY,
+                new PhotoIndexEvent(savedPhotoId, ownerUserId)
+        );
+        if (!raw && file.currentObjectId() != null) {
+            // 封面不再同步生成，补投缩略图任务（含 active-task 去重）。
+            filePostProcessingTaskService.enqueueThumbnailIfAbsent(
+                    thumbnailEvent(file, ownerUserId));
+            if (motionKind != null) {
+                // 动态照片补投运动视频提取任务（含 active-task 去重）。
+                filePostProcessingTaskService.enqueuePhotoMotionIfAbsent(
+                        thumbnailEvent(file, ownerUserId));
             }
-        });
+        }
 
         if (photosRuntimeConfigService.isAiEnabled()) {
             photoAiTaskService.queueSingleAnalysis(ownerUserId, savedPhotoId);
@@ -527,14 +521,14 @@ public class PhotoAdminService {
                 QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY,
                 Map.of("ownerUserId", ownerUserId.toString())
         );
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(
-                        QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY,
-                        new PhotoThumbnailRegenerationEvent(taskId, ownerUserId));
-            }
-        });
+        PhotoThumbnailRegenerationEvent event = new PhotoThumbnailRegenerationEvent(taskId, ownerUserId);
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY,
+                event
+        );
         return taskId;
     }
 

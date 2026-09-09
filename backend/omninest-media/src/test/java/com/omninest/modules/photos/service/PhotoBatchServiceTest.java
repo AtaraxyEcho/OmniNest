@@ -11,7 +11,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.alibaba.fastjson2.JSON;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -27,6 +26,7 @@ import com.omninest.modules.photos.domain.PhotoTag;
 import com.omninest.modules.photos.repository.PhotoBatchTaskRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -66,7 +66,7 @@ class PhotoBatchServiceTest {
     private final PhotoItemRepository photoItemRepository = mock(PhotoItemRepository.class);
     private final PhotoTagRepository photoTagRepository = mock(PhotoTagRepository.class);
     private final PhotoAlbumService albumService = mock(PhotoAlbumService.class);
-    private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
+    private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
     private final DerivedAssetStorageService derivedAssetStorageService = mock(DerivedAssetStorageService.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
@@ -78,7 +78,7 @@ class PhotoBatchServiceTest {
             photoItemRepository,
             photoTagRepository,
             albumService,
-            eventPublisher,
+            taskDispatchService,
             fileMetadataQueryService,
             derivedAssetStorageService,
             fileQueryService,
@@ -327,7 +327,7 @@ class PhotoBatchServiceTest {
                 photoItemRepository,
                 photoTagRepository,
                 albumService,
-                eventPublisher,
+                taskDispatchService,
                 fileMetadataQueryService,
                 derivedAssetStorageService,
                 fileQueryService,

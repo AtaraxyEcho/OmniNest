@@ -4,7 +4,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -24,6 +23,7 @@ import com.omninest.modules.photos.event.PhotoBatchEvent;
 import com.omninest.modules.photos.repository.PhotoBatchTaskRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.IOException;
 import java.io.InputStream;
@@ -49,8 +49,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -68,7 +66,7 @@ public class PhotoBatchService {
     private final PhotoItemRepository photoItemRepository;
     private final PhotoTagRepository photoTagRepository;
     private final PhotoAlbumService albumService;
-    private final DomainEventPublisher eventPublisher;
+    private final TaskDispatchService taskDispatchService;
     private final FileMetadataQueryService fileMetadataQueryService;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
@@ -110,15 +108,14 @@ public class PhotoBatchService {
         task.setParams(JSON.toJSONString(taskParams));
         batchTaskRepository.save(task);
 
-        // 事务提交后再发布消息，避免 Worker 在事务提交前查询导致"任务不存在"
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(
-                        QueueNames.PHOTO_BATCH_ROUTING_KEY,
-                        new PhotoBatchEvent(task.getId(), ownerUserId));
-            }
-        });
+        PhotoBatchEvent event = new PhotoBatchEvent(task.getId(), ownerUserId);
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.PHOTO_BATCH_ROUTING_KEY,
+                event
+        );
 
         return toDto(task);
     }

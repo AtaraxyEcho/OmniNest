@@ -3,7 +3,6 @@ package com.omninest.modules.file.service;
 import com.omninest.common.download.OfflineDownloadSourceResolver;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.DownloadOfflineTask;
 import com.omninest.modules.file.domain.FileNode;
@@ -14,6 +13,7 @@ import com.omninest.modules.file.event.OfflineDownloadRequestedEvent;
 import com.omninest.modules.file.repository.DownloadOfflineTaskRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.task.domain.TaskStatus;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -23,8 +23,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 管理离线下载请求、任务状态和任务消息发布。
@@ -40,7 +38,7 @@ public class OfflineDownloadRequestService {
     private final FileNodeRepository fileNodeRepository;
     private final OfflineDownloadSourceResolver sourceResolver;
     private final TaskRecordService taskRecordService;
-    private final DomainEventPublisher domainEventPublisher;
+    private final TaskDispatchService taskDispatchService;
 
     /**
      * 查询用户的离线下载任务。
@@ -88,7 +86,14 @@ public class OfflineDownloadRequestService {
         task.setStatus(TaskStatus.QUEUED.getValue());
         DownloadOfflineTask saved = offlineTaskRepository.save(task);
         log.info("创建离线下载任务: taskId={}, ownerUserId={}", taskId, ownerUserId);
-        publishRequestedEvent(saved.getId());
+        OfflineDownloadRequestedEvent event = new OfflineDownloadRequestedEvent(saved.getId());
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY,
+                event
+        );
         return toDto(saved);
     }
 
@@ -109,20 +114,6 @@ public class OfflineDownloadRequestService {
         offlineTaskRepository.save(task);
         taskRecordService.markCancelled(resolveSystemTaskId(task));
         log.info("取消离线下载任务: taskId={}, ownerUserId={}", taskId, ownerUserId);
-    }
-
-    private void publishRequestedEvent(UUID taskId) {
-        OfflineDownloadRequestedEvent event = new OfflineDownloadRequestedEvent(taskId);
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    domainEventPublisher.publishTask(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY, event);
-                }
-            });
-            return;
-        }
-        domainEventPublisher.publishTask(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY, event);
     }
 
     private FileNode resolveParent(UUID ownerUserId, UUID parentId) {

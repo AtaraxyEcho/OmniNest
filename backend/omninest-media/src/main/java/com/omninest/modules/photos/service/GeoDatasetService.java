@@ -2,13 +2,13 @@ package com.omninest.modules.photos.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.photos.config.GeonamesImportProperties;
 import com.omninest.modules.photos.domain.GeoDataset;
 import com.omninest.modules.photos.event.PhotoGeoBackfillEvent;
 import com.omninest.modules.photos.event.PhotoGeoImportEvent;
 import com.omninest.modules.photos.repository.GeoDatasetRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -21,8 +21,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * GeoNames 数据集管理服务（API 侧）。
@@ -66,7 +64,7 @@ public class GeoDatasetService {
     private final GeoDatasetRepository geoDatasetRepository;
     private final GeoCityIndex geoCityIndex;
     private final TaskRecordService taskRecordService;
-    private final DomainEventPublisher eventPublisher;
+    private final TaskDispatchService taskDispatchService;
     private final GeonamesImportProperties importProperties;
 
     /**
@@ -117,13 +115,13 @@ public class GeoDatasetService {
                         "dumpDate", dumpDate.toString()
                 ));
 
-        // 事务提交后再发布消息，避免 Worker 在事务提交前查询导致"任务不存在"
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(QueueNames.PHOTO_GEO_IMPORT_ROUTING_KEY, event);
-            }
-        });
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.PHOTO_GEO_IMPORT_ROUTING_KEY,
+                event
+        );
 
         log.info("GeoNames 数据集导入任务已创建: taskId={}, datasetVersion={}, operator={}",
                 taskId, datasetVersion, operatorUserId);
@@ -166,13 +164,13 @@ public class GeoDatasetService {
                 QueueNames.PHOTO_GEO_BACKFILL_ROUTING_KEY,
                 payload);
 
-        // 事务提交后再发布消息，避免 Worker 在事务提交前查询导致"任务不存在"
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(QueueNames.PHOTO_GEO_BACKFILL_ROUTING_KEY, event);
-            }
-        });
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.PHOTO_GEO_BACKFILL_ROUTING_KEY,
+                event
+        );
 
         log.info("照片位置回填任务已创建: taskId={}, batchSize={}, operator={}",
                 taskId, safeBatchSize, operatorUserId);

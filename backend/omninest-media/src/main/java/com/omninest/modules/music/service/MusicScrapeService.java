@@ -8,7 +8,6 @@ import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.domain.SpaceType;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.service.DerivedAssetRequest;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
@@ -26,6 +25,7 @@ import com.omninest.modules.music.repository.MusicFavoriteRepository;
 import com.omninest.modules.music.repository.MusicScanJobRepository;
 import com.omninest.modules.music.repository.MusicTrackRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -40,8 +40,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 音乐元数据刮削服务，负责候选查询、手动应用和批量异步刮削。
@@ -63,8 +61,8 @@ public class MusicScrapeService {
     private final MusicCatalogService catalogService;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final List<MusicMetadataProvider> metadataProviders;
-    private final DomainEventPublisher eventPublisher;
     private final TaskRecordService taskRecordService;
+    private final TaskDispatchService taskDispatchService;
 
     /**
      * 查询单个曲目的元数据候选。
@@ -176,7 +174,14 @@ public class MusicScrapeService {
         job.setDetails(scrapeDetails(force, 0, 0, 0, 0, 0));
         scanJobRepository.save(job);
 
-        publishMusicScrapeTaskAfterCommit(taskId, ownerUserId, force);
+        MusicScrapeEvent event = new MusicScrapeEvent(taskId, ownerUserId, force);
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.MUSIC_SCRAPE_ROUTING_KEY,
+                event
+        );
         return toDto(job);
     }
 
@@ -290,20 +295,6 @@ public class MusicScrapeService {
                     Map.of("jobId", job.getId().toString()));
             throw ex;
         }
-    }
-
-    private void publishMusicScrapeTaskAfterCommit(UUID jobId, UUID ownerUserId, boolean force) {
-        MusicScrapeEvent event = new MusicScrapeEvent(jobId, ownerUserId, force);
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            eventPublisher.publishTask(QueueNames.MUSIC_SCRAPE_ROUTING_KEY, event);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(QueueNames.MUSIC_SCRAPE_ROUTING_KEY, event);
-            }
-        });
     }
 
     private void updateScrapeProgress(

@@ -2,7 +2,6 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -32,6 +31,7 @@ import com.omninest.modules.reader.service.model.ComicManifestDraft.ComicCatalog
 import com.omninest.modules.reader.service.model.ComicManifestDraft.ComicPageDraft;
 import com.omninest.modules.reader.service.model.ReaderCoverDraft;
 import com.omninest.modules.task.domain.TaskRecord;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -72,7 +72,7 @@ public class ReaderComicManifestService {
     private final ComicPageAssetService pageAssetService;
     private final ReaderArchiveSafetyPolicy archiveSafetyPolicy;
     private final ReaderEpubArchiveStager epubArchiveStager;
-    private final DomainEventPublisher domainEventPublisher;
+    private final TaskDispatchService taskDispatchService;
     private final TaskRecordService taskRecordService;
     private final MediaSyncEventService syncEventService;
     private final ReaderCoverExtractionService coverExtractionService;
@@ -128,7 +128,7 @@ public class ReaderComicManifestService {
         lockedItem.setImportStatus("PARSING");
         itemRepository.save(lockedItem);
 
-        publishParseAfterCommit(lockedItem, source, false);
+        enqueueParseTask(lockedItem, source, false);
     }
 
     /**
@@ -169,7 +169,7 @@ public class ReaderComicManifestService {
             source.setErrorCode(null);
             source.setErrorMessage(null);
             sourceRepository.save(source);
-            publishParseAfterCommit(item, source, false);
+            enqueueParseTask(item, source, false);
             hasQueuedSource = true;
         }
 
@@ -212,7 +212,7 @@ public class ReaderComicManifestService {
             sourceRepository.save(existing);
             item.setImportStatus("PARSING");
             itemRepository.save(item);
-            publishParseAfterCommit(item, existing, false);
+            enqueueParseTask(item, existing, false);
             return existing;
         }
 
@@ -231,7 +231,7 @@ public class ReaderComicManifestService {
 
         item.setImportStatus("PARSING");
         itemRepository.save(item);
-        publishParseAfterCommit(item, source, false);
+        enqueueParseTask(item, source, false);
 
         log.info("漫画来源已入队解析: itemId={}, sourceId={}, fileNodeId={}, fileFormat={}",
                 itemId, source.getId(), fileNodeId, fileFormat);
@@ -664,7 +664,7 @@ public class ReaderComicManifestService {
         item.setImportStatus("PARSING");
         itemRepository.save(item);
 
-        publishParseAfterCommit(item, source, true);
+        enqueueParseTask(item, source, true);
 
         log.info("已发布漫画重试任务: itemId={}, sourceId={}", itemId, sourceId);
     }
@@ -695,9 +695,9 @@ public class ReaderComicManifestService {
     }
 
     /**
-     * 在事务提交后发布漫画解析任务。
+     * 创建漫画解析任务记录并在当前事务内写入 Outbox 投递行。
      */
-    private void publishParseAfterCommit(ReaderItem item, ReaderItemSource source, boolean retry) {
+    private void enqueueParseTask(ReaderItem item, ReaderItemSource source, boolean retry) {
         UUID taskId = UUID.randomUUID();
         taskRecordService.createQueuedTask(taskId, item.getOwnerUserId(), "COMIC_PARSE",
                 QueueNames.COMIC_PARSE_ROUTING_KEY, "QUEUED", "FILE_NODE", source.getFileNodeId(), Map.of(
@@ -709,7 +709,10 @@ public class ReaderComicManifestService {
                         "contentHash", source.getContentHash(),
                         "isRetry", retry
                 ));
-        Runnable publishTask = () -> domainEventPublisher.publishTask(
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
                 QueueNames.COMIC_PARSE_ROUTING_KEY,
                 new ComicParseTaskEvent(
                         taskId,
@@ -720,16 +723,6 @@ public class ReaderComicManifestService {
                         source.getFileFormat(),
                         source.getContentHash(),
                         retry));
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            publishTask.run();
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                publishTask.run();
-            }
-        });
     }
 
     /**

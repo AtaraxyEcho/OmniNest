@@ -10,7 +10,6 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.file.domain.SpaceType;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
@@ -28,6 +27,7 @@ import com.omninest.modules.music.repository.MusicArtistRepository;
 import com.omninest.modules.music.repository.MusicScanJobRepository;
 import com.omninest.modules.music.repository.MusicTrackRepository;
 import com.omninest.modules.notification.service.NotificationService;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -62,12 +62,12 @@ class MusicAdminServiceTest {
     private final MusicLibraryService musicLibraryService = mock(MusicLibraryService.class);
     private final FilePermissionService filePermissionService =
             mock(FilePermissionService.class);
-    private final DomainEventPublisher eventPublisher =
-            mock(DomainEventPublisher.class);
     private final NotificationService notificationService =
             mock(NotificationService.class);
     private final TaskRecordService taskRecordService =
             mock(TaskRecordService.class);
+    private final TaskDispatchService taskDispatchService =
+            mock(TaskDispatchService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
@@ -82,9 +82,9 @@ class MusicAdminServiceTest {
             new MusicMetadataExtractor(),
             musicLibraryService,
             filePermissionService,
-            eventPublisher,
             notificationService,
             taskRecordService,
+            taskDispatchService,
             syncEventService,
             readThroughCache,
             transactionManager
@@ -115,7 +115,11 @@ class MusicAdminServiceTest {
                 eq("MUSIC_SCAN"),
                 eq(QueueNames.MUSIC_SCAN_ROUTING_KEY),
                 any(Map.class));
-        verify(eventPublisher).publishTask(eq(QueueNames.MUSIC_SCAN_ROUTING_KEY), any(MusicScanEvent.class));
+        verify(taskDispatchService).enqueue(
+                eq(result.id()),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.MUSIC_SCAN_ROUTING_KEY),
+                any(MusicScanEvent.class));
     }
 
     @Test

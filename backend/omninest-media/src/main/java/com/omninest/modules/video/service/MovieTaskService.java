@@ -10,8 +10,8 @@ import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.dto.MovieDtos.MovieScanRequest;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.video.dto.MovieDtos.MovieTaskDto;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
 import com.omninest.modules.video.event.TranscodeRequestedEvent;
@@ -28,8 +28,6 @@ import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 影视扫描、刮削和转码任务编排服务。
@@ -50,7 +48,7 @@ public class MovieTaskService {
     private final FileMetadataQueryService fileMetadataQueryService;
     private final SimpleFileNameParser fileNameParser;
     private final MovieScrapeService scrapeService;
-    private final DomainEventPublisher domainEventPublisher;
+    private final TaskDispatchService taskDispatchService;
 
     @Transactional(readOnly = true)
     public List<MovieTaskDto> list(UUID ownerUserId, String taskType) {
@@ -79,16 +77,13 @@ public class MovieTaskService {
                 ));
         TranscodeRequestedEvent event = new TranscodeRequestedEvent(
                 taskId, videoItemId, catalogOwnerUserId, audioOnly, false);
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    domainEventPublisher.publishTask(QueueNames.VIDEO_TRANSCODE_ROUTING_KEY, event);
-                }
-            });
-        } else {
-            domainEventPublisher.publishTask(QueueNames.VIDEO_TRANSCODE_ROUTING_KEY, event);
-        }
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.VIDEO_TRANSCODE_ROUTING_KEY,
+                event
+        );
         String message = audioOnly ? "音频提取任务已进入队列" : "转码任务已进入队列";
         return new ScrapeTaskDto(taskId, TaskStatus.QUEUED.getValue(), message);
     }
@@ -113,16 +108,13 @@ public class MovieTaskService {
                 ));
         TranscodeRequestedEvent event = new TranscodeRequestedEvent(
                 taskId, videoItemId, catalogOwnerUserId, false, true);
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    domainEventPublisher.publishTask(QueueNames.VIDEO_TRANSCODE_ROUTING_KEY, event);
-                }
-            });
-        } else {
-            domainEventPublisher.publishTask(QueueNames.VIDEO_TRANSCODE_ROUTING_KEY, event);
-        }
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.VIDEO_TRANSCODE_ROUTING_KEY,
+                event
+        );
         return new ScrapeTaskDto(taskId, TaskStatus.QUEUED.getValue(), "Web 优化转码任务已进入队列");
     }
 

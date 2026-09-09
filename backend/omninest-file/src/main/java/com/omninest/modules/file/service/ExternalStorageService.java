@@ -4,7 +4,6 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.rclone.RcloneGateway;
 import com.omninest.common.storage.LocalExternalStorageSettings;
@@ -22,6 +21,7 @@ import com.omninest.modules.file.dto.ImportTaskDto;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.List;
 import java.util.Map;
@@ -31,8 +31,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 外部存储核心服务。
@@ -49,7 +47,7 @@ public class ExternalStorageService {
     private final LocalExternalStorageSettings localStorageSettings;
     private final StorageExternalAccountRepository accountRepository;
     private final StorageImportTaskRepository importTaskRepository;
-    private final DomainEventPublisher domainEventPublisher;
+    private final TaskDispatchService taskDispatchService;
     private final TaskRecordService taskRecordService;
 
     // ========== Remote 生命周期 ==========
@@ -246,19 +244,14 @@ public class ExternalStorageService {
         );
         StorageImportTask saved = importTaskRepository.save(task);
 
-        // 事务提交后发布 RabbitMQ 消息
-        TransactionSynchronizationManager.registerSynchronization(
-                new TransactionSynchronization() {
-                    @Override
-                    public void afterCommit() {
-                        domainEventPublisher.publishTask(
-                                QueueNames.EXTERNAL_IMPORT_ROUTING_KEY,
-                                new ExternalImportRequestedEvent(saved.getId())
-                        );
-                        log.info("外部存储导入任务已提交: taskId={}", saved.getId());
-                    }
-                }
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                systemTaskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.EXTERNAL_IMPORT_ROUTING_KEY,
+                new ExternalImportRequestedEvent(saved.getId())
         );
+        log.info("外部存储导入任务已提交: taskId={}", saved.getId());
 
         return toImportTaskDto(saved);
     }

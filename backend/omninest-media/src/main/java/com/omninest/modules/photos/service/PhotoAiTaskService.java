@@ -2,13 +2,13 @@ package com.omninest.modules.photos.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAiTaskDto;
 import com.omninest.modules.photos.event.PhotoAiEvent;
 import com.omninest.modules.photos.event.PhotoAiEvent.Mode;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.task.domain.TaskStatus;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -22,8 +22,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 照片图像分析长任务编排服务，统一管理任务记录、分页执行和结果失效通知。
@@ -50,7 +48,7 @@ public class PhotoAiTaskService {
     private final PhotoItemRepository photoItemRepository;
     private final PhotosRuntimeConfigService configService;
     private final TaskRecordService taskRecordService;
-    private final DomainEventPublisher eventPublisher;
+    private final TaskDispatchService taskDispatchService;
     private final PhotoAiTaskCompletionService completionService;
 
     /**
@@ -78,7 +76,7 @@ public class PhotoAiTaskService {
                 fileNodeId,
                 payload
         );
-        publishAfterCommit(new PhotoAiEvent(taskId, ownerUserId, photoId, Mode.SINGLE_PHOTO));
+        enqueueAnalysisTask(new PhotoAiEvent(taskId, ownerUserId, photoId, Mode.SINGLE_PHOTO));
         return taskId;
     }
 
@@ -160,7 +158,7 @@ public class PhotoAiTaskService {
                 QueueNames.PHOTO_AI_ROUTING_KEY,
                 taskPayload(ownerUserId, mode, totalItems)
         );
-        publishAfterCommit(new PhotoAiEvent(taskId, ownerUserId, null, mode));
+        enqueueAnalysisTask(new PhotoAiEvent(taskId, ownerUserId, null, mode));
         return new PhotoAiTaskDto(taskId, TaskStatus.QUEUED.getValue(), totalItems);
     }
 
@@ -339,16 +337,13 @@ public class PhotoAiTaskService {
         return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 
-    private void publishAfterCommit(PhotoAiEvent event) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            eventPublisher.publishTask(QueueNames.PHOTO_AI_ROUTING_KEY, event);
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                eventPublisher.publishTask(QueueNames.PHOTO_AI_ROUTING_KEY, event);
-            }
-        });
+    private void enqueueAnalysisTask(PhotoAiEvent event) {
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                event.taskId(),
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.PHOTO_AI_ROUTING_KEY,
+                event
+        );
     }
 }

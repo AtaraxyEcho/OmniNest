@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAiTaskDto;
 import com.omninest.modules.photos.event.PhotoAiEvent;
 import com.omninest.modules.photos.event.PhotoAiEvent.Mode;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +34,7 @@ class PhotoAiTaskServiceTest {
     private PhotoItemRepository photoItemRepository;
     private PhotosRuntimeConfigService configService;
     private TaskRecordService taskRecordService;
-    private DomainEventPublisher eventPublisher;
+    private TaskDispatchService taskDispatchService;
     private PhotoAiTaskCompletionService completionService;
     private PhotoAiTaskService service;
 
@@ -44,14 +44,14 @@ class PhotoAiTaskServiceTest {
         photoItemRepository = Mockito.mock(PhotoItemRepository.class);
         configService = Mockito.mock(PhotosRuntimeConfigService.class);
         taskRecordService = Mockito.mock(TaskRecordService.class);
-        eventPublisher = Mockito.mock(DomainEventPublisher.class);
+        taskDispatchService = Mockito.mock(TaskDispatchService.class);
         completionService = Mockito.mock(PhotoAiTaskCompletionService.class);
         service = new PhotoAiTaskService(
                 photoAiService,
                 photoItemRepository,
                 configService,
                 taskRecordService,
-                eventPublisher,
+                taskDispatchService,
                 completionService
         );
         Mockito.when(taskRecordService.claimForExecution(Mockito.any(UUID.class), Mockito.any(String.class)))
@@ -75,7 +75,9 @@ class PhotoAiTaskServiceTest {
                 ArgumentMatchers.argThat(payload -> Mode.LIBRARY_REANALYSIS.name().equals(payload.get("mode")))
         );
         ArgumentCaptor<PhotoAiEvent> eventCaptor = ArgumentCaptor.forClass(PhotoAiEvent.class);
-        Mockito.verify(eventPublisher).publishTask(
+        Mockito.verify(taskDispatchService).enqueue(
+                Mockito.eq(task.taskId()),
+                Mockito.eq(QueueNames.TASK_EXCHANGE),
                 Mockito.eq(QueueNames.PHOTO_AI_ROUTING_KEY),
                 eventCaptor.capture()
         );

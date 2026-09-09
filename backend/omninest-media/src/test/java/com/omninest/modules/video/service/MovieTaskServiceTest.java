@@ -8,9 +8,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.file.domain.SpaceType;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.dto.MovieDtos.MovieScanRequest;
 import com.omninest.modules.video.repository.MediaTaskRepository;
@@ -36,7 +36,7 @@ class MovieTaskServiceTest {
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
     private final SimpleFileNameParser fileNameParser = mock(SimpleFileNameParser.class);
     private final MovieScrapeService scrapeService = mock(MovieScrapeService.class);
-    private final DomainEventPublisher domainEventPublisher = mock(DomainEventPublisher.class);
+    private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final MovieTaskService service = new MovieTaskService(
             mediaTaskRepository,
             taskRecordService,
@@ -45,7 +45,7 @@ class MovieTaskServiceTest {
             fileMetadataQueryService,
             fileNameParser,
             scrapeService,
-            domainEventPublisher
+            taskDispatchService
     );
 
     /**

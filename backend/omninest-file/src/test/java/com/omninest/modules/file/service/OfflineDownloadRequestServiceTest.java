@@ -3,20 +3,19 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.download.OfflineDownloadSourceResolver;
 import com.omninest.common.download.OfflineDownloadSourceResolver.ResolvedSource;
 import com.omninest.common.download.OfflineDownloadSourceResolver.SourceKind;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.DownloadOfflineTask;
 import com.omninest.modules.file.dto.CreateOfflineDownloadRequest;
 import com.omninest.modules.file.event.OfflineDownloadRequestedEvent;
 import com.omninest.modules.file.repository.DownloadOfflineTaskRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import java.net.URI;
 import java.util.Optional;
@@ -28,7 +27,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
@@ -51,7 +49,7 @@ class OfflineDownloadRequestServiceTest {
     @Mock
     private TaskRecordService taskRecordService;
     @Mock
-    private DomainEventPublisher domainEventPublisher;
+    private TaskDispatchService taskDispatchService;
 
     @InjectMocks
     private OfflineDownloadRequestService service;
@@ -82,7 +80,9 @@ class OfflineDownloadRequestServiceTest {
         );
         ArgumentCaptor<OfflineDownloadRequestedEvent> eventCaptor =
                 ArgumentCaptor.forClass(OfflineDownloadRequestedEvent.class);
-        verify(domainEventPublisher).publishTask(
+        verify(taskDispatchService).enqueue(
+                eq(result.taskId()),
+                eq(QueueNames.TASK_EXCHANGE),
                 eq(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY),
                 eventCaptor.capture()
         );
@@ -90,7 +90,7 @@ class OfflineDownloadRequestServiceTest {
     }
 
     @Test
-    void createTaskDefersPublishUntilTransactionCommit() {
+    void createTaskEnqueuesDispatchInsideActiveTransactionSynchronization() {
         String sourceUri = "https://example.com/movie.mp4";
         when(sourceResolver.resolve(sourceUri))
                 .thenReturn(new ResolvedSource(SourceKind.HTTP, URI.create(sourceUri)));
@@ -98,16 +98,12 @@ class OfflineDownloadRequestServiceTest {
         try {
             var result = service.createTask(OWNER_ID, new CreateOfflineDownloadRequest(sourceUri, null));
 
-            verify(domainEventPublisher, never()).publishTask(
-                    eq(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY),
-                    any()
-            );
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(TransactionSynchronization::afterCommit);
-
+            // Outbox 行在事务内同步写入，不再延迟到事务提交后直发消息。
             ArgumentCaptor<OfflineDownloadRequestedEvent> eventCaptor =
                     ArgumentCaptor.forClass(OfflineDownloadRequestedEvent.class);
-            verify(domainEventPublisher).publishTask(
+            verify(taskDispatchService).enqueue(
+                    eq(result.taskId()),
+                    eq(QueueNames.TASK_EXCHANGE),
                     eq(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY),
                     eventCaptor.capture()
             );
