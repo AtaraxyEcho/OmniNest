@@ -2422,33 +2422,63 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalLocalBackdropShort => '背景库';
 
   @override
-  String get portalLocalBackdropTitle => '本机背景库';
+  String get portalLocalBackdropTitle => '背景库';
 
   @override
   String get portalLocalBackdropSubtitle =>
-      '当前设备可使用本机视频、GIF 和图片作为背景，素材不会上传服务器。';
+      '背景素材库随账号同步，Web、桌面与移动端共用；内置壁纸离线同样可用。';
 
   @override
-  String get portalLocalBackdropLoadFailed => '本机背景库加载失败';
+  String get portalLocalBackdropLoadFailed => '背景库加载失败';
 
   @override
-  String get portalLocalBackdropAddFiles => '添加文件';
+  String get portalLocalBackdropAddFiles => '添加背景';
 
   @override
   String get portalLocalBackdropScanDirectory => '扫描目录';
 
   @override
+  String get portalLocalBackdropUploading => '正在上传…';
+
+  @override
+  String portalLocalBackdropUploadFailedNames(Object titles) {
+    return '上传失败：$titles';
+  }
+
+  @override
+  String get portalLocalBackdropDeleteFailed => '删除失败，请稍后重试';
+
+  @override
+  String get portalLocalBackdropQuotaExceeded => '背景素材数量或存储空间配额不足';
+
+  @override
+  String get portalLocalBackdropUnsupportedFormat =>
+      '仅支持 JPG、PNG、WebP、GIF 图片或 MP4、WebM、MOV 视频';
+
+  @override
+  String get portalLocalBackdropFileTooLarge => '背景素材文件过大';
+
+  @override
+  String get portalLocalBackdropScanUnavailable => '安全扫描服务不可用，暂无法上传';
+
+  @override
+  String get portalLocalBackdropMalwareDetected => '文件检测到安全威胁，已拒绝';
+
+  @override
+  String get portalLocalBackdropRateLimited => '上传过于频繁，请稍后再试';
+
+  @override
   String get portalLocalBackdropClearAll => '全部清理';
 
   @override
-  String get portalLocalBackdropClearAllTitle => '清理所有本机背景？';
+  String get portalLocalBackdropClearAllTitle => '移除全部背景？';
 
   @override
   String get portalLocalBackdropClearAllMessage =>
-      '只会清理当前设备 SQLite 中的背景索引，不会删除你原目录中的本机文件。';
+      '背景素材将从服务端素材库移除并在所有设备上消失；内置壁纸离线仍可用。';
 
   @override
-  String get portalLocalBackdropClearAllConfirm => '清理';
+  String get portalLocalBackdropClearAllConfirm => '移除';
 
   @override
   String portalLocalBackdropCount(Object count) {
@@ -2456,7 +2486,8 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get portalLocalBackdropEmpty => '还没有本机背景。你可以添加视频壁纸、GIF、图片，或扫描它们所在目录。';
+  String get portalLocalBackdropEmpty =>
+      '还没有背景素材。添加视频壁纸、GIF 或图片后，会自动同步到你的所有设备。';
 
   @override
   String get portalLocalBackdropFilterEmpty => '当前分类没有可用背景';
@@ -2475,10 +2506,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalLocalBackdropRemove => '移除背景';
 
   @override
-  String get portalLocalBackdropEnable => '启用本机背景';
+  String get portalLocalBackdropEnable => '启用背景';
 
   @override
-  String get portalLocalBackdropEnableHint => '用于数字展廊和音乐空间，素材路径不会同步到服务器。';
+  String get portalLocalBackdropEnableHint => '用于 Portal 和音乐空间；内置壁纸离线仍可用。';
 
   @override
   String get portalLocalBackdropSeparateDevices => '分别设置桌面与移动端';

@@ -4648,25 +4648,25 @@ abstract class AppLocalizations {
   /// No description provided for @portalLocalBackdropTitle.
   ///
   /// In en, this message translates to:
-  /// **'Local backdrops'**
+  /// **'Backdrops'**
   String get portalLocalBackdropTitle;
 
   /// No description provided for @portalLocalBackdropSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Use local videos, GIFs, or images as the backdrop on this device. Assets are never uploaded.'**
+  /// **'Your backdrop library is synced to your account and shared across Web, desktop, and mobile. The bundled wallpaper also works offline.'**
   String get portalLocalBackdropSubtitle;
 
   /// No description provided for @portalLocalBackdropLoadFailed.
   ///
   /// In en, this message translates to:
-  /// **'Failed to load local backdrops'**
+  /// **'Failed to load backdrops'**
   String get portalLocalBackdropLoadFailed;
 
   /// No description provided for @portalLocalBackdropAddFiles.
   ///
   /// In en, this message translates to:
-  /// **'Add files'**
+  /// **'Add backdrops'**
   String get portalLocalBackdropAddFiles;
 
   /// No description provided for @portalLocalBackdropScanDirectory.
@@ -4674,6 +4674,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Scan folder'**
   String get portalLocalBackdropScanDirectory;
+
+  /// No description provided for @portalLocalBackdropUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get portalLocalBackdropUploading;
+
+  /// No description provided for @portalLocalBackdropUploadFailedNames.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to upload: {titles}'**
+  String portalLocalBackdropUploadFailedNames(Object titles);
+
+  /// No description provided for @portalLocalBackdropDeleteFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete failed. Please try again later.'**
+  String get portalLocalBackdropDeleteFailed;
+
+  /// No description provided for @portalLocalBackdropQuotaExceeded.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop count or storage quota exceeded'**
+  String get portalLocalBackdropQuotaExceeded;
+
+  /// No description provided for @portalLocalBackdropUnsupportedFormat.
+  ///
+  /// In en, this message translates to:
+  /// **'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV videos are supported'**
+  String get portalLocalBackdropUnsupportedFormat;
+
+  /// No description provided for @portalLocalBackdropFileTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop file is too large'**
+  String get portalLocalBackdropFileTooLarge;
+
+  /// No description provided for @portalLocalBackdropScanUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Security scanning is unavailable, upload blocked'**
+  String get portalLocalBackdropScanUnavailable;
+
+  /// No description provided for @portalLocalBackdropMalwareDetected.
+  ///
+  /// In en, this message translates to:
+  /// **'Malware detected, upload rejected'**
+  String get portalLocalBackdropMalwareDetected;
+
+  /// No description provided for @portalLocalBackdropRateLimited.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading too frequently, please try again later'**
+  String get portalLocalBackdropRateLimited;
 
   /// No description provided for @portalLocalBackdropClearAll.
   ///
@@ -4684,19 +4738,19 @@ abstract class AppLocalizations {
   /// No description provided for @portalLocalBackdropClearAllTitle.
   ///
   /// In en, this message translates to:
-  /// **'Clear all local backdrops?'**
+  /// **'Remove all backdrops?'**
   String get portalLocalBackdropClearAllTitle;
 
   /// No description provided for @portalLocalBackdropClearAllMessage.
   ///
   /// In en, this message translates to:
-  /// **'This only clears the backdrop index in this device\'s SQLite database. Your original local files are not deleted.'**
+  /// **'Your backdrop assets will be removed from the server library on all devices. The bundled wallpaper stays available offline.'**
   String get portalLocalBackdropClearAllMessage;
 
   /// No description provided for @portalLocalBackdropClearAllConfirm.
   ///
   /// In en, this message translates to:
-  /// **'Clear'**
+  /// **'Remove'**
   String get portalLocalBackdropClearAllConfirm;
 
   /// No description provided for @portalLocalBackdropCount.
@@ -4708,7 +4762,7 @@ abstract class AppLocalizations {
   /// No description provided for @portalLocalBackdropEmpty.
   ///
   /// In en, this message translates to:
-  /// **'No local backdrops yet. Add video backdrops, GIFs, images, or scan a folder that contains them.'**
+  /// **'No backdrops yet. Add videos, GIFs, or images and they will sync to all your devices.'**
   String get portalLocalBackdropEmpty;
 
   /// No description provided for @portalLocalBackdropFilterEmpty.
@@ -4744,13 +4798,13 @@ abstract class AppLocalizations {
   /// No description provided for @portalLocalBackdropEnable.
   ///
   /// In en, this message translates to:
-  /// **'Enable local backdrop'**
+  /// **'Enable backdrop'**
   String get portalLocalBackdropEnable;
 
   /// No description provided for @portalLocalBackdropEnableHint.
   ///
   /// In en, this message translates to:
-  /// **'Used by Digital Gallery and Music. Local asset paths are never synced to the server.'**
+  /// **'Used by Portal and Music. The bundled wallpaper also works offline.'**
   String get portalLocalBackdropEnableHint;
 
   /// No description provided for @portalLocalBackdropSeparateDevices.

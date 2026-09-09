@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
@@ -11,6 +12,7 @@ import 'package:omninest/features/backdrop/application/app_backdrop_scene_contro
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_file_picker.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
@@ -18,6 +20,8 @@ import 'package:omninest/features/backdrop/domain/app_backdrop_settings_json.dar
 import 'package:omninest/features/backdrop/presentation/app_backdrop_scene_scope.dart';
 
 class _MockBackdropApi extends Mock implements BackdropApi {}
+
+class _MockBackdropFilePicker extends Mock implements BackdropFilePicker {}
 
 class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   @override
@@ -52,6 +56,7 @@ void main() {
         fileSize: 0,
       ),
     );
+    registerFallbackValue(const BackdropPickedFile(name: 'fallback', size: 0));
   });
 
   group('AppBackdropState', () {
@@ -565,6 +570,167 @@ void main() {
         appBackdropControllerProvider.future,
       );
       expect(mobileState.selectedBackdrop?.id, mobileBackdrop.id);
+    });
+  });
+
+  group('AppBackdropController uploads', () {
+    test('上传成功写入缓存并清除失败记录', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final api = _MockBackdropApi();
+      final picker = _MockBackdropFilePicker();
+      final uploaded = BackdropServerAsset(
+        id: 'server-up',
+        title: 'up',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
+      );
+      when(() => picker.pick()).thenAnswer(
+        (_) async => [
+          const BackdropPickedFile(name: 'a.png', size: 2048, path: 'D:/a.png'),
+        ],
+      );
+      var uploadCalls = 0;
+      when(() => api.list()).thenAnswer((_) async => const []);
+      when(() => api.upload(any())).thenAnswer((_) async {
+        uploadCalls++;
+        return uploaded;
+      });
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          appBackdropFilePickerProvider.overrideWithValue(picker),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      await notifier.addBackdropFiles();
+
+      final state = container.read(appBackdropControllerProvider).requireValue;
+      expect(state.uploading, isFalse);
+      expect(state.failedUploads, isEmpty);
+      expect(
+        state.backdrops.where((backdrop) => backdrop.id == 'server-up'),
+        isNotEmpty,
+      );
+      expect(uploadCalls, 1);
+    });
+
+    test('业务失败记录错误码且不自动重试', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final api = _MockBackdropApi();
+      final picker = _MockBackdropFilePicker();
+      when(() => picker.pick()).thenAnswer(
+        (_) async => [
+          const BackdropPickedFile(name: 'a.png', size: 2048, path: 'D:/a.png'),
+        ],
+      );
+      var uploadCalls = 0;
+      when(() => api.list()).thenAnswer((_) async => const []);
+      when(() => api.upload(any())).thenAnswer((_) async {
+        uploadCalls++;
+        throw const AppException(code: '8003', message: '配额不足');
+      });
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          appBackdropFilePickerProvider.overrideWithValue(picker),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      await notifier.addBackdropFiles();
+
+      final state = container.read(appBackdropControllerProvider).requireValue;
+      expect(state.uploading, isFalse);
+      expect(state.failedUploads, hasLength(1));
+      expect(state.failedUploads.single.code, '8003');
+      expect(uploadCalls, 1);
+    });
+
+    test('网络类失败自动重试一次', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final api = _MockBackdropApi();
+      final picker = _MockBackdropFilePicker();
+      when(() => picker.pick()).thenAnswer(
+        (_) async => [
+          const BackdropPickedFile(name: 'a.png', size: 2048, path: 'D:/a.png'),
+        ],
+      );
+      var uploadCalls = 0;
+      when(() => api.list()).thenAnswer((_) async => const []);
+      when(() => api.upload(any())).thenAnswer((_) async {
+        uploadCalls++;
+        if (uploadCalls == 1) {
+          throw const AppException(code: 'network_error', message: '断网');
+        }
+        return BackdropServerAsset(
+          id: 'server-retry',
+          title: 'retry',
+          mediaType: 'image',
+          status: 'READY',
+          fileSize: 2048,
+          updatedAt: DateTime(2026),
+        );
+      });
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          appBackdropFilePickerProvider.overrideWithValue(picker),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      await container
+          .read(appBackdropControllerProvider.notifier)
+          .addBackdropFiles();
+
+      final state = container.read(appBackdropControllerProvider).requireValue;
+      expect(state.failedUploads, isEmpty);
+      expect(uploadCalls, 2);
+      expect(
+        state.backdrops.where((backdrop) => backdrop.id == 'server-retry'),
+        isNotEmpty,
+      );
     });
   });
 

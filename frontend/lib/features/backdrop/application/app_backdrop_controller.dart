@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_file_picker.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 
@@ -15,6 +17,10 @@ final appBackdropRepositoryProvider = Provider<AppBackdropRepository>((ref) {
 
 final appBackdropApiProvider = Provider<BackdropApi>((ref) {
   return BackdropApi(ref.watch(apiClientProvider));
+});
+
+final appBackdropFilePickerProvider = Provider<BackdropFilePicker>((ref) {
+  return const DefaultBackdropFilePicker();
 });
 
 final appBackdropBundledAssetInstallerProvider =
@@ -28,6 +34,17 @@ final appBackdropSelectionTargetProvider = Provider<AppBackdropSelectionTarget>(
           ? AppBackdropSelectionTarget.mobile
           : AppBackdropSelectionTarget.desktop,
 );
+
+/// 需要映射专属文案、不自动重试的业务错误码。
+const _nonTransientUploadCodes = {
+  '8002',
+  '8003',
+  '8004',
+  '8005',
+  '8006',
+  '8007',
+  '429',
+};
 
 final appBackdropControllerProvider =
     AsyncNotifierProvider<AppBackdropController, AppBackdropState>(
@@ -60,6 +77,62 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
       if (kDebugMode) {
         debugPrint('背景库服务端列表同步失败(可能离线): $error');
       }
+    }
+  }
+
+  /// 唤起文件选择并逐个上传。
+  /// 网络类失败自动重试一次;全部结束后刷新列表并记录失败条目。
+  Future<void> addBackdropFiles() async {
+    final current = state.asData?.value;
+    if (current?.uploading == true) {
+      return;
+    }
+    final picked = await ref.read(appBackdropFilePickerProvider).pick();
+    if (picked.isEmpty) {
+      return;
+    }
+    state = AsyncData(
+      (current ??
+              await _loadCurrentState(ref.read(appBackdropRepositoryProvider)))
+          .copyWith(uploading: true, clearUploadFailures: true),
+    );
+    final failures = <BackdropUploadFailure>[];
+    for (final file in picked) {
+      try {
+        final asset = await _uploadWithRetry(file);
+        await ref.read(appBackdropRepositoryProvider).upsertServerAssets([
+          asset,
+        ]);
+      } on AppException catch (error) {
+        if (kDebugMode) {
+          debugPrint('背景素材上传失败: ${file.name} code=${error.code}');
+        }
+        failures.add(BackdropUploadFailure(title: file.name, code: error.code));
+      } on Exception catch (error) {
+        if (kDebugMode) {
+          debugPrint('背景素材上传异常: ${file.name} $error');
+        }
+        failures.add(BackdropUploadFailure(title: file.name, code: 'UNKNOWN'));
+      }
+    }
+    await refreshServerAssets();
+    final refreshed = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
+    state = AsyncData(
+      refreshed.copyWith(uploading: false, failedUploads: failures),
+    );
+  }
+
+  Future<BackdropServerAsset> _uploadWithRetry(BackdropPickedFile file) async {
+    try {
+      return await ref.read(appBackdropApiProvider).upload(file);
+    } on AppException catch (error) {
+      if (_nonTransientUploadCodes.contains(error.code)) {
+        rethrow;
+      }
+      // 网络类失败自动重试一次。
+      return await ref.read(appBackdropApiProvider).upload(file);
     }
   }
 

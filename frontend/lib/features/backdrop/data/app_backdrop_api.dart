@@ -1,5 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_file_picker.dart';
 
 /// 服务端背景素材 DTO(data 层边界,进入仓储后转换为领域模型)。
 class BackdropServerAsset {
@@ -85,6 +87,46 @@ class BackdropApi {
   Future<void> delete(String assetId) async {
     final response = await apiClient.dio.delete<dynamic>('/backdrops/$assetId');
     _ensureOk(response.data);
+  }
+
+  /// 上传背景素材;Web 走流式 multipart,桌面/移动走文件路径。
+  Future<BackdropServerAsset> upload(BackdropPickedFile file) async {
+    final formData = FormData();
+    if (!file.isStreamBased) {
+      formData.files.add(
+        MapEntry(
+          'file',
+          await MultipartFile.fromFile(file.path!, filename: file.name),
+        ),
+      );
+    } else {
+      if (file.readStream == null) {
+        throw const AppException(code: '8002', message: '所选文件不可读');
+      }
+      formData.files.add(
+        MapEntry(
+          'file',
+          MultipartFile.fromStream(
+            () => file.readStream!,
+            file.size,
+            filename: file.name,
+          ),
+        ),
+      );
+    }
+    final response = await apiClient.dio.post<dynamic>(
+      '/backdrops',
+      data: formData,
+    );
+    final envelope = _ensureOk(response.data);
+    final data = envelope['data'];
+    if (data is! Map) {
+      throw const AppException(
+        code: 'BACKDROP_RESPONSE_INVALID',
+        message: '背景库响应格式不正确',
+      );
+    }
+    return BackdropServerAsset.fromJson(Map<String, dynamic>.from(data));
   }
 
   List<dynamic> _dataOf(dynamic body) {

@@ -291,13 +291,23 @@ class AppBackdropSettings {
   );
 }
 
-/// 应用本机背景库状态。
+/// 单个上传失败条目;code 为后端稳定错误码(字符串数字)供界面映射文案。
+class BackdropUploadFailure {
+  const BackdropUploadFailure({required this.title, required this.code});
+
+  final String title;
+  final String code;
+}
+
+/// 应用背景库状态。
 class AppBackdropState {
   const AppBackdropState({
     this.backdrops = const <AppBackdropAsset>[],
     this.settings = const AppBackdropSettings(),
     this.selectionTarget = AppBackdropSelectionTarget.desktop,
     this.isScanning = false,
+    this.uploading = false,
+    this.failedUploads = const <BackdropUploadFailure>[],
     this.message,
   });
 
@@ -305,6 +315,13 @@ class AppBackdropState {
   final AppBackdropSettings settings;
   final AppBackdropSelectionTarget selectionTarget;
   final bool isScanning;
+
+  /// 是否有上传批次进行中。
+  final bool uploading;
+
+  /// 最近一批上传失败的条目(标题+错误码),由界面映射文案。
+  final List<BackdropUploadFailure> failedUploads;
+
   final AppBackdropMessage? message;
 
   /// 当前设备类别使用的背景素材 ID。
@@ -336,6 +353,9 @@ class AppBackdropState {
     AppBackdropSettings? settings,
     AppBackdropSelectionTarget? selectionTarget,
     bool? isScanning,
+    bool? uploading,
+    List<BackdropUploadFailure>? failedUploads,
+    bool clearUploadFailures = false,
     AppBackdropMessage? message,
     bool clearMessage = false,
   }) {
@@ -344,6 +364,11 @@ class AppBackdropState {
       settings: settings ?? this.settings,
       selectionTarget: selectionTarget ?? this.selectionTarget,
       isScanning: isScanning ?? this.isScanning,
+      uploading: uploading ?? this.uploading,
+      failedUploads:
+          clearUploadFailures
+              ? const <BackdropUploadFailure>[]
+              : failedUploads ?? this.failedUploads,
       message: clearMessage ? null : message ?? this.message,
     );
   }

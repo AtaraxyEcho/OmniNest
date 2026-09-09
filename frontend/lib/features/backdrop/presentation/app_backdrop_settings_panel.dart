@@ -170,6 +170,15 @@ class _AppBackdropSettingsContentState
                   spacing: 10,
                   runSpacing: 8,
                   children: [
+                    AppBackdropActionButton(
+                      palette: widget.palette,
+                      icon: Icons.add_photo_alternate_rounded,
+                      label: l10n.portalLocalBackdropAddFiles,
+                      onTap:
+                          widget.state.uploading
+                              ? null
+                              : () => widget.notifier.addBackdropFiles(),
+                    ),
                     if (widget.state.backdrops.any(
                       (backdrop) => !backdrop.isBundled,
                     ))
@@ -202,6 +211,16 @@ class _AppBackdropSettingsContentState
             options: filterOptions,
             onChanged: (value) => setState(() => _filter = value),
           ),
+          if (_uploadFeedback(l10n) != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              _uploadFeedback(l10n)!,
+              style: TextStyle(
+                color: widget.palette.accentAlt,
+                fontSize: AppTypography.bodySmall,
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Expanded(
             child:
@@ -251,6 +270,33 @@ class _AppBackdropSettingsContentState
           ),
         ],
       ),
+    );
+  }
+
+  /// 上传进行中/最近失败的用户反馈文案;无反馈时为空。
+  String? _uploadFeedback(AppLocalizations l10n) {
+    if (widget.state.uploading) {
+      return l10n.portalLocalBackdropUploading;
+    }
+    final failures = widget.state.failedUploads;
+    if (failures.isEmpty) {
+      return null;
+    }
+    if (failures.length == 1) {
+      final failure = failures.single;
+      return switch (failure.code) {
+        '8003' || '4003' => l10n.portalLocalBackdropQuotaExceeded,
+        '8002' => l10n.portalLocalBackdropUnsupportedFormat,
+        '8004' => l10n.portalLocalBackdropFileTooLarge,
+        '8005' => l10n.portalLocalBackdropScanUnavailable,
+        '8006' => l10n.portalLocalBackdropMalwareDetected,
+        '8007' => l10n.portalLocalBackdropScanFailed,
+        '429' => l10n.portalLocalBackdropRateLimited,
+        _ => l10n.portalLocalBackdropUploadFailedNames(failure.title),
+      };
+    }
+    return l10n.portalLocalBackdropUploadFailedNames(
+      failures.map((failure) => failure.title).join(', '),
     );
   }
 

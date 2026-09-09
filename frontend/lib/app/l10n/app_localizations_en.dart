@@ -2480,33 +2480,68 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropShort => 'Backdrops';
 
   @override
-  String get portalLocalBackdropTitle => 'Local backdrops';
+  String get portalLocalBackdropTitle => 'Backdrops';
 
   @override
   String get portalLocalBackdropSubtitle =>
-      'Use local videos, GIFs, or images as the backdrop on this device. Assets are never uploaded.';
+      'Your backdrop library is synced to your account and shared across Web, desktop, and mobile. The bundled wallpaper also works offline.';
 
   @override
-  String get portalLocalBackdropLoadFailed => 'Failed to load local backdrops';
+  String get portalLocalBackdropLoadFailed => 'Failed to load backdrops';
 
   @override
-  String get portalLocalBackdropAddFiles => 'Add files';
+  String get portalLocalBackdropAddFiles => 'Add backdrops';
 
   @override
   String get portalLocalBackdropScanDirectory => 'Scan folder';
 
   @override
+  String get portalLocalBackdropUploading => 'Uploading…';
+
+  @override
+  String portalLocalBackdropUploadFailedNames(Object titles) {
+    return 'Failed to upload: $titles';
+  }
+
+  @override
+  String get portalLocalBackdropDeleteFailed =>
+      'Delete failed. Please try again later.';
+
+  @override
+  String get portalLocalBackdropQuotaExceeded =>
+      'Backdrop count or storage quota exceeded';
+
+  @override
+  String get portalLocalBackdropUnsupportedFormat =>
+      'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV videos are supported';
+
+  @override
+  String get portalLocalBackdropFileTooLarge => 'Backdrop file is too large';
+
+  @override
+  String get portalLocalBackdropScanUnavailable =>
+      'Security scanning is unavailable, upload blocked';
+
+  @override
+  String get portalLocalBackdropMalwareDetected =>
+      'Malware detected, upload rejected';
+
+  @override
+  String get portalLocalBackdropRateLimited =>
+      'Uploading too frequently, please try again later';
+
+  @override
   String get portalLocalBackdropClearAll => 'Clear all';
 
   @override
-  String get portalLocalBackdropClearAllTitle => 'Clear all local backdrops?';
+  String get portalLocalBackdropClearAllTitle => 'Remove all backdrops?';
 
   @override
   String get portalLocalBackdropClearAllMessage =>
-      'This only clears the backdrop index in this device\'s SQLite database. Your original local files are not deleted.';
+      'Your backdrop assets will be removed from the server library on all devices. The bundled wallpaper stays available offline.';
 
   @override
-  String get portalLocalBackdropClearAllConfirm => 'Clear';
+  String get portalLocalBackdropClearAllConfirm => 'Remove';
 
   @override
   String portalLocalBackdropCount(Object count) {
@@ -2515,7 +2550,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get portalLocalBackdropEmpty =>
-      'No local backdrops yet. Add video backdrops, GIFs, images, or scan a folder that contains them.';
+      'No backdrops yet. Add videos, GIFs, or images and they will sync to all your devices.';
 
   @override
   String get portalLocalBackdropFilterEmpty => 'No backdrops in this category';
@@ -2535,11 +2570,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropRemove => 'Remove backdrop';
 
   @override
-  String get portalLocalBackdropEnable => 'Enable local backdrop';
+  String get portalLocalBackdropEnable => 'Enable backdrop';
 
   @override
   String get portalLocalBackdropEnableHint =>
-      'Used by Digital Gallery and Music. Local asset paths are never synced to the server.';
+      'Used by Portal and Music. The bundled wallpaper also works offline.';
 
   @override
   String get portalLocalBackdropSeparateDevices =>
