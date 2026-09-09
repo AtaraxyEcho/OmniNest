@@ -205,6 +205,20 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
             """)
     Optional<FileNode> findActivePath(@Param("ownerUserId") UUID ownerUserId, @Param("path") String path);
 
+    List<FileNode> findByOwnerUserIdAndSourceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+            UUID ownerUserId, String sourceType, String normalizedPathPrefix);
+
+    @Query("""
+            select distinct node.ownerUserId
+            from FileNode node
+            where node.sourceType = :sourceType
+              and node.deleted = false
+              and node.normalizedPath like concat(:normalizedPathPrefix, '%')
+            """)
+    List<UUID> findOwnerIdsBySourceTypeAndNormalizedPathPrefix(
+            @Param("sourceType") String sourceType,
+            @Param("normalizedPathPrefix") String normalizedPathPrefix);
+
     boolean existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(UUID ownerUserId, String name);
 
     boolean existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(UUID ownerUserId, UUID parentId, String name);

@@ -27,6 +27,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -685,6 +686,46 @@ public class DerivedAssetStorageService {
 
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
+    }
+
+    /**
+     * 列出用户在指定资源类型下仍存活的派生节点引用。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @return 节点引用列表
+     */
+    @Transactional(readOnly = true)
+    public List<DerivedNodeRef> listDerivedNodeRefs(UUID ownerUserId, String resourceType) {
+        String prefix = "/.metadata/" + segment(resourceType) + "/";
+        return fileNodeRepository
+                .findByOwnerUserIdAndSourceTypeAndNormalizedPathStartingWithAndDeletedFalse(
+                        ownerUserId, SOURCE_TYPE_DERIVED, prefix)
+                .stream()
+                .map(node -> new DerivedNodeRef(node.getId(), node.getNormalizedPath()))
+                .toList();
+    }
+
+    /**
+     * 列出在指定资源类型下持有存活派生节点的用户。
+     *
+     * @param resourceType 资源类型
+     * @return 用户 ID 列表
+     */
+    @Transactional(readOnly = true)
+    public List<UUID> listOwnerIdsByDerivedPathPrefix(String resourceType) {
+        String prefix = "/.metadata/" + segment(resourceType) + "/";
+        return fileNodeRepository.findOwnerIdsBySourceTypeAndNormalizedPathPrefix(
+                SOURCE_TYPE_DERIVED, prefix);
+    }
+
+    /**
+     * 派生节点引用。
+     *
+     * @param fileNodeId 文件节点 ID
+     * @param normalizedPath 节点完整逻辑路径
+     */
+    public record DerivedNodeRef(UUID fileNodeId, String normalizedPath) {
     }
 
     private record DownloadedAsset(Path path, String mimeType) {
