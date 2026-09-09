@@ -8,11 +8,10 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_annotations.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
-import 'package:omninest/features/reader/reader_debug_log.dart';
 
 class ReaderViewContent extends StatefulWidget {
   const ReaderViewContent({
@@ -126,8 +125,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   List<int> _paragraphIndices = [];
   int _parseGeneration = 0;
   bool _isLoading = true;
-  final Map<int, TapGestureRecognizer> _recognizers = {};
-  final Map<String, int> _imageRetryCounts = {};
   late final FocusNode _selectionFocusNode;
   String _selectedText = '';
   Offset? _pointerDownPosition;
@@ -135,24 +132,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   bool _pointerMoved = false;
   bool _selectionWasActiveOnPointerDown = false;
   bool _suppressNextContentTap = false;
-
-  TapGestureRecognizer _getRecognizer(int startOffset, String href) {
-    return _recognizers.putIfAbsent(startOffset, () {
-      return TapGestureRecognizer()..onTap = () => _launchUrl(href);
-    });
-  }
-
-  /// 释放并清空链接手势识别器。
-  ///
-  /// 识别器按 startOffset 缓存且闭包捕获创建时的 href；切章后新内容的
-  /// 偏移与旧缓存冲突，复用会点击跳转到上一章的链接目标，必须先清空
-  /// 再随下一次 build 重建。
-  void _clearRecognizers() {
-    for (final recognizer in _recognizers.values) {
-      recognizer.dispose();
-    }
-    _recognizers.clear();
-  }
 
   @override
   void initState() {
@@ -176,18 +155,14 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
       // 分页模式：visibleBlocks 变化时重新应用
       if (!identical(oldWidget.visibleBlocks, widget.visibleBlocks) ||
           !identical(oldWidget.annotations, widget.annotations)) {
-        _clearRecognizers();
         _applyVisibleBlocks(notify: false);
       }
     } else if (!identical(oldWidget.rawBlocks, widget.rawBlocks) &&
         widget.rawBlocks != null &&
         widget.rawBlocks!.isNotEmpty) {
       // 滚动模式：rawBlocks 变化时直接使用
-      _clearRecognizers();
       _applyRawBlocks(notify: false);
     } else if (oldWidget.htmlContent != widget.htmlContent) {
-      // 清理旧内容的手势识别器，防止内存泄漏与旧 href 复用
-      _clearRecognizers();
       _isLoading = true;
       _blocks = [];
       _paragraphIndices = [];
@@ -204,7 +179,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
 
   @override
   void dispose() {
-    _clearRecognizers();
     _selectionFocusNode.dispose();
     super.dispose();
   }
@@ -377,47 +351,24 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
 
   Widget _buildBlock(int index) {
     final block = _blocks[index];
-    return switch (block) {
-      HeadingBlock(:final text, :final level) => Column(
+    final item = ReaderContentBlockItem(
+      block: block,
+      settings: widget.settings,
+      itemId: widget.itemId ?? '',
+      chapterId: widget.itemId ?? '',
+      // 仅分页模式的首块可能是段落续接，避免后续块误去缩进。
+      isFirstBlockContinuation: widget.isFirstBlockContinuation && index == 0,
+      onLinkTap: _launchUrl,
+      onImageTap: _handleImageTap,
+    );
+    // 翻页标题后保留额外间距，与分页引擎视觉一致。
+    if (block is HeadingBlock) {
+      return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [_buildHeading(text, level), const SizedBox(height: 24)],
-      ),
-      ParagraphBlock(:final lines, :final hasTrailingSpacing) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (hasTrailingSpacing)
-            SizedBox(height: widget.settings.fontSize * 0.6),
-          _buildParagraph(lines, _paragraphIndices[index]),
-        ],
-      ),
-      ImageBlock block => () {
-        if (kDebugMode) {
-          final srcPreview =
-              block.src.length > 80
-                  ? '${block.src.substring(0, 80)}...'
-                  : block.src;
-          readerDebugLog(
-            'ViewContent: ImageBlock — src=$srcPreview, alt=${block.alt}',
-          );
-        }
-        return ReaderContentImage(
-          block: block,
-          itemId: widget.itemId,
-          settings: widget.settings,
-          retryCount: _imageRetryCounts[block.src] ?? 0,
-          onTap: _handleImageTap,
-          onRetry:
-              () => setState(() {
-                _imageRetryCounts[block.src] =
-                    (_imageRetryCounts[block.src] ?? 0) + 1;
-              }),
-        );
-      }(),
-      DividerBlock() => _buildDivider(),
-      BlockquoteBlock block => _buildBlockquote(block),
-      ListBlock block => _buildListBlock(block),
-      TableBlock block => _buildTableBlock(block),
-    };
+        children: [item, const SizedBox(height: 24)],
+      );
+    }
+    return item;
   }
 
   void clearSelection() {
@@ -557,137 +508,6 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     yield* _textSpans(_blocks);
   }
 
-  Widget _buildHeading(String text, int level) {
-    final baseSize =
-        level == 1
-            ? widget.settings.fontSize * 1.5
-            : widget.settings.fontSize * 1.25;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: widget.settings.resolvedFontFamily,
-          color: widget.settings.onSurfaceColor.withValues(alpha: 0.90),
-          fontSize: baseSize,
-          height: 1.4,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildParagraph(List<LineData> lines, int blockIndex) {
-    // 将所有行合并为单个 Text.rich。
-    // 段落内（<br>）用 \n 分隔，段落间换行 + 缩进。
-    // 中文排版：每段首行都缩进，包括第一段。
-    final allSpans = <InlineSpan>[];
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      // 检查行文本是否已包含开头缩进
-      final lineText = line.spans.map((s) => s.text).join();
-      final hasIndent = lineText.startsWith('　　');
-      if (i > 0) {
-        final prevIsEmpty = lines[i - 1].spans.isEmpty;
-        if (line.isNewParagraph && !prevIsEmpty) {
-          // 段落间：换行 + 缩进（如果文本本身没有缩进）
-          allSpans.add(TextSpan(text: hasIndent ? '\n' : '\n　　'));
-        } else {
-          allSpans.add(const TextSpan(text: '\n'));
-        }
-      } else {
-        // 每段首行都缩进（如果文本本身没有缩进）
-        // 续接页的第一个 block 不加首行缩进（它是前一页段落的延续）
-        if (!hasIndent &&
-            !(blockIndex == 0 && widget.isFirstBlockContinuation)) {
-          allSpans.add(const TextSpan(text: '　　'));
-        }
-      }
-      _collectLineSpans(allSpans, line.spans);
-      // 行尾空格会导致 RichText 换行计算异常，留下空白缺口。
-      // 保留段首缩进的全角空格，只清除行尾多余空格。
-      _trimTrailingSpaces(allSpans);
-    }
-    return Text.rich(
-      TextSpan(style: widget.settings.bodyStyle, children: allSpans),
-      strutStyle: widget.settings.bodyStrutStyle(),
-    );
-  }
-
-  void _collectLineSpans(List<InlineSpan> out, List<ReaderInlineSpan> spans) {
-    for (final span in spans) {
-      TextStyle style;
-      GestureRecognizer? recognizer;
-      if (span.href != null) {
-        style = _spanStyle(span).copyWith(
-          color: widget.settings.accentColor,
-          decoration: TextDecoration.underline,
-          backgroundColor: span.backgroundColor,
-        );
-        recognizer = _getRecognizer(span.startOffset, span.href!);
-      } else if (span.isCode) {
-        style = _spanStyle(span).copyWith(
-          fontFamily: AppTypography.monoFamily,
-          fontFamilyFallback: AppTypography.monoFamilyFallback,
-          fontSize: widget.settings.fontSize * 0.9,
-          backgroundColor:
-              span.backgroundColor ??
-              widget.settings.onSurfaceVariantColor.withValues(alpha: 0.08),
-        );
-      } else {
-        style = _spanStyle(
-          span,
-        ).copyWith(backgroundColor: span.backgroundColor);
-      }
-
-      // 合并相邻同样式无 recognizer 的 span，减少 TextSpan 数量
-      if (recognizer == null && out.isNotEmpty && out.last is TextSpan) {
-        final last = out.last as TextSpan;
-        if (last.style == style && last.recognizer == null) {
-          out[out.length - 1] = TextSpan(
-            text: '${last.text}${span.text}',
-            style: style,
-          );
-          continue;
-        }
-      }
-      out.add(TextSpan(text: span.text, style: style, recognizer: recognizer));
-    }
-  }
-
-  /// 清除列表末尾 TextSpan 的尾部空格。
-  ///
-  /// 行尾空格会导致 RichText 认为该行还有字符占位，提前截断换行，
-  /// 使行尾留下空白缺口。只处理最后一个 TextSpan，不影响行内间距。
-  void _trimTrailingSpaces(List<InlineSpan> spans) {
-    if (spans.isEmpty) return;
-    final last = spans.last;
-    if (last is TextSpan && last.text != null) {
-      final trimmed = last.text!.trimRight();
-      if (trimmed.length != last.text!.length) {
-        spans[spans.length - 1] = TextSpan(
-          text: trimmed,
-          style: last.style,
-          recognizer: last.recognizer,
-        );
-      }
-    }
-  }
-
-  /// 引用块文本渲染（多行合并为单个 Text.rich）。
-  Widget _buildQuoteText(List<LineData> lines) {
-    final allSpans = <InlineSpan>[];
-    for (var i = 0; i < lines.length; i++) {
-      if (i > 0) allSpans.add(const TextSpan(text: '\n'));
-      _collectLineSpans(allSpans, lines[i].spans);
-      _trimTrailingSpaces(allSpans);
-    }
-    return Text.rich(
-      TextSpan(style: widget.settings.bodyStyle, children: allSpans),
-      strutStyle: widget.settings.bodyStrutStyle(),
-    );
-  }
-
   void _launchUrl(String href) {
     _suppressNextContentTap = true;
     widget.onLinkTap?.call(href);
@@ -756,204 +576,5 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     _pointerDownAt = null;
     _pointerMoved = false;
     _selectionWasActiveOnPointerDown = false;
-  }
-
-  TextStyle _spanStyle(ReaderInlineSpan span) {
-    return ReaderViewContent.spanStyle(span, widget.settings);
-  }
-
-  Widget _buildDivider() {
-    final lineColor = widget.settings.onSurfaceVariantColor.withValues(
-      alpha: 0.20,
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Center(
-        child: SizedBox(
-          width: 96,
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              Container(height: 0.5, color: lineColor),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                color: widget.settings.surfaceColor,
-                child: Icon(
-                  Icons.auto_stories_rounded,
-                  color: widget.settings.onSurfaceVariantColor.withValues(
-                    alpha: 0.36,
-                  ),
-                  size: 16,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBlockquote(BlockquoteBlock block) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.only(left: 16, top: 12, bottom: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: widget.settings.accentColor.withValues(alpha: 0.6),
-              width: 3,
-            ),
-          ),
-          color: widget.settings.onSurfaceVariantColor.withValues(alpha: 0.06),
-        ),
-        child: _buildQuoteText(block.lines),
-      ),
-    );
-  }
-
-  Widget _buildListBlock(ListBlock block) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var i = 0; i < block.items.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SizedBox(
-                    width: 24,
-                    child: Text(
-                      block.isOrdered ? '${i + 1}.' : '•',
-                      style: TextStyle(
-                        color: widget.settings.onSurfaceColor.withValues(
-                          alpha: 0.70,
-                        ),
-                        fontSize: widget.settings.fontSize,
-                        height: widget.settings.lineHeight,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Text.rich(
-                      TextSpan(
-                        children: [
-                          for (final span in block.items[i].spans)
-                            if (span.href != null)
-                              TextSpan(
-                                text: span.text,
-                                style: _spanStyle(span).copyWith(
-                                  color: widget.settings.accentColor,
-                                  decoration: TextDecoration.underline,
-                                  backgroundColor: span.backgroundColor,
-                                ),
-                                recognizer: _getRecognizer(
-                                  span.startOffset,
-                                  span.href!,
-                                ),
-                              )
-                            else
-                              TextSpan(
-                                text: span.text,
-                                style: _spanStyle(span).copyWith(
-                                  backgroundColor: span.backgroundColor,
-                                ),
-                              ),
-                        ],
-                      ),
-                      strutStyle: widget.settings.bodyStrutStyle(),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTableBlock(TableBlock block) {
-    if (block.rows.isEmpty) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final row in block.rows)
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    bottom: BorderSide(
-                      color: widget.settings.onSurfaceVariantColor.withValues(
-                        alpha: 0.15,
-                      ),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    for (final cell in row.cells)
-                      Container(
-                        constraints: const BoxConstraints(minWidth: 60),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color:
-                              row.isHeader
-                                  ? widget.settings.onSurfaceVariantColor
-                                      .withValues(alpha: 0.08)
-                                  : null,
-                        ),
-                        child: Text.rich(
-                          TextSpan(
-                            children: [
-                              for (final span in cell)
-                                if (span.href != null)
-                                  TextSpan(
-                                    text: span.text,
-                                    style: _spanStyle(span).copyWith(
-                                      color: widget.settings.accentColor,
-                                      decoration: TextDecoration.underline,
-                                      backgroundColor: span.backgroundColor,
-                                    ),
-                                    recognizer: _getRecognizer(
-                                      span.startOffset,
-                                      span.href!,
-                                    ),
-                                  )
-                                else
-                                  TextSpan(
-                                    text: span.text,
-                                    style: _spanStyle(span).copyWith(
-                                      fontWeight:
-                                          row.isHeader
-                                              ? FontWeight.w700
-                                              : span.isBold
-                                              ? FontWeight.w700
-                                              : FontWeight.w400,
-                                      backgroundColor: span.backgroundColor,
-                                    ),
-                                  ),
-                            ],
-                          ),
-                          strutStyle: widget.settings.bodyStrutStyle(),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
   }
 }

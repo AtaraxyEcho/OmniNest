@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
@@ -108,11 +109,17 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
       final lineText = line.spans.map((s) => s.text).join();
       final hasIndent = lineText.startsWith('　　');
       if (i > 0) {
-        allSpans.add(const TextSpan(text: '\n'));
+        final prevIsEmpty = lines[i - 1].spans.isEmpty;
+        if (line.isNewParagraph && !prevIsEmpty) {
+          allSpans.add(TextSpan(text: hasIndent ? '\n' : '\n　　'));
+        } else {
+          allSpans.add(const TextSpan(text: '\n'));
+        }
       } else if (!hasIndent && !widget.isFirstBlockContinuation) {
         allSpans.add(const TextSpan(text: '　　'));
       }
       _collectSpans(allSpans, line.spans);
+      _trimTrailingSpaces(allSpans);
     }
     return Padding(
       padding: const EdgeInsets.only(bottom: 2),
@@ -125,7 +132,20 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
 
   void _collectSpans(List<InlineSpan> out, List<ReaderInlineSpan> spans) {
     for (final span in spans) {
-      final style = ReaderContentBlockItem.spanStyle(span, widget.settings);
+      var style = ReaderContentBlockItem.spanStyle(span, widget.settings);
+      if (span.backgroundColor != null) {
+        style = style.copyWith(backgroundColor: span.backgroundColor);
+      }
+      if (span.isCode) {
+        style = style.copyWith(
+          fontFamily: AppTypography.monoFamily,
+          fontFamilyFallback: AppTypography.monoFamilyFallback,
+          fontSize: widget.settings.fontSize * 0.9,
+          backgroundColor:
+              span.backgroundColor ??
+              widget.settings.onSurfaceVariantColor.withValues(alpha: 0.08),
+        );
+      }
       if (span.href != null) {
         out.add(
           TextSpan(
@@ -140,6 +160,23 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
         continue;
       }
       out.add(TextSpan(text: span.text, style: style));
+    }
+  }
+
+  void _trimTrailingSpaces(List<InlineSpan> spans) {
+    if (spans.isEmpty) {
+      return;
+    }
+    final last = spans.last;
+    if (last is TextSpan && last.text != null) {
+      final trimmed = last.text!.trimRight();
+      if (trimmed.length != last.text!.length) {
+        spans[spans.length - 1] = TextSpan(
+          text: trimmed,
+          style: last.style,
+          recognizer: last.recognizer,
+        );
+      }
     }
   }
 
@@ -159,7 +196,23 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
       child: Center(
         child: SizedBox(
           width: 96,
-          child: Container(height: 0.5, color: lineColor),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Container(height: 0.5, color: lineColor),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                color: widget.settings.surfaceColor,
+                child: Icon(
+                  Icons.auto_stories_rounded,
+                  color: widget.settings.onSurfaceVariantColor.withValues(
+                    alpha: 0.36,
+                  ),
+                  size: 16,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -204,29 +257,60 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
           for (var i = 0; i < block.items.length; i++)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: block.isOrdered ? '${i + 1}. ' : '• ',
-                      style: widget.settings.bodyStyle,
-                    ),
-                    for (final span in block.items[i].spans)
-                      TextSpan(
-                        text: span.text,
-                        style: ReaderContentBlockItem.spanStyle(
-                          span,
-                          widget.settings,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 24,
+                    child: Text(
+                      block.isOrdered ? '${i + 1}.' : '•',
+                      style: TextStyle(
+                        color: widget.settings.onSurfaceColor.withValues(
+                          alpha: 0.70,
                         ),
+                        fontSize: widget.settings.fontSize,
+                        height: widget.settings.lineHeight,
                       ),
-                  ],
-                ),
-                strutStyle: widget.settings.bodyStrutStyle(),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          for (final span in block.items[i].spans)
+                            _listOrTableSpan(span),
+                        ],
+                      ),
+                      strutStyle: widget.settings.bodyStrutStyle(),
+                    ),
+                  ),
+                ],
               ),
             ),
         ],
       ),
     );
+  }
+
+  InlineSpan _listOrTableSpan(ReaderInlineSpan span, {FontWeight? weight}) {
+    var style = ReaderContentBlockItem.spanStyle(span, widget.settings);
+    if (span.backgroundColor != null) {
+      style = style.copyWith(backgroundColor: span.backgroundColor);
+    }
+    if (weight != null) {
+      style = style.copyWith(fontWeight: weight);
+    }
+    if (span.href != null) {
+      return TextSpan(
+        text: span.text,
+        style: style.copyWith(
+          color: widget.settings.accentColor,
+          decoration: TextDecoration.underline,
+        ),
+        recognizer: _recognizerFor(span.startOffset, span.href!),
+      );
+    }
+    return TextSpan(text: span.text, style: style);
   }
 
   Widget _table(TableBlock block) {
@@ -241,23 +325,53 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final row in block.rows)
-              Row(
-                children: [
-                  for (final cell in row.cells)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      child: Text(
-                        cell.map((s) => s.text).join(),
-                        style: widget.settings.bodyStyle.copyWith(
-                          fontWeight:
-                              row.isHeader ? FontWeight.w700 : FontWeight.w400,
-                        ),
+              Container(
+                decoration: BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(
+                      color: widget.settings.onSurfaceVariantColor.withValues(
+                        alpha: 0.15,
                       ),
                     ),
-                ],
+                  ),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final cell in row.cells)
+                      Container(
+                        constraints: const BoxConstraints(minWidth: 60),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color:
+                              row.isHeader
+                                  ? widget.settings.onSurfaceVariantColor
+                                      .withValues(alpha: 0.08)
+                                  : null,
+                        ),
+                        child: Text.rich(
+                          TextSpan(
+                            children: [
+                              for (final span in cell)
+                                _listOrTableSpan(
+                                  span,
+                                  weight:
+                                      row.isHeader
+                                          ? FontWeight.w700
+                                          : span.isBold
+                                          ? FontWeight.w700
+                                          : FontWeight.w400,
+                                ),
+                            ],
+                          ),
+                          strutStyle: widget.settings.bodyStrutStyle(),
+                        ),
+                      ),
+                  ],
+                ),
               ),
           ],
         ),
