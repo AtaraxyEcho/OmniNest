@@ -17,11 +17,13 @@ enum AppBackdropMediaType {
   }
 }
 
-/// 应用本机背景来源类型。
+/// 内置动态壁纸的稳定素材 ID,三端一致且不受服务端素材库影响。
+const String bundledDefaultWallpaperId = 'bundled-default-wallpaper-v1';
+
+/// 应用背景来源类型。
 enum AppBackdropSourceType {
   bundled('bundled'),
-  file('file'),
-  directory('directory');
+  server('server');
 
   const AppBackdropSourceType(this.value);
 
@@ -31,7 +33,7 @@ enum AppBackdropSourceType {
     final text = value?.toString();
     return AppBackdropSourceType.values.firstWhere(
       (type) => type.value == text,
-      orElse: () => AppBackdropSourceType.file,
+      orElse: () => AppBackdropSourceType.bundled,
     );
   }
 }
@@ -81,6 +83,8 @@ class AppBackdropAsset {
   });
 
   final String id;
+
+  /// 素材引用:bundled 为本机路径或 Web 打包资产地址,server 素材为空串。
   final String path;
   final String title;
   final AppBackdropMediaType mediaType;
@@ -254,6 +258,33 @@ class AppBackdropSettings {
       videoMuted: videoMuted ?? this.videoMuted,
     );
   }
+
+  @override
+  bool operator ==(Object other) {
+    return other is AppBackdropSettings &&
+        other.enabled == enabled &&
+        other.selectedBackdropId == selectedBackdropId &&
+        other.separateDeviceBackdrops == separateDeviceBackdrops &&
+        other.desktopBackdropId == desktopBackdropId &&
+        other.mobileBackdropId == mobileBackdropId &&
+        other.fit == fit &&
+        other.dimAmount == dimAmount &&
+        other.blurAmount == blurAmount &&
+        other.videoMuted == videoMuted;
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    enabled,
+    selectedBackdropId,
+    separateDeviceBackdrops,
+    desktopBackdropId,
+    mobileBackdropId,
+    fit,
+    dimAmount,
+    blurAmount,
+    videoMuted,
+  );
 }
 
 /// 应用本机背景库状态。

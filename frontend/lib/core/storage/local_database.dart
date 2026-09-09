@@ -52,7 +52,7 @@ class LocalDatabase extends _$LocalDatabase {
     : super(executor ?? connection.openConnection());
 
   @override
-  int get schemaVersion => 18;
+  int get schemaVersion => 19;
 
   @override
   MigrationStrategy get migration {
@@ -199,6 +199,13 @@ class LocalDatabase extends _$LocalDatabase {
               "ALTER TABLE cached_reader_books ADD COLUMN cache_version TEXT NOT NULL DEFAULT ''",
             );
           }
+        }
+        // Schema v19：背景库改为服务端事实来源,清理已退役的本机素材行。
+        // 本机路径无法跨端表达,引用它们的选择会由归一化回落到内置壁纸。
+        if (from >= 12 && from < 19) {
+          await migrator.database.customStatement(
+            "DELETE FROM app_backdrop_assets WHERE source_type IN ('file', 'directory')",
+          );
         }
       },
     );

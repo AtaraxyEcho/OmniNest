@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 import 'package:omninest/core/storage/local_database.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 
 /// 应用本机背景库本地存储。
@@ -41,6 +42,14 @@ class AppBackdropRepository {
     return AppBackdropState(backdrops: backdrops, settings: settings);
   }
 
+  /// 读取当前背景设置。
+  Future<AppBackdropSettings> loadSettings() async {
+    final row =
+        await (_db.select(_db.appBackdropSettingsTable)
+          ..where((table) => table.id.equals(settingsId))).getSingleOrNull();
+    return _mapSettings(row);
+  }
+
   /// 保存本机背景素材。
   Future<void> upsertBackdrops(List<AppBackdropAsset> backdrops) async {
     if (backdrops.isEmpty) {
@@ -75,6 +84,35 @@ class AppBackdropRepository {
         ),
       );
     });
+  }
+
+  /// 将服务端素材写入本地缓存;非 READY 状态映射为 missing,不参与选择。
+  Future<void> upsertServerAssets(List<BackdropServerAsset> assets) async {
+    if (assets.isEmpty) {
+      return;
+    }
+    final now = DateTime.now();
+    final mapped = assets
+        .map((asset) {
+          final updatedAt = asset.updatedAt ?? now;
+          return AppBackdropAsset(
+            id: asset.id,
+            path: '',
+            title: asset.title,
+            mediaType: AppBackdropMediaType.fromValue(asset.mediaType),
+            sourceType: AppBackdropSourceType.server,
+            fileSize: asset.fileSize,
+            modifiedAt: updatedAt,
+            width: asset.width,
+            height: asset.height,
+            durationMs: asset.durationMs,
+            missing: !asset.isSelectable,
+            createdAt: updatedAt,
+            updatedAt: updatedAt,
+          );
+        })
+        .toList(growable: false);
+    await upsertBackdrops(mapped);
   }
 
   /// 删除本机背景素材。
@@ -210,6 +248,10 @@ class AppBackdropRepository {
   }
 
   String? _availableSelection(String? id, Set<String> availableIds) {
+    // 内置壁纸三端恒可用,不依赖缓存行是否存在。
+    if (id != null && id == bundledDefaultWallpaperId) {
+      return id;
+    }
     if (id == null || id.isEmpty || !availableIds.contains(id)) {
       return null;
     }

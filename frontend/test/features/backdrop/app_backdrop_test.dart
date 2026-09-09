@@ -1,35 +1,75 @@
-import 'dart:io';
-
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
-import 'package:omninest/features/backdrop/data/app_backdrop_scanner.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
+import 'package:omninest/features/backdrop/domain/app_backdrop_settings_json.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_scene_scope.dart';
 
+class _MockBackdropApi extends Mock implements BackdropApi {}
+
+class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
+  @override
+  Future<AppBackdropAsset?> install() async => null;
+}
+
+class _NoopBackdropPreferencesController extends BackdropPreferencesController {
+  _NoopBackdropPreferencesController(this._repository);
+
+  final AppBackdropRepository _repository;
+
+  @override
+  Future<AppBackdropSettings> build() async {
+    return await _repository.loadSettings();
+  }
+
+  @override
+  Future<void> save(AppBackdropSettings settings) async {
+    await _repository.saveSettings(settings);
+    state = AsyncData(settings);
+  }
+}
+
 void main() {
+  setUpAll(() {
+    registerFallbackValue(
+      BackdropServerAsset(
+        id: 'fallback',
+        title: 'fallback',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 0,
+      ),
+    );
+  });
+
   group('AppBackdropState', () {
     final first = AppBackdropAsset(
       id: 'first',
-      path: 'D:/Media/first.jpg',
+      path: '',
       title: 'first',
       mediaType: AppBackdropMediaType.image,
-      sourceType: AppBackdropSourceType.file,
+      sourceType: AppBackdropSourceType.server,
       fileSize: 1024,
       modifiedAt: DateTime(2026),
       createdAt: DateTime(2026),
       updatedAt: DateTime(2026),
     );
-    final second = first.copyWith(id: 'second', path: 'D:/Media/second.mp4');
+    final second = first.copyWith(
+      id: 'second',
+      mediaType: AppBackdropMediaType.video,
+    );
 
     test('没有显式选择时不返回背景', () {
       final state = AppBackdropState(backdrops: [first, second]);
@@ -99,6 +139,20 @@ void main() {
       expect(desktop.hasActiveBackdrop, isTrue);
       expect(mobile.hasActiveBackdrop, isTrue);
     });
+
+    test('PROCESSING/FAILED 素材不可作为活动背景', () {
+      final processing = first.copyWith(id: 'processing', missing: true);
+      final state = AppBackdropState(
+        backdrops: [processing],
+        settings: const AppBackdropSettings(
+          enabled: true,
+          selectedBackdropId: 'processing',
+        ),
+      );
+
+      expect(state.selectedBackdrop?.missing, isTrue);
+      expect(state.hasActiveBackdrop, isFalse);
+    });
   });
 
   group('AppBackdropSettings', () {
@@ -136,9 +190,90 @@ void main() {
       expect(restored.desktopBackdropId, 'desktop');
       expect(restored.mobileBackdropId, 'mobile');
     });
+
+    test('相同字段的设置相等', () {
+      const settings = AppBackdropSettings(
+        enabled: true,
+        selectedBackdropId: 'a',
+      );
+
+      expect(
+        settings,
+        const AppBackdropSettings(enabled: true, selectedBackdropId: 'a'),
+      );
+      expect(
+        settings,
+        isNot(
+          const AppBackdropSettings(enabled: true, selectedBackdropId: 'b'),
+        ),
+      );
+    });
   });
 
-  group('AppBackdropRepository bundled asset', () {
+  group('AppBackdropSettingsJson', () {
+    test('缺失键回落到当前设置', () {
+      const fallback = AppBackdropSettings(
+        enabled: true,
+        selectedBackdropId: 'kept',
+        dimAmount: 0.2,
+      );
+
+      final settings = AppBackdropSettingsJson.fromPreferences(
+        const {},
+        fallback,
+      );
+
+      expect(settings.enabled, isTrue);
+      expect(settings.selectedBackdropId, 'kept');
+      expect(settings.dimAmount, 0.2);
+    });
+
+    test('服务端键覆盖当前值且空选择映射为 null', () {
+      const fallback = AppBackdropSettings(enabled: false);
+
+      final settings = AppBackdropSettingsJson.fromPreferences(const {
+        'enabled': true,
+        'selectedAssetId': 'server-1',
+        'separateDeviceBackdrops': true,
+        'desktopAssetId': 'server-1',
+        'mobileAssetId': null,
+        'fit': 'contain',
+        'dimAmount': 0.3,
+        'blurAmount': 4.0,
+        'videoMuted': false,
+      }, fallback);
+
+      expect(settings.enabled, isTrue);
+      expect(settings.selectedBackdropId, 'server-1');
+      expect(settings.separateDeviceBackdrops, isTrue);
+      expect(settings.desktopBackdropId, 'server-1');
+      expect(settings.mobileBackdropId, isNull);
+      expect(settings.fit, AppBackdropFit.contain);
+      expect(settings.dimAmount, 0.3);
+      expect(settings.blurAmount, 4.0);
+      expect(settings.videoMuted, isFalse);
+    });
+
+    test('toChanges 输出全量键值', () {
+      const settings = AppBackdropSettings(
+        enabled: true,
+        selectedBackdropId: bundledDefaultWallpaperId,
+      );
+
+      final changes = AppBackdropSettingsJson.toChanges(settings);
+
+      expect(changes['enabled'], isTrue);
+      expect(changes['selectedAssetId'], bundledDefaultWallpaperId);
+      expect(changes['fit'], 'cover');
+      expect(changes['videoMuted'], isTrue);
+      expect(
+        changes.keys,
+        containsAll(['separateDeviceBackdrops', 'dimAmount', 'blurAmount']),
+      );
+    });
+  });
+
+  group('AppBackdropRepository', () {
     test('默认动态壁纸已打包进 Flutter 资源', () async {
       final data = await rootBundle.load(
         'assets/backdrops/default_wallpaper.mp4',
@@ -151,12 +286,16 @@ void main() {
       final database = LocalDatabase(NativeDatabase.memory());
       final repository = AppBackdropRepository(database);
       addTearDown(database.close);
-      final bundled = _backdrop(
-        'bundled',
-        'D:/App/backdrops/default.mp4',
-      ).copyWith(
+      final bundled = AppBackdropAsset(
+        id: bundledDefaultWallpaperId,
+        path: 'D:/App/backdrops/default.mp4',
+        title: 'OmniNest',
         mediaType: AppBackdropMediaType.video,
         sourceType: AppBackdropSourceType.bundled,
+        fileSize: 5950165,
+        modifiedAt: DateTime(2026),
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
       );
 
       await repository.ensureBundledBackdrop(bundled);
@@ -165,7 +304,7 @@ void main() {
       expect(initial.settings.enabled, isTrue);
       expect(initial.selectedBackdrop?.id, bundled.id);
 
-      final custom = _backdrop('custom', 'D:/Media/custom.jpg');
+      final custom = _backdrop('custom');
       await repository.upsertBackdrops([custom]);
 
       await repository.saveSettings(
@@ -182,14 +321,18 @@ void main() {
       final database = LocalDatabase(NativeDatabase.memory());
       final repository = AppBackdropRepository(database);
       addTearDown(database.close);
-      final bundled = _backdrop(
-        'bundled',
-        'D:/App/backdrops/default.mp4',
-      ).copyWith(
+      final bundled = AppBackdropAsset(
+        id: bundledDefaultWallpaperId,
+        path: 'D:/App/backdrops/default.mp4',
+        title: 'OmniNest',
         mediaType: AppBackdropMediaType.video,
         sourceType: AppBackdropSourceType.bundled,
+        fileSize: 5950165,
+        modifiedAt: DateTime(2026),
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
       );
-      final custom = _backdrop('custom', 'D:/Media/custom.jpg');
+      final custom = _backdrop('custom');
       await repository.ensureBundledBackdrop(bundled);
       await repository.upsertBackdrops([custom]);
 
@@ -202,107 +345,182 @@ void main() {
       expect(cleared.backdrops.single.id, bundled.id);
       expect(cleared.settings.selectedBackdropId, bundled.id);
     });
-  });
 
-  group('AppBackdropScanner', () {
-    test('同目录 preview 文件只作为卡片预览，不作为背景入库', () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'portal_backdrop_',
+    test('服务端素材写入缓存且非 READY 状态不可选', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      addTearDown(database.close);
+      final ready = BackdropServerAsset(
+        id: 'server-ready',
+        title: 'ready',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
       );
-      addTearDown(() async {
-        if (await directory.exists()) {
-          await directory.delete(recursive: true);
-        }
-      });
-      final preview = File(
-        '${directory.path}${Platform.pathSeparator}preview.gif',
+      final processing = BackdropServerAsset(
+        id: 'server-processing',
+        title: 'processing',
+        mediaType: 'image',
+        status: 'PROCESSING',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
       );
-      final video = File('${directory.path}${Platform.pathSeparator}scene.mp4');
-      await preview.writeAsBytes([0x47, 0x49, 0x46]);
-      await video.writeAsBytes([0x00, 0x00, 0x00, 0x18]);
 
-      final scanner = AppBackdropScanner();
-      final backdrops = await scanner.scanDirectory(directory.path);
+      await repository.upsertServerAssets([ready, processing]);
+      final state = await repository.loadState();
 
-      expect(backdrops, hasLength(1));
-      expect(backdrops.single.path, video.path);
-      expect(backdrops.single.thumbnailPath, preview.path);
-      expect(backdrops.single.mediaType, AppBackdropMediaType.video);
+      final cached = state.backdrops.where(
+        (backdrop) => backdrop.sourceType == AppBackdropSourceType.server,
+      );
+      expect(cached, hasLength(2));
+      expect(
+        state.backdrops
+            .firstWhere((backdrop) => backdrop.id == 'server-ready')
+            .missing,
+        isFalse,
+      );
+      expect(
+        state.backdrops
+            .firstWhere((backdrop) => backdrop.id == 'server-processing')
+            .missing,
+        isTrue,
+      );
+      expect(state.settings.selectedBackdropId, isNull);
+    });
+
+    test('内置壁纸选择在缓存行缺失时仍然有效', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      addTearDown(database.close);
+
+      await repository.saveSettings(
+        const AppBackdropSettings(
+          enabled: true,
+          selectedBackdropId: bundledDefaultWallpaperId,
+        ),
+      );
+      final state = await repository.loadState();
+
+      expect(state.selectedBackdrop, isNull);
+      expect(state.settings.selectedBackdropId, bundledDefaultWallpaperId);
     });
   });
 
   group('AppBackdropController', () {
-    test('扫描视频目录只导入素材且选择操作不隐式启用播放', () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'portal_backdrop_controller_',
-      );
-      final video = File('${directory.path}${Platform.pathSeparator}scene.mp4');
-      await video.writeAsBytes([0x00, 0x00, 0x00, 0x18]);
+    test('服务端素材经缓存可选择且不隐式启用播放', () async {
       final database = LocalDatabase(NativeDatabase.memory());
       final repository = AppBackdropRepository(database);
+      final api = _MockBackdropApi();
+      final serverAsset = BackdropServerAsset(
+        id: 'server-1',
+        title: 'server',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
+      );
+      when(() => api.list()).thenAnswer((_) async => [serverAsset]);
       final container = ProviderContainer.test(
         overrides: [
           appBackdropRepositoryProvider.overrideWithValue(repository),
           appBackdropBundledAssetInstallerProvider.overrideWithValue(
             _NoopBundledAssetInstaller(),
           ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
         ],
       );
       addTearDown(() async {
         container.dispose();
         await database.close();
-        if (await directory.exists()) {
-          await directory.delete(recursive: true);
-        }
       });
 
       await container.read(appBackdropControllerProvider.future);
       final notifier = container.read(appBackdropControllerProvider.notifier);
-      await notifier.scanDirectoryPath(directory.path);
-
-      final imported =
-          container.read(appBackdropControllerProvider).requireValue;
-      expect(imported.backdrops, hasLength(1));
-      expect(imported.settings.selectedBackdropId, isNull);
-      expect(imported.hasActiveBackdrop, isFalse);
-
-      await notifier.selectBackdrop(imported.backdrops.single.id);
+      await notifier.selectBackdrop('server-1');
 
       final selected =
           container.read(appBackdropControllerProvider).requireValue;
       expect(
-        selected.settings.selectedBackdropId,
-        imported.backdrops.single.id,
+        selected.backdrops.where(
+          (backdrop) => backdrop.sourceType == AppBackdropSourceType.server,
+        ),
+        isNotEmpty,
       );
+      expect(selected.settings.selectedBackdropId, 'server-1');
       expect(selected.settings.enabled, isFalse);
       expect(selected.hasActiveBackdrop, isFalse);
+
+      await notifier.setEnabled(true);
+
+      final enabled =
+          container.read(appBackdropControllerProvider).requireValue;
+      expect(enabled.settings.enabled, isTrue);
+      expect(enabled.hasActiveBackdrop, isTrue);
+    });
+
+    test('离线时保留服务端素材缓存', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final serverAsset = BackdropServerAsset(
+        id: 'server-cached',
+        title: 'cached',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
+      );
+      await repository.upsertServerAssets([serverAsset]);
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenThrow(Exception('offline'));
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      final state = await container.read(appBackdropControllerProvider.future);
+
+      expect(
+        state.backdrops.where((backdrop) => backdrop.id == 'server-cached'),
+        isNotEmpty,
+      );
     });
 
     test('桌面端改选隔离壁纸不会覆盖移动端槽位', () async {
-      final directory = await Directory.systemTemp.createTemp(
-        'portal_backdrop_separation_',
-      );
-      final desktopFile = File(
-        '${directory.path}${Platform.pathSeparator}desktop.jpg',
-      );
-      final mobileFile = File(
-        '${directory.path}${Platform.pathSeparator}mobile.jpg',
-      );
-      await desktopFile.writeAsBytes([0xFF, 0xD8, 0xFF]);
-      await mobileFile.writeAsBytes([0xFF, 0xD8, 0xFF]);
       final database = LocalDatabase(NativeDatabase.memory());
       final repository = AppBackdropRepository(database);
-      final desktopBackdrop = _backdrop('desktop', desktopFile.path);
-      final mobileBackdrop = _backdrop('mobile', mobileFile.path);
+      final desktopBackdrop = _backdrop('desktop');
+      final mobileBackdrop = _backdrop('mobile');
       await repository.upsertBackdrops([desktopBackdrop, mobileBackdrop]);
       await repository.saveSettings(
         const AppBackdropSettings(selectedBackdropId: 'mobile'),
       );
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => const []);
       final desktopContainer = ProviderContainer.test(
         overrides: [
           appBackdropRepositoryProvider.overrideWithValue(repository),
           appBackdropBundledAssetInstallerProvider.overrideWithValue(
             _NoopBundledAssetInstaller(),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
           ),
           appBackdropSelectionTargetProvider.overrideWithValue(
             AppBackdropSelectionTarget.desktop,
@@ -315,6 +533,10 @@ void main() {
           appBackdropBundledAssetInstallerProvider.overrideWithValue(
             _NoopBundledAssetInstaller(),
           ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
           appBackdropSelectionTargetProvider.overrideWithValue(
             AppBackdropSelectionTarget.mobile,
           ),
@@ -324,9 +546,6 @@ void main() {
         desktopContainer.dispose();
         mobileContainer.dispose();
         await database.close();
-        if (await directory.exists()) {
-          await directory.delete(recursive: true);
-        }
       });
 
       await desktopContainer.read(appBackdropControllerProvider.future);
@@ -456,21 +675,16 @@ void main() {
   });
 }
 
-AppBackdropAsset _backdrop(String id, String path) {
+AppBackdropAsset _backdrop(String id) {
   return AppBackdropAsset(
     id: id,
-    path: path,
+    path: '',
     title: id,
     mediaType: AppBackdropMediaType.image,
-    sourceType: AppBackdropSourceType.file,
+    sourceType: AppBackdropSourceType.server,
     fileSize: 1024,
     modifiedAt: DateTime(2026),
     createdAt: DateTime(2026),
     updatedAt: DateTime(2026),
   );
-}
-
-class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
-  @override
-  Future<AppBackdropAsset?> install() async => null;
 }

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_controls.dart';
@@ -171,34 +170,14 @@ class _AppBackdropSettingsContentState
                   spacing: 10,
                   runSpacing: 8,
                   children: [
-                    AppBackdropActionButton(
-                      palette: widget.palette,
-                      icon: Icons.add_photo_alternate_rounded,
-                      label: l10n.portalLocalBackdropAddFiles,
-                      onTap:
-                          widget.state.isScanning
-                              ? null
-                              : widget.notifier.addFiles,
-                    ),
-                    if (isDesktopPlatform)
-                      AppBackdropActionButton(
-                        palette: widget.palette,
-                        icon: Icons.folder_open_rounded,
-                        label: l10n.portalLocalBackdropScanDirectory,
-                        onTap:
-                            widget.state.isScanning
-                                ? null
-                                : widget.notifier.scanDirectory,
-                      ),
-                    if (widget.state.backdrops.isNotEmpty)
+                    if (widget.state.backdrops.any(
+                      (backdrop) => !backdrop.isBundled,
+                    ))
                       AppBackdropActionButton(
                         palette: widget.palette,
                         icon: Icons.delete_sweep_rounded,
                         label: l10n.portalLocalBackdropClearAll,
-                        onTap:
-                            widget.state.isScanning
-                                ? null
-                                : () => _confirmClearAll(context, l10n),
+                        onTap: () => _confirmClearAll(context, l10n),
                       ),
                   ],
                 ),
@@ -223,16 +202,6 @@ class _AppBackdropSettingsContentState
             options: filterOptions,
             onChanged: (value) => setState(() => _filter = value),
           ),
-          if (widget.state.message != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              _messageText(l10n, widget.state.message!),
-              style: TextStyle(
-                color: widget.palette.accentAlt,
-                fontSize: AppTypography.bodySmall,
-              ),
-            ),
-          ],
           const SizedBox(height: 18),
           Expanded(
             child:
@@ -326,13 +295,6 @@ class _AppBackdropSettingsContentState
           count: entry.value,
         ),
     ];
-  }
-
-  String _messageText(AppLocalizations l10n, AppBackdropMessage message) {
-    return switch (message) {
-      AppBackdropMessage.emptyScan => l10n.portalLocalBackdropEmptyScan,
-      AppBackdropMessage.scanFailed => l10n.portalLocalBackdropScanFailed,
-    };
   }
 
   Future<void> _confirmClearAll(

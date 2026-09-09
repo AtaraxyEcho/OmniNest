@@ -4,9 +4,12 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
@@ -18,11 +21,17 @@ void main() {
     tester.view.devicePixelRatio = 1;
     final database = LocalDatabase(NativeDatabase.memory());
     final repository = AppBackdropRepository(database);
+    final api = _MockBackdropApi();
+    when(() => api.list()).thenAnswer((_) async => []);
     final container = ProviderContainer.test(
       overrides: [
         appBackdropRepositoryProvider.overrideWithValue(repository),
         appBackdropBundledAssetInstallerProvider.overrideWithValue(
           _NoopBundledAssetInstaller(),
+        ),
+        appBackdropApiProvider.overrideWithValue(api),
+        backdropPreferencesProvider.overrideWith(
+          () => _NoopBackdropPreferencesController(repository),
         ),
         appBackdropSelectionTargetProvider.overrideWithValue(
           AppBackdropSelectionTarget.mobile,
@@ -90,4 +99,23 @@ void main() {
 class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   @override
   Future<AppBackdropAsset?> install() async => null;
+}
+
+class _MockBackdropApi extends Mock implements BackdropApi {}
+
+class _NoopBackdropPreferencesController extends BackdropPreferencesController {
+  _NoopBackdropPreferencesController(this._repository);
+
+  final AppBackdropRepository _repository;
+
+  @override
+  Future<AppBackdropSettings> build() async {
+    return await _repository.loadSettings();
+  }
+
+  @override
+  Future<void> save(AppBackdropSettings settings) async {
+    await _repository.saveSettings(settings);
+    state = AsyncData(settings);
+  }
 }
