@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TaskQueryService {
 
     private final TaskRecordRepository taskRecordRepository;
+    private final TaskRedispatchService taskRedispatchService;
 
     /**
      * 查询最近任务列表
@@ -98,7 +99,10 @@ public class TaskQueryService {
     }
 
     /**
-     * 重试死信队列中的任务
+     * 重试死信队列中的任务。
+     *
+     * <p>除重置状态外，还必须按记录重建载荷并经 Outbox 重新投递；只改状态
+     * 不投递会让任务永远停留在 QUEUED。</p>
      *
      * @param taskId 任务 ID
      */
@@ -109,10 +113,11 @@ public class TaskQueryService {
         if (!TaskStatus.DLQ.getValue().equals(task.getStatus())) {
             throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "仅可重试死信队列中的任务");
         }
-        log.info("重试死信任务: taskId={}", taskId);
         task.setStatus(TaskStatus.QUEUED.getValue());
         task.setRetryCount(0);
         task.setErrorMessage(null);
         taskRecordRepository.save(task);
+        taskRedispatchService.redispatch(task);
+        log.info("重试死信任务并重新投递: taskId={}, taskType={}", taskId, task.getTaskType());
     }
 }

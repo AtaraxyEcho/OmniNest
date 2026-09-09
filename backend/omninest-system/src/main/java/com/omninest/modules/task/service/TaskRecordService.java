@@ -498,6 +498,27 @@ public class TaskRecordService {
     }
 
     /**
+     * 查询疑似投递断链的停滞任务：QUEUED 长时间未开始或 RETRY_WAIT 已过
+     * 计划重投时间。调用方需结合投递记录存活状态裁决是否重新投递。
+     *
+     * @param createdAtCutoff QUEUED 创建截止时间
+     * @param retryDueCutoff RETRY_WAIT 计划重投截止时间
+     * @param limit 批次上限
+     * @return 停滞任务记录
+     */
+    @Transactional(readOnly = true)
+    public List<TaskRecord> listStuckTasks(Instant createdAtCutoff, Instant retryDueCutoff, int limit) {
+        int safeLimit = Math.max(1, Math.min(limit, 500));
+        return taskRecordRepository.findStuckTasks(
+                TaskStatus.QUEUED.getValue(),
+                TaskStatus.RETRY_WAIT.getValue(),
+                createdAtCutoff,
+                retryDueCutoff,
+                PageRequest.of(0, safeLimit)
+        );
+    }
+
+    /**
      * 查询心跳超时的运行任务标识。
      *
      * @param taskType 任务类型

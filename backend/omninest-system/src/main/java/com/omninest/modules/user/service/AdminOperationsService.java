@@ -1,18 +1,15 @@
 package com.omninest.modules.user.service;
 
-import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.TypeReference;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
-import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.runtime.WorkerRuntimeRegistry;
 import com.omninest.common.runtime.WorkerRuntimeState;
 import com.omninest.common.security.Roles;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.modules.task.service.TaskRedispatchService;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.AuthLoginAudit;
 import com.omninest.modules.user.domain.AuthPermission;
@@ -60,8 +57,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 管理控制台操作服务。
@@ -72,8 +67,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 @RequiredArgsConstructor
 public class AdminOperationsService {
-    private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {
-    };
     private static final int DEFAULT_TASK_LIMIT = 100;
     private static final int DEFAULT_LOG_LIMIT = 100;
     private static final int DEFAULT_SESSION_LIMIT = 500;
@@ -92,7 +85,7 @@ public class AdminOperationsService {
     private final ExternalStorageAdministration externalStorageAdministration;
     private final AuditLogAdminRepository auditLogAdminRepository;
     private final AdminAuditLogService auditLogService;
-    private final DomainEventPublisher publisher;
+    private final TaskRedispatchService taskRedispatchService;
     private final ObjectStorageBuckets objectStorageBuckets;
     private final HealthEndpoint healthEndpoint;
     private final ActiveSessionRepository activeSessionRepository;
@@ -194,7 +187,12 @@ public class AdminOperationsService {
         if (routingKey == null || routingKey.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "任务缺少路由键，无法重新投递");
         }
-        Map<String, Object> retryPayload = rebuildRetryPayload(taskId, toText(row[1]), routingKey, toText(row[9]));
+        Map<String, Object> retryPayload = taskRedispatchService.rebuildPayload(
+                taskId,
+                toText(row[1]),
+                routingKey,
+                toText(row[9])
+        );
         // 使用 EntityManager RETURNING 获取更新后的完整记录
         AdminOperationsDto.TaskRecordItem retried = metricsRepository.updateTaskStatusReturning(
                 taskId,
@@ -202,181 +200,8 @@ public class AdminOperationsService {
                 0
         );
         auditLogService.record(actorUserId, "ADMIN_TASK_RETRY", "sys_tasks", taskId);
-        publishTaskAfterCommit(routingKey, retryPayload);
+        taskRedispatchService.enqueueRedispatch(taskId, routingKey, retryPayload);
         return retried;
-    }
-
-    private Map<String, Object> rebuildRetryPayload(
-            UUID taskId,
-            String taskType,
-            String routingKey,
-            String payloadJson
-    ) {
-        Map<String, Object> payload = parsePayload(payloadJson);
-        return switch (routingKey) {
-            case QueueNames.FILE_INDEX_ROUTING_KEY,
-                    QueueNames.TEXT_EXTRACTION_ROUTING_KEY,
-                    QueueNames.THUMBNAIL_ROUTING_KEY -> fileUploadedPayload(payload);
-            case QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY -> Map.of("taskId", taskId.toString());
-            case QueueNames.EXTERNAL_IMPORT_ROUTING_KEY -> Map.of(
-                    "taskId", requiredUuid(payload, "importTaskId").toString()
-            );
-            case QueueNames.MUSIC_SCAN_ROUTING_KEY,
-                    QueueNames.PHOTO_SCAN_ROUTING_KEY -> Map.of(
-                    "jobId", requiredUuid(payload, "jobId").toString(),
-                    "ownerUserId", requiredUuid(payload, "ownerUserId").toString()
-            );
-            case QueueNames.MUSIC_SCRAPE_ROUTING_KEY -> Map.of(
-                    "jobId", requiredUuid(payload, "jobId").toString(),
-                    "ownerUserId", requiredUuid(payload, "ownerUserId").toString(),
-                    "force", booleanValue(payload.get("force"))
-            );
-            case QueueNames.MEDIA_SCRAPE_ROUTING_KEY -> mediaScrapePayload(taskId, payload);
-            case QueueNames.VIDEO_TRANSCODE_ROUTING_KEY -> transcodePayload(taskId, payload);
-            case QueueNames.LOCAL_VIDEO_LIBRARY_SCAN_ROUTING_KEY,
-                    QueueNames.LOCAL_VIDEO_LIBRARY_APPLY_ROUTING_KEY -> Map.of(
-                    "taskId", taskId.toString(),
-                    "ownerUserId", requiredUuid(payload, "ownerUserId").toString(),
-                    "sourceId", requiredUuid(payload, "sourceId").toString(),
-                    "scanRunId", requiredUuid(payload, "scanRunId").toString()
-            );
-            case QueueNames.COMIC_PARSE_ROUTING_KEY -> comicParsePayload(taskId, payload);
-            case QueueNames.PHOTO_BATCH_ROUTING_KEY -> Map.of(
-                    "taskId", taskId.toString(),
-                    "ownerUserId", requiredUuid(payload, "ownerUserId").toString()
-            );
-            case QueueNames.PHOTO_INDEX_ROUTING_KEY -> Map.of(
-                    "photoId", requiredUuid(payload, "photoId").toString(),
-                    "ownerUserId", requiredUuid(payload, "ownerUserId").toString()
-            );
-            case QueueNames.PHOTO_AI_ROUTING_KEY -> Map.of(
-                    "photoId", requiredUuid(payload, "photoId").toString(),
-                    "ownerUserId", requiredUuid(payload, "ownerUserId").toString()
-            );
-            default -> throw new BusinessException(
-                    ErrorCode.PARAM_ERROR,
-                    "任务类型不支持从管理后台重试: " + (taskType == null ? routingKey : taskType)
-            );
-        };
-    }
-
-    private Map<String, Object> fileUploadedPayload(Map<String, Object> payload) {
-        return Map.of(
-                "fileNodeId", requiredUuid(payload, "fileNodeId").toString(),
-                "fileObjectId", requiredUuid(payload, "fileObjectId").toString(),
-                "ownerUserId", requiredUuid(payload, "ownerUserId").toString(),
-                "bucket", requiredText(payload, "bucket"),
-                "objectKey", requiredText(payload, "objectKey"),
-                "fileName", requiredText(payload, "fileName"),
-                "mimeType", requiredText(payload, "mimeType"),
-                "sizeBytes", longValue(payload.get("sizeBytes")),
-                "occurredAt", optionalText(payload, "occurredAt", Instant.now().toString())
-        );
-    }
-
-    private Map<String, Object> mediaScrapePayload(UUID taskId, Map<String, Object> payload) {
-        Map<String, Object> retryPayload = new LinkedHashMap<>();
-        retryPayload.put("taskId", taskId.toString());
-        retryPayload.put("ownerUserId", requiredUuid(payload, "ownerUserId").toString());
-        retryPayload.put("fileNodeId", requiredUuid(payload, "fileNodeId").toString());
-        retryPayload.put("title", optionalText(payload, "title", null));
-        retryPayload.put("year", optionalInteger(payload.get("year")));
-        retryPayload.put("seasonNumber", optionalInteger(payload.get("seasonNumber")));
-        retryPayload.put("episodeNumber", optionalInteger(payload.get("episodeNumber")));
-        retryPayload.put("force", booleanValue(payload.get("force")));
-        return retryPayload;
-    }
-
-    private Map<String, Object> transcodePayload(UUID taskId, Map<String, Object> payload) {
-        return Map.of(
-                "taskId", taskId.toString(),
-                "videoItemId", requiredUuid(payload, "videoItemId").toString(),
-                "ownerUserId", requiredUuid(payload, "ownerUserId").toString(),
-                "audioOnly", booleanValue(payload.get("audioOnly")),
-                "webOptimize", booleanValue(payload.get("webOptimize"))
-        );
-    }
-
-    private Map<String, Object> comicParsePayload(UUID taskId, Map<String, Object> payload) {
-        return Map.of(
-                "taskId", taskId.toString(),
-                "ownerUserId", requiredUuid(payload, "ownerUserId").toString(),
-                "itemId", requiredUuid(payload, "itemId").toString(),
-                "sourceId", requiredUuid(payload, "sourceId").toString(),
-                "fileNodeId", requiredUuid(payload, "fileNodeId").toString(),
-                "fileFormat", requiredText(payload, "fileFormat"),
-                "contentHash", requiredText(payload, "contentHash"),
-                "isRetry", true
-        );
-    }
-
-    private Map<String, Object> parsePayload(String payloadJson) {
-        if (payloadJson == null || payloadJson.isBlank()) {
-            return Map.of();
-        }
-        try {
-            Map<String, Object> parsed = JSON.parseObject(payloadJson, MAP_TYPE);
-            return parsed == null ? Map.of() : parsed;
-        } catch (RuntimeException ex) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "任务载荷不是合法 JSON，无法重试");
-        }
-    }
-
-    private UUID requiredUuid(Map<String, Object> payload, String key) {
-        String value = requiredText(payload, key);
-        try {
-            return UUID.fromString(value);
-        } catch (IllegalArgumentException ex) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "任务载荷字段格式错误: " + key);
-        }
-    }
-
-    private String requiredText(Map<String, Object> payload, String key) {
-        String value = optionalText(payload, key, null);
-        if (value == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "任务缺少可重试载荷字段: " + key);
-        }
-        return value;
-    }
-
-    private String optionalText(Map<String, Object> payload, String key, String defaultValue) {
-        Object value = payload.get(key);
-        if (value == null || value.toString().isBlank()) {
-            return defaultValue;
-        }
-        return value.toString().trim();
-    }
-
-    private Integer optionalInteger(Object value) {
-        if (value == null || value.toString().isBlank()) {
-            return null;
-        }
-        if (value instanceof Number number) {
-            return number.intValue();
-        }
-        try {
-            return Integer.parseInt(value.toString());
-        } catch (NumberFormatException ex) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "任务载荷数字字段格式错误");
-        }
-    }
-
-    private long longValue(Object value) {
-        if (value instanceof Number number) {
-            return number.longValue();
-        }
-        try {
-            return Long.parseLong(value.toString());
-        } catch (RuntimeException ex) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "任务载荷 sizeBytes 格式错误");
-        }
-    }
-
-    private boolean booleanValue(Object value) {
-        if (value instanceof Boolean bool) {
-            return bool;
-        }
-        return value != null && Boolean.parseBoolean(value.toString());
     }
 
     /**
@@ -586,20 +411,6 @@ public class AdminOperationsService {
         detail.put("reportedAt", state.reportedAt());
         detail.put("capabilities", state.capabilities());
         return detail;
-    }
-
-    private void publishTaskAfterCommit(String routingKey, Map<String, Object> payload) {
-        Runnable publishTask = () -> publisher.publishTask(routingKey, payload);
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            publishTask.run();
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                publishTask.run();
-            }
-        });
     }
 
     @Transactional(readOnly = true)

@@ -12,7 +12,6 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.runtime.WorkerRuntimeRegistry;
 import com.omninest.common.runtime.WorkerRuntimeState;
@@ -21,6 +20,8 @@ import com.omninest.common.security.Roles;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.modules.task.service.TaskDispatchService;
+import com.omninest.modules.task.service.TaskRedispatchService;
 import com.omninest.modules.user.domain.AuditLog;
 import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
@@ -49,7 +50,6 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.boot.health.actuate.endpoint.HealthEndpoint;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class AdminOperationsServiceTest {
     private final AuthRoleRepository authRoleRepository = mock(AuthRoleRepository.class);
@@ -62,7 +62,9 @@ class AdminOperationsServiceTest {
             mock(ExternalStorageAdministration.class);
     private final AuditLogAdminRepository auditLogAdminRepository = mock(AuditLogAdminRepository.class);
     private final AdminAuditLogService auditLogService = mock(AdminAuditLogService.class);
-    private final DomainEventPublisher publisher = mock(DomainEventPublisher.class);
+    private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
+    private final TaskRedispatchService taskRedispatchService =
+            new TaskRedispatchService(taskDispatchService);
     private final ObjectStorageBuckets objectStorageBuckets = createObjectStorageBuckets();
     private final HealthEndpoint healthEndpoint = mock(HealthEndpoint.class);
     private final ActiveSessionRepository activeSessionRepository = mock(ActiveSessionRepository.class);
@@ -81,7 +83,7 @@ class AdminOperationsServiceTest {
             externalStorageAdministration,
             auditLogAdminRepository,
             auditLogService,
-            publisher,
+            taskRedispatchService,
             objectStorageBuckets,
             healthEndpoint,
             activeSessionRepository,
@@ -220,28 +222,21 @@ class AdminOperationsServiceTest {
                 )
         );
 
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            var retried = service.retryTask(actorUserId, taskId);
+        var retried = service.retryTask(actorUserId, taskId);
 
-            assertThat(retried.status()).isEqualTo("QUEUED");
-            assertThat(retried.progress()).isZero();
-            verify(publisher, never()).publishTask(any(), any());
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(synchronization -> synchronization.afterCommit());
+        assertThat(retried.status()).isEqualTo("QUEUED");
+        assertThat(retried.progress()).isZero();
 
-            ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
-            verify(publisher).publishTask(eq("file.index"), payloadCaptor.capture());
-            assertThat(payloadCaptor.getValue())
-                    .containsEntry("fileNodeId", fileNodeId.toString())
-                    .containsEntry("fileObjectId", fileObjectId.toString())
-                    .containsEntry("ownerUserId", actorUserId.toString())
-                    .containsEntry("bucket", "user-files")
-                    .containsEntry("objectKey", "objects/a.mp3");
-            verify(auditLogService).record(actorUserId, "ADMIN_TASK_RETRY", "sys_tasks", taskId);
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(taskDispatchService).enqueue(
+                eq(taskId), eq(QueueNames.TASK_EXCHANGE), eq("file.index"), payloadCaptor.capture());
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("fileNodeId", fileNodeId.toString())
+                .containsEntry("fileObjectId", fileObjectId.toString())
+                .containsEntry("ownerUserId", actorUserId.toString())
+                .containsEntry("bucket", "user-files")
+                .containsEntry("objectKey", "objects/a.mp3");
+        verify(auditLogService).record(actorUserId, "ADMIN_TASK_RETRY", "sys_tasks", taskId);
     }
 
     @Test
@@ -288,22 +283,19 @@ class AdminOperationsServiceTest {
                 )
         );
 
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            service.retryTask(actorUserId, taskId);
-            verify(publisher, never()).publishTask(any(), any());
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(synchronization -> synchronization.afterCommit());
+        service.retryTask(actorUserId, taskId);
 
-            ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
-            verify(publisher).publishTask(eq(QueueNames.MUSIC_SCRAPE_ROUTING_KEY), payloadCaptor.capture());
-            assertThat(payloadCaptor.getValue())
-                    .containsEntry("jobId", taskId.toString())
-                    .containsEntry("ownerUserId", actorUserId.toString())
-                    .containsEntry("force", true);
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(taskDispatchService).enqueue(
+                eq(taskId),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.MUSIC_SCRAPE_ROUTING_KEY),
+                payloadCaptor.capture()
+        );
+        assertThat(payloadCaptor.getValue())
+                .containsEntry("jobId", taskId.toString())
+                .containsEntry("ownerUserId", actorUserId.toString())
+                .containsEntry("force", true);
     }
 
     @Test
@@ -340,19 +332,16 @@ class AdminOperationsServiceTest {
                 )
         );
 
-        TransactionSynchronizationManager.initSynchronization();
-        try {
-            service.retryTask(actorUserId, systemTaskId);
-            verify(publisher, never()).publishTask(any(), any());
-            TransactionSynchronizationManager.getSynchronizations()
-                    .forEach(synchronization -> synchronization.afterCommit());
+        service.retryTask(actorUserId, systemTaskId);
 
-            ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
-            verify(publisher).publishTask(eq(QueueNames.EXTERNAL_IMPORT_ROUTING_KEY), payloadCaptor.capture());
-            assertThat(payloadCaptor.getValue()).containsEntry("taskId", importTaskId.toString());
-        } finally {
-            TransactionSynchronizationManager.clearSynchronization();
-        }
+        ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(taskDispatchService).enqueue(
+                eq(systemTaskId),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.EXTERNAL_IMPORT_ROUTING_KEY),
+                payloadCaptor.capture()
+        );
+        assertThat(payloadCaptor.getValue()).containsEntry("taskId", importTaskId.toString());
     }
 
     @Test

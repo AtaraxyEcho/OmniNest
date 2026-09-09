@@ -201,4 +201,29 @@ public interface TaskRecordRepository extends JpaRepository<TaskRecord, UUID> {
             @Param("cutoff") Instant cutoff,
             Pageable pageable
     );
+
+    /**
+     * 查询疑似投递断链的停滞任务：QUEUED 长时间未开始，或 RETRY_WAIT 的
+     * 计划重投时间早已过期且无存活投递记录。
+     *
+     * @param queuedStatus 排队状态值
+     * @param retryWaitStatus 等待重试状态值
+     * @param createdAtCutoff QUEUED 创建截止时间
+     * @param retryDueCutoff RETRY_WAIT 计划重投截止时间
+     * @param pageable 批次限制
+     * @return 停滞任务
+     */
+    @Query("""
+            select task from TaskRecord task
+            where (task.status = :queuedStatus and task.createdAt < :createdAtCutoff)
+               or (task.status = :retryWaitStatus and task.nextRetryAt < :retryDueCutoff)
+            order by task.createdAt asc
+            """)
+    List<TaskRecord> findStuckTasks(
+            @Param("queuedStatus") String queuedStatus,
+            @Param("retryWaitStatus") String retryWaitStatus,
+            @Param("createdAtCutoff") Instant createdAtCutoff,
+            @Param("retryDueCutoff") Instant retryDueCutoff,
+            Pageable pageable
+    );
 }

@@ -10,11 +10,13 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.dto.TaskDto;
 import com.omninest.modules.task.repository.TaskRecordRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -22,12 +24,15 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+
+import static org.mockito.Mockito.never;
 
 /**
  * TaskQueryService 单元测试
@@ -39,11 +44,17 @@ class TaskQueryServiceTest {
     @Mock
     private TaskRecordRepository taskRecordRepository;
 
+    @Mock
+    private TaskDispatchService taskDispatchService;
+
     private TaskQueryService taskQueryService;
 
     @BeforeEach
     void setUp() {
-        taskQueryService = new TaskQueryService(taskRecordRepository);
+        taskQueryService = new TaskQueryService(
+                taskRecordRepository,
+                new TaskRedispatchService(taskDispatchService)
+        );
     }
 
     /**
@@ -180,7 +191,7 @@ class TaskQueryServiceTest {
     class RetryDlqEntryTests {
 
         @Test
-        @DisplayName("重试死信任务成功")
+        @DisplayName("重试死信任务成功并经 Outbox 重新投递")
         void retryDlqEntry_validDeadLetterTask_retriesSuccessfully() {
             // Arrange
             UUID taskId = UUID.randomUUID();
@@ -188,6 +199,8 @@ class TaskQueryServiceTest {
             dlqTask.setId(taskId);
             dlqTask.setRetryCount(3);
             dlqTask.setErrorMessage("处理失败");
+            dlqTask.setRoutingKey(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY);
+            dlqTask.setPayload("{\"taskId\":\"" + taskId + "\"}");
             when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(dlqTask));
 
             // Act
@@ -198,6 +211,30 @@ class TaskQueryServiceTest {
             assertThat(dlqTask.getRetryCount()).isZero();
             assertThat(dlqTask.getErrorMessage()).isNull();
             verify(taskRecordRepository).save(dlqTask);
+            @SuppressWarnings("unchecked")
+            ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+            verify(taskDispatchService).enqueue(
+                    eq(taskId),
+                    eq(QueueNames.TASK_EXCHANGE),
+                    eq(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY),
+                    payloadCaptor.capture()
+            );
+            assertThat(payloadCaptor.getValue()).containsEntry("taskId", taskId.toString());
+        }
+
+        @Test
+        @DisplayName("载荷无法重建时重试失败")
+        void retryDlqEntry_missingRoutingKey_throwsException() {
+            // Arrange
+            UUID taskId = UUID.randomUUID();
+            TaskRecord dlqTask = createTaskRecord(TaskStatus.DLQ.getValue());
+            dlqTask.setId(taskId);
+            when(taskRecordRepository.findById(taskId)).thenReturn(Optional.of(dlqTask));
+
+            // Act & Assert
+            assertThatThrownBy(() -> taskQueryService.retryDlqEntry(taskId))
+                    .isInstanceOf(BusinessException.class);
+            verify(taskDispatchService, never()).enqueue(any(), any(), any(), any());
         }
 
         @Test

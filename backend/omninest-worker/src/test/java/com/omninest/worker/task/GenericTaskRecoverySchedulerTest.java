@@ -9,9 +9,12 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.task.domain.TaskDispatch;
+import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.service.StaleTaskRecovery;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.modules.task.service.TaskRedispatchService;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -19,15 +22,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
 
-/** 通用心跳恢复调度器测试：重投原始消息、死信裁决与 Outbox 缺失兜底。 */
+/** 通用恢复调度器测试：心跳重投经 Outbox 退避、死信裁决与停滞任务清扫。 */
 class GenericTaskRecoverySchedulerTest {
 
     private TaskRecordService taskRecordService;
     private TaskDispatchRepository taskDispatchRepository;
-    private RabbitTemplate rabbitTemplate;
+    private TaskDispatchService taskDispatchService;
+    private TaskRedispatchService taskRedispatchService;
     private GenericTaskRecoveryScheduler scheduler;
 
     private static final UUID TASK = UUID.randomUUID();
@@ -38,10 +41,12 @@ class GenericTaskRecoverySchedulerTest {
     void setUp() {
         taskRecordService = Mockito.mock(TaskRecordService.class);
         taskDispatchRepository = Mockito.mock(TaskDispatchRepository.class);
-        rabbitTemplate = Mockito.mock(RabbitTemplate.class);
+        taskDispatchService = Mockito.mock(TaskDispatchService.class);
+        taskRedispatchService = Mockito.mock(TaskRedispatchService.class);
         scheduler = new GenericTaskRecoveryScheduler(
-                taskRecordService, taskDispatchRepository, rabbitTemplate);
+                taskRecordService, taskDispatchRepository, taskDispatchService, taskRedispatchService);
         ReflectionTestUtils.setField(scheduler, "staleHeartbeatSeconds", 600L);
+        ReflectionTestUtils.setField(scheduler, "stuckDispatchSeconds", 1800L);
     }
 
     private TaskDispatch dispatch() {
@@ -54,8 +59,19 @@ class GenericTaskRecoverySchedulerTest {
         return dispatch;
     }
 
+    private TaskRecord stuckRecord(String status) {
+        TaskRecord record = new TaskRecord();
+        record.setId(TASK);
+        record.setTaskType("MEDIA_SCRAPE");
+        record.setStatus(status);
+        record.setRoutingKey("media.scrape");
+        record.setPayload("{\"taskId\":\"" + TASK + "\"}");
+        record.setCreatedAt(Instant.now().minusSeconds(3600));
+        return record;
+    }
+
     @Test
-    void republishesOriginalMessageOnRecoverableStaleTask() {
+    void republishesOriginalMessageThroughOutboxWithBackoff() {
         when(taskRecordService.listStaleRunningTaskIds(eq("THUMBNAIL"), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(List.of(TASK));
         when(taskRecordService.recoverStaleTask(
@@ -66,9 +82,29 @@ class GenericTaskRecoverySchedulerTest {
 
         scheduler.recoverStaleTasks();
 
-        verify(taskRecordService).markRetryWait(eq(TASK), eq("WORKER_HEARTBEAT_TIMEOUT"), eq(NEXT_RETRY));
-        verify(rabbitTemplate).convertAndSend(
-                eq("omninest.tasks"), eq("thumbnail.generate"), any(Object.class));
+        // 重试状态与退避由 recoverStaleTask 单点完成，恢复重投不得重复计数。
+        verify(taskRecordService, never()).markRetryWait(any(), anyString(), any());
+        verify(taskDispatchService).enqueueAt(
+                eq(TASK), eq("omninest.tasks"), eq("thumbnail.generate"), any(), eq(NEXT_RETRY));
+    }
+
+    @Test
+    void deadLettersTaskWhenRepublishFails() {
+        when(taskRecordService.listStaleRunningTaskIds(eq("THUMBNAIL"), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(TASK));
+        when(taskRecordService.recoverStaleTask(
+                eq(TASK), eq("THUMBNAIL"), any(), any(), anyString()))
+                .thenReturn(new StaleTaskRecovery(true, false, null, null, 1, NEXT_RETRY));
+        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
+                .thenReturn(Optional.of(dispatch()));
+        Mockito.doThrow(new IllegalStateException("broker down"))
+                .when(taskDispatchService)
+                .enqueueAt(eq(TASK), anyString(), anyString(), any(), eq(NEXT_RETRY));
+
+        scheduler.recoverStaleTasks();
+
+        verify(taskRecordService).markDeadLetter(
+                eq(TASK), eq("WORKER_HEARTBEAT_TIMEOUT:REDISPATCH_FAILED"));
     }
 
     @Test
@@ -81,7 +117,7 @@ class GenericTaskRecoverySchedulerTest {
 
         scheduler.recoverStaleTasks();
 
-        verify(rabbitTemplate, never()).convertAndSend(any(String.class), any(String.class), any(Object.class));
+        verify(taskDispatchService, never()).enqueueAt(any(), any(), any(), any(), any());
         verify(taskRecordService, never()).markRetryWait(any(), anyString(), any());
     }
 
@@ -97,8 +133,8 @@ class GenericTaskRecoverySchedulerTest {
 
         scheduler.recoverStaleTasks();
 
-        verify(taskRecordService).markDeadLetter(eq(TASK), anyString());
-        verify(rabbitTemplate, never()).convertAndSend(any(String.class), any(String.class), any(Object.class));
+        verify(taskRecordService).markDeadLetter(eq(TASK), eq("WORKER_HEARTBEAT_TIMEOUT:OUTBOX_MISSING"));
+        verify(taskDispatchService, never()).enqueueAt(any(), any(), any(), any(), any());
     }
 
     @Test
@@ -116,5 +152,48 @@ class GenericTaskRecoverySchedulerTest {
         // 专用恢复调度器已覆盖的类型不在通用调度器范围内。
         verify(taskRecordService, never()).listStaleRunningTaskIds(eq("PHOTO_AI"), any(), org.mockito.ArgumentMatchers.anyInt());
         verify(taskRecordService, never()).listStaleRunningTaskIds(eq("PHOTO_GEO_IMPORT"), any(), org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    void sweepRedispatchesStuckTaskWithoutDispatch() {
+        TaskRecord record = stuckRecord("QUEUED");
+        when(taskRecordService.listStuckTasks(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(record));
+        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
+                .thenReturn(Optional.empty());
+
+        scheduler.sweepStuckTasks();
+
+        verify(taskRedispatchService).redispatch(record);
+    }
+
+    @Test
+    void sweepSkipsTaskWithLiveDispatch() {
+        TaskRecord record = stuckRecord("RETRY_WAIT");
+        TaskDispatch live = dispatch();
+        live.setStatus("PENDING");
+        when(taskRecordService.listStuckTasks(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(record));
+        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
+                .thenReturn(Optional.of(live));
+
+        scheduler.sweepStuckTasks();
+
+        verify(taskRedispatchService, never()).redispatch(any());
+    }
+
+    @Test
+    void sweepSkipsTaskWithRecentDispatch() {
+        TaskRecord record = stuckRecord("QUEUED");
+        TaskDispatch recent = dispatch();
+        recent.setCreatedAt(Instant.now());
+        when(taskRecordService.listStuckTasks(any(), any(), org.mockito.ArgumentMatchers.anyInt()))
+                .thenReturn(List.of(record));
+        when(taskDispatchRepository.findFirstByTaskIdOrderByCreatedAtDesc(TASK))
+                .thenReturn(Optional.of(recent));
+
+        scheduler.sweepStuckTasks();
+
+        verify(taskRedispatchService, never()).redispatch(any());
     }
 }
