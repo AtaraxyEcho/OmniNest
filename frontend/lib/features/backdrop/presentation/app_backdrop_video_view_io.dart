@@ -80,48 +80,55 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(appBackdropVideoSessionProvider);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final hasUsableLayout =
-            constraints.maxWidth.isFinite &&
-            constraints.maxHeight.isFinite &&
-            constraints.maxWidth > 1 &&
-            constraints.maxHeight > 1;
-        // 主源打开失败且有备用源时切换;会话以路径变化驱动重新打开。
-        if (session.openError != null &&
-            !_usingFallback &&
-            widget.fallbackSource != null &&
-            widget.fallbackSource != widget.source) {
-          _usingFallback = true;
-          _lastSessionSignature = null;
-          logFallbackOnce();
-          _notifySourceStaleOnce();
-        } else if (session.openError != null &&
-            !_usingFallback &&
-            widget.source.startsWith('http')) {
-          _notifySourceStaleOnce();
-        }
-        final source = _effectiveSource;
-        _syncSession(
-          source: source,
-          muted: widget.muted,
-          active: widget.playing && hasUsableLayout,
-          layoutUsable: hasUsableLayout,
-        );
-        if (session.openError != null ||
-            !session.ready ||
-            session.controller == null) {
-          return const SizedBox.shrink();
-        }
-        return RepaintBoundary(
-          child: Video(
-            controller: session.controller!,
-            fit: widget.fit,
-            controls: NoVideoControls,
-            wakelock: false,
-            pauseUponEnteringBackgroundMode: true,
-            resumeUponEnteringForegroundMode: true,
-          ),
+    // session 是 ChangeNotifier:open 完成/失败必须驱动重建,
+    // 否则 Video 会一直持有 dispose 前的旧 controller(表现为启动无背景、要点两次)。
+    return ListenableBuilder(
+      listenable: session,
+      builder: (context, _) {
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final hasUsableLayout =
+                constraints.maxWidth.isFinite &&
+                constraints.maxHeight.isFinite &&
+                constraints.maxWidth > 1 &&
+                constraints.maxHeight > 1;
+            // 主源打开失败且有备用源时切换;会话以路径变化驱动重新打开。
+            if (session.openError != null &&
+                !_usingFallback &&
+                widget.fallbackSource != null &&
+                widget.fallbackSource != widget.source) {
+              _usingFallback = true;
+              _lastSessionSignature = null;
+              logFallbackOnce();
+              _notifySourceStaleOnce();
+            } else if (session.openError != null &&
+                !_usingFallback &&
+                widget.source.startsWith('http')) {
+              _notifySourceStaleOnce();
+            }
+            final source = _effectiveSource;
+            _syncSession(
+              source: source,
+              muted: widget.muted,
+              active: widget.playing && hasUsableLayout,
+              layoutUsable: hasUsableLayout,
+            );
+            if (session.openError != null ||
+                !session.ready ||
+                session.controller == null) {
+              return const SizedBox.shrink();
+            }
+            return RepaintBoundary(
+              child: Video(
+                controller: session.controller!,
+                fit: widget.fit,
+                controls: NoVideoControls,
+                wakelock: false,
+                pauseUponEnteringBackgroundMode: true,
+                resumeUponEnteringForegroundMode: true,
+              ),
+            );
+          },
         );
       },
     );
