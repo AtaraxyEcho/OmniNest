@@ -5,7 +5,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import 'package:omninest/features/backdrop/application/app_backdrop_debug.dart';
 
 final appBackdropVideoSessionProvider = Provider<AppBackdropVideoSession>((
   ref,
@@ -116,19 +115,12 @@ class AppBackdropVideoSession extends ChangeNotifier {
     final queryRotated =
         !identityChanged && oldPath.isNotEmpty && oldPath != normalizedPath;
     if (identityChanged || queryRotated || activeChanged) {
-      backdropDebug(
-        'video.configure identityChanged=$identityChanged queryRotated=$queryRotated '
-        'activeChanged=$activeChanged gen=$_generation ready=$_ready '
-        'openError=${_openError != null} '
-        'oldId=${sourceIdentityOf(oldPath)} newId=${sourceIdentityOf(normalizedPath)}',
-      );
-    }
+      }
     // 仅签名参数变化时更新引用,不销毁正在播放的会话。
     _path = normalizedPath;
     _muted = muted;
     _sceneActive = active;
     if (identityChanged) {
-      backdropDebug('video.dispose for identity change gen=${_generation + 1}');
       _unregisterPath(oldPath);
       _registerPath(normalizedPath);
       _generation++;
@@ -143,9 +135,6 @@ class AppBackdropVideoSession extends ChangeNotifier {
       // 仅签名轮换:正在打开或已就绪时保持会话,避免 list 刷新打断播放;
       // 仅当上次打开失败时才用新 URL 重开。
       if (_openError != null) {
-        backdropDebug(
-          'video.dispose for query rotate after openError gen=${_generation + 1}',
-        );
         _generation++;
         _cancelRetry();
         _openAttempts = 0;
@@ -320,10 +309,6 @@ class AppBackdropVideoSession extends ChangeNotifier {
       _ready = true;
       _successfulOpenCount++;
       _openError = null;
-      backdropDebug(
-        'video.open success gen=$generation identity=${sourceIdentityOf(path)} '
-        'opens=$_successfulOpenCount shouldPlay=$_shouldPlay',
-      );
       if (!_shouldPlay) {
         _pauseCurrentPlayer();
       }
@@ -332,10 +317,6 @@ class AppBackdropVideoSession extends ChangeNotifier {
       if (_canUseGeneration(generation, path)) {
         _openError = error;
         _ready = false;
-        backdropDebug(
-          'video.open fail gen=$generation identity=${sourceIdentityOf(path)} '
-          'error=$error attempts=$_openAttempts',
-        );
         _finishOpening(generation);
         _scheduleRetry(generation);
       } else {

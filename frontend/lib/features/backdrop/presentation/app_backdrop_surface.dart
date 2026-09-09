@@ -131,6 +131,8 @@ class AppBackdropSurface extends ConsumerWidget {
         url: asset.path,
         cacheKey: 'backdrop:${asset.id}',
         fit: fit,
+        // contain 时用模糊同图铺底,避免非 16:9 图出现大面积空白/“被拉伸”观感。
+        blurPad: true,
         fallbackAsset: bundledDefaultWallpaperPosterAsset,
         onUrlFailed:
             () => Future<void>.microtask(() async {

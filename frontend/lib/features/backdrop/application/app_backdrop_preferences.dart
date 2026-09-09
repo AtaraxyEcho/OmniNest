@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
-import 'package:omninest/features/backdrop/application/app_backdrop_debug.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_settings_json.dart';
 
@@ -87,10 +86,6 @@ class BackdropPreferencesController extends AsyncNotifier<AppBackdropSettings> {
   /// 保存设置:先写本地镜像保证即时生效,再同步服务端。
   /// 冲突时按最新版本重放用户意图;远端收敛结果不会回退 enabled/选中。
   Future<void> save(AppBackdropSettings settings) async {
-    backdropDebug(
-      'prefs.save enabled=${settings.enabled} '
-      'selected=${settings.selectedBackdropId}',
-    );
     await ref.read(appBackdropRepositoryProvider).saveSettings(settings);
     state = AsyncData(settings);
     final userId = _userId;
@@ -108,10 +103,6 @@ class BackdropPreferencesController extends AsyncNotifier<AppBackdropSettings> {
         snapshot.preferences,
         settings,
       );
-      backdropDebug(
-        'prefs.save remote enabled=${remote.enabled} '
-        'selected=${remote.selectedBackdropId} wins=${_remoteWins(settings, remote)}',
-      );
       if (remote != settings && _remoteWins(settings, remote)) {
         await ref.read(appBackdropRepositoryProvider).saveSettings(remote);
         state = AsyncData(remote);
@@ -127,10 +118,6 @@ class BackdropPreferencesController extends AsyncNotifier<AppBackdropSettings> {
           retried.preferences,
           settings,
         );
-        backdropDebug(
-          'prefs.save retry remote selected=${finalRemote.selectedBackdropId} '
-          'wins=${_remoteWins(settings, finalRemote)}',
-        );
         if (_remoteWins(settings, finalRemote)) {
           await ref
               .read(appBackdropRepositoryProvider)
@@ -139,8 +126,8 @@ class BackdropPreferencesController extends AsyncNotifier<AppBackdropSettings> {
           return;
         }
       }
-    } on Exception catch (error) {
-      backdropDebug('prefs.save error $error, keep local intent');
+    } on Exception {
+      // 保留本地用户意图,由 pending 与下次同步收敛。
     }
   }
 

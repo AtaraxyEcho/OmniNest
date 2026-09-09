@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
@@ -6,8 +5,6 @@ import 'package:omninest/features/backdrop/application/app_backdrop_scene_contro
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_surface.dart';
-
-String? _lastHostSnapshot;
 
 /// 在路由内容下方承载唯一应用背景实例。
 class AppBackdropHost extends ConsumerWidget {
@@ -17,24 +14,12 @@ class AppBackdropHost extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final asyncState = ref.watch(appBackdropControllerProvider);
-    final backdropState = asyncState.asData?.value ?? const AppBackdropState();
+    final backdropState =
+        ref.watch(appBackdropControllerProvider).asData?.value ??
+        const AppBackdropState();
     final policy = ref.watch(appBackdropSceneControllerProvider).policy;
     final asset = backdropState.selectedBackdrop;
     final enabled = policy.visible && backdropState.hasActiveBackdrop;
-    final snapshot =
-        'loading=${asyncState.isLoading} err=${asyncState.hasError} '
-        'policy=${policy.scene.name}/${policy.visible}/${policy.motionAllowed} '
-        'enabled=${backdropState.settings.enabled} '
-        'selected=${backdropState.settings.selectedBackdropId} '
-        'asset=${asset?.id} missing=${asset?.missing} '
-        'active=${backdropState.hasActiveBackdrop} render=$enabled';
-    if (snapshot != _lastHostSnapshot) {
-      _lastHostSnapshot = snapshot;
-      if (kDebugMode) {
-        debugPrint('[Backdrop] host $snapshot');
-      }
-    }
     final motionAllowed =
         enabled &&
         policy.motionAllowed &&

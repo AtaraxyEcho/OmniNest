@@ -1,3 +1,5 @@
+import 'dart:ui';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
@@ -6,6 +8,9 @@ import 'package:flutter/material.dart';
 /// 缓存键基于素材 ID,签名 URL 轮换不会击穿缓存。加载顺序:
 /// 主 URL → 失败时回落 [fallbackUrl] → 再失败回落 [fallbackAsset](内置海报),
 /// 加载中与失败均不透出白底。全部网络地址失败时回调 [onUrlFailed] 供上层刷新签名 URL。
+///
+/// [BoxFit.cover] 等比放大裁切,不产生拉伸变形;
+/// [BoxFit.contain] 完整显示,可选 [blurPad] 用同图模糊铺底填满留白。
 class AppBackdropImage extends StatefulWidget {
   const AppBackdropImage({
     required this.url,
@@ -14,6 +19,7 @@ class AppBackdropImage extends StatefulWidget {
     this.fallbackUrl,
     this.fallbackAsset,
     this.onUrlFailed,
+    this.blurPad = false,
     super.key,
   });
 
@@ -24,6 +30,9 @@ class AppBackdropImage extends StatefulWidget {
   final String cacheKey;
 
   final BoxFit fit;
+
+  /// contain 模式下是否用模糊同图铺底,避免大面积纯色留白。
+  final bool blurPad;
 
   /// 主地址加载失败时的备用地址(如原图回退缩略图)。
   final String? fallbackUrl;
@@ -50,6 +59,8 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
     return value.clamp(1, 8192);
   }
 
+  bool get _useBlurPad => widget.fit == BoxFit.contain && widget.blurPad;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -59,20 +70,57 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
         if (primary == null) {
           return _buildAssetFallback();
         }
+        final cacheWidth = _resolveCacheExtent(
+          constraints.maxWidth,
+          devicePixelRatio,
+        );
+        final cacheHeight = _resolveCacheExtent(
+          constraints.maxHeight,
+          devicePixelRatio,
+        );
+        if (_useBlurPad) {
+          return Stack(
+            fit: StackFit.expand,
+            children: [
+              ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+                child: CachedNetworkImage(
+                  imageUrl: primary,
+                  cacheKey: widget.cacheKey,
+                  fit: BoxFit.cover,
+                  alignment: Alignment.center,
+                  filterQuality: FilterQuality.medium,
+                  memCacheWidth: cacheWidth,
+                  memCacheHeight: cacheHeight,
+                  placeholder: (context, url) => _buildAssetFallback(),
+                  errorWidget: (context, url, error) => _buildFallback(url),
+                ),
+              ),
+              ColoredBox(
+                color: Colors.black.withValues(alpha: 0.18),
+                child: CachedNetworkImage(
+                  imageUrl: primary,
+                  cacheKey: widget.cacheKey,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.center,
+                  filterQuality: FilterQuality.high,
+                  memCacheWidth: cacheWidth,
+                  memCacheHeight: cacheHeight,
+                  placeholder: (context, url) => const SizedBox.shrink(),
+                  errorWidget: (context, url, error) => const SizedBox.shrink(),
+                ),
+              ),
+            ],
+          );
+        }
         return CachedNetworkImage(
           imageUrl: primary,
           cacheKey: widget.cacheKey,
           fit: widget.fit,
           alignment: Alignment.center,
           filterQuality: FilterQuality.high,
-          memCacheWidth: _resolveCacheExtent(
-            constraints.maxWidth,
-            devicePixelRatio,
-          ),
-          memCacheHeight: _resolveCacheExtent(
-            constraints.maxHeight,
-            devicePixelRatio,
-          ),
+          memCacheWidth: cacheWidth,
+          memCacheHeight: cacheHeight,
           placeholder: (context, url) => _buildAssetFallback(),
           errorWidget: (context, url, error) => _buildFallback(url),
         );
