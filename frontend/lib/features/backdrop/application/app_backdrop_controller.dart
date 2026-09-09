@@ -70,8 +70,9 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     final session = await ref.watch(authSessionProvider.future);
     final userId = session.user?.id;
     await _registerBundledBackdrop(repository);
-    // 等待服务端设置落到本地镜像(离线时为缓存),再装配状态。
-    await ref.watch(backdropPreferencesProvider.future);
+    // read 而非 watch:偏好 save 会更新 state,若 watch(future) 会导致本控制器
+    // 在每次选中/启用后整树重建 → 反复 refresh → 视频会话被打断。
+    await ref.read(backdropPreferencesProvider.future);
     if (userId != null) {
       await refreshServerAssets();
     }
@@ -99,20 +100,20 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
         // 选中了内置壁纸但被关闭时,保持用户关闭意图;
         // 无选中或选中不可用时,回落内置壁纸并启用,保证启动即有背景。
         if (needBundledFallback) {
-          await _applySettings(
-            loaded.settings.copyWith(
-              enabled: true,
-              selectedBackdropId: bundled.id,
-              desktopBackdropId:
-                  loaded.settings.separateDeviceBackdrops
-                      ? bundled.id
-                      : loaded.settings.desktopBackdropId,
-              mobileBackdropId:
-                  loaded.settings.separateDeviceBackdrops
-                      ? bundled.id
-                      : loaded.settings.mobileBackdropId,
-            ),
+          final next = loaded.settings.copyWith(
+            enabled: true,
+            selectedBackdropId: bundled.id,
+            desktopBackdropId:
+                loaded.settings.separateDeviceBackdrops
+                    ? bundled.id
+                    : loaded.settings.desktopBackdropId,
+            mobileBackdropId:
+                loaded.settings.separateDeviceBackdrops
+                    ? bundled.id
+                    : loaded.settings.mobileBackdropId,
           );
+          // build 期间只写本地镜像;服务端同步交给后续用户操作,避免 build 内 save 重入。
+          await repository.saveSettings(next);
           loaded = await _loadCurrentState(repository);
         }
       }
@@ -437,10 +438,17 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     state = AsyncData(
       await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
     );
+    final prefs = ref.read(backdropPreferencesProvider).asData?.value;
+    if (prefs == settings) {
+      return;
+    }
     await ref.read(backdropPreferencesProvider.notifier).save(settings);
-    state = AsyncData(
-      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+    final after = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
     );
+    if (state.asData?.value != after) {
+      state = AsyncData(after);
+    }
   }
 
   Future<AppBackdropState> _loadCurrentState(

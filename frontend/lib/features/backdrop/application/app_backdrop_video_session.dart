@@ -64,6 +64,12 @@ class AppBackdropVideoSession extends ChangeNotifier {
   /// 当前是否正在打开视频。
   bool get opening => _opening;
 
+  /// 当前会话代数:仅资源身份变化或打开失败重开时递增,供测试断言。
+  int get generation => _generation;
+
+  /// 当前源稳定身份。
+  String get sourceIdentity => sourceIdentityOf(_path);
+
   /// 返回当前会话的调试诊断信息。
   AppBackdropVideoDiagnostics get diagnostics => AppBackdropVideoDiagnostics(
     activePath: _activePath,
