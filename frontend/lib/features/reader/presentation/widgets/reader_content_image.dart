@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_image_preview.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
@@ -43,7 +44,15 @@ class ReaderContentImage extends StatelessWidget {
         child: Column(
           children: [
             GestureDetector(
-              onTap: () => onTap?.call(block.src),
+              onTap: () {
+                onTap?.call(block.src);
+                ReaderImagePreview.show(
+                  context,
+                  block: block,
+                  itemId: itemId,
+                  retryCount: retryCount,
+                );
+              },
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
