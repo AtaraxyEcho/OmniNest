@@ -5,6 +5,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_debug.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
@@ -69,6 +70,10 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     ref.watch(appBackdropSelectionTargetProvider);
     final session = await ref.watch(authSessionProvider.future);
     final userId = session.user?.id;
+    backdropDebug(
+      'build start userId=$userId '
+      'auth=${session.isAuthenticated}',
+    );
     await _registerBundledBackdrop(repository);
     // read 而非 watch:偏好 save 会更新 state,若 watch(future) 会导致本控制器
     // 在每次选中/启用后整树重建 → 反复 refresh → 视频会话被打断。
@@ -77,6 +82,18 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
       await refreshServerAssets();
     }
     var loaded = await _loadCurrentState(repository);
+    backdropDebug(
+      'build loaded enabled=${loaded.settings.enabled} '
+      'selected=${loaded.settings.selectedBackdropId} '
+      'desktop=${loaded.settings.desktopBackdropId} '
+      'mobile=${loaded.settings.mobileBackdropId} '
+      'separate=${loaded.settings.separateDeviceBackdrops} '
+      'active=${loaded.hasActiveBackdrop} '
+      'asset=${loaded.selectedBackdrop?.id} '
+      'missing=${loaded.selectedBackdrop?.missing} '
+      'status=${loaded.selectedBackdrop?.status} '
+      'count=${loaded.backdrops.length}',
+    );
     if (!loaded.hasActiveBackdrop) {
       AppBackdropAsset? bundled;
       for (final backdrop in loaded.backdrops) {
@@ -97,6 +114,11 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
           }
         }
         final needBundledFallback = selected == null || !selected.isSelectable;
+        backdropDebug(
+          'build fallback? bundled=${bundled.id} '
+          'selected=$selectedId selectable=${selected?.isSelectable} '
+          'needFallback=$needBundledFallback',
+        );
         // 选中了内置壁纸但被关闭时,保持用户关闭意图;
         // 无选中或选中不可用时,回落内置壁纸并启用,保证启动即有背景。
         if (needBundledFallback) {
@@ -112,10 +134,15 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
                     ? bundled.id
                     : loaded.settings.mobileBackdropId,
           );
-          // build 期间只写本地镜像;服务端同步交给后续用户操作,避免 build 内 save 重入。
           await repository.saveSettings(next);
           loaded = await _loadCurrentState(repository);
+          backdropDebug(
+            'build fallback applied active=${loaded.hasActiveBackdrop} '
+            'selected=${loaded.settings.selectedBackdropId}',
+          );
         }
+      } else {
+        backdropDebug('build no bundled fallback candidate');
       }
     }
     return loaded;
@@ -251,14 +278,23 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     var current =
         state.asData?.value ??
         await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    backdropDebug(
+      'selectBackdrop id=$id before selected=${current.settings.selectedBackdropId} '
+      'enabled=${current.settings.enabled} active=${current.hasActiveBackdrop}',
+    );
     var selected = current.backdrops.where((backdrop) => backdrop.id == id);
     if (selected.isEmpty || !selected.single.isSelectable) {
+      backdropDebug(
+        'selectBackdrop not ready, force refresh '
+        'found=${selected.isNotEmpty} selectable=${selected.isNotEmpty ? selected.single.isSelectable : false}',
+      );
       await ensureFreshServerUrls(force: true);
       current =
           state.asData?.value ??
           await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
       selected = current.backdrops.where((b) => b.id == id);
       if (selected.isEmpty || !selected.single.isSelectable) {
+        backdropDebug('selectBackdrop abort after refresh');
         return;
       }
     }
@@ -269,7 +305,28 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     if (!updated.enabled) {
       updated = updated.copyWith(enabled: true);
     }
+    // 非设备分离时同步三槽位,避免 desktop/mobile 残留旧 ID 导致归一化来回切。
+    if (!updated.separateDeviceBackdrops) {
+      updated = updated.copyWith(
+        selectedBackdropId: id,
+        desktopBackdropId: id,
+        mobileBackdropId: id,
+      );
+    }
     await _applySettings(updated);
+    final after =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    backdropDebug(
+      'selectBackdrop after selected=${after.settings.selectedBackdropId} '
+      'enabled=${after.settings.enabled} active=${after.hasActiveBackdrop} '
+      'asset=${after.selectedBackdrop?.id}',
+    );
+    if (after.settings.selectedBackdropId != id ||
+        !after.hasActiveBackdrop) {
+      backdropDebug('selectBackdrop did not stick, re-apply');
+      await _applySettings(updated);
+    }
   }
 
   /// 设置桌面端和移动端是否分别保存背景选择。
@@ -434,17 +491,28 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   }
 
   Future<void> _applySettingsUnlocked(AppBackdropSettings settings) async {
+    backdropDebug(
+      'applySettings enabled=${settings.enabled} '
+      'selected=${settings.selectedBackdropId} '
+      'desktop=${settings.desktopBackdropId} '
+      'mobile=${settings.mobileBackdropId}',
+    );
     await ref.read(appBackdropRepositoryProvider).saveSettings(settings);
     state = AsyncData(
       await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
     );
     final prefs = ref.read(backdropPreferencesProvider).asData?.value;
     if (prefs == settings) {
+      backdropDebug('applySettings skip remote, prefs already match');
       return;
     }
     await ref.read(backdropPreferencesProvider.notifier).save(settings);
     final after = await _loadCurrentState(
       ref.read(appBackdropRepositoryProvider),
+    );
+    backdropDebug(
+      'applySettings after selected=${after.settings.selectedBackdropId} '
+      'enabled=${after.settings.enabled} active=${after.hasActiveBackdrop}',
     );
     if (state.asData?.value != after) {
       state = AsyncData(after);
