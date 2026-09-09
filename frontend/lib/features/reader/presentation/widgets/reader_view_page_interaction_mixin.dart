@@ -85,29 +85,8 @@ mixin ReaderViewPageInteractionMixin
 
     final chapterData = loader.getByChapterId(position.chapterId);
     final totalChars = chapterData?.totalChars ?? 0;
-    // 优先用章内精确映射（与单章滚动同一套逻辑）。
-    var charOffset = position.charOffset;
-    if (chapterData != null &&
-        chapterData.cumulativeHeights.isNotEmpty &&
-        !isPageMode) {
-      final prefix = continuousScrollController.prefixHeightOf(
-        position.chapterId,
-      );
-      final localY =
-          (scrollController.hasClients ? scrollController.offset : 0.0) +
-          viewportAnchorY -
-          prefix;
-      final mapped = loader.contentYToCharOffset(
-        position.chapterId,
-        localY.clamp(0.0, chapterData.cumulativeHeights.last),
-        pageWidth: computePageWidth(),
-        settings: settings,
-        textScale: MediaQuery.textScalerOf(context).scale(1.0),
-      );
-      if (mapped >= 0) {
-        charOffset = mapped;
-      }
-    }
+    // 连续滚动：以窗口控制器的块级映射为准，避免与 contentYToCharOffset 双路径不一致。
+    final charOffset = position.charOffset;
     final newProgress =
         totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
 

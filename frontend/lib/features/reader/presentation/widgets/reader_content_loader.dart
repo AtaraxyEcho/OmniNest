@@ -16,24 +16,89 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 class ChapterData {
   ChapterData({
     required this.chapterId,
-    required this.content,
+    required ReaderChapterContent content,
     required this.blocks,
     List<PageSlice> slices = const [],
     List<double> cumulativeHeights = const [],
     this.totalChars = 0,
-  }) : _slices = slices,
-       _cumulativeHeights = cumulativeHeights;
+    List<int>? blockCharPrefixes,
+  }) : _content = content,
+       _slices = slices,
+       _cumulativeHeights = cumulativeHeights,
+       _blockCharPrefixes =
+           blockCharPrefixes ?? buildBlockCharPrefixes(blocks, totalChars);
 
   final String chapterId;
-  final ReaderChapterContent content;
+  ReaderChapterContent _content;
+  ReaderChapterContent get content => _content;
   final List<ContentBlock> blocks;
   final int totalChars;
+
+  /// 各 block 起始字符偏移（长度 = blocks.length + 1，末项为 totalChars）。
+  List<int> get blockCharPrefixes => _blockCharPrefixes;
+  final List<int> _blockCharPrefixes;
 
   List<PageSlice> get slices => _slices;
   List<PageSlice> _slices;
 
   List<double> get cumulativeHeights => _cumulativeHeights;
   List<double> _cumulativeHeights;
+
+  /// 邻章就绪后丢弃 HTML 正文，仅保留标题与 blocks，降低窗口内存。
+  void dropHtmlBody() {
+    if (_content.content.isEmpty) {
+      return;
+    }
+    _content = ReaderChapterContent(
+      title: _content.title,
+      content: '',
+      wordCount: _content.wordCount,
+    );
+  }
+
+  /// 构建块级字符前缀表：prefixes[i] = 前 i 个 block 的字符数之和。
+  static List<int> buildBlockCharPrefixes(
+    List<ContentBlock> blocks,
+    int totalChars,
+  ) {
+    final prefixes = List<int>.filled(blocks.length + 1, 0);
+    var running = 0;
+    for (var i = 0; i < blocks.length; i++) {
+      prefixes[i] = running;
+      running += _charCountOf(blocks[i]);
+    }
+    prefixes[blocks.length] = totalChars > 0 ? totalChars : running;
+    return prefixes;
+  }
+
+  static int _charCountOf(ContentBlock block) {
+    return switch (block) {
+      HeadingBlock(:final text) => text.length,
+      ParagraphBlock(:final lines) => lines.fold(
+        0,
+        (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
+      ),
+      ImageBlock() => 0,
+      DividerBlock() => 0,
+      BlockquoteBlock(:final lines) => lines.fold(
+        0,
+        (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
+      ),
+      ListBlock(:final items) => items.fold(
+        0,
+        (s, i) => s + i.spans.fold(0, (s2, sp) => s2 + sp.text.length),
+      ),
+      TableBlock(:final rows) => rows.fold(
+        0,
+        (s, r) =>
+            s +
+            r.cells.fold(
+              0,
+              (s2, c) => s2 + c.fold(0, (s3, sp) => s3 + sp.text.length),
+            ),
+      ),
+    };
+  }
 
   /// 翻页模式的懒分页导航器（按需计算单页）。
   PageNavigator? _pageNavigator;
@@ -480,6 +545,27 @@ class ReaderContentLoader {
     );
   }
 
+  /// 邻章 blocks 就绪后丢弃 HTML 正文（活动章保留）。
+  void dropHtmlForNeighbors(String activeChapterId) {
+    for (final entry in _cache.entries) {
+      if (entry.key.chapterId == activeChapterId) {
+        continue;
+      }
+      if (entry.value.blocks.isNotEmpty) {
+        entry.value.dropHtmlBody();
+      }
+    }
+    for (final id in _contentCache.keys.toList(growable: false)) {
+      if (id == activeChapterId) {
+        continue;
+      }
+      final data = getByChapterId(id);
+      if (data != null && data.blocks.isNotEmpty) {
+        _contentCache[id] = data.content;
+      }
+    }
+  }
+
   void _prepareScrollMetricsIfNeeded(
     ChapterData data, {
     required bool prepareScrollLayout,
@@ -854,6 +940,10 @@ class ReaderContentLoader {
   int blockIndexToCharOffset(String chapterId, int blockIndex) {
     final data = getByChapterId(chapterId);
     if (data == null || blockIndex <= 0) return 0;
+    final prefixes = data.blockCharPrefixes;
+    if (blockIndex < prefixes.length) {
+      return prefixes[blockIndex];
+    }
     var accumulated = 0;
     for (var i = 0; i < blockIndex && i < data.blocks.length; i++) {
       accumulated += _blockCharCount(data.blocks[i]);

@@ -10,6 +10,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_ima
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_selection_range.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -488,7 +489,7 @@ class _ReaderContinuousScrollViewState
     final selectedText = selection?.plainText.trim() ?? '';
     if (selectedText.isNotEmpty) {
       _selectedText = selectedText;
-      _selectionChapterId = widget.controller.anchorChapterId;
+      _selectionChapterId = _resolveSelectionChapterId(selectedText);
       if (mounted) {
         setState(() {});
       }
@@ -497,6 +498,16 @@ class _ReaderContinuousScrollViewState
       _selectionChapterId = null;
     }
     widget.onSelectionActive?.call(_selectedText.isNotEmpty);
+  }
+
+  /// 在窗口章节中查找包含选中文本的章，优先于锚点章。
+  String? _resolveSelectionChapterId(String selectedText) {
+    for (final entry in widget.controller.entries) {
+      if (blocksContainSelection(entry.blocks, selectedText)) {
+        return entry.chapterId;
+      }
+    }
+    return widget.controller.anchorChapterId;
   }
 
   Widget _buildSelectionMenu(
@@ -542,34 +553,8 @@ class _ReaderContinuousScrollViewState
     if (entry == null) {
       return (0, selectedText.length);
     }
-    var offset = 0;
-    for (final block in entry.blocks) {
-      final spans = <ReaderInlineSpan>[];
-      if (block is ParagraphBlock) {
-        for (final line in block.lines) {
-          spans.addAll(line.spans);
-        }
-      } else if (block is BlockquoteBlock) {
-        for (final line in block.lines) {
-          spans.addAll(line.spans);
-        }
-      } else if (block is ListBlock) {
-        for (final item in block.items) {
-          spans.addAll(item.spans);
-        }
-      } else if (block is HeadingBlock) {
-        spans.add(ReaderInlineSpan(text: block.text, startOffset: offset));
-      }
-      for (final span in spans) {
-        final local = span.text.indexOf(selectedText);
-        if (local >= 0) {
-          final start = span.startOffset + local;
-          return (start, start + selectedText.length);
-        }
-        offset += span.text.length;
-      }
-    }
-    return (0, selectedText.length);
+    final range = resolveSelectionRangeInBlocks(entry.blocks, selectedText);
+    return range ?? (0, selectedText.length);
   }
 
   void _handlePointerDown(PointerDownEvent event) {

@@ -523,9 +523,21 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       settings: settings,
       textScale: MediaQuery.textScalerOf(context).scale(1.0),
     );
+    loader.dropHtmlForNeighbors(currentChapterId);
+    final fontSize = settings.fontSize;
+    final lineHeight = settings.lineHeight;
+    final previousPrefix =
+        continuousScrollController.isEmpty
+            ? null
+            : continuousScrollController.prefixHeightOf(currentChapterId);
     continuousScrollController.rebuild(
       anchorChapterId: currentChapterId,
       allChapterIds: loader.chapterIds,
+      estimateHeight: (chapterId) {
+        // 邻章尚未加载时用「平均行高 × 估算行数」占位，避免固定 240 跳变。
+        // 精测完成后由 prefix 补偿抵消剩余误差。
+        return fontSize * lineHeight * 20;
+      },
       resolve: (chapterId) {
         final data = loader.get(chapterId, settings);
         if (data == null) {
@@ -551,13 +563,43 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           totalHeight:
               isReady
                   ? heights.last
-                  : (data.blocks.isEmpty ? 0 : data.blocks.length * 28.0),
+                  : (data.blocks.isEmpty
+                      ? ReaderContinuousScrollController
+                          .fallbackPlaceholderHeight
+                      : data.blocks.length * fontSize * lineHeight),
           totalChars: data.totalChars,
           isReady: isReady,
           blocks: data.blocks,
+          blockCharPrefixes: data.blockCharPrefixes,
         );
       },
     );
+    _compensateScrollForPrefixDelta(previousPrefix);
+  }
+
+  /// 前缀章高度变化时补偿滚动偏移，避免测高收敛导致视口跳动。
+  void _compensateScrollForPrefixDelta(double? previousPrefix) {
+    if (previousPrefix == null ||
+        isRestoringProgress ||
+        restore.shouldSuppressWrites) {
+      return;
+    }
+    final nextPrefix = continuousScrollController.prefixHeightOf(
+      currentChapterId,
+    );
+    final delta = nextPrefix - previousPrefix;
+    if (delta.abs() < 0.5 || !scrollController.hasClients) {
+      return;
+    }
+    final captured = delta;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) {
+        return;
+      }
+      final max = scrollController.position.maxScrollExtent;
+      final target = (scrollController.offset + captured).clamp(0.0, max);
+      scrollController.jumpTo(target);
+    });
   }
 
   Map<String, List<ReaderAnnotation>> _continuousAnnotationsByChapter() {

@@ -13,6 +13,7 @@ class ContinuousChapterEntry {
     required this.totalChars,
     required this.isReady,
     this.blocks = const <ContentBlock>[],
+    this.blockCharPrefixes = const <int>[],
   });
 
   final String chapterId;
@@ -26,6 +27,9 @@ class ContinuousChapterEntry {
   final bool isReady;
   final List<ContentBlock> blocks;
 
+  /// 块级字符前缀：prefixes[i] = 前 i 个 block 字符数；末项为 totalChars。
+  final List<int> blockCharPrefixes;
+
   ContinuousChapterEntry copyWith({
     String? title,
     int? blockCount,
@@ -34,6 +38,7 @@ class ContinuousChapterEntry {
     int? totalChars,
     bool? isReady,
     List<ContentBlock>? blocks,
+    List<int>? blockCharPrefixes,
   }) {
     return ContinuousChapterEntry(
       chapterId: chapterId,
@@ -44,6 +49,7 @@ class ContinuousChapterEntry {
       totalChars: totalChars ?? this.totalChars,
       isReady: isReady ?? this.isReady,
       blocks: blocks ?? this.blocks,
+      blockCharPrefixes: blockCharPrefixes ?? this.blockCharPrefixes,
     );
   }
 }
@@ -127,13 +133,18 @@ class ReaderContinuousScrollController extends ChangeNotifier {
     return prefixHeightOf(last.chapterId) + last.totalHeight;
   }
 
+  /// 未加载章的兜底占位高度。
+  static const double fallbackPlaceholderHeight = 240;
+
   /// 用新的锚点章与全量章节元数据重建窗口。
   ///
   /// [resolve] 负责提供某章的已加载数据；返回 null 表示尚未加载。
+  /// [estimateHeight] 为未加载章提供基于字数的估算高度，减少占位跳动。
   void rebuild({
     required String anchorChapterId,
     required List<String> allChapterIds,
     required ContinuousChapterEntry? Function(String chapterId) resolve,
+    double Function(String chapterId)? estimateHeight,
   }) {
     _anchorChapterId = anchorChapterId;
     final anchorIndex = allChapterIds.indexOf(anchorChapterId);
@@ -158,17 +169,21 @@ class ReaderContinuousScrollController extends ChangeNotifier {
     for (var i = start; i < endExclusive; i++) {
       final id = allChapterIds[i];
       final resolved = resolve(id);
+      if (resolved != null) {
+        nextEntries.add(resolved);
+        continue;
+      }
+      final estimated = estimateHeight?.call(id) ?? 0;
       nextEntries.add(
-        resolved ??
-            ContinuousChapterEntry(
-              chapterId: id,
-              title: '',
-              blockCount: 0,
-              cumulativeHeights: const [],
-              totalHeight: _placeholderHeight,
-              totalChars: 0,
-              isReady: false,
-            ),
+        ContinuousChapterEntry(
+          chapterId: id,
+          title: '',
+          blockCount: 0,
+          cumulativeHeights: const [],
+          totalHeight: estimated > 0 ? estimated : fallbackPlaceholderHeight,
+          totalChars: 0,
+          isReady: false,
+        ),
       );
     }
 
@@ -185,9 +200,6 @@ class ReaderContinuousScrollController extends ChangeNotifier {
     _items = _buildItems(nextEntries);
     notifyListeners();
   }
-
-  /// 就绪章未加载时的占位高度，避免窗口塌缩。
-  static const double _placeholderHeight = 240;
 
   List<ContinuousScrollItem> _buildItems(List<ContinuousChapterEntry> entries) {
     final items = <ContinuousScrollItem>[];
@@ -211,6 +223,9 @@ class ReaderContinuousScrollController extends ChangeNotifier {
   }
 
   /// 根据窗口内容 Y 解析阅读位置。
+  ///
+  /// 就绪章优先按「块索引 + 块级字符前缀」映射；文本块再按块内高度比例插值，
+  /// 非文本块（图/表/分隔线）落到块起止字符，避免全章线性插值拉偏进度。
   ContinuousScrollPosition? positionAtContentY(double contentY) {
     if (_entries.isEmpty || _anchorChapterId == null) {
       return null;
@@ -221,58 +236,74 @@ class ReaderContinuousScrollController extends ChangeNotifier {
       final end = start + entry.totalHeight;
       if (y < end || identical(entry, _entries.last)) {
         final localY = (y - start).clamp(0.0, entry.totalHeight);
-        var charOffset = 0;
-        var progress = 0.0;
-        if (entry.isReady &&
-            entry.totalChars > 0 &&
-            entry.cumulativeHeights.length == entry.blockCount &&
-            entry.blockCount > 0) {
-          var lo = 0;
-          var hi = entry.cumulativeHeights.length - 1;
-          while (lo < hi) {
-            final mid = (lo + hi) >> 1;
-            if (entry.cumulativeHeights[mid] < localY) {
-              lo = mid + 1;
-            } else {
-              hi = mid;
-            }
-          }
-          final blockStart = lo > 0 ? entry.cumulativeHeights[lo - 1] : 0.0;
-          final blockHeight = entry.cumulativeHeights[lo] - blockStart;
-          final ratioInBlock =
-              blockHeight > 0
-                  ? ((localY - blockStart) / blockHeight).clamp(0.0, 1.0)
-                  : 0.0;
-          // 近似：按高度比例映射到章内字符。
-          charOffset = (localY /
-                  (entry.totalHeight <= 0 ? 1 : entry.totalHeight) *
-                  entry.totalChars)
-              .round()
-              .clamp(0, entry.totalChars);
-          // 块内比例仅用于平滑进度展示。
-          progress = (charOffset / entry.totalChars).clamp(0.0, 1.0);
-          if (ratioInBlock == 0 && lo == 0 && localY <= 0) {
-            charOffset = 0;
-            progress = 0;
-          }
-        } else if (entry.totalChars > 0) {
-          final ratio =
-              entry.totalHeight > 0 ? (localY / entry.totalHeight) : 0.0;
-          charOffset = (ratio * entry.totalChars).round().clamp(
-            0,
-            entry.totalChars,
-          );
-          progress = (charOffset / entry.totalChars).clamp(0.0, 1.0);
-        }
+        final resolved = _charOffsetInEntry(entry, localY);
+        final progress =
+            entry.totalChars > 0
+                ? (resolved / entry.totalChars).clamp(0.0, 1.0)
+                : 0.0;
         return ContinuousScrollPosition(
           chapterId: entry.chapterId,
-          charOffset: charOffset,
+          charOffset: resolved,
           chapterProgress: progress,
           contentY: y,
         );
       }
     }
     return null;
+  }
+
+  int _charOffsetInEntry(ContinuousChapterEntry entry, double localY) {
+    if (entry.totalChars <= 0) {
+      return 0;
+    }
+    final prefixes = entry.blockCharPrefixes;
+    final hasPrefixes =
+        entry.isReady &&
+        prefixes.length == entry.blockCount + 1 &&
+        entry.cumulativeHeights.length == entry.blockCount &&
+        entry.blockCount > 0;
+    if (!hasPrefixes) {
+      final ratio = entry.totalHeight > 0 ? (localY / entry.totalHeight) : 0.0;
+      return (ratio * entry.totalChars).round().clamp(0, entry.totalChars);
+    }
+
+    var lo = 0;
+    var hi = entry.blockCount - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (entry.cumulativeHeights[mid] < localY) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    final blockStart = lo > 0 ? entry.cumulativeHeights[lo - 1] : 0.0;
+    final blockEnd = entry.cumulativeHeights[lo];
+    final blockHeight = blockEnd - blockStart;
+    final ratioInBlock =
+        blockHeight > 0
+            ? ((localY - blockStart) / blockHeight).clamp(0.0, 1.0)
+            : 0.0;
+    final blockCharStart = prefixes[lo];
+    final blockCharEnd = prefixes[lo + 1];
+    final blockChars = blockCharEnd - blockCharStart;
+    if (blockChars <= 0) {
+      // 非文本块（图/分隔线等）：落在块起点；越过半高则落到块后。
+      return ratioInBlock >= 0.5 ? blockCharEnd : blockCharStart;
+    }
+    final isTextBlock =
+        lo >= entry.blocks.length ||
+        entry.blocks[lo] is ParagraphBlock ||
+        entry.blocks[lo] is BlockquoteBlock ||
+        entry.blocks[lo] is ListBlock ||
+        entry.blocks[lo] is HeadingBlock;
+    if (!isTextBlock) {
+      return ratioInBlock >= 0.5 ? blockCharEnd : blockCharStart;
+    }
+    return (blockCharStart + (ratioInBlock * blockChars).round()).clamp(
+      blockCharStart,
+      blockCharEnd,
+    );
   }
 
   /// 某章 charOffset 对应的窗口 contentY。
