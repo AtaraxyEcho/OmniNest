@@ -69,12 +69,27 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
     if (oldWidget.fit != widget.fit) {
       _element?.style.objectFit = _objectFit(widget.fit);
     }
-    if (oldWidget.source != widget.source) {
+    final oldIdentity = _sourceIdentityOf(oldWidget.source);
+    final newIdentity = _sourceIdentityOf(widget.source);
+    if (oldIdentity != newIdentity) {
       _sourceStaleNotified = false;
       _attempts = 0;
       _failed = false;
+    } else if (oldWidget.source != widget.source &&
+        _appliedSource != null &&
+        !_failed) {
+      // 仅签名参数轮换:热更新 src,不重置失败状态。
+      _appliedSource = widget.source;
+      _element?.src = widget.source;
+      return;
     }
     _applySource();
+  }
+
+  String _sourceIdentityOf(String path) {
+    final trimmed = path.trim();
+    final queryIndex = trimmed.indexOf('?');
+    return queryIndex < 0 ? trimmed : trimmed.substring(0, queryIndex);
   }
 
   void _notifySourceStaleOnce() {

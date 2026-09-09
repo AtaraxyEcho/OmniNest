@@ -104,27 +104,42 @@ class AppBackdropRepository {
   /// 将服务端素材写入本地缓存;非 READY 状态映射为 missing,不参与选择。
   /// path 缓存签名内容 URL、thumbnailPath 缓存缩略图 URL(过期由下次列表刷新),
   /// 渲染层据此取图,图片缓存键仍基于素材 ID。
+  /// contentUrl/thumbUrl 为空时保留原缓存,避免签名生成失败把可用路径清空。
   Future<void> upsertServerAssets(List<BackdropServerAsset> assets) async {
     if (assets.isEmpty) {
       return;
     }
     final now = DateTime.now();
+    final existingById = <String, AppBackdropAsset>{};
+    final rows = await (_db.select(_db.appBackdropAssets)).get();
+    for (final row in rows) {
+      existingById[row.id] = _mapBackdrop(row);
+    }
     final mapped = assets
         .map((asset) {
           final updatedAt = asset.updatedAt ?? now;
           final status = AppBackdropAssetStatus.fromValue(asset.status);
+          final existing = existingById[asset.id];
+          final contentUrl = asset.contentUrl;
+          final thumbUrl = asset.thumbUrl;
           return AppBackdropAsset(
             id: asset.id,
-            path: asset.contentUrl ?? '',
+            path:
+                (contentUrl != null && contentUrl.isNotEmpty)
+                    ? contentUrl
+                    : existing?.path ?? '',
             title: asset.title,
             mediaType: AppBackdropMediaType.fromValue(asset.mediaType),
             sourceType: AppBackdropSourceType.server,
             fileSize: asset.fileSize,
             modifiedAt: updatedAt,
-            width: asset.width,
-            height: asset.height,
-            durationMs: asset.durationMs,
-            thumbnailPath: asset.thumbUrl,
+            width: asset.width ?? existing?.width,
+            height: asset.height ?? existing?.height,
+            durationMs: asset.durationMs ?? existing?.durationMs,
+            thumbnailPath:
+                (thumbUrl != null && thumbUrl.isNotEmpty)
+                    ? thumbUrl
+                    : existing?.thumbnailPath,
             missing: status != AppBackdropAssetStatus.ready,
             status: status,
             createdAt: updatedAt,

@@ -991,6 +991,21 @@ void main() {
     });
   });
 
+  group('AppBackdropVideoSession source identity', () {
+    test('签名查询串变化视为同一资源', () {
+      const a = 'http://localhost:9000/derived/x/original.mp4?X-Amz-Signature=aaa';
+      const b = 'http://localhost:9000/derived/x/original.mp4?X-Amz-Signature=bbb';
+      expect(
+        AppBackdropVideoSession.sourceIdentityOf(a),
+        AppBackdropVideoSession.sourceIdentityOf(b),
+      );
+      expect(
+        AppBackdropVideoSession.sourceIdentityOf(a),
+        'http://localhost:9000/derived/x/original.mp4',
+      );
+    });
+  });
+
   group('AppBackdropSceneController', () {
     test('工作页面策略隐藏背景并启用工作可读性', () {
       expect(AppBackdropPolicy.work.scene, AppBackdropScene.work);

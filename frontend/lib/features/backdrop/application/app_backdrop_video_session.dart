@@ -73,9 +73,22 @@ class AppBackdropVideoSession extends ChangeNotifier {
     active: _sceneActive && _layoutUsable && _appVisible,
   );
 
-  /// 按本机路径重试当前正在使用的播放会话。
+  /// 按本机路径或签名 URL(忽略查询串)重试当前正在使用的播放会话。
   static void retryPath(String path) {
-    _sessionsByPath[path]?.retry();
+    final identity = sourceIdentityOf(path);
+    for (final entry in _sessionsByPath.entries) {
+      if (entry.key == path || sourceIdentityOf(entry.key) == identity) {
+        entry.value.retry();
+        return;
+      }
+    }
+  }
+
+  /// 视频源稳定身份:签名 URL 轮换查询参数时视为同一资源。
+  static String sourceIdentityOf(String path) {
+    final trimmed = path.trim();
+    final queryIndex = trimmed.indexOf('?');
+    return queryIndex < 0 ? trimmed : trimmed.substring(0, queryIndex);
   }
 
   /// 同步视频路径和静音设置。
@@ -89,13 +102,15 @@ class AppBackdropVideoSession extends ChangeNotifier {
     }
     final normalizedPath = path?.trim() ?? '';
     final oldPath = _path;
-    final pathChanged = _path != normalizedPath;
+    final identityChanged =
+        sourceIdentityOf(_path) != sourceIdentityOf(normalizedPath);
     final mutedChanged = _muted != muted;
     final activeChanged = _sceneActive != active;
+    // 仅签名参数变化时更新引用,不销毁正在播放的会话。
     _path = normalizedPath;
     _muted = muted;
     _sceneActive = active;
-    if (pathChanged) {
+    if (identityChanged) {
       _unregisterPath(oldPath);
       _registerPath(normalizedPath);
       _generation++;
@@ -104,6 +119,18 @@ class AppBackdropVideoSession extends ChangeNotifier {
       _openError = null;
       _activePath = null;
       unawaited(_disposeCurrentSession());
+    } else if (oldPath != normalizedPath) {
+      _unregisterPath(oldPath);
+      _registerPath(normalizedPath);
+      // 仅签名轮换:播放中保持会话;失败/未就绪时用新 URL 重开。
+      if (_openError != null || !_ready) {
+        _generation++;
+        _cancelRetry();
+        _openAttempts = 0;
+        _openError = null;
+        _activePath = null;
+        unawaited(_disposeCurrentSession());
+      }
     }
     if (mutedChanged) {
       final player = _player;
@@ -119,7 +146,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
         _pauseCurrentPlayer();
       }
     }
-    if (pathChanged) {
+    if (identityChanged) {
       _notifySafely();
     }
     if (_path.isNotEmpty && _sceneActive) {

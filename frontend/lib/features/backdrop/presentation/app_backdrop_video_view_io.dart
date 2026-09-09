@@ -57,7 +57,10 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
   @override
   void didUpdateWidget(AppBackdropVideoView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.source != widget.source) {
+    final identityChanged =
+        AppBackdropVideoSession.sourceIdentityOf(oldWidget.source) !=
+        AppBackdropVideoSession.sourceIdentityOf(widget.source);
+    if (identityChanged) {
       _usingFallback = false;
       _sourceStaleNotified = false;
     }
@@ -148,7 +151,8 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
     required bool active,
     required bool layoutUsable,
   }) {
-    final signature = '$source:$muted:$active:$layoutUsable';
+    final sourceIdentity = AppBackdropVideoSession.sourceIdentityOf(source);
+    final signature = '$sourceIdentity:$muted:$active:$layoutUsable';
     if (_lastSessionSignature == signature &&
         _lastLayoutUsable == layoutUsable) {
       return;
