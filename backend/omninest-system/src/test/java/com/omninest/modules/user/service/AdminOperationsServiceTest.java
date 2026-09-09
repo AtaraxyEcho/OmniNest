@@ -20,6 +20,7 @@ import com.omninest.common.security.Roles;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.modules.configcenter.dto.ConfigEntryDto;
 import com.omninest.modules.configcenter.service.ConfigCenterService;
+import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRedispatchService;
 import com.omninest.modules.user.domain.AuditLog;
@@ -63,8 +64,9 @@ class AdminOperationsServiceTest {
     private final AuditLogAdminRepository auditLogAdminRepository = mock(AuditLogAdminRepository.class);
     private final AdminAuditLogService auditLogService = mock(AdminAuditLogService.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
+    private final TaskDispatchRepository taskDispatchRepository = mock(TaskDispatchRepository.class);
     private final TaskRedispatchService taskRedispatchService =
-            new TaskRedispatchService(taskDispatchService);
+            new TaskRedispatchService(taskDispatchService, taskDispatchRepository);
     private final ObjectStorageBuckets objectStorageBuckets = createObjectStorageBuckets();
     private final HealthEndpoint healthEndpoint = mock(HealthEndpoint.class);
     private final ActiveSessionRepository activeSessionRepository = mock(ActiveSessionRepository.class);

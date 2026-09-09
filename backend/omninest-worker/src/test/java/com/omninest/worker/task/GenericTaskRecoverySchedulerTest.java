@@ -144,9 +144,11 @@ class GenericTaskRecoverySchedulerTest {
 
         scheduler.recoverStaleTasks();
 
-        for (String taskType : List.of("PHOTO_SCAN", "PHOTO_THUMBNAILS", "EXTERNAL_IMPORT",
-                "OFFLINE_DOWNLOAD", "MEDIA_SCRAPE", "VIDEO_TRANSCODE",
-                "FILE_INDEX", "THUMBNAIL", "TEXT_EXTRACTION")) {
+        for (String taskType : List.of("PHOTO_SCAN", "PHOTO_THUMBNAILS", "PHOTO_BATCH",
+                "PHOTO_MOTION", "PHOTO_MOTION_RESCAN", "EXTERNAL_IMPORT",
+                "OFFLINE_DOWNLOAD", "MEDIA_SCRAPE", "VIDEO_TRANSCODE", "WEB_OPTIMIZE",
+                "AUDIO_EXTRACT", "FILE_INDEX", "THUMBNAIL", "TEXT_EXTRACTION",
+                "LOCAL_VIDEO_LIBRARY_DISCOVERY", "LOCAL_VIDEO_LIBRARY_APPLY")) {
             verify(taskRecordService).listStaleRunningTaskIds(eq(taskType), any(), org.mockito.ArgumentMatchers.anyInt());
         }
         // 专用恢复调度器已覆盖的类型不在通用调度器范围内。

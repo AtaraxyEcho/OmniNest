@@ -13,6 +13,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.dto.TaskDto;
+import com.omninest.modules.task.repository.TaskDispatchRepository;
 import com.omninest.modules.task.repository.TaskRecordRepository;
 import java.time.Instant;
 import java.util.List;
@@ -47,13 +48,16 @@ class TaskQueryServiceTest {
     @Mock
     private TaskDispatchService taskDispatchService;
 
+    @Mock
+    private TaskDispatchRepository taskDispatchRepository;
+
     private TaskQueryService taskQueryService;
 
     @BeforeEach
     void setUp() {
         taskQueryService = new TaskQueryService(
                 taskRecordRepository,
-                new TaskRedispatchService(taskDispatchService)
+                new TaskRedispatchService(taskDispatchService, taskDispatchRepository)
         );
     }
 

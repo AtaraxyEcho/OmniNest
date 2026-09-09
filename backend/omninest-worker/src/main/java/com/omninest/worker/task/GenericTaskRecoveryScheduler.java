@@ -24,8 +24,10 @@ import org.springframework.stereotype.Component;
  * 通用任务恢复调度器。
  *
  * <p>包含两类裁决：一是心跳超时恢复，覆盖缺少专用恢复调度器的长任务类型
- * （PHOTO_SCAN、PHOTO_THUMBNAILS、EXTERNAL_IMPORT、OFFLINE_DOWNLOAD、
- * MEDIA_SCRAPE、VIDEO_TRANSCODE、FILE_INDEX、THUMBNAIL、TEXT_EXTRACTION），
+ * （PHOTO_SCAN、PHOTO_THUMBNAILS、PHOTO_BATCH、PHOTO_MOTION、
+ * PHOTO_MOTION_RESCAN、EXTERNAL_IMPORT、OFFLINE_DOWNLOAD、MEDIA_SCRAPE、
+ * VIDEO_TRANSCODE、WEB_OPTIMIZE、AUDIO_EXTRACT、FILE_INDEX、THUMBNAIL、
+ * TEXT_EXTRACTION、LOCAL_VIDEO_LIBRARY_DISCOVERY、LOCAL_VIDEO_LIBRARY_APPLY），
  * Worker 崩溃导致 RUNNING 任务心跳超时后，按重试次数裁决：可重试则经
  * Outbox 按退避时间重新入队，达到上限则进入死信；二是停滞任务清扫，对
  * 长时间停留在 QUEUED/RETRY_WAIT 且无存活投递记录的任务重新投递，兜住
@@ -48,13 +50,20 @@ public class GenericTaskRecoveryScheduler {
     private static final List<String> RECOVERED_TASK_TYPES = List.of(
             "PHOTO_SCAN",
             "PHOTO_THUMBNAILS",
+            "PHOTO_BATCH",
+            "PHOTO_MOTION",
+            "PHOTO_MOTION_RESCAN",
             "EXTERNAL_IMPORT",
             "OFFLINE_DOWNLOAD",
             "MEDIA_SCRAPE",
             "VIDEO_TRANSCODE",
+            "WEB_OPTIMIZE",
+            "AUDIO_EXTRACT",
             "FILE_INDEX",
             "THUMBNAIL",
-            "TEXT_EXTRACTION"
+            "TEXT_EXTRACTION",
+            "LOCAL_VIDEO_LIBRARY_DISCOVERY",
+            "LOCAL_VIDEO_LIBRARY_APPLY"
     );
 
     private static final int RECOVERY_BATCH_SIZE = 100;

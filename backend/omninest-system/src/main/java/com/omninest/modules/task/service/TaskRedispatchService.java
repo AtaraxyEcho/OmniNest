@@ -5,7 +5,9 @@ import com.alibaba.fastjson2.TypeReference;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.modules.task.domain.TaskDispatch;
 import com.omninest.modules.task.domain.TaskRecord;
+import com.omninest.modules.task.repository.TaskDispatchRepository;
 import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,8 +19,10 @@ import org.springframework.stereotype.Service;
  * 任务重新投递服务：从任务记录重建消费方事件载荷并经 Outbox 重发。
  *
  * <p>供管理员重试、死信重试与停滞任务清扫三类入口共用，保证"存储载荷 →
- * 消费事件"的重建规则只有一份。重建规则按路由键区分，未收录的路由键
- * 拒绝重投，避免以错误形状的载荷打爆消费方。</p>
+ * 消费事件"的重建规则只有一份。优先复用最近一次 Outbox 投递的原始消息
+ * （部分任务类型的记录载荷是事件子集，只有投递行携带完整事件）；无投递
+ * 记录时按路由键从记录载荷重建。未收录的路由键拒绝重投，避免以错误形状
+ * 的载荷打爆消费方。</p>
  *
  * @author OmniNest
  */
@@ -30,6 +34,7 @@ public class TaskRedispatchService {
     };
 
     private final TaskDispatchService taskDispatchService;
+    private final TaskDispatchRepository taskDispatchRepository;
 
     /**
      * 按任务记录重建载荷并立即经 Outbox 重新投递。
@@ -40,6 +45,18 @@ public class TaskRedispatchService {
         String routingKey = record.getRoutingKey();
         if (routingKey == null || routingKey.isBlank()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "任务缺少路由键，无法重新投递");
+        }
+        TaskDispatch dispatch = taskDispatchRepository
+                .findFirstByTaskIdOrderByCreatedAtDesc(record.getId())
+                .orElse(null);
+        if (dispatch != null && dispatch.getPayload() != null && !dispatch.getPayload().isBlank()) {
+            taskDispatchService.enqueue(
+                    record.getId(),
+                    QueueNames.TASK_EXCHANGE,
+                    dispatch.getRoutingKey(),
+                    JSON.parse(dispatch.getPayload())
+            );
+            return;
         }
         Map<String, Object> payload = rebuildPayload(
                 record.getId(),
@@ -131,6 +148,27 @@ public class TaskRedispatchService {
                     "photoId", requiredUuid(payload, "photoId").toString(),
                     "ownerUserId", requiredUuid(payload, "ownerUserId").toString()
             );
+            case QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY,
+                    QueueNames.PHOTO_MOTION_RESCAN_ROUTING_KEY -> Map.of(
+                    "taskId", taskId.toString(),
+                    "ownerUserId", requiredUuid(payload, "ownerUserId").toString()
+            );
+            case QueueNames.PHOTO_GEO_IMPORT_ROUTING_KEY -> Map.of(
+                    "datasetId", requiredUuid(payload, "datasetId").toString(),
+                    "datasetVersion", requiredText(payload, "datasetVersion"),
+                    "dumpDate", requiredText(payload, "dumpDate")
+            );
+            case QueueNames.PHOTO_GEO_BACKFILL_ROUTING_KEY -> {
+                Integer batchSize = optionalInteger(payload.get("batchSize"));
+                if (batchSize == null) {
+                    throw new BusinessException(ErrorCode.PARAM_ERROR, "任务缺少可重试载荷字段: batchSize");
+                }
+                Map<String, Object> backfill = new LinkedHashMap<>();
+                backfill.put("taskId", taskId.toString());
+                backfill.put("batchSize", batchSize);
+                backfill.put("datasetVersion", optionalText(payload, "datasetVersion", null));
+                yield backfill;
+            }
             default -> throw new BusinessException(
                     ErrorCode.PARAM_ERROR,
                     "任务类型不支持自动重新投递: " + (taskType == null ? routingKey : taskType)
