@@ -140,15 +140,20 @@ class ReaderContinuousScrollController extends ChangeNotifier {
   ///
   /// [resolve] 负责提供某章的已加载数据；返回 null 表示尚未加载。
   /// [estimateHeight] 为未加载章提供基于字数的估算高度，减少占位跳动。
+  ///
+  /// 若窗口组成与布局指纹未变化，不调用 [notifyListeners]，避免滚动热路径重建。
   void rebuild({
     required String anchorChapterId,
     required List<String> allChapterIds,
     required ContinuousChapterEntry? Function(String chapterId) resolve,
     double Function(String chapterId)? estimateHeight,
   }) {
-    _anchorChapterId = anchorChapterId;
     final anchorIndex = allChapterIds.indexOf(anchorChapterId);
     if (anchorIndex < 0) {
+      if (_entries.isEmpty && _anchorChapterId == anchorChapterId) {
+        return;
+      }
+      _anchorChapterId = anchorChapterId;
       _entries = const [];
       _items = const [];
       _entryById.clear();
@@ -187,6 +192,12 @@ class ReaderContinuousScrollController extends ChangeNotifier {
       );
     }
 
+    if (_anchorChapterId == anchorChapterId &&
+        _windowSignatureEqual(_entries, nextEntries)) {
+      return;
+    }
+
+    _anchorChapterId = anchorChapterId;
     _entries = nextEntries;
     _entryById
       ..clear()
@@ -199,6 +210,37 @@ class ReaderContinuousScrollController extends ChangeNotifier {
     }
     _items = _buildItems(nextEntries);
     notifyListeners();
+  }
+
+  /// 窗口签名比较：章组成、就绪态与高度指纹一致则视为未变化。
+  bool _windowSignatureEqual(
+    List<ContinuousChapterEntry> a,
+    List<ContinuousChapterEntry> b,
+  ) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      final x = a[i];
+      final y = b[i];
+      if (x.chapterId != y.chapterId ||
+          x.title != y.title ||
+          x.blockCount != y.blockCount ||
+          x.totalChars != y.totalChars ||
+          x.isReady != y.isReady ||
+          x.totalHeight != y.totalHeight) {
+        return false;
+      }
+      final hx = x.cumulativeHeights;
+      final hy = y.cumulativeHeights;
+      if (hx.length != hy.length) {
+        return false;
+      }
+      if (hx.isNotEmpty && hx.last != hy.last) {
+        return false;
+      }
+    }
+    return true;
   }
 
   List<ContinuousScrollItem> _buildItems(List<ContinuousChapterEntry> entries) {

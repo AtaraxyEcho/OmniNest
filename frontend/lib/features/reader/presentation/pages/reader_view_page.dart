@@ -1143,14 +1143,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   }
 
   Widget _buildContent(ReaderChapterContent content, ReaderItemDetail detail) {
-    if (kDebugMode) {
-      readerDebugLog(
-        'ReaderView: rendering content — '
-        'mode=${_isPageMode ? "page" : "scroll"}, '
-        'contentLength=${content.content.length}, '
-        'flatPages=${_flatPages.length}',
-      );
-    }
     if (_isPageMode) return buildPageModeContent(content);
     return buildScrollModeContent(content, detail);
   }

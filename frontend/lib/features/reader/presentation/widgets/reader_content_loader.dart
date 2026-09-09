@@ -44,6 +44,10 @@ class ChapterData {
   List<double> get cumulativeHeights => _cumulativeHeights;
   List<double> _cumulativeHeights;
 
+  /// 测高布局版本：每次 updateCumulativeHeights 自增，供窗口 fingerprint 使用。
+  int get layoutVersion => _layoutVersion;
+  int _layoutVersion = 0;
+
   /// 邻章就绪后丢弃 HTML 正文，仅保留标题与 blocks，降低窗口内存。
   void dropHtmlBody() {
     if (_content.content.isEmpty) {
@@ -171,8 +175,10 @@ class ChapterData {
   void updateSlices(List<PageSlice> newSlices) => _slices = newSlices;
 
   /// 更新累积高度（仅限 ReaderContentLoader 调用）。
-  void updateCumulativeHeights(List<double> newHeights) =>
-      _cumulativeHeights = newHeights;
+  void updateCumulativeHeights(List<double> newHeights) {
+    _cumulativeHeights = newHeights;
+    _layoutVersion++;
+  }
 }
 
 /// 滚动模式测高分批参数：头部精确测量块数与每批测量块数。
@@ -436,7 +442,14 @@ class ReaderContentLoader {
   final Map<String, ReaderChapterContent> _contentCache = {};
   String? _activeChapterId;
 
+  /// 测高布局失效回调（连续滚动窗口 fingerprint 刷新）。
+  void Function()? onLayoutInvalidated;
+
   String? get activeChapterId => _activeChapterId;
+
+  void _notifyLayoutInvalidated() {
+    onLayoutInvalidated?.call();
+  }
 
   _CacheKey _key(String chapterId, ReaderViewSettings settings) {
     return _CacheKey(
@@ -487,6 +500,14 @@ class ReaderContentLoader {
         settings: settings,
         textScale: textScale,
       );
+      // 预取的邻章解析完成后即可丢 HTML，blocks 已足够滚动渲染。
+      // 尚无活动章时保留 HTML，避免首次加载正文被清空。
+      if (_activeChapterId != null &&
+          chapterId != _activeChapterId &&
+          data.blocks.isNotEmpty) {
+        data.dropHtmlBody();
+        _contentCache[chapterId] = data.content;
+      }
       return data;
     } finally {
       if (identical(_inflight[key], loadFuture)) {
@@ -603,6 +624,7 @@ class ReaderContentLoader {
       estimated[i] = running;
     }
     data.updateCumulativeHeights(estimated);
+    _notifyLayoutInvalidated();
     unawaited(
       _schedulePreciseHeights(
         data,
@@ -637,6 +659,7 @@ class ReaderContentLoader {
       heights[i] = cumulative;
       if ((i + 1) % _metricsBatchBlocks == 0 || i == blocks.length - 1) {
         data.updateCumulativeHeights(heights);
+        _notifyLayoutInvalidated();
         await Future<void>.delayed(Duration.zero);
         if (generation != _heightsGeneration ||
             !identical(data.cumulativeHeights, heights)) {
@@ -730,6 +753,8 @@ class ReaderContentLoader {
       final idx = _chapterIndex(chapterId);
       return (idx - activeIdx).abs() > 1;
     });
+    // 邻章 blocks 就绪后丢 HTML，避免在 build 热路径反复处理。
+    dropHtmlForNeighbors(chapterId);
 
     final needFetch = <String>[];
     final prevId = _neighborId(activeIdx - 1);
@@ -794,6 +819,7 @@ class ReaderContentLoader {
 
     // 失效分页导航器（旧 settings 的闭包已过期）
     data.invalidatePageNavigator();
+    _notifyLayoutInvalidated();
 
     // 重新映射 key（旧 key → 新 key）
     final newKey = _key(chapterId, newSettings);

@@ -186,6 +186,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   Future<void> checkBookmarkState();
   void startHideTimer();
   void rebuildContinuousWindow();
+  void invalidateContinuousWindowFingerprint();
 
   // ── 由 State 实现的抽象方法 ──
 
@@ -202,7 +203,19 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 初始化内容加载器（仅首次）。
   void initContentLoader(List<ReaderChapter> chapters) {
     if (contentLoader != null) return;
-    contentLoader = ReaderContentLoader(allChapters: chapters);
+    final loader = ReaderContentLoader(allChapters: chapters);
+    loader.onLayoutInvalidated = _onContinuousLayoutInvalidated;
+    contentLoader = loader;
+  }
+
+  /// 测高收敛后刷新连续滚动窗口 fingerprint，避免热路径跳过更新。
+  void _onContinuousLayoutInvalidated() {
+    if (!mounted || isPageMode) {
+      return;
+    }
+    invalidateContinuousWindowFingerprint();
+    rebuildContinuousWindow();
+    setState(() {});
   }
 
   /// 加载当前章节内容并恢复阅读进度。

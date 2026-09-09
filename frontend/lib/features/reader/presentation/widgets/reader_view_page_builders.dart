@@ -38,6 +38,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   ReaderProgressSnapshot? _pendingProgressSnapshot;
   bool _progressSnapshotApplyScheduled = false;
 
+  /// 连续滚动窗口 fingerprint；未变化时跳过 rebuild，避免滚动热路径重建。
+  int? _lastWindowFingerprint;
+
+  void invalidateContinuousWindowFingerprint() {
+    _lastWindowFingerprint = null;
+  }
+
   // ── State 字段访问器（由 State 实现） ──
   ReaderContentLoader? get contentLoader;
   ReaderContinuousScrollController get continuousScrollController;
@@ -512,18 +519,33 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   // ── 滚动模式 ──
 
   /// 用 contentLoader 数据重建连续滚动窗口。
+  ///
+  /// build 热路径调用：fingerprint 未变化时整段跳过（含测高启动与 notify）。
+  /// dropHtmlForNeighbors 由 setActive/loadChapter 负责，不在此处理。
   void rebuildContinuousWindow() {
     final loader = contentLoader;
     if (loader == null) {
       return;
     }
+    final pageWidth = computePageWidth();
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final fingerprint = _computeWindowFingerprint(
+      loader,
+      pageWidth: pageWidth,
+      textScale: textScale,
+    );
+    if (_lastWindowFingerprint == fingerprint &&
+        !continuousScrollController.isEmpty) {
+      return;
+    }
+    _lastWindowFingerprint = fingerprint;
+
     loader.ensureScrollLayoutForNeighbors(
       currentChapterId,
-      pageWidth: computePageWidth(),
+      pageWidth: pageWidth,
       settings: settings,
-      textScale: MediaQuery.textScalerOf(context).scale(1.0),
+      textScale: textScale,
     );
-    loader.dropHtmlForNeighbors(currentChapterId);
     final fontSize = settings.fontSize;
     final lineHeight = settings.lineHeight;
     final previousPrefix =
@@ -575,6 +597,40 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       },
     );
     _compensateScrollForPrefixDelta(previousPrefix);
+  }
+
+  /// 窗口状态指纹：锚点 + 排版 + 视口宽度 + 窗口章 layoutVersion/高度末值。
+  int _computeWindowFingerprint(
+    ReaderContentLoader loader, {
+    required double pageWidth,
+    required double textScale,
+  }) {
+    var hash = Object.hash(
+      currentChapterId,
+      settings.fontSize,
+      settings.lineHeight,
+      settings.fontFamily,
+      settings.immersiveMode,
+      pageWidth,
+      textScale,
+    );
+    final ids = [
+      currentChapterId,
+      ...loader.neighborChapterIds(currentChapterId),
+    ];
+    for (final id in ids) {
+      final data = loader.getByChapterId(id);
+      final heights = data?.cumulativeHeights;
+      hash = Object.hash(
+        hash,
+        id,
+        data?.blocks.length ?? 0,
+        data?.totalChars ?? 0,
+        data?.layoutVersion ?? -1,
+        heights == null || heights.isEmpty ? -1.0 : heights.last,
+      );
+    }
+    return hash;
   }
 
   /// 前缀章高度变化时补偿滚动偏移，避免测高收敛导致视口跳动。
@@ -659,7 +715,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             }
           },
           child: ReaderContinuousScrollView(
-            key: ValueKey('reader-continuous-$currentChapterId'),
+            key: const Key('reader-continuous-scroll'),
             controller: continuousScrollController,
             settings: settings,
             scrollController: scrollController,
