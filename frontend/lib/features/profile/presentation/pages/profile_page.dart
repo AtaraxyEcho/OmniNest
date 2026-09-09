@@ -8,7 +8,6 @@ import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
-import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
@@ -361,16 +360,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   }
 
   Future<void> _showBackdropSettings() {
-    final colors = context.globalColors;
-    return showAppBackdropSettings(
-      context,
-      palette: AppBackdropPalette(
-        text: colors.onSurface,
-        muted: colors.onSurfaceVariant,
-        accent: colors.primary,
-        accentAlt: colors.tertiary,
-      ),
-    );
+    return showAppBackdropSettings(context);
   }
 
   Future<void> _showChangePassword() {

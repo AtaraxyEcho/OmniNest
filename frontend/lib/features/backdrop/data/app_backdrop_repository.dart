@@ -63,7 +63,7 @@ class AppBackdropRepository {
     });
   }
 
-  /// 注册安装包内置背景，并仅为首次使用背景库的用户建立默认设置。
+  /// 注册安装包内置背景;首次使用时建立默认设置,已有设置但无可用选中时回落内置壁纸。
   Future<void> ensureBundledBackdrop(AppBackdropAsset backdrop) async {
     await _db.transaction(() async {
       await _db
@@ -72,17 +72,32 @@ class AppBackdropRepository {
       final settingsRow =
           await (_db.select(_db.appBackdropSettingsTable)
             ..where((table) => table.id.equals(settingsId))).getSingleOrNull();
-      if (settingsRow != null) {
+      if (settingsRow == null) {
+        await saveSettings(
+          AppBackdropSettings(
+            enabled: true,
+            selectedBackdropId: backdrop.id,
+            desktopBackdropId: backdrop.id,
+            mobileBackdropId: backdrop.id,
+          ),
+        );
         return;
       }
-      await saveSettings(
-        AppBackdropSettings(
-          enabled: true,
-          selectedBackdropId: backdrop.id,
-          desktopBackdropId: backdrop.id,
-          mobileBackdropId: backdrop.id,
-        ),
-      );
+      final settings = _mapSettings(settingsRow);
+      final hasSelection =
+          settings.selectedBackdropId != null ||
+          settings.desktopBackdropId != null ||
+          settings.mobileBackdropId != null;
+      if (!hasSelection) {
+        await saveSettings(
+          settings.copyWith(
+            selectedBackdropId: backdrop.id,
+            desktopBackdropId: backdrop.id,
+            mobileBackdropId: backdrop.id,
+            enabled: true,
+          ),
+        );
+      }
     });
   }
 

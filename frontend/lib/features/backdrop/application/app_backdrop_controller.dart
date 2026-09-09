@@ -202,19 +202,23 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   }
 
   /// 选择背景素材;设置经由偏好同步(服务端事实来源)落盘。
+  /// 首次选中时若背景未启用,自动打开,避免“已选中但不显示”。
   Future<void> selectBackdrop(String id) async {
     await ensureFreshServerUrls();
     final current =
         state.asData?.value ??
         await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
     final selected = current.backdrops.where((backdrop) => backdrop.id == id);
-    if (selected.isEmpty) {
+    if (selected.isEmpty || !selected.single.isSelectable) {
       return;
     }
-    final updated = current.settings.selectBackdropFor(
+    var updated = current.settings.selectBackdropFor(
       current.selectionTarget,
       id,
     );
+    if (!updated.enabled) {
+      updated = updated.copyWith(enabled: true);
+    }
     await _persistSettings(updated);
   }
 

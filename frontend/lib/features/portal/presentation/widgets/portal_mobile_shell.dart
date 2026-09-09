@@ -173,16 +173,7 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
                       actions: [
                         IconButton(
                           tooltip: l10n.portalLocalBackdropTitle,
-                          onPressed:
-                              () => showAppBackdropSettings(
-                                context,
-                                palette: AppBackdropPalette(
-                                  text: foreground,
-                                  muted: scheme.onSurfaceVariant,
-                                  accent: scheme.primary,
-                                  accentAlt: scheme.tertiary,
-                                ),
-                              ),
+                          onPressed: () => showAppBackdropSettings(context),
                           icon: Icon(
                             Icons.wallpaper_rounded,
                             color: foreground,

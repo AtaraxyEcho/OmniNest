@@ -140,6 +140,7 @@ class AppBackdropSurface extends ConsumerWidget {
             }),
       );
     }
+    // 内置素材当前为视频;非 server 图片不在此分支渲染。
     return const SizedBox.shrink();
   }
 

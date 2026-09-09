@@ -426,7 +426,7 @@ void main() {
   });
 
   group('AppBackdropController', () {
-    test('服务端素材经缓存可选择且不隐式启用播放', () async {
+    test('服务端素材经缓存可选择并自动启用', () async {
       final database = LocalDatabase(NativeDatabase.memory());
       final repository = AppBackdropRepository(database);
       final api = _MockBackdropApi();
@@ -480,15 +480,8 @@ void main() {
         isNotEmpty,
       );
       expect(selected.settings.selectedBackdropId, 'server-1');
-      expect(selected.settings.enabled, isFalse);
-      expect(selected.hasActiveBackdrop, isFalse);
-
-      await notifier.setEnabled(true);
-
-      final enabled =
-          container.read(appBackdropControllerProvider).requireValue;
-      expect(enabled.settings.enabled, isTrue);
-      expect(enabled.hasActiveBackdrop, isTrue);
+      expect(selected.settings.enabled, isTrue);
+      expect(selected.hasActiveBackdrop, isTrue);
     });
 
     test('离线时保留服务端素材缓存', () async {

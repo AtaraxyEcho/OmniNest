@@ -489,16 +489,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
   }
 
   Future<void> _openBackdropSettings() {
-    final colors = context.musicColors;
-    return showAppBackdropSettings(
-      context,
-      palette: AppBackdropPalette(
-        text: colors.onSurface,
-        muted: colors.onSurfaceVariant,
-        accent: colors.primary,
-        accentAlt: Theme.of(context).colorScheme.tertiary,
-      ),
-    );
+    return showAppBackdropSettings(context);
   }
 
   Future<void> _openMobileSearch() {

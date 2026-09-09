@@ -32,9 +32,11 @@ class AppBackdropActionButton extends StatelessWidget {
           height: 38,
           padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: onTap == null ? 0.05 : 0.10),
+            color: palette.surfaceContainer.withValues(
+              alpha: onTap == null ? 0.45 : 1.0,
+            ),
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            border: Border.all(color: palette.outline),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -75,13 +77,13 @@ class AppBackdropControls extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final settings = state.settings;
     return Material(
-      color: Colors.white.withValues(alpha: 0.055),
+      color: palette.surfaceContainer,
       borderRadius: BorderRadius.circular(8),
       clipBehavior: Clip.antiAlias,
       child: DecoratedBox(
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          border: Border.all(color: palette.outline),
         ),
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -152,18 +154,18 @@ class AppBackdropControls extends StatelessWidget {
                 style: ButtonStyle(
                   foregroundColor: WidgetStateProperty.resolveWith((states) {
                     if (states.contains(WidgetState.selected)) {
-                      return Colors.black;
+                      return palette.accent;
                     }
                     return palette.text;
                   }),
                   backgroundColor: WidgetStateProperty.resolveWith((states) {
                     if (states.contains(WidgetState.selected)) {
-                      return palette.accent;
+                      return palette.accent.withValues(alpha: 0.16);
                     }
-                    return Colors.white.withValues(alpha: 0.08);
+                    return palette.surfaceContainer;
                   }),
                   side: WidgetStatePropertyAll(
-                    BorderSide(color: Colors.white.withValues(alpha: 0.18)),
+                    BorderSide(color: palette.outline),
                   ),
                 ),
                 segments: [

@@ -340,15 +340,7 @@ class ProfileMobileContent extends ConsumerWidget {
   }
 
   Future<void> _showBackdropSettings(BuildContext context) {
-    return showAppBackdropSettings(
-      context,
-      palette: AppBackdropPalette(
-        text: context.mobileColors.textPrimary,
-        muted: context.mobileColors.textSecondary,
-        accent: context.mobileColors.warmAccent,
-        accentAlt: context.mobileColors.musicAccent,
-      ),
-    );
+    return showAppBackdropSettings(context);
   }
 
   Future<void> _showChangePassword(BuildContext context) {

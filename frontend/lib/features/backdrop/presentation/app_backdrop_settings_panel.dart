@@ -13,10 +13,11 @@ export 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dar
 const _allBackdropFilter = 'all';
 
 /// 显示应用本机背景设置面板。
-Future<void> showAppBackdropSettings(
-  BuildContext context, {
-  required AppBackdropPalette palette,
-}) {
+///
+/// 颜色统一由 [Theme.colorScheme] 派生,不再接受外部调色板,避免
+/// 深色写死面板 + 主题前景色混用导致的对比度问题。
+Future<void> showAppBackdropSettings(BuildContext context) {
+  final palette = AppBackdropPalette.fromScheme(Theme.of(context).colorScheme);
   return showDialog(
     context: context,
     barrierColor: Colors.black54,
@@ -49,12 +50,12 @@ class _AppBackdropSettingsDialog extends ConsumerWidget {
         ),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xF20A1117),
+            color: palette.surface,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            border: Border.all(color: palette.outline),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.36),
+                color: Colors.black.withValues(alpha: 0.28),
                 blurRadius: 44,
                 offset: const Offset(0, 22),
               ),
@@ -68,9 +69,11 @@ class _AppBackdropSettingsDialog extends ConsumerWidget {
                   notifier: notifier,
                 ),
             loading:
-                () => const SizedBox(
+                () => SizedBox(
                   height: 420,
-                  child: Center(child: CircularProgressIndicator()),
+                  child: Center(
+                    child: CircularProgressIndicator(color: palette.accent),
+                  ),
                 ),
             error:
                 (error, stackTrace) => SizedBox(
@@ -396,7 +399,7 @@ class _AppBackdropSettingsContentState
       barrierColor: Colors.black54,
       builder:
           (dialogContext) => AlertDialog(
-            backgroundColor: const Color(0xFF101820),
+            backgroundColor: widget.palette.surface,
             titleTextStyle: TextStyle(
               color: widget.palette.text,
               fontSize: AppTypography.titleLarge,
@@ -461,13 +464,16 @@ class _BackdropFilterBar extends StatelessWidget {
                   onSelected: (_) => onChanged(option.key),
                   showCheckmark: false,
                   labelStyle: TextStyle(
-                    color: Colors.black,
+                    color: value == option.key ? palette.accent : palette.text,
                     fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w700,
                   ),
-                  selectedColor: palette.accent,
-                  backgroundColor: Colors.white.withValues(alpha: 0.86),
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+                  selectedColor: palette.accent.withValues(alpha: 0.16),
+                  backgroundColor: palette.surfaceContainer,
+                  side: BorderSide(
+                    color:
+                        value == option.key ? palette.accent : palette.outline,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
@@ -509,9 +515,9 @@ class _BackdropGrid extends StatelessWidget {
     if (state.backdrops.isEmpty || backdrops.isEmpty) {
       return DecoratedBox(
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.055),
+          color: palette.surfaceContainer,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          border: Border.all(color: palette.outline),
         ),
         child: Center(
           child: Padding(
@@ -590,7 +596,7 @@ class _BackdropTile extends StatelessWidget {
       barrierColor: Colors.black54,
       builder:
           (dialogContext) => AlertDialog(
-            backgroundColor: const Color(0xFF101820),
+            backgroundColor: palette.surface,
             title: Text(l10n.portalLocalBackdropRemoveConfirmTitle),
             content: Text(l10n.portalLocalBackdropRemoveConfirmMessage),
             actions: [
@@ -623,13 +629,12 @@ class _BackdropTile extends StatelessWidget {
         onTap: backdrop.missing ? null : onTap,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: selected ? 0.13 : 0.06),
+            color: palette.surfaceContainer.withValues(
+              alpha: selected ? 1.0 : 0.72,
+            ),
             borderRadius: BorderRadius.circular(8),
             border: Border.all(
-              color:
-                  selected
-                      ? palette.accent.withValues(alpha: 0.70)
-                      : Colors.white.withValues(alpha: 0.12),
+              color: selected ? palette.accent : palette.outline,
             ),
           ),
           clipBehavior: Clip.antiAlias,
@@ -675,7 +680,7 @@ class _BackdropTile extends StatelessWidget {
                     icon: const Icon(Icons.close_rounded, size: 16),
                     color: palette.text,
                     style: IconButton.styleFrom(
-                      backgroundColor: Colors.black.withValues(alpha: 0.28),
+                      backgroundColor: palette.surfaceContainer,
                       minimumSize: const Size(28, 28),
                       fixedSize: const Size(28, 28),
                       padding: EdgeInsets.zero,

@@ -72,17 +72,7 @@ void main() {
                   body: Center(
                     child: TextButton(
                       onPressed: () {
-                        unawaited(
-                          showAppBackdropSettings(
-                            context,
-                            palette: const AppBackdropPalette(
-                              text: Colors.white,
-                              muted: Color(0xFFB8C2C8),
-                              accent: Color(0xFF92D8D1),
-                              accentAlt: Color(0xFFE2BE8E),
-                            ),
-                          ),
-                        );
+                        unawaited(showAppBackdropSettings(context));
                       },
                       child: const Text('打开背景设置'),
                     ),

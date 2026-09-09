@@ -94,16 +94,7 @@ class _PortalLocalBackdropButton extends StatelessWidget {
         color: Colors.transparent,
         child: InkWell(
           borderRadius: BorderRadius.circular(8),
-          onTap:
-              () => showAppBackdropSettings(
-                context,
-                palette: AppBackdropPalette(
-                  text: palette.text,
-                  muted: palette.muted,
-                  accent: palette.accent,
-                  accentAlt: palette.accentAlt,
-                ),
-              ),
+          onTap: () => showAppBackdropSettings(context),
           child: Container(
             height: 38,
             padding: const EdgeInsets.symmetric(horizontal: 12),
