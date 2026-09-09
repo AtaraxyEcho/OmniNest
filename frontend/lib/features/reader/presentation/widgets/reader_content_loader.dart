@@ -717,6 +717,25 @@ class ReaderContentLoader {
     }
   }
 
+  /// 为连续滚动窗口内多章重测高度（视口宽度变化时调用）。
+  void rekeyAndRecomputeHeightsForChapters(
+    Iterable<String> chapterIds,
+    double pageWidth,
+    ReaderViewSettings newSettings,
+    double textScale, {
+    bool prepareScrollLayout = true,
+  }) {
+    for (final chapterId in chapterIds) {
+      rekeyAndRecomputeHeights(
+        chapterId,
+        pageWidth,
+        newSettings,
+        textScale,
+        prepareScrollLayout: prepareScrollLayout,
+      );
+    }
+  }
+
   List<double> _computeCumulativeHeights(
     List<ContentBlock> blocks,
     double pageWidth,

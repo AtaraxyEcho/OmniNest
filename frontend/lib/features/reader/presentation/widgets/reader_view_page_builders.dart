@@ -580,48 +580,67 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     _schedulePendingScrollRestore();
     rebuildContinuousWindow();
 
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (_) {
-        lastPointerDownTime = DateTime.now();
-        // 用户真实触摸：消耗模式切换冻结锚点
-        if (modeSwitchAnchor != null) modeSwitchAnchor = null;
-      },
-      onPointerMove: (event) {
-        // 按住拖动阅读时持续刷新进度窗口起点；buttons==0 的悬停移动
-        // 不刷新，保留"非指针驱动滚动不写进度"的守卫语义
-        if (event.buttons != 0) {
-          lastPointerDownTime = DateTime.now();
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final fallbackSize = MediaQuery.sizeOf(context);
+        final viewportSize = Size(
+          constraints.maxWidth.isFinite && constraints.maxWidth > 0
+              ? constraints.maxWidth
+              : fallbackSize.width,
+          constraints.maxHeight.isFinite && constraints.maxHeight > 0
+              ? constraints.maxHeight
+              : fallbackSize.height,
+        );
+        if (viewportSize.width.isFinite &&
+            viewportSize.height.isFinite &&
+            pageViewportSize != viewportSize) {
+          _scheduleViewportUpdate(viewportSize);
         }
+
+        return Listener(
+          behavior: HitTestBehavior.translucent,
+          onPointerDown: (_) {
+            lastPointerDownTime = DateTime.now();
+            // 用户真实触摸：消耗模式切换冻结锚点
+            if (modeSwitchAnchor != null) modeSwitchAnchor = null;
+          },
+          onPointerMove: (event) {
+            // 按住拖动阅读时持续刷新进度窗口起点；buttons==0 的悬停移动
+            // 不刷新，保留"非指针驱动滚动不写进度"的守卫语义
+            if (event.buttons != 0) {
+              lastPointerDownTime = DateTime.now();
+            }
+          },
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              lastPointerDownTime = DateTime.now();
+            }
+          },
+          child: ReaderContinuousScrollView(
+            key: ValueKey('reader-continuous-$currentChapterId'),
+            controller: continuousScrollController,
+            settings: settings,
+            scrollController: scrollController,
+            itemId: itemId,
+            annotationsByChapter: _continuousAnnotationsByChapter(),
+            onLinkTap: handleReaderLinkTap,
+            onSelectionActive: onReaderSelectionActive,
+            onTap: toggleControls,
+            onScrollPosition: onContinuousScrollPosition,
+            onHighlight: (text, start, end, chapterId) {
+              if (!mounted) return;
+              annotationHandler?.updateChapter(chapterId);
+              annotationHandler?.highlight(text, start, end, context);
+            },
+            onAnnotate: (text, start, end, chapterId) {
+              if (!mounted) return;
+              annotationHandler?.updateChapter(chapterId);
+              annotationHandler?.annotate(text, start, end, context);
+            },
+            onExpandWindow: onContinuousWindowExpand,
+          ),
+        );
       },
-      onPointerSignal: (event) {
-        if (event is PointerScrollEvent) {
-          lastPointerDownTime = DateTime.now();
-        }
-      },
-      child: ReaderContinuousScrollView(
-        key: ValueKey('reader-continuous-$currentChapterId'),
-        controller: continuousScrollController,
-        settings: settings,
-        scrollController: scrollController,
-        itemId: itemId,
-        annotationsByChapter: _continuousAnnotationsByChapter(),
-        onLinkTap: handleReaderLinkTap,
-        onSelectionActive: onReaderSelectionActive,
-        onTap: toggleControls,
-        onScrollPosition: onContinuousScrollPosition,
-        onHighlight: (text, start, end, chapterId) {
-          if (!mounted) return;
-          annotationHandler?.updateChapter(chapterId);
-          annotationHandler?.highlight(text, start, end, context);
-        },
-        onAnnotate: (text, start, end, chapterId) {
-          if (!mounted) return;
-          annotationHandler?.updateChapter(chapterId);
-          annotationHandler?.annotate(text, start, end, context);
-        },
-        onExpandWindow: onContinuousWindowExpand,
-      ),
     );
   }
 

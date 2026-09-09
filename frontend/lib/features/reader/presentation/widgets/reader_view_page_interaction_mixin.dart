@@ -408,23 +408,89 @@ mixin ReaderViewPageInteractionMixin
     restoreScrollPositionFromOffset(positionTracker.charOffset);
   }
 
-  /// 视口变化时保持当前阅读锚点并重新分页。
+  /// 视口变化时保持当前阅读锚点并重新分页/重测。
   void repaginateForViewportChange(Size newSize) {
     final previousSize = lastViewportSize;
     if (previousSize == newSize) return;
+    final widthChanged =
+        previousSize == null ||
+        (previousSize.width - newSize.width).abs() > 0.5;
     lastViewportSize = newSize;
     pageViewportSize = newSize;
-    if (contentLoader == null || !isPageMode) return;
+    if (contentLoader == null) return;
     repaginateTimer?.cancel();
     repaginateTimer = Timer(const Duration(milliseconds: 80), () {
-      if (!mounted || !isPageMode) return;
-      final trackedAnchor = modeSwitchAnchor ?? positionTracker.charOffset;
-      final anchor =
-          trackedAnchor > 0
-              ? trackedAnchor
-              : computePageCharOffset(pageModePage);
-      repaginateCurrentChapter(restoreCharOffset: anchor);
+      if (!mounted) return;
+      if (isPageMode) {
+        final trackedAnchor = modeSwitchAnchor ?? positionTracker.charOffset;
+        final anchor =
+            trackedAnchor > 0
+                ? trackedAnchor
+                : computePageCharOffset(pageModePage);
+        repaginateCurrentChapter(restoreCharOffset: anchor);
+        return;
+      }
+      if (!widthChanged) {
+        // 高度变化不改变换行；仅刷新窗口启发与布局。
+        rebuildContinuousWindow();
+        return;
+      }
+      _repaginateContinuousForViewportWidth();
     });
+  }
+
+  /// 连续滚动：视口宽度变化后重测窗口内章节并恢复阅读锚点。
+  void _repaginateContinuousForViewportWidth() {
+    final loader = contentLoader;
+    if (loader == null) return;
+    // 先冻结当前锚点（优先真实滚动位置，避免 tracker 滞后）。
+    var anchorCharOffset = positionTracker.charOffset;
+    if (scrollController.hasClients &&
+        scrollController.position.maxScrollExtent > 0) {
+      final contentY = scrollController.offset + viewportAnchorY;
+      final resolved = continuousScrollController.positionAtContentY(contentY);
+      if (resolved != null) {
+        anchorCharOffset = resolved.charOffset;
+        if (resolved.chapterId != currentChapterId) {
+          currentChapterId = resolved.chapterId;
+          annotationHandler?.updateChapter(resolved.chapterId);
+        }
+      } else {
+        final mapped = loader.contentYToCharOffset(
+          currentChapterId,
+          scrollController.offset + viewportAnchorY,
+          pageWidth: computePageWidth(),
+          settings: settings,
+          textScale: MediaQuery.textScalerOf(context).scale(1.0),
+        );
+        if (mapped > 0) {
+          anchorCharOffset = mapped;
+        }
+      }
+    }
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final pageWidth = computePageWidth();
+    final windowIds = continuousScrollController.entries
+        .map((e) => e.chapterId)
+        .toList(growable: false);
+    loader.rekeyAndRecomputeHeightsForChapters(
+      windowIds.isEmpty ? [currentChapterId] : windowIds,
+      pageWidth,
+      settings,
+      textScale,
+    );
+    loader.ensureScrollLayoutForNeighbors(
+      currentChapterId,
+      pageWidth: pageWidth,
+      settings: settings,
+      textScale: textScale,
+    );
+    positionTracker.setCharOffset(anchorCharOffset, currentChapterId);
+    rebuildContinuousWindow();
+    restoreScrollPositionFromOffset(anchorCharOffset);
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// 用指定 charOffset 恢复滚动位置（模式切换专用）。

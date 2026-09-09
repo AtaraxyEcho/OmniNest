@@ -50,8 +50,11 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
   }
 
   /// 视口尺寸变化回调。
+  ///
+  /// 翻页模式：按新视口重新分页。
+  /// 连续滚动：宽度变化会导致换行变化，需重测窗口高度并恢复锚点。
   void onViewportChanged(Size newSize) {
-    if (contentLoader == null || !isPageMode) return;
+    if (contentLoader == null) return;
     repaginateForViewportChange(newSize);
   }
 
