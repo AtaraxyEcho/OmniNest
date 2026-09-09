@@ -1,17 +1,16 @@
 import 'dart:async';
 
-import 'package:flutter/gestures.dart';
+import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_annotations.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_content_image.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_range.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 多章连续滚动视图。
@@ -57,8 +56,6 @@ class ReaderContinuousScrollView extends StatefulWidget {
 
 class _ReaderContinuousScrollViewState
     extends State<ReaderContinuousScrollView> {
-  final Map<int, TapGestureRecognizer> _recognizers = {};
-  final Map<String, int> _imageRetryCounts = {};
   final Map<String, _ProjectedChapterCache> _projectionCache = {};
   late final FocusNode _selectionFocusNode;
   String _selectedText = '';
@@ -94,7 +91,6 @@ class _ReaderContinuousScrollViewState
   void dispose() {
     widget.scrollController.removeListener(_handleScroll);
     widget.controller.removeListener(_handleControllerChanged);
-    _clearRecognizers();
     _selectionFocusNode.dispose();
     super.dispose();
   }
@@ -103,13 +99,6 @@ class _ReaderContinuousScrollViewState
     if (mounted) {
       setState(() {});
     }
-  }
-
-  void _clearRecognizers() {
-    for (final recognizer in _recognizers.values) {
-      recognizer.dispose();
-    }
-    _recognizers.clear();
   }
 
   void _handleScroll() {
@@ -253,29 +242,26 @@ class _ReaderContinuousScrollViewState
     if (blockIndex >= blocks.length) {
       return const SizedBox.shrink();
     }
-    final projected = blocks[blockIndex];
-    return switch (projected) {
-      HeadingBlock(:final text, :final level) => _buildHeading(text, level),
-      ParagraphBlock(:final lines, :final hasTrailingSpacing) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (hasTrailingSpacing)
-            SizedBox(height: widget.settings.fontSize * 0.6),
-          _buildParagraph(lines, entry.chapterId),
-        ],
-      ),
-      ImageBlock block => _buildImage(block),
-      DividerBlock() => _buildDivider(),
-      BlockquoteBlock block => _buildBlockquote(block, entry.chapterId),
-      ListBlock block => _buildList(block),
-      TableBlock block => _buildTable(block),
-    };
+    return ReaderContentBlockItem(
+      block: blocks[blockIndex],
+      settings: widget.settings,
+      itemId: widget.itemId,
+      chapterId: entry.chapterId,
+      onLinkTap: (href) {
+        _suppressNextContentTap = true;
+        widget.onLinkTap?.call(href);
+      },
+      onImageTap: (_) {
+        _suppressNextContentTap = true;
+      },
+    );
   }
 
   /// 整章批注投影缓存：blocks 身份或批注签名变化时才重算。
   List<ContentBlock> _blocksForRender(ContinuousChapterEntry entry) {
     final annotations =
-        widget.annotationsByChapter[entry.chapterId] ?? const <ReaderAnnotation>[];
+        widget.annotationsByChapter[entry.chapterId] ??
+        const <ReaderAnnotation>[];
     final signature = _annotationSignature(annotations);
     final cached = _projectionCache[entry.chapterId];
     if (cached != null &&
@@ -314,219 +300,6 @@ class _ReaderContinuousScrollViewState
       hash = Object.hash(hash, a.id, a.startOffset, a.endOffset);
     }
     return hash;
-  }
-
-  Widget _buildHeading(String text, int level) {
-    final baseSize =
-        level == 1
-            ? widget.settings.fontSize * 1.5
-            : widget.settings.fontSize * 1.25;
-    return Padding(
-      padding: const EdgeInsets.only(top: 8, bottom: 8),
-      child: Text(
-        text,
-        style: TextStyle(
-          fontFamily: widget.settings.resolvedFontFamily,
-          color: widget.settings.onSurfaceColor.withValues(alpha: 0.90),
-          fontSize: baseSize,
-          height: 1.4,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildParagraph(List<LineData> lines, String chapterId) {
-    final allSpans = <InlineSpan>[];
-    for (var i = 0; i < lines.length; i++) {
-      final line = lines[i];
-      final lineText = line.spans.map((s) => s.text).join();
-      final hasIndent = lineText.startsWith('　　');
-      if (i > 0) {
-        allSpans.add(const TextSpan(text: '\n'));
-      } else if (!hasIndent) {
-        allSpans.add(const TextSpan(text: '　　'));
-      }
-      _collectSpans(allSpans, line.spans, chapterId);
-    }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Text.rich(
-        TextSpan(style: widget.settings.bodyStyle, children: allSpans),
-        strutStyle: widget.settings.bodyStrutStyle(),
-      ),
-    );
-  }
-
-  void _collectSpans(
-    List<InlineSpan> out,
-    List<ReaderInlineSpan> spans,
-    String chapterId,
-  ) {
-    for (final span in spans) {
-      final style = ReaderViewContent.spanStyle(span, widget.settings);
-      if (span.href != null) {
-        out.add(
-          TextSpan(
-            text: span.text,
-            style: style.copyWith(
-              color: widget.settings.accentColor,
-              decoration: TextDecoration.underline,
-            ),
-            recognizer: _recognizerFor(span.startOffset, chapterId, span.href!),
-          ),
-        );
-        continue;
-      }
-      out.add(TextSpan(text: span.text, style: style));
-    }
-  }
-
-  TapGestureRecognizer _recognizerFor(
-    int startOffset,
-    String chapterId,
-    String href,
-  ) {
-    final key = Object.hash(chapterId, startOffset);
-    return _recognizers.putIfAbsent(key, () {
-      return TapGestureRecognizer()
-        ..onTap = () {
-          _suppressNextContentTap = true;
-          widget.onLinkTap?.call(href);
-        };
-    });
-  }
-
-  Widget _buildImage(ImageBlock block) {
-    return ReaderContentImage(
-      block: block,
-      itemId: widget.itemId,
-      settings: widget.settings,
-      retryCount: _imageRetryCounts[block.src] ?? 0,
-      onTap: (_) {
-        _suppressNextContentTap = true;
-      },
-      onRetry:
-          () => setState(() {
-            _imageRetryCounts[block.src] =
-                (_imageRetryCounts[block.src] ?? 0) + 1;
-          }),
-    );
-  }
-
-  Widget _buildDivider() {
-    final lineColor = widget.settings.onSurfaceVariantColor.withValues(
-      alpha: 0.20,
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 24),
-      child: Center(
-        child: SizedBox(
-          width: 96,
-          child: Container(height: 0.5, color: lineColor),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBlockquote(BlockquoteBlock block, String chapterId) {
-    final allSpans = <InlineSpan>[];
-    for (var i = 0; i < block.lines.length; i++) {
-      if (i > 0) {
-        allSpans.add(const TextSpan(text: '\n'));
-      }
-      _collectSpans(allSpans, block.lines[i].spans, chapterId);
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.only(left: 16, top: 12, bottom: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(
-              color: widget.settings.accentColor.withValues(alpha: 0.6),
-              width: 3,
-            ),
-          ),
-          color: widget.settings.onSurfaceVariantColor.withValues(alpha: 0.06),
-        ),
-        child: Text.rich(
-          TextSpan(style: widget.settings.bodyStyle, children: allSpans),
-          strutStyle: widget.settings.bodyStrutStyle(),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildList(ListBlock block) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (var i = 0; i < block.items.length; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: block.isOrdered ? '${i + 1}. ' : '• ',
-                      style: widget.settings.bodyStyle,
-                    ),
-                    for (final span in block.items[i].spans)
-                      TextSpan(
-                        text: span.text,
-                        style: ReaderViewContent.spanStyle(
-                          span,
-                          widget.settings,
-                        ),
-                      ),
-                  ],
-                ),
-                strutStyle: widget.settings.bodyStrutStyle(),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTable(TableBlock block) {
-    if (block.rows.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final row in block.rows)
-              Row(
-                children: [
-                  for (final cell in row.cells)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 6,
-                      ),
-                      child: Text(
-                        cell.map((s) => s.text).join(),
-                        style: widget.settings.bodyStyle.copyWith(
-                          fontWeight:
-                              row.isHeader ? FontWeight.w700 : FontWeight.w400,
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _handleSelectionChanged(SelectedContent? selection) {
