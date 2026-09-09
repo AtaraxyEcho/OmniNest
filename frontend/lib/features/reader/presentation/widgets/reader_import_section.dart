@@ -58,52 +58,63 @@ class _ImportSectionState extends ConsumerState<ImportSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
           children: [
             Text(
-              AppLocalizations.of(context).readerPendingImport,
+              AppLocalizations.of(context).readerPendingImport.toUpperCase(),
               style: TextStyle(
-                color: context.readerColors.onSurface,
-                fontSize: AppTypography.titleLarge,
-                height: 24 / 18,
-                fontWeight: FontWeight.w700,
+                color: context.readerColors.onSurfaceVariant,
+                fontSize: 10,
+                height: 1.2,
+                letterSpacing: 2.4,
+                fontWeight: FontWeight.w600,
               ),
             ),
-            SizedBox(width: 12),
-            Container(
-              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: context.readerColors.surfaceContainerHigh,
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                AppLocalizations.of(
-                  context,
-                ).readerPendingImportCount(candidates.length),
-                style: TextStyle(
-                  color: context.readerColors.onSurfaceVariant,
-                  fontSize: AppTypography.labelSmall,
-                  height: 14 / 11,
-                  fontWeight: FontWeight.w700,
-                ),
+            const SizedBox(width: 12),
+            Text(
+              '${candidates.length}',
+              style: TextStyle(
+                color: context.readerColors.onSurfaceVariant,
+                fontSize: 10,
+                height: 1.2,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
           ],
         ),
-        SizedBox(height: 8),
-        Text(
-          AppLocalizations.of(context).readerPendingImportDesc,
-          style: TextStyle(
-            color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.8),
-            fontSize: AppTypography.bodyMedium,
-            height: 18 / 13,
-          ),
-        ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         if (candidates.isEmpty)
-          ReaderEmptyState(
-            title: AppLocalizations.of(context).readerNoPendingImport,
-            subtitle: AppLocalizations.of(context).readerNoPendingImportHint,
-            icon: Icons.file_upload_outlined,
+          Column(
+            children: [
+              Icon(
+                Icons.upload_file_outlined,
+                size: 32,
+                color: context.readerColors.onSurfaceVariant.withValues(
+                  alpha: 0.4,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                AppLocalizations.of(context).readerNoPendingImport,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: context.readerColors.onSurfaceVariant,
+                  fontSize: AppTypography.bodyMedium,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                AppLocalizations.of(context).readerNoPendingImportHint,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: context.readerColors.onSurfaceVariant.withValues(
+                    alpha: 0.7,
+                  ),
+                  fontSize: AppTypography.labelSmall,
+                ),
+              ),
+            ],
           )
         else
           ...candidates.map(
@@ -228,24 +239,19 @@ class CandidateTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 10),
-      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      decoration: BoxDecoration(
-        color: context.readerColors.surfaceContainerHigh,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: context.readerColors.outlineVariant.withValues(alpha: 0.18),
-        ),
-      ),
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final isEpub = candidate.itemType.toUpperCase() == 'EPUB';
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
           Icon(
-            Icons.menu_book_rounded,
-            color: context.readerColors.primary,
-            size: 22,
+            candidateFileTypeIcon(candidate.itemType),
+            size: 18,
+            color: rc.onSurfaceVariant,
           ),
-          SizedBox(width: 14),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -255,82 +261,41 @@ class CandidateTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: context.readerColors.onSurface,
-                    fontSize: AppTypography.bodyLarge,
-                    height: 18 / 14,
-                    fontWeight: FontWeight.w600,
+                    color: rc.onSurface,
+                    fontSize: 14,
+                    height: 1.3,
+                    fontFamily: kReaderSerifFamily,
                   ),
                 ),
-                SizedBox(height: 3),
+                const SizedBox(height: 4),
                 Row(
                   children: [
-                    if (onTypeChanged != null)
-                      Container(
-                        height: 24,
-                        padding: EdgeInsets.only(left: 8),
-                        decoration: BoxDecoration(
-                          color: context.readerColors.surfaceContainerHighest
-                              .withValues(alpha: 0.6),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: context.readerColors.outlineVariant
-                                .withValues(alpha: 0.24),
-                          ),
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: selectedType,
-                            isDense: true,
-                            icon: Icon(Icons.expand_more_rounded, size: 14),
-                            style: TextStyle(
-                              color: context.readerColors.onSurfaceVariant,
-                              fontSize: AppTypography.labelSmall,
-                              fontWeight: FontWeight.w600,
-                            ),
-                            dropdownColor:
-                                context.readerColors.surfaceContainerHigh,
-                            items: [
-                              DropdownMenuItem(
-                                value: 'TEXT',
-                                child: Text(
-                                  AppLocalizations.of(
-                                    context,
-                                  ).readerSegmentBooks,
-                                ),
-                              ),
-                              DropdownMenuItem(
-                                value: 'COMIC',
-                                child: Text(
-                                  AppLocalizations.of(
-                                    context,
-                                  ).readerSegmentComics,
-                                ),
-                              ),
-                            ],
-                            onChanged:
-                                importing
-                                    ? null
-                                    : (value) {
-                                      if (value != null) onTypeChanged!(value);
-                                    },
-                          ),
-                        ),
-                      )
-                    else
-                      Text(
-                        _contentKindLabel(context, selectedType),
-                        style: TextStyle(
-                          color: context.readerColors.onSurfaceVariant,
-                          fontSize: AppTypography.bodySmall,
-                          height: 16 / 12,
-                        ),
-                      ),
                     Text(
-                      '  ·  ${candidate.sizeDisplay}',
+                      candidate.sizeDisplay,
                       style: TextStyle(
-                        color: context.readerColors.onSurfaceVariant,
-                        fontSize: AppTypography.bodySmall,
-                        height: 16 / 12,
+                        color: rc.onSurfaceVariant,
+                        fontSize: 10,
+                        height: 1.2,
+                        fontFeatures: const [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: rc.outlineVariant),
+                      ),
+                      child: Text(
+                        candidate.itemType.toUpperCase(),
+                        style: TextStyle(
+                          color: rc.onSurfaceVariant,
+                          fontSize: 9,
+                          height: 1.2,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
                   ],
@@ -338,34 +303,89 @@ class CandidateTile extends StatelessWidget {
               ],
             ),
           ),
-          SizedBox(width: 12),
-          SizedBox(
-            width: 80,
-            height: 36,
-            child: FilledButton(
-              onPressed: importing ? null : onImport,
-              style: FilledButton.styleFrom(
-                backgroundColor: context.readerColors.primaryContainer,
-                foregroundColor: context.readerColors.onPrimaryContainer,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                padding: EdgeInsets.zero,
+          const SizedBox(width: 12),
+          if (isEpub)
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: rc.outlineVariant),
               ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final kind in const ['TEXT', 'COMIC'])
+                    InkWell(
+                      onTap: importing ? null : () => onTypeChanged!(kind),
+                      child: Container(
+                        height: 24,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color:
+                              selectedType == kind
+                                  ? rc.sidebarSelectedBg
+                                  : Colors.transparent,
+                          border: Border(
+                            right:
+                                kind == 'TEXT'
+                                    ? BorderSide(color: rc.outlineVariant)
+                                    : BorderSide.none,
+                          ),
+                        ),
+                        child: Text(
+                          kind == 'COMIC'
+                              ? l10n.readerSegmentComics
+                              : l10n.readerSegmentBooks,
+                          style: TextStyle(
+                            fontSize: 11,
+                            height: 1.2,
+                            color:
+                                selectedType == kind
+                                    ? rc.sidebarSelectedFg
+                                    : rc.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            )
+          else
+            Text(
+              l10n.readerSegmentBooks,
+              style: TextStyle(
+                color: rc.onSurfaceVariant,
+                fontSize: 9,
+                height: 1.2,
+              ),
+            ),
+          const SizedBox(width: 12),
+          InkWell(
+            onTap: importing ? null : onImport,
+            child: Container(
+              height: 28,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: importing ? rc.outlineVariant : rc.onSurfaceVariant,
+                ),
+              ),
+              alignment: Alignment.center,
               child:
                   importing
                       ? SizedBox(
-                        width: 16,
-                        height: 16,
+                        width: 12,
+                        height: 12,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: context.readerColors.onPrimaryContainer,
+                          strokeWidth: 1.5,
+                          color: rc.onSurfaceVariant,
                         ),
                       )
                       : Text(
-                        AppLocalizations.of(context).filesImport,
-                        style: const TextStyle(
-                          fontSize: AppTypography.bodyMedium,
+                        l10n.filesImport,
+                        style: TextStyle(
+                          color: importing ? rc.onSurfaceVariant : rc.onSurface,
+                          fontSize: 11,
+                          height: 1.2,
                         ),
                       ),
             ),
@@ -374,14 +394,15 @@ class CandidateTile extends StatelessWidget {
       ),
     );
   }
+}
 
-  String _contentKindLabel(BuildContext context, String contentKind) {
-    final l10n = AppLocalizations.of(context);
-    return switch (contentKind) {
-      'COMIC' => l10n.readerSegmentComics,
-      _ => l10n.readerSegmentBooks,
-    };
-  }
+/// 按文件类型返回候选行图标。
+IconData candidateFileTypeIcon(String itemType) {
+  return switch (itemType.toUpperCase()) {
+    'TXT' => Icons.description_outlined,
+    'CBZ' || 'ZIP' => Icons.archive_outlined,
+    _ => Icons.import_contacts_outlined,
+  };
 }
 
 /// 重新解析区域 — 允许重新导入已有的阅读器条目。
