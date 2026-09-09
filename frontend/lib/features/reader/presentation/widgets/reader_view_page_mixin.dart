@@ -15,6 +15,7 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_handler.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_helper.dart';
@@ -35,6 +36,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   ReaderContentLoader? get contentLoader;
   set contentLoader(ReaderContentLoader? value);
   ScrollController get scrollController;
+  ReaderContinuousScrollController get continuousScrollController;
   ScrollRestore get restore;
   ReaderViewSettings get settings;
   set settings(ReaderViewSettings value);
@@ -183,6 +185,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   void persistSettings(ReaderViewSettings settings);
   Future<void> checkBookmarkState();
   void startHideTimer();
+  void rebuildContinuousWindow();
 
   // ── 由 State 实现的抽象方法 ──
 

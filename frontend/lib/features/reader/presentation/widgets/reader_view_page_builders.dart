@@ -11,6 +11,8 @@ import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
@@ -38,6 +40,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   // ── State 字段访问器（由 State 实现） ──
   ReaderContentLoader? get contentLoader;
+  ReaderContinuousScrollController get continuousScrollController;
   ReaderPositionTracker get positionTracker;
   ScrollController get scrollController;
   ScrollRestore get restore;
@@ -98,6 +101,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void onReaderSelectionActive(bool active);
   DateTime? get lastAppliedProgressAt;
   void applyProgressSnapshot(ReaderProgressSnapshot snapshot);
+  void onContinuousScrollPosition(ContinuousScrollPosition position);
+  void onContinuousWindowExpand({required bool forward});
 
   // ── 页面尺寸 ──
 
@@ -506,13 +511,75 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   // ── 滚动模式 ──
 
+  /// 用 contentLoader 数据重建连续滚动窗口。
+  void rebuildContinuousWindow() {
+    final loader = contentLoader;
+    if (loader == null) {
+      return;
+    }
+    loader.ensureScrollLayoutForNeighbors(
+      currentChapterId,
+      pageWidth: computePageWidth(),
+      settings: settings,
+      textScale: MediaQuery.textScalerOf(context).scale(1.0),
+    );
+    continuousScrollController.rebuild(
+      anchorChapterId: currentChapterId,
+      allChapterIds: loader.chapterIds,
+      resolve: (chapterId) {
+        final data = loader.get(chapterId, settings);
+        if (data == null) {
+          return null;
+        }
+        final heights = data.cumulativeHeights;
+        final isReady =
+            heights.isNotEmpty && heights.length == data.blocks.length;
+        var title = data.content.title;
+        if (title.isEmpty) {
+          for (final chapter in loader.allChapters) {
+            if (chapter.id == chapterId) {
+              title = chapter.title;
+              break;
+            }
+          }
+        }
+        return ContinuousChapterEntry(
+          chapterId: chapterId,
+          title: title,
+          blockCount: data.blocks.length,
+          cumulativeHeights: heights,
+          totalHeight:
+              isReady
+                  ? heights.last
+                  : (data.blocks.isEmpty ? 0 : data.blocks.length * 28.0),
+          totalChars: data.totalChars,
+          isReady: isReady,
+          blocks: data.blocks,
+        );
+      },
+    );
+  }
+
+  Map<String, List<ReaderAnnotation>> _continuousAnnotationsByChapter() {
+    final loader = contentLoader;
+    final handler = annotationHandler;
+    if (loader == null || handler == null) {
+      return const {};
+    }
+    final map = <String, List<ReaderAnnotation>>{};
+    for (final entry in continuousScrollController.entries) {
+      map[entry.chapterId] = handler.annotationsForChapter(entry.chapterId);
+    }
+    return map;
+  }
+
   Widget buildScrollModeContent(
     ReaderChapterContent content,
     ReaderItemDetail detail,
   ) {
     _schedulePendingScrollRestore();
+    rebuildContinuousWindow();
 
-    final chapterData = contentLoader?.get(currentChapterId, settings);
     return Listener(
       behavior: HitTestBehavior.translucent,
       onPointerDown: (_) {
@@ -532,32 +599,28 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           lastPointerDownTime = DateTime.now();
         }
       },
-      child: ReaderViewContent(
-        htmlContent: content.content,
+      child: ReaderContinuousScrollView(
+        key: ValueKey('reader-continuous-$currentChapterId'),
+        controller: continuousScrollController,
         settings: settings,
-        itemId: itemId,
-        annotations: annotationHandler?.chapterAnnotations ?? [],
-        rawBlocks: chapterData?.blocks,
         scrollController: scrollController,
-        onHighlight: (text, start, end) {
-          if (!mounted) return;
-          annotationHandler?.highlight(text, start, end, context);
-        },
-        onAnnotate: (text, start, end) {
-          if (!mounted) return;
-          annotationHandler?.annotate(text, start, end, context);
-        },
-        onRemoveHighlight: (a) {
-          if (!mounted) return;
-          annotationHandler?.delete(a);
-        },
-        onRemoveAnnotation: (a) {
-          if (!mounted) return;
-          annotationHandler?.delete(a);
-        },
+        itemId: itemId,
+        annotationsByChapter: _continuousAnnotationsByChapter(),
         onLinkTap: handleReaderLinkTap,
         onSelectionActive: onReaderSelectionActive,
         onTap: toggleControls,
+        onScrollPosition: onContinuousScrollPosition,
+        onHighlight: (text, start, end, chapterId) {
+          if (!mounted) return;
+          annotationHandler?.updateChapter(chapterId);
+          annotationHandler?.highlight(text, start, end, context);
+        },
+        onAnnotate: (text, start, end, chapterId) {
+          if (!mounted) return;
+          annotationHandler?.updateChapter(chapterId);
+          annotationHandler?.annotate(text, start, end, context);
+        },
+        onExpandWindow: onContinuousWindowExpand,
       ),
     );
   }
@@ -750,8 +813,19 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             settings: capturedSettings,
             textScale: capturedTextScale,
           );
-          if (contentY == null || contentY <= 0) return 0;
-          return (contentY - capturedAnchorY).clamp(0.0, max);
+          if (contentY == null || contentY <= 0) {
+            // 连续滚动：目标可能在前缀章之后的窗口坐标。
+            final prefix = continuousScrollController.prefixHeightOf(
+              currentChapterId,
+            );
+            if (prefix <= 0) return 0;
+            return (prefix - capturedAnchorY).clamp(0.0, max);
+          }
+          final prefix = continuousScrollController.prefixHeightOf(
+            currentChapterId,
+          );
+          final windowY = prefix + contentY;
+          return (windowY - capturedAnchorY).clamp(0.0, max);
         },
         isUserScrolling: () => lastPointerDownTime.isAfter(restoreScheduledAt),
         onSettled: (completed) {

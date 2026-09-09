@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -45,62 +46,83 @@ mixin ReaderViewPageInteractionMixin
       restoreTargetCharOffset = 0;
     }
 
-    final chapterData = contentLoader?.get(currentChapterId, settings);
+    // 连续滚动：进度由 ReaderContinuousScrollView 的 onScrollPosition 驱动。
+    // 此处仅保留近端预取，不再在章末硬切章。
+    if (max - scrollController.offset < max * 0.2) {
+      preloadAdjacent();
+    }
+  }
 
-    final contentY = scrollController.offset + viewportAnchorY;
-    final charOffset =
-        contentLoader?.contentYToCharOffset(
-          currentChapterId,
-          contentY,
-          pageWidth: computePageWidth(),
-          settings: settings,
-          textScale: MediaQuery.textScalerOf(context).scale(1.0),
-        ) ??
-        0;
+  /// 连续滚动位置回调：更新锚点章、进度与邻章窗口。
+  void onContinuousScrollPosition(ContinuousScrollPosition position) {
+    if (!mounted || isPageMode) return;
+    if (restore.shouldSuppressWrites ||
+        isRestoringProgress ||
+        isSwitchingChapter) {
+      return;
+    }
+    if (DateTime.now().isBefore(restoreSilenceUntil)) return;
 
+    final timeSincePointerDown =
+        DateTime.now().difference(lastPointerDownTime).inMilliseconds;
+    if (timeSincePointerDown > 2000) return;
+
+    if (modeSwitchInProgress) {
+      modeSwitchInProgress = false;
+      modeSwitchAnchor = null;
+      restoreTargetCharOffset = 0;
+    }
+
+    dismissReturnSnackBar();
+
+    final loader = contentLoader;
+    if (loader == null) return;
+
+    // 锚点章切换：顺序续读，不走 switchToChapter 硬切。
+    if (position.chapterId != currentChapterId) {
+      adoptContinuousAnchorChapter(position.chapterId);
+    }
+
+    final chapterData = loader.getByChapterId(position.chapterId);
     final totalChars = chapterData?.totalChars ?? 0;
+    // 优先用章内精确映射（与单章滚动同一套逻辑）。
+    var charOffset = position.charOffset;
+    if (chapterData != null &&
+        chapterData.cumulativeHeights.isNotEmpty &&
+        !isPageMode) {
+      final prefix = continuousScrollController.prefixHeightOf(
+        position.chapterId,
+      );
+      final localY =
+          (scrollController.hasClients ? scrollController.offset : 0.0) +
+          viewportAnchorY -
+          prefix;
+      final mapped = loader.contentYToCharOffset(
+        position.chapterId,
+        localY.clamp(0.0, chapterData.cumulativeHeights.last),
+        pageWidth: computePageWidth(),
+        settings: settings,
+        textScale: MediaQuery.textScalerOf(context).scale(1.0),
+      );
+      if (mapped >= 0) {
+        charOffset = mapped;
+      }
+    }
     final newProgress =
         totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
 
-    final savedCharOffset = positionTracker.charOffset;
-    final restoreTarget = restoreTargetCharOffset;
-    if (restoreTarget > 100 && charOffset < restoreTarget * 0.5) {
-      if (kDebugMode) {
-        readerDebugLog(
-          'onScroll SKIP: charOffset deviates from restore target '
-          '$restoreTarget -> $charOffset',
-        );
-      }
-      return;
-    }
-    if (charOffset > 0 &&
-        savedCharOffset > 100 &&
-        charOffset < savedCharOffset * 0.5 &&
-        !isSwitchingChapter) {
-      if (kDebugMode) {
-        readerDebugLog(
-          'onScroll SKIP: charOffset regression $savedCharOffset -> $charOffset',
-        );
-      }
-      return;
-    }
-
-    if (chapterData != null) {
-      positionTracker.updateFromScroll(
-        offset: scrollController.offset,
-        maxExtent: max,
-        totalChars: chapterData.totalChars,
-        chapterId: currentChapterId,
-        charOffset: charOffset,
-      );
-    }
-    if ((newProgress - scrollProgress).abs() > 0.001) {
-      if (kDebugMode) {
-        readerDebugLog(
-          'onScroll SAVE: $scrollProgress -> $newProgress, '
-          'charOffset=$charOffset (totalChars=${chapterData?.totalChars ?? 0})',
-        );
-      }
+    positionTracker.updateFromScroll(
+      offset: scrollController.hasClients ? scrollController.offset : 0,
+      maxExtent:
+          scrollController.hasClients
+              ? scrollController.position.maxScrollExtent
+              : 0,
+      totalChars: totalChars,
+      chapterId: position.chapterId,
+      charOffset: charOffset,
+    );
+    if ((newProgress - scrollProgress).abs() > 0.001 ||
+        position.chapterId == currentChapterId) {
       setState(() => scrollProgress = newProgress);
       scheduleLocalProgressSave(
         chapterProgress: newProgress,
@@ -108,25 +130,59 @@ mixin ReaderViewPageInteractionMixin
         charOffset: charOffset,
       );
     }
-    if (max - scrollController.offset < max * 0.2) {
-      preloadAdjacent();
-    }
 
-    // 边界自动续读：滚动到达章末时自动进入下一章，等效于无缝衔接。
-    // 仅向前自动续读；向上回退保留点击热区操作（回弹/恢复事件会与
-    // 章首判断互相触发，且回退已有"回到原进度"浮层兜底）。
-    final maxStable = _lastObservedMax == max;
-    _lastObservedMax = max;
-    if (scrollController.offset >= max - 2 &&
-        maxStable &&
-        DateTime.now().isAfter(_lastAutoAdvanceAt) &&
-        contentLoader != null &&
-        contentLoader!.allChapters.indexWhere((c) => c.id == currentChapterId) +
-                1 <
-            contentLoader!.allChapters.length) {
-      _lastAutoAdvanceAt = DateTime.now().add(const Duration(seconds: 1));
-      tryNavigateChapter(1);
+    if (scrollController.hasClients) {
+      final max = scrollController.position.maxScrollExtent;
+      if (max - scrollController.offset < max * 0.2) {
+        preloadAdjacent();
+      }
     }
+  }
+
+  /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。
+  void adoptContinuousAnchorChapter(String chapterId) {
+    if (chapterId == currentChapterId) return;
+    currentChapterId = chapterId;
+    annotationHandler?.updateChapter(chapterId);
+    final needFetch = contentLoader?.setActive(chapterId) ?? const [];
+    for (final id in needFetch) {
+      unawaited(prefetchChapter(id));
+    }
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  /// 连续滚动窗口扩挂：预取前后章并重建窗口。
+  void onContinuousWindowExpand({required bool forward}) {
+    if (!mounted || isPageMode) return;
+    final loader = contentLoader;
+    if (loader == null) return;
+    final chapterIds = loader.chapterIds;
+    final idx = chapterIds.indexOf(currentChapterId);
+    if (idx < 0) return;
+    final targetIndex = forward ? idx + 1 : idx - 1;
+    if (targetIndex < 0 || targetIndex >= chapterIds.length) {
+      return;
+    }
+    final targetId = chapterIds[targetIndex];
+    if (loader.getByChapterId(targetId) != null &&
+        loader.isScrollLayoutReady(targetId)) {
+      // 已就绪：仅重建窗口（锚点仍可能是当前章）。
+      rebuildContinuousWindow();
+      return;
+    }
+    unawaited(() async {
+      await prefetchChapter(targetId);
+      if (!mounted) return;
+      loader.ensureScrollLayoutForNeighbors(
+        currentChapterId,
+        pageWidth: computePageWidth(),
+        settings: settings,
+        textScale: MediaQuery.textScalerOf(context).scale(1.0),
+      );
+      rebuildContinuousWindow();
+    }());
   }
 
   /// 用户主动滚动前终止进行中的进度恢复。
@@ -146,12 +202,6 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
-  /// 上一次边界自动续读时间；加 1 秒冷却防止连续触发
-  DateTime _lastAutoAdvanceAt = DateTime.fromMillisecondsSinceEpoch(0);
-
-  /// 上一次滚动事件观察到的 maxScrollExtent，用于稳定门控
-  double _lastObservedMax = -1;
-
   /// 侧边点击处理。
   Future<void> handleSideTap(
     ReaderItemDetail detail, {
@@ -159,12 +209,19 @@ mixin ReaderViewPageInteractionMixin
   }) async {
     if (isSwitchingChapter || isLoadingChapter) return;
     _cancelOngoingRestoreForUserScroll();
-    final didScroll = await scrollBy(
-      (forward ? 1 : -1) * MediaQuery.sizeOf(context).height * 0.8,
-    );
+    final viewportDelta =
+        (forward ? 1 : -1) * MediaQuery.sizeOf(context).height * 0.8;
+    final didScroll = await scrollBy(viewportDelta);
     if (!mounted) return;
     if (!didScroll) {
-      tryNavigateChapter(forward ? 1 : -1);
+      // 连续滚动窗口：先扩挂邻章再尝试；仍无法滚动时才按目录跳章。
+      onContinuousWindowExpand(forward: forward);
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      if (!mounted) return;
+      final again = await scrollBy(viewportDelta);
+      if (!again && mounted) {
+        tryNavigateChapter(forward ? 1 : -1);
+      }
     }
   }
 
@@ -308,6 +365,13 @@ mixin ReaderViewPageInteractionMixin
           settings,
           MediaQuery.textScalerOf(context).scale(1.0),
         );
+        contentLoader?.ensureScrollLayoutForNeighbors(
+          currentChapterId,
+          pageWidth: computePageWidth(),
+          settings: settings,
+          textScale: MediaQuery.textScalerOf(context).scale(1.0),
+        );
+        rebuildContinuousWindow();
         restoreScrollPositionFromOffset(savedCharOffset);
       }
     }

@@ -742,6 +742,64 @@ class ReaderContentLoader {
   String? _neighborId(int idx) =>
       idx >= 0 && idx < allChapters.length ? allChapters[idx].id : null;
 
+  /// 章节 ID 列表（连续滚动窗口用）。
+  List<String> get chapterIds =>
+      allChapters.map((c) => c.id).toList(growable: false);
+
+  /// 相邻章节 ID（窗口扩挂用）。
+  List<String> neighborChapterIds(String chapterId, {int radius = 1}) {
+    final idx = _chapterIndex(chapterId);
+    if (idx < 0) return const [];
+    final result = <String>[];
+    for (var d = -radius; d <= radius; d++) {
+      if (d == 0) continue;
+      final id = _neighborId(idx + d);
+      if (id != null) {
+        result.add(id);
+      }
+    }
+    return result;
+  }
+
+  /// 指定章节滚动测高是否已准备。
+  bool isScrollLayoutReady(String chapterId) {
+    final data = getByChapterId(chapterId);
+    return data != null && data.cumulativeHeights.isNotEmpty;
+  }
+
+  /// 章节总高度（未就绪时返回 0）。
+  double chapterScrollHeight(String chapterId) {
+    final data = getByChapterId(chapterId);
+    if (data == null || data.cumulativeHeights.isEmpty) return 0;
+    return data.cumulativeHeights.last;
+  }
+
+  /// 为窗口内邻章准备滚动测高。
+  void ensureScrollLayoutForNeighbors(
+    String anchorChapterId, {
+    required double pageWidth,
+    required ReaderViewSettings settings,
+    double textScale = 1.0,
+    int radius = 1,
+  }) {
+    for (final id in [
+      anchorChapterId,
+      ...neighborChapterIds(anchorChapterId, radius: radius),
+    ]) {
+      final data = getByChapterId(id);
+      if (data == null || data.cumulativeHeights.isNotEmpty) {
+        continue;
+      }
+      _prepareScrollMetricsIfNeeded(
+        data,
+        prepareScrollLayout: true,
+        pageWidth: pageWidth,
+        settings: settings,
+        textScale: textScale,
+      );
+    }
+  }
+
   int _blockCharCount(ContentBlock block) {
     return switch (block) {
       HeadingBlock(:final text) => text.length,

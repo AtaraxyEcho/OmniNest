@@ -38,7 +38,11 @@ class ReaderAnnotationHandler {
   List<ReaderAnnotation> get annotations => _annotations;
 
   List<ReaderAnnotation> get chapterAnnotations =>
-      _annotations.where((a) => a.chapterId == chapterId).toList();
+      annotationsForChapter(chapterId);
+
+  /// 指定章节的批注（连续滚动窗口内邻章渲染用）。
+  List<ReaderAnnotation> annotationsForChapter(String id) =>
+      _annotations.where((a) => a.chapterId == id).toList();
 
   /// 更新当前章节，确保批注读写使用正在显示的章节。
   void updateChapter(String value) {

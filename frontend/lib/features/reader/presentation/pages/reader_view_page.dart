@@ -32,6 +32,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_bottom
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_indicator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_adaptive_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_find_panel.dart';
@@ -120,6 +121,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   // ── 渲染状态 ──
   final ScrollController _scrollController = ScrollController();
+  final ReaderContinuousScrollController _continuousScrollController =
+      ReaderContinuousScrollController();
   List<_FlatPageEntry> _flatPages = [];
   int _currentPageIndex = 0;
   int _pageModePage = 0;
@@ -206,6 +209,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set contentLoader(ReaderContentLoader? v) => _contentLoader = v;
   @override
   ScrollController get scrollController => _scrollController;
+
+  @override
+  ReaderContinuousScrollController get continuousScrollController =>
+      _continuousScrollController;
   @override
   ScrollRestore get restore => _restore;
   @override
@@ -659,6 +666,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _chapterLoadCoordinator.cancel();
     _pageLocator.cancel();
     _pageTurnController.dispose();
+    _continuousScrollController.dispose();
     _scrollController.dispose();
     // 释放 parsed blocks 缓存（离开阅读页后不再需要）
     _contentLoader?.invalidateAll();
