@@ -190,6 +190,7 @@ class _ReaderContinuousScrollViewState
       final title = entry.title;
       slivers.add(
         SliverPersistentHeader(
+          key: ValueKey('ch-header-${entry.chapterId}'),
           pinned: true,
           delegate: _ChapterHeaderDelegate(
             title: title,
@@ -200,6 +201,7 @@ class _ReaderContinuousScrollViewState
       if (!entry.isReady) {
         slivers.add(
           SliverToBoxAdapter(
+            key: ValueKey('ch-loading-${entry.chapterId}'),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 48),
               child: Center(
@@ -219,6 +221,7 @@ class _ReaderContinuousScrollViewState
         final blockCount = entry.blocks.length;
         slivers.add(
           SliverList(
+            key: ValueKey('ch-body-${entry.chapterId}'),
             delegate: SliverChildBuilderDelegate(
               (context, index) =>
                   RepaintBoundary(child: _buildBlockItem(entry, index)),
@@ -228,7 +231,10 @@ class _ReaderContinuousScrollViewState
         );
       }
       slivers.add(
-        SliverToBoxAdapter(child: SizedBox(height: entry.isReady ? 48 : 24)),
+        SliverToBoxAdapter(
+          key: ValueKey('ch-trail-${entry.chapterId}'),
+          child: SizedBox(height: entry.isReady ? 48 : 24),
+        ),
       );
     }
     return slivers;

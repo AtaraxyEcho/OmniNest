@@ -44,6 +44,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   int? _lastWindowFingerprint;
   bool _continuousWindowRebuilding = false;
 
+  /// 窗口首尾章节及高度，用于滑窗时换算滚动偏移。
+  String? _windowFirstChapterId;
+  String? _windowLastChapterId;
+  double _windowFirstChapterHeight = 0;
+  double _windowLastChapterHeight = 0;
+
   void invalidateContinuousWindowFingerprint() {
     _lastWindowFingerprint = null;
   }
@@ -548,6 +554,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       }
       _lastWindowFingerprint = fingerprint;
 
+      // 记录滑窗前首尾章，rebuild 后用高度差保持视口稳定。
+      final prevFirstId = _windowFirstChapterId;
+      final prevLastId = _windowLastChapterId;
+      final prevFirstHeight = _windowFirstChapterHeight;
+      final prevLastHeight = _windowLastChapterHeight;
+      final prevEntries = continuousScrollController.entries;
+
       loader.ensureScrollLayoutForNeighbors(
         currentChapterId,
         pageWidth: pageWidth,
@@ -614,7 +627,31 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           );
         },
       );
-      _compensateScrollForPrefixDelta(previousPrefix);
+
+      final nextEntries = continuousScrollController.entries;
+      if (nextEntries.isNotEmpty) {
+        _windowFirstChapterId = nextEntries.first.chapterId;
+        _windowLastChapterId = nextEntries.last.chapterId;
+        _windowFirstChapterHeight = nextEntries.first.totalHeight;
+        _windowLastChapterHeight = nextEntries.last.totalHeight;
+      }
+
+      final windowSlid =
+          prevFirstId != null &&
+          (nextEntries.isEmpty ||
+              nextEntries.first.chapterId != prevFirstId ||
+              (prevLastId != null && nextEntries.last.chapterId != prevLastId));
+      _compensateScrollForWindowSlide(
+        prevEntries: prevEntries,
+        prevFirstId: prevFirstId,
+        prevLastId: prevLastId,
+        prevFirstHeight: prevFirstHeight,
+        prevLastHeight: prevLastHeight,
+      );
+      // 滑窗已按首尾高度补偿，勿再按锚点 prefix 二次修正。
+      if (!windowSlid) {
+        _compensateScrollForPrefixDelta(previousPrefix);
+      }
     } finally {
       _continuousWindowRebuilding = false;
     }
@@ -674,6 +711,56 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       return parsed.chapters[n].charCount;
     }
     return parsed.chapters[index].charCount;
+  }
+
+  /// 滑窗时保持视口：前缀章卸载则 offset 减高，前缀章新增则加高。
+  void _compensateScrollForWindowSlide({
+    required List<ContinuousChapterEntry> prevEntries,
+    required String? prevFirstId,
+    required String? prevLastId,
+    required double prevFirstHeight,
+    required double prevLastHeight,
+  }) {
+    if (prevEntries.isEmpty || !scrollController.hasClients) {
+      return;
+    }
+    final nextEntries = continuousScrollController.entries;
+    if (nextEntries.isEmpty) {
+      return;
+    }
+    final nextFirstId = nextEntries.first.chapterId;
+    final nextLastId = nextEntries.last.chapterId;
+    if (nextFirstId == prevFirstId && nextLastId == prevLastId) {
+      return;
+    }
+    var delta = 0.0;
+    // 卸载前缀章：滚动坐标原点后移，offset 需减小。
+    if (prevFirstId != null && nextFirstId != prevFirstId) {
+      delta -= prevFirstHeight;
+    }
+    // 在前部新增章：原点前移，offset 需增大。
+    if (nextFirstId != prevFirstId) {
+      for (final entry in nextEntries) {
+        if (entry.chapterId == prevFirstId) {
+          break;
+        }
+        if (prevEntries.every((e) => e.chapterId != entry.chapterId)) {
+          delta += entry.totalHeight;
+        }
+      }
+    }
+    if (delta.abs() < 0.5) {
+      return;
+    }
+    final captured = delta;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) {
+        return;
+      }
+      final max = scrollController.position.maxScrollExtent;
+      final target = (scrollController.offset + captured).clamp(0.0, max);
+      scrollController.jumpTo(target);
+    });
   }
 
   /// 前缀章高度变化时补偿滚动偏移，避免测高收敛导致视口跳动。
