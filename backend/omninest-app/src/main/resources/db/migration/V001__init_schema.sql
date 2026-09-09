@@ -220,7 +220,7 @@ COMMENT ON COLUMN "omni"."auth_users"."version" IS '乐观锁版本号';
 COMMENT ON TABLE "omni"."auth_users" IS '认证用户表，保存内置登录账号、状态和容量信息';
 
 CREATE TABLE "omni"."backdrop_assets" (
-  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "id" uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   "owner_user_id" uuid NOT NULL,
   "title" varchar(200) NOT NULL,
   "media_type" varchar(16) NOT NULL,
