@@ -55,6 +55,8 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     try {
       await _repo.addTag(photoId, tag);
       await refresh();
+      ref.invalidate(photoTagsProvider);
+      ref.invalidate(photoDetailProvider(photoId));
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -66,6 +68,8 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     try {
       await _repo.removeTag(photoId, tag);
       await refresh();
+      ref.invalidate(photoTagsProvider);
+      ref.invalidate(photoDetailProvider(photoId));
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;

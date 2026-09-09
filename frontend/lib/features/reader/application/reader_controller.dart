@@ -346,24 +346,17 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
 
   /// 切换书架状态
   ///
-  /// 调用 API 切换后刷新仪表盘以同步书架数据。
+  /// 调用 API 切换后全量刷新，以服务端 `addedToBookshelf` 为准同步书架列表。
   Future<BookshelfToggleResult> toggleBookshelf(String itemId) async {
     try {
       await _api.toggleBookshelf(itemId);
-      // 刷新仪表盘以获取最新的书架数据
-      final dashboard = await _api.dashboard();
-      final current = state.asData?.value;
-      if (current != null) {
-        state = AsyncData(current.copyWith(dashboard: dashboard));
-      }
-      // 判断是否在书架中：如果仪表盘的继续阅读包含该条目，则认为已加入书架
-      final addedToBookshelf = dashboard.continueReading.any(
-        (i) => i.id == itemId,
-      );
-      // 也检查最近条目（书架可能包含未开始阅读的书）
-      final inRecent = dashboard.recentItems.any((i) => i.id == itemId);
+      await refresh();
+      final item =
+          state.asData?.value.items
+              .where((item) => item.id == itemId)
+              .firstOrNull;
       return BookshelfToggleResult(
-        addedToBookshelf: addedToBookshelf || inRecent,
+        addedToBookshelf: item?.addedToBookshelf ?? false,
       );
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);

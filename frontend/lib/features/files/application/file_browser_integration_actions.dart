@@ -253,12 +253,10 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     bool loadSpace = false,
   }) async {
     final browseContext = _captureExternalBrowseContext(accountId);
-    if (browseContext == null) {
-      return;
-    }
     await _runAction(operationLabel, () async {
       await mutation().timeout(_externalBrowseTimeout);
-      if (!_isExternalBrowseContextCurrent(browseContext)) {
+      if (browseContext == null ||
+          !_isExternalBrowseContextCurrent(browseContext)) {
         return;
       }
       await _refreshExternalBrowseAfterMutation(

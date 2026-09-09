@@ -97,6 +97,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   Future<void> moveFile(FileNode file, String targetParentId) async {
     await _runAction('移动文件', () async {
       await _repository.moveFile(fileId: file.id, parentId: targetParentId);
+      _clearSelection();
       await refreshFileNodesForCurrentSection();
     });
   }
@@ -113,6 +114,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
       } else {
         await _repository.deleteFile(file.id);
       }
+      _clearSelection();
       await refreshFileNodesForCurrentSection();
     });
   }

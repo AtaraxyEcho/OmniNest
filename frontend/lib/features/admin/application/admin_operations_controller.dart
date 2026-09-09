@@ -215,6 +215,7 @@ class AdminOperationsActions {
   Future<AdminConfigEntry> rollbackConfig(String historyId) async {
     final entry = await _api.rollbackConfig(historyId);
     ref.invalidate(adminConfigsProvider);
+    ref.invalidate(adminConfigHistoryProvider(entry.key));
     return entry;
   }
 

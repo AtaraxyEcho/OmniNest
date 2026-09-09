@@ -33,6 +33,14 @@ class ReaderSyncHandler implements RealtimeScopeHandler {
       if (ref.exists(detail)) {
         refreshes.add(ref.refresh(detail.future));
       }
+      final annotations = readerItemAnnotationsProvider(resourceId);
+      if (ref.exists(annotations)) {
+        refreshes.add(ref.refresh(annotations.future));
+      }
+      final bookmarks = readerItemBookmarksProvider(resourceId);
+      if (ref.exists(bookmarks)) {
+        refreshes.add(ref.refresh(bookmarks.future));
+      }
     }
     await Future.wait(refreshes);
     _auxiliaryRevisions.markCompleted(auxiliary);

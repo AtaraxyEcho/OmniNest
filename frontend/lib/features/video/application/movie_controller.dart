@@ -703,6 +703,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         metadataStatus: metadataStatus,
       );
       await refresh();
+      ref.invalidate(movieDetailProvider(videoItemId));
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
       rethrow;
@@ -759,9 +760,13 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
   }
 
   /// 删除外挂字幕。
-  Future<void> deleteSubtitle(String subtitleId) async {
+  Future<void> deleteSubtitle({
+    required String videoItemId,
+    required String subtitleId,
+  }) async {
     try {
       await _api.deleteSubtitle(subtitleId);
+      ref.invalidate(movieSubtitlesProvider(videoItemId));
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
       rethrow;
@@ -835,6 +840,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         overview: overview,
       );
       await refresh();
+      ref.invalidate(movieSeriesDetailProvider(seriesId));
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
       rethrow;
@@ -851,6 +857,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         videoItemId: videoItemId,
       );
       await refresh();
+      ref.invalidate(collectionItemsProvider(collectionId));
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -867,6 +874,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
         videoItemId: videoItemId,
       );
       await refresh();
+      ref.invalidate(collectionItemsProvider(collectionId));
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;

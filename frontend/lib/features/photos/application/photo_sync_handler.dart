@@ -62,6 +62,9 @@ class PhotoSyncHandler implements RealtimeScopeHandler {
     if (auxiliary.isNotEmpty && ref.exists(photoAlbumsProvider)) {
       refreshes.add(ref.refresh(photoAlbumsProvider.future));
     }
+    if (auxiliary.isNotEmpty && ref.exists(photoTagsProvider)) {
+      refreshes.add(ref.refresh(photoTagsProvider.future));
+    }
     for (final invalidation in auxiliary) {
       final resourceId = invalidation.resourceId;
       if (resourceId == null) continue;

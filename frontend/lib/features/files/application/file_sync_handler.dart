@@ -64,8 +64,13 @@ class FileTaskSyncHandler implements RealtimeScopeHandler {
   Future<bool> refresh(List<RealtimeInvalidation> invalidations) async {
     if (!ref.exists(fileBrowserControllerProvider)) return false;
     await ref.read(fileBrowserControllerProvider.future);
-    return ref
-        .read(fileBrowserControllerProvider.notifier)
-        .refreshImportTasksForRealtime();
+    final section =
+        ref.read(fileBrowserControllerProvider).asData?.value.section;
+    final notifier = ref.read(fileBrowserControllerProvider.notifier);
+    if (section == FileManagerSection.offlineDownloads) {
+      await notifier.showOfflineDownloads();
+      return true;
+    }
+    return notifier.refreshImportTasksForRealtime();
   }
 }
