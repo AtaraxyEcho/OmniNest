@@ -5,7 +5,9 @@ import com.rabbitmq.client.Channel;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
@@ -33,6 +35,27 @@ class DeadLetterConsumerTest {
                 "消息进入死信队列，原始路由键: file.index"
         );
         Mockito.verify(channel).basicAck(1L, false);
+    }
+
+    @Test
+    void handleRecordsDispatchFailureContextFromOutboxDeadLetter() throws IOException {
+        UUID taskId = UUID.randomUUID();
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString()))
+                .thenReturn(true);
+        String body = "{\"taskId\":\"" + taskId + "\",\"errorCode\":\"BROKER_UNAVAILABLE\","
+                + "\"failureType\":\"AmqpConnectException\",\"instanceId\":\"api-1\","
+                + "\"payload\":{\"taskId\":\"" + taskId + "\"}}";
+
+        consumer.handle(message(taskId.toString(), body, "media.scrape"), channel);
+
+        ArgumentCaptor<String> summaryCaptor = ArgumentCaptor.forClass(String.class);
+        Mockito.verify(taskRecordService).markDeadLetter(Mockito.eq(taskId), summaryCaptor.capture());
+        Mockito.verify(channel).basicAck(1L, false);
+        Assertions.assertThat(summaryCaptor.getValue())
+                .contains("原始路由键: media.scrape")
+                .contains("投递失败: AmqpConnectException/BROKER_UNAVAILABLE")
+                .contains("@api-1")
+                .contains("死信载荷:");
     }
 
     @Test

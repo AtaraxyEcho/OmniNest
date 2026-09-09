@@ -49,7 +49,7 @@ public class DeadLetterConsumer {
             extractTaskId(message, body).ifPresent(taskId -> {
                 boolean updated = taskRecordService.markDeadLetter(
                         taskId,
-                        "消息进入死信队列，原始路由键: " + routingKey
+                        describeDeadLetter(body, routingKey)
                 );
                 if (updated) {
                     log.info("任务状态已更新为 DLQ: taskId={}", taskId);
@@ -62,6 +62,32 @@ public class DeadLetterConsumer {
             log.error("死信处理失败", e);
             channel.basicNack(deliveryTag, false, false);
         }
+    }
+
+    /**
+     * 组装死信错误摘要。
+     *
+     * <p>Outbox 死信消息体携带投递失败上下文（错误码、失败类型、失败实例）
+     * 与脱敏后的原始载荷，一并写入任务错误摘要；普通死信仅保留原始路由键。
+     * 创建载荷本身已在任务记录中，无需重复存储。</p>
+     */
+    private String describeDeadLetter(String body, String routingKey) {
+        StringBuilder summary = new StringBuilder("消息进入死信队列，原始路由键: ").append(routingKey);
+        JSONObject json = null;
+        try {
+            json = JSONObject.parseObject(body);
+        } catch (RuntimeException exception) {
+            log.debug("死信消息体不是 JSON，仅记录路由键");
+        }
+        if (json != null && json.getString("errorCode") != null) {
+            summary.append("; 投递失败: ").append(json.getString("failureType"))
+                    .append('/').append(json.getString("errorCode"));
+            if (json.getString("instanceId") != null) {
+                summary.append(" @").append(json.getString("instanceId"));
+            }
+            summary.append("; 死信载荷: ").append(body);
+        }
+        return summary.toString();
     }
 
     /**
