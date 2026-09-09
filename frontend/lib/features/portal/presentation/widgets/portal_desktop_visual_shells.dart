@@ -319,10 +319,8 @@ class _PortalDesktopVisualHostState
         palette: palette,
         onSearch: () => context.go('/search'),
         trailing: [
-          if (isDesktopPlatform) ...[
-            _PortalLocalBackdropButton(palette: palette),
-            const SizedBox(width: 10),
-          ],
+          _PortalLocalBackdropButton(palette: palette),
+          const SizedBox(width: 10),
           AppFullscreenButton(
             isFullscreen: resolved.immersiveModeEnabled,
             foregroundColor: palette.text,

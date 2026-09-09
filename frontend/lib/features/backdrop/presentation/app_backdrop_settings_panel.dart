@@ -49,9 +49,11 @@ class _AppBackdropSettingsDialog extends ConsumerWidget {
         ),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: const Color(0xF20A1117),
+            color: Theme.of(context).colorScheme.surfaceContainerHigh,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+            border: Border.all(
+              color: Theme.of(context).colorScheme.outlineVariant,
+            ),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.36),
@@ -352,14 +354,15 @@ class _AppBackdropSettingsContentState
       barrierColor: Colors.black54,
       builder:
           (dialogContext) => AlertDialog(
-            backgroundColor: const Color(0xFF101820),
+            backgroundColor:
+                Theme.of(dialogContext).colorScheme.surfaceContainerHigh,
             titleTextStyle: TextStyle(
-              color: widget.palette.text,
+              color: Theme.of(dialogContext).colorScheme.onSurface,
               fontSize: AppTypography.titleLarge,
               fontWeight: FontWeight.w800,
             ),
             contentTextStyle: TextStyle(
-              color: widget.palette.muted,
+              color: Theme.of(dialogContext).colorScheme.onSurfaceVariant,
               fontSize: AppTypography.bodyMedium,
               height: 1.55,
             ),
@@ -417,13 +420,19 @@ class _BackdropFilterBar extends StatelessWidget {
                   onSelected: (_) => onChanged(option.key),
                   showCheckmark: false,
                   labelStyle: TextStyle(
-                    color: Colors.black,
+                    color:
+                        value == option.key
+                            ? Theme.of(context).colorScheme.onPrimary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
                     fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w700,
                   ),
                   selectedColor: palette.accent,
-                  backgroundColor: Colors.white.withValues(alpha: 0.86),
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.14)),
+                  backgroundColor:
+                      Theme.of(context).colorScheme.surfaceContainerHighest,
+                  side: BorderSide(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
                   visualDensity: VisualDensity.compact,
                 ),
               ),
