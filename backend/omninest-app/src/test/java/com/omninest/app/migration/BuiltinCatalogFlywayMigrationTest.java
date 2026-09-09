@@ -42,7 +42,7 @@ class BuiltinCatalogFlywayMigrationTest {
     @Test
     void catalogContainsRequiredRolesPermissionsAndMappings() throws SQLException {
         Assertions.assertThat(countObjects("SELECT count(*) FROM omni.auth_roles")).isEqualTo(4);
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.auth_permissions")).isEqualTo(15);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.auth_permissions")).isEqualTo(18);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -72,7 +72,10 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('photo:read'),
                         ('photo:write'),
                         ('photo:admin'),
+                        ('backdrop:read'),
+                        ('backdrop:write'),
                         ('task:read'),
+                        ('task:admin'),
                         ('system:config:read'),
                         ('system:config:manage'),
                         ('system:user:read'),
@@ -97,9 +100,9 @@ class BuiltinCatalogFlywayMigrationTest {
                 FROM (
                     VALUES
                         ('GUEST', 4),
-                        ('MEMBER', 9),
-                        ('ADMIN', 14),
-                        ('SUPER_ADMIN', 15)
+                        ('MEMBER', 11),
+                        ('ADMIN', 17),
+                        ('SUPER_ADMIN', 18)
                 ) expected(role_code, permission_count)
                 LEFT JOIN (
                     SELECT role_definition.code AS role_code, count(*)::integer AS permission_count
@@ -110,6 +113,36 @@ class BuiltinCatalogFlywayMigrationTest {
                 ) actual ON actual.role_code = expected.role_code
                 WHERE actual.permission_count IS DISTINCT FROM expected.permission_count
                 """)).isZero();
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM omni.auth_roles role_definition
+                JOIN omni.auth_role_permissions role_permission
+                  ON role_permission.role_id = role_definition.id
+                JOIN omni.auth_permissions permission_definition
+                  ON permission_definition.id = role_permission.permission_id
+                WHERE role_definition.code = 'MEMBER'
+                  AND permission_definition.code = 'task:admin'
+                """)).isZero();
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM omni.auth_roles role_definition
+                JOIN omni.auth_role_permissions role_permission
+                  ON role_permission.role_id = role_definition.id
+                JOIN omni.auth_permissions permission_definition
+                  ON permission_definition.id = role_permission.permission_id
+                WHERE role_definition.code IN ('ADMIN', 'SUPER_ADMIN')
+                  AND permission_definition.code = 'task:admin'
+                """)).isEqualTo(2);
+        Assertions.assertThat(countObjects("""
+                SELECT count(*)
+                FROM omni.auth_roles role_definition
+                JOIN omni.auth_role_permissions role_permission
+                  ON role_permission.role_id = role_definition.id
+                JOIN omni.auth_permissions permission_definition
+                  ON permission_definition.id = role_permission.permission_id
+                WHERE role_definition.code = 'MEMBER'
+                  AND permission_definition.code = 'task:read'
+                """)).isEqualTo(1);
     }
 
     @Test
