@@ -78,17 +78,21 @@ mixin ReaderViewPageInteractionMixin
     final loader = contentLoader;
     if (loader == null) return;
 
+    // 图片主导的封面等章节 totalChars 为 0：不要用 charOffset=0 覆盖进度。
+    final chapterData = loader.getByChapterId(position.chapterId);
+    final totalChars = chapterData?.totalChars ?? 0;
+    if (totalChars <= 0) {
+      return;
+    }
+
     // 锚点章切换：顺序续读，不走 switchToChapter 硬切。
     if (position.chapterId != currentChapterId) {
       adoptContinuousAnchorChapter(position.chapterId);
     }
 
-    final chapterData = loader.getByChapterId(position.chapterId);
-    final totalChars = chapterData?.totalChars ?? 0;
     // 连续滚动：以窗口控制器的块级映射为准，避免与 contentYToCharOffset 双路径不一致。
     final charOffset = position.charOffset;
-    final newProgress =
-        totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
+    final newProgress = (charOffset / totalChars).clamp(0.0, 1.0);
 
     positionTracker.updateFromScroll(
       offset: scrollController.hasClients ? scrollController.offset : 0,
@@ -121,6 +125,8 @@ mixin ReaderViewPageInteractionMixin
   /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。
   void adoptContinuousAnchorChapter(String chapterId) {
     if (chapterId == currentChapterId) return;
+    // 加载中改写 currentChapterId 会使在途 loadCurrentChapter 判定失效。
+    if (isLoadingChapter || isSwitchingChapter) return;
     currentChapterId = chapterId;
     annotationHandler?.updateChapter(chapterId);
     final needFetch = contentLoader?.setActive(chapterId) ?? const [];

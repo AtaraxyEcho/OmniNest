@@ -120,12 +120,9 @@ class _ReaderContentBlockItemState extends State<ReaderContentBlockItem> {
       _collectSpans(allSpans, line.spans);
       _trimTrailingSpaces(allSpans);
     }
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
-      child: Text.rich(
-        TextSpan(style: widget.settings.bodyStyle, children: allSpans),
-        strutStyle: widget.settings.bodyStrutStyle(),
-      ),
+    return Text.rich(
+      TextSpan(style: widget.settings.bodyStyle, children: allSpans),
+      strutStyle: widget.settings.bodyStrutStyle(),
     );
   }
 

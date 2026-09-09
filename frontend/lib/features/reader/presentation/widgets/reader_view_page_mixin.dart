@@ -337,12 +337,14 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         restore.cancel();
       }
     } finally {
-      if (_isCurrentChapterRequest(requestedChapterId, generation)) {
+      // 代次未变时必须复位 loading：章节 id 被连续滚动 adopt 改写后
+      // 若仍用 _isCurrentChapterRequest 判断会漏清，导致滚动/侧点永久卡死。
+      if (mounted && generation == loadGeneration) {
         chapterLoadingTimer?.cancel();
         showChapterLoadingOverlay = false;
         isSwitchingChapter = false;
         isLoadingChapter = false;
-        if (mounted) setState(() {});
+        setState(() {});
       }
     }
   }

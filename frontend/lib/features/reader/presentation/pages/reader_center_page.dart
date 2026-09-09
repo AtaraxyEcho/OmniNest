@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -490,9 +492,9 @@ class _LibraryGridState extends State<_LibraryGrid> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            crossAxisSpacing: 16,
-            mainAxisSpacing: 28,
-            mainAxisExtent: _tileHeight(columns),
+            crossAxisSpacing: 12,
+            mainAxisSpacing: 16,
+            mainAxisExtent: _tileHeight(constraints.maxWidth, columns),
           ),
           itemBuilder: (context, index) {
             final item = items[index];
@@ -536,9 +538,11 @@ class _LibraryGridState extends State<_LibraryGrid> {
     return 3;
   }
 
-  double _tileHeight(int columns) {
-    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
-    // 封面由卡片内 Expanded 弹性填充；行高 = 间距 12 + 标题两行 34 + 作者 14 + 渲染缓冲 6
-    return 12 + 34 * textScale + 14 * textScale + 6;
+  double _tileHeight(double width, int columns) {
+    final tileWidth = (width - 12.0 * (columns - 1)) / columns;
+    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
+    // 封面约 3:4 且设上限，标题一行 + 作者一行，压缩整卡高度。
+    final coverHeight = math.min(tileWidth * 1.33, 168.0);
+    return coverHeight + 6 + 18.0 * textScale + 14.0 * textScale + 2;
   }
 }

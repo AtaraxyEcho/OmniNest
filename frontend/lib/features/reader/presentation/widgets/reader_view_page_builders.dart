@@ -680,7 +680,15 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void _compensateScrollForPrefixDelta(double? previousPrefix) {
     if (previousPrefix == null ||
         isRestoringProgress ||
-        restore.shouldSuppressWrites) {
+        restore.shouldSuppressWrites ||
+        isLoadingChapter ||
+        isSwitchingChapter) {
+      return;
+    }
+    // 用户正在拖动/点击时不做像素补偿，避免封面图加载导致的回跳。
+    final timeSincePointerDown =
+        DateTime.now().difference(lastPointerDownTime).inMilliseconds;
+    if (timeSincePointerDown < 800) {
       return;
     }
     final nextPrefix = continuousScrollController.prefixHeightOf(
