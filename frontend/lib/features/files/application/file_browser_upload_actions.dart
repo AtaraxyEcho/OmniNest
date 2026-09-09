@@ -43,7 +43,7 @@ extension FileBrowserUploadActions on FileBrowserController {
       if (currentSection == FileManagerSection.sharedSpace) {
         await showSharedSpace();
       } else {
-        await refreshFiles();
+        await refreshFileNodesForCurrentSection();
       }
     });
   }
@@ -211,7 +211,7 @@ extension FileBrowserUploadActions on FileBrowserController {
       if (currentSection == FileManagerSection.uploadQueue) {
         await showUploadQueue();
       } else {
-        await refreshFiles();
+        await refreshFileNodesForCurrentSection();
       }
       return FileUploadBatchResult(
         total: files.length,

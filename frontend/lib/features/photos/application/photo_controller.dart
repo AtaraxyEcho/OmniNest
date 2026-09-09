@@ -643,6 +643,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       await _repo.movePhotoToTrash(photoId);
       _removePhotosOptimistically(<String>{photoId});
       await refresh();
+      await loadTrashPage(force: true);
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -655,6 +656,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
       await _repo.movePhotosToTrash(photoIds);
       _removePhotosOptimistically(photoIds.toSet());
       await refresh();
+      await loadTrashPage(force: true);
       final current = state.asData?.value;
       if (current != null) {
         state = AsyncData(
@@ -711,6 +713,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
   Future<void> applyEditedImage(String photoId, Uint8List bytes) async {
     try {
       await _repo.applyEditedImage(photoId, bytes);
+      ref.invalidate(photoDetailProvider(photoId));
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -859,6 +862,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     try {
       await _repo.addPhotosToAlbum(albumId: albumId, photoIds: photoIds);
       await refresh();
+      ref.invalidate(photoAlbumDetailProvider(albumId));
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -893,6 +897,7 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     try {
       await _repo.removePhotoFromAlbum(albumId: albumId, photoId: photoId);
       await refresh();
+      ref.invalidate(photoAlbumDetailProvider(albumId));
     } on Exception catch (e) {
       _setError(describeUserFacingError(e).message);
       rethrow;
@@ -1293,6 +1298,9 @@ class PhotoAlbumPickerNotifier extends Notifier<PhotoAlbumPickerState> {
             albumId: albumId,
             photoIds: current.selectedIds.toList(),
           );
+      ref.invalidate(photoAlbumDetailProvider(albumId));
+      final center = ref.read(photoCenterControllerProvider.notifier);
+      await center.refresh();
       return true;
     } on Exception catch (e) {
       state = PhotoAlbumPickerState(

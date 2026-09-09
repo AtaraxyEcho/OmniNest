@@ -154,6 +154,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     );
   }
 
+  /// 刷新文件列表数据，保留当前分区、目录与筛选条件。
   Future<void> refreshFiles() async {
     await _runAction('刷新文件列表', () async {
       final current = state.asData?.value;
@@ -170,7 +171,6 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
           files: filesPage.items,
-          section: FileManagerSection.allFiles,
           fileCategory: category,
           filePage: filesPage.page,
           filePageSize: filesPage.size,
@@ -181,6 +181,36 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     });
   }
 
+  /// 按当前分区刷新文件节点列表，不改变导航分区。
+  Future<void> refreshFileNodesForCurrentSection() async {
+    final section = _currentState?.section;
+    switch (section) {
+      case FileManagerSection.recent:
+        final recentFiles = await _repository.listRecentFiles();
+        final current = _currentState;
+        if (current != null) {
+          _emitState(current.copyWith(recentFiles: recentFiles));
+        }
+      case FileManagerSection.favorites:
+        final favoriteFiles = await _repository.listFavoriteFiles();
+        final current = _currentState;
+        if (current != null) {
+          _emitState(current.copyWith(favoriteFiles: favoriteFiles));
+        }
+      case FileManagerSection.recycleBin:
+        final spaceType = _currentState?.spaceType ?? 'PERSONAL';
+        final recycleBin = await _repository.listRecycleBin(
+          spaceType: spaceType,
+        );
+        final current = _currentState;
+        if (current != null) {
+          _emitState(current.copyWith(recycleBin: recycleBin));
+        }
+      default:
+        await refreshFiles();
+    }
+  }
+
   /// 按当前分区刷新远端数据，不改变目录、视图模式和筛选条件。
   Future<void> refreshForRealtime() async {
     final current = state.asData?.value;
@@ -189,6 +219,10 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showFiles() async {
+    final current = _currentState;
+    if (current != null) {
+      _emitState(current.copyWith(section: FileManagerSection.allFiles));
+    }
     await refreshFiles();
   }
 
@@ -230,7 +264,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> loadSection(FileManagerSection section) async {
     switch (section) {
       case FileManagerSection.allFiles:
-        await refreshFiles();
+        await showFiles();
       case FileManagerSection.recent:
         await showRecentFiles();
       case FileManagerSection.favorites:
@@ -372,14 +406,14 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   Future<void> moveToSharedSpace(FileNode file) async {
     await _runAction('移到共享空间', () async {
       await _repository.moveToSharedSpace(file.id);
-      await refreshFiles();
+      await refreshFileNodesForCurrentSection();
     });
   }
 
   Future<void> moveToPersonalSpace(FileNode file) async {
     await _runAction('移到个人空间', () async {
       await _repository.moveToPersonalSpace(file.id);
-      await refreshFiles();
+      await refreshFileNodesForCurrentSection();
     });
   }
 

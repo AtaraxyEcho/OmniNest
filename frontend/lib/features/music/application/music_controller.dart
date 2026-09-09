@@ -97,6 +97,10 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       shuffleEnabled: current?.shuffleEnabled ?? false,
       lastScanJob: current?.lastScanJob,
       restorePlaybackQueue: false,
+      selectedPlaylist: current?.selectedPlaylist,
+      selectedPlaylistTracks: current?.selectedPlaylistTracks,
+      selectedAlbum: current?.selectedAlbum,
+      selectedArtist: current?.selectedArtist,
     );
     if (_controllerDisposed ||
         !ref.mounted ||
@@ -122,6 +126,10 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     bool shuffleEnabled = false,
     MusicScanJob? lastScanJob,
     bool restorePlaybackQueue = true,
+    MusicPlaylist? selectedPlaylist,
+    List<MusicTrack>? selectedPlaylistTracks,
+    MusicAlbum? selectedAlbum,
+    MusicArtist? selectedArtist,
   }) async {
     _partialErrors.clear();
     final results = await Future.wait([
@@ -137,6 +145,9 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     ]);
     final dashboard = results[0] as MusicDashboard;
     final tracks = results[1] as List<MusicTrack>;
+    final albums = results[2] as List<MusicAlbum>;
+    final artists = results[3] as List<MusicArtist>;
+    final playlists = results[4] as List<MusicPlaylist>;
     final recentEntries = results[5] as List<MusicRecentEntry>;
     final lastPlayed = results[6] as MusicTrack?;
     final queueSnapshot = results[7] as MusicPlaybackQueueSnapshot;
@@ -216,12 +227,54 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         }
       }
     }
+    final resolvedPlaylist =
+        selectedPlaylist == null
+            ? null
+            : playlists
+                    .where((item) => item.id == selectedPlaylist.id)
+                    .firstOrNull ??
+                selectedPlaylist;
+    final resolvedAlbum =
+        selectedAlbum == null
+            ? null
+            : albums.where((item) => item.id == selectedAlbum.id).firstOrNull ??
+                selectedAlbum;
+    final resolvedArtist =
+        selectedArtist == null
+            ? null
+            : artists
+                    .where((item) => item.id == selectedArtist.id)
+                    .firstOrNull ??
+                selectedArtist;
+    final trackById = <String, MusicTrack>{
+      for (final track in tracks) track.id: track,
+    };
+    // 保留打开中的歌单曲目，同步收藏状态并剔除已删除曲目。
+    final resolvedPlaylistTracks =
+        selectedPlaylistTracks == null
+            ? const <MusicTrack>[]
+            : [
+              for (final track in selectedPlaylistTracks)
+                if (trackById.containsKey(track.id)) trackById[track.id]!,
+            ];
+    final resolvedAlbumTracks =
+        resolvedAlbum == null
+            ? const <MusicTrack>[]
+            : tracks
+                .where((track) => track.albumTitle == resolvedAlbum.title)
+                .toList(growable: false);
+    final resolvedArtistTracks =
+        resolvedArtist == null
+            ? const <MusicTrack>[]
+            : tracks
+                .where((track) => track.artistName == resolvedArtist.name)
+                .toList(growable: false);
     return MusicCenterState(
       dashboard: dashboard,
       tracks: tracks,
-      albums: results[2] as List<MusicAlbum>,
-      artists: results[3] as List<MusicArtist>,
-      playlists: results[4] as List<MusicPlaylist>,
+      albums: albums,
+      artists: artists,
+      playlists: playlists,
       recentItems: recentItems,
       section: section,
       currentItem: selectedItem,
@@ -231,6 +284,12 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       playbackIndex: resolvedQueueIndex,
       repeatMode: resolvedRepeatMode,
       shuffleEnabled: resolvedShuffleEnabled,
+      selectedPlaylist: resolvedPlaylist,
+      selectedPlaylistTracks: resolvedPlaylistTracks,
+      selectedAlbum: resolvedAlbum,
+      selectedAlbumTracks: resolvedAlbumTracks,
+      selectedArtist: resolvedArtist,
+      selectedArtistTracks: resolvedArtistTracks,
       lastScanJob: lastScanJob,
       neteaseUserInfo: platformInfo['netease'],
       qqUserInfo: platformInfo['qq'],

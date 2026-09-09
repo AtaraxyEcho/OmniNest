@@ -494,6 +494,12 @@ void _stubCommon(_MockPhotoRepository repository) {
   when(
     () => repository.listAlbums(),
   ).thenAnswer((_) async => const <PhotoAlbum>[]);
+  when(
+    () => repository.listTrash(
+      page: any(named: 'page'),
+      size: any(named: 'size'),
+    ),
+  ).thenAnswer((_) async => PhotoPage.empty());
 }
 
 PhotoPage _page(List<PhotoItem> items, {int page = 0, required int total}) {

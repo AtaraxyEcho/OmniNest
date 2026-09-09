@@ -37,8 +37,7 @@ class ShareLinkController extends AsyncNotifier<FileShareLink?> {
       maxAccessCount: maxAccessCount,
     );
     state = AsyncData(link);
-    ref.invalidate(fileBrowserControllerProvider);
-    ref.invalidate(myShareLinksProvider);
+    await _refreshShareLists();
     return link;
   }
 
@@ -47,8 +46,28 @@ class ShareLinkController extends AsyncNotifier<FileShareLink?> {
     final repository = ref.read(fileRepositoryProvider);
     await repository.revokeShare(shareId);
     state = const AsyncData(null);
-    ref.invalidate(fileBrowserControllerProvider);
-    ref.invalidate(myShareLinksProvider);
+    await _refreshShareLists();
+  }
+
+  /// 定向刷新分享相关列表，避免重建整个文件浏览器 Controller。
+  Future<void> _refreshShareLists() async {
+    if (ref.exists(myShareLinksProvider)) {
+      await ref.read(myShareLinksProvider.notifier).load();
+    }
+    if (!ref.exists(fileBrowserControllerProvider)) {
+      return;
+    }
+    final browser = ref.read(fileBrowserControllerProvider.notifier);
+    final section =
+        ref.read(fileBrowserControllerProvider).asData?.value.section;
+    switch (section) {
+      case FileManagerSection.myShares:
+        await browser.showMyShares();
+      case FileManagerSection.shareManagement:
+        await browser.showShareLinks();
+      default:
+        break;
+    }
   }
 
   /// 重置状态（弹窗关闭时调用）。
@@ -73,7 +92,20 @@ class MyShareLinksNotifier extends AsyncNotifier<List<FileShareLink>> {
   Future<void> revokeShare(String shareId) async {
     final repository = ref.read(fileRepositoryProvider);
     await repository.revokeShare(shareId);
-    ref.invalidate(fileBrowserControllerProvider);
     await load();
+    if (!ref.exists(fileBrowserControllerProvider)) {
+      return;
+    }
+    final browser = ref.read(fileBrowserControllerProvider.notifier);
+    final section =
+        ref.read(fileBrowserControllerProvider).asData?.value.section;
+    switch (section) {
+      case FileManagerSection.myShares:
+        await browser.showMyShares();
+      case FileManagerSection.shareManagement:
+        await browser.showShareLinks();
+      default:
+        break;
+    }
   }
 }

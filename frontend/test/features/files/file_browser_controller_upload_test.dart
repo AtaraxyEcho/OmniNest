@@ -376,7 +376,7 @@ void main() {
         isTrue,
       );
 
-      await controller.refreshFiles();
+      await controller.showFiles();
       browseCompleter.complete(const [
         ExternalFileItem(name: 'photos', path: '/photos', isDir: true),
       ]);
@@ -425,7 +425,7 @@ void main() {
       expect(state.externalBrowseError, '外部存储参数无效');
       expect(state.isBusy, isFalse);
 
-      await controller.refreshFiles();
+      await controller.showFiles();
       state = container.read(fileBrowserControllerProvider).value!;
       expect(state.section, FileManagerSection.allFiles);
     },

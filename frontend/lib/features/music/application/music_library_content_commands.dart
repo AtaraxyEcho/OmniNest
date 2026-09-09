@@ -49,15 +49,17 @@ extension MusicLibraryContentCommands on MusicCenterController {
       } else {
         await _api.favorite(track.id);
       }
-      final nextTracks =
-          current.tracks
-              .map(
-                (item) =>
-                    item.id == track.id
-                        ? item.copyWith(favorite: !track.favorite)
-                        : item,
-              )
-              .toList();
+      List<MusicTrack> patchFavorite(List<MusicTrack> items) {
+        return items
+            .map(
+              (item) =>
+                  item.id == track.id
+                      ? item.copyWith(favorite: !track.favorite)
+                      : item,
+            )
+            .toList(growable: false);
+      }
+
       final nextCurrentItem =
           current.currentItem?.track.id == track.id
               ? current.currentItem!.copyWith(
@@ -67,7 +69,13 @@ extension MusicLibraryContentCommands on MusicCenterController {
               )
               : current.currentItem;
       _replaceState(
-        current.copyWith(tracks: nextTracks, currentItem: nextCurrentItem),
+        current.copyWith(
+          tracks: patchFavorite(current.tracks),
+          selectedPlaylistTracks: patchFavorite(current.selectedPlaylistTracks),
+          selectedAlbumTracks: patchFavorite(current.selectedAlbumTracks),
+          selectedArtistTracks: patchFavorite(current.selectedArtistTracks),
+          currentItem: nextCurrentItem,
+        ),
       );
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
@@ -179,13 +187,16 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
     try {
       await _api.deletePlaylist(playlist.id);
+      final removingSelected = current.selectedPlaylist?.id == playlist.id;
       _replaceState(
         current.copyWith(
           playlists:
               current.playlists
                   .where((item) => item.id != playlist.id)
                   .toList(),
-          clearSelectedPlaylist: current.selectedPlaylist?.id == playlist.id,
+          clearSelectedPlaylist: removingSelected,
+          section:
+              removingSelected ? MusicSection.customPlaylists : current.section,
         ),
       );
     } on Exception catch (error) {
@@ -205,12 +216,23 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
     try {
       final updated = await _api.addPlaylistItems(playlist.id, [track.id]);
+      final isSelectedPlaylist = current.selectedPlaylist?.id == playlist.id;
+      final nextSelectedTracks =
+          isSelectedPlaylist &&
+                  !current.selectedPlaylistTracks.any(
+                    (item) => item.id == track.id,
+                  )
+              ? [...current.selectedPlaylistTracks, track]
+              : current.selectedPlaylistTracks;
       _replaceState(
         current.copyWith(
           playlists:
               current.playlists
                   .map((item) => item.id == updated.id ? updated : item)
                   .toList(),
+          selectedPlaylist:
+              isSelectedPlaylist ? updated : current.selectedPlaylist,
+          selectedPlaylistTracks: nextSelectedTracks,
         ),
       );
     } on Exception catch (error) {

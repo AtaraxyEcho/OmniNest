@@ -78,7 +78,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
       } else {
         await _repository.createFolder(parentId: current?.parentId, name: name);
       }
-      await refreshFiles();
+      await refreshFileNodesForCurrentSection();
     });
   }
 
@@ -90,14 +90,14 @@ extension FileBrowserSelectionActions on FileBrowserController {
       } else {
         await _repository.renameFile(fileId: file.id, name: name);
       }
-      await refreshFiles();
+      await refreshFileNodesForCurrentSection();
     });
   }
 
   Future<void> moveFile(FileNode file, String targetParentId) async {
     await _runAction('移动文件', () async {
       await _repository.moveFile(fileId: file.id, parentId: targetParentId);
-      await refreshFiles();
+      await refreshFileNodesForCurrentSection();
     });
   }
 
@@ -113,7 +113,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
       } else {
         await _repository.deleteFile(file.id);
       }
-      await refreshFiles();
+      await refreshFileNodesForCurrentSection();
     });
   }
 
@@ -134,15 +134,29 @@ extension FileBrowserSelectionActions on FileBrowserController {
   Future<void> addFavorite(FileNode file) async {
     await _runAction('添加收藏', () async {
       await _repository.addFavorite(file.id);
-      await showFavoriteFiles();
+      await _refreshFavoritesData();
     });
   }
 
   Future<void> removeFavorite(FileNode file) async {
     await _runAction('取消收藏', () async {
       await _repository.removeFavorite(file.id);
-      await showFavoriteFiles();
+      await _refreshFavoritesData();
     });
+  }
+
+  Future<void> _refreshFavoritesData() async {
+    final favoriteFiles = await _repository.listFavoriteFiles();
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    if (current.section == FileManagerSection.favorites) {
+      _emitState(current.copyWith(favoriteFiles: favoriteFiles));
+      return;
+    }
+    // 非收藏分区只静默更新收藏缓存，避免强制跳转视图。
+    _emitState(current.copyWith(favoriteFiles: favoriteFiles));
   }
 
   Future<void> batchDeleteFiles() async {
@@ -153,7 +167,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     await _runAction('批量移入回收站', () async {
       await _repository.batchDeleteFiles(ids.toList());
       _clearSelection();
-      await refreshFiles();
+      await refreshFileNodesForCurrentSection();
     });
   }
 
@@ -189,7 +203,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     await _runAction('批量移动', () async {
       await _repository.batchMoveFiles(ids.toList(), targetParentId);
       _clearSelection();
-      await refreshFiles();
+      await refreshFileNodesForCurrentSection();
     });
   }
 
@@ -201,12 +215,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     await _runAction('批量添加收藏', () async {
       await _repository.batchAddFavorites(ids.toList());
       _clearSelection();
-      final section = _currentState?.section;
-      if (section == FileManagerSection.favorites) {
-        await showFavoriteFiles();
-      } else {
-        await refreshFiles();
-      }
+      await _refreshFavoritesData();
     });
   }
 
@@ -218,12 +227,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     await _runAction('批量取消收藏', () async {
       await _repository.batchRemoveFavorites(ids.toList());
       _clearSelection();
-      final section = _currentState?.section;
-      if (section == FileManagerSection.favorites) {
-        await showFavoriteFiles();
-      } else {
-        await refreshFiles();
-      }
+      await _refreshFavoritesData();
     });
   }
 
@@ -233,7 +237,11 @@ extension FileBrowserSelectionActions on FileBrowserController {
         resourceId: file.id,
         resourceType: file.isFolder ? 'FOLDER' : 'FILE',
       );
-      await showMyShares();
+      final current = _currentState;
+      if (current != null) {
+        final myShares = await _repository.listMyShares();
+        _emitState(current.copyWith(myShares: myShares));
+      }
       return share;
     });
   }
