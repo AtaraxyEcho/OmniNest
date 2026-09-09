@@ -627,6 +627,7 @@ class _BackdropTilePreview extends StatelessWidget {
           url: thumbnailUrl,
           cacheKey: 'backdrop-preview:${backdrop.id}',
           fit: BoxFit.cover,
+          fallbackUrl: backdrop.path.isNotEmpty ? backdrop.path : null,
         );
       }
       if (!backdrop.isVideo && backdrop.path.isNotEmpty) {

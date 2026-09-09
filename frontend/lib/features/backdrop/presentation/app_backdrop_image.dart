@@ -2,22 +2,40 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 /// 背景素材图片视图:三端统一渲染服务端网络素材。
-/// 缓存键基于素材 ID,签名 URL 轮换不会击穿缓存。
-class AppBackdropImage extends StatelessWidget {
+///
+/// 缓存键基于素材 ID,签名 URL 轮换不会击穿缓存。加载顺序:
+/// 主 URL → 失败时回落 [fallbackUrl] → 再失败回落 [fallbackAsset](内置海报),
+/// 加载中与失败均不透出白底。
+class AppBackdropImage extends StatefulWidget {
   const AppBackdropImage({
     required this.url,
     required this.cacheKey,
     required this.fit,
+    this.fallbackUrl,
+    this.fallbackAsset,
     super.key,
   });
 
-  /// 图片地址(短期签名 URL)。
+  /// 主图片地址(短期签名 URL)。
   final String? url;
 
   /// 逻辑缓存键:`backdrop:{assetId}`。
   final String cacheKey;
 
   final BoxFit fit;
+
+  /// 主地址加载失败时的备用地址(如原图回退缩略图)。
+  final String? fallbackUrl;
+
+  /// 全部地址失败时的内置海报兜底。
+  final String? fallbackAsset;
+
+  @override
+  State<AppBackdropImage> createState() => _AppBackdropImageState();
+}
+
+class _AppBackdropImageState extends State<AppBackdropImage> {
+  String? _failedUrl;
 
   int? _resolveCacheExtent(double extent, double devicePixelRatio) {
     if (!extent.isFinite || extent <= 0 || !devicePixelRatio.isFinite) {
@@ -29,17 +47,17 @@ class AppBackdropImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final url = this.url;
-    if (url == null || url.isEmpty) {
-      return const SizedBox.shrink();
-    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
+        final primary = _resolveUrl();
+        if (primary == null) {
+          return _buildAssetFallback();
+        }
         return CachedNetworkImage(
-          imageUrl: url,
-          cacheKey: cacheKey,
-          fit: fit,
+          imageUrl: primary,
+          cacheKey: widget.cacheKey,
+          fit: widget.fit,
           alignment: Alignment.center,
           filterQuality: FilterQuality.high,
           memCacheWidth: _resolveCacheExtent(
@@ -50,10 +68,52 @@ class AppBackdropImage extends StatelessWidget {
             constraints.maxHeight,
             devicePixelRatio,
           ),
-          placeholder: (context, url) => const SizedBox.shrink(),
-          errorWidget: (context, url, error) => const SizedBox.shrink(),
+          placeholder: (context, url) => _buildAssetFallback(),
+          errorWidget: (context, url, error) => _buildFallback(url),
         );
       },
     );
+  }
+
+  /// 当前应使用的主地址;已失败则切到备用地址。
+  String? _resolveUrl() {
+    final url = widget.url;
+    if (url == null || url.isEmpty) {
+      return null;
+    }
+    if (_failedUrl == url) {
+      return _nonEmpty(widget.fallbackUrl);
+    }
+    return url;
+  }
+
+  Widget _buildFallback(String failedUrl) {
+    if (_failedUrl == null) {
+      _failedUrl = failedUrl;
+      final next = _resolveUrl();
+      if (next != null && next != failedUrl) {
+        return CachedNetworkImage(
+          imageUrl: next,
+          cacheKey: widget.cacheKey,
+          fit: widget.fit,
+          filterQuality: FilterQuality.high,
+          placeholder: (context, url) => _buildAssetFallback(),
+          errorWidget: (context, url, error) => _buildAssetFallback(),
+        );
+      }
+    }
+    return _buildAssetFallback();
+  }
+
+  Widget _buildAssetFallback() {
+    final asset = widget.fallbackAsset;
+    if (asset == null) {
+      return const SizedBox.shrink();
+    }
+    return Image.asset(asset, fit: widget.fit);
+  }
+
+  String? _nonEmpty(String? value) {
+    return value == null || value.isEmpty ? null : value;
   }
 }

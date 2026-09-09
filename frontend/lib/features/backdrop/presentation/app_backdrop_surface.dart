@@ -103,6 +103,7 @@ class AppBackdropSurface extends ConsumerWidget {
         url: asset.path,
         cacheKey: 'backdrop:${asset.id}',
         fit: fit,
+        fallbackAsset: bundledDefaultWallpaperPosterAsset,
       );
     }
     return const SizedBox.shrink();
