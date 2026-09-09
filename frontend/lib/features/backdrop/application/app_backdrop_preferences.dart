@@ -45,15 +45,36 @@ class BackdropPreferencesController extends AsyncNotifier<AppBackdropSettings> {
       snapshot.preferences,
       settings,
     );
-    // 仅当远端提供了有效选择时才覆盖本地;避免冲突/空快照把已启用状态打回未启用。
-    if (remote != settings && _hasUsableSelection(remote)) {
+    if (remote == settings) {
+      return settings;
+    }
+    // 本地已启用且选中一致:以本地为准并回写,避免远端陈旧 enabled=false
+    // 把刚注册的默认壁纸打回未启用(首次登录/启动无背景的主因)。
+    if (settings.enabled &&
+        !remote.enabled &&
+        _sameSelection(settings, remote)) {
+      await service.patch(
+        userId: userId,
+        scope: backdropPreferenceScope,
+        changes: AppBackdropSettingsJson.toChanges(settings),
+      );
+      return settings;
+    }
+    if (_hasUsableSelection(remote)) {
       await ref.read(appBackdropRepositoryProvider).saveSettings(remote);
-      settings = remote;
-    } else if (remote != settings && !_hasUsableSelection(settings)) {
+      return remote;
+    }
+    if (!_hasUsableSelection(settings)) {
       await ref.read(appBackdropRepositoryProvider).saveSettings(remote);
-      settings = remote;
+      return remote;
     }
     return settings;
+  }
+
+  bool _sameSelection(AppBackdropSettings a, AppBackdropSettings b) {
+    return a.selectedBackdropId == b.selectedBackdropId &&
+        a.desktopBackdropId == b.desktopBackdropId &&
+        a.mobileBackdropId == b.mobileBackdropId;
   }
 
   bool _hasUsableSelection(AppBackdropSettings settings) {

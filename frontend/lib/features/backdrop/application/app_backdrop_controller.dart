@@ -76,7 +76,7 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
       await refreshServerAssets();
     }
     var loaded = await _loadCurrentState(repository);
-    if (!loaded.hasActiveBackdrop && !_hasAnySelection(loaded.settings)) {
+    if (!loaded.hasActiveBackdrop) {
       AppBackdropAsset? bundled;
       for (final backdrop in loaded.backdrops) {
         if (backdrop.isBundled && backdrop.isSelectable) {
@@ -85,24 +85,39 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
         }
       }
       if (bundled != null) {
-        await _applySettings(
-          loaded.settings.copyWith(
-            enabled: true,
-            selectedBackdropId: bundled.id,
-            desktopBackdropId: bundled.id,
-            mobileBackdropId: bundled.id,
-          ),
-        );
-        loaded = await _loadCurrentState(repository);
+        final selectedId = loaded.settings.selectedBackdropId;
+        AppBackdropAsset? selected;
+        if (selectedId != null) {
+          for (final backdrop in loaded.backdrops) {
+            if (backdrop.id == selectedId) {
+              selected = backdrop;
+              break;
+            }
+          }
+        }
+        final needBundledFallback = selected == null || !selected.isSelectable;
+        // 选中了内置壁纸但被关闭时,保持用户关闭意图;
+        // 无选中或选中不可用时,回落内置壁纸并启用,保证启动即有背景。
+        if (needBundledFallback) {
+          await _applySettings(
+            loaded.settings.copyWith(
+              enabled: true,
+              selectedBackdropId: bundled.id,
+              desktopBackdropId:
+                  loaded.settings.separateDeviceBackdrops
+                      ? bundled.id
+                      : loaded.settings.desktopBackdropId,
+              mobileBackdropId:
+                  loaded.settings.separateDeviceBackdrops
+                      ? bundled.id
+                      : loaded.settings.mobileBackdropId,
+            ),
+          );
+          loaded = await _loadCurrentState(repository);
+        }
       }
     }
     return loaded;
-  }
-
-  bool _hasAnySelection(AppBackdropSettings settings) {
-    return settings.selectedBackdropId != null ||
-        settings.desktopBackdropId != null ||
-        settings.mobileBackdropId != null;
   }
 
   /// 拉取服务端素材并写入本地缓存;未登录(如安装引导阶段)与离线时保留缓存内容。

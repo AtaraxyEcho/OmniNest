@@ -122,8 +122,9 @@ class AppBackdropVideoSession extends ChangeNotifier {
     } else if (oldPath != normalizedPath) {
       _unregisterPath(oldPath);
       _registerPath(normalizedPath);
-      // 仅签名轮换:播放中保持会话;失败/未就绪时用新 URL 重开。
-      if (_openError != null || !_ready) {
+      // 仅签名轮换:正在打开或已就绪时保持会话,避免 list 刷新打断播放;
+      // 仅当上次打开失败时才用新 URL 重开。
+      if (_openError != null) {
         _generation++;
         _cancelRetry();
         _openAttempts = 0;

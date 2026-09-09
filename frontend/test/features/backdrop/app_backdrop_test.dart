@@ -1006,6 +1006,54 @@ void main() {
     });
   });
 
+  group('AppBackdropController startup fallback', () {
+    test('选中不可用时回落并启用内置壁纸', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      await repository.saveSettings(
+        const AppBackdropSettings(
+          enabled: true,
+          selectedBackdropId: 'missing-server-asset',
+        ),
+      );
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => const []);
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _FakeBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      final state = await container.read(appBackdropControllerProvider.future);
+
+      expect(state.settings.selectedBackdropId, bundledDefaultWallpaperId);
+      expect(state.settings.enabled, isTrue);
+      expect(state.hasActiveBackdrop, isTrue);
+    });
+  });
+
   group('AppBackdropSceneController', () {
     test('工作页面策略隐藏背景并启用工作可读性', () {
       expect(AppBackdropPolicy.work.scene, AppBackdropScene.work);
