@@ -221,14 +221,26 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     contentLoader = loader;
   }
 
+  bool _layoutInvalidationScheduled = false;
+
   /// 测高收敛后刷新连续滚动窗口 fingerprint，避免热路径跳过更新。
+  ///
+  /// 必须异步调度：ensureScrollLayout 在 rebuild 内同步 notify 时，
+  /// 同步再入 rebuildContinuousWindow 会形成无限递归直至栈溢出。
   void _onContinuousLayoutInvalidated() {
-    if (!mounted || isPageMode) {
+    if (!mounted || isPageMode || _layoutInvalidationScheduled) {
       return;
     }
-    invalidateContinuousWindowFingerprint();
-    rebuildContinuousWindow();
-    setState(() {});
+    _layoutInvalidationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _layoutInvalidationScheduled = false;
+      if (!mounted || isPageMode) {
+        return;
+      }
+      invalidateContinuousWindowFingerprint();
+      rebuildContinuousWindow();
+      setState(() {});
+    });
   }
 
   /// 加载当前章节内容并恢复阅读进度。

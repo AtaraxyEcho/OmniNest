@@ -42,6 +42,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   /// 连续滚动窗口 fingerprint；未变化时跳过 rebuild，避免滚动热路径重建。
   int? _lastWindowFingerprint;
+  bool _continuousWindowRebuilding = false;
 
   void invalidateContinuousWindowFingerprint() {
     _lastWindowFingerprint = null;
@@ -525,90 +526,98 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   /// build 热路径调用：fingerprint 未变化时整段跳过（含测高启动与 notify）。
   /// dropHtmlForNeighbors 由 setActive/loadChapter 负责，不在此处理。
   void rebuildContinuousWindow() {
+    if (_continuousWindowRebuilding) {
+      return;
+    }
     final loader = contentLoader;
     if (loader == null) {
       return;
     }
-    final pageWidth = computePageWidth();
-    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final fingerprint = _computeWindowFingerprint(
-      loader,
-      pageWidth: pageWidth,
-      textScale: textScale,
-    );
-    if (_lastWindowFingerprint == fingerprint &&
-        !continuousScrollController.isEmpty) {
-      return;
-    }
-    _lastWindowFingerprint = fingerprint;
+    _continuousWindowRebuilding = true;
+    try {
+      final pageWidth = computePageWidth();
+      final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+      final fingerprint = _computeWindowFingerprint(
+        loader,
+        pageWidth: pageWidth,
+        textScale: textScale,
+      );
+      if (_lastWindowFingerprint == fingerprint &&
+          !continuousScrollController.isEmpty) {
+        return;
+      }
+      _lastWindowFingerprint = fingerprint;
 
-    loader.ensureScrollLayoutForNeighbors(
-      currentChapterId,
-      pageWidth: pageWidth,
-      settings: settings,
-      textScale: textScale,
-    );
-    final fontSize = settings.fontSize;
-    final lineHeight = settings.lineHeight;
-    final previousPrefix =
-        continuousScrollController.isEmpty
-            ? null
-            : continuousScrollController.prefixHeightOf(currentChapterId);
-    continuousScrollController.rebuild(
-      anchorChapterId: currentChapterId,
-      allChapterIds: loader.chapterIds,
-      estimateHeight: (chapterId) {
-        // 优先用解析期 charCount 折算行数；无元数据时退回固定行数占位。
-        final lineHeightPx = fontSize * lineHeight;
-        final chars = _charCountForChapter(loader, chapterId);
-        if (chars == null || chars <= 0) {
-          return lineHeightPx * 20;
-        }
-        final fontSizeEff = math.max(12.0, fontSize);
-        final charsPerLine = math.max(
-          16,
-          (pageWidth / (fontSizeEff * 0.95)).floor(),
-        );
-        final lines = (chars / charsPerLine).ceil();
-        return lineHeightPx * math.max(8, lines) + 36;
-      },
-      resolve: (chapterId) {
-        final data = loader.get(chapterId, settings);
-        if (data == null) {
-          return null;
-        }
-        final heights = data.cumulativeHeights;
-        final isReady =
-            heights.isNotEmpty && heights.length == data.blocks.length;
-        var title = data.content.title;
-        if (title.isEmpty) {
-          for (final chapter in loader.allChapters) {
-            if (chapter.id == chapterId) {
-              title = chapter.title;
-              break;
+      loader.ensureScrollLayoutForNeighbors(
+        currentChapterId,
+        pageWidth: pageWidth,
+        settings: settings,
+        textScale: textScale,
+      );
+      final fontSize = settings.fontSize;
+      final lineHeight = settings.lineHeight;
+      final previousPrefix =
+          continuousScrollController.isEmpty
+              ? null
+              : continuousScrollController.prefixHeightOf(currentChapterId);
+      continuousScrollController.rebuild(
+        anchorChapterId: currentChapterId,
+        allChapterIds: loader.chapterIds,
+        estimateHeight: (chapterId) {
+          // 优先用解析期 charCount 折算行数；无元数据时退回固定行数占位。
+          final lineHeightPx = fontSize * lineHeight;
+          final chars = _charCountForChapter(loader, chapterId);
+          if (chars == null || chars <= 0) {
+            return lineHeightPx * 20;
+          }
+          final fontSizeEff = math.max(12.0, fontSize);
+          final charsPerLine = math.max(
+            16,
+            (pageWidth / (fontSizeEff * 0.95)).floor(),
+          );
+          final lines = (chars / charsPerLine).ceil();
+          return lineHeightPx * math.max(8, lines) + 36;
+        },
+        resolve: (chapterId) {
+          final data = loader.get(chapterId, settings);
+          if (data == null) {
+            return null;
+          }
+          final heights = data.cumulativeHeights;
+          final isReady =
+              heights.isNotEmpty && heights.length == data.blocks.length;
+          var title = data.content.title;
+          if (title.isEmpty) {
+            for (final chapter in loader.allChapters) {
+              if (chapter.id == chapterId) {
+                title = chapter.title;
+                break;
+              }
             }
           }
-        }
-        return ContinuousChapterEntry(
-          chapterId: chapterId,
-          title: title,
-          blockCount: data.blocks.length,
-          cumulativeHeights: heights,
-          totalHeight:
-              isReady
-                  ? heights.last
-                  : (data.blocks.isEmpty
-                      ? ReaderContinuousScrollController
-                          .fallbackPlaceholderHeight
-                      : data.blocks.length * fontSize * lineHeight),
-          totalChars: data.totalChars,
-          isReady: isReady,
-          blocks: data.blocks,
-          blockCharPrefixes: data.blockCharPrefixes,
-        );
-      },
-    );
-    _compensateScrollForPrefixDelta(previousPrefix);
+          return ContinuousChapterEntry(
+            chapterId: chapterId,
+            title: title,
+            blockCount: data.blocks.length,
+            cumulativeHeights: heights,
+            totalHeight:
+                isReady
+                    ? heights.last
+                    : (data.blocks.isEmpty
+                        ? ReaderContinuousScrollController
+                            .fallbackPlaceholderHeight
+                        : data.blocks.length * fontSize * lineHeight),
+            totalChars: data.totalChars,
+            isReady: isReady,
+            blocks: data.blocks,
+            blockCharPrefixes: data.blockCharPrefixes,
+          );
+        },
+      );
+      _compensateScrollForPrefixDelta(previousPrefix);
+    } finally {
+      _continuousWindowRebuilding = false;
+    }
   }
 
   /// 窗口状态指纹：锚点 + 排版 + 视口宽度 + 窗口章 layoutVersion/高度末值。

@@ -52,12 +52,30 @@ class ChapterData {
   bool get hasPreciseHeights => _hasPreciseHeights;
   bool _hasPreciseHeights = false;
 
+  /// 精确测高是否进行中，避免 layout 回调反复重启任务。
+  bool get preciseHeightsInFlight => _preciseHeightsInFlight;
+  bool _preciseHeightsInFlight = false;
+
   void markPreciseHeights() {
     _hasPreciseHeights = true;
+    _preciseHeightsInFlight = false;
   }
 
   void clearPreciseHeights() {
     _hasPreciseHeights = false;
+    _preciseHeightsInFlight = false;
+  }
+
+  bool beginPreciseHeights() {
+    if (_hasPreciseHeights || _preciseHeightsInFlight) {
+      return false;
+    }
+    _preciseHeightsInFlight = true;
+    return true;
+  }
+
+  void endPreciseHeights() {
+    _preciseHeightsInFlight = false;
   }
 
   /// 邻章就绪后丢弃 HTML 正文，仅保留标题与 blocks，降低窗口内存。
@@ -449,18 +467,27 @@ class ReaderContentLoader {
 
   final List<ReaderChapter> allChapters;
   final Map<_CacheKey, ChapterData> _cache = {};
-  int _heightsGeneration = 0;
   final Map<_CacheKey, Future<ChapterData>> _inflight = {};
   final Map<String, ReaderChapterContent> _contentCache = {};
   String? _activeChapterId;
 
   /// 测高布局失效回调（连续滚动窗口 fingerprint 刷新）。
   void Function()? onLayoutInvalidated;
+  bool _layoutInvalidationQueued = false;
 
   String? get activeChapterId => _activeChapterId;
 
+  /// 异步派发布局失效，避免在 ensure/rebuild 同步栈内重入 UI 重建。
   void _notifyLayoutInvalidated() {
-    onLayoutInvalidated?.call();
+    final callback = onLayoutInvalidated;
+    if (callback == null || _layoutInvalidationQueued) {
+      return;
+    }
+    _layoutInvalidationQueued = true;
+    scheduleMicrotask(() {
+      _layoutInvalidationQueued = false;
+      callback();
+    });
   }
 
   _CacheKey _key(String chapterId, ReaderViewSettings settings) {
@@ -660,31 +687,37 @@ class ReaderContentLoader {
     required ReaderViewSettings settings,
     required double textScale,
   }) async {
-    final generation = ++_heightsGeneration;
+    if (!data.beginPreciseHeights()) {
+      return;
+    }
     final blocks = data.blocks;
     final heights = List<double>.filled(blocks.length, 0);
     var cumulative = 0.0;
-    for (var i = 0; i < blocks.length; i++) {
-      cumulative += ReaderPaginationEngine.measureBlockHeight(
-        blocks[i],
-        pageWidth,
-        settings,
-        textScale: textScale,
-      );
-      heights[i] = cumulative;
-      if ((i + 1) % _metricsBatchBlocks == 0 || i == blocks.length - 1) {
-        data.updateCumulativeHeights(heights);
-        _notifyLayoutInvalidated();
-        await Future<void>.delayed(Duration.zero);
-        if (generation != _heightsGeneration ||
-            !identical(data.cumulativeHeights, heights)) {
-          return;
+    try {
+      for (var i = 0; i < blocks.length; i++) {
+        cumulative += ReaderPaginationEngine.measureBlockHeight(
+          blocks[i],
+          pageWidth,
+          settings,
+          textScale: textScale,
+        );
+        heights[i] = cumulative;
+        if ((i + 1) % _metricsBatchBlocks == 0 || i == blocks.length - 1) {
+          data.updateCumulativeHeights(heights);
+          _notifyLayoutInvalidated();
+          await Future<void>.delayed(Duration.zero);
+          // rekey/重算会替换 heights 数组身份，此处中止旧任务。
+          if (!identical(data.cumulativeHeights, heights)) {
+            data.endPreciseHeights();
+            return;
+          }
         }
       }
-    }
-    if (generation == _heightsGeneration) {
       data.markPreciseHeights();
       _notifyLayoutInvalidated();
+    } catch (_) {
+      data.endPreciseHeights();
+      rethrow;
     }
   }
 
@@ -697,6 +730,9 @@ class ReaderContentLoader {
   }) {
     final data = getByChapterId(chapterId);
     if (data == null || data.hasPreciseHeights || data.blocks.isEmpty) {
+      return;
+    }
+    if (data.preciseHeightsInFlight) {
       return;
     }
     unawaited(

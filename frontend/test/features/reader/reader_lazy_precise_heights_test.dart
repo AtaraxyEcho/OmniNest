@@ -15,6 +15,8 @@ void main() {
       final settings = ReaderViewSettings();
       final html = '<p>${'字' * 300}</p><p>${'字' * 300}</p>';
 
+      // 先设活动章，邻章 loadChapter 才只做 phase-one。
+      loader.setActive('c0');
       await loader.loadChapter(
         chapterId: 'c0',
         content: ReaderChapterContent(title: 'A', content: html),
@@ -32,8 +34,6 @@ void main() {
         prepareScrollLayout: true,
       );
 
-      loader.setActive('c0');
-      // 仅锚点触发 phase-one + 精测；邻章 ensure 时应只 phase-one。
       loader.ensureScrollLayoutForNeighbors(
         'c0',
         pageWidth: 400,
@@ -54,11 +54,7 @@ void main() {
         reason: 'neighbor should stay on phase-one estimate',
       );
 
-      loader.ensurePreciseHeights(
-        'c1',
-        pageWidth: 400,
-        settings: settings,
-      );
+      loader.ensurePreciseHeights('c1', pageWidth: 400, settings: settings);
       await Future<void>.delayed(const Duration(milliseconds: 50));
       expect(neighbor.hasPreciseHeights, isTrue);
     });
@@ -70,10 +66,7 @@ void main() {
       final settings = ReaderViewSettings();
       await loader.loadChapter(
         chapterId: 'c0',
-        content: ReaderChapterContent(
-          title: 'A',
-          content: '<p>内容内容内容</p>',
-        ),
+        content: ReaderChapterContent(title: 'A', content: '<p>内容内容内容</p>'),
         pageWidth: 400,
         pageHeight: 0,
         settings: settings,
