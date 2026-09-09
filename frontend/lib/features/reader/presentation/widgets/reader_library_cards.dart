@@ -160,8 +160,7 @@ class ReaderLibraryGridCard extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                AspectRatio(
-                  aspectRatio: 2 / 3,
+                Expanded(
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(2),
                     child: Stack(

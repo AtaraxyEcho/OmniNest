@@ -492,7 +492,7 @@ class _LibraryGridState extends State<_LibraryGrid> {
             crossAxisCount: columns,
             crossAxisSpacing: 16,
             mainAxisSpacing: 28,
-            mainAxisExtent: _tileHeight(constraints.maxWidth, columns),
+            mainAxisExtent: _tileHeight(columns),
           ),
           itemBuilder: (context, index) {
             final item = items[index];
@@ -536,10 +536,9 @@ class _LibraryGridState extends State<_LibraryGrid> {
     return 3;
   }
 
-  double _tileHeight(double width, int columns) {
-    final tileWidth = (width - 16 * (columns - 1)) / columns;
+  double _tileHeight(int columns) {
     final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 2.0);
-    // 封面 2:3 + 间距 8 + 标题两行 34 + 作者 14
-    return tileWidth * 1.5 + 8 + 34 * textScale + 14 * textScale;
+    // 封面由卡片内 Expanded 弹性填充；行高 = 间距 12 + 标题两行 34 + 作者 14 + 渲染缓冲 6
+    return 12 + 34 * textScale + 14 * textScale + 6;
   }
 }
