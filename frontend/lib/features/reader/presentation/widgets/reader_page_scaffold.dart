@@ -9,7 +9,10 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
+import 'package:omninest/features/files/media_import_ui.dart'
+    show ImportButtonStyle, MediaImportButton;
 import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 
 /// 阅读模块页面目标，对应模块内一级导航与路由
@@ -159,14 +162,14 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
 
 /// 模块顶栏：与其他模块一致的 WorkbenchTopBar 结构，
 /// 左侧为返回门户与「OmniNest › 阅读」衬线面包屑，右侧控件自然尺寸内联排布。
-class _ReaderModuleTopBar extends StatelessWidget {
+class _ReaderModuleTopBar extends ConsumerWidget {
   const _ReaderModuleTopBar({required this.target, required this.user});
 
   final ReaderPageTarget target;
   final UserProfile? user;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final rc = context.readerColors;
     final l10n = AppLocalizations.of(context);
     final wide = MediaQuery.sizeOf(context).width >= 1024;
@@ -237,6 +240,21 @@ class _ReaderModuleTopBar extends StatelessWidget {
                 ],
               ),
             ),
+            SizedBox(
+              width: 40,
+              height: 40,
+              child: MediaImportButton(
+                subsystemDirectory: 'Reader',
+                acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip'],
+                reuseExistingFiles: true,
+                onImportComplete: () {
+                  ref.read(readerCenterControllerProvider.notifier).refresh();
+                },
+                style: ImportButtonStyle.iconButton,
+                color: rc.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(width: 12),
             FontScaleControl(size: 20, color: rc.onSurfaceVariant),
             const SizedBox(width: 12),
             NotificationIcon(size: 20, color: rc.onSurfaceVariant),
