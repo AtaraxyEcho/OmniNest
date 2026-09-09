@@ -81,6 +81,56 @@ class TaskRecordServiceTest {
     }
 
     @Test
+    void staleRecoveryIgnoresTaskWhoseHeartbeatWasRefreshedByProgress() {
+        TaskRecord record = taskRecord(10);
+        record.setTaskType("VIDEO_TRANSCODE");
+        record.setHeartbeatAt(Instant.now().minusSeconds(700));
+        Mockito.when(taskRecordRepository.findById(record.getId())).thenReturn(Optional.of(record));
+        Mockito.when(taskRecordRepository.findByIdForUpdate(record.getId()))
+                .thenReturn(Optional.of(record));
+
+        // 长任务在耗时阶段推进进度 → 心跳刷新，本轮心跳恢复不再判死。
+        service.updateProgress(record.getId(), 20);
+
+        StaleTaskRecovery recovery = service.recoverStaleTask(
+                record.getId(),
+                "VIDEO_TRANSCODE",
+                Instant.now().minusSeconds(600),
+                Instant.now(),
+                "WORKER_HEARTBEAT_TIMEOUT"
+        );
+
+        Assertions.assertThat(recovery.recovered()).isFalse();
+        Assertions.assertThat(record.getStatus()).isEqualTo(TaskStatus.RUNNING.getValue());
+    }
+
+    @Test
+    void staleRecoveryConsumesExactlyOneRetryPerRecovery() {
+        TaskRecord record = taskRecord(50);
+        record.setTaskType("VIDEO_TRANSCODE");
+        record.setHeartbeatAt(Instant.now().minusSeconds(700));
+        record.setMaxRetries(3);
+        Mockito.when(taskRecordRepository.findByIdForUpdate(record.getId()))
+                .thenReturn(Optional.of(record));
+        Mockito.when(taskRecordRepository.save(Mockito.any(TaskRecord.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        StaleTaskRecovery recovery = service.recoverStaleTask(
+                record.getId(),
+                "VIDEO_TRANSCODE",
+                Instant.now().minusSeconds(600),
+                Instant.now(),
+                "WORKER_HEARTBEAT_TIMEOUT"
+        );
+
+        Assertions.assertThat(recovery.recovered()).isTrue();
+        Assertions.assertThat(recovery.deadLetter()).isFalse();
+        // 单次心跳恢复只消耗一次重试额度。
+        Assertions.assertThat(record.getRetryCount()).isEqualTo(1);
+        Assertions.assertThat(record.getStatus()).isEqualTo(TaskStatus.RETRY_WAIT.getValue());
+    }
+
+    @Test
     void deleteTerminalTaskBatchUpdatedBeforeDeletesBoundedIds() {
         Instant cutoff = Instant.parse("2026-06-01T00:00:00Z");
         List<String> statuses = List.of(
