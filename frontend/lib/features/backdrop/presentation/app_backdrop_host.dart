@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
@@ -20,8 +19,7 @@ class AppBackdropHost extends ConsumerWidget {
         const AppBackdropState();
     final policy = ref.watch(appBackdropSceneControllerProvider).policy;
     final asset = backdropState.selectedBackdrop;
-    final enabled =
-        !kIsWeb && policy.visible && backdropState.hasActiveBackdrop;
+    final enabled = policy.visible && backdropState.hasActiveBackdrop;
     final motionAllowed =
         enabled &&
         policy.motionAllowed &&

@@ -2,7 +2,7 @@ import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 
 /// Web 平台的内置背景注册:直接引用打包资产地址,不落本机文件。
 class AppBackdropBundledAssetInstaller {
-  static const String assetPath = 'assets/backdrops/default_wallpaper.mp4';
+  static const String assetPath = bundledDefaultWallpaperWebAsset;
 
   /// 注册内置动态壁纸并返回背景库素材。
   Future<AppBackdropAsset?> install() async {

@@ -20,6 +20,10 @@ enum AppBackdropMediaType {
 /// 内置动态壁纸的稳定素材 ID,三端一致且不受服务端素材库影响。
 const String bundledDefaultWallpaperId = 'bundled-default-wallpaper-v1';
 
+/// 内置动态壁纸在 Web 端的打包资产地址(HTML video 直接加载)。
+const String bundledDefaultWallpaperWebAsset =
+    'assets/backdrops/default_wallpaper.mp4';
+
 /// 应用背景来源类型。
 enum AppBackdropSourceType {
   bundled('bundled'),

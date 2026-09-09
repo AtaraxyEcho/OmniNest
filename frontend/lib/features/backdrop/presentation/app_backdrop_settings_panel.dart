@@ -5,7 +5,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_controls.dart';
-import 'package:omninest/features/backdrop/presentation/app_backdrop_file_view.dart';
+import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
 
 export 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
@@ -574,14 +574,25 @@ class _BackdropTilePreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final thumbnailPath = backdrop.thumbnailPath;
-    if (thumbnailPath != null && thumbnailPath.isNotEmpty) {
-      return AppBackdropFileView(path: thumbnailPath, fit: BoxFit.cover);
-    }
-    if (backdrop.isVideo) {
+    if (backdrop.sourceType == AppBackdropSourceType.server) {
+      final thumbnailUrl = backdrop.thumbnailPath;
+      if (thumbnailUrl != null && thumbnailUrl.isNotEmpty) {
+        return AppBackdropImage(
+          url: thumbnailUrl,
+          cacheKey: 'backdrop-preview:${backdrop.id}',
+          fit: BoxFit.cover,
+        );
+      }
+      if (!backdrop.isVideo && backdrop.path.isNotEmpty) {
+        return AppBackdropImage(
+          url: backdrop.path,
+          cacheKey: 'backdrop-preview-full:${backdrop.id}',
+          fit: BoxFit.cover,
+        );
+      }
       return const _BackdropVideoPlaceholder();
     }
-    return AppBackdropFileView(path: backdrop.path, fit: BoxFit.cover);
+    return const _BackdropVideoPlaceholder();
   }
 }
 

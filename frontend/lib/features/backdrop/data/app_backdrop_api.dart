@@ -10,6 +10,10 @@ class BackdropServerAsset {
     required this.status,
     this.failReason,
     required this.fileSize,
+    this.contentUrl,
+    this.contentUrlExpiresAt,
+    this.thumbUrl,
+    this.thumbUrlExpiresAt,
     this.width,
     this.height,
     this.durationMs,
@@ -24,6 +28,14 @@ class BackdropServerAsset {
       status: json['status']?.toString() ?? 'PROCESSING',
       failReason: json['failReason']?.toString(),
       fileSize: (json['fileSize'] as num?)?.toInt() ?? 0,
+      contentUrl: json['contentUrl']?.toString(),
+      contentUrlExpiresAt: DateTime.tryParse(
+        json['contentUrlExpiresAt']?.toString() ?? '',
+      ),
+      thumbUrl: json['thumbUrl']?.toString(),
+      thumbUrlExpiresAt: DateTime.tryParse(
+        json['thumbUrlExpiresAt']?.toString() ?? '',
+      ),
       width: (json['width'] as num?)?.toInt(),
       height: (json['height'] as num?)?.toInt(),
       durationMs: (json['durationMs'] as num?)?.toInt(),
@@ -37,6 +49,10 @@ class BackdropServerAsset {
   final String status;
   final String? failReason;
   final int fileSize;
+  final String? contentUrl;
+  final DateTime? contentUrlExpiresAt;
+  final String? thumbUrl;
+  final DateTime? thumbUrlExpiresAt;
   final int? width;
   final int? height;
   final int? durationMs;

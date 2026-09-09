@@ -87,6 +87,8 @@ class AppBackdropRepository {
   }
 
   /// 将服务端素材写入本地缓存;非 READY 状态映射为 missing,不参与选择。
+  /// path 缓存签名内容 URL、thumbnailPath 缓存缩略图 URL(过期由下次列表刷新),
+  /// 渲染层据此取图,图片缓存键仍基于素材 ID。
   Future<void> upsertServerAssets(List<BackdropServerAsset> assets) async {
     if (assets.isEmpty) {
       return;
@@ -97,7 +99,7 @@ class AppBackdropRepository {
           final updatedAt = asset.updatedAt ?? now;
           return AppBackdropAsset(
             id: asset.id,
-            path: '',
+            path: asset.contentUrl ?? '',
             title: asset.title,
             mediaType: AppBackdropMediaType.fromValue(asset.mediaType),
             sourceType: AppBackdropSourceType.server,
@@ -106,6 +108,7 @@ class AppBackdropRepository {
             width: asset.width,
             height: asset.height,
             durationMs: asset.durationMs,
+            thumbnailPath: asset.thumbUrl,
             missing: !asset.isSelectable,
             createdAt: updatedAt,
             updatedAt: updatedAt,

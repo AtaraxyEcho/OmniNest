@@ -2,15 +2,17 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:media_kit_video/media_kit_video.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
-import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
-import 'package:omninest/features/backdrop/presentation/app_backdrop_file_view.dart';
+import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
+import 'package:omninest/features/backdrop/presentation/app_backdrop_video_view.dart';
 
-/// 应用级本机背景渲染层。
-class AppBackdropSurface extends ConsumerStatefulWidget {
+/// 应用级背景渲染层。
+///
+/// 图片素材三端统一走网络渲染;视频桌面/移动走 media_kit,Web 走 HTML video 适配器;
+/// 内置壁纸在桌面/移动为本机文件、在 Web 为打包资产地址。
+class AppBackdropSurface extends ConsumerWidget {
   const AppBackdropSurface({
     required this.asset,
     required this.settings,
@@ -25,175 +27,97 @@ class AppBackdropSurface extends ConsumerStatefulWidget {
   final bool active;
 
   @override
-  ConsumerState<AppBackdropSurface> createState() => _AppBackdropSurfaceState();
-}
-
-class _AppBackdropSurfaceState extends ConsumerState<AppBackdropSurface>
-    with WidgetsBindingObserver {
-  bool? _lastLayoutUsable;
-  String? _lastSessionSignature;
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    ref.read(appBackdropVideoSessionProvider).updateLifecycleState(state);
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final asset = widget.asset;
+  Widget build(BuildContext context, WidgetRef ref) {
     final fit =
-        widget.settings.fit == AppBackdropFit.cover
-            ? BoxFit.cover
-            : BoxFit.contain;
+        settings.fit == AppBackdropFit.cover ? BoxFit.cover : BoxFit.contain;
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
-    final canPlayVideo =
-        !isWebPlatform &&
-        asset?.isVideo == true &&
-        !animationsDisabled &&
-        widget.policy.motionAllowed;
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final hasUsableLayout =
-            constraints.maxWidth.isFinite &&
-            constraints.maxHeight.isFinite &&
-            constraints.maxWidth > 1 &&
-            constraints.maxHeight > 1;
-        final videoActive =
-            widget.active && hasUsableLayout && canPlayVideo && asset != null;
-        _syncSession(
-          path: canPlayVideo ? asset?.path : null,
-          muted: widget.settings.videoMuted,
-          active: videoActive,
-          layoutUsable: hasUsableLayout,
-        );
-        final media = _buildMedia(
-          asset: asset,
-          fit: fit,
-          canPlayVideo: canPlayVideo,
-        );
-        final shouldBlurStatic =
-            widget.settings.blurAmount > 0.05 && asset?.isVideo != true;
-        final mediaLayer =
-            shouldBlurStatic
-                ? ImageFiltered(
-                  imageFilter: ImageFilter.blur(
-                    sigmaX: widget.settings.blurAmount,
-                    sigmaY: widget.settings.blurAmount,
-                  ),
-                  child: media,
-                )
-                : media;
-        return ExcludeSemantics(
-          child: IgnorePointer(
-            child: RepaintBoundary(
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  ColoredBox(color: Colors.transparent, child: mediaLayer),
-                  if (widget.settings.dimAmount > 0.01)
-                    ColoredBox(
-                      color: Colors.black.withValues(
-                        alpha: widget.settings.dimAmount,
-                      ),
-                    ),
-                ],
+    final motionAllowed = policy.motionAllowed && !animationsDisabled;
+    final media = _buildMedia(asset, fit, motionAllowed);
+    final shouldBlur = settings.blurAmount > 0.05 && asset?.isVideo != true;
+    final mediaLayer =
+        shouldBlur
+            ? ImageFiltered(
+              imageFilter: ImageFilter.blur(
+                sigmaX: settings.blurAmount,
+                sigmaY: settings.blurAmount,
               ),
-            ),
+              child: media,
+            )
+            : media;
+    return ExcludeSemantics(
+      child: IgnorePointer(
+        child: RepaintBoundary(
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ColoredBox(color: Colors.transparent, child: mediaLayer),
+              if (settings.dimAmount > 0.01)
+                ColoredBox(
+                  color: Colors.black.withValues(alpha: settings.dimAmount),
+                ),
+            ],
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 
-  Widget _buildMedia({
-    required AppBackdropAsset? asset,
-    required BoxFit fit,
-    required bool canPlayVideo,
-  }) {
+  Widget _buildMedia(AppBackdropAsset? asset, BoxFit fit, bool motionAllowed) {
     if (asset == null || asset.missing) {
       return const _AppBackdropFallback();
     }
-    if (!asset.isVideo) {
-      return AppBackdropFileView(path: asset.path, fit: fit);
+    if (asset.isVideo) {
+      return _buildVideo(asset, fit, motionAllowed);
     }
-    if (!canPlayVideo) {
-      return _AppBackdropVideoFallback(
+    return _buildImage(asset, fit);
+  }
+
+  Widget _buildVideo(AppBackdropAsset asset, BoxFit fit, bool motionAllowed) {
+    final source = asset.path;
+    if (source.isEmpty) {
+      return const _AppBackdropFallback(icon: Icons.movie_creation_outlined);
+    }
+    if (isWebPlatform) {
+      return AppBackdropVideoView(
+        source: source,
         fit: fit,
-        fallbackPath: asset.thumbnailPath,
+        playing: active && motionAllowed,
+        muted: settings.videoMuted,
+        fallbackSource: bundledDefaultWallpaperWebAsset,
       );
     }
-    final session = ref.watch(appBackdropVideoSessionProvider);
-    return ListenableBuilder(
-      listenable: session,
-      builder: (context, _) {
-        final controller = session.controller;
-        if (session.openError != null || !session.ready || controller == null) {
-          return _AppBackdropVideoFallback(
-            fit: fit,
-            fallbackPath: asset.thumbnailPath,
-          );
-        }
-        return RepaintBoundary(
-          child: Video(
-            controller: controller,
-            fit: fit,
-            controls: NoVideoControls,
-            wakelock: false,
-            pauseUponEnteringBackgroundMode: true,
-            resumeUponEnteringForegroundMode: true,
-          ),
-        );
-      },
+    if (!motionAllowed) {
+      return _videoStaticFallback(asset, fit);
+    }
+    return AppBackdropVideoView(
+      source: source,
+      fit: fit,
+      playing: active,
+      muted: settings.videoMuted,
     );
   }
 
-  void _syncSession({
-    required String? path,
-    required bool muted,
-    required bool active,
-    required bool layoutUsable,
-  }) {
-    final signature = '$path:$muted:$active:$layoutUsable';
-    if (_lastSessionSignature == signature &&
-        _lastLayoutUsable == layoutUsable) {
-      return;
+  Widget _buildImage(AppBackdropAsset asset, BoxFit fit) {
+    if (asset.sourceType == AppBackdropSourceType.server) {
+      return AppBackdropImage(
+        url: asset.path,
+        cacheKey: 'backdrop:${asset.id}',
+        fit: fit,
+      );
     }
-    _lastSessionSignature = signature;
-    _lastLayoutUsable = layoutUsable;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final session = ref.read(appBackdropVideoSessionProvider);
-      session.setLayoutUsable(layoutUsable);
-      session.configure(path: path, muted: muted, active: active);
-    });
+    return const SizedBox.shrink();
   }
-}
 
-class _AppBackdropVideoFallback extends StatelessWidget {
-  const _AppBackdropVideoFallback({required this.fit, this.fallbackPath});
-
-  final BoxFit fit;
-  final String? fallbackPath;
-
-  @override
-  Widget build(BuildContext context) {
-    final path = fallbackPath?.trim();
-    if (path != null && path.isNotEmpty) {
-      return AppBackdropFileView(path: path, fit: fit);
+  Widget _videoStaticFallback(AppBackdropAsset asset, BoxFit fit) {
+    final thumbnail = asset.thumbnailPath;
+    if (asset.sourceType == AppBackdropSourceType.server &&
+        thumbnail != null &&
+        thumbnail.isNotEmpty) {
+      return AppBackdropImage(
+        url: thumbnail,
+        cacheKey: 'backdrop-thumb:${asset.id}',
+        fit: fit,
+      );
     }
     return const _AppBackdropFallback(icon: Icons.movie_creation_outlined);
   }

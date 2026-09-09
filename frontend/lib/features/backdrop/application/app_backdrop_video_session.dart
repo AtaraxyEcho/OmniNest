@@ -232,8 +232,10 @@ class AppBackdropVideoSession extends ChangeNotifier {
         try {
           await player.setVolume(_muted ? 0 : 100);
           await player.setPlaylistMode(PlaylistMode.single);
+          final resource =
+              path.startsWith('http') ? Uri.parse(path) : Uri.file(path);
           await player
-              .open(Media(Uri.file(path).toString()), play: _shouldPlay)
+              .open(Media(resource.toString()), play: _shouldPlay)
               .timeout(_openTimeout);
           if (!_canUseGeneration(generation, path)) {
             await _stopAndDisposePlayer(player);
