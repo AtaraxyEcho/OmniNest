@@ -16,6 +16,9 @@ class AppBackdropLocalVideoCache {
   final Map<String, Future<String?>> _inFlight = <String, Future<String?>>{};
   Directory? _root;
 
+  /// 清空后递增，作废仍在途的下载完成回调。
+  int _cacheEpoch = 0;
+
   Future<Directory> _ensureRoot() async {
     final existing = _root;
     if (existing != null) {
@@ -61,6 +64,7 @@ class AppBackdropLocalVideoCache {
     required String assetId,
     required String remoteUrl,
   }) async {
+    final epoch = _cacheEpoch;
     try {
       if (remoteUrl.isEmpty) {
         return null;
@@ -70,7 +74,9 @@ class AppBackdropLocalVideoCache {
         '${root.path}${Platform.pathSeparator}$assetId.mp4',
       );
       if (await target.exists() && await target.length() > 0) {
-        _readyById[assetId] = target.path;
+        if (epoch == _cacheEpoch) {
+          _readyById[assetId] = target.path;
+        }
         return target.path;
       }
       await _dio.download(
@@ -78,6 +84,13 @@ class AppBackdropLocalVideoCache {
         target.path,
         options: Options(responseType: ResponseType.stream),
       );
+      if (epoch != _cacheEpoch) {
+        // 清空期间完成的下载：删除落盘文件，避免清空后又占用磁盘。
+        if (await target.exists()) {
+          await target.delete();
+        }
+        return null;
+      }
       if (!await target.exists() || await target.length() <= 0) {
         if (await target.exists()) {
           await target.delete();
@@ -114,6 +127,7 @@ class AppBackdropLocalVideoCache {
 
   /// 清空全部服务端视频壁纸本地缓存;返回删除的文件数。
   Future<int> evictAll() async {
+    _cacheEpoch++;
     _readyById.clear();
     try {
       final root = await _ensureRoot();

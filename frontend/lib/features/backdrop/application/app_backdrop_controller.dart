@@ -460,13 +460,29 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     }
   }
 
-  /// 清空本机视频壁纸缓存;当前仍选中的视频会重新按需缓存。
+  /// 清空本机视频壁纸缓存。不立即重新下载,避免「清空后马上占满磁盘」;
+  /// 下次重新选中视频时再按需缓存。
   Future<int> clearLocalVideoCache() async {
     final cache = ref.read(appBackdropLocalVideoCacheProvider);
     final removed = await cache.evictAll();
     _localVideoPaths.clear();
+    final loaded = await ref
+        .read(appBackdropRepositoryProvider)
+        .loadState();
+    final assets =
+        loaded.backdrops
+            .map(
+              (backdrop) =>
+                  backdrop.localVideoPath == null
+                      ? backdrop
+                      : backdrop.copyWith(localVideoPath: null),
+            )
+            .toList(growable: false);
     state = AsyncData(
-      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+      loaded.copyWith(
+        backdrops: assets,
+        selectionTarget: ref.read(appBackdropSelectionTargetProvider),
+      ),
     );
     return removed;
   }

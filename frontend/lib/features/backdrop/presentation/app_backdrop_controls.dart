@@ -234,14 +234,17 @@ class AppBackdropControls extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 12),
-              if (state.selectedBackdrop?.isVideo == true) ...[
-                AppBackdropActionButton(
-                  palette: palette,
-                  icon: Icons.cleaning_services_rounded,
-                  label: l10n.portalLocalBackdropClearVideoCache,
-                  onTap: () => notifier.clearLocalVideoCache(),
-                ),
-                const SizedBox(height: 8),
+              if (state.selectedBackdrop?.sourceType ==
+                  AppBackdropSourceType.server) ...[
+                if (state.selectedBackdrop?.isVideo == true)
+                  AppBackdropActionButton(
+                    palette: palette,
+                    icon: Icons.cleaning_services_rounded,
+                    label: l10n.portalLocalBackdropClearVideoCache,
+                    onTap: () => notifier.clearLocalVideoCache(),
+                  ),
+                if (state.selectedBackdrop?.isVideo == true)
+                  const SizedBox(height: 8),
               ],
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
@@ -261,10 +264,15 @@ class AppBackdropControls extends StatelessWidget {
                   palette: palette,
                   icon: Icons.replay_rounded,
                   label: l10n.portalLocalBackdropRetryPlayback,
-                  onTap:
-                      () => AppBackdropVideoSession.retryPath(
-                        state.selectedBackdrop!.path,
-                      ),
+                  onTap: () {
+                    final selected = state.selectedBackdrop!;
+                    final source =
+                        (selected.localVideoPath != null &&
+                                selected.localVideoPath!.isNotEmpty)
+                            ? selected.localVideoPath!
+                            : selected.path;
+                    AppBackdropVideoSession.retryPath(source);
+                  },
                 ),
               ],
               const SizedBox(height: 20),
