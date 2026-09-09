@@ -45,14 +45,25 @@ class BackdropPreferencesController extends AsyncNotifier<AppBackdropSettings> {
       snapshot.preferences,
       settings,
     );
-    if (remote != settings) {
+    // 仅当远端提供了有效选择时才覆盖本地;避免冲突/空快照把已启用状态打回未启用。
+    if (remote != settings && _hasUsableSelection(remote)) {
+      await ref.read(appBackdropRepositoryProvider).saveSettings(remote);
+      settings = remote;
+    } else if (remote != settings && !_hasUsableSelection(settings)) {
       await ref.read(appBackdropRepositoryProvider).saveSettings(remote);
       settings = remote;
     }
     return settings;
   }
 
-  /// 保存设置:先写本地镜像保证即时生效,再同步服务端并按服务端结果收敛。
+  bool _hasUsableSelection(AppBackdropSettings settings) {
+    return settings.selectedBackdropId != null ||
+        settings.desktopBackdropId != null ||
+        settings.mobileBackdropId != null;
+  }
+
+  /// 保存设置:先写本地镜像保证即时生效,再同步服务端。
+  /// 冲突时按最新版本重放用户意图;远端收敛结果不会回退 enabled/选中。
   Future<void> save(AppBackdropSettings settings) async {
     await ref.read(appBackdropRepositoryProvider).saveSettings(settings);
     state = AsyncData(settings);
@@ -60,20 +71,59 @@ class BackdropPreferencesController extends AsyncNotifier<AppBackdropSettings> {
     if (userId == null) {
       return;
     }
-    final snapshot = await ref
-        .read(preferenceSyncServiceProvider)
-        .patch(
+    final service = ref.read(preferenceSyncServiceProvider);
+    try {
+      final snapshot = await service.patch(
+        userId: userId,
+        scope: backdropPreferenceScope,
+        changes: AppBackdropSettingsJson.toChanges(settings),
+      );
+      final remote = AppBackdropSettingsJson.fromPreferences(
+        snapshot.preferences,
+        settings,
+      );
+      if (remote != settings && _remoteWins(settings, remote)) {
+        await ref.read(appBackdropRepositoryProvider).saveSettings(remote);
+        state = AsyncData(remote);
+        return;
+      }
+      if (remote != settings) {
+        // 服务端仍与本次操作不一致时,再写一次用户意图,避免选中/启用丢失。
+        final retried = await service.patch(
           userId: userId,
           scope: backdropPreferenceScope,
           changes: AppBackdropSettingsJson.toChanges(settings),
         );
-    final remote = AppBackdropSettingsJson.fromPreferences(
-      snapshot.preferences,
-      settings,
-    );
-    if (remote != settings) {
-      await ref.read(appBackdropRepositoryProvider).saveSettings(remote);
-      state = AsyncData(remote);
+        final finalRemote = AppBackdropSettingsJson.fromPreferences(
+          retried.preferences,
+          settings,
+        );
+        if (_remoteWins(settings, finalRemote)) {
+          await ref
+              .read(appBackdropRepositoryProvider)
+              .saveSettings(finalRemote);
+          state = AsyncData(finalRemote);
+          return;
+        }
+      }
+    } on Exception {
+      // 保留本地用户意图,由 pending 与下次同步收敛。
     }
+  }
+
+  /// 仅当远端同时保留可用选中且未把“已启用”打回关闭时,才用远端覆盖本地。
+  bool _remoteWins(AppBackdropSettings intended, AppBackdropSettings remote) {
+    if (intended.enabled && !remote.enabled) {
+      return false;
+    }
+    final intendedId = intended.selectedBackdropId;
+    if (intendedId != null &&
+        intendedId.isNotEmpty &&
+        remote.selectedBackdropId != intendedId &&
+        remote.desktopBackdropId != intendedId &&
+        remote.mobileBackdropId != intendedId) {
+      return false;
+    }
+    return remote != intended;
   }
 }

@@ -229,31 +229,28 @@ class PreferenceSyncService {
     required int? baseVersion,
     required PreferenceMutation mutation,
   }) async {
-    try {
-      final saved = await _api.patch(
-        scope: scope,
-        baseVersion: baseVersion,
-        changes: mutation.changes,
-        removeKeys: mutation.removeKeys,
-      );
-      await _localStore.writeSnapshot(userId, saved);
-      await _localStore.clearPending(userId, scope);
-      return saved;
-    } on AppException catch (error) {
-      if (error.code != _versionConflictCode) {
-        rethrow;
+    var attemptBase = baseVersion;
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final saved = await _api.patch(
+          scope: scope,
+          baseVersion: attemptBase,
+          changes: mutation.changes,
+          removeKeys: mutation.removeKeys,
+        );
+        await _localStore.writeSnapshot(userId, saved);
+        await _localStore.clearPending(userId, scope);
+        return saved;
+      } on AppException catch (error) {
+        if (error.code != _versionConflictCode) {
+          rethrow;
+        }
+        final latest = await _api.getSnapshot(scope);
+        attemptBase = latest.version;
       }
-      final latest = await _api.getSnapshot(scope);
-      final saved = await _api.patch(
-        scope: scope,
-        baseVersion: latest.version,
-        changes: mutation.changes,
-        removeKeys: mutation.removeKeys,
-      );
-      await _localStore.writeSnapshot(userId, saved);
-      await _localStore.clearPending(userId, scope);
-      return saved;
     }
+    // 三次冲突后仍失败:抛给上层,保留 pending 供下次同步重放。
+    throw const AppException(code: '7001', message: '用户偏好已在其他位置更新，请刷新后重试');
   }
 
   Future<T> _serial<T>(

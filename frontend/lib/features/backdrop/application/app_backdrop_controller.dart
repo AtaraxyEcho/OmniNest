@@ -61,6 +61,7 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   final Map<String, DateTime> _urlExpiresAt = <String, DateTime>{};
 
   static const Duration _urlRefreshLead = Duration(minutes: 2);
+  Future<void>? _settingsMutation;
 
   @override
   Future<AppBackdropState> build() async {
@@ -74,7 +75,34 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     if (userId != null) {
       await refreshServerAssets();
     }
-    return _loadCurrentState(repository);
+    var loaded = await _loadCurrentState(repository);
+    if (!loaded.hasActiveBackdrop && !_hasAnySelection(loaded.settings)) {
+      AppBackdropAsset? bundled;
+      for (final backdrop in loaded.backdrops) {
+        if (backdrop.isBundled && backdrop.isSelectable) {
+          bundled = backdrop;
+          break;
+        }
+      }
+      if (bundled != null) {
+        await _applySettings(
+          loaded.settings.copyWith(
+            enabled: true,
+            selectedBackdropId: bundled.id,
+            desktopBackdropId: bundled.id,
+            mobileBackdropId: bundled.id,
+          ),
+        );
+        loaded = await _loadCurrentState(repository);
+      }
+    }
+    return loaded;
+  }
+
+  bool _hasAnySelection(AppBackdropSettings settings) {
+    return settings.selectedBackdropId != null ||
+        settings.desktopBackdropId != null ||
+        settings.mobileBackdropId != null;
   }
 
   /// 拉取服务端素材并写入本地缓存;未登录(如安装引导阶段)与离线时保留缓存内容。
@@ -202,15 +230,21 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   }
 
   /// 选择背景素材;设置经由偏好同步(服务端事实来源)落盘。
-  /// 首次选中时若背景未启用,自动打开,避免“已选中但不显示”。
+  /// 首次选中时若背景未启用,自动打开;先写本地镜像再同步,避免冲突导致白屏。
   Future<void> selectBackdrop(String id) async {
-    await ensureFreshServerUrls();
-    final current =
+    var current =
         state.asData?.value ??
         await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
-    final selected = current.backdrops.where((backdrop) => backdrop.id == id);
+    var selected = current.backdrops.where((backdrop) => backdrop.id == id);
     if (selected.isEmpty || !selected.single.isSelectable) {
-      return;
+      await ensureFreshServerUrls(force: true);
+      current =
+          state.asData?.value ??
+          await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+      selected = current.backdrops.where((b) => b.id == id);
+      if (selected.isEmpty || !selected.single.isSelectable) {
+        return;
+      }
     }
     var updated = current.settings.selectBackdropFor(
       current.selectionTarget,
@@ -219,7 +253,7 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     if (!updated.enabled) {
       updated = updated.copyWith(enabled: true);
     }
-    await _persistSettings(updated);
+    await _applySettings(updated);
   }
 
   /// 设置桌面端和移动端是否分别保存背景选择。
@@ -371,7 +405,23 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     }
   }
 
-  Future<void> _persistSettings(AppBackdropSettings settings) async {
+  Future<void> _persistSettings(AppBackdropSettings settings) {
+    return _applySettings(settings);
+  }
+
+  /// 串行写设置:先本地镜像即时生效,再同步服务端,最后回读状态。
+  Future<void> _applySettings(AppBackdropSettings settings) {
+    final previous = _settingsMutation ?? Future<void>.value();
+    final next = previous.then((_) => _applySettingsUnlocked(settings));
+    _settingsMutation = next.catchError((Object _) {});
+    return next;
+  }
+
+  Future<void> _applySettingsUnlocked(AppBackdropSettings settings) async {
+    await ref.read(appBackdropRepositoryProvider).saveSettings(settings);
+    state = AsyncData(
+      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+    );
     await ref.read(backdropPreferencesProvider.notifier).save(settings);
     state = AsyncData(
       await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),

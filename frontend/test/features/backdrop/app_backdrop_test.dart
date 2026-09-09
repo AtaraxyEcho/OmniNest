@@ -41,6 +41,24 @@ class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   Future<AppBackdropAsset?> install() async => null;
 }
 
+class _FakeBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
+  @override
+  Future<AppBackdropAsset?> install() async {
+    final now = DateTime(2026);
+    return AppBackdropAsset(
+      id: bundledDefaultWallpaperId,
+      path: 'assets/backdrops/default_wallpaper.mp4',
+      title: 'OmniNest',
+      mediaType: AppBackdropMediaType.video,
+      sourceType: AppBackdropSourceType.bundled,
+      fileSize: 100,
+      modifiedAt: now,
+      createdAt: now,
+      updatedAt: now,
+    );
+  }
+}
+
 class _NoopBackdropPreferencesController extends BackdropPreferencesController {
   _NoopBackdropPreferencesController(this._repository);
 
@@ -532,6 +550,46 @@ void main() {
         state.backdrops.where((backdrop) => backdrop.id == 'server-cached'),
         isNotEmpty,
       );
+    });
+
+    test('无任何选中时自动启用内置壁纸', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => const []);
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _FakeBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      final state = await container.read(appBackdropControllerProvider.future);
+
+      expect(state.settings.enabled, isTrue);
+      expect(state.settings.selectedBackdropId, bundledDefaultWallpaperId);
+      expect(state.hasActiveBackdrop, isTrue);
     });
 
     test('清空背景库会调用服务端删除并清理本地缓存', () async {
