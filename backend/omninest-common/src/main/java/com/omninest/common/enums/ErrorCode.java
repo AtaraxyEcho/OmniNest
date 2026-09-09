@@ -29,6 +29,7 @@ public enum ErrorCode {
     TASK_STATUS_ILLEGAL(2001, "任务状态流转非法"),
     TASK_NOT_FOUND(2002, "任务不存在"),
     TASK_ALREADY_COMPLETED(2003, "任务已完成，不可操作"),
+    TASK_DEPENDENCY_NOT_READY(2004, "任务依赖未就绪"),
 
     // ==================== 配置 3xxx ====================
     CONFIG_NOT_FOUND(3001, "配置项不存在"),

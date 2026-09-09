@@ -50,7 +50,16 @@ public class PhotoAiConsumer {
             photoAiTaskService.execute(event);
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException e) {
-            log.error("照片 AI 任务失败: taskId={}, photoId={}", event.taskId(), event.photoId(), e);
+            if (retryService.isDependencyNotReady(e)) {
+                log.warn(
+                        "照片 AI 任务依赖未就绪，等待重试: taskId={}, photoId={}, error={}",
+                        event.taskId(),
+                        event.photoId(),
+                        e.getMessage()
+                );
+            } else {
+                log.error("照片 AI 任务失败: taskId={}, photoId={}", event.taskId(), event.photoId(), e);
+            }
             try {
                 retryService.handlePhotoAiFailure(event, e);
                 channel.basicAck(deliveryTag, false);

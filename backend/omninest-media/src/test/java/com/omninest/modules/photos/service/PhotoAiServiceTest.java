@@ -1,5 +1,6 @@
 package com.omninest.modules.photos.service;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -9,6 +10,8 @@ import com.omninest.common.ai.ImageAnalysisGateway.ContentAnalysis;
 import com.omninest.common.ai.ImageAnalysisGateway.ContentObservation;
 import com.omninest.common.ai.ImageAnalysisGateway.FaceDetection;
 import com.omninest.common.config.AiSidecarProperties;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
@@ -305,6 +308,25 @@ class PhotoAiServiceTest {
                                 && label.code().equals("mountain"))
                         && labels.stream().noneMatch(label -> label.code().equals("animal")))
         );
+    }
+
+    @Test
+    void shouldSignalDependencyNotReadyWhenCoverMissing() {
+        UUID ownerUserId = UUID.randomUUID();
+        UUID photoId = UUID.randomUUID();
+        PhotoItem photo = new PhotoItem();
+        photo.setId(photoId);
+        photo.setOwnerUserId(ownerUserId);
+        photo.setProviderMetadata(new HashMap<>());
+
+        Mockito.when(photoItemRepository.findByOwnerUserIdAndId(ownerUserId, photoId))
+                .thenReturn(Optional.of(photo));
+
+        BusinessException exception = assertThrows(BusinessException.class,
+                () -> service.processPhoto(ownerUserId, photoId));
+
+        assertEquals(ErrorCode.TASK_DEPENDENCY_NOT_READY, exception.errorCode());
+        Mockito.verifyNoInteractions(fileQueryService, imageAnalysisGateway);
     }
 
     @Test

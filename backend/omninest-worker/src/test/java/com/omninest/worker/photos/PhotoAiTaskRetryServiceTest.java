@@ -74,6 +74,45 @@ class PhotoAiTaskRetryServiceTest {
     }
 
     @Test
+    void handleFailureUsesShortRetryLadderForDependencyNotReady() {
+        PhotoAiEvent event = event();
+
+        service.handlePhotoAiFailure(event, new BusinessException(
+                com.omninest.common.enums.ErrorCode.TASK_DEPENDENCY_NOT_READY, "照片封面尚未生成，等待缩略图任务回填"));
+
+        Mockito.verify(taskRecordService).markRetryWait(
+                Mockito.eq(event.taskId()),
+                Mockito.eq("TASK_DEPENDENCY_NOT_READY"),
+                Mockito.any(Instant.class));
+        Mockito.verify(taskRecordService, Mockito.never()).markDeadLetter(
+                Mockito.any(UUID.class), Mockito.anyString());
+        ArgumentCaptor<Instant> retryAtCaptor = ArgumentCaptor.forClass(Instant.class);
+        Mockito.verify(taskDispatchService).enqueueAt(
+                Mockito.eq(event.taskId()),
+                Mockito.eq(QueueNames.TASK_EXCHANGE),
+                Mockito.eq(QueueNames.PHOTO_AI_ROUTING_KEY),
+                Mockito.eq(event),
+                retryAtCaptor.capture());
+        assertThat(retryAtCaptor.getValue())
+                .isAfter(Instant.now())
+                .isBefore(Instant.now().plusSeconds(15));
+    }
+
+    @Test
+    void handleFailureDeadLettersDependencyNotReadyWhenMaxRetriesReached() {
+        PhotoAiEvent event = event();
+        Mockito.when(taskRecordService.retryCount(event.taskId())).thenReturn(3);
+
+        service.handlePhotoAiFailure(event, new BusinessException(
+                com.omninest.common.enums.ErrorCode.TASK_DEPENDENCY_NOT_READY, "照片封面尚未生成，等待缩略图任务回填"));
+
+        Mockito.verify(taskRecordService).markDeadLetter(event.taskId(), "TASK_DEPENDENCY_NOT_READY");
+        Mockito.verify(taskRecordService, Mockito.never()).markRetryWait(
+                Mockito.any(UUID.class), Mockito.anyString(), Mockito.any(Instant.class));
+        Mockito.verifyNoInteractions(taskDispatchService);
+    }
+
+    @Test
     void handleFailureDeadLettersWhenMaxRetriesReached() {
         PhotoAiEvent event = event();
         Mockito.when(taskRecordService.retryCount(event.taskId())).thenReturn(3);

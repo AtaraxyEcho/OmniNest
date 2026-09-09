@@ -1,5 +1,7 @@
 package com.omninest.worker.photos;
 
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import com.omninest.modules.photos.event.PhotoAiEvent;
 import com.omninest.modules.photos.event.PhotoAiEvent.Mode;
 import com.omninest.modules.photos.service.PhotoAiTaskService;
@@ -45,6 +47,21 @@ class PhotoAiConsumerTest {
 
         Mockito.verify(retryService).handlePhotoAiFailure(
                 Mockito.eq(event), Mockito.any(IllegalStateException.class));
+        Mockito.verify(channel).basicAck(1L, false);
+        Mockito.verify(channel, Mockito.never()).basicNack(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.anyBoolean());
+    }
+
+    @Test
+    void handleDelegatesDependencyNotReadyToRetryServiceAndAcknowledges() throws IOException {
+        PhotoAiEvent event = event();
+        Mockito.doThrow(new BusinessException(ErrorCode.TASK_DEPENDENCY_NOT_READY, "照片封面尚未生成，等待缩略图任务回填"))
+                .when(taskService).execute(event);
+
+        consumer.handle(event, message(), channel);
+
+        Mockito.verify(retryService).handlePhotoAiFailure(
+                Mockito.eq(event), Mockito.any(BusinessException.class));
+        Mockito.verify(retryService).isDependencyNotReady(Mockito.any(BusinessException.class));
         Mockito.verify(channel).basicAck(1L, false);
         Mockito.verify(channel, Mockito.never()).basicNack(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.anyBoolean());
     }

@@ -21,6 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
  * 照片图像分析任务的失败重试与心跳恢复服务。
  * 失败终态（死信）与等待重试的裁决依据任务记录的重试次数和错误类型；
  * 延迟重投通过任务 Outbox 按 nextRetryAt 发布，消息本体始终 ACK。
+ * 任务依赖未就绪（如封面缩略图尚未回填）按专属短间隔阶梯重试，
+ * 其余瞬态错误按默认 1 分钟、5 分钟、15 分钟阶梯重试。
  *
  * @author OmniNest
  */
@@ -63,7 +65,8 @@ public class PhotoAiTaskRetryService {
             return;
         }
 
-        Instant nextRetryAt = Instant.now().plus(retryDelay(currentRetries + 1));
+        Instant nextRetryAt = Instant.now().plus(
+                retryDelay(currentRetries + 1, isDependencyNotReady(exception)));
         int retryCount = taskRecordService.markRetryWait(event.taskId(), errorSummary, nextRetryAt);
         taskDispatchService.enqueueAt(
                 event.taskId(),
@@ -134,6 +137,19 @@ public class PhotoAiTaskRetryService {
         }
     }
 
+    /**
+     * 判断异常是否为任务依赖未就绪。
+     * 该类失败的依赖通常很快恢复（如异步缩略图回填照片封面），
+     * 不属于业务失败，按专属短间隔阶梯重试而非死信或默认长间隔。
+     *
+     * @param exception 执行异常
+     * @return 是否依赖未就绪
+     */
+    public boolean isDependencyNotReady(RuntimeException exception) {
+        return exception instanceof BusinessException businessException
+                && businessException.errorCode() == ErrorCode.TASK_DEPENDENCY_NOT_READY;
+    }
+
     private boolean isNonRetryable(RuntimeException exception) {
         if (!(exception instanceof BusinessException businessException)) {
             return false;
@@ -151,7 +167,14 @@ public class PhotoAiTaskRetryService {
                 : exception.getClass().getSimpleName();
     }
 
-    private Duration retryDelay(int retryCount) {
+    private Duration retryDelay(int retryCount, boolean dependencyNotReady) {
+        if (dependencyNotReady) {
+            return switch (retryCount) {
+                case 1 -> Duration.ofSeconds(10);
+                case 2 -> Duration.ofSeconds(30);
+                default -> Duration.ofMinutes(1);
+            };
+        }
         return switch (retryCount) {
             case 1 -> Duration.ofMinutes(1);
             case 2 -> Duration.ofMinutes(5);

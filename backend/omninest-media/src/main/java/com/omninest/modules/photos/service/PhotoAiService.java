@@ -258,7 +258,12 @@ public class PhotoAiService {
 
     private Path stagePhotoFile(UUID ownerUserId, PhotoItem photo) {
         if (photo.getCoverFileId() == null) {
-            throw new IllegalStateException("照片缺少可供图像分析处理的封面文件");
+            // 封面由异步缩略图任务回填，导入后短暂缺失属预期；按依赖未就绪
+            // 抛出以进入短间隔重试，与真实分析失败区分。
+            throw new BusinessException(
+                    ErrorCode.TASK_DEPENDENCY_NOT_READY,
+                    "照片封面尚未生成，等待缩略图任务回填"
+            );
         }
         Path tempFile = null;
         try (FileContentStream content = fileQueryService.openOwnedFileContent(
