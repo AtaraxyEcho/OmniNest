@@ -4,7 +4,6 @@ import com.omninest.worker.runtime.ConditionalOnWorkerRuntime;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.event.MediaScrapeRequestedEvent;
@@ -22,11 +21,10 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @ConditionalOnWorkerRuntime
 public class MediaScrapeConsumer {
-    private static final int MAX_RETRY = 3;
 
     private final MovieScrapeExecutionService scrapeExecutionService;
     private final TaskRecordService taskRecordService;
-    private final DomainEventPublisher domainEventPublisher;
+    private final MediaScrapeRetryService mediaScrapeRetryService;
 
     @RabbitListener(queues = QueueNames.MEDIA_QUEUE)
     public void handle(MediaScrapeRequestedEvent event, Message message, Channel channel) throws IOException {
@@ -49,38 +47,15 @@ public class MediaScrapeConsumer {
                     channel.basicAck(deliveryTag, false);
                     return;
                 }
-                handleRetry(event, e);
+                mediaScrapeRetryService.handleFailure(event, e);
             } catch (Exception e) {
-                handleRetry(event, e);
+                mediaScrapeRetryService.handleFailure(event, e);
             }
             channel.basicAck(deliveryTag, false);
         } catch (Exception e) {
+            // 重试状态持久化失败时不再吞异常后 ack，消息转入死信队列保留现场。
             log.error("媒体刮削处理失败: taskId={}", event.taskId(), e);
             channel.basicNack(deliveryTag, false, false);
-        }
-    }
-
-    private void handleRetry(MediaScrapeRequestedEvent event, Exception e) {
-        try {
-            int retryCount = taskRecordService.retryCount(event.taskId());
-            if (retryCount < MAX_RETRY) {
-                taskRecordService.incrementRetryCount(event.taskId());
-                domainEventPublisher.publishTask(
-                        QueueNames.MEDIA_SCRAPE_ROUTING_KEY,
-                        new MediaScrapeRequestedEvent(
-                                event.taskId(), event.ownerUserId(), event.fileNodeId(),
-                                event.title(), event.year(), event.seasonNumber(),
-                                event.episodeNumber(), event.force()
-                        )
-                );
-                log.warn("刮削任务失败，已重新排队: taskId={}, retryCount={}/{}",
-                        event.taskId(), retryCount + 1, MAX_RETRY, e);
-            } else {
-                taskRecordService.markFailed(event.taskId(), "重试次数已耗尽: " + e.getMessage());
-                log.error("刮削任务失败，已达最大重试次数: taskId={}", event.taskId(), e);
-            }
-        } catch (Exception retryError) {
-            log.error("刮削任务重试处理异常: taskId={}", event.taskId(), retryError);
         }
     }
 }

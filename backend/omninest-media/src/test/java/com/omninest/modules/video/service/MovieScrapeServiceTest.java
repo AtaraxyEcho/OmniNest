@@ -10,13 +10,13 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.file.domain.SpaceType;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePermissionService;
 import com.omninest.modules.task.domain.TaskRecord;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.domain.MediaType;
@@ -48,14 +48,14 @@ class MovieScrapeServiceTest {
     private final MediaTvSeriesRepository tvSeriesRepository = Mockito.mock(MediaTvSeriesRepository.class);
     private final MediaTvSeasonRepository tvSeasonRepository = Mockito.mock(MediaTvSeasonRepository.class);
     private final SimpleFileNameParser fileNameParser = new SimpleFileNameParser();
-    private final DomainEventPublisher publisher = Mockito.mock(DomainEventPublisher.class);
+    private final TaskDispatchService taskDispatchService = Mockito.mock(TaskDispatchService.class);
     private final FilePermissionService filePermissionService =
             Mockito.mock(FilePermissionService.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
     private final MovieScrapeService scrapeService =
             new MovieScrapeService(fileMetadataQueryService, taskRecordService, videoItemRepository,
-                    tvSeriesRepository, tvSeasonRepository, fileNameParser, List.of(), publisher,
-                    filePermissionService, readThroughCache);
+                    tvSeriesRepository, tvSeasonRepository, fileNameParser, List.of(),
+                    taskDispatchService, filePermissionService, readThroughCache);
 
     @Test
     void createsScrapeTaskForVideoFile() {
@@ -79,7 +79,12 @@ class MovieScrapeServiceTest {
                 eq(FILE_ID),
                 any()
         );
-        verify(publisher).publishTask(eq(QueueNames.MEDIA_SCRAPE_ROUTING_KEY), any(MediaScrapeRequestedEvent.class));
+        verify(taskDispatchService).enqueue(
+                eq(result.taskId()),
+                eq(QueueNames.TASK_EXCHANGE),
+                eq(QueueNames.MEDIA_SCRAPE_ROUTING_KEY),
+                any(MediaScrapeRequestedEvent.class)
+        );
     }
 
     @Test

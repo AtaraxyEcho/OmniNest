@@ -9,12 +9,12 @@ import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePermissionService;
+import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaTvSeason;
 import com.omninest.modules.video.domain.MediaTvSeries;
@@ -32,8 +32,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 影视元数据刮削任务服务。
@@ -55,7 +53,7 @@ public class MovieScrapeService {
     private final MediaTvSeasonRepository tvSeasonRepository;
     private final SimpleFileNameParser fileNameParser;
     private final List<MetadataProvider> metadataProviders;
-    private final DomainEventPublisher publisher;
+    private final TaskDispatchService taskDispatchService;
     private final FilePermissionService filePermissionService;
     private final ReadThroughCache readThroughCache;
 
@@ -129,16 +127,13 @@ public class MovieScrapeService {
                 guess.episodeNumber(),
                 force
         );
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    publisher.publishTask(QueueNames.MEDIA_SCRAPE_ROUTING_KEY, event);
-                }
-            });
-        } else {
-            publisher.publishTask(QueueNames.MEDIA_SCRAPE_ROUTING_KEY, event);
-        }
+        // 任务记录与 Outbox 投递行在同一事务提交，避免"记录已建而消息丢失"的僵尸任务。
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.MEDIA_SCRAPE_ROUTING_KEY,
+                event
+        );
         return new ScrapeTaskDto(taskId, TaskStatus.QUEUED.getValue(), "刮削任务已进入队列");
     }
 

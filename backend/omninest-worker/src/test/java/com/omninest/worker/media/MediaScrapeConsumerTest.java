@@ -2,8 +2,6 @@ package com.omninest.worker.media;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
-import com.omninest.common.messaging.DomainEventPublisher;
-import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.event.MediaScrapeRequestedEvent;
 import com.omninest.modules.video.service.MovieScrapeExecutionService;
@@ -28,12 +26,13 @@ class MediaScrapeConsumerTest {
 
     private final MovieScrapeExecutionService executionService = Mockito.mock(MovieScrapeExecutionService.class);
     private final TaskRecordService taskRecordService = Mockito.mock(TaskRecordService.class);
-    private final DomainEventPublisher domainEventPublisher = Mockito.mock(DomainEventPublisher.class);
+    private final MediaScrapeRetryService mediaScrapeRetryService =
+            Mockito.mock(MediaScrapeRetryService.class);
     private final Channel channel = Mockito.mock(Channel.class);
     private final MediaScrapeConsumer consumer = new MediaScrapeConsumer(
             executionService,
             taskRecordService,
-            domainEventPublisher
+            mediaScrapeRetryService
     );
 
     @Test
@@ -56,21 +55,34 @@ class MediaScrapeConsumerTest {
         consumer.handle(event, message(), channel);
 
         Mockito.verify(channel).basicAck(1L, false);
-        Mockito.verifyNoInteractions(taskRecordService, domainEventPublisher);
+        Mockito.verifyNoInteractions(taskRecordService, mediaScrapeRetryService);
     }
 
     @Test
-    void handleRequeuesRetryableFailureAndAcknowledgesOriginalMessage() throws IOException {
+    void handleDelegatesRetryableFailureToRetryServiceAndAcknowledges() throws IOException {
         MediaScrapeRequestedEvent event = event();
-        Mockito.doThrow(new IllegalStateException("metadata provider unavailable"))
-                .when(executionService).execute(event);
-        Mockito.when(taskRecordService.retryCount(TASK_ID)).thenReturn(0);
+        IllegalStateException failure = new IllegalStateException("metadata provider unavailable");
+        Mockito.doThrow(failure).when(executionService).execute(event);
 
         consumer.handle(event, message(), channel);
 
-        Mockito.verify(taskRecordService).incrementRetryCount(TASK_ID);
-        Mockito.verify(domainEventPublisher).publishTask(QueueNames.MEDIA_SCRAPE_ROUTING_KEY, event);
+        Mockito.verify(mediaScrapeRetryService).handleFailure(event, failure);
         Mockito.verify(channel).basicAck(1L, false);
+        Mockito.verify(channel, Mockito.never()).basicNack(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.anyBoolean());
+    }
+
+    @Test
+    void handleDeadLettersWhenRetryPersistenceFails() throws IOException {
+        MediaScrapeRequestedEvent event = event();
+        IllegalStateException failure = new IllegalStateException("metadata provider unavailable");
+        Mockito.doThrow(failure).when(executionService).execute(event);
+        Mockito.doThrow(new BusinessException(ErrorCode.PARAM_ERROR, "载荷缺失"))
+                .when(mediaScrapeRetryService).handleFailure(Mockito.eq(event), Mockito.any());
+
+        consumer.handle(event, message(), channel);
+
+        Mockito.verify(channel).basicNack(1L, false, false);
+        Mockito.verify(channel, Mockito.never()).basicAck(Mockito.anyLong(), Mockito.anyBoolean());
     }
 
     private MediaScrapeRequestedEvent event() {
