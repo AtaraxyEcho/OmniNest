@@ -95,10 +95,7 @@ void main() {
     expect(find.text('Motion Shot'), findsOneWidget);
     expect(find.text('Bern'), findsNWidgets(2));
     // 链接基于前端站点地址（默认退化 origin），而非 API 地址；复制为手动操作。
-    expect(
-      find.text('http://localhost:8080/share/tok-1'),
-      findsOneWidget,
-    );
+    expect(find.text('http://localhost:8080/share/tok-1'), findsOneWidget);
     expect(find.text('复制'), findsOneWidget);
     expect(find.text('✓ 已复制'), findsNothing);
     await tester.tap(find.text('复制'));
