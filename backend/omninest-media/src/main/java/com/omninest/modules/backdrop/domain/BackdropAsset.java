@@ -48,8 +48,8 @@ public class BackdropAsset {
     @Column(name = "media_type", nullable = false, length = 16)
     private BackdropMediaType mediaType;
 
-    /** 原始素材文件节点 ID，关联 file_nodes。 */
-    @Column(name = "file_node_id", nullable = false)
+    /** 原始素材文件节点 ID,关联 file_nodes;行先于对象顺序下,PROCESSING 在途阶段为空,READY 必有值。 */
+    @Column(name = "file_node_id")
     private UUID fileNodeId;
 
     /** 缩略图文件节点 ID，GIF 与视频为空。 */
