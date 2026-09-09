@@ -225,6 +225,7 @@ CREATE TABLE "omni"."backdrop_assets" (
   "title" varchar(200) NOT NULL,
   "media_type" varchar(16) NOT NULL,
   "file_node_id" uuid,
+  "playback_file_id" uuid,
   "thumb_file_id" uuid,
   "width" int4,
   "height" int4,
@@ -245,6 +246,7 @@ COMMENT ON COLUMN "omni"."backdrop_assets"."owner_user_id" IS '所属用户ID，
 COMMENT ON COLUMN "omni"."backdrop_assets"."title" IS '素材展示标题';
 COMMENT ON COLUMN "omni"."backdrop_assets"."media_type" IS '媒体类型：image / gif / video';
 COMMENT ON COLUMN "omni"."backdrop_assets"."file_node_id" IS '原始素材文件节点ID，关联file_nodes；行先于对象的顺序下，PROCESSING 在途阶段为空，READY 必有值';
+COMMENT ON COLUMN "omni"."backdrop_assets"."playback_file_id" IS '壁纸播放用降分辨率衍生节点ID，视频可为空（失败或无需缩放）';
 COMMENT ON COLUMN "omni"."backdrop_assets"."thumb_file_id" IS '缩略图文件节点ID，关联file_nodes，GIF和视频为空';
 COMMENT ON COLUMN "omni"."backdrop_assets"."width" IS '客户端上报的展示宽度，非可信字段';
 COMMENT ON COLUMN "omni"."backdrop_assets"."height" IS '客户端上报的展示高度，非可信字段';

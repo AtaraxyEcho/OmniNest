@@ -120,6 +120,7 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
             }
             return RepaintBoundary(
               child: Video(
+                key: ValueKey(session.controller),
                 controller: session.controller!,
                 fit: widget.fit,
                 controls: NoVideoControls,

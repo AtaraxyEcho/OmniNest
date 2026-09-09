@@ -72,6 +72,71 @@ public class BackdropVideoThumbnailExtractor {
         return Optional.empty();
     }
 
+    /**
+     * 将视频缩放到壁纸播放用分辨率(最长边 ≤1920,高度 ≤1080),降低客户端解码压力。
+     * 源已足够小或 ffmpeg 不可用时返回空,调用方回退使用原始文件。
+     *
+     * @param stagingFile 上传 staging 本地文件
+     * @param timeout 转码超时
+     * @return 降分辨率 MP4 临时文件;无需缩放或失败时为空
+     */
+    public Optional<Path> scaleForWallpaperPlayback(Path stagingFile, Duration timeout) {
+        if (stagingFile == null || !Files.isRegularFile(stagingFile)) {
+            return Optional.empty();
+        }
+        if (!isLocalFfmpegAvailable()) {
+            return Optional.empty();
+        }
+        Path output;
+        try {
+            output = Files.createTempFile("backdrop-playback-", ".mp4");
+        } catch (IOException ex) {
+            log.warn("壁纸播放衍生临时文件创建失败: {}", ex.getMessage());
+            return Optional.empty();
+        }
+        try {
+            List<String> command = new ArrayList<>();
+            command.add("ffmpeg");
+            command.add("-y");
+            command.add("-i");
+            command.add(stagingFile.toAbsolutePath().toString());
+            command.add("-vf");
+            command.add("scale='min(1920,iw)':-2");
+            command.add("-c:v");
+            command.add("libx264");
+            command.add("-preset");
+            command.add("veryfast");
+            command.add("-crf");
+            command.add("23");
+            command.add("-an");
+            command.add("-movflags");
+            command.add("+faststart");
+            command.add(output.toAbsolutePath().toString());
+            VideoProcessExecutor.Result result = processExecutor.execute(command, timeout);
+            if (result.succeeded() && Files.isRegularFile(output) && Files.size(output) > 0) {
+                return Optional.of(output);
+            }
+            Files.deleteIfExists(output);
+            return Optional.empty();
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            deleteQuietly(output);
+            return Optional.empty();
+        } catch (IOException ex) {
+            log.warn("壁纸播放衍生转码失败: {}", ex.getMessage());
+            deleteQuietly(output);
+            return Optional.empty();
+        }
+    }
+
+    private void deleteQuietly(Path file) {
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException ex) {
+            log.debug("临时文件清理失败: {}", ex.getMessage());
+        }
+    }
+
     private Optional<Path> extractWithLocal(Path stagingFile, Duration timeout)
             throws IOException, InterruptedException {
         Path output = Files.createTempFile("backdrop-frame-", ".jpg");

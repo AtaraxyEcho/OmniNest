@@ -52,6 +52,10 @@ public class BackdropAsset {
     @Column(name = "file_node_id")
     private UUID fileNodeId;
 
+    /** 壁纸播放用降分辨率衍生节点 ID;视频可为空。 */
+    @Column(name = "playback_file_id")
+    private UUID playbackFileId;
+
     /** 缩略图文件节点 ID，GIF 与视频为空。 */
     @Column(name = "thumb_file_id")
     private UUID thumbFileId;

@@ -57,6 +57,7 @@ public class BackdropAssetService {
 
     private static final String RESOURCE_TYPE = "BACKDROP";
     private static final String ASSET_TYPE_ORIGINAL = "ORIGINAL";
+    private static final String ASSET_TYPE_PLAYBACK = "PLAYBACK";
     private static final String ASSET_TYPE_THUMBNAIL = "THUMBNAIL";
     private static final String RESERVATION_SOURCE_TYPE = "BACKDROP_UPLOAD";
     private static final String ORIGINAL_BASE_NAME = "original";
@@ -72,6 +73,7 @@ public class BackdropAssetService {
     private static final int THUMBNAIL_MAX_HEIGHT = 1024;
     private static final double THUMBNAIL_QUALITY = 0.82;
     private static final Duration VIDEO_THUMBNAIL_TIMEOUT = Duration.ofSeconds(30);
+    private static final Duration VIDEO_PLAYBACK_ENCODE_TIMEOUT = Duration.ofSeconds(90);
     private static final Duration RESERVATION_TTL = Duration.ofHours(6);
     private static final Duration UPLOAD_RATE_WINDOW = Duration.ofHours(1);
 
@@ -201,10 +203,12 @@ public class BackdropAssetService {
                         ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
                         originalFileName(media.extension()), media.mimeType(), stagingFile);
                 ImageDimensions dimensions = readImageDimensions(stagingFile, media);
+                UUID playbackNodeId = generateAndStorePlayback(
+                        ownerUserId, assetId, stagingFile, media, publishedNodeId);
                 UUID thumbNodeId = generateAndStoreThumbnail(
                         ownerUserId, assetId, stagingFile, media, publishedNodeId);
                 BackdropAsset ready = finalizePublishedAsset(
-                        ownerUserId, assetId, publishedNodeId, thumbNodeId, dimensions);
+                        ownerUserId, assetId, publishedNodeId, playbackNodeId, thumbNodeId, dimensions);
                 storageQuotaService.settleReservation(RESERVATION_SOURCE_TYPE, assetId, writtenBytes);
                 log.info("背景素材上传完成: userId={}, assetId={}, mediaType={}, size={}",
                         ownerUserId, assetId, media.mediaType(), writtenBytes);
@@ -248,6 +252,7 @@ public class BackdropAssetService {
                 @Override
                 public void afterCommit() {
                     deleteDerivedQuietly(ownerUserId, asset.getFileNodeId());
+                    deleteDerivedQuietly(ownerUserId, asset.getPlaybackFileId());
                     deleteDerivedQuietly(ownerUserId, asset.getThumbFileId());
                 }
             });
@@ -305,6 +310,7 @@ public class BackdropAssetService {
         }
         try {
             deleteDerivedQuietly(ownerUserId, existing.getFileNodeId());
+            deleteDerivedQuietly(ownerUserId, existing.getPlaybackFileId());
             deleteDerivedQuietly(ownerUserId, existing.getThumbFileId());
             UUID fileNodeId = derivedAssetStorageService.store(
                     ownerUserId, RESOURCE_TYPE, existing.getId(), ASSET_TYPE_ORIGINAL,
@@ -315,6 +321,8 @@ public class BackdropAssetService {
                 existing.setWidth(dimensions.width());
                 existing.setHeight(dimensions.height());
             }
+            existing.setPlaybackFileId(generateAndStorePlayback(
+                    ownerUserId, existing.getId(), stagingFile, media, fileNodeId));
             UUID thumbFileId = generateAndStoreThumbnail(
                     ownerUserId, existing.getId(), stagingFile, media, fileNodeId);
             existing.setThumbFileId(thumbFileId);
@@ -358,10 +366,12 @@ public class BackdropAssetService {
      * 关键约束:实体带 @Version,连续对同一游离引用多次 save 会因版本不递增触发 StaleObjectState。
      */
     private BackdropAsset finalizePublishedAsset(
-            UUID ownerUserId, UUID assetId, UUID fileNodeId, UUID thumbFileId, ImageDimensions dimensions) {
+            UUID ownerUserId, UUID assetId, UUID fileNodeId, UUID playbackFileId,
+            UUID thumbFileId, ImageDimensions dimensions) {
         BackdropAsset asset = backdropAssetRepository.findById(assetId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
         asset.setFileNodeId(fileNodeId);
+        asset.setPlaybackFileId(playbackFileId);
         asset.setThumbFileId(thumbFileId);
         asset.setStatus(BackdropAssetStatus.READY);
         if (dimensions != null) {
@@ -384,6 +394,40 @@ public class BackdropAssetService {
         } catch (IOException | RuntimeException ex) {
             log.debug("背景素材尺寸解析失败: extension={}, message={}", media.extension(), ex.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 为视频生成 ≤1080p 播放衍生文件,降低客户端解码成本;失败不阻断上传。
+     */
+    private UUID generateAndStorePlayback(
+            UUID ownerUserId, UUID assetId, Path stagingFile, DetectedMedia media, UUID publishedNodeId) {
+        if (media.mediaType() != BackdropMediaType.VIDEO) {
+            return null;
+        }
+        Path playbackFile = null;
+        try {
+            Optional<Path> scaled = videoThumbnailExtractor.scaleForWallpaperPlayback(
+                    stagingFile, VIDEO_PLAYBACK_ENCODE_TIMEOUT);
+            if (scaled.isEmpty()) {
+                return null;
+            }
+            playbackFile = scaled.get();
+            return derivedAssetStorageService.store(
+                    ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_PLAYBACK,
+                    "playback.mp4", "video/mp4", playbackFile);
+        } catch (RuntimeException ex) {
+            log.warn("壁纸播放衍生存储失败,回退原始视频: userId={}, assetId={}",
+                    ownerUserId, assetId, ex);
+            return null;
+        } finally {
+            if (playbackFile != null) {
+                try {
+                    Files.deleteIfExists(playbackFile);
+                } catch (IOException ex) {
+                    log.debug("播放衍生临时文件清理失败: {}", ex.getMessage());
+                }
+            }
         }
     }
 
@@ -451,6 +495,7 @@ public class BackdropAssetService {
             deleteDerivedQuietly(ownerUserId, publishedNodeId);
             backdropAssetRepository.findById(assetId).ifPresent(asset -> {
                 deleteDerivedQuietly(ownerUserId, asset.getFileNodeId());
+                deleteDerivedQuietly(ownerUserId, asset.getPlaybackFileId());
                 deleteDerivedQuietly(ownerUserId, asset.getThumbFileId());
                 backdropAssetRepository.delete(asset);
             });
@@ -595,7 +640,10 @@ public class BackdropAssetService {
     }
 
     private BackdropAssetDto toDto(BackdropAsset asset) {
-        FileDownloadUrlDto content = safeDownloadUrl(asset.getOwnerUserId(), asset.getFileNodeId());
+        UUID playbackNodeId = asset.getPlaybackFileId() != null
+                ? asset.getPlaybackFileId()
+                : asset.getFileNodeId();
+        FileDownloadUrlDto content = safeDownloadUrl(asset.getOwnerUserId(), playbackNodeId);
         FileDownloadUrlDto thumb = safeDownloadUrl(asset.getOwnerUserId(), asset.getThumbFileId());
         return new BackdropAssetDto(
                 asset.getId(),

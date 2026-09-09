@@ -66,7 +66,7 @@ class AppBackdropSurface extends ConsumerWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
-              ColoredBox(color: Colors.transparent, child: mediaLayer),
+              mediaLayer,
               if (settings.dimAmount > 0.01)
                 ColoredBox(
                   color: Colors.black.withValues(alpha: settings.dimAmount),
