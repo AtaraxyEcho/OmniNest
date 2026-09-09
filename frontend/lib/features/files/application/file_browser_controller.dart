@@ -154,28 +154,66 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     );
   }
 
-  /// 刷新文件列表数据，保留当前分区、目录与筛选条件。
+  /// 刷新文件列表数据，保留当前分区、目录、筛选条件与已加载分页窗口。
   Future<void> refreshFiles() async {
     await _runAction('刷新文件列表', () async {
       final current = state.asData?.value;
       final parentId = current?.parentId;
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
       final isShared = current?.spaceType == 'SHARED';
+      final spaceType = isShared ? 'SHARED' : 'PERSONAL';
+      final pageSize = current?.filePageSize ?? 100;
+      final targetPage = current?.filePage ?? 0;
 
-      final filesPage = await _listFilePageForSpace(
-        spaceType: isShared ? 'SHARED' : 'PERSONAL',
+      final firstPage = await _listFilePageForSpace(
+        spaceType: spaceType,
         parentId: parentId,
         category: category,
+        page: 0,
+        size: pageSize,
       );
+      final items = List<FileNode>.of(firstPage.items);
+      var lastLoadedPage = firstPage.page;
+      var totalPages = firstPage.totalPages;
+      var totalElements = firstPage.totalElements;
+      for (
+        var page = 1;
+        page <= targetPage && page < firstPage.totalPages;
+        page++
+      ) {
+        final nextPage = await _listFilePageForSpace(
+          spaceType: spaceType,
+          parentId: parentId,
+          category: category,
+          page: page,
+          size: pageSize,
+        );
+        final existingIds = items.map((file) => file.id).toSet();
+        items.addAll(nextPage.items.where((file) => existingIds.add(file.id)));
+        lastLoadedPage = nextPage.page;
+        totalPages = nextPage.totalPages;
+        totalElements = nextPage.totalElements;
+        if (lastLoadedPage >= totalPages - 1) {
+          break;
+        }
+      }
+
+      final latest = state.asData?.value;
+      if (latest != null &&
+          (latest.parentId != parentId ||
+              latest.spaceType != current?.spaceType ||
+              latest.fileCategory != category)) {
+        return;
+      }
 
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
-          files: filesPage.items,
+          files: items,
           fileCategory: category,
-          filePage: filesPage.page,
-          filePageSize: filesPage.size,
-          fileTotalElements: filesPage.totalElements,
-          fileTotalPages: filesPage.totalPages,
+          filePage: lastLoadedPage,
+          filePageSize: pageSize,
+          fileTotalElements: totalElements,
+          fileTotalPages: totalPages,
         ),
       );
     });

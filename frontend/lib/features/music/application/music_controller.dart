@@ -86,7 +86,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   Future<void> _refreshState({required bool strict}) async {
     final generation = ++_refreshGeneration;
     final current = state.asData?.value;
-    final next = await _loadState(
+    var next = await _loadState(
       section: current?.section ?? MusicSection.songs,
       currentItem: current?.currentItem,
       playbackPlan: current?.playbackPlan,
@@ -109,6 +109,24 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     }
     if (strict && next.errorMessage != null) {
       throw StateError(next.errorMessage!);
+    }
+    // 打开中的歌单详情以服务端曲目为准，覆盖跨端增删。
+    final openPlaylistId =
+        current?.section == MusicSection.playlistDetail
+            ? current?.selectedPlaylist?.id
+            : null;
+    if (openPlaylistId != null) {
+      try {
+        final remoteTracks = await _api.playlistTracks(openPlaylistId);
+        if (_controllerDisposed ||
+            !ref.mounted ||
+            generation != _refreshGeneration) {
+          return;
+        }
+        next = next.copyWith(selectedPlaylistTracks: remoteTracks);
+      } on Exception {
+        // 详情重拉失败时保留已缓存曲目，不打断中心刷新。
+      }
     }
     state = AsyncData(next);
   }
