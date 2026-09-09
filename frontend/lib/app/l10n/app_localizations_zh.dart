@@ -2503,6 +2503,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalLocalBackdropMissing => '文件已缺失';
 
   @override
+  String get portalLocalBackdropProcessing => '处理中';
+
+  @override
+  String get portalLocalBackdropFailed => '已失效';
+
+  @override
+  String get portalLocalBackdropRemoveConfirmTitle => '移除该背景？';
+
+  @override
+  String get portalLocalBackdropRemoveConfirmMessage =>
+      '素材将从服务端背景库删除，并在所有设备上消失。';
+
+  @override
+  String portalLocalBackdropClearPartial(int removed, int failed) {
+    return '已清理 $removed 项，失败 $failed 项。';
+  }
+
+  @override
   String get portalLocalBackdropRemove => '移除背景';
 
   @override

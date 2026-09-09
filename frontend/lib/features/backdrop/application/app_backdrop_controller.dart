@@ -121,8 +121,18 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   }
 
   bool _serverUrlsNeedRefresh() {
+    final current = state.asData?.value;
+    final hasServerAssets =
+        current?.backdrops.any(
+          (backdrop) => backdrop.sourceType == AppBackdropSourceType.server,
+        ) ??
+        false;
+    if (!hasServerAssets && _urlExpiresAt.isEmpty) {
+      // 仅内置壁纸或空库,无需刷新签名 URL。
+      return false;
+    }
     if (_urlExpiresAt.isEmpty) {
-      // 冷启动本地有缓存但内存无过期信息,视为需要刷新。
+      // 本地有服务端缓存但内存无过期信息(冷启动),视为需要刷新。
       return true;
     }
     final threshold = DateTime.now().add(_urlRefreshLead);
@@ -300,12 +310,21 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   }
 
   /// 清空服务端背景素材库并同步清理本地缓存;内置壁纸与选择保留。
+  /// 部分失败时仍清理已成功条目,并在状态中记录 removed/failed。
   Future<void> clearBackdrops() async {
     final session = await ref.read(authSessionProvider.future);
+    var removed = 0;
+    var failed = 0;
     if (session.isAuthenticated) {
       try {
-        await ref.read(appBackdropApiProvider).deleteAll();
-        _urlExpiresAt.clear();
+        final result = await ref.read(appBackdropApiProvider).deleteAll();
+        removed = result.deleted;
+        failed = result.failed;
+        if (failed == 0) {
+          _urlExpiresAt.clear();
+        } else {
+          await refreshServerAssets();
+        }
       } on Exception catch (error) {
         if (kDebugMode) {
           debugPrint('背景库服务端清空失败,保留本地现状: $error');
@@ -320,8 +339,14 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
       }
     }
     await ref.read(appBackdropRepositoryProvider).clearBackdrops();
+    final refreshed = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
     state = AsyncData(
-      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+      refreshed.copyWith(
+        clearResult: BackdropClearResult(removed: removed, failed: failed),
+        message: failed > 0 ? AppBackdropMessage.deleteFailed : null,
+      ),
     );
   }
 

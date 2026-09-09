@@ -52,7 +52,7 @@ class LocalDatabase extends _$LocalDatabase {
     : super(executor ?? connection.openConnection());
 
   @override
-  int get schemaVersion => 19;
+  int get schemaVersion => 20;
 
   @override
   MigrationStrategy get migration {
@@ -206,6 +206,21 @@ class LocalDatabase extends _$LocalDatabase {
           await migrator.database.customStatement(
             "DELETE FROM app_backdrop_assets WHERE source_type IN ('file', 'directory')",
           );
+        }
+        // Schema v20：背景素材增加服务端生命周期状态,区分处理中/失效/缺失。
+        if (from < 20) {
+          final backdropColumns =
+              await migrator.database
+                  .customSelect("PRAGMA table_info('app_backdrop_assets')")
+                  .get();
+          final hasStatus = backdropColumns.any(
+            (row) => row.read<String>('name') == 'status',
+          );
+          if (backdropColumns.isNotEmpty && !hasStatus) {
+            await migrator.database.customStatement(
+              "ALTER TABLE app_backdrop_assets ADD COLUMN status TEXT NOT NULL DEFAULT 'READY'",
+            );
+          }
         }
       },
     );

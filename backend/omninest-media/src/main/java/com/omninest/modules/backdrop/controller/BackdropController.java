@@ -4,6 +4,7 @@ import com.omninest.common.api.ApiResponse;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.backdrop.dto.BackdropDtos.BackdropAssetDto;
+import com.omninest.modules.backdrop.dto.BackdropDtos.BackdropDeleteAllResultDto;
 import com.omninest.modules.backdrop.service.BackdropAssetService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -79,13 +80,15 @@ public class BackdropController {
     /**
      * 删除当前用户全部背景素材。
      *
-     * @return 成功删除数量
+     * @return 成功/失败条数
      */
-    @Operation(summary = "清空背景素材", description = "删除当前用户全部服务端背景素材,返回成功条数")
+    @Operation(summary = "清空背景素材", description = "删除当前用户全部服务端背景素材,返回成功与失败条数")
     @PreAuthorize("hasAuthority('" + Permissions.BACKDROP_WRITE + "')")
     @DeleteMapping("/api/v1/backdrops")
-    public ApiResponse<Integer> deleteAllAssets() {
+    public ApiResponse<BackdropDeleteAllResultDto> deleteAllAssets() {
+        BackdropAssetService.DeleteAllResult result =
+                backdropAssetService.deleteAllAssets(currentUserContext.requireCurrentUserId());
         return ApiResponse.success(
-                backdropAssetService.deleteAllAssets(currentUserContext.requireCurrentUserId()));
+                new BackdropDeleteAllResultDto(result.deleted(), result.failed()));
     }
 }

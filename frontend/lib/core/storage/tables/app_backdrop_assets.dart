@@ -45,6 +45,9 @@ class AppBackdropAssets extends Table {
   /// 文件是否已缺失。
   BoolColumn get missing => boolean().withDefault(const Constant(false))();
 
+  /// 服务端生命周期状态：READY / PROCESSING / FAILED；内置素材恒为 READY。
+  TextColumn get status => text().withDefault(const Constant('READY'))();
+
   /// 创建时间。
   DateTimeColumn get createdAt => dateTime()();
 

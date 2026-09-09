@@ -97,6 +97,7 @@ class AppBackdropRepository {
     final mapped = assets
         .map((asset) {
           final updatedAt = asset.updatedAt ?? now;
+          final status = AppBackdropAssetStatus.fromValue(asset.status);
           return AppBackdropAsset(
             id: asset.id,
             path: asset.contentUrl ?? '',
@@ -109,7 +110,8 @@ class AppBackdropRepository {
             height: asset.height,
             durationMs: asset.durationMs,
             thumbnailPath: asset.thumbUrl,
-            missing: !asset.isSelectable,
+            missing: status != AppBackdropAssetStatus.ready,
+            status: status,
             createdAt: updatedAt,
             updatedAt: updatedAt,
           );
@@ -218,7 +220,7 @@ class AppBackdropRepository {
   ) {
     final availableIds =
         backdrops
-            .where((backdrop) => !backdrop.missing)
+            .where((backdrop) => backdrop.isSelectable)
             .map((backdrop) => backdrop.id)
             .toSet();
     final sharedId = _availableSelection(
@@ -276,6 +278,7 @@ class AppBackdropRepository {
       durationMs: row.durationMs,
       thumbnailPath: row.thumbnailPath,
       missing: row.missing,
+      status: AppBackdropAssetStatus.fromValue(row.status),
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     );
@@ -320,6 +323,7 @@ class AppBackdropRepository {
       durationMs: Value(backdrop.durationMs),
       thumbnailPath: Value(backdrop.thumbnailPath),
       missing: Value(backdrop.missing),
+      status: Value(backdrop.status.value),
       createdAt: backdrop.createdAt,
       updatedAt: backdrop.updatedAt,
     );

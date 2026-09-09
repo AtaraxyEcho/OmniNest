@@ -64,6 +64,14 @@ class BackdropServerAsset {
   bool get isSelectable => status == 'READY';
 }
 
+/// 批量清空背景素材结果。
+class BackdropDeleteAllResult {
+  const BackdropDeleteAllResult({required this.deleted, required this.failed});
+
+  final int deleted;
+  final int failed;
+}
+
 /// 背景库 API 客户端。
 class BackdropApi {
   const BackdropApi(this.apiClient);
@@ -89,12 +97,18 @@ class BackdropApi {
     _ensureOk(response.data);
   }
 
-  /// 清空当前用户全部背景素材,返回服务端成功删除条数。
-  Future<int> deleteAll() async {
+  /// 清空当前用户全部背景素材,返回服务端成功/失败条数。
+  Future<BackdropDeleteAllResult> deleteAll() async {
     final response = await apiClient.dio.delete<dynamic>('/backdrops');
     final envelope = _ensureOk(response.data);
     final data = envelope['data'];
-    return data is num ? data.toInt() : 0;
+    if (data is Map) {
+      return BackdropDeleteAllResult(
+        deleted: (data['deleted'] as num?)?.toInt() ?? 0,
+        failed: (data['failed'] as num?)?.toInt() ?? 0,
+      );
+    }
+    return const BackdropDeleteAllResult(deleted: 0, failed: 0);
   }
 
   /// 上传背景素材;Web 走流式 multipart,桌面/移动走文件路径。

@@ -1100,6 +1100,21 @@
   "portalLocalBackdropEmptyScan": "No usable backdrop files found. MP4, WEBM, MOV, M4V, GIF, JPG, PNG, and WEBP are supported.",
   "portalLocalBackdropScanFailed": "Scan failed. Check folder permissions.",
   "portalLocalBackdropMissing": "File missing",
+  "portalLocalBackdropProcessing": "Processing",
+  "portalLocalBackdropFailed": "Unavailable",
+  "portalLocalBackdropRemoveConfirmTitle": "Remove this backdrop?",
+  "portalLocalBackdropRemoveConfirmMessage": "It will be deleted from the server library and disappear on all devices.",
+  "portalLocalBackdropClearPartial": "Cleared {removed} item(s); {failed} failed.",
+  "@portalLocalBackdropClearPartial": {
+    "placeholders": {
+      "removed": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
   "portalLocalBackdropRemove": "Remove backdrop",
   "portalLocalBackdropEnable": "Enable backdrop",
   "portalLocalBackdropEnableHint": "Used by Portal and Music. The bundled wallpaper also works offline.",

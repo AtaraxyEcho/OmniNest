@@ -4789,6 +4789,36 @@ abstract class AppLocalizations {
   /// **'File missing'**
   String get portalLocalBackdropMissing;
 
+  /// No description provided for @portalLocalBackdropProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing'**
+  String get portalLocalBackdropProcessing;
+
+  /// No description provided for @portalLocalBackdropFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Unavailable'**
+  String get portalLocalBackdropFailed;
+
+  /// No description provided for @portalLocalBackdropRemoveConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this backdrop?'**
+  String get portalLocalBackdropRemoveConfirmTitle;
+
+  /// No description provided for @portalLocalBackdropRemoveConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'It will be deleted from the server library and disappear on all devices.'**
+  String get portalLocalBackdropRemoveConfirmMessage;
+
+  /// No description provided for @portalLocalBackdropClearPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'Cleared {removed} item(s); {failed} failed.'**
+  String portalLocalBackdropClearPartial(int removed, int failed);
+
   /// No description provided for @portalLocalBackdropRemove.
   ///
   /// In en, this message translates to:

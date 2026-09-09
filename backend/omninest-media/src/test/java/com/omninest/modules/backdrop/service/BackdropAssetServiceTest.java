@@ -374,9 +374,10 @@ class BackdropAssetServiceTest {
         when(backdropAssetRepository.findByIdAndOwnerUserId(second.getId(), OWNER_ID))
                 .thenReturn(Optional.of(second));
 
-        int deleted = service.deleteAllAssets(OWNER_ID);
+        BackdropAssetService.DeleteAllResult result = service.deleteAllAssets(OWNER_ID);
 
-        assertThat(deleted).isEqualTo(2);
+        assertThat(result.deleted()).isEqualTo(2);
+        assertThat(result.failed()).isZero();
         verify(backdropAssetRepository).delete(first);
         verify(backdropAssetRepository).delete(second);
         verify(userStorageCommand, org.mockito.Mockito.times(2))

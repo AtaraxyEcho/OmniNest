@@ -39,6 +39,7 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
   web.HTMLVideoElement? _element;
   String? _appliedSource;
   bool _failed = false;
+  bool _sourceStaleNotified = false;
   Timer? _retryTimer;
   int _attempts = 0;
 
@@ -68,7 +69,20 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
     if (oldWidget.fit != widget.fit) {
       _element?.style.objectFit = _objectFit(widget.fit);
     }
+    if (oldWidget.source != widget.source) {
+      _sourceStaleNotified = false;
+      _attempts = 0;
+      _failed = false;
+    }
     _applySource();
+  }
+
+  void _notifySourceStaleOnce() {
+    if (_sourceStaleNotified) {
+      return;
+    }
+    _sourceStaleNotified = true;
+    widget.onSourceStale?.call();
   }
 
   void _applySource() {
@@ -109,7 +123,7 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
         fallback != null &&
         _appliedSource != fallback) {
       debugPrint('背景视频播放失败,回退内置壁纸');
-      widget.onSourceStale?.call();
+      _notifySourceStaleOnce();
       _appliedSource = fallback;
       final el = _element;
       if (el != null) {
@@ -119,7 +133,7 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
       return;
     }
     if ((_appliedSource ?? '').startsWith('http')) {
-      widget.onSourceStale?.call();
+      _notifySourceStaleOnce();
     }
     _attempts++;
     if (_attempts <= _maxAttempts) {

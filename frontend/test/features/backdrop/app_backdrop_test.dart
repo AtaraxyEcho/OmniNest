@@ -555,7 +555,9 @@ void main() {
       await repository.upsertServerAssets([serverAsset]);
       final api = _MockBackdropApi();
       when(() => api.list()).thenAnswer((_) async => const []);
-      when(() => api.deleteAll()).thenAnswer((_) async => 1);
+      when(() => api.deleteAll()).thenAnswer(
+        (_) async => const BackdropDeleteAllResult(deleted: 1, failed: 0),
+      );
       final container = ProviderContainer.test(
         overrides: [
           appBackdropRepositoryProvider.overrideWithValue(repository),

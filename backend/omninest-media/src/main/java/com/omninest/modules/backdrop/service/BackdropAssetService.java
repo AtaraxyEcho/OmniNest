@@ -252,17 +252,18 @@ public class BackdropAssetService {
     }
 
     /**
-     * 删除当前用户全部背景素材。DB-first,单条失败不中断其余删除,返回成功条数。
+     * 删除当前用户全部背景素材。DB-first,单条失败不中断其余删除。
      *
      * @param ownerUserId 归属用户 ID
-     * @return 成功删除的素材数量
+     * @return 删除结果:成功与失败条数
      */
-    public int deleteAllAssets(UUID ownerUserId) {
+    public DeleteAllResult deleteAllAssets(UUID ownerUserId) {
         List<UUID> assetIds = backdropAssetRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)
                 .stream()
                 .map(BackdropAsset::getId)
                 .toList();
         int deleted = 0;
+        int failed = 0;
         for (UUID assetId : assetIds) {
             try {
                 deleteAsset(ownerUserId, assetId);
@@ -271,11 +272,26 @@ public class BackdropAssetService {
                 if (ex.errorCode().getCode() == ErrorCode.BACKDROP_NOT_FOUND.getCode()) {
                     continue;
                 }
-                throw ex;
+                failed++;
+                log.warn("背景素材批量删除单项失败: userId={}, assetId={}, code={}",
+                        ownerUserId, assetId, ex.errorCode().getCode());
+            } catch (RuntimeException ex) {
+                failed++;
+                log.warn("背景素材批量删除单项异常: userId={}, assetId={}", ownerUserId, assetId, ex);
             }
         }
-        log.info("背景素材批量删除完成: userId={}, requested={}, deleted={}", ownerUserId, assetIds.size(), deleted);
-        return deleted;
+        log.info("背景素材批量删除完成: userId={}, requested={}, deleted={}, failed={}",
+                ownerUserId, assetIds.size(), deleted, failed);
+        return new DeleteAllResult(deleted, failed);
+    }
+
+    /**
+     * 批量清空结果。
+     *
+     * @param deleted 成功删除数量
+     * @param failed 失败数量
+     */
+    public record DeleteAllResult(int deleted, int failed) {
     }
 
     private BackdropAssetDto reuseExistingAsset(

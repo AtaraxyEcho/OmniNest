@@ -289,6 +289,13 @@ class _AppBackdropSettingsContentState
     if (widget.state.uploading) {
       return l10n.portalLocalBackdropUploading;
     }
+    final clearResult = widget.state.clearResult;
+    if (clearResult != null && clearResult.failed > 0) {
+      return l10n.portalLocalBackdropClearPartial(
+        clearResult.removed,
+        clearResult.failed,
+      );
+    }
     if (widget.state.message == AppBackdropMessage.deleteFailed) {
       return l10n.portalLocalBackdropDeleteFailed;
     }
@@ -561,6 +568,51 @@ class _BackdropTile extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onRemove;
 
+  String _tileLabel(AppLocalizations l10n) {
+    return switch (backdrop.status) {
+      AppBackdropAssetStatus.processing => l10n.portalLocalBackdropProcessing,
+      AppBackdropAssetStatus.failed => l10n.portalLocalBackdropFailed,
+      AppBackdropAssetStatus.ready =>
+        backdrop.missing ? l10n.portalLocalBackdropMissing : backdrop.title,
+    };
+  }
+
+  Future<void> _confirmRemove(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) async {
+    final remove = onRemove;
+    if (remove == null) {
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierColor: Colors.black54,
+      builder:
+          (dialogContext) => AlertDialog(
+            backgroundColor: const Color(0xFF101820),
+            title: Text(l10n.portalLocalBackdropRemoveConfirmTitle),
+            content: Text(l10n.portalLocalBackdropRemoveConfirmMessage),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: Text(
+                  MaterialLocalizations.of(context).cancelButtonLabel,
+                ),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: Text(l10n.portalLocalBackdropRemove),
+              ),
+            ],
+          ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+    remove();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -603,9 +655,7 @@ class _BackdropTile extends StatelessWidget {
                 right: onRemove == null ? 10 : 34,
                 bottom: 9,
                 child: Text(
-                  backdrop.missing
-                      ? l10n.portalLocalBackdropMissing
-                      : backdrop.title,
+                  _tileLabel(l10n),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -621,7 +671,7 @@ class _BackdropTile extends StatelessWidget {
                   top: 4,
                   child: IconButton(
                     tooltip: l10n.portalLocalBackdropRemove,
-                    onPressed: onRemove,
+                    onPressed: () => _confirmRemove(context, l10n),
                     icon: const Icon(Icons.close_rounded, size: 16),
                     color: palette.text,
                     style: IconButton.styleFrom(

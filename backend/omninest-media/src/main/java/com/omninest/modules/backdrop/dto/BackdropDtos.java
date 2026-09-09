@@ -50,4 +50,17 @@ public final class BackdropDtos {
             @Schema(description = "最后更新时间") Instant updatedAt
     ) {
     }
+
+    /**
+     * 批量清空背景素材结果。
+     *
+     * @param deleted 成功删除数量
+     * @param failed 失败数量
+     */
+    @Schema(description = "批量清空结果")
+    public record BackdropDeleteAllResultDto(
+            @Schema(description = "成功删除数量") int deleted,
+            @Schema(description = "失败数量") int failed
+    ) {
+    }
 }

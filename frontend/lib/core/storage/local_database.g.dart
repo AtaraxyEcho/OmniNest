@@ -5892,6 +5892,16 @@ class $AppBackdropAssetsTable extends AppBackdropAssets
     ),
     defaultValue: const Constant(false),
   );
+  static const VerificationMeta _statusMeta = const VerificationMeta('status');
+  @override
+  late final GeneratedColumn<String> status = GeneratedColumn<String>(
+    'status',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('READY'),
+  );
   static const VerificationMeta _createdAtMeta = const VerificationMeta(
     'createdAt',
   );
@@ -5929,6 +5939,7 @@ class $AppBackdropAssetsTable extends AppBackdropAssets
     durationMs,
     thumbnailPath,
     missing,
+    status,
     createdAt,
     updatedAt,
   ];
@@ -6037,6 +6048,12 @@ class $AppBackdropAssetsTable extends AppBackdropAssets
         missing.isAcceptableOrUnknown(data['missing']!, _missingMeta),
       );
     }
+    if (data.containsKey('status')) {
+      context.handle(
+        _statusMeta,
+        status.isAcceptableOrUnknown(data['status']!, _statusMeta),
+      );
+    }
     if (data.containsKey('created_at')) {
       context.handle(
         _createdAtMeta,
@@ -6122,6 +6139,11 @@ class $AppBackdropAssetsTable extends AppBackdropAssets
             DriftSqlType.bool,
             data['${effectivePrefix}missing'],
           )!,
+      status:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}status'],
+          )!,
       createdAt:
           attachedDatabase.typeMapping.read(
             DriftSqlType.dateTime,
@@ -6182,6 +6204,9 @@ class AppBackdropAssetRow extends DataClass
   /// 文件是否已缺失。
   final bool missing;
 
+  /// 服务端生命周期状态：READY / PROCESSING / FAILED；内置素材恒为 READY。
+  final String status;
+
   /// 创建时间。
   final DateTime createdAt;
 
@@ -6201,6 +6226,7 @@ class AppBackdropAssetRow extends DataClass
     this.durationMs,
     this.thumbnailPath,
     required this.missing,
+    required this.status,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -6230,6 +6256,7 @@ class AppBackdropAssetRow extends DataClass
       map['thumbnail_path'] = Variable<String>(thumbnailPath);
     }
     map['missing'] = Variable<bool>(missing);
+    map['status'] = Variable<String>(status);
     map['created_at'] = Variable<DateTime>(createdAt);
     map['updated_at'] = Variable<DateTime>(updatedAt);
     return map;
@@ -6261,6 +6288,7 @@ class AppBackdropAssetRow extends DataClass
               ? const Value.absent()
               : Value(thumbnailPath),
       missing: Value(missing),
+      status: Value(status),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -6285,6 +6313,7 @@ class AppBackdropAssetRow extends DataClass
       durationMs: serializer.fromJson<int?>(json['durationMs']),
       thumbnailPath: serializer.fromJson<String?>(json['thumbnailPath']),
       missing: serializer.fromJson<bool>(json['missing']),
+      status: serializer.fromJson<String>(json['status']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -6306,6 +6335,7 @@ class AppBackdropAssetRow extends DataClass
       'durationMs': serializer.toJson<int?>(durationMs),
       'thumbnailPath': serializer.toJson<String?>(thumbnailPath),
       'missing': serializer.toJson<bool>(missing),
+      'status': serializer.toJson<String>(status),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -6325,6 +6355,7 @@ class AppBackdropAssetRow extends DataClass
     Value<int?> durationMs = const Value.absent(),
     Value<String?> thumbnailPath = const Value.absent(),
     bool? missing,
+    String? status,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => AppBackdropAssetRow(
@@ -6343,6 +6374,7 @@ class AppBackdropAssetRow extends DataClass
     thumbnailPath:
         thumbnailPath.present ? thumbnailPath.value : this.thumbnailPath,
     missing: missing ?? this.missing,
+    status: status ?? this.status,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -6370,6 +6402,7 @@ class AppBackdropAssetRow extends DataClass
               ? data.thumbnailPath.value
               : this.thumbnailPath,
       missing: data.missing.present ? data.missing.value : this.missing,
+      status: data.status.present ? data.status.value : this.status,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -6391,6 +6424,7 @@ class AppBackdropAssetRow extends DataClass
           ..write('durationMs: $durationMs, ')
           ..write('thumbnailPath: $thumbnailPath, ')
           ..write('missing: $missing, ')
+          ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -6412,6 +6446,7 @@ class AppBackdropAssetRow extends DataClass
     durationMs,
     thumbnailPath,
     missing,
+    status,
     createdAt,
     updatedAt,
   );
@@ -6432,6 +6467,7 @@ class AppBackdropAssetRow extends DataClass
           other.durationMs == this.durationMs &&
           other.thumbnailPath == this.thumbnailPath &&
           other.missing == this.missing &&
+          other.status == this.status &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -6450,6 +6486,7 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
   final Value<int?> durationMs;
   final Value<String?> thumbnailPath;
   final Value<bool> missing;
+  final Value<String> status;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -6467,6 +6504,7 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     this.durationMs = const Value.absent(),
     this.thumbnailPath = const Value.absent(),
     this.missing = const Value.absent(),
+    this.status = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -6485,6 +6523,7 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     this.durationMs = const Value.absent(),
     this.thumbnailPath = const Value.absent(),
     this.missing = const Value.absent(),
+    this.status = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -6510,6 +6549,7 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     Expression<int>? durationMs,
     Expression<String>? thumbnailPath,
     Expression<bool>? missing,
+    Expression<String>? status,
     Expression<DateTime>? createdAt,
     Expression<DateTime>? updatedAt,
     Expression<int>? rowid,
@@ -6528,6 +6568,7 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
       if (durationMs != null) 'duration_ms': durationMs,
       if (thumbnailPath != null) 'thumbnail_path': thumbnailPath,
       if (missing != null) 'missing': missing,
+      if (status != null) 'status': status,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -6548,6 +6589,7 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     Value<int?>? durationMs,
     Value<String?>? thumbnailPath,
     Value<bool>? missing,
+    Value<String>? status,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -6566,6 +6608,7 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
       durationMs: durationMs ?? this.durationMs,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
       missing: missing ?? this.missing,
+      status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -6614,6 +6657,9 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     if (missing.present) {
       map['missing'] = Variable<bool>(missing.value);
     }
+    if (status.present) {
+      map['status'] = Variable<String>(status.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -6642,6 +6688,7 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
           ..write('durationMs: $durationMs, ')
           ..write('thumbnailPath: $thumbnailPath, ')
           ..write('missing: $missing, ')
+          ..write('status: $status, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -11841,6 +11888,7 @@ typedef $$AppBackdropAssetsTableCreateCompanionBuilder =
       Value<int?> durationMs,
       Value<String?> thumbnailPath,
       Value<bool> missing,
+      Value<String> status,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -11860,6 +11908,7 @@ typedef $$AppBackdropAssetsTableUpdateCompanionBuilder =
       Value<int?> durationMs,
       Value<String?> thumbnailPath,
       Value<bool> missing,
+      Value<String> status,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -11936,6 +11985,11 @@ class $$AppBackdropAssetsTableFilterComposer
 
   ColumnFilters<bool> get missing => $composableBuilder(
     column: $table.missing,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get status => $composableBuilder(
+    column: $table.status,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12024,6 +12078,11 @@ class $$AppBackdropAssetsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get status => $composableBuilder(
+    column: $table.status,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
     column: $table.createdAt,
     builder: (column) => ColumnOrderings(column),
@@ -12093,6 +12152,9 @@ class $$AppBackdropAssetsTableAnnotationComposer
   GeneratedColumn<bool> get missing =>
       $composableBuilder(column: $table.missing, builder: (column) => column);
 
+  GeneratedColumn<String> get status =>
+      $composableBuilder(column: $table.status, builder: (column) => column);
+
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
 
@@ -12159,6 +12221,7 @@ class $$AppBackdropAssetsTableTableManager
                 Value<int?> durationMs = const Value.absent(),
                 Value<String?> thumbnailPath = const Value.absent(),
                 Value<bool> missing = const Value.absent(),
+                Value<String> status = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -12176,6 +12239,7 @@ class $$AppBackdropAssetsTableTableManager
                 durationMs: durationMs,
                 thumbnailPath: thumbnailPath,
                 missing: missing,
+                status: status,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -12195,6 +12259,7 @@ class $$AppBackdropAssetsTableTableManager
                 Value<int?> durationMs = const Value.absent(),
                 Value<String?> thumbnailPath = const Value.absent(),
                 Value<bool> missing = const Value.absent(),
+                Value<String> status = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -12212,6 +12277,7 @@ class $$AppBackdropAssetsTableTableManager
                 durationMs: durationMs,
                 thumbnailPath: thumbnailPath,
                 missing: missing,
+                status: status,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,

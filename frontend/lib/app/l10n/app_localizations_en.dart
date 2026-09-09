@@ -2567,6 +2567,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropMissing => 'File missing';
 
   @override
+  String get portalLocalBackdropProcessing => 'Processing';
+
+  @override
+  String get portalLocalBackdropFailed => 'Unavailable';
+
+  @override
+  String get portalLocalBackdropRemoveConfirmTitle => 'Remove this backdrop?';
+
+  @override
+  String get portalLocalBackdropRemoveConfirmMessage =>
+      'It will be deleted from the server library and disappear on all devices.';
+
+  @override
+  String portalLocalBackdropClearPartial(int removed, int failed) {
+    return 'Cleared $removed item(s); $failed failed.';
+  }
+
+  @override
   String get portalLocalBackdropRemove => 'Remove backdrop';
 
   @override

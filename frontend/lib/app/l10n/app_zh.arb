@@ -974,6 +974,21 @@
   "portalLocalBackdropEmptyScan": "未发现可用背景文件。当前支持 MP4、WEBM、MOV、M4V、GIF、JPG、PNG、WEBP。",
   "portalLocalBackdropScanFailed": "扫描失败，请检查目录权限",
   "portalLocalBackdropMissing": "文件已缺失",
+  "portalLocalBackdropProcessing": "处理中",
+  "portalLocalBackdropFailed": "已失效",
+  "portalLocalBackdropRemoveConfirmTitle": "移除该背景？",
+  "portalLocalBackdropRemoveConfirmMessage": "素材将从服务端背景库删除，并在所有设备上消失。",
+  "portalLocalBackdropClearPartial": "已清理 {removed} 项，失败 {failed} 项。",
+  "@portalLocalBackdropClearPartial": {
+    "placeholders": {
+      "removed": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
   "portalLocalBackdropRemove": "移除背景",
   "portalLocalBackdropEnable": "启用背景",
   "portalLocalBackdropEnableHint": "用于 Portal 和音乐空间；内置壁纸离线仍可用。",

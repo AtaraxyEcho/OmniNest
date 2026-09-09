@@ -70,6 +70,25 @@ enum AppBackdropSelectionTarget { desktop, mobile }
 /// 应用本机背景操作消息。
 enum AppBackdropMessage { emptyScan, scanFailed, deleteFailed }
 
+/// 服务端背景素材生命周期状态。
+enum AppBackdropAssetStatus {
+  ready('READY'),
+  processing('PROCESSING'),
+  failed('FAILED');
+
+  const AppBackdropAssetStatus(this.value);
+
+  final String value;
+
+  static AppBackdropAssetStatus fromValue(Object? value) {
+    final text = value?.toString().toUpperCase();
+    return AppBackdropAssetStatus.values.firstWhere(
+      (status) => status.value == text,
+      orElse: () => AppBackdropAssetStatus.ready,
+    );
+  }
+}
+
 /// 应用本机背景素材。
 class AppBackdropAsset {
   const AppBackdropAsset({
@@ -88,11 +107,12 @@ class AppBackdropAsset {
     this.durationMs,
     this.thumbnailPath,
     this.missing = false,
+    this.status = AppBackdropAssetStatus.ready,
   });
 
   final String id;
 
-  /// 素材引用:bundled 为本机路径或 Web 打包资产地址,server 素材为空串。
+  /// 素材引用:bundled 为本机路径或 Web 打包资产地址,server 素材为签名 URL 缓存。
   final String path;
   final String title;
   final AppBackdropMediaType mediaType;
@@ -105,6 +125,7 @@ class AppBackdropAsset {
   final int? durationMs;
   final String? thumbnailPath;
   final bool missing;
+  final AppBackdropAssetStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -112,6 +133,9 @@ class AppBackdropAsset {
 
   /// 当前素材是否随应用安装包提供。
   bool get isBundled => sourceType == AppBackdropSourceType.bundled;
+
+  /// 是否可被选为当前背景。
+  bool get isSelectable => !missing && status == AppBackdropAssetStatus.ready;
 
   AppBackdropAsset copyWith({
     String? id,
@@ -127,6 +151,7 @@ class AppBackdropAsset {
     int? durationMs,
     String? thumbnailPath,
     bool? missing,
+    AppBackdropAssetStatus? status,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -144,6 +169,7 @@ class AppBackdropAsset {
       durationMs: durationMs ?? this.durationMs,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
       missing: missing ?? this.missing,
+      status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -303,6 +329,14 @@ class BackdropUploadFailure {
   final String code;
 }
 
+/// 清空结果反馈。
+class BackdropClearResult {
+  const BackdropClearResult({required this.removed, required this.failed});
+
+  final int removed;
+  final int failed;
+}
+
 /// 应用背景库状态。
 class AppBackdropState {
   const AppBackdropState({
@@ -312,6 +346,7 @@ class AppBackdropState {
     this.isScanning = false,
     this.uploading = false,
     this.failedUploads = const <BackdropUploadFailure>[],
+    this.clearResult,
     this.message,
   });
 
@@ -325,6 +360,9 @@ class AppBackdropState {
 
   /// 最近一批上传失败的条目(标题+错误码),由界面映射文案。
   final List<BackdropUploadFailure> failedUploads;
+
+  /// 最近一次清空结果(含部分失败)。
+  final BackdropClearResult? clearResult;
 
   final AppBackdropMessage? message;
 
@@ -349,7 +387,7 @@ class AppBackdropState {
   /// 当前是否存在已启用且可访问的背景素材。
   bool get hasActiveBackdrop {
     final selected = selectedBackdrop;
-    return settings.enabled && selected != null && !selected.missing;
+    return settings.enabled && selected != null && selected.isSelectable;
   }
 
   AppBackdropState copyWith({
@@ -360,6 +398,8 @@ class AppBackdropState {
     bool? uploading,
     List<BackdropUploadFailure>? failedUploads,
     bool clearUploadFailures = false,
+    BackdropClearResult? clearResult,
+    bool clearClearResult = false,
     AppBackdropMessage? message,
     bool clearMessage = false,
   }) {
@@ -373,6 +413,7 @@ class AppBackdropState {
           clearUploadFailures
               ? const <BackdropUploadFailure>[]
               : failedUploads ?? this.failedUploads,
+      clearResult: clearClearResult ? null : clearResult ?? this.clearResult,
       message: clearMessage ? null : message ?? this.message,
     );
   }
