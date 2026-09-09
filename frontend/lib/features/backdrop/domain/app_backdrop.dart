@@ -131,6 +131,7 @@ class AppBackdropAsset {
     this.height,
     this.durationMs,
     this.thumbnailPath,
+    this.localVideoPath,
     this.missing = false,
     this.status = AppBackdropAssetStatus.ready,
   });
@@ -149,6 +150,9 @@ class AppBackdropAsset {
   final int? height;
   final int? durationMs;
   final String? thumbnailPath;
+
+  /// 桌面/移动：本机缓存的视频路径;为空则用网络 path。
+  final String? localVideoPath;
   final bool missing;
   final AppBackdropAssetStatus status;
   final DateTime createdAt;
@@ -175,6 +179,7 @@ class AppBackdropAsset {
     int? height,
     int? durationMs,
     String? thumbnailPath,
+    String? localVideoPath,
     bool? missing,
     AppBackdropAssetStatus? status,
     DateTime? createdAt,
@@ -193,6 +198,7 @@ class AppBackdropAsset {
       height: height ?? this.height,
       durationMs: durationMs ?? this.durationMs,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
+      localVideoPath: localVideoPath ?? this.localVideoPath,
       missing: missing ?? this.missing,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,

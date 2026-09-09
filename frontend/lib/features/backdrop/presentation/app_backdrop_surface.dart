@@ -102,7 +102,11 @@ class AppBackdropSurface extends ConsumerWidget {
     BoxFit fit,
     bool motionAllowed,
   ) {
-    final source = asset.path;
+    // 优先本机缓存(原片落盘),无缓存时用签名 URL 边下边播。
+    final source =
+        (asset.localVideoPath != null && asset.localVideoPath!.isNotEmpty)
+            ? asset.localVideoPath!
+            : asset.path;
     if (source.isEmpty) {
       return const _AppBackdropFallback(icon: Icons.movie_creation_outlined);
     }

@@ -203,12 +203,11 @@ public class BackdropAssetService {
                         ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
                         originalFileName(media.extension()), media.mimeType(), stagingFile);
                 ImageDimensions dimensions = readImageDimensions(stagingFile, media);
-                UUID playbackNodeId = generateAndStorePlayback(
-                        ownerUserId, assetId, stagingFile, media, publishedNodeId);
+                // 不做服务端降质衍生:壁纸默认原片,由客户端可选本地缓存。
                 UUID thumbNodeId = generateAndStoreThumbnail(
                         ownerUserId, assetId, stagingFile, media, publishedNodeId);
                 BackdropAsset ready = finalizePublishedAsset(
-                        ownerUserId, assetId, publishedNodeId, playbackNodeId, thumbNodeId, dimensions);
+                        ownerUserId, assetId, publishedNodeId, null, thumbNodeId, dimensions);
                 storageQuotaService.settleReservation(RESERVATION_SOURCE_TYPE, assetId, writtenBytes);
                 log.info("背景素材上传完成: userId={}, assetId={}, mediaType={}, size={}",
                         ownerUserId, assetId, media.mediaType(), writtenBytes);
@@ -321,8 +320,7 @@ public class BackdropAssetService {
                 existing.setWidth(dimensions.width());
                 existing.setHeight(dimensions.height());
             }
-            existing.setPlaybackFileId(generateAndStorePlayback(
-                    ownerUserId, existing.getId(), stagingFile, media, fileNodeId));
+            existing.setPlaybackFileId(null);
             UUID thumbFileId = generateAndStoreThumbnail(
                     ownerUserId, existing.getId(), stagingFile, media, fileNodeId);
             existing.setThumbFileId(thumbFileId);
@@ -640,10 +638,8 @@ public class BackdropAssetService {
     }
 
     private BackdropAssetDto toDto(BackdropAsset asset) {
-        UUID playbackNodeId = asset.getPlaybackFileId() != null
-                ? asset.getPlaybackFileId()
-                : asset.getFileNodeId();
-        FileDownloadUrlDto content = safeDownloadUrl(asset.getOwnerUserId(), playbackNodeId);
+        // 默认下发原片:不擅自降质;客户端可选本地缓存降低网络抖动。
+        FileDownloadUrlDto content = safeDownloadUrl(asset.getOwnerUserId(), asset.getFileNodeId());
         FileDownloadUrlDto thumb = safeDownloadUrl(asset.getOwnerUserId(), asset.getThumbFileId());
         return new BackdropAssetDto(
                 asset.getId(),

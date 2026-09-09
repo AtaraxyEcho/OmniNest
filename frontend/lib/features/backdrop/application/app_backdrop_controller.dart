@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
@@ -9,11 +11,20 @@ import 'package:omninest/features/backdrop/application/app_backdrop_preferences.
 import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_file_picker.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_local_cache.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 
 final appBackdropRepositoryProvider = Provider<AppBackdropRepository>((ref) {
   return AppBackdropRepository(ref.watch(localDatabaseProvider));
+});
+
+final appBackdropLocalVideoCacheProvider = Provider<AppBackdropLocalVideoCache>((
+  ref,
+) {
+  final cache = AppBackdropLocalVideoCache();
+  ref.onDispose(cache.dispose);
+  return cache;
 });
 
 final appBackdropApiProvider = Provider<BackdropApi>((ref) {
@@ -59,6 +70,9 @@ final appBackdropControllerProvider =
 class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   /// 签名 URL 过期时间(内存态,避免为过期检测扩大 drift schema)。
   final Map<String, DateTime> _urlExpiresAt = <String, DateTime>{};
+
+  /// 视频壁纸本机缓存路径(assetId → 本地文件)。
+  final Map<String, String> _localVideoPaths = <String, String>{};
 
   static const Duration _urlRefreshLead = Duration(minutes: 2);
   Future<void>? _settingsMutation;
@@ -381,6 +395,8 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
       _urlExpiresAt.remove(id);
     }
     await ref.read(appBackdropRepositoryProvider).removeBackdrop(id);
+    await ref.read(appBackdropLocalVideoCacheProvider).evict(id);
+    _localVideoPaths.remove(id);
     state = AsyncData(
       await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
     );
@@ -478,8 +494,51 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     AppBackdropRepository repository,
   ) async {
     final loaded = await repository.loadState();
-    return loaded.copyWith(
+    final assets =
+        loaded.backdrops.map((backdrop) {
+          final local = _localVideoPaths[backdrop.id];
+          return local == null ? backdrop : backdrop.copyWith(localVideoPath: local);
+        }).toList(growable: false);
+    final withLocal = loaded.copyWith(
+      backdrops: assets,
       selectionTarget: ref.read(appBackdropSelectionTargetProvider),
+    );
+    _scheduleLocalVideoCache(withLocal);
+    return withLocal;
+  }
+
+  /// 对当前选中的服务端视频启动本机缓存;就绪后刷新 state 使用本地路径。
+  void _scheduleLocalVideoCache(AppBackdropState state) {
+    final selected = state.selectedBackdrop;
+    if (selected == null ||
+        !selected.isVideo ||
+        selected.sourceType != AppBackdropSourceType.server ||
+        selected.path.isEmpty ||
+        !selected.path.startsWith('http') ||
+        _localVideoPaths.containsKey(selected.id)) {
+      return;
+    }
+    final cache = ref.read(appBackdropLocalVideoCacheProvider);
+    final assetId = selected.id;
+    final remoteUrl = selected.path;
+    unawaited(
+      cache.ensureCached(assetId: assetId, remoteUrl: remoteUrl).then((local) {
+        if (local == null || !ref.mounted) {
+          return;
+        }
+        _localVideoPaths[assetId] = local;
+        final current = this.state.asData?.value;
+        if (current == null) {
+          return;
+        }
+        final nextAssets =
+            current.backdrops.map((backdrop) {
+              return backdrop.id == assetId
+                  ? backdrop.copyWith(localVideoPath: local)
+                  : backdrop;
+            }).toList(growable: false);
+        this.state = AsyncData(current.copyWith(backdrops: nextAssets));
+      }),
     );
   }
 }
