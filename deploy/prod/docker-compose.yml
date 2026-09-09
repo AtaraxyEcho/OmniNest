@@ -242,6 +242,24 @@ services:
       - omninest-minio:/data
     restart: unless-stopped
 
+  # 视频探测、背景抽帧与转码共用的 ffmpeg 工具容器（长期空转，供 docker exec 调用）。
+  ffmpeg:
+    image: jrottenberg/ffmpeg:8-alpine
+    container_name: omninest-ffmpeg
+    environment:
+      TZ: Asia/Shanghai
+    entrypoint: ["sh", "-c", "while true; do sleep 86400; done"]
+    healthcheck:
+      test: ["CMD-SHELL", "ffmpeg -version >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - omninest-probe-tmp:/tmp/probe
+      - omninest-transcode-tmp:/tmp/transcode
+      - ${OMNINEST_LOCAL_MEDIA_ROOT:-../../.omninest/local-media}:/mnt/local-media:ro
+    restart: unless-stopped
+
   aria2:
     image: p3terx/aria2-pro:latest
     environment:
@@ -346,6 +364,8 @@ volumes:
   omninest-search:
   omninest-certbot-config:
   omninest-certbot-challenges:
+  omninest-probe-tmp:
+  omninest-transcode-tmp:
 
 networks:
   default:
