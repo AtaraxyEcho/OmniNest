@@ -48,8 +48,14 @@ enum AppBackdropSourceType {
 
 /// 应用本机背景适配方式。
 enum AppBackdropFit {
+  /// 等比放大铺满并裁切,不变形(系统壁纸默认)。
   cover('cover'),
-  contain('contain');
+
+  /// 完整显示,可配合模糊铺底。
+  contain('contain'),
+
+  /// 拉伸铺满,可能变形;仅在用户明确需要时使用。
+  fill('fill');
 
   const AppBackdropFit(this.value);
 
@@ -60,6 +66,25 @@ enum AppBackdropFit {
     return AppBackdropFit.values.firstWhere(
       (fit) => fit.value == text,
       orElse: () => AppBackdropFit.cover,
+    );
+  }
+}
+
+/// cover/fill 裁切或缩放时的对齐锚点。
+enum AppBackdropAlignment {
+  top('top'),
+  center('center'),
+  bottom('bottom');
+
+  const AppBackdropAlignment(this.value);
+
+  final String value;
+
+  static AppBackdropAlignment fromValue(Object? value) {
+    final text = value?.toString();
+    return AppBackdropAlignment.values.firstWhere(
+      (alignment) => alignment.value == text,
+      orElse: () => AppBackdropAlignment.center,
     );
   }
 }
@@ -185,6 +210,7 @@ class AppBackdropSettings {
     this.desktopBackdropId,
     this.mobileBackdropId,
     this.fit = AppBackdropFit.cover,
+    this.alignment = AppBackdropAlignment.center,
     this.dimAmount = 0.08,
     this.blurAmount = 0.0,
     this.videoMuted = true,
@@ -196,6 +222,7 @@ class AppBackdropSettings {
   final String? desktopBackdropId;
   final String? mobileBackdropId;
   final AppBackdropFit fit;
+  final AppBackdropAlignment alignment;
   final double dimAmount;
   final double blurAmount;
   final bool videoMuted;
@@ -266,6 +293,7 @@ class AppBackdropSettings {
     String? mobileBackdropId,
     bool clearMobileBackdropId = false,
     AppBackdropFit? fit,
+    AppBackdropAlignment? alignment,
     double? dimAmount,
     double? blurAmount,
     bool? videoMuted,
@@ -287,6 +315,7 @@ class AppBackdropSettings {
               ? null
               : mobileBackdropId ?? this.mobileBackdropId,
       fit: fit ?? this.fit,
+      alignment: alignment ?? this.alignment,
       dimAmount: (dimAmount ?? this.dimAmount).clamp(0.0, 0.86),
       blurAmount: (blurAmount ?? this.blurAmount).clamp(0.0, 18.0),
       videoMuted: videoMuted ?? this.videoMuted,
@@ -302,6 +331,7 @@ class AppBackdropSettings {
         other.desktopBackdropId == desktopBackdropId &&
         other.mobileBackdropId == mobileBackdropId &&
         other.fit == fit &&
+        other.alignment == alignment &&
         other.dimAmount == dimAmount &&
         other.blurAmount == blurAmount &&
         other.videoMuted == videoMuted;
@@ -315,6 +345,7 @@ class AppBackdropSettings {
     desktopBackdropId,
     mobileBackdropId,
     fit,
+    alignment,
     dimAmount,
     blurAmount,
     videoMuted,

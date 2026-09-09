@@ -2620,6 +2620,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropFitContain => 'Fit';
 
   @override
+  String get portalLocalBackdropFitFill => 'Stretch';
+
+  @override
+  String get portalLocalBackdropAlignment => 'Crop anchor';
+
+  @override
+  String get portalLocalBackdropAlignTop => 'Top';
+
+  @override
+  String get portalLocalBackdropAlignCenter => 'Center';
+
+  @override
+  String get portalLocalBackdropAlignBottom => 'Bottom';
+
+  @override
   String get portalLocalBackdropFilterAll => 'All';
 
   @override

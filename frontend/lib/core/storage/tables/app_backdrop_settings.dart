@@ -25,8 +25,11 @@ class AppBackdropSettingsTable extends Table {
   /// 移动端选中的本机背景素材 ID。
   TextColumn get mobileBackdropId => text().nullable()();
 
-  /// 背景适配方式：cover、contain。
+  /// 背景适配方式：cover、contain、fill。
   TextColumn get fit => text().withDefault(const Constant('cover'))();
+
+  /// cover/fill 对齐：top、center、bottom。
+  TextColumn get alignment => text().withDefault(const Constant('center'))();
 
   /// 背景暗化强度。
   RealColumn get dimAmount => real().withDefault(const Constant(0.16))();

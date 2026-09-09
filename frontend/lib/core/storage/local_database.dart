@@ -52,7 +52,7 @@ class LocalDatabase extends _$LocalDatabase {
     : super(executor ?? connection.openConnection());
 
   @override
-  int get schemaVersion => 20;
+  int get schemaVersion => 21;
 
   @override
   MigrationStrategy get migration {
@@ -219,6 +219,21 @@ class LocalDatabase extends _$LocalDatabase {
           if (backdropColumns.isNotEmpty && !hasStatus) {
             await migrator.database.customStatement(
               "ALTER TABLE app_backdrop_assets ADD COLUMN status TEXT NOT NULL DEFAULT 'READY'",
+            );
+          }
+        }
+        // Schema v21：背景设置增加 cover/fill 对齐锚点。
+        if (from < 21) {
+          final settingColumns =
+              await migrator.database
+                  .customSelect("PRAGMA table_info('app_backdrop_settings')")
+                  .get();
+          final hasAlignment = settingColumns.any(
+            (row) => row.read<String>('name') == 'alignment',
+          );
+          if (settingColumns.isNotEmpty && !hasAlignment) {
+            await migrator.database.customStatement(
+              "ALTER TABLE app_backdrop_settings ADD COLUMN alignment TEXT NOT NULL DEFAULT 'center'",
             );
           }
         }

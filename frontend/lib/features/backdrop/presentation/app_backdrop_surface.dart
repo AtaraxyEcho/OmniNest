@@ -29,11 +29,26 @@ class AppBackdropSurface extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final fit =
-        settings.fit == AppBackdropFit.cover ? BoxFit.cover : BoxFit.contain;
+    final BoxFit fit = switch (settings.fit) {
+      AppBackdropFit.cover => BoxFit.cover,
+      AppBackdropFit.contain => BoxFit.contain,
+      AppBackdropFit.fill => BoxFit.fill,
+    };
+    final alignment = switch (settings.alignment) {
+      AppBackdropAlignment.top => Alignment.topCenter,
+      AppBackdropAlignment.center => Alignment.center,
+      AppBackdropAlignment.bottom => Alignment.bottomCenter,
+    };
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final motionAllowed = policy.motionAllowed && !animationsDisabled;
-    final media = _buildMedia(context, ref, asset, fit, motionAllowed);
+    final media = _buildMedia(
+      context,
+      ref,
+      asset,
+      fit,
+      alignment,
+      motionAllowed,
+    );
     final shouldBlur = settings.blurAmount > 0.05 && asset?.isVideo != true;
     final mediaLayer =
         shouldBlur
@@ -68,6 +83,7 @@ class AppBackdropSurface extends ConsumerWidget {
     WidgetRef ref,
     AppBackdropAsset? asset,
     BoxFit fit,
+    Alignment alignment,
     bool motionAllowed,
   ) {
     if (asset == null || asset.missing) {
@@ -76,7 +92,7 @@ class AppBackdropSurface extends ConsumerWidget {
     if (asset.isVideo) {
       return _buildVideo(context, ref, asset, fit, motionAllowed);
     }
-    return _buildImage(context, ref, asset, fit);
+    return _buildImage(context, ref, asset, fit, alignment);
   }
 
   Widget _buildVideo(
@@ -125,12 +141,14 @@ class AppBackdropSurface extends ConsumerWidget {
     WidgetRef ref,
     AppBackdropAsset asset,
     BoxFit fit,
+    Alignment alignment,
   ) {
     if (asset.sourceType == AppBackdropSourceType.server) {
       return AppBackdropImage(
         url: asset.path,
         cacheKey: 'backdrop:${asset.id}',
         fit: fit,
+        alignment: alignment,
         // contain 时用模糊同图铺底,避免非 16:9 图出现大面积空白/“被拉伸”观感。
         blurPad: true,
         fallbackAsset: bundledDefaultWallpaperPosterAsset,

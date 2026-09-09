@@ -192,6 +192,16 @@ void main() {
   });
 
   group('AppBackdropSettings', () {
+    test('fit 支持 cover/contain/fill,alignment 默认 center', () {
+      const settings = AppBackdropSettings();
+
+      expect(settings.fit, AppBackdropFit.cover);
+      expect(settings.alignment, AppBackdropAlignment.center);
+      expect(AppBackdropFit.fromValue('fill'), AppBackdropFit.fill);
+      expect(AppBackdropAlignment.fromValue('top'), AppBackdropAlignment.top);
+      expect(AppBackdropAlignment.fromValue('unknown'), AppBackdropAlignment.center);
+    });
+
     test('开启隔离时从共享选择初始化两端槽位', () {
       const settings = AppBackdropSettings(selectedBackdropId: 'shared');
 

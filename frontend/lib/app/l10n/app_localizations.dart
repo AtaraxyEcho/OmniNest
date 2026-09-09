@@ -4879,6 +4879,36 @@ abstract class AppLocalizations {
   /// **'Fit'**
   String get portalLocalBackdropFitContain;
 
+  /// No description provided for @portalLocalBackdropFitFill.
+  ///
+  /// In en, this message translates to:
+  /// **'Stretch'**
+  String get portalLocalBackdropFitFill;
+
+  /// No description provided for @portalLocalBackdropAlignment.
+  ///
+  /// In en, this message translates to:
+  /// **'Crop anchor'**
+  String get portalLocalBackdropAlignment;
+
+  /// No description provided for @portalLocalBackdropAlignTop.
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get portalLocalBackdropAlignTop;
+
+  /// No description provided for @portalLocalBackdropAlignCenter.
+  ///
+  /// In en, this message translates to:
+  /// **'Center'**
+  String get portalLocalBackdropAlignCenter;
+
+  /// No description provided for @portalLocalBackdropAlignBottom.
+  ///
+  /// In en, this message translates to:
+  /// **'Bottom'**
+  String get portalLocalBackdropAlignBottom;
+
   /// No description provided for @portalLocalBackdropFilterAll.
   ///
   /// In en, this message translates to:

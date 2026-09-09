@@ -16,6 +16,7 @@ class AppBackdropImage extends StatefulWidget {
     required this.url,
     required this.cacheKey,
     required this.fit,
+    this.alignment = Alignment.center,
     this.fallbackUrl,
     this.fallbackAsset,
     this.onUrlFailed,
@@ -30,6 +31,9 @@ class AppBackdropImage extends StatefulWidget {
   final String cacheKey;
 
   final BoxFit fit;
+
+  /// cover/fill 时的裁切锚点。
+  final Alignment alignment;
 
   /// contain 模式下是否用模糊同图铺底,避免大面积纯色留白。
   final bool blurPad;
@@ -117,7 +121,7 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
           imageUrl: primary,
           cacheKey: widget.cacheKey,
           fit: widget.fit,
-          alignment: Alignment.center,
+          alignment: widget.alignment,
           filterQuality: FilterQuality.high,
           memCacheWidth: cacheWidth,
           memCacheHeight: cacheHeight,

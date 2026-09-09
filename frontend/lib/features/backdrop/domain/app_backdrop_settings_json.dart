@@ -24,6 +24,9 @@ class AppBackdropSettingsJson {
       fit: AppBackdropFit.fromValue(
         json['fit']?.toString() ?? fallback.fit.value,
       ),
+      alignment: AppBackdropAlignment.fromValue(
+        json['alignment']?.toString() ?? fallback.alignment.value,
+      ),
       dimAmount: _optDouble(json['dimAmount']) ?? fallback.dimAmount,
       blurAmount: _optDouble(json['blurAmount']) ?? fallback.blurAmount,
       videoMuted: _optBool(json['videoMuted']) ?? fallback.videoMuted,
@@ -39,6 +42,7 @@ class AppBackdropSettingsJson {
       'desktopAssetId': settings.desktopBackdropId,
       'mobileAssetId': settings.mobileBackdropId,
       'fit': settings.fit.value,
+      'alignment': settings.alignment.value,
       'dimAmount': settings.dimAmount,
       'blurAmount': settings.blurAmount,
       'videoMuted': settings.videoMuted,

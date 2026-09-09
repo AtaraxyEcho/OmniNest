@@ -316,6 +316,14 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     await _persistSettings(current.settings.copyWith(fit: fit));
   }
 
+  /// 更新 cover/fill 对齐锚点。
+  Future<void> setAlignment(AppBackdropAlignment alignment) async {
+    final current =
+        state.asData?.value ??
+        await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
+    await _persistSettings(current.settings.copyWith(alignment: alignment));
+  }
+
   /// 更新背景暗化强度。
   Future<void> setDimAmount(double value) async {
     final current =

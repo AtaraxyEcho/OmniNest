@@ -177,10 +177,62 @@ class AppBackdropControls extends StatelessWidget {
                     value: AppBackdropFit.contain,
                     label: Text(l10n.portalLocalBackdropFitContain),
                   ),
+                  ButtonSegment(
+                    value: AppBackdropFit.fill,
+                    label: Text(l10n.portalLocalBackdropFitFill),
+                  ),
                 ],
                 selected: {settings.fit},
                 onSelectionChanged: (value) => notifier.setFit(value.first),
               ),
+              if (settings.fit == AppBackdropFit.cover) ...[
+                const SizedBox(height: 8),
+                Text(
+                  l10n.portalLocalBackdropAlignment,
+                  style: TextStyle(
+                    color: palette.muted,
+                    fontSize: AppTypography.bodySmall,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SegmentedButton<AppBackdropAlignment>(
+                  style: ButtonStyle(
+                    foregroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return palette.accent;
+                      }
+                      return palette.text;
+                    }),
+                    backgroundColor: WidgetStateProperty.resolveWith((states) {
+                      if (states.contains(WidgetState.selected)) {
+                        return palette.accent.withValues(alpha: 0.16);
+                      }
+                      return palette.surfaceContainer;
+                    }),
+                    side: WidgetStatePropertyAll(
+                      BorderSide(color: palette.outline),
+                    ),
+                  ),
+                  segments: [
+                    ButtonSegment(
+                      value: AppBackdropAlignment.top,
+                      label: Text(l10n.portalLocalBackdropAlignTop),
+                    ),
+                    ButtonSegment(
+                      value: AppBackdropAlignment.center,
+                      label: Text(l10n.portalLocalBackdropAlignCenter),
+                    ),
+                    ButtonSegment(
+                      value: AppBackdropAlignment.bottom,
+                      label: Text(l10n.portalLocalBackdropAlignBottom),
+                    ),
+                  ],
+                  selected: {settings.alignment},
+                  onSelectionChanged:
+                      (value) => notifier.setAlignment(value.first),
+                ),
+              ],
               const SizedBox(height: 8),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

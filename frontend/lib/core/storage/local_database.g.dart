@@ -6786,6 +6786,18 @@ class $AppBackdropSettingsTableTable extends AppBackdropSettingsTable
     requiredDuringInsert: false,
     defaultValue: const Constant('cover'),
   );
+  static const VerificationMeta _alignmentMeta = const VerificationMeta(
+    'alignment',
+  );
+  @override
+  late final GeneratedColumn<String> alignment = GeneratedColumn<String>(
+    'alignment',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+    defaultValue: const Constant('center'),
+  );
   static const VerificationMeta _dimAmountMeta = const VerificationMeta(
     'dimAmount',
   );
@@ -6845,6 +6857,7 @@ class $AppBackdropSettingsTableTable extends AppBackdropSettingsTable
     desktopBackdropId,
     mobileBackdropId,
     fit,
+    alignment,
     dimAmount,
     blurAmount,
     videoMuted,
@@ -6915,6 +6928,12 @@ class $AppBackdropSettingsTableTable extends AppBackdropSettingsTable
         fit.isAcceptableOrUnknown(data['fit']!, _fitMeta),
       );
     }
+    if (data.containsKey('alignment')) {
+      context.handle(
+        _alignmentMeta,
+        alignment.isAcceptableOrUnknown(data['alignment']!, _alignmentMeta),
+      );
+    }
     if (data.containsKey('dim_amount')) {
       context.handle(
         _dimAmountMeta,
@@ -6982,6 +7001,11 @@ class $AppBackdropSettingsTableTable extends AppBackdropSettingsTable
             DriftSqlType.string,
             data['${effectivePrefix}fit'],
           )!,
+      alignment:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}alignment'],
+          )!,
       dimAmount:
           attachedDatabase.typeMapping.read(
             DriftSqlType.double,
@@ -7031,8 +7055,11 @@ class AppBackdropSettingRow extends DataClass
   /// 移动端选中的本机背景素材 ID。
   final String? mobileBackdropId;
 
-  /// 背景适配方式：cover、contain。
+  /// 背景适配方式：cover、contain、fill。
   final String fit;
+
+  /// cover/fill 对齐：top、center、bottom。
+  final String alignment;
 
   /// 背景暗化强度。
   final double dimAmount;
@@ -7053,6 +7080,7 @@ class AppBackdropSettingRow extends DataClass
     this.desktopBackdropId,
     this.mobileBackdropId,
     required this.fit,
+    required this.alignment,
     required this.dimAmount,
     required this.blurAmount,
     required this.videoMuted,
@@ -7074,6 +7102,7 @@ class AppBackdropSettingRow extends DataClass
       map['mobile_backdrop_id'] = Variable<String>(mobileBackdropId);
     }
     map['fit'] = Variable<String>(fit);
+    map['alignment'] = Variable<String>(alignment);
     map['dim_amount'] = Variable<double>(dimAmount);
     map['blur_amount'] = Variable<double>(blurAmount);
     map['video_muted'] = Variable<bool>(videoMuted);
@@ -7099,6 +7128,7 @@ class AppBackdropSettingRow extends DataClass
               ? const Value.absent()
               : Value(mobileBackdropId),
       fit: Value(fit),
+      alignment: Value(alignment),
       dimAmount: Value(dimAmount),
       blurAmount: Value(blurAmount),
       videoMuted: Value(videoMuted),
@@ -7125,6 +7155,7 @@ class AppBackdropSettingRow extends DataClass
       ),
       mobileBackdropId: serializer.fromJson<String?>(json['mobileBackdropId']),
       fit: serializer.fromJson<String>(json['fit']),
+      alignment: serializer.fromJson<String>(json['alignment']),
       dimAmount: serializer.fromJson<double>(json['dimAmount']),
       blurAmount: serializer.fromJson<double>(json['blurAmount']),
       videoMuted: serializer.fromJson<bool>(json['videoMuted']),
@@ -7144,6 +7175,7 @@ class AppBackdropSettingRow extends DataClass
       'desktopBackdropId': serializer.toJson<String?>(desktopBackdropId),
       'mobileBackdropId': serializer.toJson<String?>(mobileBackdropId),
       'fit': serializer.toJson<String>(fit),
+      'alignment': serializer.toJson<String>(alignment),
       'dimAmount': serializer.toJson<double>(dimAmount),
       'blurAmount': serializer.toJson<double>(blurAmount),
       'videoMuted': serializer.toJson<bool>(videoMuted),
@@ -7159,6 +7191,7 @@ class AppBackdropSettingRow extends DataClass
     Value<String?> desktopBackdropId = const Value.absent(),
     Value<String?> mobileBackdropId = const Value.absent(),
     String? fit,
+    String? alignment,
     double? dimAmount,
     double? blurAmount,
     bool? videoMuted,
@@ -7181,6 +7214,7 @@ class AppBackdropSettingRow extends DataClass
             ? mobileBackdropId.value
             : this.mobileBackdropId,
     fit: fit ?? this.fit,
+    alignment: alignment ?? this.alignment,
     dimAmount: dimAmount ?? this.dimAmount,
     blurAmount: blurAmount ?? this.blurAmount,
     videoMuted: videoMuted ?? this.videoMuted,
@@ -7209,6 +7243,7 @@ class AppBackdropSettingRow extends DataClass
               ? data.mobileBackdropId.value
               : this.mobileBackdropId,
       fit: data.fit.present ? data.fit.value : this.fit,
+      alignment: data.alignment.present ? data.alignment.value : this.alignment,
       dimAmount: data.dimAmount.present ? data.dimAmount.value : this.dimAmount,
       blurAmount:
           data.blurAmount.present ? data.blurAmount.value : this.blurAmount,
@@ -7228,6 +7263,7 @@ class AppBackdropSettingRow extends DataClass
           ..write('desktopBackdropId: $desktopBackdropId, ')
           ..write('mobileBackdropId: $mobileBackdropId, ')
           ..write('fit: $fit, ')
+          ..write('alignment: $alignment, ')
           ..write('dimAmount: $dimAmount, ')
           ..write('blurAmount: $blurAmount, ')
           ..write('videoMuted: $videoMuted, ')
@@ -7245,6 +7281,7 @@ class AppBackdropSettingRow extends DataClass
     desktopBackdropId,
     mobileBackdropId,
     fit,
+    alignment,
     dimAmount,
     blurAmount,
     videoMuted,
@@ -7261,6 +7298,7 @@ class AppBackdropSettingRow extends DataClass
           other.desktopBackdropId == this.desktopBackdropId &&
           other.mobileBackdropId == this.mobileBackdropId &&
           other.fit == this.fit &&
+          other.alignment == this.alignment &&
           other.dimAmount == this.dimAmount &&
           other.blurAmount == this.blurAmount &&
           other.videoMuted == this.videoMuted &&
@@ -7276,6 +7314,7 @@ class AppBackdropSettingsTableCompanion
   final Value<String?> desktopBackdropId;
   final Value<String?> mobileBackdropId;
   final Value<String> fit;
+  final Value<String> alignment;
   final Value<double> dimAmount;
   final Value<double> blurAmount;
   final Value<bool> videoMuted;
@@ -7289,6 +7328,7 @@ class AppBackdropSettingsTableCompanion
     this.desktopBackdropId = const Value.absent(),
     this.mobileBackdropId = const Value.absent(),
     this.fit = const Value.absent(),
+    this.alignment = const Value.absent(),
     this.dimAmount = const Value.absent(),
     this.blurAmount = const Value.absent(),
     this.videoMuted = const Value.absent(),
@@ -7303,6 +7343,7 @@ class AppBackdropSettingsTableCompanion
     this.desktopBackdropId = const Value.absent(),
     this.mobileBackdropId = const Value.absent(),
     this.fit = const Value.absent(),
+    this.alignment = const Value.absent(),
     this.dimAmount = const Value.absent(),
     this.blurAmount = const Value.absent(),
     this.videoMuted = const Value.absent(),
@@ -7318,6 +7359,7 @@ class AppBackdropSettingsTableCompanion
     Expression<String>? desktopBackdropId,
     Expression<String>? mobileBackdropId,
     Expression<String>? fit,
+    Expression<String>? alignment,
     Expression<double>? dimAmount,
     Expression<double>? blurAmount,
     Expression<bool>? videoMuted,
@@ -7334,6 +7376,7 @@ class AppBackdropSettingsTableCompanion
       if (desktopBackdropId != null) 'desktop_backdrop_id': desktopBackdropId,
       if (mobileBackdropId != null) 'mobile_backdrop_id': mobileBackdropId,
       if (fit != null) 'fit': fit,
+      if (alignment != null) 'alignment': alignment,
       if (dimAmount != null) 'dim_amount': dimAmount,
       if (blurAmount != null) 'blur_amount': blurAmount,
       if (videoMuted != null) 'video_muted': videoMuted,
@@ -7350,6 +7393,7 @@ class AppBackdropSettingsTableCompanion
     Value<String?>? desktopBackdropId,
     Value<String?>? mobileBackdropId,
     Value<String>? fit,
+    Value<String>? alignment,
     Value<double>? dimAmount,
     Value<double>? blurAmount,
     Value<bool>? videoMuted,
@@ -7365,6 +7409,7 @@ class AppBackdropSettingsTableCompanion
       desktopBackdropId: desktopBackdropId ?? this.desktopBackdropId,
       mobileBackdropId: mobileBackdropId ?? this.mobileBackdropId,
       fit: fit ?? this.fit,
+      alignment: alignment ?? this.alignment,
       dimAmount: dimAmount ?? this.dimAmount,
       blurAmount: blurAmount ?? this.blurAmount,
       videoMuted: videoMuted ?? this.videoMuted,
@@ -7399,6 +7444,9 @@ class AppBackdropSettingsTableCompanion
     if (fit.present) {
       map['fit'] = Variable<String>(fit.value);
     }
+    if (alignment.present) {
+      map['alignment'] = Variable<String>(alignment.value);
+    }
     if (dimAmount.present) {
       map['dim_amount'] = Variable<double>(dimAmount.value);
     }
@@ -7427,6 +7475,7 @@ class AppBackdropSettingsTableCompanion
           ..write('desktopBackdropId: $desktopBackdropId, ')
           ..write('mobileBackdropId: $mobileBackdropId, ')
           ..write('fit: $fit, ')
+          ..write('alignment: $alignment, ')
           ..write('dimAmount: $dimAmount, ')
           ..write('blurAmount: $blurAmount, ')
           ..write('videoMuted: $videoMuted, ')
@@ -12327,6 +12376,7 @@ typedef $$AppBackdropSettingsTableTableCreateCompanionBuilder =
       Value<String?> desktopBackdropId,
       Value<String?> mobileBackdropId,
       Value<String> fit,
+      Value<String> alignment,
       Value<double> dimAmount,
       Value<double> blurAmount,
       Value<bool> videoMuted,
@@ -12342,6 +12392,7 @@ typedef $$AppBackdropSettingsTableTableUpdateCompanionBuilder =
       Value<String?> desktopBackdropId,
       Value<String?> mobileBackdropId,
       Value<String> fit,
+      Value<String> alignment,
       Value<double> dimAmount,
       Value<double> blurAmount,
       Value<bool> videoMuted,
@@ -12390,6 +12441,11 @@ class $$AppBackdropSettingsTableTableFilterComposer
 
   ColumnFilters<String> get fit => $composableBuilder(
     column: $table.fit,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get alignment => $composableBuilder(
+    column: $table.alignment,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12458,6 +12514,11 @@ class $$AppBackdropSettingsTableTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get alignment => $composableBuilder(
+    column: $table.alignment,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<double> get dimAmount => $composableBuilder(
     column: $table.dimAmount,
     builder: (column) => ColumnOrderings(column),
@@ -12516,6 +12577,9 @@ class $$AppBackdropSettingsTableTableAnnotationComposer
 
   GeneratedColumn<String> get fit =>
       $composableBuilder(column: $table.fit, builder: (column) => column);
+
+  GeneratedColumn<String> get alignment =>
+      $composableBuilder(column: $table.alignment, builder: (column) => column);
 
   GeneratedColumn<double> get dimAmount =>
       $composableBuilder(column: $table.dimAmount, builder: (column) => column);
@@ -12587,6 +12651,7 @@ class $$AppBackdropSettingsTableTableTableManager
                 Value<String?> desktopBackdropId = const Value.absent(),
                 Value<String?> mobileBackdropId = const Value.absent(),
                 Value<String> fit = const Value.absent(),
+                Value<String> alignment = const Value.absent(),
                 Value<double> dimAmount = const Value.absent(),
                 Value<double> blurAmount = const Value.absent(),
                 Value<bool> videoMuted = const Value.absent(),
@@ -12600,6 +12665,7 @@ class $$AppBackdropSettingsTableTableTableManager
                 desktopBackdropId: desktopBackdropId,
                 mobileBackdropId: mobileBackdropId,
                 fit: fit,
+                alignment: alignment,
                 dimAmount: dimAmount,
                 blurAmount: blurAmount,
                 videoMuted: videoMuted,
@@ -12615,6 +12681,7 @@ class $$AppBackdropSettingsTableTableTableManager
                 Value<String?> desktopBackdropId = const Value.absent(),
                 Value<String?> mobileBackdropId = const Value.absent(),
                 Value<String> fit = const Value.absent(),
+                Value<String> alignment = const Value.absent(),
                 Value<double> dimAmount = const Value.absent(),
                 Value<double> blurAmount = const Value.absent(),
                 Value<bool> videoMuted = const Value.absent(),
@@ -12628,6 +12695,7 @@ class $$AppBackdropSettingsTableTableTableManager
                 desktopBackdropId: desktopBackdropId,
                 mobileBackdropId: mobileBackdropId,
                 fit: fit,
+                alignment: alignment,
                 dimAmount: dimAmount,
                 blurAmount: blurAmount,
                 videoMuted: videoMuted,

@@ -2552,6 +2552,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalLocalBackdropFitContain => '完整显示';
 
   @override
+  String get portalLocalBackdropFitFill => '拉伸铺满';
+
+  @override
+  String get portalLocalBackdropAlignment => '裁切对齐';
+
+  @override
+  String get portalLocalBackdropAlignTop => '顶部';
+
+  @override
+  String get portalLocalBackdropAlignCenter => '居中';
+
+  @override
+  String get portalLocalBackdropAlignBottom => '底部';
+
+  @override
   String get portalLocalBackdropFilterAll => '全部';
 
   @override
