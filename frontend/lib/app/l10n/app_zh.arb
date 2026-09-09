@@ -1759,6 +1759,7 @@
   "adminLogsSubtitle": "统一查看应用日志、异常日志和登录审计。",
   "adminTasksTitle": "后台任务",
   "adminTasksSubtitle": "跟踪索引、转码、同步、备份和清理任务。",
+  "adminSectionForbidden": "当前账号无权打开该管理分区。",
   "adminSessionsTitle": "会话管理",
   "adminSessionsSubtitle": "查看和管理用户活跃会话，支持强制踢出。",
   "adminUsersTitle": "用户管理",

@@ -17,7 +17,8 @@ class _FileSidebar extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final user = ref.watch(authSessionProvider).asData?.value.user;
-    final isSuperAdmin = user?.role == 'SUPER_ADMIN';
+    final canManageExternalStorage =
+        user?.permissions.contains('system:config:manage') ?? false;
     return Container(
       width: 220,
       padding: const EdgeInsets.fromLTRB(16, 22, 16, 22),
@@ -41,7 +42,7 @@ class _FileSidebar extends ConsumerWidget {
                   _FileSidebarGroupLabel(label: entry.key.labelOf(l10n)),
                   const SizedBox(height: 8),
                   for (final section in entry.value)
-                    if (isSuperAdmin ||
+                    if (canManageExternalStorage ||
                         !_superAdminOnlySections.contains(section))
                       _FileNavItem(
                         section: section,

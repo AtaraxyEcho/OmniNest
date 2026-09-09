@@ -1,5 +1,7 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/admin/application/admin_console_controller.dart';
@@ -22,6 +24,23 @@ class AdminDashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final permissions =
+        ref.watch(authSessionProvider).asData?.value.user?.permissions ??
+        const <String>{};
+    if (!section.isVisibleTo(permissions)) {
+      return AdminShell(
+        section: section,
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              AppLocalizations.of(context).adminSectionForbidden,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ),
+      );
+    }
     return AdminShell(section: section, child: _AdminSectionBody(section));
   }
 }

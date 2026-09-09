@@ -20,8 +20,14 @@ class AdminSyncHandler implements RealtimeScopeHandler {
   bool appliesTo(RealtimeInvalidation invalidation) {
     final session = ref.read(authSessionProvider);
     if (!session.hasValue) return true;
-    final role = session.value?.user?.role;
-    return role == 'ADMIN' || role == 'SUPER_ADMIN';
+    final permissions = session.value?.user?.permissions ?? const <String>{};
+    return permissions.any(
+      (code) =>
+          code.startsWith('system:') ||
+          code == 'task:admin' ||
+          code == 'media:library:manage' ||
+          code == 'photo:admin',
+    );
   }
 
   @override

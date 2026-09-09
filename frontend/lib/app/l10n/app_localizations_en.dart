@@ -4403,6 +4403,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Track indexing, transcoding, sync, backup and cleanup tasks.';
 
   @override
+  String get adminSectionForbidden =>
+      'You do not have permission to open this admin section.';
+
+  @override
   String get adminSessionsTitle => 'Session Management';
 
   @override

@@ -18,6 +18,7 @@ import 'package:omninest/features/admin/application/admin_operations_controller.
 import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 
 part 'admin_shell_navigation.dart';
 
@@ -192,7 +193,7 @@ class _AdminShellBody extends StatelessWidget {
   }
 }
 
-class AdminSidebar extends StatefulWidget {
+class AdminSidebar extends ConsumerStatefulWidget {
   const AdminSidebar({
     required this.selectedSection,
     required this.closeOnSelect,
@@ -203,10 +204,10 @@ class AdminSidebar extends StatefulWidget {
   final bool closeOnSelect;
 
   @override
-  State<AdminSidebar> createState() => _AdminSidebarState();
+  ConsumerState<AdminSidebar> createState() => _AdminSidebarState();
 }
 
-class _AdminSidebarState extends State<AdminSidebar>
+class _AdminSidebarState extends ConsumerState<AdminSidebar>
     with SingleTickerProviderStateMixin {
   late final AnimationController _entrance;
   late final Animation<double> _titleFade;
@@ -313,9 +314,12 @@ class _AdminSidebarState extends State<AdminSidebar>
   }
 
   List<Widget> _buildNavChildren(BuildContext context) {
+    final permissions =
+        ref.watch(authSessionProvider).asData?.value.user?.permissions ??
+        const <String>{};
     final children = <Widget>[];
     var navIndex = 0;
-    for (final entry in AdminSection.grouped.entries) {
+    for (final entry in AdminSection.visibleGrouped(permissions).entries) {
       children.add(
         _SidebarGroupLabel(
           label: _sectionGroupLabel(AppLocalizations.of(context), entry.key),
@@ -501,14 +505,17 @@ class _AdminSearchField extends StatelessWidget {
   }
 }
 
-class _MobileAdminSectionSheet extends StatelessWidget {
+class _MobileAdminSectionSheet extends ConsumerWidget {
   const _MobileAdminSectionSheet({required this.selected});
 
   final AdminSection selected;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final permissions =
+        ref.watch(authSessionProvider).asData?.value.user?.permissions ??
+        const <String>{};
     return SafeArea(
       child: ConstrainedBox(
         constraints: BoxConstraints(
@@ -517,7 +524,8 @@ class _MobileAdminSectionSheet extends StatelessWidget {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: [
-            for (final entry in AdminSection.grouped.entries) ...[
+            for (final entry
+                in AdminSection.visibleGrouped(permissions).entries) ...[
               Padding(
                 padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
                 child: Text(

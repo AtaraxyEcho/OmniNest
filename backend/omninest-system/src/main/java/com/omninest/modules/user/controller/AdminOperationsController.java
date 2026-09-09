@@ -73,14 +73,14 @@ public class AdminOperationsController {
 
     @Operation(summary = "获取任务管理视图")
     @GetMapping("/api/v1/admin/tasks")
-    @PreAuthorize("hasAuthority('" + Permissions.TASK_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<AdminOperationsDto.TaskManagementView> tasks() {
         return ApiResponse.success(adminOperationsService.tasks());
     }
 
     @Operation(summary = "分页查询后台任务")
     @GetMapping("/api/v1/admin/tasks/page")
-    @PreAuthorize("hasAuthority('" + Permissions.TASK_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<PageResponse<AdminOperationsDto.TaskRecordItem>> taskPage(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "25") int size,

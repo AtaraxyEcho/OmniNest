@@ -21,6 +21,7 @@ public final class Permissions {
     public static final String BACKDROP_READ = "backdrop:read";
     public static final String BACKDROP_WRITE = "backdrop:write";
     public static final String TASK_READ = "task:read";
+    public static final String TASK_ADMIN = "task:admin";
     public static final String SYSTEM_CONFIG_READ = "system:config:read";
     public static final String SYSTEM_CONFIG_MANAGE = "system:config:manage";
     public static final String SYSTEM_USER_READ = "system:user:read";
@@ -40,6 +41,7 @@ public final class Permissions {
             BACKDROP_READ,
             BACKDROP_WRITE,
             TASK_READ,
+            TASK_ADMIN,
             SYSTEM_CONFIG_READ,
             SYSTEM_CONFIG_MANAGE,
             SYSTEM_USER_READ,

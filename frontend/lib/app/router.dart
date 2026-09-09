@@ -72,6 +72,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         setupRequired: setupState.asData?.value.setupRequired ?? false,
         location: state.uri.toString(),
         userRole: authState.asData?.value.user?.role,
+        userPermissions: authState.asData?.value.user?.permissions,
       );
     },
     routes: [
@@ -393,6 +394,7 @@ String? authRedirectPath({
   bool isSetupChecking = false,
   bool setupRequired = false,
   String? userRole,
+  Set<String>? userPermissions,
 }) {
   if (isChecking || isSetupChecking) {
     return null;
@@ -426,10 +428,19 @@ String? authRedirectPath({
     ).toString();
   }
 
-  // 管理页面仅对 ADMIN / SUPER_ADMIN 开放
+  // 管理页面：角色或管理类权限码任一命中即可进入；分区细粒度由页面权限校验
   if (isAuthenticated && path.startsWith('/admin')) {
-    final isAdmin = userRole == 'ADMIN' || userRole == 'SUPER_ADMIN';
-    if (!isAdmin) {
+    final isAdminRole = userRole == 'ADMIN' || userRole == 'SUPER_ADMIN';
+    final hasAdminPermission =
+        userPermissions?.any(
+          (code) =>
+              code.startsWith('system:') ||
+              code == 'task:admin' ||
+              code == 'media:library:manage' ||
+              code == 'photo:admin',
+        ) ??
+        false;
+    if (!isAdminRole && !hasAdminPermission) {
       return '/portal';
     }
   }

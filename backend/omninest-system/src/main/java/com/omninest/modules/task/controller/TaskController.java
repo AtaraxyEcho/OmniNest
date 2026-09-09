@@ -61,7 +61,7 @@ public class TaskController {
      */
     @Operation(summary = "查询死信队列任务", description = "查询死信队列中处理失败的任务列表")
     @GetMapping("/api/v1/tasks/dlq")
-    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<List<TaskDto>> listDlq(@RequestParam(defaultValue = "20") int limit) {
         return ApiResponse.success(taskQueryService.listDlq(limit));
     }

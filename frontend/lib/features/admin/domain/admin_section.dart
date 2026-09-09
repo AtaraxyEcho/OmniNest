@@ -29,6 +29,37 @@ enum AdminSection {
 
   String get location => '/admin/$pathSegment';
 
+  /// 分区可见所需的任一权限码。
+  ///
+  /// 管理端按能力域收敛入口；后端仍以 @PreAuthorize 做最终校验。
+  Set<String> get requiredAnyPermissions {
+    return switch (this) {
+      AdminSection.overview ||
+      AdminSection.analytics ||
+      AdminSection.monitoring => {
+        'system:config:read',
+        'system:user:read',
+        'task:admin',
+        'media:library:manage',
+        'photo:admin',
+      },
+      AdminSection.logs ||
+      AdminSection.sessions ||
+      AdminSection.config ||
+      AdminSection.storage => {'system:config:read'},
+      AdminSection.tasks => {'task:admin'},
+      AdminSection.users || AdminSection.roles => {'system:user:read'},
+      AdminSection.externalStorage => {
+        'system:config:read',
+        'system:config:manage',
+      },
+    };
+  }
+
+  bool isVisibleTo(Set<String> permissions) {
+    return permissions.intersection(requiredAnyPermissions).isNotEmpty;
+  }
+
   static AdminSection fromPathSegment(String? segment) {
     for (final section in values) {
       if (section.pathSegment == segment) {
@@ -44,6 +75,18 @@ enum AdminSection {
         group: values
             .where((section) => section.group == group)
             .toList(growable: false),
+    };
+  }
+
+  static Map<AdminSectionGroup, List<AdminSection>> visibleGrouped(
+    Set<String> permissions,
+  ) {
+    return {
+      for (final entry in grouped.entries)
+        if (entry.value.any((section) => section.isVisibleTo(permissions)))
+          entry.key: entry.value
+              .where((section) => section.isVisibleTo(permissions))
+              .toList(growable: false),
     };
   }
 }

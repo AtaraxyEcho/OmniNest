@@ -115,6 +115,32 @@ void main() {
     );
   });
 
+  test('持有 task:admin 的非管理员角色可进入管理端', () {
+    expect(
+      authRedirectPath(
+        isChecking: false,
+        isAuthenticated: true,
+        location: '/admin/tasks',
+        userRole: 'MEMBER',
+        userPermissions: {'task:read', 'task:admin'},
+      ),
+      isNull,
+    );
+  });
+
+  test('仅持有 task:read 的成员不可进入管理端', () {
+    expect(
+      authRedirectPath(
+        isChecking: false,
+        isAuthenticated: true,
+        location: '/admin/tasks',
+        userRole: 'MEMBER',
+        userPermissions: {'task:read', 'media:write'},
+      ),
+      '/portal',
+    );
+  });
+
   test('管理员访问管理页面时允许通过', () {
     expect(
       authRedirectPath(

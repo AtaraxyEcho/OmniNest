@@ -1885,6 +1885,7 @@
   "adminLogsSubtitle": "Unified view of application logs, error logs and login audit.",
   "adminTasksTitle": "Background Tasks",
   "adminTasksSubtitle": "Track indexing, transcoding, sync, backup and cleanup tasks.",
+  "adminSectionForbidden": "You do not have permission to open this admin section.",
   "adminSessionsTitle": "Session Management",
   "adminSessionsSubtitle": "View and manage user active sessions, supports forced logout.",
   "adminUsersTitle": "User Management",

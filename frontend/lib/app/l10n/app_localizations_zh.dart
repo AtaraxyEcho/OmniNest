@@ -4266,6 +4266,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminTasksSubtitle => '跟踪索引、转码、同步、备份和清理任务。';
 
   @override
+  String get adminSectionForbidden => '当前账号无权打开该管理分区。';
+
+  @override
   String get adminSessionsTitle => '会话管理';
 
   @override

@@ -58,16 +58,16 @@ class AdminSyncEventServiceTest {
     }
 
     @Test
-    void taskActionTargetsUsersWithTaskReadPermission() {
+    void taskActionTargetsUsersWithTaskAdminPermission() {
         when(authUserRepository.findDistinctByRoles_Permissions_CodeAndStatus(
-                Permissions.TASK_READ,
+                Permissions.TASK_ADMIN,
                 UserStatus.ACTIVE.getValue()
         )).thenReturn(List.of());
 
         service.record("ADMIN_TASK_RETRY", "sys_tasks", RESOURCE_ID);
 
         verify(authUserRepository).findDistinctByRoles_Permissions_CodeAndStatus(
-                Permissions.TASK_READ,
+                Permissions.TASK_ADMIN,
                 UserStatus.ACTIVE.getValue()
         );
     }

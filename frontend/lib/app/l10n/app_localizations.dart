@@ -8135,6 +8135,12 @@ abstract class AppLocalizations {
   /// **'Track indexing, transcoding, sync, backup and cleanup tasks.'**
   String get adminTasksSubtitle;
 
+  /// No description provided for @adminSectionForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'You do not have permission to open this admin section.'**
+  String get adminSectionForbidden;
+
   /// No description provided for @adminSessionsTitle.
   ///
   /// In en, this message translates to:

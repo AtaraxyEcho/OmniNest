@@ -56,7 +56,7 @@ public class AdminSyncEventService {
             return Permissions.SYSTEM_USER_READ;
         }
         if (action.contains("TASK") || action.contains("DLQ")) {
-            return Permissions.TASK_READ;
+            return Permissions.TASK_ADMIN;
         }
         return Permissions.SYSTEM_CONFIG_READ;
     }
