@@ -273,6 +273,21 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     }
     final targetChapter = chapters[chapterIndex];
     final targetOffset = target.clamp(0, counts[chapterIndex]);
+
+    // 连续滚动：目标在窗口邻域内时直接 jumpTo，避免整树切换。
+    if (!_isPageMode && _contentLoader != null) {
+      final currentIdx = chapters.indexWhere((c) => c.id == _currentChapterId);
+      final targetIdx = chapterIndex;
+      final inWindow =
+          currentIdx >= 0 &&
+          (targetIdx - currentIdx).abs() <= 1 &&
+          _contentLoader!.getByChapterId(targetChapter.id) != null;
+      if (inWindow) {
+        await _seekWithinContinuousWindow(targetChapter.id, targetOffset);
+        return;
+      }
+    }
+
     await switchToChapter(
       targetChapter.id,
       intent: ReaderChapterNavigationIntent.offset(
@@ -280,6 +295,65 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         offerReturn: true,
       ),
     );
+  }
+
+  /// 窗口内章节：按 charOffset 换算 contentY 后 jumpTo。
+  Future<void> _seekWithinContinuousWindow(
+    String chapterId,
+    int charOffset,
+  ) async {
+    final loader = _contentLoader;
+    if (loader == null) {
+      return;
+    }
+    final data = loader.getByChapterId(chapterId);
+    if (data == null) {
+      return;
+    }
+    final clamped = charOffset.clamp(0, data.totalChars);
+    _isRestoringProgress = true;
+    _restoreTargetCharOffset = clamped;
+    _restoreSilenceUntil = DateTime.now().add(
+      const Duration(milliseconds: ReaderViewPageMixin.restoreSilenceMs),
+    );
+    if (chapterId != _currentChapterId) {
+      adoptContinuousAnchorChapter(chapterId);
+    }
+    final textScale = FontScaleScope.systemScalerOf(context).scale(1);
+    final intraY = loader.charOffsetToPixelOffset(
+      chapterId,
+      clamped,
+      pageWidth: computePageWidth(),
+      settings: _settings,
+      textScale: textScale,
+    );
+    _positionTracker.setCharOffset(clamped, chapterId);
+    final chapterData = loader.getByChapterId(chapterId);
+    final totalChars = chapterData?.totalChars ?? 0;
+    final progress =
+        totalChars > 0 ? (clamped / totalChars).clamp(0.0, 1.0) : 0.0;
+    _scrollProgress = progress;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      // 窗口已按新锚点重建后再取 prefix。
+      final windowY =
+          continuousScrollController.prefixHeightOf(chapterId) + intraY;
+      if (_scrollController.hasClients) {
+        final max = _scrollController.position.maxScrollExtent;
+        final target = (windowY - viewportAnchorY).clamp(0.0, max);
+        _scrollController.jumpTo(target);
+      }
+      _isRestoringProgress = false;
+      scheduleLocalProgressSave(
+        chapterProgress: progress,
+        mode: 'scroll',
+        charOffset: clamped,
+      );
+      _updateState(() {});
+    });
   }
 
   void _openReaderSearchResult(int offset) {
@@ -319,7 +393,12 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         embedded: true,
       ),
       ReaderPanelType.search => ReaderFindPanel(
-        plainText: getPlainText(content.content),
+        plainText: () {
+          final fromBlocks = currentChapterPlainText();
+          return fromBlocks.isNotEmpty
+              ? fromBlocks
+              : getPlainText(content.content);
+        }(),
         settings: _settings,
         onSelect: _openReaderSearchResult,
       ),

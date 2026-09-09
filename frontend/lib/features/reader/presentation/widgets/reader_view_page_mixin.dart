@@ -15,6 +15,7 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_handler.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
@@ -163,6 +164,18 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   bool get isPageMode;
 
   String get currentChapterTitle;
+
+  /// 当前锚点章纯文本。
+  ///
+  /// 连续滚动切章后页面持有的 HTML 可能过期或已被 dropHtml，
+  /// 优先从已解析 blocks 提取，保证搜索/TTS 与可见正文一致。
+  String currentChapterPlainText() {
+    final data = contentLoader?.getByChapterId(currentChapterId);
+    if (data == null || data.blocks.isEmpty) {
+      return '';
+    }
+    return plainTextFromBlocks(data.blocks);
+  }
 
   double get bookProgress;
 

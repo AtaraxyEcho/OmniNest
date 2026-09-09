@@ -1041,16 +1041,21 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     );
   }
 
-  List<Widget> _buildOverlays(ReaderChapterContent content) => [
-    if (_showTts)
-      Positioned(
-        bottom: _showControls ? 82 : 0,
-        left: 0,
-        right: 0,
-        child: ReaderTtsControls(text: getPlainText(content.content)),
-      ),
-    if (_showReturnControl) buildReturnToProgressControl(),
-  ];
+  List<Widget> _buildOverlays(ReaderChapterContent content) {
+    final fromBlocks = currentChapterPlainText();
+    final ttsText =
+        fromBlocks.isNotEmpty ? fromBlocks : getPlainText(content.content);
+    return [
+      if (_showTts)
+        Positioned(
+          bottom: _showControls ? 82 : 0,
+          left: 0,
+          right: 0,
+          child: ReaderTtsControls(text: ttsText),
+        ),
+      if (_showReturnControl) buildReturnToProgressControl(),
+    ];
+  }
 
   /// 底部浮动"返回原进度"控件（参考微信读书样式）。
   ///
