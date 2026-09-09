@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 ///
 /// 缓存键基于素材 ID,签名 URL 轮换不会击穿缓存。加载顺序:
 /// 主 URL → 失败时回落 [fallbackUrl] → 再失败回落 [fallbackAsset](内置海报),
-/// 加载中与失败均不透出白底。
+/// 加载中与失败均不透出白底。全部网络地址失败时回调 [onUrlFailed] 供上层刷新签名 URL。
 class AppBackdropImage extends StatefulWidget {
   const AppBackdropImage({
     required this.url,
@@ -13,6 +13,7 @@ class AppBackdropImage extends StatefulWidget {
     required this.fit,
     this.fallbackUrl,
     this.fallbackAsset,
+    this.onUrlFailed,
     super.key,
   });
 
@@ -30,12 +31,16 @@ class AppBackdropImage extends StatefulWidget {
   /// 全部地址失败时的内置海报兜底。
   final String? fallbackAsset;
 
+  /// 主/备用网络地址均失败时回调一次。
+  final VoidCallback? onUrlFailed;
+
   @override
   State<AppBackdropImage> createState() => _AppBackdropImageState();
 }
 
 class _AppBackdropImageState extends State<AppBackdropImage> {
   String? _failedUrl;
+  bool _urlFailedNotified = false;
 
   int? _resolveCacheExtent(double extent, double devicePixelRatio) {
     if (!extent.isFinite || extent <= 0 || !devicePixelRatio.isFinite) {
@@ -88,6 +93,7 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
   }
 
   Widget _buildFallback(String failedUrl) {
+    _notifyUrlFailedOnce();
     if (_failedUrl == null) {
       _failedUrl = failedUrl;
       final next = _resolveUrl();
@@ -103,6 +109,14 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
       }
     }
     return _buildAssetFallback();
+  }
+
+  void _notifyUrlFailedOnce() {
+    if (_urlFailedNotified) {
+      return;
+    }
+    _urlFailedNotified = true;
+    widget.onUrlFailed?.call();
   }
 
   Widget _buildAssetFallback() {

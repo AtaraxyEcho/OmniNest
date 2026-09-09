@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
@@ -32,7 +33,7 @@ class AppBackdropSurface extends ConsumerWidget {
         settings.fit == AppBackdropFit.cover ? BoxFit.cover : BoxFit.contain;
     final animationsDisabled = MediaQuery.disableAnimationsOf(context);
     final motionAllowed = policy.motionAllowed && !animationsDisabled;
-    final media = _buildMedia(asset, fit, motionAllowed);
+    final media = _buildMedia(context, ref, asset, fit, motionAllowed);
     final shouldBlur = settings.blurAmount > 0.05 && asset?.isVideo != true;
     final mediaLayer =
         shouldBlur
@@ -62,21 +63,41 @@ class AppBackdropSurface extends ConsumerWidget {
     );
   }
 
-  Widget _buildMedia(AppBackdropAsset? asset, BoxFit fit, bool motionAllowed) {
+  Widget _buildMedia(
+    BuildContext context,
+    WidgetRef ref,
+    AppBackdropAsset? asset,
+    BoxFit fit,
+    bool motionAllowed,
+  ) {
     if (asset == null || asset.missing) {
       return const _AppBackdropFallback();
     }
     if (asset.isVideo) {
-      return _buildVideo(asset, fit, motionAllowed);
+      return _buildVideo(context, ref, asset, fit, motionAllowed);
     }
-    return _buildImage(asset, fit);
+    return _buildImage(context, ref, asset, fit);
   }
 
-  Widget _buildVideo(AppBackdropAsset asset, BoxFit fit, bool motionAllowed) {
+  Widget _buildVideo(
+    BuildContext context,
+    WidgetRef ref,
+    AppBackdropAsset asset,
+    BoxFit fit,
+    bool motionAllowed,
+  ) {
     final source = asset.path;
     if (source.isEmpty) {
       return const _AppBackdropFallback(icon: Icons.movie_creation_outlined);
     }
+    void onSourceStale() {
+      Future<void>.microtask(() async {
+        await ref
+            .read(appBackdropControllerProvider.notifier)
+            .ensureFreshServerUrls(force: true);
+      });
+    }
+
     if (isWebPlatform) {
       return AppBackdropVideoView(
         source: source,
@@ -84,32 +105,50 @@ class AppBackdropSurface extends ConsumerWidget {
         playing: active && motionAllowed,
         muted: settings.videoMuted,
         fallbackSource: bundledDefaultWallpaperWebAsset,
+        onSourceStale: onSourceStale,
       );
     }
     if (!motionAllowed) {
-      return _videoStaticFallback(asset, fit);
+      return _videoStaticFallback(context, ref, asset, fit);
     }
     return AppBackdropVideoView(
       source: source,
       fit: fit,
       playing: active,
       muted: settings.videoMuted,
+      onSourceStale: onSourceStale,
     );
   }
 
-  Widget _buildImage(AppBackdropAsset asset, BoxFit fit) {
+  Widget _buildImage(
+    BuildContext context,
+    WidgetRef ref,
+    AppBackdropAsset asset,
+    BoxFit fit,
+  ) {
     if (asset.sourceType == AppBackdropSourceType.server) {
       return AppBackdropImage(
         url: asset.path,
         cacheKey: 'backdrop:${asset.id}',
         fit: fit,
         fallbackAsset: bundledDefaultWallpaperPosterAsset,
+        onUrlFailed:
+            () => Future<void>.microtask(() async {
+              await ref
+                  .read(appBackdropControllerProvider.notifier)
+                  .ensureFreshServerUrls(force: true);
+            }),
       );
     }
     return const SizedBox.shrink();
   }
 
-  Widget _videoStaticFallback(AppBackdropAsset asset, BoxFit fit) {
+  Widget _videoStaticFallback(
+    BuildContext context,
+    WidgetRef ref,
+    AppBackdropAsset asset,
+    BoxFit fit,
+  ) {
     final thumbnail = asset.thumbnailPath;
     if (asset.sourceType == AppBackdropSourceType.server &&
         thumbnail != null &&
@@ -118,6 +157,12 @@ class AppBackdropSurface extends ConsumerWidget {
         url: thumbnail,
         cacheKey: 'backdrop-thumb:${asset.id}',
         fit: fit,
+        onUrlFailed:
+            () => Future<void>.microtask(() async {
+              await ref
+                  .read(appBackdropControllerProvider.notifier)
+                  .ensureFreshServerUrls(force: true);
+            }),
       );
     }
     if (asset.sourceType == AppBackdropSourceType.bundled) {

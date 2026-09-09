@@ -75,4 +75,17 @@ public class BackdropController {
         backdropAssetService.deleteAsset(currentUserContext.requireCurrentUserId(), assetId);
         return ApiResponse.success(null);
     }
+
+    /**
+     * 删除当前用户全部背景素材。
+     *
+     * @return 成功删除数量
+     */
+    @Operation(summary = "清空背景素材", description = "删除当前用户全部服务端背景素材,返回成功条数")
+    @PreAuthorize("hasAuthority('" + Permissions.BACKDROP_WRITE + "')")
+    @DeleteMapping("/api/v1/backdrops")
+    public ApiResponse<Integer> deleteAllAssets() {
+        return ApiResponse.success(
+                backdropAssetService.deleteAllAssets(currentUserContext.requireCurrentUserId()));
+    }
 }

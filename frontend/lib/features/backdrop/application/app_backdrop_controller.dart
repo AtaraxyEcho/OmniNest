@@ -57,6 +57,11 @@ final appBackdropControllerProvider =
 /// 服务端素材库与用户偏好(scope=backdrop)是事实来源,drift 行为离线缓存与
 /// 内置壁纸登记;本机文件导入链路已退役,素材统一经服务端流转。
 class AppBackdropController extends AsyncNotifier<AppBackdropState> {
+  /// 签名 URL 过期时间(内存态,避免为过期检测扩大 drift schema)。
+  final Map<String, DateTime> _urlExpiresAt = <String, DateTime>{};
+
+  static const Duration _urlRefreshLead = Duration(minutes: 2);
+
   @override
   Future<AppBackdropState> build() async {
     final repository = ref.watch(appBackdropRepositoryProvider);
@@ -81,12 +86,49 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     final repository = ref.read(appBackdropRepositoryProvider);
     try {
       final assets = await ref.read(appBackdropApiProvider).list();
+      for (final asset in assets) {
+        final expiresAt = asset.contentUrlExpiresAt;
+        if (expiresAt != null) {
+          _urlExpiresAt[asset.id] = expiresAt;
+        } else {
+          _urlExpiresAt.remove(asset.id);
+        }
+      }
       await repository.upsertServerAssets(assets);
     } on Exception catch (error) {
       if (kDebugMode) {
         debugPrint('背景库服务端列表同步失败(可能离线): $error');
       }
     }
+  }
+
+  /// 签名 URL 可能已过期或即将过期时刷新服务端列表。
+  ///
+  /// [force] 为 true 时无条件刷新(如视频打开失败后的补偿)。
+  Future<void> ensureFreshServerUrls({bool force = false}) async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return;
+    }
+    if (!force && !_serverUrlsNeedRefresh()) {
+      return;
+    }
+    await refreshServerAssets();
+    final refreshed = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
+    state = AsyncData(refreshed);
+  }
+
+  bool _serverUrlsNeedRefresh() {
+    if (_urlExpiresAt.isEmpty) {
+      // 冷启动本地有缓存但内存无过期信息,视为需要刷新。
+      return true;
+    }
+    final threshold = DateTime.now().add(_urlRefreshLead);
+    return _urlExpiresAt.values.any(
+      (expiresAt) => !expiresAt.isAfter(threshold),
+    );
   }
 
   /// 唤起文件选择并逐个上传。
@@ -151,6 +193,7 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
 
   /// 选择背景素材;设置经由偏好同步(服务端事实来源)落盘。
   Future<void> selectBackdrop(String id) async {
+    await ensureFreshServerUrls();
     final current =
         state.asData?.value ??
         await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
@@ -240,8 +283,15 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
         if (kDebugMode) {
           debugPrint('背景素材删除失败,保留本地缓存: $error');
         }
+        final failed = await _loadCurrentState(
+          ref.read(appBackdropRepositoryProvider),
+        );
+        state = AsyncData(
+          failed.copyWith(message: AppBackdropMessage.deleteFailed),
+        );
         return;
       }
+      _urlExpiresAt.remove(id);
     }
     await ref.read(appBackdropRepositoryProvider).removeBackdrop(id);
     state = AsyncData(
@@ -249,8 +299,26 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     );
   }
 
-  /// 清空本地背景库缓存;内置壁纸与选择保留。
+  /// 清空服务端背景素材库并同步清理本地缓存;内置壁纸与选择保留。
   Future<void> clearBackdrops() async {
+    final session = await ref.read(authSessionProvider.future);
+    if (session.isAuthenticated) {
+      try {
+        await ref.read(appBackdropApiProvider).deleteAll();
+        _urlExpiresAt.clear();
+      } on Exception catch (error) {
+        if (kDebugMode) {
+          debugPrint('背景库服务端清空失败,保留本地现状: $error');
+        }
+        final current = await _loadCurrentState(
+          ref.read(appBackdropRepositoryProvider),
+        );
+        state = AsyncData(
+          current.copyWith(message: AppBackdropMessage.deleteFailed),
+        );
+        return;
+      }
+    }
     await ref.read(appBackdropRepositoryProvider).clearBackdrops();
     state = AsyncData(
       await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),

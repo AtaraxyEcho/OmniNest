@@ -30,6 +30,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -61,6 +62,7 @@ class BackdropAssetServiceTest {
     private UserStorageCommand userStorageCommand;
     private MalwareScanGateway malwareScanGateway;
     private RateLimitService rateLimitService;
+    private BackdropVideoThumbnailExtractor videoThumbnailExtractor;
     private BackdropAssetService service;
     private final AtomicReference<BackdropAsset> storedAsset = new AtomicReference<>();
 
@@ -74,6 +76,9 @@ class BackdropAssetServiceTest {
         userStorageCommand = mock(UserStorageCommand.class);
         malwareScanGateway = mock(MalwareScanGateway.class);
         rateLimitService = mock(RateLimitService.class);
+        videoThumbnailExtractor = mock(BackdropVideoThumbnailExtractor.class);
+        when(videoThumbnailExtractor.extractFirstFrame(any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.empty());
 
         when(runtimeConfigService.uploadRatePerHour()).thenReturn(20);
         when(runtimeConfigService.maxAssetsPerUser()).thenReturn(30);
@@ -100,6 +105,7 @@ class BackdropAssetServiceTest {
                 userStorageCommand,
                 malwareScanGateway,
                 rateLimitService,
+                videoThumbnailExtractor,
                 afterCommitFiringTransactionManager()
         );
     }
@@ -355,6 +361,26 @@ class BackdropAssetServiceTest {
         assertThatThrownBy(() -> service.deleteAsset(OWNER_ID, UUID.randomUUID()))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode().getCode()).isEqualTo(8001));
+    }
+
+    @Test
+    void deleteAllAssetsRemovesEveryOwnedAsset() {
+        BackdropAsset first = readyAsset();
+        BackdropAsset second = readyAsset();
+        when(backdropAssetRepository.findByOwnerUserIdOrderByUpdatedAtDesc(OWNER_ID))
+                .thenReturn(List.of(first, second));
+        when(backdropAssetRepository.findByIdAndOwnerUserId(first.getId(), OWNER_ID))
+                .thenReturn(Optional.of(first));
+        when(backdropAssetRepository.findByIdAndOwnerUserId(second.getId(), OWNER_ID))
+                .thenReturn(Optional.of(second));
+
+        int deleted = service.deleteAllAssets(OWNER_ID);
+
+        assertThat(deleted).isEqualTo(2);
+        verify(backdropAssetRepository).delete(first);
+        verify(backdropAssetRepository).delete(second);
+        verify(userStorageCommand, org.mockito.Mockito.times(2))
+                .decrementUsage(eq(OWNER_ID), anyLong());
     }
 
     private UUID stubFreshInsert() {

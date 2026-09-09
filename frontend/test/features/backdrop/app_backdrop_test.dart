@@ -541,6 +541,120 @@ void main() {
       );
     });
 
+    test('清空背景库会调用服务端删除并清理本地缓存', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final serverAsset = BackdropServerAsset(
+        id: 'server-clear',
+        title: 'clear',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
+      );
+      await repository.upsertServerAssets([serverAsset]);
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => const []);
+      when(() => api.deleteAll()).thenAnswer((_) async => 1);
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      await notifier.clearBackdrops();
+
+      verify(() => api.deleteAll()).called(1);
+      final state = container.read(appBackdropControllerProvider).requireValue;
+      expect(
+        state.backdrops.where(
+          (backdrop) => backdrop.sourceType == AppBackdropSourceType.server,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('清空背景库服务端失败时保留本地缓存并提示', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final serverAsset = BackdropServerAsset(
+        id: 'server-keep',
+        title: 'keep',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
+      );
+      await repository.upsertServerAssets([serverAsset]);
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => [serverAsset]);
+      when(
+        () => api.deleteAll(),
+      ).thenThrow(const AppException(code: '500', message: 'boom'));
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      await notifier.clearBackdrops();
+
+      final state = container.read(appBackdropControllerProvider).requireValue;
+      expect(
+        state.backdrops.where((backdrop) => backdrop.id == 'server-keep'),
+        isNotEmpty,
+      );
+      expect(state.message, AppBackdropMessage.deleteFailed);
+    });
+
     test('桌面端改选隔离壁纸不会覆盖移动端槽位', () async {
       final database = LocalDatabase(NativeDatabase.memory());
       final repository = AppBackdropRepository(database);

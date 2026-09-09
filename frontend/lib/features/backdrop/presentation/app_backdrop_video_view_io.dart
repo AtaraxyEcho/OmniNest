@@ -6,6 +6,7 @@ import 'package:omninest/features/backdrop/application/app_backdrop_video_sessio
 /// IO 平台(桌面/移动)的背景视频视图,基于 media_kit 播放会话。
 /// source 可以是本机文件路径(内置壁纸)或服务端签名 URL;
 /// 播放失败时切换到 [fallbackSource](内置壁纸)后重试,仍失败则收敛为空视图。
+/// [onSourceStale] 在主源打开失败时回调,供上层刷新签名 URL。
 class AppBackdropVideoView extends ConsumerStatefulWidget {
   const AppBackdropVideoView({
     required this.source,
@@ -13,6 +14,7 @@ class AppBackdropVideoView extends ConsumerStatefulWidget {
     required this.playing,
     required this.muted,
     this.fallbackSource,
+    this.onSourceStale,
     super.key,
   });
 
@@ -24,6 +26,9 @@ class AppBackdropVideoView extends ConsumerStatefulWidget {
   /// 主源播放失败时的备用地址(通常为内置壁纸本机文件)。
   final String? fallbackSource;
 
+  /// 主源打开失败时通知上层签名 URL 可能过期。
+  final VoidCallback? onSourceStale;
+
   @override
   ConsumerState<AppBackdropVideoView> createState() =>
       _AppBackdropVideoViewState();
@@ -34,6 +39,7 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
   bool? _lastLayoutUsable;
   String? _lastSessionSignature;
   bool _usingFallback = false;
+  bool _sourceStaleNotified = false;
 
   String get _effectiveSource {
     if (_usingFallback && widget.fallbackSource != null) {
@@ -46,6 +52,15 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didUpdateWidget(AppBackdropVideoView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.source != widget.source) {
+      _usingFallback = false;
+      _sourceStaleNotified = false;
+    }
   }
 
   @override
@@ -77,6 +92,11 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
           _usingFallback = true;
           _lastSessionSignature = null;
           logFallbackOnce();
+          _notifySourceStaleOnce();
+        } else if (session.openError != null &&
+            !_usingFallback &&
+            widget.source.startsWith('http')) {
+          _notifySourceStaleOnce();
         }
         final source = _effectiveSource;
         _syncSession(
@@ -112,6 +132,14 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
     }
     _fallbackLogged = true;
     debugPrint('背景视频主源打开失败,回退内置壁纸');
+  }
+
+  void _notifySourceStaleOnce() {
+    if (_sourceStaleNotified) {
+      return;
+    }
+    _sourceStaleNotified = true;
+    widget.onSourceStale?.call();
   }
 
   void _syncSession({

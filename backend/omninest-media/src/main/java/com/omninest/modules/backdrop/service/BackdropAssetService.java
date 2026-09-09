@@ -67,6 +67,7 @@ public class BackdropAssetService {
     private static final int THUMBNAIL_MAX_WIDTH = 1024;
     private static final int THUMBNAIL_MAX_HEIGHT = 1024;
     private static final double THUMBNAIL_QUALITY = 0.82;
+    private static final Duration VIDEO_THUMBNAIL_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration RESERVATION_TTL = Duration.ofHours(6);
     private static final Duration UPLOAD_RATE_WINDOW = Duration.ofHours(1);
 
@@ -89,6 +90,7 @@ public class BackdropAssetService {
     private final UserStorageCommand userStorageCommand;
     private final MalwareScanGateway malwareScanGateway;
     private final RateLimitService rateLimitService;
+    private final BackdropVideoThumbnailExtractor videoThumbnailExtractor;
     private final TransactionTemplate transactionTemplate;
 
     /**
@@ -113,6 +115,7 @@ public class BackdropAssetService {
             UserStorageCommand userStorageCommand,
             MalwareScanGateway malwareScanGateway,
             RateLimitService rateLimitService,
+            BackdropVideoThumbnailExtractor videoThumbnailExtractor,
             PlatformTransactionManager transactionManager
     ) {
         this.backdropAssetRepository = backdropAssetRepository;
@@ -123,6 +126,7 @@ public class BackdropAssetService {
         this.userStorageCommand = userStorageCommand;
         this.malwareScanGateway = malwareScanGateway;
         this.rateLimitService = rateLimitService;
+        this.videoThumbnailExtractor = videoThumbnailExtractor;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -192,9 +196,11 @@ public class BackdropAssetService {
                 publishedNodeId = derivedAssetStorageService.store(
                         ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
                         ORIGINAL_BASE_NAME + media.extension(), media.mimeType(), stagingFile);
-                UUID thumbNodeId = generateAndStoreThumbnail(ownerUserId, assetId, stagingFile, media);
+                ImageDimensions dimensions = readImageDimensions(stagingFile, media);
+                UUID thumbNodeId = generateAndStoreThumbnail(
+                        ownerUserId, assetId, stagingFile, media, publishedNodeId);
                 BackdropAsset ready = finalizePublishedAsset(
-                        ownerUserId, assetId, publishedNodeId, thumbNodeId);
+                        ownerUserId, assetId, publishedNodeId, thumbNodeId, dimensions);
                 storageQuotaService.settleReservation(RESERVATION_SOURCE_TYPE, assetId, writtenBytes);
                 log.info("背景素材上传完成: userId={}, assetId={}, mediaType={}, size={}",
                         ownerUserId, assetId, media.mediaType(), writtenBytes);
@@ -245,6 +251,33 @@ public class BackdropAssetService {
         log.info("背景素材已删除: userId={}, assetId={}", ownerUserId, assetId);
     }
 
+    /**
+     * 删除当前用户全部背景素材。DB-first,单条失败不中断其余删除,返回成功条数。
+     *
+     * @param ownerUserId 归属用户 ID
+     * @return 成功删除的素材数量
+     */
+    public int deleteAllAssets(UUID ownerUserId) {
+        List<UUID> assetIds = backdropAssetRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)
+                .stream()
+                .map(BackdropAsset::getId)
+                .toList();
+        int deleted = 0;
+        for (UUID assetId : assetIds) {
+            try {
+                deleteAsset(ownerUserId, assetId);
+                deleted++;
+            } catch (BusinessException ex) {
+                if (ex.errorCode().getCode() == ErrorCode.BACKDROP_NOT_FOUND.getCode()) {
+                    continue;
+                }
+                throw ex;
+            }
+        }
+        log.info("背景素材批量删除完成: userId={}, requested={}, deleted={}", ownerUserId, assetIds.size(), deleted);
+        return deleted;
+    }
+
     private BackdropAssetDto reuseExistingAsset(
             UUID ownerUserId, BackdropAsset existing, Path stagingFile, DetectedMedia media) {
         if (existing.getStatus() != BackdropAssetStatus.FAILED) {
@@ -257,7 +290,13 @@ public class BackdropAssetService {
                     ownerUserId, RESOURCE_TYPE, existing.getId(), ASSET_TYPE_ORIGINAL,
                     ORIGINAL_BASE_NAME + media.extension(), media.mimeType(), stagingFile);
             existing.setFileNodeId(fileNodeId);
-            UUID thumbFileId = generateAndStoreThumbnail(ownerUserId, existing.getId(), stagingFile, media);
+            ImageDimensions dimensions = readImageDimensions(stagingFile, media);
+            if (dimensions != null) {
+                existing.setWidth(dimensions.width());
+                existing.setHeight(dimensions.height());
+            }
+            UUID thumbFileId = generateAndStoreThumbnail(
+                    ownerUserId, existing.getId(), stagingFile, media, fileNodeId);
             existing.setThumbFileId(thumbFileId);
             existing.setStatus(BackdropAssetStatus.READY);
             existing.setFailReason(null);
@@ -299,18 +338,41 @@ public class BackdropAssetService {
      * 关键约束:实体带 @Version,连续对同一游离引用多次 save 会因版本不递增触发 StaleObjectState。
      */
     private BackdropAsset finalizePublishedAsset(
-            UUID ownerUserId, UUID assetId, UUID fileNodeId, UUID thumbFileId) {
+            UUID ownerUserId, UUID assetId, UUID fileNodeId, UUID thumbFileId, ImageDimensions dimensions) {
         BackdropAsset asset = backdropAssetRepository.findById(assetId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
         asset.setFileNodeId(fileNodeId);
         asset.setThumbFileId(thumbFileId);
         asset.setStatus(BackdropAssetStatus.READY);
+        if (dimensions != null) {
+            asset.setWidth(dimensions.width());
+            asset.setHeight(dimensions.height());
+        }
         return backdropAssetRepository.save(asset);
     }
 
+    private ImageDimensions readImageDimensions(Path stagingFile, DetectedMedia media) {
+        if (media.mediaType() == BackdropMediaType.VIDEO) {
+            return null;
+        }
+        try {
+            java.awt.image.BufferedImage image = javax.imageio.ImageIO.read(stagingFile.toFile());
+            if (image == null) {
+                return null;
+            }
+            return new ImageDimensions(image.getWidth(), image.getHeight());
+        } catch (IOException | RuntimeException ex) {
+            log.debug("背景素材尺寸解析失败: extension={}, message={}", media.extension(), ex.getMessage());
+            return null;
+        }
+    }
+
     private UUID generateAndStoreThumbnail(
-            UUID ownerUserId, UUID assetId, Path stagingFile, DetectedMedia media) {
-        if (media.mediaType() != BackdropMediaType.IMAGE || media.extension().equals("gif")) {
+            UUID ownerUserId, UUID assetId, Path stagingFile, DetectedMedia media, UUID publishedNodeId) {
+        if (media.mediaType() == BackdropMediaType.VIDEO) {
+            return generateAndStoreVideoThumbnail(ownerUserId, assetId, stagingFile, publishedNodeId);
+        }
+        if (media.mediaType() != BackdropMediaType.IMAGE) {
             return null;
         }
         Path thumbnailFile = null;
@@ -328,6 +390,38 @@ public class BackdropAssetService {
                     thumbnailMimeType(), thumbnailFile);
         } catch (IOException ex) {
             throw new UncheckedIOException("背景素材缩略图生成失败", ex);
+        }
+    }
+
+    /**
+     * 提取视频首帧作为预览缩略图。抽帧失败不阻断上传主流程,仅返回空并保留占位预览。
+     */
+    private UUID generateAndStoreVideoThumbnail(
+            UUID ownerUserId, UUID assetId, Path stagingFile, UUID publishedNodeId) {
+        Path thumbnailFile = null;
+        try {
+            Optional<Path> extracted = videoThumbnailExtractor.extractFirstFrame(
+                    ownerUserId, publishedNodeId, stagingFile, VIDEO_THUMBNAIL_TIMEOUT);
+            if (extracted.isEmpty()) {
+                return null;
+            }
+            thumbnailFile = extracted.get();
+            return derivedAssetStorageService.store(
+                    ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_THUMBNAIL,
+                    THUMBNAIL_BASE_NAME + ".jpg",
+                    "image/jpeg", thumbnailFile);
+        } catch (RuntimeException ex) {
+            log.warn("背景视频缩略图生成失败,保留无预览状态: userId={}, assetId={}",
+                    ownerUserId, assetId, ex);
+            return null;
+        } finally {
+            if (thumbnailFile != null) {
+                try {
+                    Files.deleteIfExists(thumbnailFile);
+                } catch (IOException ex) {
+                    log.debug("背景视频缩略图临时文件清理失败: {}", ex.getMessage());
+                }
+            }
         }
     }
 
@@ -413,7 +507,7 @@ public class BackdropAssetService {
         }
         if (matchesAt(head, 0, "GIF87a".getBytes(StandardCharsets.US_ASCII))
                 || matchesAt(head, 0, "GIF89a".getBytes(StandardCharsets.US_ASCII))) {
-            return new DetectedMedia(BackdropMediaType.IMAGE, "image/gif", "gif");
+            return new DetectedMedia(BackdropMediaType.GIF, "image/gif", "gif");
         }
         if (head.length >= 12
                 && matchesAt(head, 0, "RIFF".getBytes(StandardCharsets.US_ASCII))
@@ -544,5 +638,14 @@ public class BackdropAssetService {
      * @param extension 规范化扩展名
      */
     private record DetectedMedia(BackdropMediaType mediaType, String mimeType, String extension) {
+    }
+
+    /**
+     * 服务端解析的展示尺寸。
+     *
+     * @param width 宽度像素
+     * @param height 高度像素
+     */
+    private record ImageDimensions(int width, int height) {
     }
 }

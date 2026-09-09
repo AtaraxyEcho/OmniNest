@@ -72,6 +72,7 @@ class BackdropUploadResourceFilesTest {
     UserStorageCommand userStorageCommand;
     MalwareScanGateway malwareScanGateway;
     RateLimitService rateLimitService;
+    BackdropVideoThumbnailExtractor videoThumbnailExtractor;
     BackdropAssetService service;
     final AtomicReference<BackdropAsset> storedAsset = new AtomicReference<>();
     final List<BackdropAsset> storedAssets = new java.util.ArrayList<>();
@@ -100,6 +101,9 @@ class BackdropUploadResourceFilesTest {
         userStorageCommand = mock(UserStorageCommand.class);
         malwareScanGateway = mock(MalwareScanGateway.class);
         rateLimitService = mock(RateLimitService.class);
+        videoThumbnailExtractor = mock(BackdropVideoThumbnailExtractor.class);
+        when(videoThumbnailExtractor.extractFirstFrame(any(), any(), any(), any()))
+                .thenReturn(java.util.Optional.empty());
 
         when(runtimeConfigService.uploadRatePerHour()).thenReturn(20);
         when(runtimeConfigService.maxAssetsPerUser()).thenReturn(30);
@@ -137,6 +141,7 @@ class BackdropUploadResourceFilesTest {
                 userStorageCommand,
                 malwareScanGateway,
                 rateLimitService,
+                videoThumbnailExtractor,
                 afterCommitFiringTransactionManager()
         );
     }

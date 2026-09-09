@@ -68,7 +68,7 @@ enum AppBackdropFit {
 enum AppBackdropSelectionTarget { desktop, mobile }
 
 /// 应用本机背景操作消息。
-enum AppBackdropMessage { emptyScan, scanFailed }
+enum AppBackdropMessage { emptyScan, scanFailed, deleteFailed }
 
 /// 应用本机背景素材。
 class AppBackdropAsset {

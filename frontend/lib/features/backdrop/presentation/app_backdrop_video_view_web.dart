@@ -15,6 +15,7 @@ class AppBackdropVideoView extends StatefulWidget {
     required this.playing,
     required this.muted,
     this.fallbackSource,
+    this.onSourceStale,
     super.key,
   });
 
@@ -26,6 +27,9 @@ class AppBackdropVideoView extends StatefulWidget {
 
   /// 播放失败时的备用地址(通常为内置壁纸资产 URL)。
   final String? fallbackSource;
+
+  /// 主源打开失败时通知上层签名 URL 可能过期。
+  final VoidCallback? onSourceStale;
 
   @override
   State<AppBackdropVideoView> createState() => _AppBackdropVideoViewState();
@@ -105,6 +109,7 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
         fallback != null &&
         _appliedSource != fallback) {
       debugPrint('背景视频播放失败,回退内置壁纸');
+      widget.onSourceStale?.call();
       _appliedSource = fallback;
       final el = _element;
       if (el != null) {
@@ -112,6 +117,9 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
         _play(el);
       }
       return;
+    }
+    if ((_appliedSource ?? '').startsWith('http')) {
+      widget.onSourceStale?.call();
     }
     _attempts++;
     if (_attempts <= _maxAttempts) {

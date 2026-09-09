@@ -110,6 +110,17 @@ class _AppBackdropSettingsContentState
   String _filter = _allBackdropFilter;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      widget.notifier.ensureFreshServerUrls();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final compact = MediaQuery.sizeOf(context).width < 720;
@@ -278,6 +289,9 @@ class _AppBackdropSettingsContentState
     if (widget.state.uploading) {
       return l10n.portalLocalBackdropUploading;
     }
+    if (widget.state.message == AppBackdropMessage.deleteFailed) {
+      return l10n.portalLocalBackdropDeleteFailed;
+    }
     final failures = widget.state.failedUploads;
     if (failures.isEmpty) {
       return null;
@@ -305,11 +319,25 @@ class _AppBackdropSettingsContentState
       return backdrops;
     }
     return backdrops
-        .where((backdrop) => _extensionOf(backdrop.path) == _filter)
+        .where(
+          (backdrop) =>
+              _filterKeyOf(backdrop) == _filter ||
+              _legacyExtensionOf(backdrop.path) == _filter,
+        )
         .toList(growable: false);
   }
 
-  String _extensionOf(String path) {
+  String _filterKeyOf(AppBackdropAsset backdrop) {
+    if (backdrop.sourceType == AppBackdropSourceType.server) {
+      return backdrop.mediaType.value;
+    }
+    return _legacyExtensionOf(backdrop.path);
+  }
+
+  String _legacyExtensionOf(String path) {
+    if (path.isEmpty || path.startsWith('http')) {
+      return '';
+    }
     final lower = path.toLowerCase();
     final index = lower.lastIndexOf('.');
     return index < 0 ? '' : lower.substring(index);
@@ -321,9 +349,9 @@ class _AppBackdropSettingsContentState
   ) {
     final counts = <String, int>{};
     for (final backdrop in backdrops) {
-      final extension = _extensionOf(backdrop.path);
-      if (extension.isNotEmpty) {
-        counts[extension] = (counts[extension] ?? 0) + 1;
+      final key = _filterKeyOf(backdrop);
+      if (key.isNotEmpty) {
+        counts[key] = (counts[key] ?? 0) + 1;
       }
     }
     final entries =
@@ -337,10 +365,19 @@ class _AppBackdropSettingsContentState
       for (final entry in entries)
         _FilterOption(
           key: entry.key,
-          label: entry.key.replaceFirst('.', '').toUpperCase(),
+          label: _filterLabel(l10n, entry.key),
           count: entry.value,
         ),
     ];
+  }
+
+  String _filterLabel(AppLocalizations l10n, String key) {
+    return switch (key) {
+      'image' => 'IMAGE',
+      'gif' => 'GIF',
+      'video' => 'VIDEO',
+      _ => key.replaceFirst('.', '').toUpperCase(),
+    };
   }
 
   Future<void> _confirmClearAll(
@@ -630,7 +667,8 @@ class _BackdropTilePreview extends StatelessWidget {
           fallbackUrl: backdrop.path.isNotEmpty ? backdrop.path : null,
         );
       }
-      if (!backdrop.isVideo && backdrop.path.isNotEmpty) {
+      if (backdrop.mediaType != AppBackdropMediaType.video &&
+          backdrop.path.isNotEmpty) {
         return AppBackdropImage(
           url: backdrop.path,
           cacheKey: 'backdrop-preview-full:${backdrop.id}',
