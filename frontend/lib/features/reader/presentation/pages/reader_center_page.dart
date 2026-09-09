@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -492,8 +490,8 @@ class _LibraryGridState extends State<_LibraryGrid> {
           physics: const NeverScrollableScrollPhysics(),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 16,
+            crossAxisSpacing: 16,
+            mainAxisSpacing: 20,
             mainAxisExtent: _tileHeight(constraints.maxWidth, columns),
           ),
           itemBuilder: (context, index) {
@@ -532,17 +530,17 @@ class _LibraryGridState extends State<_LibraryGrid> {
   }
 
   int _columnCount(double width) {
-    if (width >= 1280) return 6;
-    if (width >= 1024) return 5;
-    if (width >= 640) return 4;
+    // 比原配置多一列：封面仍 2:3，但单卡更窄更矮。
+    if (width >= 1280) return 7;
+    if (width >= 1024) return 6;
+    if (width >= 640) return 5;
     return 3;
   }
 
   double _tileHeight(double width, int columns) {
-    final tileWidth = (width - 12.0 * (columns - 1)) / columns;
-    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.4);
-    // 封面约 3:4 且设上限，标题一行 + 作者一行，压缩整卡高度。
-    final coverHeight = math.min(tileWidth * 1.33, 168.0);
-    return coverHeight + 6 + 18.0 * textScale + 14.0 * textScale + 2;
+    final tileWidth = (width - 16.0 * (columns - 1)) / columns;
+    final textScale = MediaQuery.textScalerOf(context).scale(1).clamp(1.0, 1.6);
+    // 恢复原先 2:3 封面比例；文字区略压（标题两行 + 作者一行）。
+    return tileWidth * 1.5 + 6 + 34.0 * textScale + 14.0 * textScale + 2;
   }
 }
