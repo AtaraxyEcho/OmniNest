@@ -47,6 +47,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_page_c
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_library_actions_mixin.dart';
 import 'package:omninest/features/reader/application/reader_session_recorder.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_window_search.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_interaction_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_settings_mixin.dart';

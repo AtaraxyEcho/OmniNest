@@ -11,12 +11,20 @@ class ReaderFindPanel extends StatefulWidget {
     required this.plainText,
     required this.settings,
     required this.onSelect,
+    this.chapterTitleOf,
+    this.searchHint,
     super.key,
   });
 
   final String plainText;
   final ReaderViewSettings settings;
   final ValueChanged<int> onSelect;
+
+  /// 可选：全局 offset → 章标题（窗口多章搜索时展示）。
+  final String Function(int globalOffset)? chapterTitleOf;
+
+  /// 搜索框提示；默认「搜索当前章节」。
+  final String? searchHint;
 
   @override
   State<ReaderFindPanel> createState() => _ReaderFindPanelState();
@@ -110,7 +118,7 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
             autofocus: true,
             style: TextStyle(color: widget.settings.onSurfaceColor),
             decoration: InputDecoration(
-              hintText: l10n.readerSearchCurrentChapter,
+              hintText: widget.searchHint ?? l10n.readerSearchCurrentChapter,
               prefixIcon: Icon(
                 Icons.search_rounded,
                 color: widget.settings.onSurfaceVariantColor,
@@ -151,6 +159,7 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                     itemCount: _matches.length,
                     itemBuilder: (context, index) {
                       final offset = _matches[index];
+                      final chapterTitle = widget.chapterTitleOf?.call(offset);
                       return ListTile(
                         leading: SizedBox(
                           width: 32,
@@ -165,9 +174,25 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
                         ),
                         title: Text.rich(
                           _highlightedSnippet(offset),
-                          maxLines: 3,
+                          maxLines:
+                              chapterTitle == null || chapterTitle.isEmpty
+                                  ? 3
+                                  : 2,
                           overflow: TextOverflow.ellipsis,
                         ),
+                        subtitle:
+                            chapterTitle == null || chapterTitle.isEmpty
+                                ? null
+                                : Text(
+                                  chapterTitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color:
+                                        widget.settings.onSurfaceVariantColor,
+                                    fontSize: AppTypography.labelSmall,
+                                  ),
+                                ),
                         onTap: () => widget.onSelect(offset),
                       );
                     },

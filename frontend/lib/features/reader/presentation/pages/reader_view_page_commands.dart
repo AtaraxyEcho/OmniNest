@@ -368,6 +368,87 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     _updateState(() {});
   }
 
+  /// 构建搜索面板：连续滚动时检索窗口内多章，翻页仍限当前章。
+  Widget _buildFindPanel(ReaderChapterContent content) {
+    final fromBlocks = currentChapterPlainText();
+    final fallbackText =
+        fromBlocks.isNotEmpty ? fromBlocks : getPlainText(content.content);
+
+    if (_isPageMode || _contentLoader == null) {
+      return ReaderFindPanel(
+        plainText: fallbackText,
+        settings: _settings,
+        onSelect: _openReaderSearchResult,
+      );
+    }
+
+    final index = _buildWindowSearchIndex();
+    return ReaderFindPanel(
+      plainText: index.combinedText,
+      settings: _settings,
+      chapterTitleOf: index.titleOf,
+      onSelect: (globalOffset) {
+        final hit = index.resolve(globalOffset);
+        if (hit == null) {
+          _openReaderSearchResult(globalOffset);
+          return;
+        }
+        _openWindowSearchResult(hit);
+      },
+    );
+  }
+
+  ReaderWindowSearchIndex _buildWindowSearchIndex() {
+    final loader = _contentLoader!;
+    final chapters = <WindowSearchChapter>[];
+    for (final entry in continuousScrollController.entries) {
+      final data = loader.getByChapterId(entry.chapterId);
+      if (data == null || data.blocks.isEmpty) {
+        continue;
+      }
+      chapters.add(
+        WindowSearchChapter.fromBlocks(
+          chapterId: entry.chapterId,
+          title:
+              entry.title.isNotEmpty
+                  ? entry.title
+                  : _chapterTitleById(entry.chapterId),
+          blocks: data.blocks,
+        ),
+      );
+    }
+    if (chapters.isEmpty) {
+      final text = currentChapterPlainText();
+      chapters.add(
+        WindowSearchChapter(
+          chapterId: _currentChapterId,
+          title: _chapterTitleById(_currentChapterId),
+          plainText: text,
+        ),
+      );
+    }
+    return ReaderWindowSearchIndex(chapters);
+  }
+
+  String _chapterTitleById(String chapterId) {
+    final chapters = _contentLoader?.allChapters ?? const [];
+    for (final c in chapters) {
+      if (c.id == chapterId) {
+        return c.title;
+      }
+    }
+    return '';
+  }
+
+  void _openWindowSearchResult(WindowSearchHit hit) {
+    _closeReaderPanel();
+    if (_isPageMode) {
+      _openReaderSearchResult(hit.localOffset);
+      return;
+    }
+    unawaited(_seekWithinContinuousWindow(hit.chapterId, hit.localOffset));
+  }
+
   List<Widget> _buildReaderPanels(
     ReaderItemDetail detail,
     ReaderChapterContent content,
@@ -392,16 +473,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         onSettingsChanged: onSettingsChanged,
         embedded: true,
       ),
-      ReaderPanelType.search => ReaderFindPanel(
-        plainText: () {
-          final fromBlocks = currentChapterPlainText();
-          return fromBlocks.isNotEmpty
-              ? fromBlocks
-              : getPlainText(content.content);
-        }(),
-        settings: _settings,
-        onSelect: _openReaderSearchResult,
-      ),
+      ReaderPanelType.search => _buildFindPanel(content),
       ReaderPanelType.annotations =>
         _annotationHandler?.buildPanel(context) ?? const SizedBox.shrink(),
       ReaderPanelType.shortcuts => ReaderShortcutPanel(
