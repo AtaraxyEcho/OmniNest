@@ -1,5 +1,6 @@
 import 'dart:collection';
 import 'dart:convert';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -61,37 +62,53 @@ class ReaderContentImage extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child:
-                      isCachedImage
-                          ? _buildCachedImage()
-                          : isDataUri
-                          ? _buildDataUriImage()
-                          : Image.network(
-                            retryCount > 0
-                                ? '${block.src}#retry=$retryCount'
-                                : block.src,
-                            key: ValueKey('${block.src}#$retryCount'),
-                            width: double.infinity,
-                            fit: BoxFit.fitWidth,
-                            filterQuality: FilterQuality.medium,
-                            cacheWidth: 800,
-                            loadingBuilder: (context, child, progress) {
-                              if (progress == null) return child;
-                              return SizedBox(
-                                height: 120,
-                                child: Center(
-                                  child: CircularProgressIndicator(
-                                    value:
-                                        progress.expectedTotalBytes == null
-                                            ? null
-                                            : progress.cumulativeBytesLoaded /
-                                                progress.expectedTotalBytes!,
-                                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final maxImageHeight = _maxImageHeight(
+                        context,
+                        constraints.maxWidth.isFinite
+                            ? constraints.maxWidth
+                            : MediaQuery.sizeOf(context).width,
+                      );
+                      return ConstrainedBox(
+                        constraints: BoxConstraints(maxHeight: maxImageHeight),
+                        child:
+                            isCachedImage
+                                ? _buildCachedImage()
+                                : isDataUri
+                                ? _buildDataUriImage()
+                                : Image.network(
+                                  retryCount > 0
+                                      ? '${block.src}#retry=$retryCount'
+                                      : block.src,
+                                  key: ValueKey('${block.src}#$retryCount'),
+                                  width: double.infinity,
+                                  fit: BoxFit.fitWidth,
+                                  filterQuality: FilterQuality.medium,
+                                  cacheWidth: 800,
+                                  loadingBuilder: (context, child, progress) {
+                                    if (progress == null) return child;
+                                    return SizedBox(
+                                      height: 120,
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                          value:
+                                              progress.expectedTotalBytes ==
+                                                      null
+                                                  ? null
+                                                  : progress
+                                                          .cumulativeBytesLoaded /
+                                                      progress
+                                                          .expectedTotalBytes!,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  errorBuilder: (_, _, _) => _buildError(),
                                 ),
-                              );
-                            },
-                            errorBuilder: (_, _, _) => _buildError(),
-                          ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -112,6 +129,12 @@ class ReaderContentImage extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// 限制超高图：避免 SliverList 中整块长图被一次滑动“翻过”。
+  double _maxImageHeight(BuildContext context, double width) {
+    final viewportHeight = MediaQuery.sizeOf(context).height;
+    return math.min(width * 1.35, viewportHeight * 0.78);
   }
 
   Widget _buildCachedImage() {

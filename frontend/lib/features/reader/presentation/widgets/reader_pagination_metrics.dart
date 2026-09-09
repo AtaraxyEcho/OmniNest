@@ -56,6 +56,7 @@ abstract final class _ReaderPaginationMetrics {
   }
 
   static double imageHeight(double effectiveWidth, String? caption) {
+    // 粗估高度（滚动/分页进度映射）；真实渲染在 ReaderContentImage 有高度上限。
     var height = effectiveWidth * 0.75 + 48;
     if (caption != null && caption.isNotEmpty) {
       height += 26;
