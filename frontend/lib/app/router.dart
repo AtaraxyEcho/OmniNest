@@ -428,7 +428,7 @@ String? authRedirectPath({
     ).toString();
   }
 
-  // 管理页面：角色或管理类权限码任一命中即可进入；分区细粒度由页面权限校验
+  // 管理页面：具备任一管理端入口权限即可进入；分区细粒度由页面权限校验
   if (isAuthenticated && path.startsWith('/admin')) {
     final isAdminRole = userRole == 'ADMIN' || userRole == 'SUPER_ADMIN';
     final hasAdminPermission =

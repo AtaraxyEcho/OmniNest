@@ -31,28 +31,21 @@ enum AdminSection {
 
   /// 分区可见所需的任一权限码。
   ///
-  /// 管理端按能力域收敛入口；后端仍以 @PreAuthorize 做最终校验。
+  /// 与后端管理端接口的 @PreAuthorize 对齐；后端仍做最终校验。
   Set<String> get requiredAnyPermissions {
     return switch (this) {
       AdminSection.overview ||
-      AdminSection.analytics ||
-      AdminSection.monitoring => {
-        'system:config:read',
-        'system:user:read',
-        'task:admin',
-        'media:library:manage',
-        'photo:admin',
-      },
+      AdminSection.analytics => {'system:config:read', 'system:user:read'},
+      AdminSection.monitoring ||
       AdminSection.logs ||
       AdminSection.sessions ||
       AdminSection.config ||
-      AdminSection.storage => {'system:config:read'},
+      AdminSection.storage ||
+      AdminSection.externalStorage => {'system:config:read'},
       AdminSection.tasks => {'task:admin'},
-      AdminSection.users || AdminSection.roles => {'system:user:read'},
-      AdminSection.externalStorage => {
-        'system:config:read',
-        'system:config:manage',
-      },
+      AdminSection.users => {'system:user:read'},
+      // 角色页同时依赖 /admin/roles 与 /admin/roles/detail
+      AdminSection.roles => {'system:user:read', 'system:config:read'},
     };
   }
 
