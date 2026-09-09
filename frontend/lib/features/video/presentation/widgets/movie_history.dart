@@ -66,10 +66,14 @@ class HistorySection extends StatelessWidget {
           ],
         ),
         if (items.isEmpty)
-          MovieRedesignEmptyState(
-            icon: Icons.manage_history_rounded,
-            title: l10n.videoNoWatchHistory,
-            subtitle: l10n.videoRedesignNoHistoryHint,
+          // 分区 Column 为左对齐布局，空状态需撑满宽度才能与
+          // Sliver 分区一样水平居中。
+          Center(
+            child: MovieRedesignEmptyState(
+              icon: Icons.manage_history_rounded,
+              title: l10n.videoNoWatchHistory,
+              subtitle: l10n.videoRedesignNoHistoryHint,
+            ),
           )
         else
           MovieRedesignHistoryList(

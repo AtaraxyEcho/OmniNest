@@ -69,10 +69,14 @@ class CollectionsSection extends ConsumerWidget {
           ],
         ),
         if (collections.isEmpty)
-          MovieRedesignEmptyState(
-            icon: Icons.video_collection_rounded,
-            title: l10n.videoNoMediaItems,
-            subtitle: l10n.videoNewCollection,
+          // 分区 Column 为左对齐布局，空状态需撑满宽度才能与
+          // Sliver 分区一样水平居中。
+          Center(
+            child: MovieRedesignEmptyState(
+              icon: Icons.video_collection_rounded,
+              title: l10n.videoNoMediaItems,
+              subtitle: l10n.videoNewCollection,
+            ),
           )
         else
           LayoutBuilder(
