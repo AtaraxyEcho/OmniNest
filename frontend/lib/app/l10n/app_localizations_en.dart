@@ -4486,6 +4486,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerStatsTitle => 'Statistics';
 
   @override
+  String get adminHistoryEmpty => 'No reading sessions yet.';
+
+  @override
   String get readerStatsLast14 => 'Last 14 days';
 
   @override

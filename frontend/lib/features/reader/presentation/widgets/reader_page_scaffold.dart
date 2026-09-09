@@ -259,6 +259,10 @@ class _ReaderSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final rc = context.readerColors;
+    final mainTargets =
+        targets.where((t) => t != ReaderPageTarget.admin).toList();
+    final adminTargets =
+        targets.where((t) => t == ReaderPageTarget.admin).toList();
     return Container(
       width: 208,
       decoration: BoxDecoration(
@@ -268,12 +272,32 @@ class _ReaderSidebar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final target in targets)
+          for (final target in mainTargets)
             _SidebarNavItem(
               target: target,
               selected: target == current,
               onTap: () => context.go(target.location),
             ),
+          const Spacer(),
+          if (adminTargets.isNotEmpty) ...[
+            Container(
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: rc.outlineVariant)),
+              ),
+              padding: const EdgeInsets.only(top: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (final target in adminTargets)
+                    _SidebarNavItem(
+                      target: target,
+                      selected: target == current,
+                      onTap: () => context.go(target.location),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );

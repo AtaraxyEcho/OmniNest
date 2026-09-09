@@ -8291,6 +8291,12 @@ abstract class AppLocalizations {
   /// **'Statistics'**
   String get readerStatsTitle;
 
+  /// No description provided for @adminHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No reading sessions yet.'**
+  String get adminHistoryEmpty;
+
   /// No description provided for @readerStatsLast14.
   ///
   /// In en, this message translates to:

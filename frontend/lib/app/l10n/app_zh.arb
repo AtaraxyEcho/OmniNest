@@ -1790,6 +1790,7 @@
   "readerShelfEmptyHint": "去书库挑选喜欢的书加入书架吧。",
   "readerStatsActivity": "阅读记录",
   "readerStatsTitle": "阅读统计",
+  "adminHistoryEmpty": "暂无阅读记录。",
   "readerStatsLast14": "最近 14 天",
   "readerStatsCompleted": "已完成",
   "readerStatsInProgress": "进行中",

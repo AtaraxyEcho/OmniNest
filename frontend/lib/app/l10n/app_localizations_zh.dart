@@ -2557,7 +2557,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get adminTopBarPortal => '门户';
+  String get adminTopBarPortal => 'Portal';
 
   @override
   String get adminShellTitle => 'OmniNest 管理台';
@@ -4342,6 +4342,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerStatsTitle => '阅读统计';
+
+  @override
+  String get adminHistoryEmpty => '暂无阅读记录。';
 
   @override
   String get readerStatsLast14 => '最近 14 天';
