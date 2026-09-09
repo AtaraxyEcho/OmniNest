@@ -523,7 +523,7 @@ class ReaderContentLoader {
           chapterId != _activeChapterId &&
           data.blocks.isNotEmpty) {
         data.dropHtmlBody();
-        _contentCache[chapterId] = data.content;
+        _contentCache.remove(chapterId);
       }
       return data;
     } finally {
@@ -584,6 +584,9 @@ class ReaderContentLoader {
   }
 
   /// 邻章 blocks 就绪后丢弃 HTML 正文（活动章保留）。
+  ///
+  /// 同时从 [_contentCache] 移除，使 [contentFor] 返回 null，
+  /// 切章时走 provider 重新取正文，避免用空 HTML 闪空白页。
   void dropHtmlForNeighbors(String activeChapterId) {
     for (final entry in _cache.entries) {
       if (entry.key.chapterId == activeChapterId) {
@@ -593,15 +596,7 @@ class ReaderContentLoader {
         entry.value.dropHtmlBody();
       }
     }
-    for (final id in _contentCache.keys.toList(growable: false)) {
-      if (id == activeChapterId) {
-        continue;
-      }
-      final data = getByChapterId(id);
-      if (data != null && data.blocks.isNotEmpty) {
-        _contentCache[id] = data.content;
-      }
-    }
+    _contentCache.removeWhere((id, _) => id != activeChapterId);
   }
 
   void _prepareScrollMetricsIfNeeded(

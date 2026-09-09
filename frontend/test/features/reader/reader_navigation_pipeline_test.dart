@@ -118,8 +118,13 @@ void main() {
       prepareScrollLayout: false,
     );
 
-    expect(loader.contentFor('chapter-2'), same(content));
-    expect(loader.get('chapter-2', settings), isNotNull);
+    // 邻章预载后 HTML 会被 drop 以省内存；切章复用的是 blocks。
+    expect(loader.contentFor('chapter-2'), isNull);
+    final neighbor = loader.get('chapter-2', settings);
+    expect(neighbor, isNotNull);
+    expect(neighbor!.blocks, isNotEmpty);
+    expect(neighbor.content.content, isEmpty);
+    expect(neighbor.content.title, '第二章');
   });
 
   test('长段落连续翻页复用视觉行测量结果', () {

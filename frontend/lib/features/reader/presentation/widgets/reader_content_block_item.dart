@@ -6,10 +6,9 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_mod
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
-/// 单个正文块的统一渲染（连续滚动已接入）。
+/// 单个正文块的统一渲染（连续滚动与翻页共用）。
 ///
-/// 视觉与 [ReaderViewContent.spanStyle] 同源；翻页路径尚未切换到本组件，
-/// 后续收敛时再替换 ReaderViewContent 的块构建。
+/// 样式与 [ReaderViewContent.spanStyle] 同源；链接/图片手势由本组件自行持有。
 class ReaderContentBlockItem extends StatefulWidget {
   const ReaderContentBlockItem({
     required this.block,
