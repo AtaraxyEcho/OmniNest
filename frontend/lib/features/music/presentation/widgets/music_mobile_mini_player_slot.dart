@@ -30,6 +30,9 @@ class MusicMobileMiniPlayerSlot extends ConsumerStatefulWidget {
 
 class _MusicMobileMiniPlayerSlotState
     extends ConsumerState<MusicMobileMiniPlayerSlot> {
+  /// 已被下滑收起的曲目：切歌后自动回归。
+  String? _dismissedForTrackId;
+
   StreamSubscription<Duration>? _positionSubscription;
   StreamSubscription<Duration>? _durationSubscription;
   Duration _position = Duration.zero;
@@ -93,158 +96,189 @@ class _MusicMobileMiniPlayerSlotState
           light ? colors.primary : colors.surfaceContainerHigh,
           light ? 0.06 : 0.04,
         )!;
-    final requestedSurfaceAlpha = light ? 0.34 : 0.78;
+    // 浮起卡片配方：壁纸激活（玻璃模块）保持烟熏半透；实底模块上近实底，
+    // 读作一张浮起的卡而不是第二根贴边栏。
+    final requestedSurfaceAlpha =
+        backdropActive ? (light ? 0.55 : 0.80) : (light ? 0.96 : 0.94);
     final surfaceAlpha =
         requestedSurfaceAlpha < surface.a ? requestedSurfaceAlpha : surface.a;
-    final requestedOutlineAlpha = light ? 0.52 : 0.72;
+    final requestedOutlineAlpha = light ? 0.35 : 0.50;
     final outlineAlpha =
         requestedOutlineAlpha < colors.outline.a
             ? requestedOutlineAlpha
             : colors.outline.a;
     final progressTrackAlpha =
         0.30 < colors.outline.a ? 0.30 : colors.outline.a;
+    if (track.id == _dismissedForTrackId) {
+      return const SizedBox.shrink();
+    }
     return Theme(
       data: theme,
       child: Semantics(
         container: true,
         label: '${track.title}, ${track.artistName}',
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragEnd: (details) {
-            final velocity = details.primaryVelocity ?? 0;
-            if (velocity.abs() < 180) {
-              return;
-            }
-            if (velocity < 0) {
-              unawaited(_runCommand(() => _controller.nextTrack()));
-            } else {
-              unawaited(_runCommand(() => _controller.previousTrack()));
-            }
-          },
-          child: ClipRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: surface.withValues(alpha: surfaceAlpha),
-                  border: Border(
-                    top: BorderSide(
-                      color: colors.outline.withValues(alpha: outlineAlpha),
-                    ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragEnd: (details) {
+              final velocity = details.primaryVelocity ?? 0;
+              if (velocity.abs() < 180) {
+                return;
+              }
+              if (velocity < 0) {
+                unawaited(_runCommand(() => _controller.nextTrack()));
+              } else {
+                unawaited(_runCommand(() => _controller.previousTrack()));
+              }
+            },
+            // 下滑收起：读作浮层卡片的可关闭性；切歌后自动回归。
+            onVerticalDragEnd: (details) {
+              if ((details.primaryVelocity ?? 0) > 240) {
+                setState(() => _dismissedForTrackId = track.id);
+              }
+            },
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
                   ),
-                ),
-                child: SizedBox(
-                  height: 56,
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 6),
-                            SizedBox.square(
-                              dimension: 44,
-                              child: InkWell(
-                                onTap: widget.onOpenPlayer,
-                                borderRadius: BorderRadius.circular(6),
-                                child: MusicDeckArtwork(
-                                  title: track.title,
-                                  imageUrl: track.coverUrl,
-                                  borderRadius: 6,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: InkWell(
-                                onTap: widget.onOpenPlayer,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 6,
-                                  ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        track.title,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: colors.onSurface,
-                                          fontSize: AppTypography.bodyMedium,
-                                          fontWeight: FontWeight.w700,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 2),
-                                      Text(
-                                        track.artistName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: TextStyle(
-                                          color: colors.onSurfaceVariant,
-                                          fontSize: AppTypography.labelSmall,
-                                        ),
-                                      ),
-                                    ],
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: surface.withValues(alpha: surfaceAlpha),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: colors.outline.withValues(alpha: outlineAlpha),
+                      ),
+                    ),
+                    child: SizedBox(
+                      height: 52,
+                      child: Column(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                const SizedBox(width: 6),
+                                SizedBox.square(
+                                  dimension: 38,
+                                  child: InkWell(
+                                    onTap: widget.onOpenPlayer,
+                                    borderRadius: BorderRadius.circular(6),
+                                    child: MusicDeckArtwork(
+                                      title: track.title,
+                                      imageUrl: track.coverUrl,
+                                      borderRadius: 6,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ),
-                            IconButton(
-                              tooltip:
-                                  track.favorite
-                                      ? l10n.musicUnfavorite
-                                      : l10n.musicFavorite,
-                              onPressed:
-                                  canFavorite
-                                      ? () => unawaited(_toggleFavorite(track))
-                                      : null,
-                              icon: AnimatedSwitcher(
-                                duration: const Duration(milliseconds: 160),
-                                child: Icon(
-                                  track.favorite
-                                      ? Icons.favorite_rounded
-                                      : Icons.favorite_border_rounded,
-                                  key: ValueKey<bool>(track.favorite),
-                                  color:
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: InkWell(
+                                    onTap: widget.onOpenPlayer,
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 2,
+                                      ),
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            track.title,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: colors.onSurface,
+                                              fontSize:
+                                                  AppTypography.bodyMedium,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            track.artistName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: colors.onSurfaceVariant,
+                                              fontSize:
+                                                  AppTypography.labelSmall,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                  tooltip:
                                       track.favorite
-                                          ? colors.star
-                                          : colors.onSurfaceVariant,
-                                  size: 21,
-                                ),
-                              ),
-                            ),
-                            IconButton(
-                              tooltip:
-                                  center?.isPlaying == true
-                                      ? l10n.musicPause
-                                      : l10n.musicPlay,
-                              onPressed:
-                                  () => unawaited(
-                                    _runCommand(_controller.togglePlayback),
+                                          ? l10n.musicUnfavorite
+                                          : l10n.musicFavorite,
+                                  onPressed:
+                                      canFavorite
+                                          ? () =>
+                                              unawaited(_toggleFavorite(track))
+                                          : null,
+                                  icon: AnimatedSwitcher(
+                                    duration: const Duration(milliseconds: 160),
+                                    child: Icon(
+                                      track.favorite
+                                          ? Icons.favorite_rounded
+                                          : Icons.favorite_border_rounded,
+                                      key: ValueKey<bool>(track.favorite),
+                                      color:
+                                          track.favorite
+                                              ? colors.star
+                                              : colors.onSurfaceVariant,
+                                      size: 21,
+                                    ),
                                   ),
-                              icon: Icon(
-                                center?.isPlaying == true
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
-                                color: colors.primary,
-                                size: 28,
-                              ),
+                                ),
+                                IconButton(
+                                  tooltip:
+                                      center?.isPlaying == true
+                                          ? l10n.musicPause
+                                          : l10n.musicPlay,
+                                  onPressed:
+                                      () => unawaited(
+                                        _runCommand(_controller.togglePlayback),
+                                      ),
+                                  icon: Icon(
+                                    center?.isPlaying == true
+                                        ? Icons.pause_rounded
+                                        : Icons.play_arrow_rounded,
+                                    color: colors.primary,
+                                    size: 28,
+                                  ),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                          ],
-                        ),
+                          ),
+                          LinearProgressIndicator(
+                            minHeight: 2,
+                            value: progress,
+                            color: colors.primary,
+                            backgroundColor: colors.outline.withValues(
+                              alpha: progressTrackAlpha,
+                            ),
+                          ),
+                        ],
                       ),
-                      LinearProgressIndicator(
-                        minHeight: 2,
-                        value: progress,
-                        color: colors.primary,
-                        backgroundColor: colors.outline.withValues(
-                          alpha: progressTrackAlpha,
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
