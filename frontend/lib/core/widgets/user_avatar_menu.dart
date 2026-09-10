@@ -241,8 +241,7 @@ class _ThemeCycleButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     // 跟随系统不参与循环；当前为浅色或系统时，下一步为深色；当前为深色时回到浅色。
-    final next =
-        themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    final next = themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     final (icon, label) =
         next == ThemeMode.dark
             ? (Icons.dark_mode_outlined, l10n.settingsThemeDark)
