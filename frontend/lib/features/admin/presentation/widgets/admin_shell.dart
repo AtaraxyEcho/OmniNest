@@ -276,8 +276,10 @@ class _AdminSidebarState extends ConsumerState<AdminSidebar>
   Widget build(BuildContext context) {
     final c = context.adminColors;
     return Container(
-      width: 220,
-      padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+      // 256 与常见桌面侧栏一致；原先 220 扣除内边距后品牌名仅约 112px，
+      // 会被 ellipsis 截断成 “OmniNe…”。
+      width: 256,
+      padding: const EdgeInsets.fromLTRB(14, 24, 14, 24),
       decoration: BoxDecoration(
         color: c.surfaceContainerLow.withValues(alpha: 0.88),
         border: Border(
@@ -603,27 +605,31 @@ class _AdminSideTitle extends StatelessWidget {
     final c = context.adminColors;
     final l10n = AppLocalizations.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+      // 与导航项内缩接近，品牌行不至于贴边，同时给标题更多宽度。
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: [
-          const BrandLogo(size: 40, radius: 12),
-          const SizedBox(width: 12),
+          const BrandLogo(size: 36, radius: 10),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   l10n.adminShellTitle,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    fontSize: AppTypography.titleMedium,
+                    fontSize: AppTypography.titleSmall + 1,
                     height: 20 / 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const SizedBox(height: 3),
+                const SizedBox(height: 2),
                 Text(
                   l10n.adminShellSubtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.labelMedium?.copyWith(
                     fontSize: AppTypography.labelSmall,
                     height: 14 / 11,
