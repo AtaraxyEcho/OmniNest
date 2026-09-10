@@ -111,7 +111,7 @@ class FrameTopBar extends ConsumerWidget {
           const Spacer(),
           searchField,
           const SizedBox(width: 12),
-          _FrameImportAction(),
+          const FrameImportAction(),
           const SizedBox(width: 12),
           const FontScaleControl(size: 20),
           const NotificationIcon(size: 20),
@@ -185,8 +185,10 @@ class _FrameIconButtonState extends State<FrameIconButton> {
   }
 }
 
-/// 顶栏照片导入入口，沿用图库导入完成回调。
-class _FrameImportAction extends ConsumerWidget {
+/// 照片导入入口：顶栏图标与托管态页签行尾部共用，沿用图库导入完成回调。
+class FrameImportAction extends ConsumerWidget {
+  const FrameImportAction({super.key});
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return MediaImportButton(

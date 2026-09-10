@@ -218,6 +218,7 @@ class _MobileTopBar extends ConsumerWidget {
           builder:
               (context) => _buildTopBar(
                 context,
+                ref: ref,
                 l10n: l10n,
                 backdropActive: backdropActive,
               ),
@@ -234,17 +235,19 @@ class _MobileTopBar extends ConsumerWidget {
           builder:
               (context) => _buildTopBar(
                 context,
+                ref: ref,
                 l10n: l10n,
                 backdropActive: backdropActive,
               ),
         ),
       );
     }
-    return _buildTopBar(context, l10n: l10n, backdropActive: false);
+    return _buildTopBar(context, ref: ref, l10n: l10n, backdropActive: false);
   }
 
   Widget _buildTopBar(
     BuildContext context, {
+    required WidgetRef ref,
     required AppLocalizations l10n,
     required bool backdropActive,
   }) {
@@ -300,20 +303,43 @@ class _MobileTopBar extends ConsumerWidget {
                 ),
                 if (branch == MobileNavigationConfig.musicBranch)
                   const MusicMobileTopBarActions(),
-                IconButton(
-                  tooltip: l10n.searchTitle,
-                  onPressed:
-                      () => context.push(
-                        '/search?scope=${MobileNavigationConfig.searchScopeForBranch(branch)}',
+                // Files/Photos 分支搜索改为模块页内搜索条（按宿主隔离），
+                // 其余分支跳全局搜索。
+                if (_searchHostForBranch(branch) case final searchHost?)
+                  IconButton(
+                    tooltip: l10n.searchTitle,
+                    onPressed:
+                        () =>
+                            ref
+                                .read(
+                                  mobileModuleSearchActiveProvider(
+                                    searchHost,
+                                  ).notifier,
+                                )
+                                .toggle(),
+                    icon: Icon(Icons.search_rounded, size: 22),
+                    style: IconButton.styleFrom(
+                      foregroundColor: foreground,
+                      minimumSize: const Size.square(
+                        MobileLayoutTokens.minimumTarget,
                       ),
-                  icon: Icon(Icons.search_rounded, size: 22),
-                  style: IconButton.styleFrom(
-                    foregroundColor: foreground,
-                    minimumSize: const Size.square(
-                      MobileLayoutTokens.minimumTarget,
+                    ),
+                  )
+                else
+                  IconButton(
+                    tooltip: l10n.searchTitle,
+                    onPressed:
+                        () => context.push(
+                          '/search?scope=${MobileNavigationConfig.searchScopeForBranch(branch)}',
+                        ),
+                    icon: Icon(Icons.search_rounded, size: 22),
+                    style: IconButton.styleFrom(
+                      foregroundColor: foreground,
+                      minimumSize: const Size.square(
+                        MobileLayoutTokens.minimumTarget,
+                      ),
                     ),
                   ),
-                ),
                 _MobileActivityButton(
                   foregroundColor: foreground,
                   borderColor: surface,
@@ -656,6 +682,15 @@ class _MobileNavigationRail extends ConsumerWidget {
 
 bool _localBackdropActive(WidgetRef ref) {
   return ref.watch(mobileShellLocalBackdropActiveProvider);
+}
+
+/// 返回分支对应的页内搜索宿主标识；无宿主的分支返回 null（走全局搜索）。
+String? _searchHostForBranch(int branch) {
+  return switch (branch) {
+    MobileNavigationConfig.filesBranch => MobileModuleSearchHosts.files,
+    MobileNavigationConfig.photosBranch => MobileModuleSearchHosts.photos,
+    _ => null,
+  };
 }
 
 Color _musicChromeSurface(

@@ -335,11 +335,13 @@ class _FileManagerShell extends ConsumerWidget {
                   ),
                   child: Column(
                     children: [
-                      if (hosted && !isWide)
+                      if (hosted && !isWide) ...[
+                        _FileHostedSearchBar(section: state.section),
                         _FileMobileSectionBar(
                           section: state.section,
                           onSectionChanged: onSectionChanged,
                         ),
+                      ],
                       if (state.lastActionError case final error?)
                         Padding(
                           padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
@@ -558,19 +560,11 @@ class _FileTopBarState extends ConsumerState<_FileTopBar> {
     super.dispose();
   }
 
-  bool get _canSearch => switch (widget.state.section) {
-    FileManagerSection.allFiles ||
-    FileManagerSection.recent ||
-    FileManagerSection.favorites ||
-    FileManagerSection.recycleBin => true,
-    _ => false,
-  };
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(fileBrowserControllerProvider.notifier);
-    final canSearch = _canSearch;
+    final canSearch = _fileSectionSupportsSearch(widget.state.section);
     final isNarrow = MediaQuery.sizeOf(context).width < 720;
     return WorkbenchTopBar(
       surfaceColor: context.filesColors.surface,
@@ -658,3 +652,84 @@ const Set<FileManagerSection> _superAdminOnlySections = {
   FileManagerSection.externalStorage,
   FileManagerSection.importTasks,
 };
+
+/// 当前 section 是否支持节内搜索。
+bool _fileSectionSupportsSearch(FileManagerSection section) =>
+    switch (section) {
+      FileManagerSection.allFiles ||
+      FileManagerSection.recent ||
+      FileManagerSection.favorites ||
+      FileManagerSection.recycleBin => true,
+      _ => false,
+    };
+
+/// 托管态页内搜索条：壳层顶栏搜索钮展开，保留节内目录定位能力。
+class _FileHostedSearchBar extends ConsumerStatefulWidget {
+  const _FileHostedSearchBar({required this.section});
+
+  final FileManagerSection section;
+
+  @override
+  ConsumerState<_FileHostedSearchBar> createState() =>
+      _FileHostedSearchBarState();
+}
+
+class _FileHostedSearchBarState extends ConsumerState<_FileHostedSearchBar> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void didUpdateWidget(covariant _FileHostedSearchBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.section != widget.section) {
+      _searchController.clear();
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final active = ref.watch(
+      mobileModuleSearchActiveProvider(MobileModuleSearchHosts.files),
+    );
+    if (!active || !_fileSectionSupportsSearch(widget.section)) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    return Container(
+      color: context.mobileColors.surface,
+      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: ResponsiveSearchField(
+              controller: _searchController,
+              onChanged: controller.setSearchQuery,
+              hintText: l10n.filesSearchHint,
+              maxWidth: double.infinity,
+            ),
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context).coreClose,
+            onPressed: () {
+              ref
+                  .read(
+                    mobileModuleSearchActiveProvider(
+                      MobileModuleSearchHosts.files,
+                    ).notifier,
+                  )
+                  .set(false);
+              controller.setSearchQuery('');
+            },
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+    );
+  }
+}

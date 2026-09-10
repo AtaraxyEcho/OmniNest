@@ -26,6 +26,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_tags_view.da
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_trash_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_top_bar.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_timeline_view.dart';
 
 part 'photos_page_batch_actions.dart';
@@ -213,18 +214,20 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                   useSafeArea: !hosted,
                 );
         if (hosted) {
-          // 应用壳托管时同样按设计稿移动端结构渲染：顶栏 + 内容 + 底部导航。
+          // 极简托管布局：顶栏与底栏由壳层唯一提供，模块只渲染
+          // 页内搜索条（壳层搜索钮展开）、视图页签行与内容、批量条。
           return Column(
             children: [
-              FrameTopBar(
-                view: data.frameView,
+              _PhotosHostedSearchBar(
                 searchController: _searchController,
                 onSearchChanged: notifier.setSearchQuery,
-                showTitle: false,
-                searchExpanded: true,
               ),
+              if (!data.isSelectionMode)
+                _PhotosViewTabBar(
+                  activeView: data.frameView,
+                  onSelectView: notifier.setFrameView,
+                ),
               Expanded(child: content),
-              if (bottomNav != null) bottomNav,
               if (data.isSelectionMode && data.selectedPhotoIds.isNotEmpty)
                 _buildAnimatedBatchBar(data),
             ],
@@ -422,5 +425,162 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
         );
       }
     }
+  }
+}
+
+/// 托管态页内搜索条：壳层顶栏搜索钮展开，承载模块内照片搜索。
+class _PhotosHostedSearchBar extends ConsumerStatefulWidget {
+  const _PhotosHostedSearchBar({
+    required this.searchController,
+    required this.onSearchChanged,
+  });
+
+  final TextEditingController searchController;
+  final ValueChanged<String> onSearchChanged;
+
+  @override
+  ConsumerState<_PhotosHostedSearchBar> createState() =>
+      _PhotosHostedSearchBarState();
+}
+
+class _PhotosHostedSearchBarState
+    extends ConsumerState<_PhotosHostedSearchBar> {
+  @override
+  Widget build(BuildContext context) {
+    final active = ref.watch(
+      mobileModuleSearchActiveProvider(MobileModuleSearchHosts.photos),
+    );
+    if (!active) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    final colors = context.frameColors;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.navBg,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: widget.searchController,
+              onChanged: widget.onSearchChanged,
+              autofocus: true,
+              style: TextStyle(
+                fontSize: AppTypography.bodyLarge,
+                color: colors.ink,
+              ),
+              decoration: InputDecoration(
+                isDense: true,
+                filled: true,
+                fillColor: colors.card,
+                hintText: l10n.photosSearchHint,
+                hintStyle: TextStyle(color: colors.muted),
+                prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                prefixIconConstraints: const BoxConstraints(
+                  minWidth: 36,
+                  minHeight: 36,
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 9,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            tooltip: AppLocalizations.of(context).coreClose,
+            onPressed: () {
+              ref
+                  .read(
+                    mobileModuleSearchActiveProvider(
+                      MobileModuleSearchHosts.photos,
+                    ).notifier,
+                  )
+                  .set(false);
+              widget.searchController.clear();
+              widget.onSearchChanged('');
+            },
+            icon: Icon(Icons.close_rounded, color: colors.muted),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 托管态视图页签行：五个主视图 + 收藏/回收站入口 + 导入。
+class _PhotosViewTabBar extends StatelessWidget {
+  const _PhotosViewTabBar({
+    required this.activeView,
+    required this.onSelectView,
+  });
+
+  final FrameView activeView;
+  final ValueChanged<FrameView> onSelectView;
+
+  static const List<FrameView> _views = [
+    FrameView.grid,
+    FrameView.timeline,
+    FrameView.locations,
+    FrameView.tags,
+    FrameView.albums,
+    FrameView.favorites,
+    FrameView.trash,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final colors = context.frameColors;
+    return Container(
+      decoration: BoxDecoration(
+        color: colors.navBg,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: SizedBox(
+        height: 44,
+        child: Row(
+          children: [
+            Expanded(
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                itemCount: _views.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 2),
+                itemBuilder: (context, index) {
+                  final view = _views[index];
+                  final selected = view == activeView;
+                  return TextButton(
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: const Size(0, 44),
+                    ),
+                    onPressed: () => onSelectView(view),
+                    child: Text(
+                      frameViewLabel(l10n, view),
+                      style: TextStyle(
+                        fontSize: AppTypography.bodyMedium,
+                        color: selected ? colors.accent : colors.muted,
+                        fontWeight:
+                            selected ? FontWeight.w700 : FontWeight.w400,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const FrameImportAction(),
+            const SizedBox(width: 6),
+          ],
+        ),
+      ),
+    );
   }
 }
