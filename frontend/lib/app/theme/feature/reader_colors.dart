@@ -34,8 +34,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
     required this.comicBg,
     required this.comicText,
     required this.comicMuted,
-    required this.coverGradientStart,
-    required this.coverGradientEnd,
+    required this.coverPlaceholder,
     required this.reading,
   });
 
@@ -66,8 +65,9 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
   final Color comicBg;
   final Color comicText;
   final Color comicMuted;
-  final Color coverGradientStart;
-  final Color coverGradientEnd;
+
+  /// 封面回退纯色（原双色渐变按禁渐变规范收敛）。
+  final Color coverPlaceholder;
 
   /// 阅读强调色（琥珀棕），用于进度线、完成徽标等阅读语义元素
   final Color reading;
@@ -101,8 +101,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
     comicBg: Color(0xFF000000),
     comicText: Color(0xFFFFFFFF),
     comicMuted: Color(0xB3FFFFFF),
-    coverGradientStart: Color(0xFFFDFCF9),
-    coverGradientEnd: Color(0xFFECEAE5),
+    coverPlaceholder: Color(0xFFECEAE5),
     reading: Color(0xFFB87A35),
   );
 
@@ -135,8 +134,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
     comicBg: Color(0xFF000000),
     comicText: Color(0xFFFFFFFF),
     comicMuted: Color(0xB3FFFFFF),
-    coverGradientStart: Color(0xFF1A1916),
-    coverGradientEnd: Color(0xFF252320),
+    coverPlaceholder: Color(0xFF252320),
     reading: Color(0xFFC8923E),
   );
 
@@ -178,8 +176,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
     Color? comicBg,
     Color? comicText,
     Color? comicMuted,
-    Color? coverGradientStart,
-    Color? coverGradientEnd,
+    Color? coverPlaceholder,
     Color? reading,
   }) {
     return ReaderColors(
@@ -212,8 +209,7 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
       comicBg: comicBg ?? this.comicBg,
       comicText: comicText ?? this.comicText,
       comicMuted: comicMuted ?? this.comicMuted,
-      coverGradientStart: coverGradientStart ?? this.coverGradientStart,
-      coverGradientEnd: coverGradientEnd ?? this.coverGradientEnd,
+      coverPlaceholder: coverPlaceholder ?? this.coverPlaceholder,
       reading: reading ?? this.reading,
     );
   }
@@ -263,10 +259,8 @@ class ReaderColors extends ThemeExtension<ReaderColors> {
       comicBg: Color.lerp(comicBg, other.comicBg, t)!,
       comicText: Color.lerp(comicText, other.comicText, t)!,
       comicMuted: Color.lerp(comicMuted, other.comicMuted, t)!,
-      coverGradientStart:
-          Color.lerp(coverGradientStart, other.coverGradientStart, t)!,
-      coverGradientEnd:
-          Color.lerp(coverGradientEnd, other.coverGradientEnd, t)!,
+      coverPlaceholder:
+          Color.lerp(coverPlaceholder, other.coverPlaceholder, t)!,
       reading: Color.lerp(reading, other.reading, t)!,
     );
   }

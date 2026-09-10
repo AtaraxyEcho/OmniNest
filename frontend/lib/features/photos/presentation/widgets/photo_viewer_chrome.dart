@@ -32,6 +32,7 @@ class PhotoViewerTopBar extends StatelessWidget {
     required this.onShare,
     required this.showInfo,
     required this.compact,
+    this.countText,
   });
 
   final PhotoItem photo;
@@ -46,6 +47,9 @@ class PhotoViewerTopBar extends StatelessWidget {
   final VoidCallback onShare;
   final bool showInfo;
   final bool compact;
+
+  /// 当前位置计数（如 3 / 24）；紧凑档提供时替换日期行（信息减法）。
+  final String? countText;
 
   @override
   Widget build(BuildContext context) {
@@ -110,7 +114,17 @@ class PhotoViewerTopBar extends StatelessWidget {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                if (date != null)
+                if (compact && countText != null)
+                  Text(
+                    countText!,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: dateColor,
+                      fontSize: AppTypography.labelSmall,
+                    ),
+                  )
+                else if (date != null)
                   Text(
                     viewerShortDate(date),
                     maxLines: 1,

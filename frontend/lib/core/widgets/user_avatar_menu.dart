@@ -451,7 +451,7 @@ class _AvatarWidget extends StatelessWidget {
   }
 }
 
-/// 首字母渐变降级头像。
+/// 首字母降级头像：纯色底（禁渐变规范）。
 class _AvatarFallback extends StatelessWidget {
   const _AvatarFallback({required this.initial});
 
@@ -461,18 +461,12 @@ class _AvatarFallback extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [theme.colorScheme.primary, theme.colorScheme.tertiary],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      color: theme.colorScheme.primaryContainer,
       alignment: Alignment.center,
       child: Text(
         initial,
         style: TextStyle(
-          color: theme.colorScheme.onPrimary,
+          color: theme.colorScheme.onPrimaryContainer,
           fontWeight: FontWeight.w700,
           fontSize: AppTypography.titleMedium,
         ),

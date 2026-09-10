@@ -500,6 +500,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               onShare: _openSharePanel,
               showInfo: _showInfo,
               compact: compact,
+              countText: '${_currentPage + 1} / ${_pages.length}',
             ),
           ),
         ),
@@ -666,14 +667,15 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                 onTap: () => _setMotionPinned(!_motionPinnedPlaying),
               ),
             ),
-          if (index > 0)
+          // 紧凑档去常驻箭头（滑动翻页）；≥700 档保留。
+          if (MediaQuery.sizeOf(context).width >= 700 && index > 0)
             PhotoViewerArrowButton(
               icon: Icons.chevron_left_rounded,
               tooltip: AppLocalizations.of(context).photosPrevPhoto,
               alignRight: false,
               onTap: () => _goToPage(index - 1),
             ),
-          if (index < total - 1)
+          if (MediaQuery.sizeOf(context).width >= 700 && index < total - 1)
             PhotoViewerArrowButton(
               icon: Icons.chevron_right_rounded,
               tooltip: AppLocalizations.of(context).photosNextPhoto,

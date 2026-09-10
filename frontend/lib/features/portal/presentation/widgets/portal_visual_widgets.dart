@@ -257,7 +257,7 @@ class PortalVisualPanel extends StatelessWidget {
     final content = DecoratedBox(
       decoration: BoxDecoration(
         color: surfaceColor,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor),
         boxShadow: [
           BoxShadow(
@@ -275,7 +275,7 @@ class PortalVisualPanel extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: content,
       ),
@@ -321,7 +321,7 @@ class PortalVisualTopBar extends StatelessWidget {
                 child: Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     onTap: onSearch,
                     child: Container(
                       height: 38,
@@ -329,7 +329,7 @@ class PortalVisualTopBar extends StatelessWidget {
                       alignment: Alignment.centerLeft,
                       decoration: BoxDecoration(
                         color: palette.structuralStrongSurface(alpha: 0.62),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: palette.muted.withValues(alpha: 0.20),
                         ),
@@ -410,12 +410,14 @@ class PortalGradientCover extends StatelessWidget {
     final hasImage =
         (normalizedImageUrl != null && normalizedImageUrl.isNotEmpty) ||
         (normalizedReaderItemId != null && normalizedReaderItemId.isNotEmpty);
-    final colors = switch (variant % 4) {
-      0 => [palette.accent.withValues(alpha: 0.28), palette.accentAlt],
-      1 => [const Color(0xFF263A66), palette.accent],
-      2 => [const Color(0xFF244641), const Color(0xFFC9C083)],
-      _ => [const Color(0xFF20233D), const Color(0xFFE16F5C)],
+    // 禁渐变规范：每个变体取单一纯色（回退色列表沿用双份同色保持接口）。
+    final solid = switch (variant % 4) {
+      0 => palette.accentAlt,
+      1 => const Color(0xFF263A66),
+      2 => const Color(0xFF244641),
+      _ => const Color(0xFF20233D),
     };
+    final colors = [solid, solid];
     return ConstrainedBox(
       constraints: BoxConstraints(
         minHeight: minCoverHeight,
@@ -425,7 +427,7 @@ class PortalGradientCover extends StatelessWidget {
       child: Container(
         height: height,
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.26),
@@ -435,7 +437,7 @@ class PortalGradientCover extends StatelessWidget {
           ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(12),
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -526,7 +528,7 @@ class PortalGradientCover extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.16),
                         width: borderWidth,
                       ),
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                 ),
@@ -798,7 +800,7 @@ class PortalMetricLine extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: content,
       ),
@@ -840,14 +842,14 @@ class PortalQuickLinks extends StatelessWidget {
                 (entry) => Material(
                   color: Colors.transparent,
                   child: InkWell(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () => context.go(entry.$3),
                     child: Container(
                       height: 38,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
                         color: palette.structuralStrongSurface(alpha: 0.62),
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                         border: Border.all(
                           color: palette.muted.withValues(alpha: 0.20),
                         ),

@@ -115,16 +115,7 @@ class CoverFallback extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            context.readerColors.coverGradientStart,
-            context.readerColors.coverGradientEnd,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
+      decoration: BoxDecoration(color: context.readerColors.coverPlaceholder),
       child: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,

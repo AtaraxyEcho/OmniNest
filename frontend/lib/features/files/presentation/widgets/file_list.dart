@@ -353,7 +353,7 @@ class _FileRowState extends State<_FileRow> {
             onLongPress: longPress,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
                 color:
                     widget.selected

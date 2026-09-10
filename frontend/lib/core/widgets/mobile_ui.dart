@@ -433,7 +433,7 @@ class MobileSettingsGroup extends StatelessWidget {
                   Divider(
                     height: 1,
                     indent: 60,
-                    color: context.mobileColors.outline,
+                    color: context.mobileColors.outline.withValues(alpha: 0.5),
                   ),
               ],
             ],

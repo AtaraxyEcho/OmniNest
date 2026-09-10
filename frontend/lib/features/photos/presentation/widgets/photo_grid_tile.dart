@@ -67,7 +67,7 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
             ).format(date);
 
     final body = ClipRRect(
-      borderRadius: BorderRadius.circular(3),
+      borderRadius: BorderRadius.circular(4),
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -156,7 +156,7 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.all(Radius.circular(3)),
+                    borderRadius: const BorderRadius.all(Radius.circular(4)),
                     border: Border.fromBorderSide(
                       BorderSide(color: colors.accent, width: 2),
                     ),
