@@ -55,6 +55,42 @@ void main() {
     );
   });
 
+  testWidgets('下拉箭头固定在字段右侧且字段撑满父宽', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OmniNestTheme.light(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 220,
+              child: AppDropdown<String>(
+                dense: true,
+                label: '操作类型',
+                value: 'ALL',
+                items: const [
+                  AppDropdownItem(value: 'ALL', label: '全部'),
+                  AppDropdownItem(value: 'LOGIN', label: '登录'),
+                ],
+                onChanged: null,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    final fieldRect = tester.getRect(find.byType(InputDecorator));
+    final iconRect = tester.getRect(
+      find.byIcon(Icons.keyboard_arrow_down_rounded),
+    );
+
+    expect(fieldRect.width, moreOrLessEquals(220, epsilon: 0.5));
+    expect(iconRect.right, lessThanOrEqualTo(fieldRect.right + 0.5));
+    expect(iconRect.right, greaterThan(fieldRect.center.dx));
+    // 箭头应贴近右缘，而不是紧挨着文案。
+    expect(fieldRect.right - iconRect.right, lessThan(20));
+  });
+
   testWidgets('表单下拉使用浮动标签且不低于控件高度', (tester) async {
     await tester.pumpWidget(
       MaterialApp(

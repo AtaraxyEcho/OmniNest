@@ -156,12 +156,12 @@ class AdminFilterBar extends StatelessWidget {
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         SizedBox(
-          width: 240,
+          width: AppControlTokens.searchFieldWidth,
           child: TextField(
             controller: TextEditingController(text: keyword),
             decoration: InputDecoration(
               isDense: true,
-              prefixIcon: const Icon(Icons.search_rounded, size: 20),
+              prefixIcon: const Icon(Icons.search_rounded, size: 18),
               hintText: AppLocalizations.of(context).adminSearchHint,
             ),
             onSubmitted: onKeywordChanged,

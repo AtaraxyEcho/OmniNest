@@ -17,13 +17,13 @@ class AppDropdownItem<T> {
 }
 
 /// 全局统一下拉选择：闭合态与 [TextField] 同风格的描边填充式
-///（静态 outlineVariant 描边、hover 加深、聚焦主色描边 + 旋转箭头），
+///（静态 outlineVariant 描边、hover 加深、聚焦主色描边 + 右侧旋转箭头），
 /// 展开菜单基于 Material 3 的 [MenuAnchor]——锚点定位、自动上下翻转、
 /// 外部点击关闭与键盘导航均由框架保证；视觉上为圆角投影面板、选项
 /// hover 高亮、选中项主色加粗并打勾。全局所有表单型下拉统一使用本控件。
 ///
-/// 筛选栏等与按钮并排的场景应传 [dense] 为 true：不使用浮动标签，
-/// 字段高度与按钮对齐，避免下拉比相邻按钮更高。
+/// 字段横向撑满父级约束（或 [width]），箭头通过 suffixIcon 固定右侧；
+/// 筛选栏等与按钮并排的场景应传 [dense] 为 true。
 class AppDropdown<T> extends StatefulWidget {
   const AppDropdown({
     required this.value,
@@ -46,7 +46,7 @@ class AppDropdown<T> extends StatefulWidget {
   /// [dense] 为 true 时作为字段内前缀文案，不抬升字段高度。
   final String? label;
 
-  /// 固定宽度；为空时由父级约束决定。
+  /// 固定宽度；为空时由父级约束决定并横向撑满。
   final double? width;
   final String? suffixText;
 
@@ -93,17 +93,15 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
   }
 
   EdgeInsetsGeometry get _contentPadding {
-    if (widget.dense) {
-      return EdgeInsets.symmetric(
-        horizontal: AppControlTokens.denseFieldHorizontalPadding,
-        vertical: AppControlTokens.denseFieldVerticalPadding,
-      );
-    }
-    return Theme.of(context).inputDecorationTheme.contentPadding ??
-        EdgeInsets.symmetric(
-          horizontal: AppControlTokens.fieldHorizontalPadding,
-          vertical: AppControlTokens.fieldVerticalPadding,
-        );
+    final horizontal =
+        widget.dense
+            ? AppControlTokens.denseFieldHorizontalPadding
+            : AppControlTokens.fieldHorizontalPadding;
+    final vertical =
+        widget.dense
+            ? AppControlTokens.denseFieldVerticalPadding
+            : AppControlTokens.fieldVerticalPadding;
+    return EdgeInsets.symmetric(horizontal: horizontal, vertical: vertical);
   }
 
   @override
@@ -154,72 +152,85 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
             },
             child: GestureDetector(
               onTap: () => isOpen ? controller.close() : controller.open(),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  minHeight: AppControlTokens.fieldHeight,
-                ),
-                child: InputDecorator(
-                  isFocused: _focused || isOpen,
-                  isEmpty: false,
-                  expands: false,
-                  decoration: InputDecoration(
-                    labelText: dense ? null : widget.label,
-                    floatingLabelBehavior:
-                        dense ? FloatingLabelBehavior.never : null,
-                    helperText: widget.helperText,
-                    isDense: true,
-                    suffixText:
-                        widget.suffixText == null || widget.suffixText!.isEmpty
-                            ? null
-                            : widget.suffixText,
-                    filled: true,
-                    fillColor: colors.surfaceContainerLowest,
-                    contentPadding: _contentPadding,
-                    // 闭合态与主题输入框同风格描边：hover 加深，聚焦/展开
-                    // 用主色，保证与相邻 TextField 的视觉重量一致。
-                    border: _fieldBorder(colors.outlineVariant),
-                    enabledBorder: _fieldBorder(
-                      _focused || isOpen
-                          ? colors.primary
-                          : _hovered
-                          ? colors.onSurfaceVariant
-                          : colors.outlineVariant,
+              behavior: HitTestBehavior.opaque,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final boundedWidth =
+                      constraints.hasBoundedWidth ? constraints.maxWidth : null;
+                  final fieldWidth = widget.width ?? boundedWidth;
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: AppControlTokens.fieldHeight,
+                      minWidth: fieldWidth ?? 0,
+                      maxWidth: fieldWidth ?? double.infinity,
                     ),
-                    focusedBorder: _fieldBorder(colors.primary, width: 1.5),
-                  ),
-                  child: Row(
-                    children: [
-                      if (dense && widget.label != null) ...[
-                        Flexible(
-                          child: Text(
-                            widget.label!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: labelStyle,
+                    child: InputDecorator(
+                      isFocused: _focused || isOpen,
+                      isEmpty: false,
+                      expands: false,
+                      decoration: InputDecoration(
+                        labelText: dense ? null : widget.label,
+                        floatingLabelBehavior:
+                            dense ? FloatingLabelBehavior.never : null,
+                        helperText: widget.helperText,
+                        isDense: true,
+                        suffixText:
+                            widget.suffixText == null ||
+                                    widget.suffixText!.isEmpty
+                                ? null
+                                : widget.suffixText,
+                        suffixIcon: AnimatedRotation(
+                          turns: isOpen ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 150),
+                          child: Icon(
+                            Icons.keyboard_arrow_down_rounded,
+                            size: 20,
+                            color: colors.onSurfaceVariant,
                           ),
                         ),
-                        Text(' · ', style: labelStyle),
-                      ],
-                      Expanded(
-                        child: Text(
-                          _currentLabel,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: valueStyle,
+                        suffixIconConstraints: const BoxConstraints(
+                          minWidth: 28,
+                          minHeight: 0,
                         ),
-                      ),
-                      AnimatedRotation(
-                        turns: isOpen ? 0.5 : 0,
-                        duration: const Duration(milliseconds: 150),
-                        child: Icon(
-                          Icons.keyboard_arrow_down_rounded,
-                          size: 20,
-                          color: colors.onSurfaceVariant,
+                        filled: true,
+                        fillColor: colors.surfaceContainerLowest,
+                        contentPadding: _contentPadding,
+                        border: _fieldBorder(colors.outlineVariant),
+                        enabledBorder: _fieldBorder(
+                          _focused || isOpen
+                              ? colors.primary
+                              : _hovered
+                              ? colors.onSurfaceVariant
+                              : colors.outlineVariant,
                         ),
+                        focusedBorder: _fieldBorder(colors.primary, width: 1.5),
                       ),
-                    ],
-                  ),
-                ),
+                      child: Row(
+                        children: [
+                          if (dense && widget.label != null) ...[
+                            Flexible(
+                              child: Text(
+                                widget.label!,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: labelStyle,
+                              ),
+                            ),
+                            Text(' · ', style: labelStyle),
+                          ],
+                          Expanded(
+                            child: Text(
+                              _currentLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: valueStyle,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           );
@@ -277,6 +288,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
         ],
       ),
     );
+
     if (widget.width != null) {
       field = SizedBox(width: widget.width, child: field);
     }

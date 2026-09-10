@@ -88,7 +88,7 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
           runSpacing: 10,
           children: [
             AppDropdown<String>(
-              width: 190,
+              width: AppControlTokens.filterFieldWidth,
               dense: true,
               label: l10n.adminConfigGroupColumn,
               value: _groupFilter,

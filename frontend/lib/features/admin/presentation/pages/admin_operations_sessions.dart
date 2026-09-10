@@ -113,7 +113,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             AppDropdown<String>(
-              width: 190,
+              width: AppControlTokens.filterFieldWidth,
               dense: true,
               label: l10n.adminFilterStatus,
               value: _status,
@@ -146,7 +146,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
               },
             ),
             AppDropdown<String>(
-              width: 190,
+              width: AppControlTokens.filterFieldWidth,
               dense: true,
               label: l10n.adminFilterPlatform,
               value: _platform,
@@ -168,7 +168,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
               },
             ),
             AppDropdown<int>(
-              width: 190,
+              width: AppControlTokens.filterFieldCompactWidth,
               dense: true,
               value: _retentionDays,
               items: [

@@ -269,6 +269,15 @@ class OmniNestTheme {
           horizontal: inputHorizontalPadding,
           vertical: inputVerticalPadding,
         ),
+        // 前后缀图标不撑满 Material 默认 48 宽，避免搜索框被图标挤扁。
+        prefixIconConstraints: BoxConstraints(
+          minWidth: AppControlTokens.fieldPrefixIconWidth,
+          minHeight: 0,
+        ),
+        suffixIconConstraints: BoxConstraints(
+          minWidth: AppControlTokens.fieldSuffixIconWidth,
+          minHeight: 0,
+        ),
         border: inputBorder,
         enabledBorder: inputBorder,
         focusedBorder: inputBorder.copyWith(

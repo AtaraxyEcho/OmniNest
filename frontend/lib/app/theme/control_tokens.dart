@@ -35,6 +35,21 @@ abstract final class AppControlTokens {
   /// 紧凑筛选下拉垂直内边距。
   static double get denseFieldVerticalPadding => isDesktopDensity ? 8 : 12;
 
+  /// 筛选栏带标签下拉默认宽度。
+  static double get filterFieldWidth => isDesktopDensity ? 200 : 220;
+
+  /// 筛选栏无标签短下拉默认宽度。
+  static double get filterFieldCompactWidth => isDesktopDensity ? 148 : 168;
+
+  /// 筛选栏搜索框默认宽度。
+  static double get searchFieldWidth => isDesktopDensity ? 220 : 240;
+
+  /// 输入框前缀图标占位宽度（搜索等）。
+  static double get fieldPrefixIconWidth => isDesktopDensity ? 32 : 36;
+
+  /// 下拉箭头占位宽度。
+  static double get fieldSuffixIconWidth => isDesktopDensity ? 28 : 32;
+
   /// 菜单 / 字段圆角。
   static const double controlRadius = 8;
 

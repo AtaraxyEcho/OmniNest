@@ -651,37 +651,33 @@ class _AdminRecordFilterBar extends StatelessWidget {
       runSpacing: 10,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        SizedBox(
-          width: 220,
-          child: AppDropdown<String>(
-            value: value,
-            dense: true,
-            label: label,
-            items: [
-              for (final option in options)
-                AppDropdownItem(value: option, label: optionLabel(option)),
-            ],
-            onChanged: (next) {
-              if (next != null) onChanged(next);
-            },
-          ),
+        AppDropdown<String>(
+          width: AppControlTokens.filterFieldWidth,
+          value: value,
+          dense: true,
+          label: label,
+          items: [
+            for (final option in options)
+              AppDropdownItem(value: option, label: optionLabel(option)),
+          ],
+          onChanged: (next) {
+            if (next != null) onChanged(next);
+          },
         ),
-        SizedBox(
-          width: 160,
-          child: AppDropdown<int>(
-            value: retentionDays,
-            dense: true,
-            items: [
-              for (final days in const <int>[7, 30, 90, 365])
-                AppDropdownItem(
-                  value: days,
-                  label: l10n.adminRetentionDays('$days'),
-                ),
-            ],
-            onChanged: (next) {
-              if (next != null) onRetentionChanged(next);
-            },
-          ),
+        AppDropdown<int>(
+          width: AppControlTokens.filterFieldCompactWidth,
+          value: retentionDays,
+          dense: true,
+          items: [
+            for (final days in const <int>[7, 30, 90, 365])
+              AppDropdownItem(
+                value: days,
+                label: l10n.adminRetentionDays('$days'),
+              ),
+          ],
+          onChanged: (next) {
+            if (next != null) onRetentionChanged(next);
+          },
         ),
         FilledButton.tonalIcon(
           onPressed: onCleanup,

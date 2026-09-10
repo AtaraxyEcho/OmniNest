@@ -582,20 +582,18 @@ class _TaskFilter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 220,
-      child: AppDropdown<String>(
-        value: value,
-        dense: true,
-        label: label,
-        items: [
-          for (final option in options)
-            AppDropdownItem(value: option, label: optionLabel(option)),
-        ],
-        onChanged: (next) {
-          if (next != null) onChanged(next);
-        },
-      ),
+    return AppDropdown<String>(
+      width: AppControlTokens.filterFieldWidth,
+      value: value,
+      dense: true,
+      label: label,
+      items: [
+        for (final option in options)
+          AppDropdownItem(value: option, label: optionLabel(option)),
+      ],
+      onChanged: (next) {
+        if (next != null) onChanged(next);
+      },
     );
   }
 }
