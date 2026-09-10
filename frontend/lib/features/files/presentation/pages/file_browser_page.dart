@@ -18,7 +18,6 @@ import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/workbench_navigation_bar.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
-import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
@@ -320,14 +319,7 @@ class _FileManagerShell extends ConsumerWidget {
             extendBody: true,
             body: Stack(
               children: [
-                if (hosted)
-                  const MobilePageSurface(
-                    exposeBackdrop: true,
-                    backdropOpacity: 0.56,
-                    child: SizedBox.expand(),
-                  )
-                else
-                  const _FileBackdrop(),
+                if (!hosted) const _FileBackdrop(),
                 // 主内容（延伸到顶部栏下方）
                 Padding(
                   padding: EdgeInsets.only(

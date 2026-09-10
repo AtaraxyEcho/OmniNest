@@ -34,7 +34,7 @@ class _InlineUploadQueueCardState extends State<_InlineUploadQueueCard> {
         ).colorScheme.surfaceContainer.withValues(alpha: 0.72),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: context.filesColors.tertiary.withValues(alpha: 0.24),
+          color: context.filesColors.outlineVariant.withValues(alpha: 0.5),
         ),
       ),
       child: Padding(
