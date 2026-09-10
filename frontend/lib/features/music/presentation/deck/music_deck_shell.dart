@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/theme/motion_token.dart';
@@ -225,7 +226,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
     final l10n = AppLocalizations.of(context);
     final colors = context.musicColors;
     return SizedBox(
-      height: 42,
+      height: AppControlTokens.fieldHeight,
       child: Row(
         children: [
           IconButton(

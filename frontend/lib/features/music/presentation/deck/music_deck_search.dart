@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -32,19 +33,20 @@ class MusicDeckSearchField extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.globalColors;
+    // 与全局顶栏搜索对齐：高度走控件 token；浅色用 surfaceContainerLow，避免纯白。
     return Focus(
       onFocusChange: onFocusChanged,
       child: DecoratedBox(
         key: const ValueKey<String>('music-global-search-surface'),
         decoration: BoxDecoration(
           color: colors.surfaceContainerLow.withValues(alpha: 0.92),
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
           border: Border.all(
             color: colors.outlineVariant.withValues(alpha: 0.42),
           ),
         ),
         child: SizedBox(
-          height: 42,
+          height: AppControlTokens.fieldHeight,
           child: TextField(
             controller: controller,
             focusNode: focusNode,
@@ -54,6 +56,7 @@ class MusicDeckSearchField extends StatelessWidget {
               fontSize: AppTypography.bodyMedium,
             ),
             decoration: InputDecoration(
+              isDense: true,
               hintText: l10n.musicSearchHint,
               hintStyle: TextStyle(
                 color: colors.onSurfaceVariant,
@@ -61,8 +64,12 @@ class MusicDeckSearchField extends StatelessWidget {
               ),
               prefixIcon: Icon(
                 Icons.search_rounded,
-                size: 19,
+                size: 18,
                 color: colors.onSurfaceVariant,
+              ),
+              prefixIconConstraints: BoxConstraints(
+                minWidth: AppControlTokens.fieldPrefixIconWidth,
+                minHeight: 0,
               ),
               suffixIcon:
                   controller.text.isEmpty
@@ -75,8 +82,15 @@ class MusicDeckSearchField extends StatelessWidget {
                         },
                         icon: const Icon(Icons.close_rounded, size: 17),
                       ),
+              suffixIconConstraints: BoxConstraints(
+                minWidth: AppControlTokens.fieldSuffixIconWidth,
+                minHeight: 0,
+              ),
               border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(vertical: 11),
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: AppControlTokens.denseFieldHorizontalPadding,
+                vertical: AppControlTokens.denseFieldVerticalPadding,
+              ),
             ),
           ),
         ),
