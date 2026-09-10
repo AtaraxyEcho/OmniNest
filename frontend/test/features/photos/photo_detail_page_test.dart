@@ -12,7 +12,6 @@ import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
-import 'package:omninest/features/photos/presentation/pages/photo_browse_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_detail_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
@@ -250,10 +249,6 @@ void main() {
         GoRoute(
           path: '/photos',
           builder: (context, state) => const PhotosPage(),
-        ),
-        GoRoute(
-          path: '/photos/browse',
-          builder: (context, state) => const PhotoBrowsePage(),
         ),
         GoRoute(
           path: '/photos/slideshow',

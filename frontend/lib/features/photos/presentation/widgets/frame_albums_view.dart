@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -82,7 +83,10 @@ class FrameAlbumsView extends StatelessWidget {
                                 child: _FrameAlbumCard(
                                   album: album,
                                   onOpen: () => onOpenAlbum(album),
-                                  onLongPress: () => onDeleteAlbum(album),
+                                  onLongPress: () {
+                                    HapticFeedback.mediumImpact();
+                                    onDeleteAlbum(album);
+                                  },
                                 ),
                               ),
                           ],

@@ -16445,6 +16445,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Overview'**
   String get videoMetaFieldOverview;
+
+  /// No description provided for @readerComicManifestLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load the comic manifest, please retry later'**
+  String get readerComicManifestLoadFailed;
+
+  /// No description provided for @readerComicParseFailedWithReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Comic parsing failed: {reason}'**
+  String readerComicParseFailedWithReason(Object reason);
+
+  /// No description provided for @readerComicParseFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Comic parsing failed, retry sources on the detail page'**
+  String get readerComicParseFailed;
+
+  /// No description provided for @readerComicPartialFailedWithReason.
+  ///
+  /// In en, this message translates to:
+  /// **'Some comic sources failed to parse: {reason}'**
+  String readerComicPartialFailedWithReason(Object reason);
+
+  /// No description provided for @readerComicPartialFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Some comic sources failed to parse, handle failed sources on the detail page'**
+  String get readerComicPartialFailed;
+
+  /// No description provided for @readerComicEmptyManifest.
+  ///
+  /// In en, this message translates to:
+  /// **'Comic content is empty or the manifest has not been generated'**
+  String get readerComicEmptyManifest;
+
+  /// No description provided for @readerComicEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Comic content is empty'**
+  String get readerComicEmpty;
 }
 
 class _AppLocalizationsDelegate

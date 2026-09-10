@@ -90,6 +90,26 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
           canPop: false,
           onPopInvokedWithResult: (didPop, result) {
             if (didPop) return;
+            final photoState =
+                ref.read(photoCenterControllerProvider).asData?.value;
+            final controller = ref.read(photoCenterControllerProvider.notifier);
+            if (photoState == null) {
+              context.go('/portal');
+              return;
+            }
+            // 返回优先级：退出多选 → 回图库视图 → 清空搜索 → 回门户。
+            if (photoState.isSelectionMode) {
+              controller.toggleSelectionMode();
+              return;
+            }
+            if (photoState.frameView != FrameView.grid) {
+              controller.setFrameView(FrameView.grid);
+              return;
+            }
+            if (photoState.searchQuery.isNotEmpty) {
+              controller.setSearchQuery('');
+              return;
+            }
             context.go('/portal');
           },
           child: Scaffold(

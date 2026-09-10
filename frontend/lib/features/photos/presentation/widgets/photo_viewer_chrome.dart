@@ -282,47 +282,6 @@ class PhotoViewerTopBar extends StatelessWidget {
   }
 }
 
-/// 幻灯片播放状态徽章：底部居中，黑色半透明胶囊。
-class PhotoViewerSlideshowBadge extends StatelessWidget {
-  const PhotoViewerSlideshowBadge({
-    super.key,
-    required this.current,
-    required this.total,
-  });
-
-  final int current;
-  final int total;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.50),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.play_arrow_rounded,
-            size: 14,
-            color: Colors.white.withValues(alpha: 0.80),
-          ),
-          const SizedBox(width: 4),
-          Text(
-            AppLocalizations.of(context).photosSlideshowBadge(current, total),
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.80),
-              fontSize: AppTypography.bodySmall,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 bool _isZhLocale(BuildContext context) {
   return Localizations.localeOf(context).languageCode == 'zh';
 }

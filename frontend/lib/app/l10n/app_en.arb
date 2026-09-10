@@ -1881,10 +1881,6 @@
   "adminRestartItems": "Restart Items",
   "adminStatusEnabled": "Enabled",
   "adminStatusDisabled": "Disabled",
-  "adminRoleSuperAdmin": "Super Admin",
-  "adminRoleAdmin": "Admin",
-  "adminRoleMember": "Member",
-  "adminRoleGuest": "Guest",
   "adminGroupOverview": "Overview",
   "adminGroupOperations": "Operations",
   "adminGroupIdentity": "Identity & Permissions",
@@ -4068,5 +4064,22 @@
   "videoMetaFieldOriginalTitle": "Original title",
   "videoMetaFieldYear": "Year",
   "videoMetaFieldRuntimeMinutes": "Runtime (minutes)",
-  "videoMetaFieldOverview": "Overview"
+  "videoMetaFieldOverview": "Overview",
+  "readerComicManifestLoadFailed": "Failed to load the comic manifest, please retry later",
+  "readerComicParseFailedWithReason": "Comic parsing failed: {reason}",
+  "@readerComicParseFailedWithReason": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "readerComicParseFailed": "Comic parsing failed, retry sources on the detail page",
+  "readerComicPartialFailedWithReason": "Some comic sources failed to parse: {reason}",
+  "@readerComicPartialFailedWithReason": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "readerComicPartialFailed": "Some comic sources failed to parse, handle failed sources on the detail page",
+  "readerComicEmptyManifest": "Comic content is empty or the manifest has not been generated",
+  "readerComicEmpty": "Comic content is empty"
 }

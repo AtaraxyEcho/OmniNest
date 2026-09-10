@@ -8730,4 +8730,29 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoMetaFieldOverview => '简介';
+
+  @override
+  String get readerComicManifestLoadFailed => '漫画清单加载失败，请稍后重试';
+
+  @override
+  String readerComicParseFailedWithReason(Object reason) {
+    return '漫画解析失败：$reason';
+  }
+
+  @override
+  String get readerComicParseFailed => '漫画解析失败，请在详情页重试来源';
+
+  @override
+  String readerComicPartialFailedWithReason(Object reason) {
+    return '部分漫画来源解析失败：$reason';
+  }
+
+  @override
+  String get readerComicPartialFailed => '部分漫画来源解析失败，请在详情页处理失败来源';
+
+  @override
+  String get readerComicEmptyManifest => '漫画内容为空或尚未生成清单';
+
+  @override
+  String get readerComicEmpty => '漫画内容为空';
 }

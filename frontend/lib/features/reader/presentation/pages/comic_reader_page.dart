@@ -88,10 +88,11 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       if (!mounted) {
         return;
       }
+      final l10n = AppLocalizations.of(context);
       setState(() {
         _loading = false;
         _waitingForParse = false;
-        _error = '漫画清单加载失败，请稍后重试';
+        _error = l10n.readerComicManifestLoadFailed;
       });
     } finally {
       _requestInFlight = false;
@@ -114,6 +115,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     if (manifest.totalPages > 0) {
       return null;
     }
+    final l10n = AppLocalizations.of(context);
     final failedSource =
         manifest.sources
             .where((source) => source.status == ReaderSourceStatus.failed)
@@ -124,13 +126,13 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
       ReaderImportStatus.pending || ReaderImportStatus.parsing => null,
       ReaderImportStatus.failed =>
         failureReason?.trim().isNotEmpty == true
-            ? '漫画解析失败：${failureReason!.trim()}'
-            : '漫画解析失败，请在详情页重试来源',
+            ? l10n.readerComicParseFailedWithReason(failureReason!.trim())
+            : l10n.readerComicParseFailed,
       ReaderImportStatus.partialFailed =>
         failureReason?.trim().isNotEmpty == true
-            ? '部分漫画来源解析失败：${failureReason!.trim()}'
-            : '部分漫画来源解析失败，请在详情页处理失败来源',
-      _ => '漫画内容为空或尚未生成清单',
+            ? l10n.readerComicPartialFailedWithReason(failureReason!.trim())
+            : l10n.readerComicPartialFailed,
+      _ => l10n.readerComicEmptyManifest,
     };
   }
 
@@ -232,6 +234,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final manifestMonitor = ref.watch(
       comicManifestMonitorProvider(widget.itemId),
     );
@@ -244,9 +247,10 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     if (_loading && manifestMonitor.asData?.value.refreshError != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted && _loading) {
+          final l10n = AppLocalizations.of(context);
           setState(() {
             _loading = false;
-            _error = '漫画清单加载失败，请稍后重试';
+            _error = l10n.readerComicManifestLoadFailed;
           });
         }
       });
@@ -319,7 +323,7 @@ class _ComicReaderPageState extends ConsumerState<ComicReaderPage> {
     if (_error != null || _manifest == null || _manifest!.totalPages == 0) {
       return Scaffold(
         body: AppErrorView(
-          message: _error ?? '漫画内容为空',
+          message: _error ?? l10n.readerComicEmpty,
           onBack: _handleBack,
           onRetry: () {
             setState(() {

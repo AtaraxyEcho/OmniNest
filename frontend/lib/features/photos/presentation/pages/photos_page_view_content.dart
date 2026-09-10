@@ -37,40 +37,58 @@ class _FrameViewContent extends ConsumerWidget {
               : const Duration(milliseconds: 200),
       child: switch (state.frameView) {
         FrameView.grid || FrameView.favorites => _buildGrid(context, ref),
-        FrameView.timeline => PhotoTimelineView(
-          key: const ValueKey('frame-timeline'),
-          onOpenPhoto: (photo) {
-            // 时间线的浏览范围为当前已加载的各月份预览照片。
-            final timeline = state.timeline;
-            if (timeline != null) {
-              final previews = <PhotoItem>[
-                for (final year in timeline.years)
-                  for (final month in year.months) ...month.previewPhotos,
-              ];
-              ref
-                  .read(photoBrowseScopeProvider.notifier)
-                  .set(previews, PhotoBrowseSource.timeline);
-            }
-            onOpenPhoto(photo);
-          },
-          state: state,
+        FrameView.timeline => _compactRefreshable(
+          ref,
+          () => ref
+              .read(photoCenterControllerProvider.notifier)
+              .loadTimeline(force: true),
+          PhotoTimelineView(
+            key: const ValueKey('frame-timeline'),
+            onOpenPhoto: (photo) {
+              // 时间线的浏览范围为当前已加载的各月份预览照片。
+              final timeline = state.timeline;
+              if (timeline != null) {
+                final previews = <PhotoItem>[
+                  for (final year in timeline.years)
+                    for (final month in year.months) ...month.previewPhotos,
+                ];
+                ref
+                    .read(photoBrowseScopeProvider.notifier)
+                    .set(previews, PhotoBrowseSource.timeline);
+              }
+              onOpenPhoto(photo);
+            },
+            state: state,
+          ),
         ),
-        FrameView.locations => FrameLocationsView(
-          key: const ValueKey('frame-locations'),
-          onOpenPhoto: onOpenPhoto,
-          onToggleFavorite: onToggleFavorite,
+        FrameView.locations => _compactRefreshable(
+          ref,
+          () => ref.read(photoCenterControllerProvider.notifier).refresh(),
+          FrameLocationsView(
+            key: const ValueKey('frame-locations'),
+            onOpenPhoto: onOpenPhoto,
+            onToggleFavorite: onToggleFavorite,
+          ),
         ),
-        FrameView.tags => FrameTagsView(
-          key: const ValueKey('frame-tags'),
-          onOpenPhoto: onOpenPhoto,
-          onToggleFavorite: onToggleFavorite,
+        FrameView.tags => _compactRefreshable(
+          ref,
+          () => ref.read(photoCenterControllerProvider.notifier).refresh(),
+          FrameTagsView(
+            key: const ValueKey('frame-tags'),
+            onOpenPhoto: onOpenPhoto,
+            onToggleFavorite: onToggleFavorite,
+          ),
         ),
-        FrameView.albums => FrameAlbumsView(
-          key: const ValueKey('frame-albums'),
-          albums: state.albums,
-          onOpenAlbum: onOpenAlbum,
-          onDeleteAlbum: onDeleteAlbum,
-          onCreateAlbum: onCreateAlbum,
+        FrameView.albums => _compactRefreshable(
+          ref,
+          () => ref.read(photoCenterControllerProvider.notifier).refresh(),
+          FrameAlbumsView(
+            key: const ValueKey('frame-albums'),
+            albums: state.albums,
+            onOpenAlbum: onOpenAlbum,
+            onDeleteAlbum: onDeleteAlbum,
+            onCreateAlbum: onCreateAlbum,
+          ),
         ),
         FrameView.trash => FrameTrashView(
           key: const ValueKey('frame-trash'),
@@ -81,6 +99,28 @@ class _FrameViewContent extends ConsumerWidget {
           onDeleteForever: onDeleteForeverFromTrash,
           onEmptyTrash: onEmptyTrash,
         ),
+      },
+    );
+  }
+
+  /// 紧凑档为视图包下拉刷新；宽屏沿用原布局。
+  Widget _compactRefreshable(
+    WidgetRef ref,
+    Future<void> Function() onRefresh,
+    Widget child,
+  ) {
+    if (!compact) {
+      return child;
+    }
+    return Builder(
+      builder: (context) {
+        return RefreshIndicator(
+          displacement: 48,
+          strokeWidth: 2.5,
+          color: context.frameColors.accent,
+          onRefresh: onRefresh,
+          child: child,
+        );
       },
     );
   }

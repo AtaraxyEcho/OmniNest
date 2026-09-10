@@ -8995,4 +8995,33 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoMetaFieldOverview => 'Overview';
+
+  @override
+  String get readerComicManifestLoadFailed =>
+      'Failed to load the comic manifest, please retry later';
+
+  @override
+  String readerComicParseFailedWithReason(Object reason) {
+    return 'Comic parsing failed: $reason';
+  }
+
+  @override
+  String get readerComicParseFailed =>
+      'Comic parsing failed, retry sources on the detail page';
+
+  @override
+  String readerComicPartialFailedWithReason(Object reason) {
+    return 'Some comic sources failed to parse: $reason';
+  }
+
+  @override
+  String get readerComicPartialFailed =>
+      'Some comic sources failed to parse, handle failed sources on the detail page';
+
+  @override
+  String get readerComicEmptyManifest =>
+      'Comic content is empty or the manifest has not been generated';
+
+  @override
+  String get readerComicEmpty => 'Comic content is empty';
 }

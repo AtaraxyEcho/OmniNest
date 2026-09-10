@@ -1755,10 +1755,6 @@
   "adminRestartItems": "重启项",
   "adminStatusEnabled": "启用",
   "adminStatusDisabled": "禁用",
-  "adminRoleSuperAdmin": "超级管理员",
-  "adminRoleAdmin": "管理员",
-  "adminRoleMember": "成员",
-  "adminRoleGuest": "访客",
   "adminGroupOverview": "总览",
   "adminGroupOperations": "运维",
   "adminGroupIdentity": "身份与权限",
@@ -3942,5 +3938,22 @@
   "videoMetaFieldOriginalTitle": "原名",
   "videoMetaFieldYear": "年份",
   "videoMetaFieldRuntimeMinutes": "时长（分钟）",
-  "videoMetaFieldOverview": "简介"
+  "videoMetaFieldOverview": "简介",
+  "readerComicManifestLoadFailed": "漫画清单加载失败，请稍后重试",
+  "readerComicParseFailedWithReason": "漫画解析失败：{reason}",
+  "@readerComicParseFailedWithReason": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "readerComicParseFailed": "漫画解析失败，请在详情页重试来源",
+  "readerComicPartialFailedWithReason": "部分漫画来源解析失败：{reason}",
+  "@readerComicPartialFailedWithReason": {
+    "placeholders": {
+      "reason": {}
+    }
+  },
+  "readerComicPartialFailed": "部分漫画来源解析失败，请在详情页处理失败来源",
+  "readerComicEmptyManifest": "漫画内容为空或尚未生成清单",
+  "readerComicEmpty": "漫画内容为空"
 }
