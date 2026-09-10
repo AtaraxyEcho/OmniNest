@@ -229,7 +229,9 @@ class _PreferenceRow extends StatelessWidget {
   }
 }
 
-/// 主题循环小描边按钮：显示切换目标（跟随系统 → 浅色 → 深色 → 跟随系统）。
+/// 主题循环小描边按钮：仅在浅色与深色之间切换（不进入跟随系统）。
+///
+/// 若当前为跟随系统，点击后落入浅色并从此只在浅/深之间循环。
 class _ThemeCycleButton extends ConsumerWidget {
   const _ThemeCycleButton({required this.themeMode});
 
@@ -238,23 +240,13 @@ class _ThemeCycleButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final (next, icon, label) = switch (themeMode) {
-      ThemeMode.system => (
-        ThemeMode.light,
-        Icons.light_mode_outlined,
-        l10n.settingsThemeLight,
-      ),
-      ThemeMode.light => (
-        ThemeMode.dark,
-        Icons.dark_mode_outlined,
-        l10n.settingsThemeDark,
-      ),
-      ThemeMode.dark => (
-        ThemeMode.system,
-        Icons.brightness_auto_outlined,
-        l10n.settingsThemeSystem,
-      ),
-    };
+    // 跟随系统不参与循环；当前为浅色或系统时，下一步为深色；当前为深色时回到浅色。
+    final next =
+        themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    final (icon, label) =
+        next == ThemeMode.dark
+            ? (Icons.dark_mode_outlined, l10n.settingsThemeDark)
+            : (Icons.light_mode_outlined, l10n.settingsThemeLight);
     return _SmallOutlineButton(
       icon: icon,
       label: label,

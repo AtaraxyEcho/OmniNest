@@ -88,7 +88,7 @@ void main() {
     expect(container.read(localeControllerProvider), 'zh');
   });
 
-  testWidgets('头像菜单主题行内按钮循环 跟随系统→浅色→深色', (tester) async {
+  testWidgets('头像菜单主题仅在浅色与深色间切换且不回到跟随系统', (tester) async {
     await tester.pumpWidget(host());
     await tester.pump();
 
@@ -99,7 +99,12 @@ void main() {
 
     await tester.tap(find.byType(UserAvatarMenu));
     await tester.pumpAndSettle();
-    // 跟随系统的切换目标是浅色
+    // 跟随系统不参与循环：点击后直接进入深色
+    await tester.tap(find.text('深色模式'));
+    await tester.pumpAndSettle();
+    expect(container.read(appearanceControllerProvider), ThemeMode.dark);
+    expect(find.text('跟随系统'), findsNothing);
+
     await tester.tap(find.text('浅色模式'));
     await tester.pumpAndSettle();
     expect(container.read(appearanceControllerProvider), ThemeMode.light);
@@ -107,10 +112,6 @@ void main() {
     await tester.tap(find.text('深色模式'));
     await tester.pumpAndSettle();
     expect(container.read(appearanceControllerProvider), ThemeMode.dark);
-
-    await tester.tap(find.text('跟随系统'));
-    await tester.pumpAndSettle();
-    expect(container.read(appearanceControllerProvider), ThemeMode.system);
     expect(find.text('外观'), findsOneWidget);
   });
 }
