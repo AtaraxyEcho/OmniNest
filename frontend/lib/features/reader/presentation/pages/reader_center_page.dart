@@ -7,6 +7,9 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/features/files/media_import_ui.dart'
+    show ImportButtonStyle, MediaImportButton;
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
@@ -236,6 +239,7 @@ class _LibraryHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final l10n = AppLocalizations.of(context);
+    final hosted = MobileShellScope.isHosted(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -263,6 +267,8 @@ class _LibraryHeader extends StatelessWidget {
                 fontFeatures: const [FontFeature.tabularFigures()],
               ),
             ),
+            // 托管态模块顶栏隐藏，导入入口承接至书库页头。
+            if (hosted) ...[const SizedBox(width: 12), _LibraryImportButton()],
           ],
         ),
         const SizedBox(height: 18),
@@ -273,6 +279,30 @@ class _LibraryHeader extends StatelessWidget {
           onSegmentChanged: onSegmentChanged,
         ),
       ],
+    );
+  }
+}
+
+/// 托管态书库页头的导入入口（模块顶栏隐藏后由页头承接）。
+class _LibraryImportButton extends ConsumerWidget {
+  const _LibraryImportButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final rc = context.readerColors;
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: MediaImportButton(
+        subsystemDirectory: 'Reader',
+        acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip'],
+        reuseExistingFiles: true,
+        onImportComplete: () {
+          ref.read(readerCenterControllerProvider.notifier).refresh();
+        },
+        style: ImportButtonStyle.iconButton,
+        color: rc.onSurfaceVariant,
+      ),
     );
   }
 }

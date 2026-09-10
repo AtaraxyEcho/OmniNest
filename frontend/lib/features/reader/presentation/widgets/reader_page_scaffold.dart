@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/features/files/media_import_ui.dart'
@@ -52,8 +53,9 @@ extension ReaderPageTargetX on ReaderPageTarget {
 
 /// 阅读模块页面骨架，1:1 参照样例 App.tsx：
 /// 44px 顶栏（返回门户 + 「OmniNest › 阅读」衬线面包屑 + 字号/通知/头像）、
-/// 208px 左侧栏（≥1024，激活项前景色反白）、56px 底导航（<1024）、
-/// 移动端托管态使用横排页签（全局壳已占底栏）。
+/// 208px 左侧栏（≥1024，激活项前景色反白）、56px 底导航（非托管 <1024）。
+/// 移动端托管态（全局壳已占顶栏与底栏）隐藏模块 chrome，
+/// 分区改为内容区顶部的横排页签行（ReaderHostedSectionTabs）。
 class ReaderPageScaffold extends ConsumerStatefulWidget {
   const ReaderPageScaffold({
     required this.target,
@@ -120,6 +122,8 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
+        // 托管态由应用壳提供顶栏与底栏：隐藏模块 chrome，分区改为页内页签行。
+        final hosted = MobileShellScope.isHosted(context);
         final isWide = constraints.maxWidth >= 1024;
         return PopScope(
           canPop: !widget.enablePopGuard,
@@ -132,12 +136,18 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
             body: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                _ReaderModuleTopBar(target: widget.target, user: user),
+                if (!hosted)
+                  _ReaderModuleTopBar(target: widget.target, user: user),
+                if (hosted)
+                  _ReaderHostedSectionTabs(
+                    current: widget.target,
+                    targets: targets,
+                  ),
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (isWide)
+                      if (isWide && !hosted)
                         _ReaderSidebar(
                           current: widget.target,
                           targets: targets,
@@ -149,12 +159,12 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
               ],
             ),
             bottomNavigationBar:
-                isWide
-                    ? null
-                    : _ReaderModuleBottomNav(
+                !hosted && !isWide
+                    ? _ReaderModuleBottomNav(
                       current: widget.target,
                       targets: targets,
-                    ),
+                    )
+                    : null,
           ),
         );
       },
@@ -262,6 +272,73 @@ class _ReaderModuleTopBar extends ConsumerWidget {
             NotificationIcon(size: 20, color: rc.onSurfaceVariant),
             const SizedBox(width: 12),
             const UserAvatarMenu(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 托管态顶部页签行：全局壳占用底栏后，模块分区改为页内横排页签。
+class _ReaderHostedSectionTabs extends StatelessWidget {
+  const _ReaderHostedSectionTabs({
+    required this.current,
+    required this.targets,
+  });
+
+  final ReaderPageTarget current;
+  final List<ReaderPageTarget> targets;
+
+  @override
+  Widget build(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: rc.surface,
+        border: Border(bottom: BorderSide(color: rc.outlineVariant)),
+      ),
+      child: SizedBox(
+        height: 44,
+        child: Row(
+          children: [
+            for (final target in targets)
+              Expanded(
+                child: InkWell(
+                  onTap: () => context.go(target.location),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        target.localizedLabel(l10n),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: AppTypography.bodyMedium,
+                          height: 1.2,
+                          color:
+                              target == current
+                                  ? rc.onSurface
+                                  : rc.onSurfaceVariant,
+                          fontWeight:
+                              target == current
+                                  ? FontWeight.w600
+                                  : FontWeight.w400,
+                        ),
+                      ),
+                      const SizedBox(height: 5),
+                      Container(
+                        height: 2,
+                        width: 28,
+                        color:
+                            target == current
+                                ? rc.sidebarSelectedBg
+                                : Colors.transparent,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
           ],
         ),
       ),

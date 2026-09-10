@@ -107,6 +107,35 @@ void main() {
       expect(find.text('Bookshelf'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets('托管态隐藏模块顶栏与底导航，分区改为顶部页签行', (tester) async {
+      tester.view.physicalSize = const Size(390, 844);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _wrap(
+          const ReaderPageScaffold(
+            target: ReaderPageTarget.library,
+            child: Text('hosted library content'),
+          ),
+          hosted: true,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('hosted library content'), findsOneWidget);
+      // 页签行渲染三个非管理员分区
+      expect(find.text('Library'), findsOneWidget);
+      expect(find.text('Bookshelf'), findsOneWidget);
+      expect(find.text('Stats'), findsOneWidget);
+      // 模块顶栏面包屑与底导航/侧栏图标不再渲染
+      expect(find.text('OmniNest'), findsNothing);
+      expect(find.byIcon(Icons.admin_panel_settings_outlined), findsNothing);
+      expect(find.byIcon(Icons.auto_stories_outlined), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 
   group('ReaderStatsPage', () {
