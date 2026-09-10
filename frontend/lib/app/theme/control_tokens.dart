@@ -55,4 +55,16 @@ abstract final class AppControlTokens {
 
   /// 菜单面板圆角。
   static const double menuRadius = 12;
+
+  /// 桌面模块侧栏展开宽度。
+  static const double sidebarWidth = 256;
+
+  /// 桌面模块侧栏折叠宽度（仅图标）。
+  static const double sidebarCollapsedWidth = 56;
+
+  /// 侧栏品牌 Logo 边长。
+  static const double sidebarLogoSize = 36;
+
+  /// 侧栏品牌 Logo 圆角。
+  static const double sidebarLogoRadius = 10;
 }

@@ -469,7 +469,7 @@ class _MovieMobileDrawer extends StatelessWidget {
       child: SafeArea(
         right: false,
         child: SizedBox(
-          width: 256,
+          width: AppControlTokens.sidebarWidth,
           height: double.infinity,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,

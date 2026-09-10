@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -283,7 +284,7 @@ class _ReaderSidebar extends StatelessWidget {
     final adminTargets =
         targets.where((t) => t == ReaderPageTarget.admin).toList();
     return Container(
-      width: 208,
+      width: AppControlTokens.sidebarWidth,
       decoration: BoxDecoration(
         border: Border(right: BorderSide(color: rc.outlineVariant)),
       ),

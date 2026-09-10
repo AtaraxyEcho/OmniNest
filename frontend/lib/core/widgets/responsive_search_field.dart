@@ -33,9 +33,9 @@ class ResponsiveSearchField extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return ConstrainedBox(
+      // 只限制最大宽；高度由 decoration 决定，避免顶栏紧凑设计（如 34px）被强制抬高。
       constraints: BoxConstraints(
         maxWidth: maxWidth ?? AppControlTokens.searchFieldWidth,
-        minHeight: AppControlTokens.fieldHeight,
       ),
       child: TextField(
         controller: controller,

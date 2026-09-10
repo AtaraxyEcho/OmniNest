@@ -20,7 +20,7 @@ class _FileSidebar extends ConsumerWidget {
     final canManageExternalStorage =
         user?.permissions.contains('system:config:manage') ?? false;
     return Container(
-      width: 220,
+      width: AppControlTokens.sidebarWidth,
       padding: const EdgeInsets.fromLTRB(16, 22, 16, 22),
       decoration: BoxDecoration(
         color: context.filesColors.surfaceContainerLow.withValues(alpha: 0.9),
@@ -77,7 +77,7 @@ class _SideHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Row(
         children: [
-          const BrandLogo(size: 40, radius: 12),
+          const BrandLogo.sidebar(),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

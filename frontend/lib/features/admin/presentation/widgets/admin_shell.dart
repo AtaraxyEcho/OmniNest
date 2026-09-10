@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
@@ -278,7 +279,7 @@ class _AdminSidebarState extends ConsumerState<AdminSidebar>
     return Container(
       // 256 与常见桌面侧栏一致；原先 220 扣除内边距后品牌名仅约 112px，
       // 会被 ellipsis 截断成 “OmniNe…”。
-      width: 256,
+      width: AppControlTokens.sidebarWidth,
       padding: const EdgeInsets.fromLTRB(14, 24, 14, 24),
       decoration: BoxDecoration(
         color: c.surfaceContainerLow.withValues(alpha: 0.88),
@@ -609,7 +610,7 @@ class _AdminSideTitle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 6),
       child: Row(
         children: [
-          const BrandLogo(size: 36, radius: 10),
+          const BrandLogo.sidebar(),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

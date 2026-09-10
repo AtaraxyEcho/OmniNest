@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
@@ -94,7 +95,7 @@ void main() {
       expect(find.byType(FrameBottomNav), findsNothing);
       expect(
         tester.getSize(find.byType(FrameSidebar)).width,
-        moreOrLessEquals(220),
+        moreOrLessEquals(AppControlTokens.sidebarWidth),
       );
       expect(find.text('Trash'), findsOneWidget);
 
@@ -136,13 +137,13 @@ void main() {
       );
     });
 
-    testWidgets('宽 1024 以下侧栏折叠为 60px 且隐藏文字', (tester) async {
+    testWidgets('宽 1024 以下侧栏折叠为统一宽度且隐藏文字', (tester) async {
       await _pumpAt(tester, const Size(950, 800));
 
       expect(find.byType(FrameSidebar), findsOneWidget);
       expect(
         tester.getSize(find.byType(FrameSidebar)).width,
-        moreOrLessEquals(60),
+        moreOrLessEquals(AppControlTokens.sidebarCollapsedWidth),
       );
       // 折叠态仅保留图标与顶栏标题，侧栏文字与统计全部隐藏。
       expect(find.text('Trash'), findsNothing);

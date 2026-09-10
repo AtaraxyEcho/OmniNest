@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -396,7 +397,10 @@ class MovieSidebar extends StatelessWidget {
       (entry) => canManage || entry.key != MovieSidebarGroup.management,
     );
     return Container(
-      width: collapsed ? 48 : 192,
+      width:
+          collapsed
+              ? AppControlTokens.sidebarCollapsedWidth
+              : AppControlTokens.sidebarWidth,
       decoration: BoxDecoration(
         color: palette.background,
         border: Border(right: BorderSide(color: palette.border)),

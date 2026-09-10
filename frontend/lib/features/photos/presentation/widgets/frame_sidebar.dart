@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/features/photos/application/photo_center_models.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
 
-/// Frame 风格桌面侧栏：系统 Logo、视图导航与图库统计，宽度 220px，可折叠 60px。
+/// Frame 风格桌面侧栏：系统 Logo、视图导航与图库统计，与全局侧栏 token 同宽。
 class FrameSidebar extends StatelessWidget {
   const FrameSidebar({
     required this.activeView,
@@ -45,7 +46,10 @@ class FrameSidebar extends StatelessWidget {
               ? Duration.zero
               : const Duration(milliseconds: 200),
       curve: Curves.easeOut,
-      width: collapsed ? 60 : 220,
+      width:
+          collapsed
+              ? AppControlTokens.sidebarCollapsedWidth
+              : AppControlTokens.sidebarWidth,
       decoration: BoxDecoration(
         color: colors.navBg,
         border: Border(right: BorderSide(color: colors.border)),
@@ -143,7 +147,7 @@ class _FrameLogo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.frameColors;
-    final mark = const BrandLogo(size: 28, radius: 8);
+    final mark = const BrandLogo.sidebar();
     if (collapsed) {
       return SizedBox(height: 60, child: Center(child: mark));
     }
