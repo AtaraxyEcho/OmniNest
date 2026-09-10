@@ -157,22 +157,22 @@ void main() {
     }
   });
 
-  testWidgets('实底模块顶/底栏为不透明全局表面，选中态为墨色前景', (tester) async {
+  testWidgets('照片分支 chrome 跟随 Frame 暖纸面，选中态为 Frame 墨色', (tester) async {
     await pumpShell(tester, initialLocation: '/photos');
 
-    expect(chromeColor(chromeOf(tester, top: true)), const Color(0xFFF7F8F6));
-    expect(chromeColor(chromeOf(tester, top: false)), const Color(0xFFF7F8F6));
+    expect(chromeColor(chromeOf(tester, top: true)), const Color(0xFFFAFAF8));
+    expect(chromeColor(chromeOf(tester, top: false)), const Color(0xFFFAFAF8));
     expect(chromeColor(chromeOf(tester, top: true)).a, 1.0);
     expect(chromeColor(chromeOf(tester, top: false)).a, 1.0);
 
     final selectedIcon = tester.widget<Icon>(
       find.byIcon(Icons.photo_library_rounded),
     );
-    expect(selectedIcon.color, const Color(0xFF1A1D1B));
+    expect(selectedIcon.color, const Color(0xFF1A1917));
     final unselectedIcon = tester.widget<Icon>(
       find.byIcon(Icons.home_outlined),
     );
-    expect(unselectedIcon.color, const Color(0xFF58605B));
+    expect(unselectedIcon.color, const Color(0xFF8A8680));
   });
 
   testWidgets('阅读分支 chrome 取纸感表面与纸感墨色选中态', (tester) async {
@@ -199,6 +199,64 @@ void main() {
     await tapNav(tester, '音乐');
     expect(chromeColor(chromeOf(tester, top: true)).a, lessThan(1.0));
     expect(chromeColor(chromeOf(tester, top: false)).a, lessThan(1.0));
+  });
+
+  testWidgets('玻璃分支统一烟熏配方：浅色+壁纸顶栏 0.72 / 底栏 0.80', (tester) async {
+    await pumpShell(tester, initialLocation: '/portal', backdropActive: true);
+    final portalTop = chromeColor(chromeOf(tester, top: true));
+    final portalBottom = chromeColor(chromeOf(tester, top: false));
+    expect(portalTop.a, closeTo(0.72, 0.001));
+    expect(portalBottom.a, closeTo(0.80, 0.001));
+    // 烟熏基色：浅色+壁纸下为暗色玻璃底。
+    expect(portalTop.r, lessThan(0.2));
+
+    await tapNav(tester, '音乐');
+    final musicTop = chromeColor(chromeOf(tester, top: true));
+    final musicBottom = chromeColor(chromeOf(tester, top: false));
+    expect(musicTop.a, closeTo(0.72, 0.001), reason: '音乐与首页共用同一玻璃配方');
+    expect(musicBottom.a, closeTo(0.80, 0.001));
+    expect(musicTop.r, lessThan(0.2));
+  });
+
+  testWidgets('玻璃分支无壁纸浅色为近实底浅玻璃 0.90', (tester) async {
+    await pumpShell(tester, initialLocation: '/portal');
+    expect(chromeColor(chromeOf(tester, top: true)).a, closeTo(0.90, 0.001));
+
+    await tapNav(tester, '音乐');
+    expect(
+      chromeColor(chromeOf(tester, top: true)).a,
+      closeTo(0.90, 0.001),
+      reason: '音乐无壁纸浅色不再 0.42 失衡',
+    );
+  });
+
+  testWidgets('深色下玻璃分支统一 0.78/0.82 档', (tester) async {
+    await pumpShell(
+      tester,
+      initialLocation: '/portal',
+      brightness: Brightness.dark,
+    );
+    expect(chromeColor(chromeOf(tester, top: true)).a, closeTo(0.78, 0.001));
+    expect(chromeColor(chromeOf(tester, top: false)).a, closeTo(0.82, 0.001));
+  });
+
+  testWidgets('深色下照片 chrome 跟随 Frame 暖炭面，文件保持全局暗面', (tester) async {
+    await pumpShell(
+      tester,
+      initialLocation: '/photos',
+      brightness: Brightness.dark,
+    );
+    expect(chromeColor(chromeOf(tester, top: true)), const Color(0xFF191817));
+    expect(chromeColor(chromeOf(tester, top: false)), const Color(0xFF191817));
+    // 底栏选中墨色为 Frame 暗版反色的米白。
+    final selectedIcon = tester.widget<Icon>(
+      find.byIcon(Icons.photo_library_rounded),
+    );
+    expect(selectedIcon.color, const Color(0xFFF2EFE9));
+
+    await tapNav(tester, '文件');
+    expect(chromeColor(chromeOf(tester, top: true)), const Color(0xFF101311));
+    expect(chromeColor(chromeOf(tester, top: false)), const Color(0xFF101311));
   });
 
   testWidgets('六分支循环切换不触发壳层断言', (tester) async {

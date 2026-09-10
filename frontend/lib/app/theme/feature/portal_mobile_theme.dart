@@ -65,36 +65,4 @@ abstract final class PortalMobileTheme {
       ),
     );
   }
-
-  /// 返回移动端 Portal 顶部栏和底部导航使用的局部表面色。
-  static Color chromeSurface(
-    BuildContext context, {
-    required bool backdropActive,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    final light = scheme.brightness == Brightness.light;
-    if (backdropActive) {
-      return scheme.surfaceContainerLow.withValues(alpha: light ? 0.42 : 0.64);
-    }
-    return Color.lerp(
-      light ? scheme.surfaceContainerHigh : scheme.surfaceContainerLow,
-      light ? scheme.primaryContainer : scheme.secondaryContainer,
-      light ? 0.10 : 0.05,
-    )!.withValues(alpha: light ? 0.74 : 0.78);
-  }
-
-  /// 返回移动端 Portal 导航表面的边框色。
-  static Color chromeOutline(
-    BuildContext context, {
-    required bool backdropActive,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    if (backdropActive) {
-      return scheme.outlineVariant;
-    }
-    return (scheme.brightness == Brightness.light
-            ? scheme.onSurface
-            : scheme.outlineVariant)
-        .withValues(alpha: scheme.brightness == Brightness.light ? 0.14 : 0.72);
-  }
 }

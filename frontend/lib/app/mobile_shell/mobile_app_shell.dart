@@ -6,9 +6,9 @@ import 'package:omninest/app/mobile_shell/mobile_navigation_config.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
-import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/feature/portal_mobile_theme.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -253,29 +253,20 @@ class _MobileTopBar extends ConsumerWidget {
   }) {
     final portalStyle = branch == MobileNavigationConfig.portalBranch;
     final musicStyle = branch == MobileNavigationConfig.musicBranch;
+    final glassStyle = portalStyle || musicStyle;
     final surface =
-        portalStyle
-            ? PortalMobileTheme.chromeSurface(
+        glassStyle
+            ? _glassChromeSurface(
               context,
               backdropActive: backdropActive,
+              bottom: false,
             )
-            : musicStyle
-            ? _musicChromeSurface(context, backdropActive: backdropActive)
             : _solidChromeSurface(context, branch: branch);
     final outline =
-        portalStyle
-            ? PortalMobileTheme.chromeOutline(
-              context,
-              backdropActive: backdropActive,
-            )
-            : musicStyle
-            ? _musicChromeOutline(context)
+        glassStyle
+            ? _glassChromeOutline(context, backdropActive: backdropActive)
             : _solidChromeOutline(context, branch: branch);
-    final foreground = _chromeForeground(
-      context,
-      branch: branch,
-      musicStyle: musicStyle,
-    );
+    final foreground = _chromeForeground(context, branch: branch);
     return SafeArea(
       bottom: false,
       child: DecoratedBox(
@@ -427,13 +418,18 @@ class _MobileSystemBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final readerStyle = branch == MobileNavigationConfig.readerBranch;
+    final frameStyle = branch == MobileNavigationConfig.photosBranch;
     final background =
         readerStyle
             ? context.readerColors.primaryContainer
+            : frameStyle
+            ? context.frameColors.activeBg
             : context.mobileColors.surfaceSelected;
     final foreground =
         readerStyle
             ? context.readerColors.onSurface
+            : frameStyle
+            ? context.frameColors.ink
             : context.mobileColors.textPrimary;
     return ColoredBox(
       color: background,
@@ -449,6 +445,8 @@ class _MobileSystemBanner extends StatelessWidget {
                 color:
                     readerStyle
                         ? context.readerColors.warning
+                        : frameStyle
+                        ? context.frameColors.accent
                         : context.mobileColors.warmAccent,
               ),
               const SizedBox(width: 10),
@@ -525,32 +523,19 @@ class _MobileBottomNavigation extends ConsumerWidget {
   }) {
     final destinations = _destinations(AppLocalizations.of(context));
     final surface =
-        portalStyle
-            ? PortalMobileTheme.chromeSurface(
+        portalStyle || musicStyle
+            ? _glassChromeSurface(
               context,
               backdropActive: backdropActive,
+              bottom: true,
             )
-            : musicStyle
-            ? _musicChromeSurface(context, backdropActive: backdropActive)
             : _solidChromeSurface(context, branch: branch);
     final outline =
-        portalStyle
-            ? PortalMobileTheme.chromeOutline(
-              context,
-              backdropActive: backdropActive,
-            )
-            : musicStyle
-            ? _musicChromeOutline(context)
+        portalStyle || musicStyle
+            ? _glassChromeOutline(context, backdropActive: backdropActive)
             : _solidChromeOutline(context, branch: branch);
-    final selectedColor = _chromeForeground(
-      context,
-      branch: branch,
-      musicStyle: musicStyle,
-    );
-    final unselectedColor =
-        branch == MobileNavigationConfig.readerBranch
-            ? context.readerColors.onSurfaceVariant
-            : context.mobileColors.textSecondary;
+    final selectedColor = _chromeForeground(context, branch: branch);
+    final unselectedColor = _chromeUnselectedColor(context, branch: branch);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: surface,
@@ -628,32 +613,19 @@ class _MobileNavigationRail extends ConsumerWidget {
   Widget _buildRail(BuildContext context, {required bool backdropActive}) {
     final destinations = _destinations(AppLocalizations.of(context));
     final surface =
-        portalStyle
-            ? PortalMobileTheme.chromeSurface(
+        portalStyle || musicStyle
+            ? _glassChromeSurface(
               context,
               backdropActive: backdropActive,
+              bottom: false,
             )
-            : musicStyle
-            ? _musicChromeSurface(context, backdropActive: backdropActive)
             : _solidChromeSurface(context, branch: branch);
     final outline =
-        portalStyle
-            ? PortalMobileTheme.chromeOutline(
-              context,
-              backdropActive: backdropActive,
-            )
-            : musicStyle
-            ? _musicChromeOutline(context)
+        portalStyle || musicStyle
+            ? _glassChromeOutline(context, backdropActive: backdropActive)
             : _solidChromeOutline(context, branch: branch);
-    final selectedColor = _chromeForeground(
-      context,
-      branch: branch,
-      musicStyle: musicStyle,
-    );
-    final unselectedColor =
-        branch == MobileNavigationConfig.readerBranch
-            ? context.readerColors.onSurfaceVariant
-            : context.mobileColors.textSecondary;
+    final selectedColor = _chromeForeground(context, branch: branch);
+    final unselectedColor = _chromeUnselectedColor(context, branch: branch);
     return DecoratedBox(
       decoration: BoxDecoration(
         color: surface,
@@ -693,34 +665,54 @@ String? _searchHostForBranch(int branch) {
   };
 }
 
-Color _musicChromeSurface(
+/// 玻璃分支（首页/音乐）统一 chrome 表面配方。
+///
+/// 两分支主题在「浅色 + 动态壁纸」时都已把 scheme 换为烟熏组，此处直接
+/// 取 scheme 表面即可同语言：壁纸激活 = 烟熏玻璃（α 不低于 Portal 内容卡
+/// 的 68%，底栏再高一档）；无壁纸浅色 = 近实底浅玻璃；深色 = 深玻璃。
+Color _glassChromeSurface(
+  BuildContext context, {
+  required bool backdropActive,
+  required bool bottom,
+}) {
+  final scheme = Theme.of(context).colorScheme;
+  final light = scheme.brightness == Brightness.light;
+  if (backdropActive) {
+    // withValues 为替换 alpha：烟熏基色自带的透明度被目标档位覆盖。
+    return scheme.surfaceContainerLow.withValues(
+      alpha: light ? (bottom ? 0.80 : 0.72) : (bottom ? 0.82 : 0.78),
+    );
+  }
+  final base = light ? scheme.surfaceContainerHigh : scheme.surfaceContainerLow;
+  return base.withValues(alpha: light ? 0.90 : (bottom ? 0.82 : 0.78));
+}
+
+/// 玻璃分支统一 chrome 描边：壁纸激活取（烟熏）outlineVariant 提档，
+/// 无壁纸浅色为 onSurface 12% 发丝线，深色为 outlineVariant 72%。
+Color _glassChromeOutline(
   BuildContext context, {
   required bool backdropActive,
 }) {
-  final colors = context.musicColors;
-  final light = Theme.of(context).brightness == Brightness.light;
-  final requestedAlpha = backdropActive ? 0.36 : (light ? 0.42 : 0.82);
-  final alpha =
-      requestedAlpha < colors.surfaceContainer.a
-          ? requestedAlpha
-          : colors.surfaceContainer.a;
-  return colors.surfaceContainer.withValues(alpha: alpha);
+  final scheme = Theme.of(context).colorScheme;
+  final light = scheme.brightness == Brightness.light;
+  if (backdropActive) {
+    return scheme.outlineVariant.withValues(alpha: light ? 0.9 : 0.72);
+  }
+  if (light) {
+    return scheme.onSurface.withValues(alpha: 0.12);
+  }
+  return scheme.outlineVariant.withValues(alpha: 0.72);
 }
 
-Color _musicChromeOutline(BuildContext context) {
-  final colors = context.musicColors;
-  final requestedAlpha =
-      Theme.of(context).brightness == Brightness.light ? 0.52 : 0.72;
-  final alpha =
-      requestedAlpha < colors.outline.a ? requestedAlpha : colors.outline.a;
-  return colors.outline.withValues(alpha: alpha);
-}
-
-/// 实底分支的 chrome 表面：阅读分支取纸感表面与页面同源，
-/// 其余取全局 surface，不再透出壁纸。
+/// 实底分支的 chrome 表面：与页面同源——阅读取纸感表面、照片取 Frame
+/// 暖纸表面（浅色扁平化下与全局面仅细微差、深色下避免冷暖拼接连条），
+/// 其余取全局 surface。
 Color _solidChromeSurface(BuildContext context, {required int branch}) {
   if (branch == MobileNavigationConfig.readerBranch) {
     return context.readerColors.surface;
+  }
+  if (branch == MobileNavigationConfig.photosBranch) {
+    return context.frameColors.navBg;
   }
   return context.mobileColors.pageMask;
 }
@@ -729,22 +721,39 @@ Color _solidChromeOutline(BuildContext context, {required int branch}) {
   if (branch == MobileNavigationConfig.readerBranch) {
     return context.readerColors.outlineVariant;
   }
+  if (branch == MobileNavigationConfig.photosBranch) {
+    return context.frameColors.border;
+  }
   return context.mobileColors.outline;
 }
 
 /// chrome 前景色；选中态一律取该前景色（墨色单色），不使用模块 accent。
-Color _chromeForeground(
-  BuildContext context, {
-  required int branch,
-  required bool musicStyle,
-}) {
-  if (musicStyle) {
-    return context.musicColors.onSurface;
+/// 玻璃分支跟随分支主题 scheme（浅色+壁纸即烟熏浅字）。
+Color _chromeForeground(BuildContext context, {required int branch}) {
+  final glassStyle =
+      branch == MobileNavigationConfig.portalBranch ||
+      branch == MobileNavigationConfig.musicBranch;
+  if (glassStyle) {
+    return Theme.of(context).colorScheme.onSurface;
   }
   if (branch == MobileNavigationConfig.readerBranch) {
     return context.readerColors.onSurface;
   }
+  if (branch == MobileNavigationConfig.photosBranch) {
+    return context.frameColors.ink;
+  }
   return context.mobileColors.textPrimary;
+}
+
+/// chrome 未选中前景：随分支面板的弱化色。
+Color _chromeUnselectedColor(BuildContext context, {required int branch}) {
+  if (branch == MobileNavigationConfig.readerBranch) {
+    return context.readerColors.onSurfaceVariant;
+  }
+  if (branch == MobileNavigationConfig.photosBranch) {
+    return context.frameColors.muted;
+  }
+  return context.mobileColors.textSecondary;
 }
 
 class _MobileBottomDestination extends StatelessWidget {
