@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 
 /// Music Deck 桌面端在不同窗口宽度下使用的布局参数。
 @immutable
@@ -33,7 +34,11 @@ class MusicDeckDesktopLayout {
       widePanelWidth:
           showWidePanel ? (viewportWidth * 0.145).clamp(270.0, 380.0) : 0,
       playerMaxWidth: (viewportWidth * 0.52).clamp(920.0, 1480.0),
-      searchMaxWidth: (availableWidth * 0.32).clamp(480.0, 760.0),
+      // 与其他模块顶栏搜索对齐：不再按视口放大到 480–760。
+      searchMaxWidth: (availableWidth * 0.18).clamp(
+        AppControlTokens.searchFieldWidth,
+        AppControlTokens.searchFieldWidth + 80,
+      ),
     );
   }
 

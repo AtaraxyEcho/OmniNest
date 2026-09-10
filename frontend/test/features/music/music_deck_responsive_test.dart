@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_cover_grid.dart';
@@ -256,7 +257,7 @@ void main() {
     expect(ultraWide.mainContentWidth, greaterThan(2800));
     expect(ultraWide.widePanelWidth, 380);
     expect(ultraWide.playerMaxWidth, 1480);
-    expect(ultraWide.searchMaxWidth, 760);
+    expect(ultraWide.searchMaxWidth, AppControlTokens.searchFieldWidth + 80);
   });
 
   test('桌面布局在最小桌面宽度下仍保留有效主内容区', () {

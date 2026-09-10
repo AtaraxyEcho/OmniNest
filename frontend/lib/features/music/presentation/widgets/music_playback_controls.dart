@@ -46,7 +46,10 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
       MusicPlaybackButtonSize.inline => constrainedViewport ? 26.0 : 28.0,
     };
     final scale = _pressed ? 0.95 : (_hovered && enabled ? 1.035 : 1.0);
-    final iconSize = (diameter * 0.5).clamp(13.0, 20.0);
+    // 播放三角在视觉重心偏左，相对暂停/图标略微右移做光学居中。
+    final iconSize = (diameter * 0.52).clamp(14.0, 22.0);
+    final iconOffset =
+        widget.isPlaying ? Offset.zero : Offset(iconSize * 0.1, 0);
     return Semantics(
       button: true,
       enabled: enabled,
@@ -149,18 +152,21 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
                               child: child,
                             ),
                           ),
-                      child: Icon(
-                        widget.isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
+                      child: Transform.translate(
                         key: ValueKey<bool>(widget.isPlaying),
-                        size: iconSize,
-                        color:
-                            enabled
-                                ? widget.foregroundColor
-                                : widget.foregroundColor.withValues(
-                                  alpha: 0.36,
-                                ),
+                        offset: iconOffset,
+                        child: Icon(
+                          widget.isPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                          size: iconSize,
+                          color:
+                              enabled
+                                  ? widget.foregroundColor
+                                  : widget.foregroundColor.withValues(
+                                    alpha: 0.36,
+                                  ),
+                        ),
                       ),
                     ),
                   ),
