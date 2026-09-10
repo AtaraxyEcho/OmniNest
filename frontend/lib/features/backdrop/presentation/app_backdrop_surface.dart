@@ -131,12 +131,20 @@ class AppBackdropSurface extends ConsumerWidget {
     if (!motionAllowed) {
       return _videoStaticFallback(context, ref, asset, fit);
     }
-    return AppBackdropVideoView(
-      source: source,
-      fit: fit,
-      playing: active,
-      muted: settings.videoMuted,
-      onSourceStale: onSourceStale,
+    // 视频打开失败或未就绪时底部保留静态海报：模拟器软解、低端设备或
+    // 网络失败时背景层不整层空白，视频渲染就绪后自然覆盖海报。
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _videoStaticFallback(context, ref, asset, fit),
+        AppBackdropVideoView(
+          source: source,
+          fit: fit,
+          playing: active,
+          muted: settings.videoMuted,
+          onSourceStale: onSourceStale,
+        ),
+      ],
     );
   }
 
@@ -182,6 +190,7 @@ class AppBackdropSurface extends ConsumerWidget {
         url: thumbnail,
         cacheKey: 'backdrop-thumb:${asset.id}',
         fit: fit,
+        fallbackAsset: bundledDefaultWallpaperPosterAsset,
         onUrlFailed:
             () => Future<void>.microtask(() async {
               await ref
