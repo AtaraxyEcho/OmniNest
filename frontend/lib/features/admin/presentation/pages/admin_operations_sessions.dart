@@ -114,6 +114,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
           children: [
             AppDropdown<String>(
               width: 190,
+              dense: true,
               label: l10n.adminFilterStatus,
               value: _status,
               items: [
@@ -146,6 +147,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
             ),
             AppDropdown<String>(
               width: 190,
+              dense: true,
               label: l10n.adminFilterPlatform,
               value: _platform,
               items: [
@@ -167,6 +169,7 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
             ),
             AppDropdown<int>(
               width: 190,
+              dense: true,
               value: _retentionDays,
               items: [
                 for (final days in const <int>[7, 30, 90, 365])

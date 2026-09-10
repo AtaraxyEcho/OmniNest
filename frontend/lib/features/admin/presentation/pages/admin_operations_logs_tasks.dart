@@ -586,6 +586,7 @@ class _TaskFilter extends StatelessWidget {
       width: 220,
       child: AppDropdown<String>(
         value: value,
+        dense: true,
         label: label,
         items: [
           for (final option in options)

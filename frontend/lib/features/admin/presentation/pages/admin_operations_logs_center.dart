@@ -655,6 +655,7 @@ class _AdminRecordFilterBar extends StatelessWidget {
           width: 220,
           child: AppDropdown<String>(
             value: value,
+            dense: true,
             label: label,
             items: [
               for (final option in options)
@@ -669,6 +670,7 @@ class _AdminRecordFilterBar extends StatelessWidget {
           width: 160,
           child: AppDropdown<int>(
             value: retentionDays,
+            dense: true,
             items: [
               for (final days in const <int>[7, 30, 90, 365])
                 AppDropdownItem(

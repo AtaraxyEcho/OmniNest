@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 
 /// 响应式搜索框：最大宽度 [maxWidth]，窄屏时自动缩小。
 class ResponsiveSearchField extends StatelessWidget {
@@ -39,12 +40,14 @@ class ResponsiveSearchField extends StatelessWidget {
               hintText: hintText ?? l10n.coreSearchHint,
               prefixIcon: const Icon(Icons.search_rounded, size: 18),
               border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(
+                  AppControlTokens.controlRadius,
+                ),
                 borderSide: BorderSide.none,
               ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 10,
+              contentPadding: EdgeInsets.symmetric(
+                horizontal: AppControlTokens.fieldHorizontalPadding,
+                vertical: AppControlTokens.fieldVerticalPadding,
               ),
             ),
       ),

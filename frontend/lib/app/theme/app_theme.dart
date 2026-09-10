@@ -1,7 +1,7 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
@@ -67,15 +67,11 @@ class OmniNestTheme {
   }) {
     final brightness = ThemeData.estimateBrightnessForColor(colors.surface);
     // 桌面/桌面浏览器采用紧凑密度，移动端保持触控尺寸。
-    final isDesktopDensity =
-        kIsWeb ||
-        defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux;
-    final controlMinHeight = isDesktopDensity ? 38.0 : 44.0;
-    final iconMinSize =
-        isDesktopDensity ? const Size(36, 36) : const Size(40, 40);
-    final inputVerticalPadding = isDesktopDensity ? 10.0 : 12.0;
+    final isDesktopDensity = AppControlTokens.isDesktopDensity;
+    final controlMinHeight = AppControlTokens.buttonHeight;
+    final iconMinSize = Size.square(AppControlTokens.iconButtonSize);
+    final inputHorizontalPadding = AppControlTokens.fieldHorizontalPadding;
+    final inputVerticalPadding = AppControlTokens.fieldVerticalPadding;
     final isDark = brightness == Brightness.dark;
     final scheme = ColorScheme(
       brightness: brightness,
@@ -196,10 +192,10 @@ class OmniNestTheme {
           ),
     );
     final roundedShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
     );
     final inputBorder = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
+      borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
       borderSide: BorderSide(color: colors.outlineVariant),
     );
 
@@ -212,7 +208,9 @@ class OmniNestTheme {
       dividerColor: colors.outlineVariant,
       fontFamily: AppTypography.fontFamily,
       textTheme: textTheme,
-      visualDensity: VisualDensity.adaptivePlatformDensity,
+      // 控件高度由 AppControlTokens 显式控制，不再叠加平台自适应密度，
+      // 避免按钮被 compact 压矮后高于/低于相邻输入框与下拉。
+      visualDensity: VisualDensity.standard,
       primaryTextTheme: textTheme,
       iconTheme: IconThemeData(color: colors.onSurfaceVariant, size: 20),
       textSelectionTheme: TextSelectionThemeData(
@@ -263,10 +261,12 @@ class OmniNestTheme {
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
+        // 桌面/Web 采用密集装饰，避免输入框高于相邻按钮。
+        isDense: isDesktopDensity,
         filled: true,
         fillColor: colors.surfaceContainerLowest,
         contentPadding: EdgeInsets.symmetric(
-          horizontal: 14,
+          horizontal: inputHorizontalPadding,
           vertical: inputVerticalPadding,
         ),
         border: inputBorder,

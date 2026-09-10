@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 
 /// 全局统一下拉选项描述。
 class AppDropdownItem<T> {
@@ -20,6 +21,9 @@ class AppDropdownItem<T> {
 /// 展开菜单基于 Material 3 的 [MenuAnchor]——锚点定位、自动上下翻转、
 /// 外部点击关闭与键盘导航均由框架保证；视觉上为圆角投影面板、选项
 /// hover 高亮、选中项主色加粗并打勾。全局所有表单型下拉统一使用本控件。
+///
+/// 筛选栏等与按钮并排的场景应传 [dense] 为 true：不使用浮动标签，
+/// 字段高度与按钮对齐，避免下拉比相邻按钮更高。
 class AppDropdown<T> extends StatefulWidget {
   const AppDropdown({
     required this.value,
@@ -29,6 +33,7 @@ class AppDropdown<T> extends StatefulWidget {
     this.width,
     this.suffixText,
     this.helperText,
+    this.dense = false,
     super.key,
   });
 
@@ -37,6 +42,8 @@ class AppDropdown<T> extends StatefulWidget {
   final ValueChanged<T?>? onChanged;
 
   /// 浮动标签；为空时不显示。
+  ///
+  /// [dense] 为 true 时作为字段内前缀文案，不抬升字段高度。
   final String? label;
 
   /// 固定宽度；为空时由父级约束决定。
@@ -45,6 +52,9 @@ class AppDropdown<T> extends StatefulWidget {
 
   /// 字段下方的辅助说明。
   final String? helperText;
+
+  /// 紧凑模式：高度与按钮对齐，[label] 以内嵌前缀展示。
+  final bool dense;
 
   @override
   State<AppDropdown<T>> createState() => _AppDropdownState<T>();
@@ -82,9 +92,29 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
     }
   }
 
+  EdgeInsetsGeometry get _contentPadding {
+    if (widget.dense) {
+      return EdgeInsets.symmetric(
+        horizontal: AppControlTokens.denseFieldHorizontalPadding,
+        vertical: AppControlTokens.denseFieldVerticalPadding,
+      );
+    }
+    return Theme.of(context).inputDecorationTheme.contentPadding ??
+        EdgeInsets.symmetric(
+          horizontal: AppControlTokens.fieldHorizontalPadding,
+          vertical: AppControlTokens.fieldVerticalPadding,
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final dense = widget.dense;
+    final labelStyle = textTheme.bodySmall?.copyWith(
+      color: colors.onSurfaceVariant,
+    );
+    final valueStyle = textTheme.bodyMedium?.copyWith(color: colors.onSurface);
 
     Widget field = Focus(
       focusNode: _focusNode,
@@ -97,11 +127,11 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
           backgroundColor: WidgetStatePropertyAll(colors.surfaceContainerHigh),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(AppControlTokens.menuRadius),
               side: BorderSide(color: colors.outlineVariant),
             ),
           ),
-          elevation: WidgetStatePropertyAll(8),
+          elevation: const WidgetStatePropertyAll(8),
           padding: const WidgetStatePropertyAll(
             EdgeInsets.symmetric(vertical: 6),
           ),
@@ -124,53 +154,71 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
             },
             child: GestureDetector(
               onTap: () => isOpen ? controller.close() : controller.open(),
-              child: InputDecorator(
-                isFocused: _focused || isOpen,
-                decoration: InputDecoration(
-                  labelText: widget.label,
-                  helperText: widget.helperText,
-                  suffixText:
-                      widget.suffixText == null || widget.suffixText!.isEmpty
-                          ? null
-                          : widget.suffixText,
-                  filled: true,
-                  fillColor: colors.surfaceContainerLowest,
-                  contentPadding:
-                      Theme.of(context).inputDecorationTheme.contentPadding ??
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  // 闭合态与主题输入框同风格描边：hover 加深，聚焦/展开
-                  // 用主色，保证与相邻 TextField 的视觉重量一致。
-                  border: _fieldBorder(colors.outlineVariant),
-                  enabledBorder: _fieldBorder(
-                    _focused || isOpen
-                        ? colors.primary
-                        : _hovered
-                        ? colors.onSurfaceVariant
-                        : colors.outlineVariant,
-                  ),
-                  focusedBorder: _fieldBorder(colors.primary, width: 1.5),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  minHeight: AppControlTokens.fieldHeight,
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        _currentLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: colors.onSurface,
+                child: InputDecorator(
+                  isFocused: _focused || isOpen,
+                  isEmpty: false,
+                  expands: false,
+                  decoration: InputDecoration(
+                    labelText: dense ? null : widget.label,
+                    floatingLabelBehavior:
+                        dense ? FloatingLabelBehavior.never : null,
+                    helperText: widget.helperText,
+                    isDense: true,
+                    suffixText:
+                        widget.suffixText == null || widget.suffixText!.isEmpty
+                            ? null
+                            : widget.suffixText,
+                    filled: true,
+                    fillColor: colors.surfaceContainerLowest,
+                    contentPadding: _contentPadding,
+                    // 闭合态与主题输入框同风格描边：hover 加深，聚焦/展开
+                    // 用主色，保证与相邻 TextField 的视觉重量一致。
+                    border: _fieldBorder(colors.outlineVariant),
+                    enabledBorder: _fieldBorder(
+                      _focused || isOpen
+                          ? colors.primary
+                          : _hovered
+                          ? colors.onSurfaceVariant
+                          : colors.outlineVariant,
+                    ),
+                    focusedBorder: _fieldBorder(colors.primary, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      if (dense && widget.label != null) ...[
+                        Flexible(
+                          child: Text(
+                            widget.label!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: labelStyle,
+                          ),
+                        ),
+                        Text(' · ', style: labelStyle),
+                      ],
+                      Expanded(
+                        child: Text(
+                          _currentLabel,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: valueStyle,
                         ),
                       ),
-                    ),
-                    AnimatedRotation(
-                      turns: isOpen ? 0.5 : 0,
-                      duration: const Duration(milliseconds: 150),
-                      child: Icon(
-                        Icons.keyboard_arrow_down_rounded,
-                        color: colors.onSurfaceVariant,
+                      AnimatedRotation(
+                        turns: isOpen ? 0.5 : 0,
+                        duration: const Duration(milliseconds: 150),
+                        child: Icon(
+                          Icons.keyboard_arrow_down_rounded,
+                          size: 20,
+                          color: colors.onSurfaceVariant,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -184,10 +232,14 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
                 padding: const WidgetStatePropertyAll(
                   EdgeInsets.symmetric(horizontal: 12),
                 ),
-                minimumSize: const WidgetStatePropertyAll(Size.fromHeight(44)),
+                minimumSize: WidgetStatePropertyAll(
+                  Size.fromHeight(AppControlTokens.menuItemHeight),
+                ),
                 shape: WidgetStatePropertyAll(
                   RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
+                    borderRadius: BorderRadius.circular(
+                      AppControlTokens.controlRadius,
+                    ),
                   ),
                 ),
                 backgroundColor: WidgetStateProperty.resolveWith(
@@ -233,7 +285,7 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
 
   OutlineInputBorder _fieldBorder(Color color, {double width = 1}) =>
       OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
         borderSide: BorderSide(color: color, width: width),
       );
 }

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/app_exception.dart';
@@ -497,7 +498,9 @@ class _LanguageSwitchState extends ConsumerState<_LanguageSwitch> {
               padding: const WidgetStatePropertyAll(
                 EdgeInsets.symmetric(horizontal: 12),
               ),
-              minimumSize: const WidgetStatePropertyAll(Size.fromHeight(44)),
+              minimumSize: WidgetStatePropertyAll(
+                Size.fromHeight(AppControlTokens.menuItemHeight),
+              ),
               shape: WidgetStatePropertyAll(
                 RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
@@ -532,7 +535,7 @@ class _LanguageSwitchState extends ConsumerState<_LanguageSwitch> {
               () => controller.isOpen ? controller.close() : controller.open(),
           style: TextButton.styleFrom(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            minimumSize: const Size(0, 36),
+            minimumSize: Size(0, AppControlTokens.buttonHeight),
             foregroundColor: colors.onSurface,
           ),
           child: Row(

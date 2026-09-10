@@ -10,6 +10,7 @@ import 'package:data_table_2/data_table_2.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 
@@ -641,6 +642,7 @@ class _AdminListPaginationBarState extends State<AdminListPaginationBar> {
                   SizedBox(
                     width: 92,
                     child: AppDropdown<int>(
+                      dense: true,
                       value: widget.rowsPerPage,
                       items: [
                         for (final choice
@@ -663,7 +665,7 @@ class _AdminListPaginationBarState extends State<AdminListPaginationBar> {
                     onPressed:
                         current > 0 ? () => widget.onPageChanged(0) : null,
                     style: IconButton.styleFrom(
-                      minimumSize: const Size(44, 44),
+                      minimumSize: Size.square(AppControlTokens.iconButtonSize),
                       padding: EdgeInsets.zero,
                     ),
                     icon: const Icon(Icons.first_page_rounded),
@@ -676,7 +678,7 @@ class _AdminListPaginationBarState extends State<AdminListPaginationBar> {
                             ? () => widget.onPageChanged(current - 1)
                             : null,
                     style: IconButton.styleFrom(
-                      minimumSize: const Size(44, 44),
+                      minimumSize: Size.square(AppControlTokens.iconButtonSize),
                       padding: EdgeInsets.zero,
                     ),
                     icon: const Icon(Icons.chevron_left_rounded),
@@ -700,7 +702,7 @@ class _AdminListPaginationBarState extends State<AdminListPaginationBar> {
                             ? () => widget.onPageChanged(current + 1)
                             : null,
                     style: IconButton.styleFrom(
-                      minimumSize: const Size(44, 44),
+                      minimumSize: Size.square(AppControlTokens.iconButtonSize),
                       padding: EdgeInsets.zero,
                     ),
                     icon: const Icon(Icons.chevron_right_rounded),
@@ -713,7 +715,7 @@ class _AdminListPaginationBarState extends State<AdminListPaginationBar> {
                             ? () => widget.onPageChanged(total - 1)
                             : null,
                     style: IconButton.styleFrom(
-                      minimumSize: const Size(44, 44),
+                      minimumSize: Size.square(AppControlTokens.iconButtonSize),
                       padding: EdgeInsets.zero,
                     ),
                     icon: const Icon(Icons.last_page_rounded),

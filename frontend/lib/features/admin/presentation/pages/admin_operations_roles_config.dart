@@ -89,6 +89,7 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
           children: [
             AppDropdown<String>(
               width: 190,
+              dense: true,
               label: l10n.adminConfigGroupColumn,
               value: _groupFilter,
               items: [
