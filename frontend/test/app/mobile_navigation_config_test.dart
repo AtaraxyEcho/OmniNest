@@ -4,29 +4,23 @@ import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 
 void main() {
   group('MobileNavigationConfig', () {
-    test('将照片与影视映射到独立入口', () {
-      expect(
-        MobileNavigationConfig.destinationIndexForBranch(
-          MobileNavigationConfig.photosBranch,
-        ),
-        3,
-      );
-      expect(
-        MobileNavigationConfig.destinationIndexForBranch(
-          MobileNavigationConfig.videoBranch,
-        ),
-        4,
-      );
+    test('导航顺序为 首页·音乐·照片·媒体·阅读·文件', () {
+      expect(MobileNavigationConfig.portalBranch, 0);
+      expect(MobileNavigationConfig.musicBranch, 1);
+      expect(MobileNavigationConfig.photosBranch, 2);
+      expect(MobileNavigationConfig.videoBranch, 3);
+      expect(MobileNavigationConfig.readerBranch, 4);
+      expect(MobileNavigationConfig.filesBranch, 5);
     });
 
-    test('一级导航项直接映射对应分支', () {
+    test('分支与一级导航项双向映射保持一致', () {
+      for (var index = 0; index < 6; index++) {
+        expect(MobileNavigationConfig.destinationIndexForBranch(index), index);
+        expect(MobileNavigationConfig.branchForDestination(index), index);
+      }
       expect(
-        MobileNavigationConfig.branchForDestination(3),
-        MobileNavigationConfig.photosBranch,
-      );
-      expect(
-        MobileNavigationConfig.branchForDestination(4),
-        MobileNavigationConfig.videoBranch,
+        MobileNavigationConfig.branchForDestination(99),
+        MobileNavigationConfig.readerBranch,
       );
     });
 
@@ -51,7 +45,7 @@ void main() {
       );
     });
 
-    test('移动端业务模块统一使用连续动态背景策略', () {
+    test('动态壁纸仅保留给首页与音乐，内容模块隐藏壁纸', () {
       expect(
         MobileNavigationConfig.backdropPolicyForBranch(
           MobileNavigationConfig.portalBranch,
@@ -59,26 +53,10 @@ void main() {
         AppBackdropPolicy.portalMobile,
       );
       expect(
-        AppBackdropPolicy.portalMobile.readabilityMode,
-        AppBackdropReadabilityMode.none,
-      );
-      expect(
-        MobileNavigationConfig.backdropPolicyForBranch(
-          MobileNavigationConfig.filesBranch,
-        ),
-        AppBackdropPolicy.mobileContent,
-      );
-      expect(
         MobileNavigationConfig.backdropPolicyForBranch(
           MobileNavigationConfig.musicBranch,
         ),
         AppBackdropPolicy.musicDeck,
-      );
-      expect(
-        MobileNavigationConfig.backdropPolicyForBranch(
-          MobileNavigationConfig.readerBranch,
-        ),
-        AppBackdropPolicy.mobileContent,
       );
       for (final branch in <int>[
         MobileNavigationConfig.filesBranch,
@@ -87,9 +65,10 @@ void main() {
         MobileNavigationConfig.readerBranch,
       ]) {
         final policy = MobileNavigationConfig.backdropPolicyForBranch(branch);
-        expect(policy.playbackMode, AppBackdropPlaybackMode.continuous);
-        expect(policy.motionAllowed, isTrue);
-        expect(policy.readabilityMode, AppBackdropReadabilityMode.none);
+        expect(policy, AppBackdropPolicy.work);
+        expect(policy.visible, isFalse);
+        expect(policy.playbackMode, AppBackdropPlaybackMode.paused);
+        expect(policy.motionAllowed, isFalse);
       }
     });
   });

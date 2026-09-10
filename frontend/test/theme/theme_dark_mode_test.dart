@@ -29,7 +29,8 @@ void main() {
       expect(global!.surface, AppThemePalette.dark.surface);
       expect(music?.surface, global.surface);
       expect(photos?.surface, global.surface);
-      expect(reader?.surface, global.surface);
+      // Reader 自 b019beb 起使用固定纸感色板，不再与全局面同源。
+      expect(reader?.surface, const Color(0xFF0F0E0C));
     });
 
     test('模块颜色从统一调色板派生', () {
@@ -39,7 +40,7 @@ void main() {
 
       expect(music.surface, AppThemePalette.dark.surface);
       expect(photos.surface, AppThemePalette.light.surface);
-      expect(reader.surface, AppThemePalette.dark.surface);
+      expect(reader.surface, const Color(0xFF0F0E0C));
     });
 
     test('主题插值同步更新模块扩展', () {

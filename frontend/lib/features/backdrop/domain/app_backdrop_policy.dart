@@ -55,15 +55,6 @@ class AppBackdropPolicy {
     motionAllowed: true,
   );
 
-  /// 移动端业务模块使用连续背景，并由模块局部表面保证内容可读性。
-  static const mobileContent = AppBackdropPolicy(
-    scene: AppBackdropScene.content,
-    visible: true,
-    playbackMode: AppBackdropPlaybackMode.continuous,
-    readabilityMode: AppBackdropReadabilityMode.none,
-    motionAllowed: true,
-  );
-
   /// 普通内容浏览使用高可读性和连续背景策略。
   static const content = AppBackdropPolicy(
     scene: AppBackdropScene.content,

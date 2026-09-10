@@ -22,15 +22,11 @@ class AppRouteSurface extends StatelessWidget {
     final useMobileTheme =
         isMobilePlatform ||
         ResponsiveBreakpoints.isCompact(MediaQuery.sizeOf(context).width);
-    final effectivePolicy =
-        useMobileTheme && identical(policy, AppBackdropPolicy.staticContent)
-            ? AppBackdropPolicy.mobileContent
-            : policy;
     Widget content = Builder(
       builder:
           (context) => ColoredBox(
             color:
-                effectivePolicy.visible
+                policy.visible
                     ? Colors.transparent
                     : Theme.of(context).colorScheme.surface,
             child: child,
@@ -42,10 +38,6 @@ class AppRouteSurface extends StatelessWidget {
         child: content,
       );
     }
-    return AppBackdropSceneScope(
-      owner: owner,
-      policy: effectivePolicy,
-      child: content,
-    );
+    return AppBackdropSceneScope(owner: owner, policy: policy, child: content);
   }
 }

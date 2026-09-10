@@ -116,11 +116,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           StatefulShellBranch(
             routes: [
-              _animatedRoute('/files', (state) => const FileBrowserPage()),
-            ],
-          ),
-          StatefulShellBranch(
-            routes: [
               _animatedRoute('/music', (state) => const MusicCenterPage()),
             ],
           ),
@@ -147,6 +142,11 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                   itemId: state.pathParameters['itemId']!,
                 ),
               ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              _animatedRoute('/files', (state) => const FileBrowserPage()),
             ],
           ),
         ],

@@ -8,6 +8,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/feature/portal_mobile_theme.dart';
+import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -101,11 +102,13 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
     return Column(
       children: [
         _MobileTopBar(branch: widget.navigationShell.currentIndex),
-        if (offline) const _MobileSystemBanner(),
+        if (offline)
+          _MobileSystemBanner(branch: widget.navigationShell.currentIndex),
         Expanded(child: _moduleContent()),
         if (!selectionActive) ...[
           MusicMobileMiniPlayerSlot(onOpenPlayer: _openNowPlaying),
           _MobileBottomNavigation(
+            branch: widget.navigationShell.currentIndex,
             selectedIndex: _destinationIndex,
             onSelected: _selectDestination,
             portalStyle:
@@ -130,6 +133,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
         children: [
           if (!selectionActive)
             _MobileNavigationRail(
+              branch: widget.navigationShell.currentIndex,
               selectedIndex: _destinationIndex,
               onSelected: _selectDestination,
               portalStyle:
@@ -143,7 +147,10 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
             child: Column(
               children: [
                 _MobileTopBar(branch: widget.navigationShell.currentIndex),
-                if (offline) const _MobileSystemBanner(),
+                if (offline)
+                  _MobileSystemBanner(
+                    branch: widget.navigationShell.currentIndex,
+                  ),
                 Expanded(child: _moduleContent()),
                 if (!selectionActive)
                   MusicMobileMiniPlayerSlot(onOpenPlayer: _openNowPlaying),
@@ -251,7 +258,7 @@ class _MobileTopBar extends ConsumerWidget {
             )
             : musicStyle
             ? _musicChromeSurface(context, backdropActive: backdropActive)
-            : _mobileChromeSurface(context, backdropActive: backdropActive);
+            : _solidChromeSurface(context, branch: branch);
     final outline =
         portalStyle
             ? PortalMobileTheme.chromeOutline(
@@ -260,11 +267,12 @@ class _MobileTopBar extends ConsumerWidget {
             )
             : musicStyle
             ? _musicChromeOutline(context)
-            : _mobileChromeOutline(context, backdropActive: backdropActive);
-    final foreground =
-        musicStyle
-            ? context.musicColors.onSurface
-            : context.mobileColors.textPrimary;
+            : _solidChromeOutline(context, branch: branch);
+    final foreground = _chromeForeground(
+      context,
+      branch: branch,
+      musicStyle: musicStyle,
+    );
     return SafeArea(
       bottom: false,
       child: DecoratedBox(
@@ -306,7 +314,10 @@ class _MobileTopBar extends ConsumerWidget {
                     ),
                   ),
                 ),
-                _MobileActivityButton(foregroundColor: foreground),
+                _MobileActivityButton(
+                  foregroundColor: foreground,
+                  borderColor: surface,
+                ),
                 const SizedBox(width: 4),
                 const UserAvatarMenu(size: 32, directToProfile: true),
               ],
@@ -319,20 +330,26 @@ class _MobileTopBar extends ConsumerWidget {
 
   String _title(AppLocalizations l10n) {
     return switch (branch) {
-      0 => l10n.mobileNavHome,
-      1 => l10n.mobileNavFiles,
-      2 => l10n.mobileNavMusic,
-      3 => l10n.portalDockPhotos,
-      4 => l10n.portalDockMovies,
-      _ => l10n.mobileNavReader,
+      MobileNavigationConfig.portalBranch => l10n.mobileNavHome,
+      MobileNavigationConfig.musicBranch => l10n.mobileNavMusic,
+      MobileNavigationConfig.photosBranch => l10n.portalDockPhotos,
+      MobileNavigationConfig.videoBranch => l10n.portalDockMovies,
+      MobileNavigationConfig.readerBranch => l10n.mobileNavReader,
+      _ => l10n.mobileNavFiles,
     };
   }
 }
 
 class _MobileActivityButton extends ConsumerWidget {
-  const _MobileActivityButton({required this.foregroundColor});
+  const _MobileActivityButton({
+    required this.foregroundColor,
+    required this.borderColor,
+  });
 
   final Color foregroundColor;
+
+  /// 活动点外圈描边色，取当前 chrome 表面避免浮点错位。
+  final Color borderColor;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -365,10 +382,7 @@ class _MobileActivityButton extends ConsumerWidget {
                 decoration: BoxDecoration(
                   color: indicatorColor,
                   shape: BoxShape.circle,
-                  border: Border.all(
-                    color: context.mobileColors.surface,
-                    width: 2,
-                  ),
+                  border: Border.all(color: borderColor, width: 2),
                 ),
                 child: const SizedBox.square(dimension: 9),
               ),
@@ -380,12 +394,23 @@ class _MobileActivityButton extends ConsumerWidget {
 }
 
 class _MobileSystemBanner extends StatelessWidget {
-  const _MobileSystemBanner();
+  const _MobileSystemBanner({required this.branch});
+
+  final int branch;
 
   @override
   Widget build(BuildContext context) {
+    final readerStyle = branch == MobileNavigationConfig.readerBranch;
+    final background =
+        readerStyle
+            ? context.readerColors.primaryContainer
+            : context.mobileColors.surfaceSelected;
+    final foreground =
+        readerStyle
+            ? context.readerColors.onSurface
+            : context.mobileColors.textPrimary;
     return ColoredBox(
-      color: context.mobileColors.surfaceSelected,
+      color: background,
       child: SizedBox(
         height: 42,
         child: Padding(
@@ -395,7 +420,10 @@ class _MobileSystemBanner extends StatelessWidget {
               Icon(
                 Icons.wifi_off_rounded,
                 size: 18,
-                color: context.mobileColors.warmAccent,
+                color:
+                    readerStyle
+                        ? context.readerColors.warning
+                        : context.mobileColors.warmAccent,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -404,7 +432,7 @@ class _MobileSystemBanner extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: context.mobileColors.textPrimary,
+                    color: foreground,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
@@ -420,12 +448,14 @@ class _MobileSystemBanner extends StatelessWidget {
 
 class _MobileBottomNavigation extends ConsumerWidget {
   const _MobileBottomNavigation({
+    required this.branch,
     required this.selectedIndex,
     required this.onSelected,
     required this.portalStyle,
     required this.musicStyle,
   });
 
+  final int branch;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final bool portalStyle;
@@ -476,7 +506,7 @@ class _MobileBottomNavigation extends ConsumerWidget {
             )
             : musicStyle
             ? _musicChromeSurface(context, backdropActive: backdropActive)
-            : _mobileChromeSurface(context, backdropActive: backdropActive);
+            : _solidChromeSurface(context, branch: branch);
     final outline =
         portalStyle
             ? PortalMobileTheme.chromeOutline(
@@ -485,7 +515,16 @@ class _MobileBottomNavigation extends ConsumerWidget {
             )
             : musicStyle
             ? _musicChromeOutline(context)
-            : _mobileChromeOutline(context, backdropActive: backdropActive);
+            : _solidChromeOutline(context, branch: branch);
+    final selectedColor = _chromeForeground(
+      context,
+      branch: branch,
+      musicStyle: musicStyle,
+    );
+    final unselectedColor =
+        branch == MobileNavigationConfig.readerBranch
+            ? context.readerColors.onSurfaceVariant
+            : context.mobileColors.textSecondary;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: surface,
@@ -502,6 +541,8 @@ class _MobileBottomNavigation extends ConsumerWidget {
                   child: _MobileBottomDestination(
                     destination: destinations[index],
                     selected: selectedIndex == index,
+                    selectedColor: selectedColor,
+                    unselectedColor: unselectedColor,
                     onTap: () => onSelected(index),
                   ),
                 ),
@@ -515,12 +556,14 @@ class _MobileBottomNavigation extends ConsumerWidget {
 
 class _MobileNavigationRail extends ConsumerWidget {
   const _MobileNavigationRail({
+    required this.branch,
     required this.selectedIndex,
     required this.onSelected,
     required this.portalStyle,
     required this.musicStyle,
   });
 
+  final int branch;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
   final bool portalStyle;
@@ -558,28 +601,55 @@ class _MobileNavigationRail extends ConsumerWidget {
 
   Widget _buildRail(BuildContext context, {required bool backdropActive}) {
     final destinations = _destinations(AppLocalizations.of(context));
-    return NavigationRail(
-      minWidth: 80,
-      selectedIndex: selectedIndex,
-      onDestinationSelected: onSelected,
-      backgroundColor:
-          portalStyle
-              ? PortalMobileTheme.chromeSurface(
-                context,
-                backdropActive: backdropActive,
-              )
-              : musicStyle
-              ? _musicChromeSurface(context, backdropActive: backdropActive)
-              : _mobileChromeSurface(context, backdropActive: backdropActive),
-      labelType: NavigationRailLabelType.all,
-      destinations: [
-        for (final destination in destinations)
-          NavigationRailDestination(
-            icon: Icon(destination.icon),
-            selectedIcon: Icon(destination.selectedIcon),
-            label: Text(destination.label),
-          ),
-      ],
+    final surface =
+        portalStyle
+            ? PortalMobileTheme.chromeSurface(
+              context,
+              backdropActive: backdropActive,
+            )
+            : musicStyle
+            ? _musicChromeSurface(context, backdropActive: backdropActive)
+            : _solidChromeSurface(context, branch: branch);
+    final outline =
+        portalStyle
+            ? PortalMobileTheme.chromeOutline(
+              context,
+              backdropActive: backdropActive,
+            )
+            : musicStyle
+            ? _musicChromeOutline(context)
+            : _solidChromeOutline(context, branch: branch);
+    final selectedColor = _chromeForeground(
+      context,
+      branch: branch,
+      musicStyle: musicStyle,
+    );
+    final unselectedColor =
+        branch == MobileNavigationConfig.readerBranch
+            ? context.readerColors.onSurfaceVariant
+            : context.mobileColors.textSecondary;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surface,
+        border: Border(right: BorderSide(color: outline)),
+      ),
+      child: NavigationRail(
+        minWidth: 80,
+        selectedIndex: selectedIndex,
+        onDestinationSelected: onSelected,
+        indicatorColor: Colors.transparent,
+        selectedIconTheme: IconThemeData(color: selectedColor),
+        unselectedIconTheme: IconThemeData(color: unselectedColor),
+        labelType: NavigationRailLabelType.all,
+        destinations: [
+          for (final destination in destinations)
+            NavigationRailDestination(
+              icon: Icon(destination.icon),
+              selectedIcon: Icon(destination.selectedIcon),
+              label: Text(destination.label),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -611,33 +681,52 @@ Color _musicChromeOutline(BuildContext context) {
   return colors.outline.withValues(alpha: alpha);
 }
 
-Color _mobileChromeSurface(
-  BuildContext context, {
-  required bool backdropActive,
-}) {
-  return context.mobileColors.pageMask.withValues(
-    alpha: backdropActive ? 0.58 : 0.92,
-  );
+/// 实底分支的 chrome 表面：阅读分支取纸感表面与页面同源，
+/// 其余取全局 surface，不再透出壁纸。
+Color _solidChromeSurface(BuildContext context, {required int branch}) {
+  if (branch == MobileNavigationConfig.readerBranch) {
+    return context.readerColors.surface;
+  }
+  return context.mobileColors.pageMask;
 }
 
-Color _mobileChromeOutline(
+Color _solidChromeOutline(BuildContext context, {required int branch}) {
+  if (branch == MobileNavigationConfig.readerBranch) {
+    return context.readerColors.outlineVariant;
+  }
+  return context.mobileColors.outline;
+}
+
+/// chrome 前景色；选中态一律取该前景色（墨色单色），不使用模块 accent。
+Color _chromeForeground(
   BuildContext context, {
-  required bool backdropActive,
+  required int branch,
+  required bool musicStyle,
 }) {
-  return context.mobileColors.outline.withValues(
-    alpha: backdropActive ? 0.72 : 1,
-  );
+  if (musicStyle) {
+    return context.musicColors.onSurface;
+  }
+  if (branch == MobileNavigationConfig.readerBranch) {
+    return context.readerColors.onSurface;
+  }
+  return context.mobileColors.textPrimary;
 }
 
 class _MobileBottomDestination extends StatelessWidget {
   const _MobileBottomDestination({
     required this.destination,
     required this.selected,
+    required this.selectedColor,
+    required this.unselectedColor,
     required this.onTap,
   });
 
   final _MobileDestination destination;
   final bool selected;
+
+  /// 选中态统一墨色前景（亮墨/暗米白/玻璃烟熏随分支主题解析）。
+  final Color selectedColor;
+  final Color unselectedColor;
   final VoidCallback onTap;
 
   @override
@@ -659,7 +748,7 @@ class _MobileBottomDestination extends StatelessWidget {
                   width: selected ? 28 : 0,
                   height: 3,
                   decoration: BoxDecoration(
-                    color: context.mobileColors.musicAccent,
+                    color: selectedColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
@@ -670,10 +759,7 @@ class _MobileBottomDestination extends StatelessWidget {
                   Icon(
                     selected ? destination.selectedIcon : destination.icon,
                     size: 22,
-                    color:
-                        selected
-                            ? context.mobileColors.musicAccent
-                            : context.mobileColors.textSecondary,
+                    color: selected ? selectedColor : unselectedColor,
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -681,10 +767,7 @@ class _MobileBottomDestination extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color:
-                          selected
-                              ? context.mobileColors.textPrimary
-                              : context.mobileColors.textSecondary,
+                      color: selected ? selectedColor : unselectedColor,
                       fontSize: 11,
                       fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -707,11 +790,6 @@ List<_MobileDestination> _destinations(AppLocalizations l10n) {
       label: l10n.mobileNavHome,
     ),
     _MobileDestination(
-      icon: Icons.folder_outlined,
-      selectedIcon: Icons.folder_rounded,
-      label: l10n.mobileNavFiles,
-    ),
-    _MobileDestination(
       icon: Icons.music_note_outlined,
       selectedIcon: Icons.music_note_rounded,
       label: l10n.mobileNavMusic,
@@ -730,6 +808,11 @@ List<_MobileDestination> _destinations(AppLocalizations l10n) {
       icon: Icons.menu_book_outlined,
       selectedIcon: Icons.menu_book_rounded,
       label: l10n.mobileNavReader,
+    ),
+    _MobileDestination(
+      icon: Icons.folder_outlined,
+      selectedIcon: Icons.folder_rounded,
+      label: l10n.mobileNavFiles,
     ),
   ];
 }

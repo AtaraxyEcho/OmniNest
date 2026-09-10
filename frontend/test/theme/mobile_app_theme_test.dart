@@ -15,13 +15,14 @@ void main() {
     expect(MobileAppTheme.resolve(source), same(source));
   });
 
-  test('移动端浅色主题统一模块表面和正文颜色', () {
+  test('移动端浅色主题统一模块表面和正文颜色（与桌面同色板）', () {
     final source = OmniNestTheme.light();
     final resolved = MobileAppTheme.resolve(source);
     final scheme = resolved.colorScheme;
 
-    expect(scheme.surface, const Color(0xFFF4F7F5));
-    expect(scheme.onSurface, const Color(0xFF17201C));
+    expect(scheme.surface, const Color(0xFFF7F8F6));
+    expect(scheme.onSurface, const Color(0xFF1A1D1B));
+    expect(scheme.primary, const Color(0xFF0B6B61));
     expect(resolved.textTheme.bodyMedium!.color, scheme.onSurface);
     expect(resolved.cardTheme.color, scheme.surfaceContainerLow);
     expect(resolved.extension<FilesColors>()!.surface, scheme.surface);
