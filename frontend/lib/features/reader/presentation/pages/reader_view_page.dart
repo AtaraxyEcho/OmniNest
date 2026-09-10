@@ -1101,6 +1101,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
               },
               onShowAnnotations:
                   () => _toggleReaderPanel(ReaderPanelType.annotations),
+              onToggleImmersive: _toggleReaderImmersive,
               isBookmarked: _isBookmarked,
               isInBookshelf: _isInBookshelf,
             ),

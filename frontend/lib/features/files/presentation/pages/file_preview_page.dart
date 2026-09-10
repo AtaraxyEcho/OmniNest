@@ -201,7 +201,7 @@ class _VideoPlayerBodyState extends State<_VideoPlayerBody> {
         onRetry: () => unawaited(_loadController.retry()),
       ),
       MediaPreviewLoadState.ready => Center(
-        child: Video(controller: _videoController, controls: NoVideoControls),
+        child: Video(controller: _videoController),
       ),
     };
   }

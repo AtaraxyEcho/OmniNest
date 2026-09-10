@@ -216,6 +216,8 @@ class _EmptyTrashButtonState extends State<_EmptyTrashButton> {
 }
 
 /// 回收站图格：图片暗化，悬停显示恢复/永久删除按钮，底部显示标题。
+///
+/// 触屏无悬停能力，长按图格弹出操作面板提供相同动作。
 class _TrashTile extends StatefulWidget {
   const _TrashTile({
     required this.photo,
@@ -244,90 +246,136 @@ class _TrashTileState extends State<_TrashTile> {
     return (width / height).clamp(0.6, 2.4);
   }
 
+  Future<void> _showActionSheet() async {
+    final l10n = AppLocalizations.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.restore_rounded),
+                title: Text(l10n.photosRestore),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  widget.onRestore();
+                },
+              ),
+              ListTile(
+                leading: const Icon(
+                  Icons.delete_outline_rounded,
+                  color: Color(0xFFEF4444),
+                ),
+                title: Text(
+                  l10n.photosDeletePermanently,
+                  style: const TextStyle(color: Color(0xFFEF4444)),
+                ),
+                onTap: () {
+                  Navigator.of(sheetContext).pop();
+                  widget.onDeleteForever();
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = context.frameColors;
     final photo = widget.photo;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(3),
-          child: AspectRatio(
-            aspectRatio: _aspectRatio,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                Opacity(
-                  opacity: 0.7,
-                  child:
-                      photo.hasCover
-                          ? PhotoThumbImage(
-                            imageUrl: photo.coverUrl!,
-                            cacheKey: photo.coverCacheKey,
-                          )
-                          : ColoredBox(color: colors.card),
-                ),
-                Positioned.fill(
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.basic,
-                    onEnter: (_) => setState(() => _hovering = true),
-                    onExit: (_) => setState(() => _hovering = false),
-                    child: AnimatedOpacity(
-                      opacity: _hovering ? 1 : 0,
-                      duration:
-                          MediaQuery.disableAnimationsOf(context)
-                              ? Duration.zero
-                              : const Duration(milliseconds: 150),
-                      child: ColoredBox(
-                        color: Colors.black.withValues(alpha: 0.35),
-                        child: Center(
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _TrashPillButton(
-                                icon: Icons.restore_rounded,
-                                label:
-                                    AppLocalizations.of(context).photosRestore,
-                                background: Colors.white,
-                                foreground: FramePalette.ink,
-                                onTap: widget.onRestore,
-                              ),
-                              const SizedBox(width: 8),
-                              _TrashPillButton(
-                                icon: Icons.delete_outline_rounded,
-                                label:
-                                    AppLocalizations.of(
-                                      context,
-                                    ).photosDeletePermanently,
-                                background: const Color(0xFFEF4444),
-                                foreground: Colors.white,
-                                onTap: widget.onDeleteForever,
-                              ),
-                            ],
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onLongPress: _showActionSheet,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(3),
+            child: AspectRatio(
+              aspectRatio: _aspectRatio,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Opacity(
+                    opacity: 0.7,
+                    child:
+                        photo.hasCover
+                            ? PhotoThumbImage(
+                              imageUrl: photo.coverUrl!,
+                              cacheKey: photo.coverCacheKey,
+                            )
+                            : ColoredBox(color: colors.card),
+                  ),
+                  Positioned.fill(
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.basic,
+                      onEnter: (_) => setState(() => _hovering = true),
+                      onExit: (_) => setState(() => _hovering = false),
+                      child: AnimatedOpacity(
+                        opacity: _hovering ? 1 : 0,
+                        duration:
+                            MediaQuery.disableAnimationsOf(context)
+                                ? Duration.zero
+                                : const Duration(milliseconds: 150),
+                        child: ColoredBox(
+                          color: Colors.black.withValues(alpha: 0.35),
+                          child: Center(
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                _TrashPillButton(
+                                  icon: Icons.restore_rounded,
+                                  label:
+                                      AppLocalizations.of(
+                                        context,
+                                      ).photosRestore,
+                                  background: Colors.white,
+                                  foreground: FramePalette.ink,
+                                  onTap: widget.onRestore,
+                                ),
+                                const SizedBox(width: 8),
+                                _TrashPillButton(
+                                  icon: Icons.delete_outline_rounded,
+                                  label:
+                                      AppLocalizations.of(
+                                        context,
+                                      ).photosDeletePermanently,
+                                  background: const Color(0xFFEF4444),
+                                  foreground: Colors.white,
+                                  onTap: widget.onDeleteForever,
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.only(top: 6),
-          child: Text(
-            photo.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: colors.muted,
-              fontSize: AppTypography.bodySmall,
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              photo.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.muted,
+                fontSize: AppTypography.bodySmall,
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

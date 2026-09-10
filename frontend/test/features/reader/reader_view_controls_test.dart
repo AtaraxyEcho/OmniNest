@@ -9,10 +9,11 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_settin
 import 'package:omninest/features/reader/presentation/widgets/reader_view_top_bar.dart';
 
 void main() {
-  Widget buildApp(Widget child, {double textScale = 1}) {
+  Widget buildApp(Widget child, {double textScale = 1, Locale? locale}) {
     return MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      locale: locale,
       builder:
           (context, appChild) => MediaQuery(
             data: MediaQuery.of(
@@ -85,16 +86,62 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byIcon(Icons.more_vert_rounded), findsNothing);
+    expect(find.byIcon(Icons.more_vert_rounded), findsOneWidget);
     expect(find.byIcon(Icons.search_rounded), findsOneWidget);
-    expect(find.byIcon(Icons.keyboard_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.keyboard_rounded), findsNothing);
     expect(find.byIcon(Icons.toc_rounded), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('文本阅读顶部菜单不再提供目录入口', (tester) async {
+  testWidgets('文本阅读顶栏紧凑档溢出菜单收纳低频操作且无目录入口', (tester) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(320, 568);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    var ttsToggled = false;
+    var immersiveToggled = false;
+    await tester.pumpWidget(
+      buildApp(
+        ReaderViewTopBar(
+          settings: ReaderViewSettings(paletteId: 'dark'),
+          bookTitle: '测试书籍',
+          chapterTitle: '测试章节',
+          onBack: () {},
+          onSearch: () {},
+          onShowShortcuts: () {},
+          onAddBookmark: () {},
+          onToggleTts: () => ttsToggled = true,
+          onShowAnnotations: () {},
+          onToggleImmersive: () => immersiveToggled = true,
+        ),
+        locale: const Locale('zh'),
+      ),
+    );
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
+    await tester.pumpAndSettle();
+
+    expect(find.text('朗读'), findsOneWidget);
+    expect(find.text('批注'), findsOneWidget);
+    expect(find.text('快捷键'), findsOneWidget);
+    expect(find.text('沉浸模式'), findsOneWidget);
+    expect(find.byIcon(Icons.toc_rounded), findsNothing);
+
+    await tester.tap(find.text('沉浸模式'));
+    await tester.pumpAndSettle();
+    expect(immersiveToggled, isTrue);
+
+    await tester.tap(find.byIcon(Icons.more_vert_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('朗读'));
+    await tester.pumpAndSettle();
+    expect(ttsToggled, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('文本阅读顶栏宽屏保留快捷键按钮且不出现溢出菜单', (tester) async {
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 800);
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -108,12 +155,14 @@ void main() {
           onSearch: () {},
           onShowShortcuts: () {},
           onAddBookmark: () {},
+          onToggleTts: () {},
+          onShowAnnotations: () {},
+          onToggleImmersive: () {},
         ),
       ),
     );
+    expect(find.byIcon(Icons.keyboard_rounded), findsOneWidget);
     expect(find.byIcon(Icons.more_vert_rounded), findsNothing);
-    expect(find.byIcon(Icons.text_format_rounded), findsNothing);
-    expect(find.byIcon(Icons.toc_rounded), findsNothing);
     expect(tester.takeException(), isNull);
   });
 

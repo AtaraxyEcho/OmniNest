@@ -4,6 +4,9 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
+/// 顶栏溢出菜单动作：紧凑/中等档收纳低频操作（对齐漫画阅读器顶栏先例）。
+enum _ReaderTopBarOverflowAction { tts, annotations, shortcuts, immersive }
+
 /// 阅读器顶部上下文栏，按可用宽度收起低频操作。
 class ReaderViewTopBar extends StatelessWidget {
   const ReaderViewTopBar({
@@ -17,6 +20,7 @@ class ReaderViewTopBar extends StatelessWidget {
     this.onToggleBookshelf,
     this.onToggleTts,
     this.onShowAnnotations,
+    this.onToggleImmersive,
     this.isBookmarked = false,
     this.isInBookshelf = false,
     super.key,
@@ -32,6 +36,7 @@ class ReaderViewTopBar extends StatelessWidget {
   final VoidCallback? onToggleBookshelf;
   final VoidCallback? onToggleTts;
   final VoidCallback? onShowAnnotations;
+  final VoidCallback? onToggleImmersive;
   final bool isBookmarked;
   final bool isInBookshelf;
 
@@ -129,13 +134,74 @@ class ReaderViewTopBar extends StatelessWidget {
                                   context,
                                 ).readerAddToBookshelf,
                       ),
-                    _TopBarButton(
-                      icon: Icons.keyboard_rounded,
-                      onTap: onShowShortcuts,
-                      settings: settings,
-                      tooltip:
-                          AppLocalizations.of(context).readerShortcutsTitle,
-                    ),
+                    if (layout.density == ReaderControlDensity.expanded)
+                      _TopBarButton(
+                        icon: Icons.keyboard_rounded,
+                        onTap: onShowShortcuts,
+                        settings: settings,
+                        tooltip:
+                            AppLocalizations.of(context).readerShortcutsTitle,
+                      )
+                    else
+                      PopupMenuButton<_ReaderTopBarOverflowAction>(
+                        tooltip:
+                            MaterialLocalizations.of(context).moreButtonTooltip,
+                        icon: Icon(
+                          Icons.more_vert_rounded,
+                          color: settings.onSurfaceVariantColor,
+                        ),
+                        onSelected: (action) {
+                          switch (action) {
+                            case _ReaderTopBarOverflowAction.tts:
+                              onToggleTts?.call();
+                            case _ReaderTopBarOverflowAction.annotations:
+                              onShowAnnotations?.call();
+                            case _ReaderTopBarOverflowAction.shortcuts:
+                              onShowShortcuts();
+                            case _ReaderTopBarOverflowAction.immersive:
+                              onToggleImmersive?.call();
+                          }
+                        },
+                        itemBuilder:
+                            (context) => [
+                              if (onToggleTts != null)
+                                PopupMenuItem(
+                                  value: _ReaderTopBarOverflowAction.tts,
+                                  child: Text(
+                                    AppLocalizations.of(
+                                      context,
+                                    ).readerReadAloud,
+                                  ),
+                                ),
+                              if (onShowAnnotations != null)
+                                PopupMenuItem(
+                                  value:
+                                      _ReaderTopBarOverflowAction.annotations,
+                                  child: Text(
+                                    AppLocalizations.of(
+                                      context,
+                                    ).readerAnnotations,
+                                  ),
+                                ),
+                              PopupMenuItem(
+                                value: _ReaderTopBarOverflowAction.shortcuts,
+                                child: Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  ).readerShortcutsTitle,
+                                ),
+                              ),
+                              if (onToggleImmersive != null)
+                                PopupMenuItem(
+                                  value: _ReaderTopBarOverflowAction.immersive,
+                                  child: Text(
+                                    AppLocalizations.of(
+                                      context,
+                                    ).readerImmersiveMode,
+                                  ),
+                                ),
+                            ],
+                      ),
                   ],
                 ),
               ),

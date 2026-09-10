@@ -6,6 +6,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart
 import 'package:omninest/features/photos/domain/photo.dart';
 
 enum _PhotoMenuAction {
+  favorite,
   info,
   edit,
   slideshow,
@@ -129,6 +130,8 @@ class PhotoViewerTopBar extends StatelessWidget {
               icon: Icon(Icons.more_vert_rounded, color: iconColor),
               onSelected: (action) {
                 switch (action) {
+                  case _PhotoMenuAction.favorite:
+                    onToggleFavorite();
                   case _PhotoMenuAction.info:
                     onToggleInfo();
                   case _PhotoMenuAction.edit:
@@ -147,6 +150,14 @@ class PhotoViewerTopBar extends StatelessWidget {
               },
               itemBuilder:
                   (context) => [
+                    PopupMenuItem(
+                      value: _PhotoMenuAction.favorite,
+                      child: Text(
+                        photo.favorite
+                            ? AppLocalizations.of(context).photosUnfavorite
+                            : AppLocalizations.of(context).photosFavorite,
+                      ),
+                    ),
                     PopupMenuItem(
                       value: _PhotoMenuAction.share,
                       child: Text(
