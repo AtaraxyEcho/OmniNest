@@ -456,10 +456,12 @@ class _PortalContinueStrip extends StatelessWidget {
     }
     if (items.isEmpty &&
         (movie.isLoading || music.isLoading || reader.isLoading)) {
-      return const SizedBox(
+      return SizedBox(
         height: 108,
-        child: Row(
-          children: [
+        child: ListView(
+          scrollDirection: Axis.horizontal,
+          physics: const NeverScrollableScrollPhysics(),
+          children: const [
             MobileSkeletonBlock(width: 248, height: 108),
             SizedBox(width: 12),
             MobileSkeletonBlock(width: 248, height: 108),
