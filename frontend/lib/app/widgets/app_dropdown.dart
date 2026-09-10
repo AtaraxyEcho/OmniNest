@@ -193,7 +193,8 @@ class _AppDropdownState<T> extends State<AppDropdown<T>> {
                           minHeight: 0,
                         ),
                         filled: true,
-                        fillColor: colors.surfaceContainerLowest,
+                        // 与主题输入框一致：浅色不用纯白填充。
+                        fillColor: colors.surfaceContainerLow,
                         contentPadding: _contentPadding,
                         border: _fieldBorder(colors.outlineVariant),
                         enabledBorder: _fieldBorder(

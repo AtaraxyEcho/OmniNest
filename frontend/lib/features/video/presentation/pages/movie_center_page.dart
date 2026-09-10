@@ -5,6 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -118,8 +119,12 @@ class _MovieSearchField extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final palette = context.movieRedesign;
+    // 与其他模块顶栏搜索框对齐：更窄、更矮；浅色用 muted 避免纯白。
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 320),
+      constraints: BoxConstraints(
+        maxWidth: AppControlTokens.searchFieldWidth,
+        minHeight: AppControlTokens.fieldHeight,
+      ),
       child: TextField(
         onChanged:
             ref.read(movieCenterControllerProvider.notifier).setSearchQuery,
@@ -148,21 +153,24 @@ class _MovieSearchField extends ConsumerWidget {
             color: palette.mutedForeground,
             size: 16,
           ),
-          prefixIconConstraints: const BoxConstraints(minWidth: 34),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 10,
-            vertical: 8,
+          prefixIconConstraints: BoxConstraints(
+            minWidth: AppControlTokens.fieldPrefixIconWidth,
+            minHeight: 0,
+          ),
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: AppControlTokens.fieldHorizontalPadding,
+            vertical: AppControlTokens.fieldVerticalPadding,
           ),
           border: OutlineInputBorder(
-            borderRadius: MovieRedesignPalette.borderRadius,
+            borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
             borderSide: BorderSide(color: palette.border),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: MovieRedesignPalette.borderRadius,
+            borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
             borderSide: BorderSide(color: palette.border),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: MovieRedesignPalette.borderRadius,
+            borderRadius: BorderRadius.circular(AppControlTokens.controlRadius),
             borderSide: BorderSide(color: palette.foreground),
           ),
         ),

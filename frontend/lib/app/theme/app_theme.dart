@@ -264,7 +264,8 @@ class OmniNestTheme {
         // 桌面/Web 采用密集装饰，避免输入框高于相邻按钮。
         isDense: isDesktopDensity,
         filled: true,
-        fillColor: colors.surfaceContainerLowest,
+        // 浅色模式用 surfaceContainerLow，避免纯白输入框/搜索框。
+        fillColor: colors.surfaceContainerLow,
         contentPadding: EdgeInsets.symmetric(
           horizontal: inputHorizontalPadding,
           vertical: inputVerticalPadding,

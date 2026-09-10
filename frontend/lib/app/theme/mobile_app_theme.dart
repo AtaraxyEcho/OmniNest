@@ -123,7 +123,8 @@ abstract final class MobileAppTheme {
         indicatorColor: colors.primaryContainer,
       ),
       inputDecorationTheme: source.inputDecorationTheme.copyWith(
-        fillColor: colors.surfaceContainerLowest,
+        // 浅色模式避免纯白输入框。
+        fillColor: colors.surfaceContainerLow,
         labelStyle: source.inputDecorationTheme.labelStyle?.copyWith(
           color: colors.onSurfaceVariant,
         ),

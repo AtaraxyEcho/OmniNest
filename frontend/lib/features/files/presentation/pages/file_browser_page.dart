@@ -23,6 +23,7 @@ import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/core/widgets/space_selector_sheet.dart';
+import 'package:omninest/core/widgets/responsive_search_field.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/application/share_link_controller.dart';
@@ -524,23 +525,52 @@ class _FileBackdrop extends StatelessWidget {
   }
 }
 
-class _FileTopBar extends ConsumerWidget {
+class _FileTopBar extends ConsumerStatefulWidget {
   const _FileTopBar({required this.state, required this.showMenu});
 
   final FileBrowserState state;
   final bool showMenu;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_FileTopBar> createState() => _FileTopBarState();
+}
+
+class _FileTopBarState extends ConsumerState<_FileTopBar> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void didUpdateWidget(covariant _FileTopBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.state.section != widget.state.section) {
+      _searchController.clear();
+    } else {
+      final query = widget.state.searchQuery;
+      if (_searchController.text != query) {
+        _searchController.text = query;
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  bool get _canSearch => switch (widget.state.section) {
+    FileManagerSection.allFiles ||
+    FileManagerSection.recent ||
+    FileManagerSection.favorites ||
+    FileManagerSection.recycleBin => true,
+    _ => false,
+  };
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(fileBrowserControllerProvider.notifier);
-    final canSearch = switch (state.section) {
-      FileManagerSection.allFiles ||
-      FileManagerSection.recent ||
-      FileManagerSection.favorites ||
-      FileManagerSection.recycleBin => true,
-      _ => false,
-    };
+    final canSearch = _canSearch;
+    final isNarrow = MediaQuery.sizeOf(context).width < 720;
     return WorkbenchTopBar(
       surfaceColor: context.filesColors.surface,
       borderColor: context.filesColors.outlineVariant,
@@ -548,7 +578,7 @@ class _FileTopBar extends ConsumerWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Row(
           children: [
-            if (showMenu)
+            if (widget.showMenu)
               Builder(
                 builder:
                     (context) => IconButton(
@@ -570,34 +600,41 @@ class _FileTopBar extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                state.section.labelOf(l10n),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: AppTypography.titleMedium,
-                  height: 24 / 15,
-                  fontWeight: FontWeight.w800,
-                  color: context.filesColors.primary,
+            if (!isNarrow)
+              Expanded(
+                child: Text(
+                  widget.state.section.labelOf(l10n),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: AppTypography.titleMedium,
+                    height: 24 / 15,
+                    fontWeight: FontWeight.w800,
+                    color: context.filesColors.primary,
+                  ),
                 ),
+              )
+            else
+              const Spacer(),
+            if (canSearch) ...[
+              const SizedBox(width: 12),
+              // 与其他模块一致的顶栏内联搜索框，替代搜索按钮弹层。
+              ResponsiveSearchField(
+                controller: _searchController,
+                onChanged: controller.setSearchQuery,
+                hintText: l10n.filesSearchHint,
+                maxWidth: isNarrow ? 160 : null,
               ),
-            ),
-            if (canSearch)
-              IconButton(
-                tooltip: l10n.filesSearch,
-                onPressed: () => _showSearchOverlay(context, ref),
-                icon: Icon(Icons.search_rounded, size: 20),
-              ),
+            ],
             IconButton(
               tooltip: l10n.filesRefresh,
               onPressed:
-                  state.isBusy
+                  widget.state.isBusy
                       ? null
                       : () => unawaited(
                         _runFileAction(
                           context,
-                          () => controller.loadSection(state.section),
+                          () => controller.loadSection(widget.state.section),
                         ),
                       ),
               icon: Icon(Icons.refresh_rounded, size: 20),
@@ -611,121 +648,6 @@ class _FileTopBar extends ConsumerWidget {
             const UserAvatarMenu(),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showSearchOverlay(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final controller = ref.read(fileBrowserControllerProvider.notifier);
-    showGeneralDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: l10n.filesSearch,
-      barrierColor: Colors.black38,
-      transitionDuration: const Duration(milliseconds: 250),
-      pageBuilder:
-          (context, animation, secondaryAnimation) => Dialog(
-            backgroundColor: Colors.transparent,
-            child: _SearchOverlayCard(
-              initialQuery:
-                  ref
-                      .read(fileBrowserControllerProvider)
-                      .asData
-                      ?.value
-                      .searchQuery ??
-                  '',
-              onChanged: controller.setSearchQuery,
-            ),
-          ),
-      transitionBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
-        return FadeTransition(
-          opacity: curved,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
-            child: child,
-          ),
-        );
-      },
-    );
-  }
-}
-
-/// 搜索弹窗 — 屏幕中间展开的玻璃卡片
-class _SearchOverlayCard extends StatefulWidget {
-  const _SearchOverlayCard({
-    required this.initialQuery,
-    required this.onChanged,
-  });
-
-  final String initialQuery;
-  final ValueChanged<String> onChanged;
-
-  @override
-  State<_SearchOverlayCard> createState() => _SearchOverlayCardState();
-}
-
-class _SearchOverlayCardState extends State<_SearchOverlayCard> {
-  late final TextEditingController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController(text: widget.initialQuery);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return WorkbenchPanel(
-      padding: const EdgeInsets.all(20),
-      backgroundColor: context.filesColors.surfaceContainer,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  l10n.filesSearchFiles,
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ),
-              IconButton(
-                tooltip: l10n.coreClose,
-                icon: Icon(Icons.close_rounded),
-                onPressed: () => Navigator.of(context).pop(),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _controller,
-            autofocus: true,
-            onChanged: widget.onChanged,
-            decoration: InputDecoration(
-              hintText: l10n.filesSearchHint,
-              prefixIcon: Icon(Icons.search_rounded),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              filled: true,
-              fillColor: Theme.of(
-                context,
-              ).colorScheme.surfaceContainerHigh.withValues(alpha: 0.5),
-            ),
-          ),
-        ],
       ),
     );
   }
