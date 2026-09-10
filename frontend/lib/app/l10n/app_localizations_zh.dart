@@ -1127,6 +1127,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesMoreActions => '更多操作';
 
   @override
+  String get filesMoreSections => '更多分区';
+
+  @override
+  String get filesFilterSort => '排序与筛选';
+
+  @override
+  String get filesSwitchView => '切换视图';
+
+  @override
   String get filesFileActions => '文件操作';
 
   @override
@@ -1177,6 +1186,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesBatchRemoveFavorite => '批量取消收藏';
+
+  @override
+  String get filesAddFavorite => '收藏';
+
+  @override
+  String get filesRemoveFavorite => '取消收藏';
 
   @override
   String get filesBatchRestoreTitle => '批量恢复？';

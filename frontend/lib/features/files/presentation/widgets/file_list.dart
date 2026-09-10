@@ -8,6 +8,7 @@ import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/presentation/widgets/file_thumbnail.dart';
 
 enum _FileListAction {
+  favorite,
   rename,
   move,
   moveToShared,
@@ -35,8 +36,10 @@ class FileList extends StatefulWidget {
     this.onDownload,
     this.onShare,
     this.onPreview,
+    this.onToggleFavorite,
     this.selectedFileIds = const {},
     this.onToggleSelection,
+    this.showingFavorites = false,
     super.key,
   });
 
@@ -54,8 +57,12 @@ class FileList extends StatefulWidget {
   final ValueChanged<FileNode>? onDownload;
   final ValueChanged<FileNode>? onShare;
   final ValueChanged<FileNode>? onPreview;
+  final ValueChanged<FileNode>? onToggleFavorite;
   final Set<String> selectedFileIds;
   final ValueChanged<String>? onToggleSelection;
+
+  /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
+  final bool showingFavorites;
 
   @override
   State<FileList> createState() => _FileListState();
@@ -172,6 +179,8 @@ class _FileListState extends State<FileList>
               onDownload: widget.onDownload,
               onShare: widget.onShare,
               onPreview: widget.onPreview,
+              onToggleFavorite: widget.onToggleFavorite,
+              showingFavorites: widget.showingFavorites,
               selected: widget.selectedFileIds.contains(widget.files[i].id),
               selectionMode: widget.onToggleSelection != null,
               swipeActionsEnabled:
@@ -244,6 +253,8 @@ class _FileRow extends StatefulWidget {
     this.onDownload,
     this.onShare,
     this.onPreview,
+    this.onToggleFavorite,
+    this.showingFavorites = false,
     this.selected = false,
     this.selectionMode = false,
     this.swipeActionsEnabled = false,
@@ -264,10 +275,14 @@ class _FileRow extends StatefulWidget {
   final ValueChanged<FileNode>? onDownload;
   final ValueChanged<FileNode>? onShare;
   final ValueChanged<FileNode>? onPreview;
+  final ValueChanged<FileNode>? onToggleFavorite;
   final bool selected;
   final bool selectionMode;
   final bool swipeActionsEnabled;
   final VoidCallback? onToggleSelection;
+
+  /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
+  final bool showingFavorites;
 
   /// 是否允许左滑操作（非回收站模式下允许）
   bool get swipeable => swipeActionsEnabled && !showingRecycleBin && enabled;
@@ -519,6 +534,28 @@ class _FileRowState extends State<_FileRow> {
                                         dense: true,
                                       ),
                                     ),
+                                  if (widget.onToggleFavorite != null &&
+                                      !file.isFolder)
+                                    PopupMenuItem(
+                                      value: _FileListAction.favorite,
+                                      child: ListTile(
+                                        leading: Icon(
+                                          widget.showingFavorites
+                                              ? Icons.star_border_rounded
+                                              : Icons.star_rounded,
+                                        ),
+                                        title: Text(
+                                          widget.showingFavorites
+                                              ? AppLocalizations.of(
+                                                context,
+                                              ).filesRemoveFavorite
+                                              : AppLocalizations.of(
+                                                context,
+                                              ).filesAddFavorite,
+                                        ),
+                                        dense: true,
+                                      ),
+                                    ),
                                   PopupMenuItem(
                                     value: _FileListAction.delete,
                                     child: ListTile(
@@ -552,6 +589,8 @@ class _FileRowState extends State<_FileRow> {
                           widget.onDownload?.call(file);
                         case _FileListAction.share:
                           widget.onShare?.call(file);
+                        case _FileListAction.favorite:
+                          widget.onToggleFavorite?.call(file);
                         case _FileListAction.delete:
                           widget.onDelete(file);
                         case _FileListAction.restore:

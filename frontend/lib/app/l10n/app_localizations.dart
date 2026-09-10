@@ -2252,6 +2252,24 @@ abstract class AppLocalizations {
   /// **'More Actions'**
   String get filesMoreActions;
 
+  /// No description provided for @filesMoreSections.
+  ///
+  /// In en, this message translates to:
+  /// **'More Sections'**
+  String get filesMoreSections;
+
+  /// No description provided for @filesFilterSort.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort & Filter'**
+  String get filesFilterSort;
+
+  /// No description provided for @filesSwitchView.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch View'**
+  String get filesSwitchView;
+
   /// No description provided for @filesFileActions.
   ///
   /// In en, this message translates to:
@@ -2335,6 +2353,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Batch Unfavorite'**
   String get filesBatchRemoveFavorite;
+
+  /// No description provided for @filesAddFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorite'**
+  String get filesAddFavorite;
+
+  /// No description provided for @filesRemoveFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Unfavorite'**
+  String get filesRemoveFavorite;
 
   /// No description provided for @filesBatchRestoreTitle.
   ///

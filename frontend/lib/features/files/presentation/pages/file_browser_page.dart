@@ -415,11 +415,12 @@ class _FileManagerShell extends ConsumerWidget {
                               physics: const AlwaysScrollableScrollPhysics(
                                 parent: BouncingScrollPhysics(),
                               ),
-                              padding: const EdgeInsets.fromLTRB(
+                              // 托管态无自有底栏，仅按 FAB 悬浮净距预留。
+                              padding: EdgeInsets.fromLTRB(
                                 16,
                                 10,
                                 16,
-                                112,
+                                hosted ? 96 : 112,
                               ),
                               child: _AnimatedSectionBody(state: state),
                             ),
@@ -475,7 +476,7 @@ class _FileManagerShell extends ConsumerWidget {
   }
 }
 
-class _FileMobileSectionBar extends StatelessWidget {
+class _FileMobileSectionBar extends ConsumerWidget {
   const _FileMobileSectionBar({
     required this.section,
     required this.onSectionChanged,
@@ -484,24 +485,34 @@ class _FileMobileSectionBar extends StatelessWidget {
   final FileManagerSection section;
   final ValueChanged<FileManagerSection> onSectionChanged;
 
+  /// chips 直达的分区；其余分区经「更多」面板进入。
+  static const List<FileManagerSection> _primarySections = [
+    FileManagerSection.allFiles,
+    FileManagerSection.recent,
+    FileManagerSection.favorites,
+    FileManagerSection.sharedWithMe,
+    FileManagerSection.recycleBin,
+  ];
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    const sections = <FileManagerSection>[
-      FileManagerSection.allFiles,
-      FileManagerSection.recent,
-      FileManagerSection.favorites,
-      FileManagerSection.sharedWithMe,
-      FileManagerSection.recycleBin,
-    ];
+    final sections = _primarySections;
     return SizedBox(
       height: 60,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        itemCount: sections.length,
+        itemCount: sections.length + 1,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
+          if (index == sections.length) {
+            return ActionChip(
+              avatar: const Icon(Icons.expand_more_rounded, size: 17),
+              label: Text(l10n.filesMoreSections),
+              onPressed: () => _showMoreSectionsSheet(context, ref, l10n),
+            );
+          }
           final value = sections[index];
           return ChoiceChip(
             selected: value == section,
@@ -512,6 +523,66 @@ class _FileMobileSectionBar extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+
+  /// 其余分区（共享/传输/存储）底部面板；超管分区按权限过滤。
+  void _showMoreSectionsSheet(
+    BuildContext context,
+    WidgetRef ref,
+    AppLocalizations l10n,
+  ) {
+    final user = ref.read(authSessionProvider).asData?.value.user;
+    final canManageSystemConfig =
+        user?.permissions.contains('system:config:manage') ?? false;
+    final groups = <_FileSidebarGroup, List<FileManagerSection>>{
+      for (final entry in _fileSidebarGroups.entries)
+        entry.key: [
+          for (final item in entry.value)
+            if (!_primarySections.contains(item) &&
+                (canManageSystemConfig ||
+                    !_superAdminOnlySections.contains(item)))
+              item,
+        ],
+    }..removeWhere((_, value) => value.isEmpty);
+
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (sheetContext) => SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final entry in groups.entries) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
+                    child: Text(
+                      entry.key.labelOf(l10n),
+                      style: TextStyle(
+                        fontSize: AppTypography.labelMedium,
+                        fontWeight: FontWeight.w700,
+                        color: context.filesColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  for (final item in entry.value)
+                    ListTile(
+                      leading: Icon(item.icon),
+                      title: Text(item.labelOf(l10n)),
+                      selected: item == section,
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        onSectionChanged(item);
+                      },
+                    ),
+                ],
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
     );
   }
 }

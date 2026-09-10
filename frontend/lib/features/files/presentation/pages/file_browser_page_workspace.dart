@@ -66,30 +66,16 @@ class _FileNodeWorkspace extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (state.section == FileManagerSection.allFiles) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: _SpaceToggle(
-                  currentSpaceType: state.spaceType,
-                  enabled: actionsEnabled,
-                  compact: false,
-                  onChanged: (value) {
-                    if (value != state.spaceType) {
-                      unawaited(
-                        _runFileAction(
-                          context,
-                          () => controller.switchSpace(value),
-                        ),
-                      );
-                    }
-                  },
-                ),
+              // 极简工具区：面包屑内联空间切换，排序/类型筛选收进面板，
+              // 视图切换为单钮（原 4 行工具区压缩为 1 行）。
+              Row(
+                children: [
+                  Expanded(child: _Breadcrumbs(state: state)),
+                  _FileFilterButton(state: state),
+                  _FileViewToggleButton(state: state),
+                ],
               ),
               const SizedBox(height: 10),
-              _Breadcrumbs(state: state, showSpaceToggle: false),
-              const SizedBox(height: 10),
-              _FileToolbar(state: state),
-              const SizedBox(height: 10),
-              _FileCategoryFilter(state: state),
             ],
             const SizedBox(height: 10),
             if (state.section == FileManagerSection.allFiles &&
@@ -299,6 +285,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
     bool actionsEnabled,
   ) {
     final isShared = state.spaceType == 'SHARED';
+    final favorites = state.section == FileManagerSection.favorites;
     if (state.viewMode == FileBrowserViewMode.list) {
       return _withFilePagination(
         context,
@@ -379,6 +366,18 @@ class _FileNodeWorkspace extends ConsumerWidget {
               recycle
                   ? null
                   : (file) => ShareLinkSheet.show(context, file: file),
+          onToggleFavorite:
+              recycle
+                  ? null
+                  : (file) => unawaited(
+                    _runFileAction(
+                      context,
+                      favorites
+                          ? () => controller.removeFavorite(file)
+                          : () => controller.addFavorite(file),
+                    ),
+                  ),
+          showingFavorites: favorites,
           onPreview:
               recycle
                   ? null
@@ -466,6 +465,18 @@ class _FileNodeWorkspace extends ConsumerWidget {
                 : (file) => unawaited(_downloadFile(context, controller, file)),
         onShare:
             recycle ? null : (file) => ShareLinkSheet.show(context, file: file),
+        onToggleFavorite:
+            recycle
+                ? null
+                : (file) => unawaited(
+                  _runFileAction(
+                    context,
+                    favorites
+                        ? () => controller.removeFavorite(file)
+                        : () => controller.addFavorite(file),
+                  ),
+                ),
+        showingFavorites: favorites,
         onPreview:
             recycle
                 ? null

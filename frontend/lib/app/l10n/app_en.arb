@@ -416,6 +416,9 @@
   "filesPreview": "Preview",
   "filesRestore": "Restore",
   "filesMoreActions": "More Actions",
+  "filesMoreSections": "More Sections",
+  "filesFilterSort": "Sort & Filter",
+  "filesSwitchView": "Switch View",
   "filesFileActions": "File Actions",
   "filesDeleteConfirmTitle": "Move to Recycle Bin?",
   "@filesDeleteConfirmTitle": {
@@ -455,6 +458,8 @@
   "filesBatchDelete": "Batch Delete",
   "filesBatchAddFavorite": "Batch Favorite",
   "filesBatchRemoveFavorite": "Batch Unfavorite",
+  "filesAddFavorite": "Favorite",
+  "filesRemoveFavorite": "Unfavorite",
   "filesBatchRestoreTitle": "Batch Restore?",
   "filesBatchRestoreMessage": "Will restore {count} selected files.",
   "@filesBatchRestoreMessage": {

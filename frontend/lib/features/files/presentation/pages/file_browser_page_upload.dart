@@ -505,6 +505,164 @@ class _FileCategoryFilter extends ConsumerWidget {
   }
 }
 
+/// 窄屏排序/类型筛选入口：存在激活筛选时显示圆点，点按展开底部筛选面板。
+class _FileFilterButton extends ConsumerWidget {
+  const _FileFilterButton({required this.state});
+
+  final FileBrowserState state;
+
+  bool get _filterActive =>
+      state.sortBy != FileBrowserSortBy.name ||
+      state.fileCategory != FileBrowserFileCategory.all;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    return Stack(
+      alignment: Alignment.center,
+      children: [
+        IconButton(
+          tooltip: l10n.filesFilterSort,
+          onPressed: state.isBusy ? null : () => _showFilterSheet(context, ref),
+          icon: const Icon(Icons.tune_rounded, size: 20),
+        ),
+        if (_filterActive)
+          Positioned(
+            top: 9,
+            right: 9,
+            child: Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                color: context.filesColors.primary,
+                shape: BoxShape.circle,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showFilterSheet(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    const categories = [
+      FileBrowserFileCategory.all,
+      FileBrowserFileCategory.image,
+      FileBrowserFileCategory.video,
+      FileBrowserFileCategory.audio,
+    ];
+    final sorts = <FileBrowserSortBy, String>{
+      FileBrowserSortBy.name: l10n.filesSortName,
+      FileBrowserSortBy.updatedAt: l10n.filesSortTime,
+      FileBrowserSortBy.size: l10n.filesSortSize,
+    };
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder:
+          (sheetContext) => SafeArea(
+            top: false,
+            child: Consumer(
+              builder: (context, sheetRef, _) {
+                final current =
+                    sheetRef.watch(fileBrowserControllerProvider).asData?.value;
+                if (current == null) {
+                  return const SizedBox.shrink();
+                }
+                final enabled = !current.isBusy;
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
+                      child: Text(
+                        l10n.filesFilterSort,
+                        style: Theme.of(context).textTheme.titleSmall,
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final entry in sorts.entries)
+                            _CategoryCapsule(
+                              label: entry.value,
+                              icon: Icons.sort_rounded,
+                              isActive: current.sortBy == entry.key,
+                              enabled: enabled,
+                              onTap: () async {
+                                controller.setSortBy(entry.key);
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final category in categories)
+                            _CategoryCapsule(
+                              label: category.labelOf(l10n),
+                              icon: category.icon,
+                              isActive: current.fileCategory == category,
+                              enabled: enabled,
+                              onTap:
+                                  () => unawaited(
+                                    _runFileAction(
+                                      sheetContext,
+                                      () =>
+                                          controller.setFileCategory(category),
+                                    ),
+                                  ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                );
+              },
+            ),
+          ),
+    );
+  }
+}
+
+/// 窄屏列表/网格视图切换按钮（单钮往复，展示目标视图图标）。
+class _FileViewToggleButton extends ConsumerWidget {
+  const _FileViewToggleButton({required this.state});
+
+  final FileBrowserState state;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    final enabled = !state.isBusy;
+    final isList = state.viewMode == FileBrowserViewMode.list;
+    return IconButton(
+      tooltip: AppLocalizations.of(context).filesSwitchView,
+      onPressed:
+          enabled
+              ? () => controller.setViewMode(
+                isList ? FileBrowserViewMode.grid : FileBrowserViewMode.list,
+              )
+              : null,
+      icon: Icon(
+        isList ? Icons.grid_view_rounded : Icons.view_list_rounded,
+        size: 20,
+      ),
+    );
+  }
+}
+
 class _CategoryCapsule extends StatefulWidget {
   const _CategoryCapsule({
     required this.label,
@@ -602,10 +760,9 @@ class _CategoryCapsuleState extends State<_CategoryCapsule>
 }
 
 class _Breadcrumbs extends ConsumerWidget {
-  const _Breadcrumbs({required this.state, this.showSpaceToggle = true});
+  const _Breadcrumbs({required this.state});
 
   final FileBrowserState state;
-  final bool showSpaceToggle;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -633,22 +790,21 @@ class _Breadcrumbs extends ConsumerWidget {
                       : null,
               icon: Icon(Icons.arrow_upward_rounded, size: 19),
             ),
-            if (showSpaceToggle)
-              _SpaceToggle(
-                currentSpaceType: state.spaceType,
-                enabled: enabled,
-                compact: false,
-                onChanged: (value) {
-                  if (value != state.spaceType) {
-                    unawaited(
-                      _runFileAction(
-                        context,
-                        () => controller.switchSpace(value),
-                      ),
-                    );
-                  }
-                },
-              ),
+            _SpaceToggle(
+              currentSpaceType: state.spaceType,
+              enabled: enabled,
+              compact: false,
+              onChanged: (value) {
+                if (value != state.spaceType) {
+                  unawaited(
+                    _runFileAction(
+                      context,
+                      () => controller.switchSpace(value),
+                    ),
+                  );
+                }
+              },
+            ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 4),
               child: Icon(

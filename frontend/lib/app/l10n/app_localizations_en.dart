@@ -1167,6 +1167,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesMoreActions => 'More Actions';
 
   @override
+  String get filesMoreSections => 'More Sections';
+
+  @override
+  String get filesFilterSort => 'Sort & Filter';
+
+  @override
+  String get filesSwitchView => 'Switch View';
+
+  @override
   String get filesFileActions => 'File Actions';
 
   @override
@@ -1217,6 +1226,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesBatchRemoveFavorite => 'Batch Unfavorite';
+
+  @override
+  String get filesAddFavorite => 'Favorite';
+
+  @override
+  String get filesRemoveFavorite => 'Unfavorite';
 
   @override
   String get filesBatchRestoreTitle => 'Batch Restore?';
