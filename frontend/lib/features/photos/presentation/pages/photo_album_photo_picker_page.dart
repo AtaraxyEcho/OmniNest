@@ -68,51 +68,54 @@ class _PhotoAlbumPhotoPickerPageState
       body: Column(
         children: [
           // 顶部栏：返回 + 标题 + 已选计数
-          Container(
-            height: 56,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: context.photosColors.surfaceContainer.withValues(
-                alpha: 0.70,
-              ),
-              border: Border(
-                bottom: BorderSide(
-                  color: context.photosColors.outlineVariant.withValues(
-                    alpha: 0.32,
-                  ),
+          SafeArea(
+            bottom: false,
+            child: Container(
+              height: 56,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                color: context.photosColors.surfaceContainer.withValues(
+                  alpha: 0.70,
                 ),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  tooltip: l10n.photosBack,
-                  onPressed: () => context.pop(),
-                  icon: Icon(
-                    Icons.arrow_back_rounded,
-                    color: context.photosColors.onSurface,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    l10n.photosAddPhotos,
-                    style: TextStyle(
-                      color: context.photosColors.onSurface,
-                      fontSize: AppTypography.titleMedium,
-                      fontWeight: FontWeight.w700,
+                border: Border(
+                  bottom: BorderSide(
+                    color: context.photosColors.outlineVariant.withValues(
+                      alpha: 0.32,
                     ),
                   ),
                 ),
-                Text(
-                  l10n.photosPickerAddCount(state.selectedIds.length),
-                  style: TextStyle(
-                    color: context.photosColors.onSurfaceVariant,
-                    fontSize: AppTypography.bodyMedium,
-                    fontWeight: FontWeight.w600,
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    tooltip: l10n.photosBack,
+                    onPressed: () => context.pop(),
+                    icon: Icon(
+                      Icons.arrow_back_rounded,
+                      color: context.photosColors.onSurface,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      l10n.photosAddPhotos,
+                      style: TextStyle(
+                        color: context.photosColors.onSurface,
+                        fontSize: AppTypography.titleMedium,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    l10n.photosSelectedCount(state.selectedIds.length),
+                    style: TextStyle(
+                      color: context.photosColors.onSurfaceVariant,
+                      fontSize: AppTypography.bodyMedium,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           // 候选网格

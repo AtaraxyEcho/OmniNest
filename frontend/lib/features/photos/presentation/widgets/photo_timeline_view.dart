@@ -42,54 +42,38 @@ class _PhotoTimelineViewState extends ConsumerState<PhotoTimelineView> {
       if (widget.state.timelinePageError != null) {
         return _TimelineInitialError(message: widget.state.timelinePageError!);
       }
-      return SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height - 120,
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      );
+      return _TimelinePlaceholder(child: const CircularProgressIndicator());
     }
     if (timeline.years.isEmpty) {
-      return SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(
-          parent: BouncingScrollPhysics(),
-        ),
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height - 120,
-          child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.timeline_outlined,
-                  size: 64,
-                  color: context.photosColors.onSurfaceVariant.withValues(
-                    alpha: 0.4,
-                  ),
-                ),
-                SizedBox(height: 16),
-                Text(
-                  AppLocalizations.of(context).photosNoTimelineData,
-                  style: TextStyle(
-                    color: context.photosColors.onSurfaceVariant,
-                    fontSize: AppTypography.titleMedium,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                SizedBox(height: 8),
-                Text(
-                  AppLocalizations.of(context).photosNoTimelineHint,
-                  style: TextStyle(
-                    color: context.photosColors.onSurfaceVariant,
-                    fontSize: AppTypography.bodyMedium,
-                  ),
-                ),
-              ],
+      return _TimelinePlaceholder(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.timeline_outlined,
+              size: 64,
+              color: context.photosColors.onSurfaceVariant.withValues(
+                alpha: 0.4,
+              ),
             ),
-          ),
+            SizedBox(height: 16),
+            Text(
+              AppLocalizations.of(context).photosNoTimelineData,
+              style: TextStyle(
+                color: context.photosColors.onSurfaceVariant,
+                fontSize: AppTypography.titleMedium,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              AppLocalizations.of(context).photosNoTimelineHint,
+              style: TextStyle(
+                color: context.photosColors.onSurfaceVariant,
+                fontSize: AppTypography.bodyMedium,
+              ),
+            ),
+          ],
         ),
       );
     }
@@ -128,37 +112,53 @@ class _TimelineInitialError extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      child: SizedBox(
-        height: MediaQuery.of(context).size.height - 120,
-        child: Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                message,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: context.photosColors.onSurfaceVariant,
-                  fontSize: AppTypography.bodyLarge,
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextButton.icon(
-                onPressed:
-                    () => ref
-                        .read(photoCenterControllerProvider.notifier)
-                        .loadTimeline(force: true),
-                icon: const Icon(Icons.refresh_rounded, size: 18),
-                label: Text(AppLocalizations.of(context).coreRetry),
-              ),
-            ],
+    return _TimelinePlaceholder(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: context.photosColors.onSurfaceVariant,
+              fontSize: AppTypography.bodyLarge,
+            ),
           ),
-        ),
+          const SizedBox(height: 12),
+          TextButton.icon(
+            onPressed:
+                () => ref
+                    .read(photoCenterControllerProvider.notifier)
+                    .loadTimeline(force: true),
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: Text(AppLocalizations.of(context).coreRetry),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// 视口占位：按可用高度撑满以下拉刷新，内容垂直居中；
+/// 不再用「屏高-120」猜测 chrome 占用。
+class _TimelinePlaceholder extends StatelessWidget {
+  const _TimelinePlaceholder({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height =
+            constraints.hasBoundedHeight ? constraints.maxHeight : 480.0;
+        return SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          child: SizedBox(height: height, child: Center(child: child)),
+        );
+      },
     );
   }
 }

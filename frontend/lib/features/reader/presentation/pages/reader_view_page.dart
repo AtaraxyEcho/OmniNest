@@ -896,6 +896,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     final chromeLayout = ReaderChromeLayout.resolve(
       immersiveMode: _settings.immersiveMode,
       isPageMode: _isPageMode,
+      safePadding: MediaQuery.paddingOf(context),
     );
 
     return Stack(

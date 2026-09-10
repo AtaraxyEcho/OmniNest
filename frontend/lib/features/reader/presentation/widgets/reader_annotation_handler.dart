@@ -164,98 +164,101 @@ class ReaderAnnotationHandler {
             builder: (context, setState) {
               return AlertDialog(
                 title: Text(l10n.readerAddAnnotation),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxHeight: 150),
-                      child: SingleChildScrollView(
-                        child: Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color:
-                                Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerHighest,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .outlineVariant
-                                  .withValues(alpha: 0.3),
+                // 键盘弹出时引文+备注+色板可能超出可用高，滚动兜底。
+                content: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 150),
+                        child: SingleChildScrollView(
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .outlineVariant
+                                    .withValues(alpha: 0.3),
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            selectedText,
-                            style: const TextStyle(
-                              fontSize: AppTypography.bodyMedium,
-                              fontStyle: FontStyle.italic,
+                            child: Text(
+                              selectedText,
+                              style: const TextStyle(
+                                fontSize: AppTypography.bodyMedium,
+                                fontStyle: FontStyle.italic,
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children:
-                          _presetColors.map((colorHex) {
-                            final isSelected = selectedColor == colorHex;
-                            final color = parseAnnotationColor(colorHex);
-                            return Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              child: InkWell(
-                                onTap:
-                                    () => setState(() {
-                                      selectedColor = colorHex;
-                                    }),
-                                customBorder: const CircleBorder(),
-                                child: Container(
-                                  width: 28,
-                                  height: 28,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: color,
-                                    border: Border.all(
-                                      color:
-                                          isSelected
-                                              ? Theme.of(
-                                                context,
-                                              ).colorScheme.outline
-                                              : Colors.transparent,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child:
-                                      isSelected
-                                          ? Icon(
-                                            Icons.check,
-                                            size: 16,
-                                            color: Colors.black,
-                                          )
-                                          : null,
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children:
+                            _presetColors.map((colorHex) {
+                              final isSelected = selectedColor == colorHex;
+                              final color = parseAnnotationColor(colorHex);
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
                                 ),
-                              ),
-                            );
-                          }).toList(),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: noteController,
-                      maxLines: 3,
-                      onChanged: (v) {
-                        setState(() => noteEmpty = v.trim().isEmpty);
-                      },
-                      decoration: InputDecoration(
-                        hintText: l10n.readerAnnotationHint,
-                        border: const OutlineInputBorder(),
+                                child: InkWell(
+                                  onTap:
+                                      () => setState(() {
+                                        selectedColor = colorHex;
+                                      }),
+                                  customBorder: const CircleBorder(),
+                                  child: Container(
+                                    width: 28,
+                                    height: 28,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: color,
+                                      border: Border.all(
+                                        color:
+                                            isSelected
+                                                ? Theme.of(
+                                                  context,
+                                                ).colorScheme.outline
+                                                : Colors.transparent,
+                                        width: 2,
+                                      ),
+                                    ),
+                                    child:
+                                        isSelected
+                                            ? Icon(
+                                              Icons.check,
+                                              size: 16,
+                                              color: Colors.black,
+                                            )
+                                            : null,
+                                  ),
+                                ),
+                              );
+                            }).toList(),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: noteController,
+                        maxLines: 3,
+                        onChanged: (v) {
+                          setState(() => noteEmpty = v.trim().isEmpty);
+                        },
+                        decoration: InputDecoration(
+                          hintText: l10n.readerAnnotationHint,
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
                 actions: [
                   TextButton(

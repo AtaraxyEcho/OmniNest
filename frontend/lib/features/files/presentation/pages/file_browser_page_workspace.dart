@@ -296,6 +296,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
           enabled: actionsEnabled,
           selectedFileIds: state.selectedFileIds,
           onToggleSelection: controller.toggleSelection,
+          selectionActive: state.hasSelection,
           onOpen:
               (file) => unawaited(
                 _runFileAction(context, () => controller.openFolder(file)),
@@ -398,6 +399,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
         enabled: actionsEnabled,
         selectedFileIds: state.selectedFileIds,
         onToggleSelection: controller.toggleSelection,
+        selectionActive: state.hasSelection,
         onOpen:
             (file) => unawaited(
               _runFileAction(context, () => controller.openFolder(file)),

@@ -25,6 +25,7 @@ class FileGrid extends StatelessWidget {
     this.onToggleFavorite,
     this.selectedFileIds = const {},
     this.onToggleSelection,
+    this.selectionActive = false,
     this.showingFavorites = false,
     super.key,
   });
@@ -46,6 +47,9 @@ class FileGrid extends StatelessWidget {
   final ValueChanged<FileNode>? onToggleFavorite;
   final Set<String> selectedFileIds;
   final ValueChanged<String>? onToggleSelection;
+
+  /// 多选模式是否激活：激活时才显示 Checkbox，卡片点击切换选中。
+  final bool selectionActive;
 
   /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
   final bool showingFavorites;
@@ -122,7 +126,7 @@ class FileGrid extends StatelessWidget {
                 onToggleFavorite: onToggleFavorite,
                 showingFavorites: showingFavorites,
                 selected: selectedFileIds.contains(files[index].id),
-                selectionMode: onToggleSelection != null,
+                selectionMode: selectionActive,
                 onToggleSelection:
                     onToggleSelection != null
                         ? () => onToggleSelection!(files[index].id)
@@ -193,13 +197,24 @@ class _FileTileState extends State<_FileTile> {
         widget.file.isFolder
             ? context.filesColors.tertiary
             : context.filesColors.primary;
+    final bool selectionToggleable =
+        widget.selectionMode && widget.onToggleSelection != null;
     final VoidCallback? activate =
-        widget.enabled && !widget.showingRecycleBin
+        selectionToggleable
+            ? () => widget.onToggleSelection!()
+            : widget.enabled && !widget.showingRecycleBin
             ? widget.file.isFolder
                 ? () => widget.onOpen(widget.file)
                 : widget.onPreview != null
                 ? () => widget.onPreview!(widget.file)
                 : null
+            : null;
+    final VoidCallback? longPress =
+        widget.enabled && widget.onToggleSelection != null
+            ? () {
+              HapticFeedback.mediumImpact();
+              widget.onToggleSelection!();
+            }
             : null;
     return Semantics(
       button: activate != null,
@@ -229,6 +244,7 @@ class _FileTileState extends State<_FileTile> {
                   : SystemMouseCursors.basic,
           child: GestureDetector(
             onTap: activate,
+            onLongPress: longPress,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 160),
               decoration: BoxDecoration(
@@ -270,7 +286,6 @@ class _FileTileState extends State<_FileTile> {
                                   widget.onToggleSelection != null
                                       ? (_) => widget.onToggleSelection!()
                                       : null,
-                              visualDensity: VisualDensity.compact,
                             ),
                           ),
                         FileThumbnail(file: widget.file, size: 42),

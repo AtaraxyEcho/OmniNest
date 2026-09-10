@@ -45,7 +45,12 @@ class PhotoPanelHost extends StatelessWidget {
               constraints: BoxConstraints(
                 maxHeight: math.max(240, size.height * 0.8),
               ),
-              child: child,
+              child: Padding(
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.paddingOf(context).bottom,
+                ),
+                child: child,
+              ),
             ),
           ),
         ),

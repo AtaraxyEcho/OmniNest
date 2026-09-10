@@ -23,6 +23,7 @@ class ReaderChromeLayout {
   static ReaderChromeLayout resolve({
     required bool immersiveMode,
     required bool isPageMode,
+    EdgeInsets safePadding = EdgeInsets.zero,
   }) {
     if (immersiveMode) {
       return const ReaderChromeLayout(
@@ -32,8 +33,12 @@ class ReaderChromeLayout {
         showPersistentProgress: false,
       );
     }
-    return const ReaderChromeLayout(
-      contentPadding: EdgeInsets.only(top: 35, bottom: 16),
+    // 阅读页为独立 Scaffold，正文 padding 自行兜底状态栏与手势条 inset。
+    return ReaderChromeLayout(
+      contentPadding: EdgeInsets.only(
+        top: math.max(35, safePadding.top),
+        bottom: 16 + safePadding.bottom,
+      ),
       viewportVerticalReserve: 51,
       chapterHeaderReserve: 54,
       showPersistentProgress: true,

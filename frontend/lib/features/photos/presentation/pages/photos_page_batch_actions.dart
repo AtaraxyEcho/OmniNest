@@ -15,98 +15,104 @@ class _BatchActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: context.photosColors.surfaceContainerHigh,
-        border: Border(
-          top: BorderSide(
-            color: context.photosColors.outlineVariant.withValues(alpha: 0.32),
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // 取消选择
-          IconButton(
-            tooltip: AppLocalizations.of(context).photosDeselect,
-            onPressed: () {
-              ref
-                  .read(photoCenterControllerProvider.notifier)
-                  .toggleSelectionMode();
-            },
-            icon: Icon(
-              Icons.close_rounded,
-              color: context.photosColors.onSurfaceVariant,
-              size: 20,
-            ),
-          ),
-          SizedBox(width: 8),
-          Text(
-            AppLocalizations.of(
-              context,
-            ).photosSelectedCount(state.selectedPhotoIds.length),
-            style: TextStyle(
-              color: context.photosColors.onSurface,
-              fontSize: AppTypography.bodyLarge,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(width: 8),
-          _BatchAction(
-            icon:
-                _allVisibleSelected
-                    ? Icons.deselect_rounded
-                    : Icons.select_all_rounded,
-            label:
-                _allVisibleSelected
-                    ? AppLocalizations.of(context).photosDeselectAll
-                    : AppLocalizations.of(context).photosSelectAll,
-            onTap: () {
-              ref
-                  .read(photoCenterControllerProvider.notifier)
-                  .toggleSelectAllVisible();
-            },
-          ),
-          const SizedBox(width: 8),
-          // 批量操作区：窄宽度下横向滚动，避免溢出。
-          Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: [
-                  // 批量标签
-                  _BatchAction(
-                    icon: Icons.label_outline,
-                    label: AppLocalizations.of(context).photosTag,
-                    onTap: () => _showBatchTagDialog(context),
-                  ),
-                  const SizedBox(width: 8),
-                  // 批量移动到相册
-                  _BatchAction(
-                    icon: Icons.photo_album_outlined,
-                    label: AppLocalizations.of(context).photosMove,
-                    onTap: () => _showBatchMoveDialog(context),
-                  ),
-                  const SizedBox(width: 8),
-                  _BatchAction(
-                    icon: Icons.archive_outlined,
-                    label: AppLocalizations.of(context).photosExportZip,
-                    onTap: () => _startBatchDownload(context),
-                  ),
-                  const SizedBox(width: 8),
-                  // 批量删除
-                  _BatchAction(
-                    icon: Icons.delete_outline,
-                    label: AppLocalizations.of(context).photosDeleteShort,
-                    onTap: () => _confirmBatchTrash(context),
-                  ),
-                ],
+    // 壳层底栏隐藏后批量条贴底渲染，包 SafeArea 避让手势导航条。
+    return SafeArea(
+      top: false,
+      child: Container(
+        height: 56,
+        padding: EdgeInsets.symmetric(horizontal: 24),
+        decoration: BoxDecoration(
+          color: context.photosColors.surfaceContainerHigh,
+          border: Border(
+            top: BorderSide(
+              color: context.photosColors.outlineVariant.withValues(
+                alpha: 0.32,
               ),
             ),
           ),
-        ],
+        ),
+        child: Row(
+          children: [
+            // 取消选择
+            IconButton(
+              tooltip: AppLocalizations.of(context).photosDeselect,
+              onPressed: () {
+                ref
+                    .read(photoCenterControllerProvider.notifier)
+                    .toggleSelectionMode();
+              },
+              icon: Icon(
+                Icons.close_rounded,
+                color: context.photosColors.onSurfaceVariant,
+                size: 20,
+              ),
+            ),
+            SizedBox(width: 8),
+            Text(
+              AppLocalizations.of(
+                context,
+              ).photosSelectedCount(state.selectedPhotoIds.length),
+              style: TextStyle(
+                color: context.photosColors.onSurface,
+                fontSize: AppTypography.bodyLarge,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(width: 8),
+            _BatchAction(
+              icon:
+                  _allVisibleSelected
+                      ? Icons.deselect_rounded
+                      : Icons.select_all_rounded,
+              label:
+                  _allVisibleSelected
+                      ? AppLocalizations.of(context).photosDeselectAll
+                      : AppLocalizations.of(context).photosSelectAll,
+              onTap: () {
+                ref
+                    .read(photoCenterControllerProvider.notifier)
+                    .toggleSelectAllVisible();
+              },
+            ),
+            const SizedBox(width: 8),
+            // 批量操作区：窄宽度下横向滚动，避免溢出。
+            Expanded(
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // 批量标签
+                    _BatchAction(
+                      icon: Icons.label_outline,
+                      label: AppLocalizations.of(context).photosTag,
+                      onTap: () => _showBatchTagDialog(context),
+                    ),
+                    const SizedBox(width: 8),
+                    // 批量移动到相册
+                    _BatchAction(
+                      icon: Icons.photo_album_outlined,
+                      label: AppLocalizations.of(context).photosMove,
+                      onTap: () => _showBatchMoveDialog(context),
+                    ),
+                    const SizedBox(width: 8),
+                    _BatchAction(
+                      icon: Icons.archive_outlined,
+                      label: AppLocalizations.of(context).photosExportZip,
+                      onTap: () => _startBatchDownload(context),
+                    ),
+                    const SizedBox(width: 8),
+                    // 批量删除
+                    _BatchAction(
+                      icon: Icons.delete_outline,
+                      label: AppLocalizations.of(context).photosDeleteShort,
+                      onTap: () => _confirmBatchTrash(context),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

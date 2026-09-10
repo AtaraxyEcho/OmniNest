@@ -394,88 +394,93 @@ class _AlbumTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 56,
-      padding: EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: context.photosColors.surfaceContainer.withValues(alpha: 0.70),
-        border: Border(
-          bottom: BorderSide(
-            color: context.photosColors.outlineVariant.withValues(alpha: 0.32),
+    return SafeArea(
+      bottom: false,
+      child: Container(
+        height: 56,
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: context.photosColors.surfaceContainer.withValues(alpha: 0.70),
+          border: Border(
+            bottom: BorderSide(
+              color: context.photosColors.outlineVariant.withValues(
+                alpha: 0.32,
+              ),
+            ),
           ),
         ),
-      ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: AppLocalizations.of(context).photosBack,
-            onPressed: onBack,
-            icon: Icon(
-              Icons.arrow_back_rounded,
-              color: context.photosColors.onSurface,
+        child: Row(
+          children: [
+            IconButton(
+              tooltip: AppLocalizations.of(context).photosBack,
+              onPressed: onBack,
+              icon: Icon(
+                Icons.arrow_back_rounded,
+                color: context.photosColors.onSurface,
+              ),
             ),
-          ),
-          SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  album.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.photosColors.onSurface,
-                    fontSize: AppTypography.titleMedium,
-                    fontWeight: FontWeight.w700,
+            SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    album.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: context.photosColors.onSurface,
+                      fontSize: AppTypography.titleMedium,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                ),
-                Text(
-                  AppLocalizations.of(
-                    context,
-                  ).photosAlbumPhotoCountLabel(album.photoCount),
-                  style: TextStyle(
-                    color: context.photosColors.onSurfaceVariant,
-                    fontSize: AppTypography.bodySmall,
+                  Text(
+                    AppLocalizations.of(
+                      context,
+                    ).photosAlbumPhotoCountLabel(album.photoCount),
+                    style: TextStyle(
+                      color: context.photosColors.onSurfaceVariant,
+                      fontSize: AppTypography.bodySmall,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: AppLocalizations.of(context).photosAddPhotos,
-            onPressed: onAddPhotos,
-            icon: Icon(
-              Icons.add_photo_alternate_outlined,
-              color: context.photosColors.onSurfaceVariant,
+            IconButton(
+              tooltip: AppLocalizations.of(context).photosAddPhotos,
+              onPressed: onAddPhotos,
+              icon: Icon(
+                Icons.add_photo_alternate_outlined,
+                color: context.photosColors.onSurfaceVariant,
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: AppLocalizations.of(context).photosSlideshow,
-            onPressed: onSlideshow,
-            icon: Icon(
-              Icons.slideshow_outlined,
-              color: context.photosColors.onSurfaceVariant,
+            IconButton(
+              tooltip: AppLocalizations.of(context).photosSlideshow,
+              onPressed: onSlideshow,
+              icon: Icon(
+                Icons.slideshow_outlined,
+                color: context.photosColors.onSurfaceVariant,
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: AppLocalizations.of(context).photosShareAlbum,
-            onPressed: onShare,
-            icon: Icon(
-              Icons.share_outlined,
-              color: context.photosColors.onSurfaceVariant,
+            IconButton(
+              tooltip: AppLocalizations.of(context).photosShareAlbum,
+              onPressed: onShare,
+              icon: Icon(
+                Icons.share_outlined,
+                color: context.photosColors.onSurfaceVariant,
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: AppLocalizations.of(context).photosDeleteAlbumTooltip,
-            onPressed: onDelete,
-            icon: Icon(
-              Icons.delete_outline_rounded,
-              color: context.photosColors.danger,
+            IconButton(
+              tooltip: AppLocalizations.of(context).photosDeleteAlbumTooltip,
+              onPressed: onDelete,
+              icon: Icon(
+                Icons.delete_outline_rounded,
+                color: context.photosColors.danger,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

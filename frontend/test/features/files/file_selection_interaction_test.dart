@@ -37,7 +37,7 @@ void main() {
     expect(dropSource, contains('whereType<DropItemFile>()'));
   });
 
-  testWidgets('列表整行点击打开或预览且只有复选框切换选择', (tester) async {
+  testWidgets('列表常态点击打开且多选态由长按进入', (tester) async {
     FileNode? opened;
     FileNode? previewed;
     String? selectedId;
@@ -59,6 +59,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    // 常态：无 Checkbox，点击直接打开/预览。
+    expect(find.byType(Checkbox), findsNothing);
     await tester.tap(find.text('Documents'));
     expect(opened?.id, 'folder-1');
     expect(selectedId, isNull);
@@ -66,6 +68,46 @@ void main() {
     await tester.tap(find.text('notes.txt'));
     expect(previewed?.id, 'file-1');
     expect(selectedId, isNull);
+
+    // 长按行进入多选：触发选择回调，Checkbox 尚未渲染（由页面状态驱动）。
+    await tester.longPress(find.text('notes.txt'));
+    expect(selectedId, 'file-1');
+  });
+
+  testWidgets('列表多选态显示复选框且点击行切换选择', (tester) async {
+    String? selectedId;
+    FileNode? opened;
+    await tester.pumpWidget(
+      _filesApp(
+        FileList(
+          files: _files,
+          showingRecycleBin: false,
+          enabled: true,
+          selectionActive: true,
+          selectedFileIds: const {'file-1'},
+          onRename: (_) {},
+          onDelete: (_) {},
+          onPurge: (_) {},
+          onRestore: (_) {},
+          onOpen: (file) => opened = file,
+          onPreview: (_) {},
+          onToggleSelection: (id) => selectedId = id,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byType(Checkbox), findsNWidgets(2));
+    expect(
+      tester.widget<Checkbox>(find.byType(Checkbox).last).value,
+      isTrue,
+      reason: 'file-1 已选中',
+    );
+
+    // 多选态下点击行 = 切换选择而不是打开。
+    await tester.tap(find.text('Documents'));
+    expect(selectedId, 'folder-1');
+    expect(opened, isNull);
 
     await tester.tap(find.byType(Checkbox).first);
     expect(selectedId, 'folder-1');
@@ -99,7 +141,7 @@ void main() {
     expect(opened?.id, 'folder-1');
     expect(selectedId, isNull);
 
-    await tester.tap(find.byType(Checkbox).first);
+    await tester.longPress(find.text('Documents'));
     expect(selectedId, 'folder-1');
   });
 

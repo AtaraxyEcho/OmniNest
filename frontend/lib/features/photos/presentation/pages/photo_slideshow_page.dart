@@ -752,7 +752,12 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           duration: const Duration(milliseconds: 400),
           curve: Curves.ease,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              20 + MediaQuery.paddingOf(context).top,
+              24,
+              32,
+            ),
             child: Row(
               children: [
                 _ViewerIconButton(
@@ -910,7 +915,12 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           duration: const Duration(milliseconds: 400),
           curve: Curves.ease,
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+            padding: EdgeInsets.fromLTRB(
+              24,
+              0,
+              24,
+              24 + MediaQuery.paddingOf(context).bottom,
+            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,

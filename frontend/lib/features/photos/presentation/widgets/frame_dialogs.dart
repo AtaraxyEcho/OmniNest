@@ -205,34 +205,37 @@ Future<(String, String)?> showFrameNewAlbumDialog(BuildContext context) {
                         borderRadius: BorderRadius.circular(12),
                       ),
                       title: _frameDialogTitle(ctx, l10n.photosNewAlbum),
-                      content: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextField(
-                            controller: nameController,
-                            autofocus: true,
-                            style: TextStyle(
-                              color: ctx.frameColors.ink,
-                              fontSize: AppTypography.bodyLarge,
+                      // 双输入框在键盘弹出时可能超出可用高，滚动兜底。
+                      content: SingleChildScrollView(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextField(
+                              controller: nameController,
+                              autofocus: true,
+                              style: TextStyle(
+                                color: ctx.frameColors.ink,
+                                fontSize: AppTypography.bodyLarge,
+                              ),
+                              decoration: _frameFieldDecoration(
+                                ctx,
+                                hint: l10n.photosAlbumNameHint,
+                              ),
                             ),
-                            decoration: _frameFieldDecoration(
-                              ctx,
-                              hint: l10n.photosAlbumNameHint,
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: descController,
+                              style: TextStyle(
+                                color: ctx.frameColors.ink,
+                                fontSize: AppTypography.bodyLarge,
+                              ),
+                              decoration: _frameFieldDecoration(
+                                ctx,
+                                hint: l10n.photosAlbumDescriptionHint,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: descController,
-                            style: TextStyle(
-                              color: ctx.frameColors.ink,
-                              fontSize: AppTypography.bodyLarge,
-                            ),
-                            decoration: _frameFieldDecoration(
-                              ctx,
-                              hint: l10n.photosAlbumDescriptionHint,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                       actions: [
                         _frameCancelAction(ctx, context),
