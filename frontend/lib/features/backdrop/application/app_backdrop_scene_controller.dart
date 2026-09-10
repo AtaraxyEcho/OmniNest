@@ -19,13 +19,11 @@ class AppBackdropSceneController extends Notifier<AppBackdropSceneState> {
   ///
   /// [owner] 是前景模块的稳定标识，[policy] 是模块请求的背景策略。
   /// 返回值是本次注册的租约，释放时可用于避免删除同名的新注册。
+  /// 每次注册都签发新租约：整树重挂后新作用域持新租约，旧作用域的
+  /// 释放按旧租约号匹配失败，不会误删新注册。
   int request(String owner, AppBackdropPolicy policy) {
     if (!ref.mounted) {
       return 0;
-    }
-    final current = _policies[owner];
-    if (current?.policy == policy && state.owner == owner) {
-      return current!.sequence;
     }
     _sequence++;
     _policies[owner] = _OwnedBackdropPolicy(
@@ -53,17 +51,25 @@ class AppBackdropSceneController extends Notifier<AppBackdropSceneState> {
 
   void _resolve() {
     if (_policies.isEmpty) {
-      state = const AppBackdropSceneState();
+      _updateState(const AppBackdropSceneState());
       return;
     }
     final entries = _policies.entries.toList(growable: false)..sort(
       (left, right) => right.value.sequence.compareTo(left.value.sequence),
     );
     final active = entries.first;
-    state = AppBackdropSceneState(
-      owner: active.key,
-      policy: active.value.policy,
+    _updateState(
+      AppBackdropSceneState(owner: active.key, policy: active.value.policy),
     );
+  }
+
+  /// 仅在所有者或策略实际变化时发布状态，重复注册同策略不触发宿主重建。
+  void _updateState(AppBackdropSceneState next) {
+    final current = state;
+    if (current.owner == next.owner && current.policy == next.policy) {
+      return;
+    }
+    state = next;
   }
 }
 

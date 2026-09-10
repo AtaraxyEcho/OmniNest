@@ -31,11 +31,18 @@ class AppBackdropHost extends ConsumerWidget {
       readabilityMode: policy.readabilityMode,
       motionAllowed: motionAllowed,
     );
+    // 条件子项必须携带稳定 Key：无 Key 时 Stack 按位置匹配，可见性翻转会
+    // 让路由内容被错误复用到兄弟元素之下并整树重挂（Router 期间 setState 断言）。
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (policy.visible) const Positioned.fill(child: _DefaultAppBackdrop()),
+        if (policy.visible)
+          const Positioned.fill(
+            key: ValueKey<String>('omninest.backdrop.default'),
+            child: _DefaultAppBackdrop(),
+          ),
         Positioned.fill(
+          key: const ValueKey<String>('omninest.backdrop.surface'),
           child: AnimatedOpacity(
             opacity: enabled ? 1 : 0,
             duration:
@@ -55,8 +62,14 @@ class AppBackdropHost extends ConsumerWidget {
         ),
         if (enabled &&
             policy.readabilityMode != AppBackdropReadabilityMode.none)
-          _AppBackdropReadabilityLayer(mode: policy.readabilityMode),
-        Positioned.fill(child: child),
+          _AppBackdropReadabilityLayer(
+            key: const ValueKey<String>('omninest.backdrop.readability'),
+            mode: policy.readabilityMode,
+          ),
+        Positioned.fill(
+          key: const ValueKey<String>('omninest.backdrop.content'),
+          child: child,
+        ),
       ],
     );
   }
@@ -72,7 +85,7 @@ class _DefaultAppBackdrop extends StatelessWidget {
 }
 
 class _AppBackdropReadabilityLayer extends StatelessWidget {
-  const _AppBackdropReadabilityLayer({required this.mode});
+  const _AppBackdropReadabilityLayer({required this.mode, super.key});
 
   final AppBackdropReadabilityMode mode;
 

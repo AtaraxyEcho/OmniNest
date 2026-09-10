@@ -93,16 +93,18 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
           ),
           child: AppBackdropHost(child: child ?? const SizedBox.shrink()),
         );
-        // 应用字体档位根部生效；跟随系统时不覆盖，系统 TextScaler 原样穿透。
+        // 应用字体档位根部生效。MediaQuery 包装必须结构恒定：跟随系统时
+        // 写入原始系统 TextScaler（数据等价），避免档位翻转时整棵路由子树
+        // 因 widget 类型变化而重挂（丢失滚动状态并打断背景视频会话）。
         final appScale = fontScalePreset.scale;
-        if (appScale != null) {
-          content = MediaQuery(
-            data: mediaQuery.copyWith(
-              textScaler: ComposedScaler(systemScaler, appScale),
-            ),
-            child: content,
-          );
-        }
+        final effectiveScaler =
+            appScale == null
+                ? systemScaler
+                : ComposedScaler(systemScaler, appScale);
+        content = MediaQuery(
+          data: mediaQuery.copyWith(textScaler: effectiveScaler),
+          child: content,
+        );
         return FontScaleScope(systemScaler: systemScaler, child: content);
       },
     );
