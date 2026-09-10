@@ -200,56 +200,62 @@ class _ExternalStorageAccountDialogState
       title: Text(
         isEdit ? l10n.filesEditExternalStorage : l10n.filesAddExternalStorage,
       ),
-      content: SizedBox(
-        width: 420,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              AppDropdown<String>(
-                value: _provider,
-                label: l10n.filesStorageType,
-                items: [
-                  for (final e in _providerLabels(l10n).entries)
-                    AppDropdownItem(value: e.key, label: e.value),
-                ],
-                onChanged:
-                    isEdit
-                        ? null
-                        : (value) {
-                          if (value != null) setState(() => _provider = value);
-                        },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _displayNameCtrl,
-                decoration: InputDecoration(
-                  labelText: l10n.filesDisplayName,
-                  hintText: l10n.filesDisplayNameHint,
-                  isDense: true,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppDropdown<String>(
+                  value: _provider,
+                  label: l10n.filesStorageType,
+                  items: [
+                    for (final e in _providerLabels(l10n).entries)
+                      AppDropdownItem(value: e.key, label: e.value),
+                  ],
+                  onChanged:
+                      isEdit
+                          ? null
+                          : (value) {
+                            if (value != null) {
+                              setState(() => _provider = value);
+                            }
+                          },
                 ),
-                onChanged: (_) => setState(() {}),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                l10n.filesConnectionCredentials,
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: context.filesColors.onSurfaceVariant,
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _displayNameCtrl,
+                  decoration: InputDecoration(
+                    labelText: l10n.filesDisplayName,
+                    hintText: l10n.filesDisplayNameHint,
+                    isDense: true,
+                  ),
+                  onChanged: (_) => setState(() {}),
                 ),
-              ),
-              if (isEdit && widget.account?.credentialsConfigured == true) ...[
-                const SizedBox(height: 6),
+                const SizedBox(height: 16),
                 Text(
-                  l10n.filesExistingSecretPreserved,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  l10n.filesConnectionCredentials,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: context.filesColors.onSurfaceVariant,
                   ),
                 ),
+                if (isEdit &&
+                    widget.account?.credentialsConfigured == true) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    l10n.filesExistingSecretPreserved,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.filesColors.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 8),
+                ..._buildCredentialFields(),
               ],
-              const SizedBox(height: 8),
-              ..._buildCredentialFields(),
-            ],
+            ),
           ),
         ),
       ),

@@ -15,6 +15,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_image_cache.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 
 /// 幻灯片帧：页面上的一层画面（照片 + 已解码位图）。
@@ -1133,23 +1134,16 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   // ─── Info 面板 ───
 
   Widget _buildInfoPanel(BuildContext context, PhotoItem photo) {
-    return Positioned(
-      top: 0,
-      right: 0,
-      bottom: 0,
-      width: photoInfoPanelWidth,
-      child: AnimatedSlide(
-        offset: _showInfo ? Offset.zero : const Offset(1, 0),
-        duration: const Duration(milliseconds: 450),
-        curve: Curves.easeOutCubic,
-        child: PhotoInfoPanel(
-          photo: photo,
-          onShare:
-              () => setState(() {
-                _showInfo = false;
-                _showShare = true;
-              }),
-        ),
+    return PhotoPanelHost(
+      visible: _showInfo,
+      onClose: () => setState(() => _showInfo = false),
+      child: PhotoInfoPanel(
+        photo: photo,
+        onShare:
+            () => setState(() {
+              _showInfo = false;
+              _showShare = true;
+            }),
       ),
     );
   }

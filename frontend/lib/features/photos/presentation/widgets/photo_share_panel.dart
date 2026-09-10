@@ -12,6 +12,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 
 /// 照片分享侧栏：SHARE 眉题 + 预览卡 + LINK 复制 + 分享渠道宫格 + OPTIONS 开关。
 ///
@@ -196,78 +197,71 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     final l10n = AppLocalizations.of(context);
     final preferZh = Localizations.localeOf(context).languageCode == 'zh';
     final location = widget.photo.locationDisplay(preferZh: preferZh);
-    return Positioned(
-      top: 0,
-      right: 0,
-      bottom: 0,
-      width: 320,
-      child: AnimatedSlide(
-        offset: widget.visible ? Offset.zero : const Offset(1, 0),
-        duration: const Duration(milliseconds: 450),
-        curve: const Cubic(0.25, 0.46, 0.45, 0.94),
-        child: Container(
-          decoration: const BoxDecoration(
-            color: Color(0xFF0A0A0A),
-            border: Border(left: BorderSide(color: Color(0x12FFFFFF))),
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  l10n.photosShareEyebrow,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.30),
-                    fontSize: AppTypography.labelSmall,
-                    letterSpacing: 0.14,
-                  ),
+    return PhotoPanelHost(
+      visible: widget.visible,
+      onClose: () => widget.onDone?.call(),
+      child: Container(
+        decoration: photoPanelContainerDecoration(context),
+        child: SingleChildScrollView(
+          padding:
+              MediaQuery.sizeOf(context).width < photoPanelCompactBreakpoint
+                  ? const EdgeInsets.fromLTRB(24, 20, 24, 24)
+                  : const EdgeInsets.fromLTRB(24, 64, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                l10n.photosShareEyebrow,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.30),
+                  fontSize: AppTypography.labelSmall,
+                  letterSpacing: 0.14,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  widget.photo.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: AppTypography.titleLarge,
-                    fontWeight: FontWeight.w300,
-                  ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                widget.photo.title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: AppTypography.titleLarge,
+                  fontWeight: FontWeight.w300,
                 ),
-                const SizedBox(height: 28),
-                _buildPreviewCard(location),
-                const SizedBox(height: 24),
-                _buildLinkSection(l10n),
-                const SizedBox(height: 24),
-                _buildShareToGrid(l10n),
-                const SizedBox(height: 24),
-                _buildOptions(l10n, location),
-                const SizedBox(height: 32),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: widget.onDone,
-                    style: TextButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.10),
-                      foregroundColor: Colors.white.withValues(alpha: 0.90),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        side: BorderSide(
-                          color: Colors.white.withValues(alpha: 0.10),
-                        ),
+              ),
+              const SizedBox(height: 28),
+              _buildPreviewCard(location),
+              const SizedBox(height: 24),
+              _buildLinkSection(l10n),
+              const SizedBox(height: 24),
+              _buildShareToGrid(l10n),
+              const SizedBox(height: 24),
+              _buildOptions(l10n, location),
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: widget.onDone,
+                  style: TextButton.styleFrom(
+                    backgroundColor: Colors.white.withValues(alpha: 0.10),
+                    foregroundColor: Colors.white.withValues(alpha: 0.90),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      side: BorderSide(
+                        color: Colors.white.withValues(alpha: 0.10),
                       ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
-                    child: Text(
-                      l10n.photosShareDone,
-                      style: const TextStyle(
-                        fontSize: AppTypography.bodyMedium,
-                        letterSpacing: 0.04,
-                        fontWeight: FontWeight.w300,
-                      ),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    l10n.photosShareDone,
+                    style: const TextStyle(
+                      fontSize: AppTypography.bodyMedium,
+                      letterSpacing: 0.04,
+                      fontWeight: FontWeight.w300,
                     ),
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

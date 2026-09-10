@@ -273,38 +273,26 @@ class _ReaderMetadataEditPageState
                   maxLines: 5,
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _publisherCtrl,
-                        label: l10n.readerLabelPublisher,
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _releaseDateCtrl,
-                        label: l10n.readerLabelReleaseDate,
-                      ),
-                    ),
-                  ],
+                _buildFieldPair(
+                  first: _buildTextField(
+                    controller: _publisherCtrl,
+                    label: l10n.readerLabelPublisher,
+                  ),
+                  second: _buildTextField(
+                    controller: _releaseDateCtrl,
+                    label: l10n.readerLabelReleaseDate,
+                  ),
                 ),
                 const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _buildTextField(
-                        controller: _ratingCtrl,
-                        label: l10n.readerLabelRating,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                      ),
+                _buildFieldPair(
+                  first: _buildTextField(
+                    controller: _ratingCtrl,
+                    label: l10n.readerLabelRating,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(child: _buildSerialStatusDropdown()),
-                  ],
+                  ),
+                  second: _buildSerialStatusDropdown(),
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
@@ -349,8 +337,9 @@ class _ReaderMetadataEditPageState
                     : _coverPlaceholder(),
           ),
           SizedBox(height: 16),
-          Row(
-            mainAxisSize: MainAxisSize.min,
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
             children: [
               OutlinedButton.icon(
                 onPressed: () => _pickFromFiles(),
@@ -393,6 +382,31 @@ class _ReaderMetadataEditPageState
         size: 48,
         color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.4),
       ),
+    );
+  }
+
+  /// 双列表单字段组：窄屏（可用宽 <420 或大字号）改纵向堆叠，
+  /// 判定阈值对齐漫画详情页先例。
+  Widget _buildFieldPair({required Widget first, required Widget second}) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final narrow =
+            constraints.maxWidth < 420 ||
+            MediaQuery.textScalerOf(context).scale(1) > 1.4;
+        if (narrow) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [first, const SizedBox(height: 16), second],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: first),
+            const SizedBox(width: 16),
+            Expanded(child: second),
+          ],
+        );
+      },
     );
   }
 

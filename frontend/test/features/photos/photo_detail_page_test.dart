@@ -422,7 +422,7 @@ void main() {
     expect(slide.offset, const Offset(1, 0));
   });
 
-  testWidgets('紧凑端信息侧栏为同一右滑入覆盖层且点击遮罩关闭', (tester) async {
+  testWidgets('紧凑端信息面板为底部滑入形态且点击遮罩关闭', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -430,7 +430,7 @@ void main() {
     await tester.pumpWidget(_harness(scope: scope).child);
     await tester.pumpAndSettle();
 
-    // 信息入口在弹出菜单中；打开后与桌面同为覆盖层。
+    // 信息入口在弹出菜单中；紧凑宽度为底部滑入面板。
     expect(find.byType(AnimatedSize), findsNothing);
     await tester.tap(find.byIcon(Icons.more_vert_rounded));
     await tester.pumpAndSettle();
@@ -450,7 +450,7 @@ void main() {
           )
           .first,
     );
-    expect(slide.offset, const Offset(1, 0));
+    expect(slide.offset, const Offset(0, 1));
   });
 
   testWidgets('亮色主题下查看器保持恒暗（顶栏与信息侧栏）', (tester) async {

@@ -40,89 +40,58 @@ Future<(String, String)?> showPhotoShareDialog(
                           fontSize: AppTypography.titleLarge,
                         ),
                       ),
-                      content: SizedBox(
-                        width: 400,
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // 密码字段
-                            TextField(
-                              controller: passwordController,
-                              obscureText: true,
-                              style: TextStyle(
-                                color: ctx.frameColors.ink,
-                                fontSize: AppTypography.bodyLarge,
-                              ),
-                              decoration: InputDecoration(
-                                hintText:
-                                    AppLocalizations.of(
-                                      context,
-                                    ).photosSharePasswordHint,
-                                hintStyle: TextStyle(
-                                  color: ctx.frameColors.muted,
+                      content: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 400),
+                        child: SizedBox(
+                          width: 400,
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // 密码字段
+                              TextField(
+                                controller: passwordController,
+                                obscureText: true,
+                                style: TextStyle(
+                                  color: ctx.frameColors.ink,
+                                  fontSize: AppTypography.bodyLarge,
                                 ),
-                                filled: true,
-                                fillColor: ctx.frameColors.hover,
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 10,
-                                ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide.none,
-                                ),
-                                enabledBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(
-                                    color: ctx.frameColors.border,
+                                decoration: InputDecoration(
+                                  hintText:
+                                      AppLocalizations.of(
+                                        context,
+                                      ).photosSharePasswordHint,
+                                  hintStyle: TextStyle(
+                                    color: ctx.frameColors.muted,
+                                  ),
+                                  filled: true,
+                                  fillColor: ctx.frameColors.hover,
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 10,
+                                  ),
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: ctx.frameColors.border,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                    borderSide: BorderSide(
+                                      color: ctx.frameColors.accent,
+                                    ),
                                   ),
                                 ),
-                                focusedBorder: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(
-                                    color: ctx.frameColors.accent,
-                                  ),
-                                ),
                               ),
-                            ),
-                            const SizedBox(height: 16),
-                            // 有效期
-                            Text(
-                              AppLocalizations.of(context).photosShareExpiry,
-                              style: TextStyle(
-                                color: ctx.frameColors.sub,
-                                fontSize: AppTypography.bodySmall,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              children: [
-                                for (final option in const [
-                                  '1d',
-                                  '7d',
-                                  '30d',
-                                  'never',
-                                ])
-                                  _ExpiryChip(
-                                    label: _expiryLabel(context, option),
-                                    selected: expiryOption == option,
-                                    onTap:
-                                        () => setDialogState(
-                                          () => expiryOption = option,
-                                        ),
-                                  ),
-                              ],
-                            ),
-                            // 现有链接
-                            if (shares.isNotEmpty) ...[
                               const SizedBox(height: 16),
+                              // 有效期
                               Text(
-                                AppLocalizations.of(
-                                  context,
-                                ).photosExistingShareLinks,
+                                AppLocalizations.of(context).photosShareExpiry,
                                 style: TextStyle(
                                   color: ctx.frameColors.sub,
                                   fontSize: AppTypography.bodySmall,
@@ -130,80 +99,114 @@ Future<(String, String)?> showPhotoShareDialog(
                                 ),
                               ),
                               const SizedBox(height: 8),
-                              ...shares.map(
-                                (share) => Padding(
-                                  padding: const EdgeInsets.only(bottom: 4),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              share.token,
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: TextStyle(
-                                                color: ctx.frameColors.ink,
-                                                fontSize:
-                                                    AppTypography.bodyMedium,
-                                              ),
-                                            ),
-                                            Text(
-                                              AppLocalizations.of(
-                                                context,
-                                              ).photosShareAccessCount(
-                                                share.accessCount,
-                                              ),
-                                              style: TextStyle(
-                                                color: ctx.frameColors.muted,
-                                                fontSize:
-                                                    AppTypography.labelSmall,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      IconButton(
-                                        tooltip:
-                                            AppLocalizations.of(
-                                              context,
-                                            ).coreDelete,
-                                        icon: const Icon(
-                                          Icons.delete_outline,
-                                          size: 18,
-                                          color: Color(0xFFEF4444),
-                                        ),
-                                        onPressed: () async {
-                                          try {
-                                            await onRevoke(share.id);
-                                            if (ctx.mounted) {
-                                              Navigator.pop(ctx, null);
-                                            }
-                                          } on Exception catch (error) {
-                                            if (ctx.mounted) {
-                                              ScaffoldMessenger.of(
-                                                ctx,
-                                              ).showSnackBar(
-                                                SnackBar(
-                                                  content: Text(
-                                                    describeUserFacingError(
-                                                      error,
-                                                    ).displayMessage,
-                                                  ),
-                                                ),
-                                              );
-                                            }
-                                          }
-                                        },
-                                      ),
-                                    ],
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  for (final option in const [
+                                    '1d',
+                                    '7d',
+                                    '30d',
+                                    'never',
+                                  ])
+                                    _ExpiryChip(
+                                      label: _expiryLabel(context, option),
+                                      selected: expiryOption == option,
+                                      onTap:
+                                          () => setDialogState(
+                                            () => expiryOption = option,
+                                          ),
+                                    ),
+                                ],
+                              ),
+                              // 现有链接
+                              if (shares.isNotEmpty) ...[
+                                const SizedBox(height: 16),
+                                Text(
+                                  AppLocalizations.of(
+                                    context,
+                                  ).photosExistingShareLinks,
+                                  style: TextStyle(
+                                    color: ctx.frameColors.sub,
+                                    fontSize: AppTypography.bodySmall,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                              ),
+                                const SizedBox(height: 8),
+                                ...shares.map(
+                                  (share) => Padding(
+                                    padding: const EdgeInsets.only(bottom: 4),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                share.token,
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: TextStyle(
+                                                  color: ctx.frameColors.ink,
+                                                  fontSize:
+                                                      AppTypography.bodyMedium,
+                                                ),
+                                              ),
+                                              Text(
+                                                AppLocalizations.of(
+                                                  context,
+                                                ).photosShareAccessCount(
+                                                  share.accessCount,
+                                                ),
+                                                style: TextStyle(
+                                                  color: ctx.frameColors.muted,
+                                                  fontSize:
+                                                      AppTypography.labelSmall,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        IconButton(
+                                          tooltip:
+                                              AppLocalizations.of(
+                                                context,
+                                              ).coreDelete,
+                                          icon: const Icon(
+                                            Icons.delete_outline,
+                                            size: 18,
+                                            color: Color(0xFFEF4444),
+                                          ),
+                                          onPressed: () async {
+                                            try {
+                                              await onRevoke(share.id);
+                                              if (ctx.mounted) {
+                                                Navigator.pop(ctx, null);
+                                              }
+                                            } on Exception catch (error) {
+                                              if (ctx.mounted) {
+                                                ScaffoldMessenger.of(
+                                                  ctx,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      describeUserFacingError(
+                                                        error,
+                                                      ).displayMessage,
+                                                    ),
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
-                          ],
+                          ),
                         ),
                       ),
                       actions: [

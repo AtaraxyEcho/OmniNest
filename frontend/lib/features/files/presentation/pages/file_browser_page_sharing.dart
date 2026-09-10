@@ -296,9 +296,13 @@ class _OfflineDownloadWorkspace extends ConsumerWidget {
                   trailingWidget: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        _offlineDownloadTrailing(task),
-                        style: Theme.of(context).textTheme.labelMedium,
+                      Flexible(
+                        child: Text(
+                          _offlineDownloadTrailing(task),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.labelMedium,
+                        ),
                       ),
                       IconButton(
                         tooltip:

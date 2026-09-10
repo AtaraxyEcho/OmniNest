@@ -170,7 +170,9 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
   Widget _buildErrorView(String message) {
     return Center(
       child: Container(
-        width: 400,
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        constraints: BoxConstraints(maxWidth: 416),
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: context.filesColors.surfaceContainerHighest,
@@ -245,7 +247,9 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: 380,
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        constraints: BoxConstraints(maxWidth: 396),
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: context.filesColors.surfaceContainerHighest,
@@ -343,7 +347,9 @@ class _PreviewCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Container(
-        width: 420,
+        width: double.infinity,
+        margin: const EdgeInsets.symmetric(horizontal: 16),
+        constraints: BoxConstraints(maxWidth: 436),
         padding: const EdgeInsets.all(32),
         decoration: BoxDecoration(
           color: context.filesColors.surfaceContainerHighest,

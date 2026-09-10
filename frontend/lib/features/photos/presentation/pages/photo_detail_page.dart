@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_motion_player.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_viewer_chrome.dart';
@@ -446,20 +447,11 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                       ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
             ),
           ),
-        Positioned(
-          top: 0,
-          right: 0,
-          bottom: 0,
-          width: photoInfoPanelWidth,
-          child: AnimatedSlide(
-            offset: _showInfo ? Offset.zero : const Offset(1, 0),
-            duration: const Duration(milliseconds: 450),
-            curve: Curves.easeOutCubic,
-            child: PhotoInfoPanel(
-              photo: currentFresh,
-              onShare: _openSharePanel,
-            ),
-          ),
+        PhotoPanelHost(
+          visible: _showInfo,
+          onClose:
+              () => ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
+          child: PhotoInfoPanel(photo: currentFresh, onShare: _openSharePanel),
         ),
         // 顶部操作栏：设计稿样式，半透明浮层横贯照片与侧栏
         Positioned(

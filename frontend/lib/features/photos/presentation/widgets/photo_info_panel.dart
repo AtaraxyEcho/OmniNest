@@ -7,12 +7,14 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 
-/// 信息侧栏宽度：与分享侧栏一致（幻灯片与详情页共用）。
-const double photoInfoPanelWidth = 320;
+export 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart'
+    show photoInfoPanelWidth;
 
-/// 照片信息面板：幻灯片与详情页共用的恒暗信息侧栏内容。
+/// 照片信息面板：幻灯片与详情页共用的恒暗信息面板内容。
 ///
+/// 宽屏为右侧 320 侧滑栏，紧凑宽度经 [PhotoPanelHost] 转为底部滑入面板。
 /// 视觉规格：0A0A0A 面板底、PHOTO INFO 眉题 + 标题头部、
 /// `buildPhotoInfoEntries` 平铺字段行（有值才渲染）、AI 识别 / 描述 /
 /// 标签分区（数据存在时渲染）、底部 Like/Share 操作。
@@ -26,8 +28,6 @@ class PhotoInfoPanel extends ConsumerWidget {
   /// 底部 Share 按钮：由宿主关闭信息面板并打开分享侧栏。
   final VoidCallback onShare;
 
-  static const Color _panelColor = Color(0xF00A0A0A);
-  static const Color _borderColor = Color(0x12FFFFFF);
   static const Color _pillBackground = Color(0x12FFFFFF);
   static const Color _pillForeground = Color(0x99FFFFFF);
 
@@ -48,12 +48,12 @@ class PhotoInfoPanel extends ConsumerWidget {
     final rows = buildPhotoInfoEntries(fresh, l10n, preferZh: preferZh);
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
-        color: _panelColor,
-        border: Border(left: BorderSide(color: _borderColor)),
-      ),
+      decoration: photoPanelContainerDecoration(context),
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 64, 24, 24),
+        padding:
+            MediaQuery.sizeOf(context).width < photoPanelCompactBreakpoint
+                ? const EdgeInsets.fromLTRB(24, 20, 24, 24)
+                : const EdgeInsets.fromLTRB(24, 64, 24, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
