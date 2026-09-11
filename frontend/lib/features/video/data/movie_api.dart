@@ -428,9 +428,43 @@ class MovieApi {
     );
   }
 
+  Future<List<VideoTrustedMount>> trustedMounts() async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/storage/mounts',
+    );
+    final data = parseEnvelope(response.data)['data'];
+    return data is List
+        ? data
+            .whereType<Map<String, dynamic>>()
+            .map(VideoTrustedMount.fromJson)
+            .toList()
+        : <VideoTrustedMount>[];
+  }
+
+  Future<MediaPage<VideoStorageDirectory>> trustedMountDirectories({
+    required String mountKey,
+    String? parent,
+    int page = 0,
+    int size = 100,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/storage/mounts/$mountKey/directories',
+      queryParameters: {
+        if (parent != null) 'parent': parent,
+        'page': page,
+        'size': size,
+      },
+    );
+    return MediaPage.fromJson(
+      parseData(response.data),
+      VideoStorageDirectory.fromJson,
+    );
+  }
+
   Future<VideoLibrarySource> createLibrarySource({
     required String name,
-    required String storageLocationId,
+    String? storageLocationId,
+    String? mountKey,
     required String relativeRoot,
     required VideoLibraryType libraryType,
     bool enabled = true,
@@ -439,7 +473,8 @@ class MovieApi {
       '/video/library-sources',
       data: {
         'name': name,
-        'storageLocationId': storageLocationId,
+        if (storageLocationId != null) 'storageLocationId': storageLocationId,
+        if (mountKey != null) 'mountKey': mountKey,
         'relativeRoot': relativeRoot,
         'libraryType': libraryType.apiValue,
         'importPolicy': 'MANUAL_REVIEW',
@@ -571,20 +606,6 @@ class MovieApi {
       '/video/scan-runs/$runId/cancel',
     );
     return MediaScanRun.fromJson(parseData(response.data));
-  }
-
-  Future<MediaPage<MediaUnavailableItem>> unavailableLocalMedia({
-    int page = 0,
-    int size = 100,
-  }) async {
-    final response = await apiClient.dio.get<Map<String, dynamic>>(
-      '/video/library-sources/unavailable',
-      queryParameters: {'page': page, 'size': size},
-    );
-    return MediaPage.fromJson(
-      parseData(response.data),
-      MediaUnavailableItem.fromJson,
-    );
   }
 
   Future<NfoExport> nfoPreview(String videoItemId) async {

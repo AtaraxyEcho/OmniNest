@@ -96,6 +96,26 @@ class VideoStorageDirectory {
   final bool hasChildren;
 }
 
+class VideoTrustedMount {
+  const VideoTrustedMount({
+    required this.mountKey,
+    required this.displayName,
+    required this.available,
+  });
+
+  factory VideoTrustedMount.fromJson(Map<String, dynamic> json) {
+    return VideoTrustedMount(
+      mountKey: json['mountKey']?.toString() ?? '',
+      displayName: json['displayName']?.toString() ?? '',
+      available: json['available'] == true,
+    );
+  }
+
+  final String mountKey;
+  final String displayName;
+  final bool available;
+}
+
 enum VideoLibraryType {
   movie('MOVIE'),
   tvSeries('TV_SERIES'),
@@ -402,39 +422,6 @@ class MediaSelectionSummary {
   final int existingCount;
   final int unmatchedCount;
   final int failedCount;
-}
-
-class MediaUnavailableItem {
-  const MediaUnavailableItem({
-    required this.videoItemId,
-    required this.fileNodeId,
-    required this.librarySourceId,
-    required this.title,
-    required this.availabilityStatus,
-    required this.missingConfirmations,
-    this.missingSince,
-  });
-
-  factory MediaUnavailableItem.fromJson(Map<String, dynamic> json) {
-    return MediaUnavailableItem(
-      videoItemId: json['videoItemId']?.toString() ?? '',
-      fileNodeId: json['fileNodeId']?.toString() ?? '',
-      librarySourceId: json['librarySourceId']?.toString() ?? '',
-      title: json['title']?.toString() ?? '',
-      availabilityStatus: json['availabilityStatus']?.toString() ?? 'MISSING',
-      missingConfirmations: MovieJson.asInt(json['missingConfirmations']),
-      missingSince:
-          DateTime.tryParse(json['missingSince']?.toString() ?? '')?.toLocal(),
-    );
-  }
-
-  final String videoItemId;
-  final String fileNodeId;
-  final String librarySourceId;
-  final String title;
-  final String availabilityStatus;
-  final int missingConfirmations;
-  final DateTime? missingSince;
 }
 
 class MovieTask {

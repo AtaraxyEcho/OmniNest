@@ -1,5 +1,13 @@
 part of 'movie_management.dart';
 
+/// 挂载直达模式所需的权限集合：媒体库管理 + 系统配置读/管。
+/// 挂载列表端点是只读门控，权限独立授予，三项必须齐全。
+const _mountDirectPermissions = [
+  'media:library:manage',
+  'system:config:read',
+  'system:config:manage',
+];
+
 class VideoLibrarySourceDialog extends ConsumerStatefulWidget {
   const VideoLibrarySourceDialog({
     required this.locations,
@@ -20,6 +28,8 @@ class _VideoLibrarySourceDialogState
   late final TextEditingController _nameController;
   late final TextEditingController _pathController;
   late String _locationId;
+  String? _mountKey;
+  bool _mountMode = true;
   late VideoLibraryType _libraryType;
   late bool _enabled;
   bool _saving = false;
@@ -44,10 +54,21 @@ class _VideoLibrarySourceDialogState
     super.dispose();
   }
 
+  bool _hasMountDirectPermission() {
+    final permissions =
+        ref.watch(authSessionProvider).asData?.value.user?.permissions ??
+        const <String>[];
+    return _mountDirectPermissions.every(permissions.contains);
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    if (_locationId.isEmpty || widget.locations.isEmpty) {
+    // 编辑态固定走位置模式；创建态在持有挂载直达权限时默认进入挂载模式。
+    final mountAllowed = widget.source == null && _hasMountDirectPermission();
+    final effectiveMountMode = mountAllowed && _mountMode;
+    if (!effectiveMountMode &&
+        (_locationId.isEmpty || widget.locations.isEmpty)) {
       return AlertDialog(
         title: Text(l10n.videoNoAvailableStorageLocation),
         content: Text(l10n.videoNoAvailableStorageLocationHint),
@@ -59,6 +80,11 @@ class _VideoLibrarySourceDialogState
         ],
       );
     }
+    final mountsAsync = ref.watch(videoTrustedMountsProvider);
+    final mounts = mountsAsync.asData?.value ?? const <VideoTrustedMount>[];
+    final availableMounts = mounts.where((mount) => mount.available).toList();
+    final effectiveMountKey =
+        _mountKey ?? availableMounts.firstOrNull?.mountKey;
     return AlertDialog(
       title: Text(
         widget.source == null
@@ -70,35 +96,76 @@ class _VideoLibrarySourceDialogState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (mountAllowed) ...[
+              SegmentedButton<bool>(
+                segments: [
+                  ButtonSegment(
+                    value: true,
+                    label: Text(l10n.videoSourceFromMount),
+                  ),
+                  ButtonSegment(
+                    value: false,
+                    label: Text(l10n.videoStorageLocation),
+                  ),
+                ],
+                selected: {_mountMode},
+                onSelectionChanged: (selection) {
+                  setState(() => _mountMode = selection.first);
+                },
+              ),
+              const SizedBox(height: 14),
+            ],
             TextField(
               controller: _nameController,
               decoration: InputDecoration(labelText: l10n.videoSourceName),
             ),
             const SizedBox(height: 14),
-            AppDropdown<String>(
-              value: _locationId,
-              label: l10n.videoStorageLocation,
-              items: [
-                for (final location in widget.locations)
-                  AppDropdownItem(
-                    value: location.id,
-                    label:
-                        '${location.name} · ${_storageHealthLabel(l10n, location.healthStatus)}',
-                    enabled: location.available,
-                  ),
-              ],
-              onChanged:
-                  widget.source == null
-                      ? (value) {
-                        if (value != null) {
-                          setState(() {
-                            _locationId = value;
-                            _pathController.text = '.';
-                          });
+            if (effectiveMountMode)
+              AppDropdown<String>(
+                value: effectiveMountKey ?? '',
+                label: l10n.videoTrustedMountLabel,
+                items: [
+                  for (final mount in mounts)
+                    AppDropdownItem(
+                      value: mount.mountKey,
+                      label: mount.displayName,
+                      enabled: mount.available,
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() {
+                      _mountKey = value;
+                      _pathController.text = '.';
+                    });
+                  }
+                },
+              )
+            else
+              AppDropdown<String>(
+                value: _locationId,
+                label: l10n.videoStorageLocation,
+                items: [
+                  for (final location in widget.locations)
+                    AppDropdownItem(
+                      value: location.id,
+                      label:
+                          '${location.name} · ${_storageHealthLabel(l10n, location.healthStatus)}',
+                      enabled: location.available,
+                    ),
+                ],
+                onChanged:
+                    widget.source == null
+                        ? (value) {
+                          if (value != null) {
+                            setState(() {
+                              _locationId = value;
+                              _pathController.text = '.';
+                            });
+                          }
                         }
-                      }
-                      : null,
-            ),
+                        : null,
+              ),
             const SizedBox(height: 14),
             AppDropdown<VideoLibraryType>(
               value: _libraryType,
@@ -130,18 +197,35 @@ class _VideoLibrarySourceDialogState
                     readOnly: true,
                     decoration: InputDecoration(
                       labelText: l10n.videoRelativeDirectory,
-                      helperText: l10n.videoRelativeDirectoryHint,
+                      helperText:
+                          effectiveMountMode
+                              ? l10n.videoNoTrustedMountHint
+                              : l10n.videoRelativeDirectoryHint,
                     ),
                   ),
                 ),
                 const SizedBox(width: 8),
                 IconButton.filledTonal(
-                  onPressed: _browseDirectory,
+                  onPressed:
+                      effectiveMountMode && effectiveMountKey == null
+                          ? null
+                          : _browseDirectory,
                   tooltip: l10n.videoBrowseRelativeDirectory,
                   icon: const Icon(Icons.folder_open_rounded),
                 ),
               ],
             ),
+            if (effectiveMountMode && effectiveMountKey == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  l10n.videoNoTrustedMount,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                    fontSize: AppTypography.bodySmall,
+                  ),
+                ),
+              ),
             if (widget.source != null)
               SwitchListTile.adaptive(
                 contentPadding: EdgeInsets.zero,
@@ -158,7 +242,10 @@ class _VideoLibrarySourceDialogState
           child: Text(l10n.videoCancel),
         ),
         FilledButton(
-          onPressed: _saving ? null : _save,
+          onPressed:
+              _saving || (effectiveMountMode && effectiveMountKey == null)
+                  ? null
+                  : _save,
           child:
               _saving
                   ? const SizedBox.square(
@@ -179,23 +266,33 @@ class _VideoLibrarySourceDialogState
       showMovieFeedback(context, l10n.videoSourceRequiredFields, isError: true);
       return;
     }
+    final mountAllowed = widget.source == null && _hasMountDirectPermission();
+    final mountMode = mountAllowed && _mountMode;
+    final mountsAsync = ref.read(videoTrustedMountsProvider);
+    final mounts = mountsAsync.asData?.value ?? const <VideoTrustedMount>[];
+    final mountKey =
+        _mountKey ??
+        mounts.where((mount) => mount.available).firstOrNull?.mountKey;
+    if (mountMode && mountKey == null) {
+      showMovieFeedback(context, l10n.videoNoTrustedMount, isError: true);
+      return;
+    }
     setState(() => _saving = true);
     try {
       final actions = ref.read(videoLibrarySourceActionsProvider);
-      if (widget.source == null) {
+      if (mountMode) {
+        await actions.create(
+          name: name,
+          mountKey: mountKey,
+          relativeRoot: path,
+          libraryType: _libraryType,
+        );
+      } else {
         await actions.create(
           name: name,
           storageLocationId: _locationId,
           relativeRoot: path,
           libraryType: _libraryType,
-        );
-      } else {
-        await actions.update(
-          source: widget.source!,
-          name: name,
-          relativeRoot: path,
-          libraryType: _libraryType,
-          enabled: _enabled,
         );
       }
       if (mounted) Navigator.of(context).pop();
@@ -209,11 +306,19 @@ class _VideoLibrarySourceDialogState
   }
 
   Future<void> _browseDirectory() async {
+    final mountAllowed = widget.source == null && _hasMountDirectPermission();
+    final mountMode = mountAllowed && _mountMode;
+    final mountsAsync = ref.read(videoTrustedMountsProvider);
+    final mounts = mountsAsync.asData?.value ?? const <VideoTrustedMount>[];
+    final mountKey =
+        _mountKey ??
+        mounts.where((mount) => mount.available).firstOrNull?.mountKey;
     final selected = await showDialog<String>(
       context: context,
       builder:
           (context) => _VideoStorageDirectoryDialog(
             locationId: _locationId,
+            mountKey: mountMode ? mountKey : null,
             initialPath: _pathController.text,
           ),
     );
@@ -222,18 +327,25 @@ class _VideoLibrarySourceDialogState
     }
     _pathController.text = selected;
     if (_nameController.text.trim().isEmpty) {
-      final location =
-          widget.locations.where((item) => item.id == _locationId).firstOrNull;
-      if (location == null) {
-        return;
+      final String? name;
+      if (mountMode) {
+        name = selected == '.' ? mountKey : selected.split('/').last;
+      } else {
+        final location =
+            widget.locations
+                .where((item) => item.id == _locationId)
+                .firstOrNull;
+        if (location == null) {
+          return;
+        }
+        name =
+            selected == '.'
+                ? (location.rootName.trim().isEmpty
+                    ? location.name
+                    : location.rootName)
+                : selected.split('/').last;
       }
-      final name =
-          selected == '.'
-              ? (location.rootName.trim().isEmpty
-                  ? location.name
-                  : location.rootName)
-              : selected.split('/').last;
-      if (name.trim().isNotEmpty) {
+      if (name != null && name.trim().isNotEmpty) {
         _nameController.text = name.trim();
       }
     }
@@ -243,10 +355,15 @@ class _VideoLibrarySourceDialogState
 class _VideoStorageDirectoryDialog extends ConsumerStatefulWidget {
   const _VideoStorageDirectoryDialog({
     required this.locationId,
+    this.mountKey,
     required this.initialPath,
   });
 
   final String locationId;
+
+  /// 非空时按可信挂载浏览（挂载直达模式），忽略 locationId。
+  final String? mountKey;
+
   final String initialPath;
 
   @override
@@ -273,14 +390,24 @@ class _VideoStorageDirectoryDialogState
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final parent = _currentPath == '.' ? null : _currentPath;
     final directories = ref.watch(
-      videoStorageDirectoriesProvider((
-        locationId: widget.locationId,
-        parent: _currentPath == '.' ? null : _currentPath,
-      )),
+      widget.mountKey != null
+          ? videoMountDirectoriesProvider((
+            mountKey: widget.mountKey!,
+            parent: parent,
+          ))
+          : videoStorageDirectoriesProvider((
+            locationId: widget.locationId,
+            parent: parent,
+          )),
     );
     return AlertDialog(
-      title: Text(l10n.videoBrowseRelativeDirectory),
+      title: Text(
+        widget.mountKey != null
+            ? l10n.videoBrowseMountDirectory
+            : l10n.videoBrowseRelativeDirectory,
+      ),
       content: SizedBox(
         width: 520,
         height: 420,
@@ -625,100 +752,4 @@ IconData _mediaTreeNodeIcon(String nodeType) {
     'DIRECTORY' => Icons.folder_outlined,
     _ => Icons.insert_drive_file_outlined,
   };
-}
-
-class _UnavailableLocalMediaPanel extends ConsumerWidget {
-  const _UnavailableLocalMediaPanel();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final unavailable = ref.watch(unavailableLocalMediaProvider);
-    final count = unavailable.asData?.value.totalElements;
-    return Material(
-      color: context.videoColors.surfaceContainerLow,
-      clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: BorderSide(
-          color: context.videoColors.outlineVariant.withValues(alpha: 0.36),
-        ),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          key: const Key('mediaLibraryUnavailablePanel'),
-          leading: Icon(
-            count == null || count == 0
-                ? Icons.verified_outlined
-                : Icons.link_off_rounded,
-            color:
-                count == null || count == 0
-                    ? context.videoColors.primary
-                    : Theme.of(context).colorScheme.error,
-          ),
-          title: Text(
-            l10n.videoUnavailableTitle,
-            style: const TextStyle(fontWeight: FontWeight.w800),
-          ),
-          subtitle: Text(
-            count == null || count == 0
-                ? l10n.videoUnavailableEmpty
-                : l10n.videoUnavailableCount(count),
-          ),
-          children: [
-            unavailable.when(
-              loading: () => const LinearProgressIndicator(),
-              error:
-                  (error, _) => ListTile(
-                    leading: const Icon(Icons.error_outline_rounded),
-                    title: Text(l10n.videoUnavailableLoadFailed),
-                    subtitle: Text(movieErrorMessage(error)),
-                  ),
-              data:
-                  (page) =>
-                      page.items.isEmpty
-                          ? const SizedBox.shrink()
-                          : ListView.separated(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: page.items.length,
-                            separatorBuilder:
-                                (_, _) => Divider(
-                                  height: 1,
-                                  indent: 56,
-                                  color: context.videoColors.outlineVariant
-                                      .withValues(alpha: 0.22),
-                                ),
-                            itemBuilder: (context, index) {
-                              final item = page.items[index];
-                              final pending =
-                                  item.availabilityStatus == 'MISSING_PENDING';
-                              return ListTile(
-                                leading: Icon(
-                                  pending
-                                      ? Icons.schedule_rounded
-                                      : Icons.broken_image_outlined,
-                                  color:
-                                      pending
-                                          ? Theme.of(
-                                            context,
-                                          ).colorScheme.tertiary
-                                          : Theme.of(context).colorScheme.error,
-                                ),
-                                title: Text(item.title),
-                                subtitle: Text(
-                                  pending
-                                      ? l10n.videoMissingPending
-                                      : l10n.videoMissingConfirmed,
-                                ),
-                              );
-                            },
-                          ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

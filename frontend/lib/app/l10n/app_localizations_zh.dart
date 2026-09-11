@@ -3660,7 +3660,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminType => '类型';
 
   @override
-  String get adminLocalMount => '本地挂载';
+  String get adminLocalMount => '本地(rclone) 账号';
 
   @override
   String get adminDisplayNameLabel => '展示名称';
@@ -3760,6 +3760,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminStorageMountsSection => '本地挂载位置';
+
+  @override
+  String get adminTrustedMountsTitle => '可信挂载点';
+
+  @override
+  String get adminTrustedMountsSubtitle =>
+      '部署配置登记的挂载键及其在当前节点的可用状态，是挂载位置与挂载直达创建的来源。';
+
+  @override
+  String get adminTrustedMountsEmpty => '未在部署配置中登记挂载';
+
+  @override
+  String adminLibraryOrphanLocation(Object count) {
+    return '有 $count 个挂载位置已无库源引用，可在上方列表中清理';
+  }
+
+  @override
+  String get adminLibraryCleanupOrphan => '清理挂载位置';
 
   @override
   String get adminLibraryColumnName => '库名称';
@@ -8034,6 +8052,21 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get videoDirectoryRoot => '根目录';
+
+  @override
+  String get videoSourceFromMount => '从挂载点直达';
+
+  @override
+  String get videoTrustedMountLabel => '挂载点';
+
+  @override
+  String get videoNoTrustedMount => '暂无可用挂载点';
+
+  @override
+  String get videoNoTrustedMountHint => '请先在部署配置登记挂载并确认其可用，创建时会自动登记挂载根为存储位置。';
+
+  @override
+  String get videoBrowseMountDirectory => '浏览挂载目录';
 
   @override
   String get videoDiscoveryTitle => '发现与入库';

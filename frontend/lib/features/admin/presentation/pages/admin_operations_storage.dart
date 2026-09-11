@@ -268,6 +268,11 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    // 库源变化（含挂载直达新建/删除）可能新增或移除挂载位置引用，
+    // 同步刷新存储管理视图，避免非 autoDispose 的 adminStorageProvider 陈旧。
+    ref.listen(videoLibrarySourcesProvider, (previous, next) {
+      ref.invalidate(adminStorageProvider);
+    });
     final canManageStorage =
         ref
             .watch(authSessionProvider)
@@ -475,9 +480,93 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
             ],
           ),
         ),
+        const SizedBox(height: 24),
+        _AdminTrustedMountsSection(mounts: widget.view.trustedMounts),
+        const SizedBox(height: 24),
         listSection,
         const SizedBox(height: 32),
         _LibrarySourcesSection(canManage: canManageSources),
+      ],
+    );
+  }
+}
+
+/// 可信挂载点健康卡：展示部署白名单层的挂载键与当前节点可用性，
+/// 使四层链路（部署配置→位置→库源→扫描）最底层的状态可观测。
+class _AdminTrustedMountsSection extends StatelessWidget {
+  const _AdminTrustedMountsSection({required this.mounts});
+
+  final List<AdminTrustedMount> mounts;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AdminTableSection(
+      title: l10n.adminTrustedMountsTitle,
+      subtitle: l10n.adminTrustedMountsSubtitle,
+      children: [
+        if (mounts.isEmpty)
+          _EmptyText(l10n.adminTrustedMountsEmpty)
+        else
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                for (final mount in mounts)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.adminColors.surfaceContainerLow.withValues(
+                        alpha: 0.42,
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: context.adminColors.outlineVariant.withValues(
+                          alpha: 0.18,
+                        ),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          mount.available
+                              ? Icons.dns_outlined
+                              : Icons.dns_outlined,
+                          size: 18,
+                          color:
+                              mount.available
+                                  ? context.adminColors.success
+                                  : context.adminColors.tertiary,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          mount.mountKey,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(width: 8),
+                        AdminStatusTag(
+                          label: healthStatusLabel(
+                            l10n,
+                            mount.available ? 'AVAILABLE' : 'UNAVAILABLE',
+                          ),
+                          tone:
+                              mount.available
+                                  ? AdminTagTone.success
+                                  : AdminTagTone.warning,
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
       ],
     );
   }

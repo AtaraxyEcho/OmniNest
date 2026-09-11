@@ -74,6 +74,24 @@ final videoStorageDirectoriesProvider = FutureProvider.autoDispose
           .storageDirectories(locationId: key.locationId, parent: key.parent);
     });
 
+/// 部署可信挂载列表；仅在用户同时持有媒体库管理与系统配置读/管权限时消费。
+final videoTrustedMountsProvider =
+    FutureProvider.autoDispose<List<VideoTrustedMount>>((ref) {
+      return ref.watch(movieApiProvider).trustedMounts();
+    });
+
+typedef VideoMountDirectoryKey = ({String mountKey, String? parent});
+
+final videoMountDirectoriesProvider = FutureProvider.autoDispose
+    .family<MediaPage<VideoStorageDirectory>, VideoMountDirectoryKey>((
+      ref,
+      key,
+    ) {
+      return ref
+          .watch(movieApiProvider)
+          .trustedMountDirectories(mountKey: key.mountKey, parent: key.parent);
+    });
+
 final latestMediaScanRunProvider = StreamProvider.autoDispose
     .family<MediaScanRun?, String>((ref, sourceId) async* {
       final api = ref.watch(movieApiProvider);
@@ -96,7 +114,6 @@ final latestMediaScanRunProvider = StreamProvider.autoDispose
         if (run == null || !run.active) {
           if (run != null) {
             ref.invalidate(videoLibrarySourcesProvider);
-            ref.invalidate(unavailableLocalMediaProvider);
             if (run.status == 'COMPLETED' || run.status == 'PARTIAL') {
               // 面板重新挂载会重启轮询流；同一完成 run 只触发一次中心数据
               // 重载，否则管理页每次进入都会全量刷新并在历史缺陷下反复跳回
@@ -135,11 +152,6 @@ final mediaScanTreeProvider = FutureProvider.autoDispose
           );
     });
 
-final unavailableLocalMediaProvider =
-    FutureProvider.autoDispose<MediaPage<MediaUnavailableItem>>((ref) {
-      return ref.watch(movieApiProvider).unavailableLocalMedia();
-    });
-
 final videoLibrarySourceActionsProvider = Provider<VideoLibrarySourceActions>((
   ref,
 ) {
@@ -155,17 +167,21 @@ class VideoLibrarySourceActions {
 
   Future<void> create({
     required String name,
-    required String storageLocationId,
+    String? storageLocationId,
+    String? mountKey,
     required String relativeRoot,
     required VideoLibraryType libraryType,
   }) async {
     await _api.createLibrarySource(
       name: name,
       storageLocationId: storageLocationId,
+      mountKey: mountKey,
       relativeRoot: relativeRoot,
       libraryType: libraryType,
     );
     ref.invalidate(videoLibrarySourcesProvider);
+    // 挂载直达会在服务端新建存储位置，位置下拉需要同步刷新。
+    ref.invalidate(videoStorageLocationsProvider);
   }
 
   Future<void> update({
@@ -188,7 +204,6 @@ class VideoLibrarySourceActions {
   Future<void> delete(String sourceId) async {
     await _api.deleteLibrarySource(sourceId);
     ref.invalidate(videoLibrarySourcesProvider);
-    ref.invalidate(unavailableLocalMediaProvider);
   }
 
   Future<MediaLibraryAccessSettings> updateAccess({

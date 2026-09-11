@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -20,9 +21,6 @@ import 'package:omninest/core/utils/status_labels.dart';
 
 part 'movie_admin_list.dart';
 part 'movie_admin_tasks.dart';
-part 'movie_library_source_rail.dart';
 part 'movie_library_access_management.dart';
-part 'movie_library_source_management.dart';
 part 'movie_library_review.dart';
-part 'movie_library_source_workspace.dart';
 part 'movie_library_management_components.dart';

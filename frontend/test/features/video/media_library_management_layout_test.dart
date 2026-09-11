@@ -9,61 +9,16 @@ import 'package:omninest/features/video/presentation/widgets/movie_management.da
 import 'package:omninest/features/video/presentation/widgets/movie_shell.dart';
 
 void main() {
-  testWidgets('media library uses source and workspace split on desktop', (
-    tester,
-  ) async {
-    await _pumpLibrary(tester, size: const Size(1280, 900));
-
-    expect(find.byKey(const Key('mediaLibraryDesktopSplit')), findsOneWidget);
-    expect(find.byKey(const Key('mediaLibraryMobileStack')), findsNothing);
-    expect(
-      find.byKey(const Key('mediaLibrarySourceNavigator')),
-      findsOneWidget,
-    );
-    expect(find.text('电影收藏'), findsNWidgets(2));
-
-    await tester.tap(find.byKey(const Key('mediaLibrarySource-series')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('家庭剧集'), findsNWidgets(2));
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('media library stacks controls without overflow on narrow view', (
-    tester,
-  ) async {
-    await _pumpLibrary(tester, size: const Size(540, 1100), darkMode: true);
-
-    expect(find.byKey(const Key('mediaLibraryMobileStack')), findsOneWidget);
-    expect(find.byKey(const Key('mediaLibraryDesktopSplit')), findsNothing);
-    expect(find.text('添加来源'), findsOneWidget);
-    expect(find.text('发现更新'), findsOneWidget);
-    expect(
-      find.byKey(const Key('mediaLibraryUnavailablePanel')),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('review workspace exposes candidate hierarchy inline', (
     tester,
   ) async {
-    await _pumpLibrary(
+    await _pumpReviewWorkspace(
       tester,
-      size: const Size(1280, 900),
       reviewRun: _readyRun,
       reviewPage: _reviewPage,
       reviewChildNodeId: 'SERIES:1',
       reviewChildPage: _reviewChildPage,
     );
-
-    final scanReviewTab = find.descendant(
-      of: find.byType(SegmentedButton<int>),
-      matching: find.text('扫描与审核'),
-    );
-    expect(scanReviewTab, findsOneWidget);
-    await tester.tap(scanReviewTab);
-    await tester.pumpAndSettle();
 
     // 媒体树为父子嵌套列表：根层节点直接可见，无右侧详情面板。
     expect(find.text('候选电影'), findsOneWidget);
@@ -81,10 +36,7 @@ void main() {
   testWidgets('access workspace switches to paged selected users', (
     tester,
   ) async {
-    await _pumpLibrary(tester, size: const Size(1280, 900));
-
-    await tester.tap(find.text('访问权限'));
-    await tester.pumpAndSettle();
+    await _pumpAccessPanel(tester);
 
     expect(
       find.widgetWithText(RadioListTile<MediaLibraryVisibility>, '私人'),
@@ -143,29 +95,60 @@ void main() {
   });
 }
 
-Future<void> _pumpLibrary(
+Future<void> _pumpReviewWorkspace(
   WidgetTester tester, {
-  required Size size,
-  bool darkMode = false,
   MediaScanRun? reviewRun,
   MediaPage<MediaScanTreeNode>? reviewPage,
   String? reviewChildNodeId,
   MediaPage<MediaScanTreeNode>? reviewChildPage,
 }) async {
-  tester.view.physicalSize = size;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(tester.view.resetPhysicalSize);
-  addTearDown(tester.view.resetDevicePixelRatio);
-
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        videoStorageLocationsProvider.overrideWith(
-          (ref) async => const [_storageLocation],
+        latestMediaScanRunProvider(
+          'movie',
+        ).overrideWith((ref) => Stream.value(reviewRun)),
+        if (reviewRun != null && reviewPage != null)
+          mediaScanTreeProvider((
+            runId: reviewRun.id,
+            parentNodeId: null,
+            page: 0,
+          )).overrideWith((ref) async => reviewPage),
+        if (reviewRun != null &&
+            reviewChildNodeId != null &&
+            reviewChildPage != null)
+          mediaScanTreeProvider((
+            runId: reviewRun.id,
+            parentNodeId: reviewChildNodeId,
+            page: 0,
+          )).overrideWith((ref) async => reviewChildPage),
+      ],
+      child: MaterialApp(
+        theme: OmniNestTheme.light(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('zh'),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 900,
+              child: MediaLibraryReviewWorkspace(
+                source: _librarySources.first,
+                treeHeight: 400,
+              ),
+            ),
+          ),
         ),
-        videoLibrarySourcesProvider.overrideWith(
-          (ref) async => _librarySources,
-        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _pumpAccessPanel(WidgetTester tester) async {
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
         mediaLibraryAccessProvider('movie').overrideWith(
           (ref) async => const MediaLibraryAccessSettings(
             librarySourceId: 'movie',
@@ -190,45 +173,18 @@ Future<void> _pumpLibrary(
             totalPages: 1,
           ),
         ),
-        latestMediaScanRunProvider(
-          'movie',
-        ).overrideWith((ref) => Stream.value(reviewRun)),
-        latestMediaScanRunProvider(
-          'series',
-        ).overrideWith((ref) => Stream.value(null)),
-        unavailableLocalMediaProvider.overrideWith(
-          (ref) async => const MediaPage<MediaUnavailableItem>(
-            items: [],
-            page: 0,
-            size: 50,
-            totalElements: 0,
-            totalPages: 0,
-          ),
-        ),
-        if (reviewRun != null && reviewPage != null)
-          mediaScanTreeProvider((
-            runId: reviewRun.id,
-            parentNodeId: null,
-            page: 0,
-          )).overrideWith((ref) async => reviewPage),
-        if (reviewRun != null &&
-            reviewChildNodeId != null &&
-            reviewChildPage != null)
-          mediaScanTreeProvider((
-            runId: reviewRun.id,
-            parentNodeId: reviewChildNodeId,
-            page: 0,
-          )).overrideWith((ref) async => reviewChildPage),
       ],
       child: MaterialApp(
-        theme: darkMode ? OmniNestTheme.dark() : OmniNestTheme.light(),
+        theme: OmniNestTheme.light(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
-        home: const Scaffold(
-          body: SingleChildScrollView(
-            padding: EdgeInsets.all(16),
-            child: LocalLibrarySourcesPanel(),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 480,
+              child: MediaLibraryAccessPanel(source: _librarySources.first),
+            ),
           ),
         ),
       ),
@@ -236,17 +192,6 @@ Future<void> _pumpLibrary(
   );
   await tester.pumpAndSettle();
 }
-
-const _storageLocation = VideoStorageLocation(
-  id: 'storage',
-  name: '家庭媒体盘',
-  providerType: 'LOCAL_FILESYSTEM',
-  mountKey: 'media',
-  relativeRoot: '.',
-  scopeType: 'SHARED',
-  enabled: true,
-  healthStatus: 'AVAILABLE',
-);
 
 const _librarySources = [
   VideoLibrarySource(
@@ -264,23 +209,6 @@ const _librarySources = [
     lastCreatedCount: 0,
     lastCandidateCount: 3,
     lastMissingCount: 0,
-    version: 0,
-  ),
-  VideoLibrarySource(
-    id: 'series',
-    name: '家庭剧集',
-    storageLocationId: 'storage',
-    relativeRoot: 'TV Series',
-    libraryType: VideoLibraryType.tvSeries,
-    importPolicy: 'MANUAL_REVIEW',
-    visibility: MediaLibraryVisibility.allMembers,
-    enabled: true,
-    scanStatus: 'COMPLETED',
-    healthStatus: 'AVAILABLE',
-    lastScannedCount: 138,
-    lastCreatedCount: 120,
-    lastCandidateCount: 0,
-    lastMissingCount: 1,
     version: 0,
   ),
 ];

@@ -145,9 +145,60 @@ class _LibrarySourcesSectionState
             ],
           ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true || !mounted) return;
     try {
       await ref.read(videoLibrarySourceActionsProvider).delete(source.id);
+    } on Exception catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.adminLoadFailed(error.toString()))),
+        );
+      }
+      return;
+    }
+    if (!mounted) return;
+    // 删除后刷新存储管理视图，计算已无库源引用的孤立挂载位置并提示清理；
+    // 实际删除仍走存储位置删除接口，后端内容引用与业务使用双检查兜底。
+    ref.invalidate(adminStorageProvider);
+    List<AdminStorageLocation> orphans;
+    List<VideoLibrarySource> remainingSources;
+    try {
+      final view = await ref.read(adminStorageProvider.future);
+      if (!mounted) return;
+      remainingSources = await ref.read(videoLibrarySourcesProvider.future);
+      if (!mounted) return;
+      final referencedIds =
+          remainingSources.map((item) => item.storageLocationId).toSet();
+      orphans =
+          view.locations
+              .where((location) => !referencedIds.contains(location.id))
+              .toList();
+    } on Exception {
+      return;
+    }
+    if (!mounted || orphans.isEmpty) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.adminLibraryOrphanLocation(orphans.length)),
+        action:
+            orphans.length == 1
+                ? SnackBarAction(
+                  label: l10n.adminLibraryCleanupOrphan,
+                  onPressed: () => _cleanupOrphanLocation(orphans.first),
+                )
+                : null,
+      ),
+    );
+  }
+
+  /// 删除单个孤立挂载位置；失败时以 snackbar 反馈。
+  Future<void> _cleanupOrphanLocation(AdminStorageLocation location) async {
+    final l10n = AppLocalizations.of(context);
+    try {
+      await ref
+          .read(adminOperationsActionsProvider)
+          .deleteStorageLocation(location.id);
+      ref.invalidate(adminStorageProvider);
     } on Exception catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

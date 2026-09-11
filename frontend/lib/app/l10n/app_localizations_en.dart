@@ -3783,7 +3783,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminType => 'Type';
 
   @override
-  String get adminLocalMount => 'Local Mount';
+  String get adminLocalMount => 'Local (rclone) account';
 
   @override
   String get adminDisplayNameLabel => 'Display Name';
@@ -3884,6 +3884,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminStorageMountsSection => 'Local mount locations';
+
+  @override
+  String get adminTrustedMountsTitle => 'Trusted mounts';
+
+  @override
+  String get adminTrustedMountsSubtitle =>
+      'Mount keys registered in deployment config and their availability on this node. They back mount locations and mount-direct creation.';
+
+  @override
+  String get adminTrustedMountsEmpty =>
+      'No mounts registered in deployment config';
+
+  @override
+  String adminLibraryOrphanLocation(Object count) {
+    return '$count mount location(s) no longer referenced by any library source. Clean them up in the list above.';
+  }
+
+  @override
+  String get adminLibraryCleanupOrphan => 'Clean up mount location';
 
   @override
   String get adminLibraryColumnName => 'Name';
@@ -8272,6 +8291,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get videoDirectoryRoot => 'Root directory';
+
+  @override
+  String get videoSourceFromMount => 'Direct from trusted mount';
+
+  @override
+  String get videoTrustedMountLabel => 'Trusted mount';
+
+  @override
+  String get videoNoTrustedMount => 'No trusted mount available';
+
+  @override
+  String get videoNoTrustedMountHint =>
+      'Register a mount in deployment config first and make sure it is available. The mount root is registered as a storage location automatically on creation.';
+
+  @override
+  String get videoBrowseMountDirectory => 'Browse mount directories';
 
   @override
   String get videoDiscoveryTitle => 'Discovery and import';

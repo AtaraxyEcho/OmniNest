@@ -267,3 +267,26 @@ class _MediaLibraryAccessFormState
     }
   }
 }
+
+String _visibilityLabel(
+  AppLocalizations l10n,
+  MediaLibraryVisibility visibility,
+) {
+  return switch (visibility) {
+    MediaLibraryVisibility.private => l10n.videoLibraryVisibilityPrivate,
+    MediaLibraryVisibility.selectedUsers => l10n.videoLibraryVisibilitySelected,
+    MediaLibraryVisibility.allMembers => l10n.videoLibraryVisibilityMembers,
+  };
+}
+
+String _visibilityHint(
+  AppLocalizations l10n,
+  MediaLibraryVisibility visibility,
+) {
+  return switch (visibility) {
+    MediaLibraryVisibility.private => l10n.videoLibraryVisibilityPrivateHint,
+    MediaLibraryVisibility.selectedUsers =>
+      l10n.videoLibraryVisibilitySelectedHint,
+    MediaLibraryVisibility.allMembers => l10n.videoLibraryVisibilityMembersHint,
+  };
+}

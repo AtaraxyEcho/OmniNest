@@ -7000,7 +7000,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminLocalMount.
   ///
   /// In en, this message translates to:
-  /// **'Local Mount'**
+  /// **'Local (rclone) account'**
   String get adminLocalMount;
 
   /// No description provided for @adminDisplayNameLabel.
@@ -7200,6 +7200,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Local mount locations'**
   String get adminStorageMountsSection;
+
+  /// No description provided for @adminTrustedMountsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Trusted mounts'**
+  String get adminTrustedMountsTitle;
+
+  /// No description provided for @adminTrustedMountsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Mount keys registered in deployment config and their availability on this node. They back mount locations and mount-direct creation.'**
+  String get adminTrustedMountsSubtitle;
+
+  /// No description provided for @adminTrustedMountsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No mounts registered in deployment config'**
+  String get adminTrustedMountsEmpty;
+
+  /// No description provided for @adminLibraryOrphanLocation.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} mount location(s) no longer referenced by any library source. Clean them up in the list above.'**
+  String adminLibraryOrphanLocation(Object count);
+
+  /// No description provided for @adminLibraryCleanupOrphan.
+  ///
+  /// In en, this message translates to:
+  /// **'Clean up mount location'**
+  String get adminLibraryCleanupOrphan;
 
   /// No description provided for @adminLibraryColumnName.
   ///
@@ -15137,6 +15167,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Root directory'**
   String get videoDirectoryRoot;
+
+  /// No description provided for @videoSourceFromMount.
+  ///
+  /// In en, this message translates to:
+  /// **'Direct from trusted mount'**
+  String get videoSourceFromMount;
+
+  /// No description provided for @videoTrustedMountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Trusted mount'**
+  String get videoTrustedMountLabel;
+
+  /// No description provided for @videoNoTrustedMount.
+  ///
+  /// In en, this message translates to:
+  /// **'No trusted mount available'**
+  String get videoNoTrustedMount;
+
+  /// No description provided for @videoNoTrustedMountHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Register a mount in deployment config first and make sure it is available. The mount root is registered as a storage location automatically on creation.'**
+  String get videoNoTrustedMountHint;
+
+  /// No description provided for @videoBrowseMountDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse mount directories'**
+  String get videoBrowseMountDirectory;
 
   /// No description provided for @videoDiscoveryTitle.
   ///
