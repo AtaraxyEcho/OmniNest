@@ -714,7 +714,12 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
                   ],
         ),
       );
-      ref.read(photoDetailMemoryCacheProvider).put(updated);
+      final cache = ref.read(photoDetailMemoryCacheProvider);
+      final cached = cache.get(photoId);
+      // 列表种子通常无 sourceUrl；不得覆盖已有完整详情缓存。
+      cache.put(
+        cached != null ? cached.copyWith(favorite: nextFavorite) : updated,
+      );
     }
     try {
       if (currentFavorite) {

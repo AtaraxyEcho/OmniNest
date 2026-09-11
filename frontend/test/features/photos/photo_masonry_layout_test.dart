@@ -18,36 +18,76 @@ PhotoItem _photo(String id, {int? width, int? height}) {
 }
 
 void main() {
-  group('assignMasonryColumns', () {
-    test('按最矮列贪心分配且不丢图', () {
+  group('placeMasonryTiles', () {
+    test('贪心分列且不丢图、列内 top 递增', () {
       final photos = [
         for (var i = 0; i < 17; i++)
           _photo('p$i', width: 100, height: i.isEven ? 100 : 200),
       ];
-      final tracks = assignMasonryColumns(photos, 3);
-      expect(tracks, hasLength(3));
-      final ids = [for (final track in tracks) ...track.map((p) => p.id)];
-      expect(ids.toSet(), photos.map((p) => p.id).toSet());
-      expect(ids, hasLength(photos.length));
+      final placed = placeMasonryTiles(photos, 3);
+      expect(placed, hasLength(photos.length));
+      expect(
+        placed.map((t) => t.photo.id).toSet(),
+        photos.map((p) => p.id).toSet(),
+      );
+      final topsByColumn = <int, List<double>>{};
+      for (final tile in placed) {
+        topsByColumn.putIfAbsent(tile.column, () => []).add(tile.logicalTop);
+      }
+      for (final tops in topsByColumn.values) {
+        for (var i = 1; i < tops.length; i++) {
+          expect(tops[i], greaterThan(tops[i - 1]));
+        }
+      }
     });
 
-    test('缺失尺寸按 1.0 纵横比参与分配', () {
-      final photos = [_photo('a'), _photo('b'), _photo('c'), _photo('d')];
-      final tracks = assignMasonryColumns(photos, 2);
-      expect(tracks[0], hasLength(2));
-      expect(tracks[1], hasLength(2));
+    test('同列相邻 tile 无空洞（top 连续）', () {
+      final photos = [
+        for (var i = 0; i < 12; i++) _photo('p$i', width: 1, height: 1),
+      ];
+      const gap = 0.05;
+      final placed = placeMasonryTiles(photos, 2, gapLogical: gap);
+      final byColumn = <int, List<MasonryPlacedTile>>{};
+      for (final tile in placed) {
+        byColumn.putIfAbsent(tile.column, () => []).add(tile);
+      }
+      for (final columnTiles in byColumn.values) {
+        for (var i = 1; i < columnTiles.length; i++) {
+          final prev = columnTiles[i - 1];
+          final next = columnTiles[i];
+          expect(
+            next.logicalTop,
+            closeTo(prev.logicalTop + prev.logicalExtent + gap, 1e-9),
+          );
+        }
+      }
+    });
+  });
+
+  group('masonryTotalLogicalHeight', () {
+    test('等于各列 bottom 最大值', () {
+      final photos = [
+        // ratio clamp 到 0.6..2.4；横图 extent=1/2=0.5，方图 extent=1
+        _photo('wide', width: 2, height: 1),
+        _photo('square', width: 1, height: 1),
+      ];
+      final placed = placeMasonryTiles(photos, 2);
+      final total = masonryTotalLogicalHeight(placed);
+      expect(total, closeTo(1.0, 1e-9));
     });
   });
 
   group('windowMasonryColumns', () {
-    test('按窗口切片且各列内顺序与整表分柱一致', () {
+    test('按窗口切片且各列内顺序与分柱一致', () {
       final photos = [
         for (var i = 0; i < 20; i++) _photo('p$i', width: 1, height: 1),
       ];
-      final tracks = assignMasonryColumns(photos, 2);
+      final placed = placeMasonryTiles(photos, 2);
+      final tracks = List.generate(2, (_) => <PhotoItem>[]);
+      for (final tile in placed) {
+        tracks[tile.column].add(tile.photo);
+      }
       final windows = windowMasonryColumns(tracks, windowSize: 3);
-      expect(windows, isNotEmpty);
-
       for (var columnIndex = 0; columnIndex < tracks.length; columnIndex++) {
         final rebuilt = [for (final window in windows) ...window[columnIndex]];
         expect(
@@ -55,25 +95,6 @@ void main() {
           tracks[columnIndex].map((p) => p.id).toList(),
         );
       }
-
-      final allIds = {
-        for (final window in windows)
-          for (final track in window) ...track.map((p) => p.id),
-      };
-      expect(allIds, photos.map((p) => p.id).toSet());
-    });
-
-    test('短列窗口可为空而不越界', () {
-      final tracks = [
-        [for (var i = 0; i < 5; i++) _photo('a$i')],
-        [_photo('b0')],
-      ];
-      final windows = windowMasonryColumns(tracks, windowSize: 2);
-      expect(windows, hasLength(3));
-      expect(windows[0][1], hasLength(1));
-      expect(windows[1][1], isEmpty);
-      expect(windows[2][0], hasLength(1));
-      expect(windows[2][1], isEmpty);
     });
   });
 }

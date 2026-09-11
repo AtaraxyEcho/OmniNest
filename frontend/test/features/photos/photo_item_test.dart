@@ -2,6 +2,23 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
 void main() {
+  test('copyWith 仅覆盖收藏标志并保持不变字段', () {
+    final photo = PhotoItem.fromJson(<String, dynamic>{
+      'id': 'photo-1',
+      'fileNodeId': 'file-1',
+      'title': 'a.jpg',
+      'favorite': false,
+      'sourceUrl': 'https://example.test/a.jpg?sig=1',
+      'width': 100,
+      'height': 50,
+    });
+    final liked = photo.copyWith(favorite: true);
+    expect(liked.favorite, isTrue);
+    expect(liked.sourceUrl, photo.sourceUrl);
+    expect(liked.width, 100);
+    expect(identical(photo, photo.copyWith(favorite: false)), isTrue);
+  });
+
   test('照片详情源图使用稳定缓存键', () {
     final photo = PhotoItem.fromJson(<String, dynamic>{
       'id': 'photo-source',

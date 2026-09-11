@@ -8,16 +8,16 @@ import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.d
 import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_masonry_layout.dart';
 
-/// 每列每窗最多构建的图格数；整窗约 columns × 该值，控制视口附近 build 量。
-const int _masonryWindowPerColumn = 8;
+const double _masonryColumnGap = 10;
+const double _masonryTileGap = 10;
 
 /// Frame 瀑布流网格：按设计稿 CSS columns 布局。
 ///
 /// 默认 4 列，容器 ≤1280px 时 3 列，≤900px 时 2 列；列距 10px、
 /// 图格下边距 10px、容器内边距 16px（md 及以上 24px）。
 ///
-/// 整表贪心分柱只在列表/列数变化时计算；渲染按垂直窗口懒构建，
-/// 避免大图库一次性 build 全部 [PhotoGridTile]。
+/// 全表贪心分柱只在列表/列数变化时计算；渲染用 [SliverLayoutBuilder]
+/// 按滚动视口裁剪，只构建可见 [PhotoGridTile]，列坐标连续无空洞。
 class FrameMasonryGrid extends ConsumerStatefulWidget {
   const FrameMasonryGrid({
     required this.photos,
@@ -45,23 +45,23 @@ class FrameMasonryGrid extends ConsumerStatefulWidget {
 class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
   List<PhotoItem>? _layoutPhotos;
   int _layoutColumns = 0;
+  double _layoutColumnWidth = 0;
   bool _hasLayout = false;
-  List<List<List<PhotoItem>>> _windows = const [];
+  List<MasonryPlacedTile> _placed = const [];
 
-  void _ensureLayout(int columns) {
+  void _ensureLayout(int columns, double columnWidth) {
     if (_hasLayout &&
         identical(_layoutPhotos, widget.photos) &&
-        _layoutColumns == columns) {
+        _layoutColumns == columns &&
+        (_layoutColumnWidth - columnWidth).abs() < 0.01) {
       return;
     }
     _layoutPhotos = widget.photos;
     _layoutColumns = columns;
+    _layoutColumnWidth = columnWidth;
     _hasLayout = true;
-    final tracks = assignMasonryColumns(widget.photos, columns);
-    _windows = windowMasonryColumns(
-      tracks,
-      windowSize: _masonryWindowPerColumn,
-    );
+    final gapLogical = columnWidth <= 0 ? 0.0 : _masonryTileGap / columnWidth;
+    _placed = placeMasonryTiles(widget.photos, columns, gapLogical: gapLogical);
   }
 
   int _columnCountFor(double width) {
@@ -123,85 +123,74 @@ class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
               builder: (context, constraints) {
                 final padding = constraints.crossAxisExtent > 768 ? 24.0 : 16.0;
                 final columns = _columnCountFor(constraints.crossAxisExtent);
-                _ensureLayout(columns);
-                final windows = _windows;
-                return SliverPadding(
-                  padding: EdgeInsets.all(padding),
-                  sliver: SliverList.builder(
-                    itemCount: windows.length,
-                    itemBuilder: (context, windowIndex) {
-                      final windowTracks = windows[windowIndex];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            for (
-                              var columnIndex = 0;
-                              columnIndex < windowTracks.length;
-                              columnIndex++
-                            ) ...[
-                              if (columnIndex > 0) const SizedBox(width: 10),
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    for (final photo
-                                        in windowTracks[columnIndex])
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 10,
-                                        ),
-                                        child: PhotoGridTile(
-                                          key: ValueKey(photo.id),
-                                          photo: photo,
-                                          aspectRatio: photoMasonryAspectRatio(
-                                            photo,
-                                          ),
-                                          enableHero: true,
-                                          isSelectionMode: isSelectionMode,
-                                          isSelected: selectedIds.contains(
-                                            photo.id,
-                                          ),
-                                          onTap: () {
-                                            if (isSelectionMode) {
-                                              ref
-                                                  .read(
-                                                    photoCenterControllerProvider
-                                                        .notifier,
-                                                  )
-                                                  .togglePhotoSelection(
-                                                    photo.id,
-                                                  );
-                                            } else {
-                                              widget.onOpenPhoto(photo);
-                                            }
-                                          },
-                                          onLongPress: () {
-                                            HapticFeedback.mediumImpact();
-                                            _toggleSelect(
-                                              photo,
-                                              isSelectionMode,
-                                            );
-                                          },
-                                          onToggleSelection:
-                                              () => _toggleSelect(
-                                                photo,
-                                                isSelectionMode,
-                                              ),
-                                          onToggleFavorite:
-                                              () => widget.onToggleFavorite(
-                                                photo,
-                                              ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    },
+                final contentWidth = (constraints.crossAxisExtent - padding * 2)
+                    .clamp(0.0, double.infinity);
+                final columnWidth =
+                    columns <= 0
+                        ? 0.0
+                        : (contentWidth - _masonryColumnGap * (columns - 1)) /
+                            columns;
+                _ensureLayout(columns, columnWidth);
+                final placed = _placed;
+                final totalHeight =
+                    columnWidth * masonryTotalLogicalHeight(placed);
+                // 视口 + 固定预取，滚动时仅构建相交 tile。
+                const cachePad = 600.0;
+                final cacheTop = (constraints.scrollOffset - cachePad)
+                    .clamp(0.0, double.infinity);
+                final cacheBottom =
+                    constraints.scrollOffset +
+                    constraints.remainingPaintExtent +
+                    cachePad;
+                final visible = <Widget>[];
+                for (final tile in placed) {
+                  final top = tile.logicalTop * columnWidth;
+                  final height = tile.logicalExtent * columnWidth;
+                  if (top + height < cacheTop || top > cacheBottom) {
+                    continue;
+                  }
+                  final left = tile.column * (columnWidth + _masonryColumnGap);
+                  visible.add(
+                    Positioned(
+                      key: ValueKey(tile.photo.id),
+                      left: left,
+                      top: top,
+                      width: columnWidth,
+                      height: height,
+                      child: PhotoGridTile(
+                        photo: tile.photo,
+                        enableHero: true,
+                        isSelectionMode: isSelectionMode,
+                        isSelected: selectedIds.contains(tile.photo.id),
+                        onTap: () {
+                          if (isSelectionMode) {
+                            ref
+                                .read(photoCenterControllerProvider.notifier)
+                                .togglePhotoSelection(tile.photo.id);
+                          } else {
+                            widget.onOpenPhoto(tile.photo);
+                          }
+                        },
+                        onLongPress: () {
+                          HapticFeedback.mediumImpact();
+                          _toggleSelect(tile.photo, isSelectionMode);
+                        },
+                        onToggleSelection:
+                            () => _toggleSelect(tile.photo, isSelectionMode),
+                        onToggleFavorite:
+                            () => widget.onToggleFavorite(tile.photo),
+                      ),
+                    ),
+                  );
+                }
+                return SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(padding),
+                    child: SizedBox(
+                      height: totalHeight > 0 ? totalHeight : 1,
+                      width: contentWidth,
+                      child: Stack(clipBehavior: Clip.none, children: visible),
+                    ),
                   ),
                 );
               },

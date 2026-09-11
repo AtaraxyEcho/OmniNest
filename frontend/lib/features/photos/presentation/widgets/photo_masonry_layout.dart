@@ -10,33 +10,71 @@ double photoMasonryAspectRatio(PhotoItem photo) {
   return (width / height).clamp(0.6, 2.4);
 }
 
-/// 将照片按纵横比贪心分配到最矮列，复刻 CSS columns 顺序铺排。
+/// 瀑布流中一张图的逻辑布局：逻辑高以「列宽 = 1」为单位。
+class MasonryPlacedTile {
+  const MasonryPlacedTile({
+    required this.photo,
+    required this.column,
+    required this.logicalTop,
+    required this.logicalExtent,
+  });
+
+  final PhotoItem photo;
+  final int column;
+  final double logicalTop;
+  final double logicalExtent;
+}
+
+/// 将照片按纵横比贪心分配到最矮列，并计算连续列坐标。
 ///
-/// 仅在列表引用或列数变化时调用；返回与 [columns] 等长的列数组。
-List<List<PhotoItem>> assignMasonryColumns(
+/// [gapLogical] 为图格间距与列宽之比（例如 10px 间距、200px 列宽 → 0.05），
+/// 计入高度累计，保证同列相邻 tile 紧贴且跨任意切片都不出现空洞。
+List<MasonryPlacedTile> placeMasonryTiles(
   List<PhotoItem> photos,
-  int columns,
-) {
+  int columns, {
+  double gapLogical = 0,
+}) {
   final trackCount = columns.clamp(1, 12);
-  final tracks = List.generate(trackCount, (_) => <PhotoItem>[]);
-  final trackHeights = List.filled(trackCount, 0.0);
+  final tops = List.filled(trackCount, 0.0);
+  final placed = <MasonryPlacedTile>[];
   for (final photo in photos) {
-    final ratio = photoMasonryAspectRatio(photo);
+    final extent = 1 / photoMasonryAspectRatio(photo);
     var shortest = 0;
-    for (var i = 1; i < trackHeights.length; i++) {
-      if (trackHeights[i] < trackHeights[shortest]) {
+    for (var i = 1; i < trackCount; i++) {
+      if (tops[i] < tops[shortest]) {
         shortest = i;
       }
     }
-    tracks[shortest].add(photo);
-    trackHeights[shortest] += 1 / ratio;
+    placed.add(
+      MasonryPlacedTile(
+        photo: photo,
+        column: shortest,
+        logicalTop: tops[shortest],
+        logicalExtent: extent,
+      ),
+    );
+    // 最后一张后不再追加间距，避免总高度虚高一截。
+    tops[shortest] += extent + gapLogical;
   }
-  return tracks;
+  return placed;
+}
+
+/// 全表瀑布流总逻辑高度。
+double masonryTotalLogicalHeight(List<MasonryPlacedTile> tiles) {
+  var maxBottom = 0.0;
+  for (final tile in tiles) {
+    final bottom = tile.logicalTop + tile.logicalExtent;
+    if (bottom > maxBottom) {
+      maxBottom = bottom;
+    }
+  }
+  return maxBottom;
 }
 
 /// 将已分柱结果按「每列最多 [windowSize] 张」切成垂直窗口。
 ///
-/// 窗口 i 同时截取各列的第 i 段，保持列内相对顺序与跨窗口的列布局连续。
+/// 仅用于测试与兼容；生产渲染请使用 [placeMasonryTiles] + 视口裁剪，
+/// 避免按行窗口切片导致同列在窗口边界出现高度空洞。
 List<List<List<PhotoItem>>> windowMasonryColumns(
   List<List<PhotoItem>> tracks, {
   required int windowSize,
