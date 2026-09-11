@@ -102,8 +102,10 @@ class StorageLocationServiceTest {
         Mockito.when(locationRepository.findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
                 "media", ".", "SYSTEM")).thenReturn(java.util.Optional.of(existing));
 
-        assertThat(service.findOrCreateSystemLocation(UUID.randomUUID(), "media", "."))
-                .isSameAs(existing);
+        var resolution = service.findOrCreateSystemLocation(UUID.randomUUID(), "media", ".");
+
+        assertThat(resolution.location()).isSameAs(existing);
+        assertThat(resolution.created()).isFalse();
         Mockito.verifyNoInteractions(locationInserter);
     }
 
@@ -130,8 +132,10 @@ class StorageLocationServiceTest {
         Mockito.when(locationInserter.insert(Mockito.any(StorageLocation.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        StorageLocation created = service.findOrCreateSystemLocation(UUID.randomUUID(), "media", ".");
+        var resolution = service.findOrCreateSystemLocation(UUID.randomUUID(), "media", ".");
 
+        assertThat(resolution.created()).isTrue();
+        StorageLocation created = resolution.location();
         assertThat(created.getMountKey()).isEqualTo("media");
         assertThat(created.getRelativeRoot()).isEqualTo(".");
         assertThat(created.getName()).isEqualTo("media");
@@ -139,6 +143,24 @@ class StorageLocationServiceTest {
         assertThat(created.isEnabled()).isTrue();
         Mockito.verify(pathResolver).resolveLocationRoot(created);
         Mockito.verify(locationInserter).insert(created);
+    }
+
+    @Test
+    void findOrCreateSystemLocationTruncatesAutoNameByCodePoints() {
+        Mockito.when(runtimeConfigService.isEnabled()).thenReturn(true);
+        String longSegment = "影".repeat(200);
+        Mockito.when(locationRepository.findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
+                Mockito.eq("media"), Mockito.eq(longSegment), Mockito.eq("SYSTEM")))
+                .thenReturn(java.util.Optional.empty());
+        Mockito.when(locationInserter.insert(Mockito.any(StorageLocation.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var resolution = service.findOrCreateSystemLocation(UUID.randomUUID(), "media", longSegment);
+
+        String name = resolution.location().getName();
+        assertThat(name.codePointCount(0, name.length())).isEqualTo(160);
+        assertThat(name).startsWith("media/");
+        assertThat(name.chars().noneMatch(value -> Character.isSurrogate((char) value))).isTrue();
     }
 
     @Test
@@ -152,8 +174,10 @@ class StorageLocationServiceTest {
         Mockito.when(locationInserter.insert(Mockito.any(StorageLocation.class)))
                 .thenThrow(new org.springframework.dao.DataIntegrityViolationException("唯一键冲突"));
 
-        assertThat(service.findOrCreateSystemLocation(UUID.randomUUID(), "media", "."))
-                .isSameAs(winner);
+        var resolution = service.findOrCreateSystemLocation(UUID.randomUUID(), "media", ".");
+
+        assertThat(resolution.location()).isSameAs(winner);
+        assertThat(resolution.created()).isFalse();
     }
 
     private StorageLocation systemLocation(String mountKey, String relativeRoot) {

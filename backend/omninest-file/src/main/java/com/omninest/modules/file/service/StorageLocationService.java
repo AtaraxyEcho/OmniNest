@@ -206,14 +206,14 @@ public class StorageLocationService {
      *
      * <p>命中同挂载与相对根的系统级位置时直接复用；未命中时在独立事务中创建，
      * 并发撞唯一键时回查返回既有记录。创建的记录独立提交，调用方后续业务失败
-     * 可能留下无引用位置，属可接受的幂等残留。</p>
+     * 时应通过 rollbackAutoCreatedLocation 清理本次新建且无引用的位置。</p>
      *
      * @param operatorId 操作用户 ID
      * @param mountKey 部署可信挂载键
      * @param relativeRoot 位置相对根目录
-     * @return 已存在或新建的系统级存储位置
+     * @return 位置与本次是否新建的判定结果
      */
-    public StorageLocation findOrCreateSystemLocation(UUID operatorId, String mountKey, String relativeRoot) {
+    public SystemLocationResolution findOrCreateSystemLocation(UUID operatorId, String mountKey, String relativeRoot) {
         ensureRuntimeEnabled();
         String normalizedMountKey = normalizeMountKey(mountKey);
         String normalizedRoot = normalizeRelativeRoot(relativeRoot);
@@ -225,7 +225,7 @@ public class StorageLocationService {
             if (!existing.isEnabled()) {
                 throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "存储位置已停用");
             }
-            return existing;
+            return new SystemLocationResolution(existing, false);
         }
         StorageLocation location = new StorageLocation();
         location.setName(autoLocationName(normalizedMountKey, normalizedRoot));
@@ -239,23 +239,47 @@ public class StorageLocationService {
         location.setCreatedBy(operatorId);
         validateLocation(location);
         try {
-            return locationInserter.insert(location);
+            return new SystemLocationResolution(locationInserter.insert(location), true);
         } catch (DataIntegrityViolationException exception) {
             return storageLocationRepository
                     .findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
                             normalizedMountKey, normalizedRoot, SYSTEM)
+                    .map(found -> new SystemLocationResolution(found, false))
                     .orElseThrow(() -> exception);
         }
     }
 
     /**
-     * 自动生成位置显示名：挂载根直接用挂载键，子目录用挂载键加末段，超长截断。
+     * 回滚挂载直达本次自动创建的存储位置：仍被内容引用或业务来源引用时跳过。
+     *
+     * <p>必须在独立事务中执行判定与删除，避免外层失败事务中止后无法继续查询；
+     * 判定与删除之间存在极小的并发窗口（他方恰在此时引用该位置），由引用方
+     * 后续健康检查暴露，不做悲观锁。</p>
+     *
+     * @param locationId 自动创建的存储位置 ID
+     */
+    public void rollbackAutoCreatedLocation(UUID locationId) {
+        locationInserter.deleteIfUnreferenced(locationId);
+    }
+
+    /**
+     * find-or-create 结果：位置与本次调用是否新建，供调用方决定失败清理。
+     */
+    public record SystemLocationResolution(StorageLocation location, boolean created) {
+    }
+
+    /**
+     * 自动生成位置显示名：挂载根直接用挂载键，子目录用挂载键加末段；
+     * 按 Unicode 码点截断至 160，避免切断代理项对。
      */
     private String autoLocationName(String mountKey, String relativeRoot) {
         String name = ".".equals(relativeRoot)
                 ? mountKey
                 : mountKey + "/" + Path.of(relativeRoot).getFileName();
-        return name.length() > 160 ? name.substring(0, 160) : name;
+        if (name.codePointCount(0, name.length()) <= 160) {
+            return name;
+        }
+        return new String(name.codePoints().limit(160).toArray(), 0, 160);
     }
 
     private StorageLocation requireLocation(UUID locationId) {

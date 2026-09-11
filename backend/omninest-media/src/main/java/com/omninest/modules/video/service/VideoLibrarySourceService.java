@@ -64,7 +64,41 @@ public class VideoLibrarySourceService {
     @Transactional(rollbackFor = Exception.class)
     public VideoLibrarySourceDto create(UUID operatorUserId, CreateVideoLibrarySourceRequest request) {
         accessService.requireManagePermission(operatorUserId);
-        UUID storageLocationId = resolveStorageLocationId(operatorUserId, request);
+        boolean hasLocationId = request.storageLocationId() != null;
+        boolean hasMountKey = request.mountKey() != null && !request.mountKey().isBlank();
+        if (hasLocationId == hasMountKey) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "storageLocationId 与 mountKey 必须二选一");
+        }
+        StorageLocation autoCreated = null;
+        UUID storageLocationId;
+        if (hasMountKey) {
+            accessService.requireSystemConfigManage(operatorUserId);
+            StorageLocationService.SystemLocationResolution resolution =
+                    storageLocationService.findOrCreateSystemLocation(operatorUserId, request.mountKey(), ".");
+            autoCreated = resolution.created() ? resolution.location() : null;
+            storageLocationId = resolution.location().getId();
+        } else {
+            storageLocationId = request.storageLocationId();
+        }
+        try {
+            return persistNewSource(operatorUserId, request, storageLocationId);
+        } catch (RuntimeException exception) {
+            if (autoCreated != null) {
+                // 外层事务即将回滚；本次自动创建的位置在独立事务中按无引用条件清理，
+                // 复用既有位置（created=false）不清理。清理与他方并发引用之间的极小
+                // 窗口由位置健康检查暴露，不做悲观锁。
+                storageLocationService.rollbackAutoCreatedLocation(autoCreated.getId());
+            }
+            throw exception;
+        }
+    }
+
+    /** 持久化新来源；权限与位置解析已由调用方完成。 */
+    private VideoLibrarySourceDto persistNewSource(
+            UUID operatorUserId,
+            CreateVideoLibrarySourceRequest request,
+            UUID storageLocationId
+    ) {
         StorageLocation location = storageLocationService.requireAccessibleLocation(
                 operatorUserId,
                 storageLocationId
@@ -86,26 +120,6 @@ public class VideoLibrarySourceService {
         source.setScanStatus("NEVER_SCANNED");
         source.setHealthStatus(request.enabled() ? "AVAILABLE" : "DISABLED");
         return toDto(sourceRepository.save(source));
-    }
-
-    /**
-     * 解析来源归属的存储位置：storageLocationId 与 mountKey 二选一。
-     * mountKey 分支要求调用者额外持有系统配置管理权限，并在挂载根查找或创建
-     * 系统级存储位置；位置记录独立提交，来源创建失败时可能留下可复用的幂等残留。
-     */
-    private UUID resolveStorageLocationId(UUID operatorUserId, CreateVideoLibrarySourceRequest request) {
-        boolean hasLocationId = request.storageLocationId() != null;
-        boolean hasMountKey = request.mountKey() != null && !request.mountKey().isBlank();
-        if (hasLocationId == hasMountKey) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "storageLocationId 与 mountKey 必须二选一");
-        }
-        if (hasLocationId) {
-            return request.storageLocationId();
-        }
-        accessService.requireSystemConfigManage(operatorUserId);
-        return storageLocationService
-                .findOrCreateSystemLocation(operatorUserId, request.mountKey(), ".")
-                .getId();
     }
 
     /**

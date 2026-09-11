@@ -215,7 +215,7 @@ class VideoLibrarySourceServiceTest {
     void createWithMountKeyDelegatesToFindOrCreateSystemLocation() {
         StorageLocation rootLocation = systemLocation(OTHER_LOCATION_ID, "media", ".");
         when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
-                .thenReturn(rootLocation);
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, true));
         when(storageLocationService.requireAccessibleLocation(OWNER_ID, OTHER_LOCATION_ID))
                 .thenReturn(rootLocation);
         when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
@@ -239,6 +239,73 @@ class VideoLibrarySourceServiceTest {
         assertThat(result.relativeRoot()).isEqualTo("Movies");
         verify(accessService).requireSystemConfigManage(OWNER_ID);
         verify(storageLocationService).findOrCreateSystemLocation(OWNER_ID, "media", ".");
+        verify(storageLocationService, never()).rollbackAutoCreatedLocation(any());
+    }
+
+    @Test
+    void createWithMountKeyRollsBackAutoCreatedLocationOnFailure() {
+        StorageLocation rootLocation = systemLocation(OTHER_LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, true));
+        when(storageLocationService.requireAccessibleLocation(OWNER_ID, OTHER_LOCATION_ID))
+                .thenReturn(rootLocation);
+        // 同挂载已有重叠库源，创建在冲突检查处失败。
+        StorageLocation wizardLocation = systemLocation(LOCATION_ID, "media", "Movies");
+        VideoLibrarySource existing = source("READY");
+        existing.setStorageLocationId(LOCATION_ID);
+        existing.setRelativeRoot(".");
+        when(storageLocationService.listByMountKeyForBusiness("media"))
+                .thenReturn(List.of(wizardLocation, rootLocation));
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(existing));
+        when(sourceRepository.findByStorageLocationId(OTHER_LOCATION_ID)).thenReturn(List.of());
+
+        CreateVideoLibrarySourceRequest request = new CreateVideoLibrarySourceRequest(
+                "直达电影",
+                "media",
+                null,
+                "Movies",
+                MediaLibraryType.MOVIE,
+                MediaImportPolicy.MANUAL_REVIEW,
+                true
+        );
+
+        assertThatThrownBy(() -> service.create(OWNER_ID, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("重复或重叠");
+        verify(storageLocationService).rollbackAutoCreatedLocation(OTHER_LOCATION_ID);
+    }
+
+    @Test
+    void createWithMountKeyFailureKeepsReusedLocation() {
+        StorageLocation rootLocation = systemLocation(OTHER_LOCATION_ID, "media", ".");
+        // 命中既有位置（created=false），失败时不做回滚清理。
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, false));
+        when(storageLocationService.requireAccessibleLocation(OWNER_ID, OTHER_LOCATION_ID))
+                .thenReturn(rootLocation);
+        StorageLocation wizardLocation = systemLocation(LOCATION_ID, "media", "Movies");
+        VideoLibrarySource existing = source("READY");
+        existing.setStorageLocationId(LOCATION_ID);
+        existing.setRelativeRoot(".");
+        when(storageLocationService.listByMountKeyForBusiness("media"))
+                .thenReturn(List.of(wizardLocation, rootLocation));
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(existing));
+        when(sourceRepository.findByStorageLocationId(OTHER_LOCATION_ID)).thenReturn(List.of());
+
+        CreateVideoLibrarySourceRequest request = new CreateVideoLibrarySourceRequest(
+                "直达电影",
+                "media",
+                null,
+                "Movies",
+                MediaLibraryType.MOVIE,
+                MediaImportPolicy.MANUAL_REVIEW,
+                true
+        );
+
+        assertThatThrownBy(() -> service.create(OWNER_ID, request))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("重复或重叠");
+        verify(storageLocationService, never()).rollbackAutoCreatedLocation(any());
     }
 
     private StorageLocation systemLocation(UUID locationId, String mountKey, String relativeRoot) {
