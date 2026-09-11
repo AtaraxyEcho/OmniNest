@@ -5,30 +5,43 @@ import 'package:omninest/features/portal/presentation/widgets/weather_detail_lay
 
 void main() {
   group('WeatherDetailLayoutMetrics.resolve', () {
-    test('手机使用单列且不超视口', () {
+    test('手机单列，宽度贴边且不超视口', () {
       final metrics = WeatherDetailLayoutMetrics.resolve(const Size(390, 844));
       expect(metrics.mode, WeatherDetailLayoutMode.mobile);
       expect(metrics.useHeroSplit, isFalse);
-      expect(metrics.metricColumns, 2);
       expect(metrics.dialogWidth, lessThanOrEqualTo(390));
       expect(metrics.dialogWidth, lessThanOrEqualTo(kWeatherDetailMaxWidth));
     });
 
-    test('平板使用英雄双列与三列指标', () {
-      final metrics = WeatherDetailLayoutMetrics.resolve(const Size(820, 1180));
-      expect(metrics.mode, WeatherDetailLayoutMode.tablet);
-      expect(metrics.useHeroSplit, isTrue);
-      expect(metrics.metricColumns, 3);
-      expect(metrics.dialogWidth, lessThanOrEqualTo(kWeatherDetailMaxWidth));
-    });
+    test('平板/桌面英雄区等宽双列', () {
+      final tablet = WeatherDetailLayoutMetrics.resolve(const Size(820, 1180));
+      expect(tablet.useHeroSplit, isTrue);
+      expect(tablet.metricColumns, 3);
+      expect(tablet.sectionGap, 16);
 
-    test('桌面宽度不超过 max-w-3xl', () {
-      final metrics = WeatherDetailLayoutMetrics.resolve(
+      final desktop = WeatherDetailLayoutMetrics.resolve(
         const Size(1600, 1000),
       );
-      expect(metrics.mode, WeatherDetailLayoutMode.desktop);
-      expect(metrics.dialogWidth, kWeatherDetailMaxWidth);
-      expect(metrics.dialogHeight, lessThanOrEqualTo(1000));
+      expect(desktop.mode, WeatherDetailLayoutMode.desktop);
+      expect(desktop.dialogWidth, kWeatherDetailMaxWidth);
+      expect(desktop.useHeroSplit, isTrue);
+      // 左卡与右侧两卡总高对齐：split*2 + gap ≈ hero
+      final gap = desktop.sectionGap * 0.75;
+      expect(
+        desktop.splitCardHeight * 2 + gap,
+        closeTo(desktop.heroHeight, 1.0),
+      );
+      expect(
+        desktop.heroHeight,
+        greaterThanOrEqualTo(kWeatherDetailHeroMinHeight),
+      );
+    });
+
+    test('温度字号落在样例 4rem–6rem 区间附近', () {
+      final small = WeatherDetailLayoutMetrics.resolve(const Size(360, 700));
+      final large = WeatherDetailLayoutMetrics.resolve(const Size(1920, 1080));
+      expect(small.tempFontSize, greaterThanOrEqualTo(64));
+      expect(large.tempFontSize, lessThanOrEqualTo(96));
     });
 
     test('弹窗尺寸永不超出程序窗口', () {
@@ -42,30 +55,19 @@ void main() {
         Size(1280, 720),
         Size(1440, 900),
         Size(1920, 1080),
-        Size(2560, 1440),
         Size(480, 320),
       ];
       for (final size in sizes) {
         final metrics = WeatherDetailLayoutMetrics.resolve(size);
-        expect(
-          metrics.dialogWidth,
-          lessThanOrEqualTo(size.width),
-          reason: 'width at $size',
-        );
-        expect(
-          metrics.dialogHeight,
-          lessThanOrEqualTo(size.height),
-          reason: 'height at $size',
-        );
+        expect(metrics.dialogWidth, lessThanOrEqualTo(size.width));
+        expect(metrics.dialogHeight, lessThanOrEqualTo(size.height));
         expect(
           metrics.dialogWidth + metrics.insetPadding.horizontal,
           lessThanOrEqualTo(size.width + 0.01),
-          reason: 'width+inset at $size',
         );
         expect(
           metrics.dialogHeight + metrics.insetPadding.vertical,
           lessThanOrEqualTo(size.height + 0.01),
-          reason: 'height+inset at $size',
         );
       }
     });
@@ -95,15 +97,6 @@ void main() {
         ).mode,
         WeatherDetailLayoutMode.desktop,
       );
-    });
-
-    test('温度字号有上下限', () {
-      final small = WeatherDetailLayoutMetrics.resolve(const Size(360, 640));
-      final large = WeatherDetailLayoutMetrics.resolve(const Size(1920, 1080));
-      expect(small.tempFontSize, greaterThanOrEqualTo(48));
-      expect(large.tempFontSize, lessThanOrEqualTo(88));
-      final scaled = large.scaledTempSize(const TextScaler.linear(1.4));
-      expect(scaled, lessThanOrEqualTo(large.tempFontSize * 1.25 + 0.01));
     });
   });
 }

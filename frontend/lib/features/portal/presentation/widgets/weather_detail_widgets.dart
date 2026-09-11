@@ -40,10 +40,10 @@ _TipData? _resolveTip(WeatherData w, AppLocalizations l10n) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 玻璃卡片与指标
+// 玻璃卡片
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// 样例中的 GlassCard：半透明白底 + 描边 + 模糊。
+/// 样例 GlassCard：rounded-2xl + white/10 + blur。
 class _GlassCard extends StatelessWidget {
   const _GlassCard({
     required this.child,
@@ -60,13 +60,13 @@ class _GlassCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
-      borderRadius: BorderRadius.circular(radius - 8),
+      borderRadius: BorderRadius.circular(radius),
       child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: tint ?? Colors.white.withValues(alpha: 0.10),
-            borderRadius: BorderRadius.circular(radius - 8),
+            borderRadius: BorderRadius.circular(radius),
             border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
           ),
           child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
@@ -76,6 +76,7 @@ class _GlassCard extends StatelessWidget {
   }
 }
 
+/// 样例 MetricItem：p-4，标签 xs，数值 xl。
 class _MetricCell extends StatelessWidget {
   const _MetricCell({
     required this.icon,
@@ -92,14 +93,14 @@ class _MetricCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
-              Icon(icon, size: 14, color: Colors.white.withValues(alpha: 0.45)),
+              Icon(icon, size: 13, color: Colors.white.withValues(alpha: 0.45)),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -108,7 +109,6 @@ class _MetricCell extends StatelessWidget {
                     fontSize: AppTypography.labelSmall,
                     fontWeight: FontWeight.w500,
                     color: Colors.white.withValues(alpha: 0.45),
-                    letterSpacing: 0.4,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -116,23 +116,16 @@ class _MetricCell extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Flexible(
-                child: Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: AppTypography.titleMedium,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                    height: 1.0,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: AppTypography.titleMedium,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              height: 1.05,
+            ),
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
           ),
           if (trailing != null) ...[const SizedBox(height: 8), trailing!],
         ],
@@ -141,10 +134,9 @@ class _MetricCell extends StatelessWidget {
   }
 }
 
-/// UV 色带，对齐样例 UvBar。
+/// 样例 UvBar。
 Widget _buildUvBar(int value) {
-  const maxUv = 11;
-  final pct = (value / maxUv).clamp(0.0, 1.0);
+  final pct = (value / 11).clamp(0.0, 1.0);
   final color = switch (value) {
     <= 2 => const Color(0xFF4ADE80),
     <= 5 => const Color(0xFFFACC15),
@@ -156,10 +148,12 @@ Widget _buildUvBar(int value) {
     child: ClipRRect(
       borderRadius: BorderRadius.circular(3),
       child: Stack(
+        fit: StackFit.expand,
         children: [
           ColoredBox(color: Colors.white.withValues(alpha: 0.15)),
           FractionallySizedBox(
             widthFactor: pct,
+            alignment: Alignment.centerLeft,
             child: ColoredBox(color: color),
           ),
         ],
@@ -168,31 +162,33 @@ Widget _buildUvBar(int value) {
   );
 }
 
+/// 样例昼夜/日出单元：py-4 px-3，图标 2xl，数值 xl/base。
 class _SplitMoment extends StatelessWidget {
   const _SplitMoment({
     required this.icon,
     required this.label,
     required this.value,
+    this.valueSize = AppTypography.titleMedium,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final double valueSize;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       child: Column(
-        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 22, color: Colors.white.withValues(alpha: 0.9)),
+          Icon(icon, size: 24, color: Colors.white.withValues(alpha: 0.92)),
           const SizedBox(height: 6),
           Text(
             label,
             style: TextStyle(
-              fontSize: AppTypography.labelSmall,
+              fontSize: AppTypography.bodySmall,
               color: Colors.white.withValues(alpha: 0.40),
             ),
             maxLines: 1,
@@ -202,11 +198,11 @@ class _SplitMoment extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
-              fontSize: AppTypography.titleMedium,
+            style: TextStyle(
+              fontSize: valueSize,
               fontWeight: FontWeight.w600,
               color: Colors.white,
-              height: 1.0,
+              height: 1.1,
             ),
           ),
         ],
@@ -215,13 +211,13 @@ class _SplitMoment extends StatelessWidget {
   }
 }
 
-Widget _vDivider() => ColoredBox(
-  color: Colors.white.withValues(alpha: 0.10),
-  child: const SizedBox(width: 1, height: double.infinity),
+Widget _vDivider() => SizedBox(
+  width: 1,
+  child: ColoredBox(color: Colors.white.withValues(alpha: 0.10)),
 );
 
 Widget _hDivider() => Divider(
   height: 1,
   thickness: 1,
-  color: Colors.white.withValues(alpha: 0.10),
+  color: Colors.white.withValues(alpha: 0.08),
 );

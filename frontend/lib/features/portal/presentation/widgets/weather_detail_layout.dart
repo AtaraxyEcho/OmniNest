@@ -6,22 +6,25 @@ import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 
 /// 天气详情弹窗布局档位。
 enum WeatherDetailLayoutMode {
-  /// 手机：单列，卡片纵向堆叠。
+  /// 手机：单列。
   mobile,
 
-  /// 平板：英雄区双列，指标 3 列。
+  /// 平板及以上：英雄区双列。
   tablet,
 
-  /// 桌面：英雄区双列，指标 3 列，整体更宽松。
+  /// 桌面：英雄区双列，间距略宽。
   desktop,
 }
 
-/// 对齐样例 max-w-3xl 的玻璃面板宽度。
+/// 对齐样例 max-w-3xl。
 const double kWeatherDetailMaxWidth = 768;
 
-/// 天气详情弹窗的响应式度量。
+/// 样例 min-h-[180px]。
+const double kWeatherDetailHeroMinHeight = 180;
+
+/// 天气详情弹窗度量。
 ///
-/// 以程序窗口为输入，输出保证 dialog 宽高不超过可用视口。
+/// 宽高均不超过可用视口；高度只作上限，内容高度贴合卡片。
 @immutable
 class WeatherDetailLayoutMetrics {
   const WeatherDetailLayoutMetrics({
@@ -33,12 +36,14 @@ class WeatherDetailLayoutMetrics {
     required this.useHeroSplit,
     required this.metricColumns,
     required this.sectionGap,
-    required this.cardPadding,
+    required this.heroCardPadding,
     required this.tempFontSize,
     required this.closeButtonSize,
     required this.cornerRadius,
+    required this.innerRadius,
     required this.compactHeight,
-    required this.heroMinHeight,
+    required this.heroHeight,
+    required this.splitCardHeight,
   });
 
   factory WeatherDetailLayoutMetrics.resolve(Size viewport) {
@@ -53,57 +58,69 @@ class WeatherDetailLayoutMetrics {
     final compactHeight = height < 700;
     final tight = width < 360 || height < 480;
 
-    final baseHInset = switch (mode) {
-      WeatherDetailLayoutMode.mobile => 10.0,
+    // 样例外层边距：手机贴边略留，桌面适中。
+    final horizontalInset = switch (mode) {
+      WeatherDetailLayoutMode.mobile => 12.0,
+      WeatherDetailLayoutMode.tablet => 20.0,
+      WeatherDetailLayoutMode.desktop => 24.0,
+    };
+    final verticalInset = switch (mode) {
+      WeatherDetailLayoutMode.mobile => 12.0,
       WeatherDetailLayoutMode.tablet => 16.0,
       WeatherDetailLayoutMode.desktop => 20.0,
     };
-    final baseVInset = switch (mode) {
-      WeatherDetailLayoutMode.mobile => 10.0,
-      WeatherDetailLayoutMode.tablet => 14.0,
-      WeatherDetailLayoutMode.desktop => 18.0,
-    };
-    final horizontalInset = math.min(baseHInset, width * 0.05);
-    final verticalInset = math.min(baseVInset, height * 0.04);
 
-    final availableWidth = math.min(width - horizontalInset * 2, width);
-    final availableHeight = math.min(height - verticalInset * 2, height);
-    final safeWidth = math.max(240.0, availableWidth);
-    final safeHeight = math.max(280.0, availableHeight);
+    final availableWidth = math.min(
+      math.max(240.0, width - horizontalInset * 2),
+      width,
+    );
+    final availableHeight = math.min(
+      math.max(280.0, height - verticalInset * 2),
+      height,
+    );
 
-    final dialogWidth = math.min(kWeatherDetailMaxWidth, safeWidth);
-    // 高度贴近内容，上限约 92% 可用高，避免盖满整页。
-    final dialogHeight = math.min(safeHeight * 0.94, safeHeight);
+    final dialogWidth = math.min(kWeatherDetailMaxWidth, availableWidth);
+    // 仅作滚动上限；面板本身贴内容高度。
+    final dialogHeight = availableHeight;
 
     final useHeroSplit =
         mode != WeatherDetailLayoutMode.mobile &&
-        dialogWidth >= 520 &&
+        dialogWidth >= 560 &&
         !compactHeight;
 
-    final metricColumns = switch (mode) {
-      WeatherDetailLayoutMode.mobile => dialogWidth >= 340 ? 2 : 1,
-      WeatherDetailLayoutMode.tablet => 3,
-      WeatherDetailLayoutMode.desktop => 3,
+    final metricColumns = dialogWidth >= 420 ? 3 : 2;
+
+    // 样例 gap-4 / p-4~6。
+    final sectionGap = tight ? 12.0 : 16.0;
+    final contentPad = switch (mode) {
+      WeatherDetailLayoutMode.mobile => 16.0,
+      WeatherDetailLayoutMode.tablet => 20.0,
+      WeatherDetailLayoutMode.desktop => 24.0,
     };
-
-    final sectionGap = tight || compactHeight ? 10.0 : 12.0;
-    final pad = (mode == WeatherDetailLayoutMode.mobile ? 14.0 : 16.0).clamp(
-      10.0,
-      dialogWidth * 0.05,
+    final contentPadding = EdgeInsets.all(
+      contentPad.clamp(12.0, dialogWidth * 0.06),
     );
-    final contentPadding = EdgeInsets.all(pad);
 
-    final cardPadding =
+    // 样例左卡 p-5 sm:p-6。
+    final heroCardPadding =
         compactHeight
-            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 12)
-            : const EdgeInsets.symmetric(horizontal: 14, vertical: 14);
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 16)
+            : const EdgeInsets.symmetric(horizontal: 20, vertical: 20);
 
-    // 样例 clamp(4rem, 12vw, 6rem)，按弹窗宽近似折算。
-    final tempFontSize = (dialogWidth * 0.14).clamp(48.0, 88.0);
+    // 样例 clamp(4rem, 12vw, 6rem)，以面板宽近似。
+    final tempFontSize = (dialogWidth * 0.12).clamp(64.0, 96.0);
 
     final closeButtonSize = tight ? 32.0 : 36.0;
-    final cornerRadius = 24.0;
-    final heroMinHeight = useHeroSplit ? 168.0 : 150.0;
+    const cornerRadius = 24.0;
+    const innerRadius = 16.0;
+
+    // 双列时左右等高：左 min-h 180，右侧两卡均分。
+    final heroHeight =
+        useHeroSplit
+            ? math.max(kWeatherDetailHeroMinHeight, tempFontSize * 1.85 + 48)
+            : math.max(160.0, tempFontSize * 1.55 + 40);
+    final splitCardHeight =
+        useHeroSplit ? (heroHeight - sectionGap * 0.75) / 2 : 88.0;
 
     return WeatherDetailLayoutMetrics(
       mode: mode,
@@ -117,12 +134,14 @@ class WeatherDetailLayoutMetrics {
       useHeroSplit: useHeroSplit,
       metricColumns: metricColumns,
       sectionGap: sectionGap,
-      cardPadding: cardPadding,
+      heroCardPadding: heroCardPadding,
       tempFontSize: tempFontSize,
       closeButtonSize: closeButtonSize,
       cornerRadius: cornerRadius,
+      innerRadius: innerRadius,
       compactHeight: compactHeight,
-      heroMinHeight: heroMinHeight,
+      heroHeight: heroHeight,
+      splitCardHeight: splitCardHeight,
     );
   }
 
@@ -130,10 +149,10 @@ class WeatherDetailLayoutMetrics {
     if (ResponsiveBreakpoints.isMobile(width)) {
       return WeatherDetailLayoutMode.mobile;
     }
-    if (ResponsiveBreakpoints.isTablet(width)) {
-      return WeatherDetailLayoutMode.tablet;
+    if (width >= ResponsiveBreakpoints.desktop) {
+      return WeatherDetailLayoutMode.desktop;
     }
-    return WeatherDetailLayoutMode.desktop;
+    return WeatherDetailLayoutMode.tablet;
   }
 
   final WeatherDetailLayoutMode mode;
@@ -144,16 +163,18 @@ class WeatherDetailLayoutMetrics {
   final bool useHeroSplit;
   final int metricColumns;
   final double sectionGap;
-  final EdgeInsets cardPadding;
+  final EdgeInsets heroCardPadding;
   final double tempFontSize;
   final double closeButtonSize;
   final double cornerRadius;
+  final double innerRadius;
   final bool compactHeight;
-  final double heroMinHeight;
+  final double heroHeight;
+  final double splitCardHeight;
 
   bool get isMobile => mode == WeatherDetailLayoutMode.mobile;
 
   double scaledTempSize(TextScaler scaler) {
-    return scaler.scale(tempFontSize).clamp(40.0, tempFontSize * 1.25);
+    return scaler.scale(tempFontSize).clamp(48.0, tempFontSize * 1.2);
   }
 }

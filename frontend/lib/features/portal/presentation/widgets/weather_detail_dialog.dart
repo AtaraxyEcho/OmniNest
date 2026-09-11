@@ -251,7 +251,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
         w.updateTime.isNotEmpty ? _formatUpdateTime(w.updateTime) : '';
 
     return Container(
-      padding: EdgeInsets.fromLTRB(metrics.isMobile ? 14 : 18, 10, 8, 10),
+      padding: EdgeInsets.fromLTRB(metrics.isMobile ? 16 : 20, 10, 8, 10),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
@@ -338,38 +338,54 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
     return cleaned;
   }
 
-  // ─── 英雄区 ────────────────────────────────────────────────────────────
+  // ─── 英雄区：样例 grid-cols-2 等宽 + 右侧 grid-rows-2 等高 ──────────────
 
   Widget _buildHeroSection(
     BuildContext context,
     WeatherDetailLayoutMetrics metrics,
   ) {
-    final left = _buildCurrentCard(context, metrics);
-    final right = Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildDayNightCard(metrics),
-        SizedBox(height: metrics.sectionGap * 0.75),
-        _buildSunCard(metrics),
-      ],
+    final left = SizedBox(
+      width: double.infinity,
+      height: metrics.useHeroSplit ? metrics.heroHeight : null,
+      child: _buildCurrentCard(context, metrics),
+    );
+    final rightGap = SizedBox(height: metrics.sectionGap * 0.75);
+    final dayNight = SizedBox(
+      width: double.infinity,
+      height: metrics.useHeroSplit ? metrics.splitCardHeight : null,
+      child: _buildDayNightCard(metrics),
+    );
+    final sun = SizedBox(
+      width: double.infinity,
+      height: metrics.useHeroSplit ? metrics.splitCardHeight : null,
+      child: _buildSunCard(metrics),
     );
 
     if (!metrics.useHeroSplit) {
       return Column(
         mainAxisSize: MainAxisSize.min,
-        children: [left, SizedBox(height: metrics.sectionGap), right],
+        children: [
+          left,
+          SizedBox(height: metrics.sectionGap),
+          dayNight,
+          rightGap,
+          sun,
+        ],
       );
     }
 
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(flex: 5, child: left),
-          SizedBox(width: metrics.sectionGap),
-          Expanded(flex: 6, child: right),
-        ],
-      ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: left),
+        SizedBox(width: metrics.sectionGap),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [dayNight, rightGap, sun],
+          ),
+        ),
+      ],
     );
   }
 
@@ -384,47 +400,52 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
       fontSize: metrics.scaledTempSize(scaler),
       fontWeight: FontWeight.w300,
       color: Colors.white,
-      height: 1.0,
-      letterSpacing: -1.5,
+      height: 0.95,
+      letterSpacing: -2,
     );
 
     return _GlassCard(
-      radius: metrics.cornerRadius,
-      padding: metrics.cardPadding,
+      radius: metrics.innerRadius,
+      padding: metrics.heroCardPadding,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        mainAxisSize:
+            metrics.useHeroSplit ? MainAxisSize.max : MainAxisSize.min,
+        mainAxisAlignment:
+            metrics.useHeroSplit
+                ? MainAxisAlignment.spaceBetween
+                : MainAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          Row(
             children: [
-              Row(
-                children: [
-                  Text(w.weatherIcon, style: const TextStyle(fontSize: 20)),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      w.text,
-                      style: TextStyle(
-                        fontSize: AppTypography.bodyLarge,
-                        color: Colors.white.withValues(alpha: 0.55),
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              Text(w.weatherIcon, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  w.text,
+                  style: TextStyle(
+                    fontSize: AppTypography.titleSmall,
+                    color: Colors.white.withValues(alpha: 0.50),
                   ),
-                ],
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          if (!metrics.useHeroSplit) const SizedBox(height: 20),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text('${w.temp}°', style: tempStyle),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text('${w.temp}°', style: tempStyle),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 10,
-                runSpacing: 6,
+                runSpacing: 4,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   if (hasRange)
@@ -468,8 +489,13 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
         w.textNight == '--' ? l10n.portalWeatherSunsetLabel : w.textNight;
 
     return _GlassCard(
-      radius: metrics.cornerRadius,
+      radius: metrics.innerRadius,
       child: Row(
+        // 双列固定高度时拉伸填满；单列高度自适应，避免 stretch 触发无界高度。
+        crossAxisAlignment:
+            metrics.useHeroSplit
+                ? CrossAxisAlignment.stretch
+                : CrossAxisAlignment.center,
         children: [
           Expanded(
             child: _SplitMoment(
@@ -478,11 +504,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
               value: w.tempMax != 0 ? '${w.tempMax}°' : '--',
             ),
           ),
-          SizedBox(
-            width: 1,
-            height: 44,
-            child: ColoredBox(color: Colors.white.withValues(alpha: 0.10)),
-          ),
+          if (metrics.useHeroSplit) _vDivider(),
           Expanded(
             child: _SplitMoment(
               icon: Icons.nightlight_round,
@@ -500,26 +522,28 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
     final w = widget.weather;
 
     return _GlassCard(
-      radius: metrics.cornerRadius,
+      radius: metrics.innerRadius,
       child: Row(
+        crossAxisAlignment:
+            metrics.useHeroSplit
+                ? CrossAxisAlignment.stretch
+                : CrossAxisAlignment.center,
         children: [
           Expanded(
             child: _SplitMoment(
               icon: Icons.wb_twilight,
               label: l10n.portalWeatherSunriseLabel,
               value: w.sunrise,
+              valueSize: AppTypography.bodyLarge,
             ),
           ),
-          SizedBox(
-            width: 1,
-            height: 44,
-            child: ColoredBox(color: Colors.white.withValues(alpha: 0.10)),
-          ),
+          if (metrics.useHeroSplit) _vDivider(),
           Expanded(
             child: _SplitMoment(
               icon: Icons.nightlight_round,
               label: l10n.portalWeatherSunsetLabel,
               value: w.sunset,
+              valueSize: AppTypography.bodyLarge,
             ),
           ),
         ],
@@ -527,26 +551,26 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
     );
   }
 
-  // ─── AQI ───────────────────────────────────────────────────────────────
+  // ─── AQI 细条 ──────────────────────────────────────────────────────────
 
   Widget _buildAqiStrip(WeatherDetailLayoutMetrics metrics) {
     final w = widget.weather;
     final accent = w.aqiColorValue;
     return _GlassCard(
-      radius: metrics.cornerRadius,
-      tint: accent.withValues(alpha: 0.18),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      radius: metrics.innerRadius,
+      tint: accent.withValues(alpha: 0.16),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
-          Icon(Icons.air, color: accent, size: 18),
-          const SizedBox(width: 10),
+          Icon(Icons.air, color: accent, size: 16),
+          const SizedBox(width: 8),
           Expanded(
             child: Text(
               'AQI ${w.aqi} · ${w.aqiCategory} · PM2.5 ${w.pm2p5} μg/m³',
               style: TextStyle(
-                fontSize: AppTypography.bodyMedium,
+                fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w600,
-                color: Colors.white.withValues(alpha: 0.92),
+                color: Colors.white.withValues(alpha: 0.90),
               ),
               overflow: TextOverflow.ellipsis,
             ),
@@ -601,7 +625,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
     ];
 
     return _GlassCard(
-      radius: metrics.cornerRadius,
+      radius: metrics.innerRadius,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final columns = metrics.metricColumns;
