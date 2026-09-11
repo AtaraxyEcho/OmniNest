@@ -108,6 +108,34 @@ class PortalVisualPalette {
         glow: scheme.primary.withValues(alpha: 0.16),
       );
     }
+    if (!backdropActive) {
+      // 深色无壁纸（Web / 桌面未启用）：烟熏玻璃色板是按「背后有亮壁纸」
+      // 设计的，直接压在近黑舞台上会整体灰暗；回落常规暗色表面
+      // （与浅色无壁纸分支同构），文字用主题前景色。
+      final background =
+          Color.lerp(scheme.surface, scheme.primaryContainer, 0.04)!;
+      final surface =
+          Color.lerp(scheme.surfaceContainer, scheme.primaryContainer, 0.08)!;
+      final surfaceStrong =
+          Color.lerp(
+            scheme.surfaceContainerHigh,
+            scheme.secondaryContainer,
+            0.05,
+          )!;
+      return PortalVisualPalette(
+        background: background,
+        surface: surface,
+        surfaceStrong: surfaceStrong,
+        clearStructuralSurfaces: false,
+        lightweightSurfaceAlpha: 0.18,
+        structuralAlphaCeiling: null,
+        text: scheme.onSurface,
+        muted: scheme.onSurfaceVariant,
+        accent: scheme.primary,
+        accentAlt: scheme.tertiary,
+        glow: scheme.primary.withValues(alpha: 0.16),
+      );
+    }
     return const PortalVisualPalette(
       background: Color(0xFF071016),
       surface: Color(0xA6121D25),

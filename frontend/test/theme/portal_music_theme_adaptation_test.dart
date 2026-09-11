@@ -13,6 +13,7 @@ void main() {
     PortalVisualPalette? lightPalette;
     PortalVisualPalette? lightBackdropPalette;
     PortalVisualPalette? darkPalette;
+    PortalVisualPalette? darkBackdropPalette;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -37,6 +38,10 @@ void main() {
         home: Builder(
           builder: (context) {
             darkPalette = PortalVisualPalette.of(context);
+            darkBackdropPalette = PortalVisualPalette.of(
+              context,
+              backdropActive: true,
+            );
             return const SizedBox.shrink();
           },
         ),
@@ -67,6 +72,17 @@ void main() {
     );
     expect(darkPalette!.clearStructuralSurfaces, isFalse);
     expect(darkPalette!.structuralSurface(), darkPalette!.surface);
+    // 深色无壁纸回落常规不透明暗面（避免烟熏色板压近黑舞台的整体灰暗），
+    // 有壁纸时保持烟熏玻璃色板。
+    expect(darkPalette!.surface.a, 1.0);
+    expect(darkPalette!.background, isNot(const Color(0xFF071016)));
+    expect(darkBackdropPalette!.background, const Color(0xFF071016));
+    expect(darkBackdropPalette!.surface.a, closeTo(0.65, 0.01));
+    expect(darkPalette!.text, OmniNestTheme.dark().colorScheme.onSurface);
+    expect(
+      ThemeData.estimateBrightnessForColor(darkBackdropPalette!.text),
+      Brightness.light,
+    );
     expect(lightBackdropPalette!.clearStructuralSurfaces, isFalse);
     expect(lightBackdropPalette!.surface.a, inInclusiveRange(0.28, 0.32));
     expect(
