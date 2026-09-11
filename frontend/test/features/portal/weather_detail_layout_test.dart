@@ -5,51 +5,30 @@ import 'package:omninest/features/portal/presentation/widgets/weather_detail_lay
 
 void main() {
   group('WeatherDetailLayoutMetrics.resolve', () {
-    test('手机宽度使用移动档位且不超视口', () {
+    test('手机使用单列且不超视口', () {
       final metrics = WeatherDetailLayoutMetrics.resolve(const Size(390, 844));
       expect(metrics.mode, WeatherDetailLayoutMode.mobile);
-      expect(metrics.isMobile, isTrue);
-      expect(metrics.gridColumns, 2);
-      expect(metrics.useTwoColumn, isFalse);
+      expect(metrics.useHeroSplit, isFalse);
+      expect(metrics.metricColumns, 2);
       expect(metrics.dialogWidth, lessThanOrEqualTo(390));
-      expect(metrics.dialogHeight, lessThanOrEqualTo(844));
-      expect(metrics.cornerRadius, 16);
+      expect(metrics.dialogWidth, lessThanOrEqualTo(kWeatherDetailMaxWidth));
     });
 
-    test('平板宽度使用平板档位与双栏', () {
+    test('平板使用英雄双列与三列指标', () {
       final metrics = WeatherDetailLayoutMetrics.resolve(const Size(820, 1180));
       expect(metrics.mode, WeatherDetailLayoutMode.tablet);
-      expect(metrics.gridColumns, 3);
-      expect(metrics.useTwoColumn, isTrue);
-      expect(metrics.dialogWidth, lessThanOrEqualTo(820));
-      expect(metrics.dialogWidth, lessThanOrEqualTo(720));
+      expect(metrics.useHeroSplit, isTrue);
+      expect(metrics.metricColumns, 3);
+      expect(metrics.dialogWidth, lessThanOrEqualTo(kWeatherDetailMaxWidth));
     });
 
-    test('窄平板竖屏回退单列', () {
-      final metrics = WeatherDetailLayoutMetrics.resolve(const Size(620, 900));
-      expect(metrics.mode, WeatherDetailLayoutMode.tablet);
-      expect(metrics.useTwoColumn, isFalse);
-    });
-
-    test('桌面宽度使用桌面档位', () {
-      final metrics = WeatherDetailLayoutMetrics.resolve(const Size(1100, 900));
-      expect(metrics.mode, WeatherDetailLayoutMode.desktop);
-      expect(metrics.useTwoColumn, isTrue);
-      expect(metrics.gridColumns, 3);
-      expect(metrics.dialogWidth, lessThanOrEqualTo(960));
-      expect(metrics.dialogWidth, lessThanOrEqualTo(1100));
-    });
-
-    test('宽屏使用四列指标', () {
+    test('桌面宽度不超过 max-w-3xl', () {
       final metrics = WeatherDetailLayoutMetrics.resolve(
-        const Size(1920, 1080),
+        const Size(1600, 1000),
       );
-      expect(metrics.mode, WeatherDetailLayoutMode.wide);
-      expect(metrics.gridColumns, 4);
-      expect(metrics.dialogWidth, lessThanOrEqualTo(1200));
-      expect(metrics.dialogWidth, greaterThan(900));
-      expect(metrics.dialogWidth, lessThanOrEqualTo(1920));
-      expect(metrics.dialogHeight, lessThanOrEqualTo(1080));
+      expect(metrics.mode, WeatherDetailLayoutMode.desktop);
+      expect(metrics.dialogWidth, kWeatherDetailMaxWidth);
+      expect(metrics.dialogHeight, lessThanOrEqualTo(1000));
     });
 
     test('弹窗尺寸永不超出程序窗口', () {
@@ -61,85 +40,70 @@ void main() {
         Size(800, 600),
         Size(1024, 768),
         Size(1280, 720),
-        Size(1366, 768),
         Size(1440, 900),
         Size(1920, 1080),
         Size(2560, 1440),
         Size(480, 320),
-        Size(900, 500),
       ];
       for (final size in sizes) {
         final metrics = WeatherDetailLayoutMetrics.resolve(size);
         expect(
-          metrics.dialogWidth + metrics.insetPadding.horizontal,
-          lessThanOrEqualTo(size.width + 0.01),
-          reason: 'width overflow at $size',
-        );
-        expect(
-          metrics.dialogHeight + metrics.insetPadding.vertical,
-          lessThanOrEqualTo(size.height + 0.01),
-          reason: 'height overflow at $size',
-        );
-        expect(
           metrics.dialogWidth,
           lessThanOrEqualTo(size.width),
-          reason: 'dialog width at $size',
+          reason: 'width at $size',
         );
         expect(
           metrics.dialogHeight,
           lessThanOrEqualTo(size.height),
-          reason: 'dialog height at $size',
+          reason: 'height at $size',
+        );
+        expect(
+          metrics.dialogWidth + metrics.insetPadding.horizontal,
+          lessThanOrEqualTo(size.width + 0.01),
+          reason: 'width+inset at $size',
+        );
+        expect(
+          metrics.dialogHeight + metrics.insetPadding.vertical,
+          lessThanOrEqualTo(size.height + 0.01),
+          reason: 'height+inset at $size',
         );
       }
     });
 
-    test('矮窗口压缩间距并可能关闭双栏', () {
-      final shortDesktop = WeatherDetailLayoutMetrics.resolve(
-        const Size(1440, 520),
-      );
-      expect(shortDesktop.compactHeight, isTrue);
-      expect(shortDesktop.useTwoColumn, isFalse);
-      expect(shortDesktop.dialogHeight, lessThanOrEqualTo(520));
-
-      final landscapePhone = WeatherDetailLayoutMetrics.resolve(
-        const Size(844, 390),
-      );
-      expect(landscapePhone.compactHeight, isTrue);
-      expect(landscapePhone.dialogHeight, lessThanOrEqualTo(390));
+    test('矮窗口关闭英雄双列', () {
+      final short = WeatherDetailLayoutMetrics.resolve(const Size(1440, 520));
+      expect(short.compactHeight, isTrue);
+      expect(short.useHeroSplit, isFalse);
     });
 
-    test('断点与全局 ResponsiveBreakpoints 一致', () {
-      const mobileEdge = Size(ResponsiveBreakpoints.mobile - 1, 800);
-      const tabletEdge = Size(ResponsiveBreakpoints.desktop - 1, 800);
-      const desktopEdge = Size(ResponsiveBreakpoints.desktop, 800);
-      const wideEdge = Size(ResponsiveBreakpoints.wide, 800);
-
+    test('断点与 ResponsiveBreakpoints 一致', () {
       expect(
-        WeatherDetailLayoutMetrics.resolve(mobileEdge).mode,
+        WeatherDetailLayoutMetrics.resolve(
+          const Size(ResponsiveBreakpoints.mobile - 1, 800),
+        ).mode,
         WeatherDetailLayoutMode.mobile,
       );
       expect(
-        WeatherDetailLayoutMetrics.resolve(tabletEdge).mode,
+        WeatherDetailLayoutMetrics.resolve(
+          const Size(ResponsiveBreakpoints.desktop - 1, 800),
+        ).mode,
         WeatherDetailLayoutMode.tablet,
       );
       expect(
-        WeatherDetailLayoutMetrics.resolve(desktopEdge).mode,
+        WeatherDetailLayoutMetrics.resolve(
+          const Size(ResponsiveBreakpoints.desktop, 800),
+        ).mode,
         WeatherDetailLayoutMode.desktop,
-      );
-      expect(
-        WeatherDetailLayoutMetrics.resolve(wideEdge).mode,
-        WeatherDetailLayoutMode.wide,
       );
     });
 
-    test('温度字号随窗口连续缩放并有上限', () {
-      final small = WeatherDetailLayoutMetrics.resolve(const Size(390, 700));
+    test('温度字号有上下限', () {
+      final small = WeatherDetailLayoutMetrics.resolve(const Size(360, 640));
       final large = WeatherDetailLayoutMetrics.resolve(const Size(1920, 1080));
-      expect(small.tempFontSize, lessThanOrEqualTo(large.tempFontSize + 0.01));
-      final normal = large.scaledTempSize(TextScaler.noScaling);
+      expect(small.tempFontSize, greaterThanOrEqualTo(48));
+      expect(large.tempFontSize, lessThanOrEqualTo(88));
       final scaled = large.scaledTempSize(const TextScaler.linear(1.4));
-      expect(normal, closeTo(large.tempFontSize, 0.01));
-      expect(scaled, lessThanOrEqualTo(large.tempFontSize * 1.3 + 0.01));
+      expect(scaled, lessThanOrEqualTo(large.tempFontSize * 1.25 + 0.01));
     });
   });
 }

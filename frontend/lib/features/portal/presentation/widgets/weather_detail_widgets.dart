@@ -1,7 +1,7 @@
 part of 'weather_detail_dialog.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 提示卡片逻辑
+// 提示文案
 // ═══════════════════════════════════════════════════════════════════════════════
 
 class _TipData {
@@ -40,133 +40,136 @@ _TipData? _resolveTip(WeatherData w, AppLocalizations l10n) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 共用小组件
+// 玻璃卡片与指标
 // ═══════════════════════════════════════════════════════════════════════════════
 
-class _Panel extends StatelessWidget {
-  const _Panel({
+/// 样例中的 GlassCard：半透明白底 + 描边 + 模糊。
+class _GlassCard extends StatelessWidget {
+  const _GlassCard({
     required this.child,
-    required this.padding,
     required this.radius,
-    required this.background,
-    this.borderColor,
+    this.padding,
+    this.tint,
   });
 
   final Widget child;
-  final EdgeInsetsGeometry padding;
   final double radius;
-  final Color background;
-  final Color? borderColor;
+  final EdgeInsetsGeometry? padding;
+  final Color? tint;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(radius),
-        border: borderColor == null ? null : Border.all(color: borderColor!),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius - 8),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: tint ?? Colors.white.withValues(alpha: 0.10),
+            borderRadius: BorderRadius.circular(radius - 8),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+          ),
+          child: Padding(padding: padding ?? EdgeInsets.zero, child: child),
+        ),
       ),
-      child: child,
-    );
-  }
-}
-
-class _SunMoment extends StatelessWidget {
-  const _SunMoment({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-    required this.secondary,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color color;
-  final Color secondary;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: color, size: 20),
-        const SizedBox(height: 6),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: AppTypography.bodySmall,
-            color: secondary,
-            fontWeight: FontWeight.w500,
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: AppTypography.titleMedium,
-            fontWeight: FontWeight.w600,
-            color: color,
-          ),
-        ),
-      ],
     );
   }
 }
 
 class _MetricCell extends StatelessWidget {
-  const _MetricCell({required this.item, required this.atm});
+  const _MetricCell({
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.trailing,
+  });
 
-  final _DetailItem item;
-  final _Atmosphere atm;
+  final IconData icon;
+  final String label;
+  final String value;
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(item.icon, size: 16, color: atm.textSecondary),
-            const SizedBox(width: 6),
-            Flexible(
-              child: Text(
-                item.label,
-                style: TextStyle(
-                  fontSize: AppTypography.labelSmall,
-                  color: atm.textSecondary,
-                  fontWeight: FontWeight.w500,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: Colors.white.withValues(alpha: 0.45)),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: AppTypography.labelSmall,
+                    fontWeight: FontWeight.w500,
+                    color: Colors.white.withValues(alpha: 0.45),
+                    letterSpacing: 0.4,
+                  ),
+                  overflow: TextOverflow.ellipsis,
                 ),
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Text(
-          item.value,
-          style: TextStyle(
-            fontSize: AppTypography.bodyLarge,
-            fontWeight: FontWeight.w600,
-            color: atm.textColor,
+            ],
           ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-          textAlign: TextAlign.center,
-        ),
-      ],
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Flexible(
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: AppTypography.titleMedium,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                    height: 1.0,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          if (trailing != null) ...[const SizedBox(height: 8), trailing!],
+        ],
+      ),
     );
   }
 }
 
-class _DetailItem {
-  const _DetailItem({
+/// UV 色带，对齐样例 UvBar。
+Widget _buildUvBar(int value) {
+  const maxUv = 11;
+  final pct = (value / maxUv).clamp(0.0, 1.0);
+  final color = switch (value) {
+    <= 2 => const Color(0xFF4ADE80),
+    <= 5 => const Color(0xFFFACC15),
+    <= 7 => const Color(0xFFFB923C),
+    _ => const Color(0xFFEF4444),
+  };
+  return SizedBox(
+    height: 6,
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(3),
+      child: Stack(
+        children: [
+          ColoredBox(color: Colors.white.withValues(alpha: 0.15)),
+          FractionallySizedBox(
+            widthFactor: pct,
+            child: ColoredBox(color: color),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _SplitMoment extends StatelessWidget {
+  const _SplitMoment({
     required this.icon,
     required this.label,
     required this.value,
@@ -175,4 +178,50 @@ class _DetailItem {
   final IconData icon;
   final String label;
   final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 22, color: Colors.white.withValues(alpha: 0.9)),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: AppTypography.labelSmall,
+              color: Colors.white.withValues(alpha: 0.40),
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: AppTypography.titleMedium,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
+              height: 1.0,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
+
+Widget _vDivider() => ColoredBox(
+  color: Colors.white.withValues(alpha: 0.10),
+  child: const SizedBox(width: 1, height: double.infinity),
+);
+
+Widget _hDivider() => Divider(
+  height: 1,
+  thickness: 1,
+  color: Colors.white.withValues(alpha: 0.10),
+);

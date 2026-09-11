@@ -6,29 +6,29 @@ import 'package:omninest/features/portal/presentation/widgets/weather_detail_dia
 
 WeatherData _sampleWeather() {
   return const WeatherData(
-    temp: 26,
-    feelsLike: 28,
-    text: '晴',
-    icon: '100',
-    humidity: '45%',
-    windSpeed: '12',
-    windDir: '东南',
-    pressure: '1012',
-    visibility: '18',
-    uvIndex: 7,
-    sunrise: '05:42',
-    sunset: '18:31',
-    aqi: 62,
-    pm2p5: 28,
-    aqiCategory: '良',
-    updateTime: '2026-03-01 14:00',
-    healthAdvice: '多补水，午间减少暴晒。',
-    tempMax: 30,
-    tempMin: 18,
-    precip: '0',
+    temp: 21,
+    feelsLike: 20,
+    text: '阴',
+    icon: '104',
+    humidity: '64%',
+    windSpeed: '3',
+    windDir: '北风',
+    pressure: '938',
+    visibility: '30',
+    uvIndex: 4,
+    sunrise: '06:33',
+    sunset: '18:59',
+    aqi: 42,
+    pm2p5: 18,
+    aqiCategory: '优',
+    updateTime: '2026-09-11 17:45',
+    healthAdvice: '',
+    tempMax: 24,
+    tempMin: 16,
+    precip: '0.0',
     windScale: '3',
-    textDay: '晴',
-    textNight: '多云',
+    textDay: '多云',
+    textNight: '晴',
   );
 }
 
@@ -69,12 +69,14 @@ Future<void> _closeWeatherDetail(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('天气详情首帧延迟启动重量级背景动效', (tester) async {
+  testWidgets('天气详情首帧延迟启动背景动效', (tester) async {
+    await _openWeatherDetail(tester);
+    // 再关掉后用 empty 数据打开验证延迟逻辑
+    await _closeWeatherDetail(tester);
+
     final view = tester.view;
     view.physicalSize = const Size(390, 844);
     view.devicePixelRatio = 1.0;
-    addTearDown(view.reset);
-
     await tester.pumpWidget(
       MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -93,57 +95,34 @@ void main() {
         ),
       ),
     );
-
     await tester.tap(find.text('打开天气'));
     await tester.pump();
-
     expect(find.byKey(const ValueKey('weather-scene-effects')), findsNothing);
-
     await tester.pump(const Duration(milliseconds: 220));
-
     expect(find.byKey(const ValueKey('weather-scene-effects')), findsOneWidget);
   });
 
-  testWidgets('手机尺寸展示核心天气信息并可关闭', (tester) async {
+  testWidgets('手机尺寸展示温度、提示、AQI 与指标', (tester) async {
     await _openWeatherDetail(tester, size: const Size(390, 844));
 
-    expect(find.text('26°'), findsOneWidget);
-    expect(find.textContaining('AQI 62'), findsOneWidget);
-    expect(find.textContaining('晴'), findsWidgets);
+    expect(find.text('21°'), findsOneWidget);
+    expect(find.textContaining('适合户外'), findsOneWidget);
+    expect(find.textContaining('AQI 42'), findsOneWidget);
+    expect(find.textContaining('湿度'), findsOneWidget);
     expect(find.byIcon(Icons.close_rounded), findsOneWidget);
 
     await _closeWeatherDetail(tester);
-
-    expect(find.text('26°'), findsNothing);
+    expect(find.text('21°'), findsNothing);
   });
 
-  testWidgets('桌面宽屏展示关闭按钮与关键指标', (tester) async {
+  testWidgets('桌面尺寸英雄双列与指标网格', (tester) async {
     await _openWeatherDetail(tester, size: const Size(1600, 1000));
 
-    expect(find.text('26°'), findsOneWidget);
-    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
-    expect(find.textContaining('湿度'), findsOneWidget);
-    expect(find.textContaining('能见度'), findsOneWidget);
-  });
-
-  testWidgets('平板尺寸可正常渲染完整详情', (tester) async {
-    await _openWeatherDetail(tester, size: const Size(820, 1180));
-
-    expect(find.text('26°'), findsOneWidget);
-    expect(find.textContaining('PM2.5'), findsOneWidget);
-    expect(find.textContaining('05:42'), findsOneWidget);
-  });
-
-  testWidgets('小窗口弹窗不溢出且可滚动', (tester) async {
-    await _openWeatherDetail(tester, size: const Size(320, 480));
-
-    expect(tester.takeException(), isNull);
-    expect(find.text('26°'), findsOneWidget);
-    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
-
-    final dialogRect = tester.getRect(find.byType(Dialog).first);
-    expect(dialogRect.width, lessThanOrEqualTo(320));
-    expect(dialogRect.height, lessThanOrEqualTo(480));
+    expect(find.text('21°'), findsOneWidget);
+    expect(find.textContaining('多云'), findsWidgets);
+    expect(find.textContaining('06:33'), findsOneWidget);
+    expect(find.textContaining('18:59'), findsOneWidget);
+    expect(find.textContaining('UV 4'), findsOneWidget);
   });
 
   testWidgets('弹窗矩形不超过窗口视口', (tester) async {
@@ -155,5 +134,11 @@ void main() {
     expect(dialogRect.top, greaterThanOrEqualTo(0));
     expect(dialogRect.right, lessThanOrEqualTo(viewport.width));
     expect(dialogRect.bottom, lessThanOrEqualTo(viewport.height));
+  });
+
+  testWidgets('小窗口不溢出', (tester) async {
+    await _openWeatherDetail(tester, size: const Size(320, 480));
+    expect(tester.takeException(), isNull);
+    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -12,9 +13,7 @@ part 'weather_detail_atmospheres.dart';
 part 'weather_detail_painters.dart';
 part 'weather_detail_widgets.dart';
 
-/// 打开沉浸式天气详情弹窗。
-///
-/// 弹窗尺寸随程序窗口动态夹紧，不会超过当前可用视口。
+/// 打开天气详情弹窗（玻璃拟态面板，对齐 Redesign Weather Detail UI 样例）。
 Future<void> showWeatherDetailDialog(
   BuildContext context, {
   required WeatherData weather,
@@ -25,10 +24,6 @@ Future<void> showWeatherDetailDialog(
     builder: (_) => _WeatherDetailDialog(weather: weather),
   );
 }
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 弹窗主体
-// ═══════════════════════════════════════════════════════════════════════════════
 
 class _WeatherDetailDialog extends StatefulWidget {
   const _WeatherDetailDialog({required this.weather});
@@ -137,19 +132,16 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
 
   @override
   Widget build(BuildContext context) {
-    // 以程序窗口为输入；窗口缩放时 MediaQuery 会触发本 build 重建。
     final viewport = MediaQuery.sizeOf(context);
     final metrics = WeatherDetailLayoutMetrics.resolve(viewport);
     final spec = WeatherSceneSpec.from(widget.weather);
-    final profile = spec.profile;
-    final atm = _Atmosphere.forScene(spec.scene, profile);
+    final atm = _Atmosphere.forScene(spec.scene, spec.profile);
     final effectsReady = _effectsReady && !_animationsDisabled;
 
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: metrics.insetPadding,
       clipBehavior: Clip.antiAlias,
-      // 用真实约束二次夹紧，避免 Dialog 子树请求尺寸超过可用区。
       child: LayoutBuilder(
         builder: (context, constraints) {
           final maxW =
@@ -165,70 +157,55 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
 
           return SizedBox(
             width: width,
-            height: height,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(metrics.cornerRadius),
-              child: Stack(
-                children: [
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [atm.top, atm.mid, atm.bottom],
-                        ),
-                      ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: height),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(metrics.cornerRadius),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [atm.top, atm.mid, atm.bottom],
                     ),
                   ),
-                  if (effectsReady)
-                    Positioned.fill(
-                      child: IgnorePointer(
-                        child: AnimatedBuilder(
-                          animation: _animCtrl,
-                          builder:
-                              (_, _) => CustomPaint(
-                                key: const ValueKey('weather-scene-effects'),
-                                painter: _WeatherScenePainter(
-                                  spec: spec,
-                                  elapsed: _elapsedSeconds,
-                                  particleColor: atm.particleColor,
-                                ),
-                              ),
+                  // 内容高度贴合，仅在超高时滚动，避免下方大段空白。
+                  child: Stack(
+                    children: [
+                      if (effectsReady)
+                        Positioned.fill(
+                          child: IgnorePointer(
+                            child: AnimatedBuilder(
+                              animation: _animCtrl,
+                              builder:
+                                  (_, _) => CustomPaint(
+                                    key: const ValueKey(
+                                      'weather-scene-effects',
+                                    ),
+                                    painter: _WeatherScenePainter(
+                                      spec: spec,
+                                      elapsed: _elapsedSeconds,
+                                      particleColor: atm.particleColor,
+                                    ),
+                                  ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  Positioned.fill(
-                    child: DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topCenter,
-                          end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            atm.bottom.withValues(alpha: 0.45),
-                            atm.bottom.withValues(alpha: 0.88),
-                          ],
-                          stops: const [0.0, 0.4, 0.72],
+                      DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: const Color(0x8C0F2027),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.12),
+                          ),
+                          borderRadius: BorderRadius.circular(
+                            metrics.cornerRadius,
+                          ),
                         ),
+                        child: _buildPanel(context, metrics),
                       ),
-                      child: SingleChildScrollView(
-                        // 内容顶边距为关闭按钮预留空间，避免与按钮重叠。
-                        padding: metrics.contentPadding.copyWith(
-                          top:
-                              metrics.contentPadding.top +
-                              metrics.closeButtonSize * 0.15,
-                        ),
-                        child: _buildBody(context, atm, metrics),
-                      ),
-                    ),
+                    ],
                   ),
-                  Positioned(
-                    top: math.max(4, metrics.contentPadding.top * 0.35),
-                    right: math.max(4, metrics.contentPadding.right * 0.35),
-                    child: _buildCloseButton(atm, metrics),
-                  ),
-                ],
+                ),
               ),
             ),
           );
@@ -237,149 +214,167 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
     );
   }
 
-  Widget _buildBody(
-    BuildContext context,
-    _Atmosphere atm,
-    WeatherDetailLayoutMetrics metrics,
-  ) {
-    if (metrics.useTwoColumn) {
-      return _buildTwoColumnBody(context, atm, metrics);
-    }
-    return _buildStackedBody(context, atm, metrics);
-  }
-
-  // ─── 布局：单列 ────────────────────────────────────────────────────────
-
-  Widget _buildStackedBody(
-    BuildContext context,
-    _Atmosphere atm,
-    WeatherDetailLayoutMetrics metrics,
-  ) {
-    final gap = SizedBox(height: metrics.sectionGap);
+  Widget _buildPanel(BuildContext context, WeatherDetailLayoutMetrics metrics) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _buildHeroPanel(context, atm, metrics, panelized: !metrics.isMobile),
-        gap,
-        _buildTipCard(atm, metrics),
-        gap,
-        _buildAqiCard(metrics),
-        gap,
-        _buildAdviceCard(atm, metrics),
-        gap,
-        _buildOverviewCard(atm, metrics),
-        gap,
-        _buildMetricsGrid(atm, metrics),
-      ],
-    );
-  }
-
-  // ─── 布局：双列 ────────────────────────────────────────────────────────
-
-  Widget _buildTwoColumnBody(
-    BuildContext context,
-    _Atmosphere atm,
-    WeatherDetailLayoutMetrics metrics,
-  ) {
-    final gap = SizedBox(height: metrics.sectionGap);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              flex: metrics.heroFlex,
-              child: _buildHeroPanel(context, atm, metrics, panelized: true),
+        _buildHeader(context, metrics),
+        Flexible(
+          child: SingleChildScrollView(
+            padding: metrics.contentPadding,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildHeroSection(context, metrics),
+                SizedBox(height: metrics.sectionGap),
+                _buildAqiStrip(metrics),
+                SizedBox(height: metrics.sectionGap),
+                _buildMetricsCard(metrics),
+              ],
             ),
-            SizedBox(width: metrics.sectionGap),
-            Expanded(
-              flex: metrics.sideFlex,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildTipCard(atm, metrics),
-                  gap,
-                  _buildAqiCard(metrics),
-                  gap,
-                  _buildAdviceCard(atm, metrics),
-                  gap,
-                  _buildOverviewCard(atm, metrics),
-                ],
-              ),
-            ),
-          ],
+          ),
         ),
-        gap,
-        _buildMetricsGrid(atm, metrics),
       ],
     );
   }
 
-  // ─── 组件 ──────────────────────────────────────────────────────────────
+  // ─── 顶栏：提示 + 更新时间 + 关闭 ──────────────────────────────────────
 
-  Widget _buildCloseButton(
-    _Atmosphere atm,
+  Widget _buildHeader(
+    BuildContext context,
     WeatherDetailLayoutMetrics metrics,
   ) {
     final l10n = AppLocalizations.of(context);
-    return Semantics(
-      button: true,
-      label: l10n.coreClose,
-      child: Tooltip(
-        message: l10n.coreClose,
-        child: IconButton(
-          onPressed: _close,
-          iconSize: metrics.closeButtonSize * 0.5,
-          constraints: BoxConstraints.tightFor(
-            width: metrics.closeButtonSize,
-            height: metrics.closeButtonSize,
-          ),
-          padding: EdgeInsets.zero,
-          icon: Icon(Icons.close_rounded, color: atm.textColor),
-          style: IconButton.styleFrom(
-            backgroundColor: Colors.white.withValues(alpha: 0.18),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(10),
+    final w = widget.weather;
+    final tip = _resolveTip(w, l10n);
+    final updated =
+        w.updateTime.isNotEmpty ? _formatUpdateTime(w.updateTime) : '';
+
+    return Container(
+      padding: EdgeInsets.fromLTRB(metrics.isMobile ? 14 : 18, 10, 8, 10),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+        ),
+      ),
+      child: Row(
+        children: [
+          if (tip != null) ...[
+            Icon(
+              tip.icon,
+              size: 16,
+              color: Colors.white.withValues(alpha: 0.70),
+            ),
+            const SizedBox(width: 8),
+          ],
+          Expanded(
+            child: Text(
+              tip?.text ?? w.text,
+              style: TextStyle(
+                fontSize: AppTypography.bodyMedium,
+                color: Colors.white.withValues(alpha: 0.72),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-        ),
+          if (updated.isNotEmpty) ...[
+            const SizedBox(width: 8),
+            Text(
+              updated,
+              style: TextStyle(
+                fontSize: AppTypography.bodySmall,
+                color: Colors.white.withValues(alpha: 0.32),
+              ),
+            ),
+          ],
+          const SizedBox(width: 4),
+          Semantics(
+            button: true,
+            label: l10n.coreClose,
+            child: Tooltip(
+              message: l10n.coreClose,
+              child: IconButton(
+                onPressed: _close,
+                constraints: BoxConstraints.tightFor(
+                  width: metrics.closeButtonSize,
+                  height: metrics.closeButtonSize,
+                ),
+                padding: EdgeInsets.zero,
+                iconSize: metrics.closeButtonSize * 0.45,
+                icon: Icon(
+                  Icons.close_rounded,
+                  color: Colors.white.withValues(alpha: 0.85),
+                ),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildHeroPanel(
+  String _formatUpdateTime(String raw) {
+    // "2026-09-11T17:45+08:00" / "2026-09-11 17:45" → "17:45"
+    final tIndex = raw.indexOf('T');
+    final spaceIndex = raw.indexOf(' ');
+    final start =
+        tIndex >= 0 ? tIndex + 1 : (spaceIndex >= 0 ? spaceIndex + 1 : -1);
+    if (start < 0 || start >= raw.length) {
+      return raw.length > 16 ? raw.substring(raw.length - 16) : raw;
+    }
+    final rest = raw.substring(start);
+    final plus = rest.indexOf('+');
+    final cleaned = plus >= 0 ? rest.substring(0, plus) : rest;
+    if (cleaned.length >= 5) {
+      return cleaned.substring(0, 5);
+    }
+    return cleaned;
+  }
+
+  // ─── 英雄区 ────────────────────────────────────────────────────────────
+
+  Widget _buildHeroSection(
     BuildContext context,
-    _Atmosphere atm,
-    WeatherDetailLayoutMetrics metrics, {
-    required bool panelized,
-  }) {
-    final child = _buildSummary(context, atm, metrics);
-    if (!panelized) {
-      return Padding(
-        padding: EdgeInsets.symmetric(
-          horizontal: 8,
-          vertical: metrics.sectionGap / 2,
-        ),
-        child: child,
+    WeatherDetailLayoutMetrics metrics,
+  ) {
+    final left = _buildCurrentCard(context, metrics);
+    final right = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _buildDayNightCard(metrics),
+        SizedBox(height: metrics.sectionGap * 0.75),
+        _buildSunCard(metrics),
+      ],
+    );
+
+    if (!metrics.useHeroSplit) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [left, SizedBox(height: metrics.sectionGap), right],
       );
     }
-    return Container(
-      constraints: BoxConstraints(minHeight: metrics.heroMinHeight),
-      width: double.infinity,
-      padding: metrics.heroPanelPadding,
-      decoration: BoxDecoration(
-        color: atm.panelBg,
-        borderRadius: BorderRadius.circular(metrics.cornerRadius),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 5, child: left),
+          SizedBox(width: metrics.sectionGap),
+          Expanded(flex: 6, child: right),
+        ],
       ),
-      child: Center(child: child),
     );
   }
 
-  Widget _buildSummary(
+  Widget _buildCurrentCard(
     BuildContext context,
-    _Atmosphere atm,
     WeatherDetailLayoutMetrics metrics,
   ) {
     final w = widget.weather;
@@ -387,314 +382,251 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
     final scaler = MediaQuery.textScalerOf(context);
     final tempStyle = TextStyle(
       fontSize: metrics.scaledTempSize(scaler),
+      fontWeight: FontWeight.w300,
+      color: Colors.white,
       height: 1.0,
-      fontWeight: FontWeight.w800,
-      color: atm.textColor,
-      letterSpacing: -1.2,
+      letterSpacing: -1.5,
     );
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('${w.temp}°', style: tempStyle),
-        if (hasRange)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              '${w.tempMax}° / ${w.tempMin}°',
-              style: TextStyle(
-                fontSize: AppTypography.bodyLarge,
-                color: atm.textSecondary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        const SizedBox(height: 6),
-        Text(
-          AppLocalizations.of(
-            context,
-          ).portalWeatherFeelsLike(w.text, w.feelsLike),
-          style: Theme.of(
-            context,
-          ).textTheme.bodyLarge?.copyWith(color: atm.textSecondary),
-          textAlign: TextAlign.center,
-        ),
-        if (w.updateTime.isNotEmpty) ...[
-          const SizedBox(height: 10),
-          Text(
-            w.updateTime,
-            style: TextStyle(
-              fontSize: AppTypography.bodySmall,
-              color: atm.textSecondary.withValues(alpha: 0.85),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildTipCard(_Atmosphere atm, WeatherDetailLayoutMetrics metrics) {
-    final l10n = AppLocalizations.of(context);
-    final tip = _resolveTip(widget.weather, l10n);
-    if (tip == null) {
-      return const SizedBox.shrink();
-    }
-
-    return _Panel(
-      padding: metrics.cardPadding,
+    return _GlassCard(
       radius: metrics.cornerRadius,
-      background: Colors.white.withValues(alpha: 0.18),
-      borderColor: Colors.white.withValues(alpha: 0.12),
-      child: Row(
-        children: [
-          Icon(tip.icon, color: atm.textColor, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              tip.text,
-              style: TextStyle(
-                fontSize: AppTypography.bodyMedium,
-                color: atm.textColor,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAdviceCard(_Atmosphere atm, WeatherDetailLayoutMetrics metrics) {
-    final advice = widget.weather.healthAdvice;
-    if (advice.isEmpty) {
-      return const SizedBox.shrink();
-    }
-    return _Panel(
       padding: metrics.cardPadding,
-      radius: metrics.cornerRadius,
-      background: Colors.white.withValues(alpha: 0.12),
-      borderColor: Colors.white.withValues(alpha: 0.08),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(
-            Icons.medical_information_outlined,
-            color: atm.textColor,
-            size: 18,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              advice,
-              style: TextStyle(
-                fontSize: AppTypography.bodySmall,
-                color: atm.textColor,
-                height: 1.35,
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(w.weatherIcon, style: const TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      w.text,
+                      style: TextStyle(
+                        fontSize: AppTypography.bodyLarge,
+                        color: Colors.white.withValues(alpha: 0.55),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
-            ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('${w.temp}°', style: tempStyle),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 10,
+                runSpacing: 6,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  if (hasRange)
+                    Text(
+                      '${w.tempMax}° / ${w.tempMin}°',
+                      style: TextStyle(
+                        fontSize: AppTypography.bodyMedium,
+                        color: Colors.white.withValues(alpha: 0.60),
+                      ),
+                    ),
+                  if (hasRange)
+                    Container(
+                      width: 1,
+                      height: 12,
+                      color: Colors.white.withValues(alpha: 0.20),
+                    ),
+                  Text(
+                    AppLocalizations.of(
+                      context,
+                    ).portalWeatherFeelsLike(w.text, w.feelsLike),
+                    style: TextStyle(
+                      fontSize: AppTypography.bodyMedium,
+                      color: Colors.white.withValues(alpha: 0.60),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ],
       ),
     );
   }
 
-  Widget _buildAqiCard(WeatherDetailLayoutMetrics metrics) {
-    final c = widget.weather.aqiColorValue;
-    return _Panel(
-      padding: metrics.cardPadding,
-      radius: metrics.cornerRadius,
-      background: c.withValues(alpha: 0.16),
-      child: Row(
-        children: [
-          Icon(Icons.air, color: c, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AQI ${widget.weather.aqi} · ${widget.weather.aqiCategory}',
-                  style: TextStyle(
-                    color: c,
-                    fontWeight: FontWeight.w700,
-                    fontSize: AppTypography.bodyLarge,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'PM2.5 ${widget.weather.pm2p5} μg/m³',
-                  style: TextStyle(
-                    color: c.withValues(alpha: 0.85),
-                    fontSize: AppTypography.bodySmall,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// 昼夜天气 + 日出日落合并为一张概览卡，减少纵向堆叠。
-  Widget _buildOverviewCard(
-    _Atmosphere atm,
-    WeatherDetailLayoutMetrics metrics,
-  ) {
+  Widget _buildDayNightCard(WeatherDetailLayoutMetrics metrics) {
     final l10n = AppLocalizations.of(context);
     final w = widget.weather;
-    final hasDayNight = w.textDay != '--' || w.textNight != '--';
-    final hasSun = w.sunrise != '--' || w.sunset != '--';
-    if (!hasDayNight && !hasSun) {
-      return const SizedBox.shrink();
-    }
-
     final dayLabel =
         w.textDay == '--' ? l10n.portalWeatherSunriseLabel : w.textDay;
     final nightLabel =
         w.textNight == '--' ? l10n.portalWeatherSunsetLabel : w.textNight;
-    final divider = Container(
-      width: 1,
-      color: atm.textColor.withValues(alpha: 0.14),
-    );
 
-    return _Panel(
-      padding: metrics.cardPadding,
+    return _GlassCard(
       radius: metrics.cornerRadius,
-      background: atm.panelBg,
-      borderColor: Colors.white.withValues(alpha: 0.08),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          if (hasDayNight) ...[
-            Row(
-              children: [
-                Expanded(
-                  child: _SunMoment(
-                    icon: Icons.wb_sunny_outlined,
-                    label: dayLabel,
-                    value: w.tempMax != 0 ? '${w.tempMax}°' : '--',
-                    color: atm.textColor,
-                    secondary: atm.textSecondary,
-                  ),
-                ),
-                divider,
-                Expanded(
-                  child: _SunMoment(
-                    icon: Icons.nightlight_round,
-                    label: nightLabel,
-                    value: w.tempMin != 0 ? '${w.tempMin}°' : '--',
-                    color: atm.textColor,
-                    secondary: atm.textSecondary,
-                  ),
-                ),
-              ],
+          Expanded(
+            child: _SplitMoment(
+              icon: Icons.wb_sunny_outlined,
+              label: dayLabel,
+              value: w.tempMax != 0 ? '${w.tempMax}°' : '--',
             ),
-            if (hasSun)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: atm.textColor.withValues(alpha: 0.12),
-                ),
-              ),
-          ],
-          if (hasSun)
-            Row(
-              children: [
-                Expanded(
-                  child: _SunMoment(
-                    icon: Icons.wb_twilight,
-                    label: l10n.portalWeatherSunriseLabel,
-                    value: w.sunrise,
-                    color: atm.textColor,
-                    secondary: atm.textSecondary,
-                  ),
-                ),
-                divider,
-                Expanded(
-                  child: _SunMoment(
-                    icon: Icons.nightlight_round,
-                    label: l10n.portalWeatherSunsetLabel,
-                    value: w.sunset,
-                    color: atm.textColor,
-                    secondary: atm.textSecondary,
-                  ),
-                ),
-              ],
+          ),
+          SizedBox(
+            width: 1,
+            height: 44,
+            child: ColoredBox(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+          Expanded(
+            child: _SplitMoment(
+              icon: Icons.nightlight_round,
+              label: nightLabel,
+              value: w.tempMin != 0 ? '${w.tempMin}°' : '--',
             ),
+          ),
         ],
       ),
     );
   }
 
-  // ─── 参数网格 ─────────────────────────────────────────────────────────
+  Widget _buildSunCard(WeatherDetailLayoutMetrics metrics) {
+    final l10n = AppLocalizations.of(context);
+    final w = widget.weather;
 
-  Widget _buildMetricsGrid(
-    _Atmosphere atm,
-    WeatherDetailLayoutMetrics metrics,
-  ) {
+    return _GlassCard(
+      radius: metrics.cornerRadius,
+      child: Row(
+        children: [
+          Expanded(
+            child: _SplitMoment(
+              icon: Icons.wb_twilight,
+              label: l10n.portalWeatherSunriseLabel,
+              value: w.sunrise,
+            ),
+          ),
+          SizedBox(
+            width: 1,
+            height: 44,
+            child: ColoredBox(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+          Expanded(
+            child: _SplitMoment(
+              icon: Icons.nightlight_round,
+              label: l10n.portalWeatherSunsetLabel,
+              value: w.sunset,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── AQI ───────────────────────────────────────────────────────────────
+
+  Widget _buildAqiStrip(WeatherDetailLayoutMetrics metrics) {
+    final w = widget.weather;
+    final accent = w.aqiColorValue;
+    return _GlassCard(
+      radius: metrics.cornerRadius,
+      tint: accent.withValues(alpha: 0.18),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(Icons.air, color: accent, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'AQI ${w.aqi} · ${w.aqiCategory} · PM2.5 ${w.pm2p5} μg/m³',
+              style: TextStyle(
+                fontSize: AppTypography.bodyMedium,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withValues(alpha: 0.92),
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── 指标 ──────────────────────────────────────────────────────────────
+
+  Widget _buildMetricsCard(WeatherDetailLayoutMetrics metrics) {
     final l10n = AppLocalizations.of(context);
     final w = widget.weather;
     final windText =
         w.windScale != '--'
             ? '${w.windScale} ${w.windDir}'
             : '${w.windSpeed} ${w.windDir}';
-    final items = [
-      _DetailItem(
+
+    final cells = <Widget>[
+      _MetricCell(
         icon: Icons.water_drop_outlined,
         label: l10n.portalWeatherHumidity,
         value: w.humidity,
       ),
-      _DetailItem(
+      _MetricCell(
         icon: Icons.air,
         label: l10n.portalWeatherWind,
         value: windText,
       ),
-      _DetailItem(
+      _MetricCell(
         icon: Icons.visibility_outlined,
         label: l10n.portalWeatherVisibility,
         value: w.visibility,
       ),
-      _DetailItem(
+      _MetricCell(
         icon: Icons.compress,
         label: l10n.portalWeatherPressure,
         value: w.pressure,
       ),
-      _DetailItem(
+      _MetricCell(
         icon: Icons.wb_sunny_outlined,
         label: l10n.portalWeatherUV,
         value: 'UV ${w.uvIndex}',
+        trailing: _buildUvBar(w.uvIndex),
       ),
-      _DetailItem(
+      _MetricCell(
         icon: Icons.water_outlined,
         label: l10n.portalWeatherPrecip,
         value: w.precip,
       ),
     ];
 
-    return _Panel(
-      padding: EdgeInsets.all(metrics.compactHeight ? 10 : 12),
+    return _GlassCard(
       radius: metrics.cornerRadius,
-      background: atm.panelBg,
-      borderColor: Colors.white.withValues(alpha: 0.08),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final columns = metrics.gridColumns;
-          final spacing = 10.0;
-          final tileWidth =
-              (constraints.maxWidth - (columns - 1) * spacing) / columns;
-          return Wrap(
-            spacing: spacing,
-            runSpacing: spacing,
+          final columns = metrics.metricColumns;
+          final rows = (cells.length / columns).ceil();
+          return Column(
             children: [
-              for (final item in items)
-                SizedBox(
-                  width: tileWidth,
-                  height: metrics.metricCellHeight,
-                  child: _MetricCell(item: item, atm: atm),
+              for (var r = 0; r < rows; r++) ...[
+                if (r > 0) _hDivider(),
+                IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (var c = 0; c < columns; c++) ...[
+                        if (c > 0) _vDivider(),
+                        Expanded(
+                          child:
+                              r * columns + c < cells.length
+                                  ? cells[r * columns + c]
+                                  : const SizedBox.shrink(),
+                        ),
+                      ],
+                    ],
+                  ),
                 ),
+              ],
             ],
           );
         },
