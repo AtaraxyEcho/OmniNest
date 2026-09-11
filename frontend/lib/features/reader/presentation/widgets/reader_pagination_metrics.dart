@@ -55,9 +55,17 @@ abstract final class _ReaderPaginationMetrics {
     return height + settings.fontSize * 0.6;
   }
 
+  /// 图片固定槽位高度：与 ReaderContentImage 的渲染槽一致。
+  ///
+  /// 槽位在解码前后保持不变，测高与真实布局零漂移；640 上限接近手机
+  /// 端既有视觉量级（0.78 视口），纯宽度公式使测高无需视口参数。
+  static double imageSlotHeight(double effectiveWidth) {
+    return math.min(effectiveWidth * 1.35, 640);
+  }
+
   static double imageHeight(double effectiveWidth, String? caption) {
-    // 粗估高度（滚动/分页进度映射）；真实渲染在 ReaderContentImage 有高度上限。
-    var height = effectiveWidth * 0.75 + 48;
+    // 槽位高度 + 上下 24 内边距；caption 增加一行。
+    var height = imageSlotHeight(effectiveWidth) + 48;
     if (caption != null && caption.isNotEmpty) {
       height += 26;
     }

@@ -120,6 +120,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void onContinuousScrollPosition(ContinuousScrollPosition position);
   void onContinuousWindowExpand({required bool forward});
   void prefetchNextChapterAtBoundary(int pageIndex);
+  int windowContentYToCharOffset(String chapterId, double windowContentY);
+  double chapterStartScrollOffset(String chapterId);
+  void restoreToChapterStart(String chapterId);
+  bool get pointerDownActive;
+  set pointerDownActive(bool value);
+  bool isUserScrollActive({required DateTime since});
 
   // ── 页面尺寸 ──
 
@@ -159,12 +165,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     final size = MediaQuery.sizeOf(context);
     final topInset =
         settings.immersiveMode ? 0.0 : MediaQuery.viewPaddingOf(context).top;
-    final chromeLayout = ReaderChromeLayout.resolve(
+    return ReaderChromeLayout.anchorViewportY(
+      viewportSize: size,
       immersiveMode: settings.immersiveMode,
-      isPageMode: isPageMode,
+      topInset: topInset,
     );
-    return (size.height - topInset - chromeLayout.viewportVerticalReserve) *
-        0.25;
   }
 
   int computePageCharOffset(int pageIndex) {
@@ -339,8 +344,15 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           behavior: HitTestBehavior.translucent,
           onPointerDown: (_) {
             lastPointerDownTime = DateTime.now();
+            pointerDownActive = true;
             // 用户真实触摸：消耗模式切换冻结锚点
             if (modeSwitchAnchor != null) modeSwitchAnchor = null;
+          },
+          onPointerUp: (_) {
+            pointerDownActive = false;
+          },
+          onPointerCancel: (_) {
+            pointerDownActive = false;
           },
           child: ReaderPageView(
             key: ValueKey(
@@ -726,6 +738,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (prevEntries.isEmpty || !scrollController.hasClients) {
       return;
     }
+    // 与 _compensateScrollForPrefixDelta 同套状态守卫：恢复/加载/切章期间
+    // 滚动偏移由对应流程掌控，此处补偿会产生叠加跳变。
+    if (isRestoringProgress ||
+        restore.shouldSuppressWrites ||
+        isLoadingChapter ||
+        isSwitchingChapter) {
+      return;
+    }
     final nextEntries = continuousScrollController.entries;
     if (nextEntries.isEmpty) {
       return;
@@ -839,8 +859,15 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           behavior: HitTestBehavior.translucent,
           onPointerDown: (_) {
             lastPointerDownTime = DateTime.now();
+            pointerDownActive = true;
             // 用户真实触摸：消耗模式切换冻结锚点
             if (modeSwitchAnchor != null) modeSwitchAnchor = null;
+          },
+          onPointerUp: (_) {
+            pointerDownActive = false;
+          },
+          onPointerCancel: (_) {
+            pointerDownActive = false;
           },
           onPointerMove: (event) {
             // 按住拖动阅读时持续刷新进度窗口起点；buttons==0 的悬停移动
@@ -1030,16 +1057,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     }
 
     if (restoreCharOffset <= 0) {
-      scrollProgress = 0;
-      positionTracker.setCharOffset(0, currentChapterId);
-      isRestoringProgress = false;
       modeSwitchInProgress = false;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (scrollController.hasClients) {
-          scrollController.jumpTo(0);
-        }
-      });
+      if (isPageMode) {
+        scrollProgress = 0;
+        positionTracker.setCharOffset(0, currentChapterId);
+        isRestoringProgress = false;
+      } else {
+        restoreToChapterStart(currentChapterId);
+      }
       return;
     }
 
@@ -1063,28 +1088,24 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           if (!scrollController.hasClients) return 0;
           final max = scrollController.position.maxScrollExtent;
           if (max <= 0) return 0;
-          final contentY = contentLoader?.charOffsetToPixelOffset(
+          final intraY = contentLoader?.charOffsetToPixelOffset(
             currentChapterId,
             capturedCharOffset,
             pageWidth: capturedPageWidth,
             settings: capturedSettings,
             textScale: capturedTextScale,
           );
-          if (contentY == null || contentY <= 0) {
-            // 连续滚动：目标可能在前缀章之后的窗口坐标。
-            final prefix = continuousScrollController.prefixHeightOf(
-              currentChapterId,
-            );
-            if (prefix <= 0) return 0;
-            return (prefix - capturedAnchorY).clamp(0.0, max);
-          }
           final prefix = continuousScrollController.prefixHeightOf(
             currentChapterId,
           );
-          final windowY = prefix + contentY;
+          // 章体在窗口中的起点 = 前缀 + 章头 chrome；charOffset 原点是章体顶。
+          final windowY =
+              prefix +
+              ReaderContinuousScrollController.chapterHeaderExtent +
+              (intraY ?? 0.0);
           return (windowY - capturedAnchorY).clamp(0.0, max);
         },
-        isUserScrolling: () => lastPointerDownTime.isAfter(restoreScheduledAt),
+        isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
         onSettled: (completed) {
           if (completed) {
             positionTracker.setCharOffset(capturedCharOffset, currentChapterId);
@@ -1192,8 +1213,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     pendingChapterProgress = null;
     scrollProgress = progressRatio;
     final capturedRatio = progressRatio;
-    final capturedPageWidth = computePageWidth();
-    final capturedTextScale = MediaQuery.textScalerOf(context).scale(1.0);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -1203,24 +1222,32 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         targetOffsetBuilder: () {
           if (!scrollController.hasClients) return 0;
           final max = scrollController.position.maxScrollExtent;
-          return capturedRatio * max;
+          final data = contentLoader?.get(currentChapterId, settings);
+          final chapterHeight =
+              (data != null && data.cumulativeHeights.isNotEmpty)
+                  ? data.cumulativeHeights.last
+                  : 0.0;
+          if (chapterHeight <= 0) {
+            return capturedRatio * max;
+          }
+          // 章内比例映射到窗口坐标：前缀 + 章头 + ratio×章体高 − 视口锚点。
+          final target =
+              continuousScrollController.prefixHeightOf(currentChapterId) +
+              ReaderContinuousScrollController.chapterHeaderExtent +
+              capturedRatio * chapterHeight -
+              viewportAnchorY;
+          return target.clamp(0.0, max);
         },
-        isUserScrolling: () => lastPointerDownTime.isAfter(restoreScheduledAt),
+        isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
         onSettled: (completed) {
           if (completed && scrollController.hasClients) {
             final max = scrollController.position.maxScrollExtent;
             final data = contentLoader?.get(currentChapterId, settings);
             if (data != null && max > 0) {
-              final settledContentY = scrollController.offset + viewportAnchorY;
-              final settledCharOffset =
-                  contentLoader?.contentYToCharOffset(
-                    currentChapterId,
-                    settledContentY,
-                    pageWidth: capturedPageWidth,
-                    settings: settings,
-                    textScale: capturedTextScale,
-                  ) ??
-                  0;
+              final settledCharOffset = windowContentYToCharOffset(
+                currentChapterId,
+                scrollController.offset + viewportAnchorY,
+              );
               positionTracker.updateFromScroll(
                 offset: scrollController.offset,
                 maxExtent: max,

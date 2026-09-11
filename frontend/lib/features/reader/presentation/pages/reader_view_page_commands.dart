@@ -338,9 +338,11 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       if (!mounted) {
         return;
       }
-      // 窗口已按新锚点重建后再取 prefix。
+      // 窗口已按新锚点重建后再取 prefix；章体起点 = 前缀 + 章头 chrome。
       final windowY =
-          continuousScrollController.prefixHeightOf(chapterId) + intraY;
+          continuousScrollController.prefixHeightOf(chapterId) +
+          ReaderContinuousScrollController.chapterHeaderExtent +
+          intraY;
       if (_scrollController.hasClients) {
         final max = _scrollController.position.maxScrollExtent;
         final target = (windowY - viewportAnchorY).clamp(0.0, max);

@@ -17,6 +17,12 @@ part 'reader_pagination_text_layout.dart';
 /// 将章节文本行拼成带样式的 TextSpan，用 TextPainter 统一排版，
 /// 通过 getPositionForOffset 找到精确切割点。
 class ReaderPaginationEngine {
+  /// 图片固定槽位高度：渲染（ReaderContentImage）与测高共用。
+  ///
+  /// 槽位在图片解码前后保持不变，保证真实布局与累积测高零漂移。
+  static double imageSlotHeight(double effectiveWidth) =>
+      _ReaderPaginationMetrics.imageSlotHeight(effectiveWidth);
+
   /// 将 [blocks] 按可用高度切分为页面。
   static List<PageSlice> paginate(
     List<ContentBlock> blocks,

@@ -127,11 +127,15 @@ class _ReaderContinuousScrollViewState
 
   double _viewportAnchorY() {
     final size = MediaQuery.sizeOf(context);
-    final chrome = ReaderChromeLayout.resolve(
+    final topInset =
+        widget.settings.immersiveMode
+            ? 0.0
+            : MediaQuery.viewPaddingOf(context).top;
+    return ReaderChromeLayout.anchorViewportY(
+      viewportSize: size,
       immersiveMode: widget.settings.immersiveMode,
-      isPageMode: false,
+      topInset: topInset,
     );
-    return (size.height - chrome.viewportVerticalReserve) * 0.25;
   }
 
   @override
@@ -233,7 +237,13 @@ class _ReaderContinuousScrollViewState
       slivers.add(
         SliverToBoxAdapter(
           key: ValueKey('ch-trail-${entry.chapterId}'),
-          child: SizedBox(height: entry.isReady ? 48 : 24),
+          child: SizedBox(
+            height:
+                entry.isReady
+                    ? ReaderContinuousScrollController.chapterTrailingExtent
+                    : ReaderContinuousScrollController
+                        .chapterTrailingLoadingExtent,
+          ),
         ),
       );
     }
@@ -458,10 +468,10 @@ class _ChapterHeaderDelegate extends SliverPersistentHeaderDelegate {
   final ReaderViewSettings settings;
 
   @override
-  double get minExtent => 36;
+  double get minExtent => ReaderContinuousScrollController.chapterHeaderExtent;
 
   @override
-  double get maxExtent => 36;
+  double get maxExtent => ReaderContinuousScrollController.chapterHeaderExtent;
 
   @override
   Widget build(

@@ -243,16 +243,10 @@ mixin ReaderViewPageInteractionMixin
     if (!mounted || !scrollController.hasClients) return true;
     final latestMax = scrollController.position.maxScrollExtent;
     if (latestMax > 0) {
-      final contentY = scrollController.offset + viewportAnchorY;
-      final charOffset =
-          contentLoader?.contentYToCharOffset(
-            currentChapterId,
-            contentY,
-            pageWidth: computePageWidth(),
-            settings: settings,
-            textScale: MediaQuery.textScalerOf(context).scale(1.0),
-          ) ??
-          0;
+      final charOffset = windowContentYToCharOffset(
+        currentChapterId,
+        scrollController.offset + viewportAnchorY,
+      );
       final totalChars =
           contentLoader?.getByChapterId(currentChapterId)?.totalChars ?? 0;
       final latestProgress =
@@ -311,17 +305,14 @@ mixin ReaderViewPageInteractionMixin
       if (!isPageMode &&
           scrollController.hasClients &&
           scrollController.position.maxScrollExtent > 0) {
-        // 滚动模式：从实际滚动位置计算精确锚点
-        final contentY = scrollController.offset + viewportAnchorY;
-        savedCharOffset =
-            contentLoader?.contentYToCharOffset(
-              currentChapterId,
-              contentY,
-              pageWidth: computePageWidth(),
-              settings: settings,
-              textScale: MediaQuery.textScalerOf(context).scale(1.0),
-            ) ??
-            positionTracker.charOffset;
+        // 滚动模式：从实际滚动位置计算精确锚点（窗口坐标统一换算）
+        savedCharOffset = windowContentYToCharOffset(
+          currentChapterId,
+          scrollController.offset + viewportAnchorY,
+        );
+        if (savedCharOffset <= 0) {
+          savedCharOffset = positionTracker.charOffset;
+        }
       } else {
         savedCharOffset = positionTracker.charOffset;
       }
@@ -459,12 +450,9 @@ mixin ReaderViewPageInteractionMixin
           annotationHandler?.updateChapter(resolved.chapterId);
         }
       } else {
-        final mapped = loader.contentYToCharOffset(
+        final mapped = windowContentYToCharOffset(
           currentChapterId,
           scrollController.offset + viewportAnchorY,
-          pageWidth: computePageWidth(),
-          settings: settings,
-          textScale: MediaQuery.textScalerOf(context).scale(1.0),
         );
         if (mapped > 0) {
           anchorCharOffset = mapped;

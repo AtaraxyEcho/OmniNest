@@ -130,11 +130,29 @@ class ReaderContinuousScrollController extends ChangeNotifier {
   double get totalHeight {
     if (_entries.isEmpty) return 0;
     final last = _entries.last;
-    return prefixHeightOf(last.chapterId) + last.totalHeight;
+    return prefixHeightOf(last.chapterId) + effectiveExtentOf(last);
   }
 
   /// 未加载章的兜底占位高度。
   static const double fallbackPlaceholderHeight = 240;
+
+  /// 章头 sliver 高度，与 view 的 _ChapterHeaderDelegate 对齐。
+  static const double chapterHeaderExtent = 36;
+
+  /// 章尾留白，与 view 的 ch-trailing 对齐：就绪章 48 / 未就绪章 24。
+  static const double chapterTrailingExtent = 48;
+  static const double chapterTrailingLoadingExtent = 24;
+
+  /// 章在窗口中的完整占位高度：章头 + 章体 + 章尾。
+  ///
+  /// 窗口坐标（prefix、positionAtContentY、contentYFor）必须与 view 的
+  /// sliver 布局（header + body + trailing）一致，否则跨章边界换算有
+  /// 固定偏差。
+  double effectiveExtentOf(ContinuousChapterEntry entry) {
+    return chapterHeaderExtent +
+        entry.totalHeight +
+        (entry.isReady ? chapterTrailingExtent : chapterTrailingLoadingExtent);
+  }
 
   /// 用新的锚点章与全量章节元数据重建窗口。
   ///
@@ -206,7 +224,7 @@ class ReaderContinuousScrollController extends ChangeNotifier {
     var running = 0.0;
     for (final entry in nextEntries) {
       _prefixHeights[entry.chapterId] = running;
-      running += entry.totalHeight;
+      running += effectiveExtentOf(entry);
     }
     _items = _buildItems(nextEntries);
     notifyListeners();
@@ -275,9 +293,13 @@ class ReaderContinuousScrollController extends ChangeNotifier {
     final y = contentY < 0 ? 0.0 : contentY;
     for (final entry in _entries) {
       final start = prefixHeightOf(entry.chapterId);
-      final end = start + entry.totalHeight;
+      final end = start + effectiveExtentOf(entry);
       if (y < end || identical(entry, _entries.last)) {
-        final localY = (y - start).clamp(0.0, entry.totalHeight);
+        // 章体位于章头之后：章头区域映射章首，章尾留白映射章尾。
+        final localY = (y - start - chapterHeaderExtent).clamp(
+          0.0,
+          entry.totalHeight,
+        );
         final resolved = _charOffsetInEntry(entry, localY);
         final progress =
             entry.totalChars > 0
@@ -357,10 +379,10 @@ class ReaderContinuousScrollController extends ChangeNotifier {
   }) {
     final prefix = prefixHeightOf(chapterId);
     if (totalChars <= 0 || chapterHeight <= 0) {
-      return prefix;
+      return prefix + chapterHeaderExtent;
     }
     final ratio = (charOffset / totalChars).clamp(0.0, 1.0);
-    return prefix + ratio * chapterHeight;
+    return prefix + chapterHeaderExtent + ratio * chapterHeight;
   }
 
   /// 是否需要向后扩挂（视口接近窗口末尾）。

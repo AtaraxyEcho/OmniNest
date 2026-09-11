@@ -73,10 +73,11 @@ void main() {
       );
 
       expect(controller.entries.map((e) => e.chapterId), ['c0', 'c1', 'c2']);
+      // 前缀含每章 chrome：章头 36 + 章尾 48（就绪章）。
       expect(controller.prefixHeightOf('c0'), 0);
-      expect(controller.prefixHeightOf('c1'), 200);
-      expect(controller.prefixHeightOf('c2'), 500);
-      expect(controller.totalHeight, 750);
+      expect(controller.prefixHeightOf('c1'), 284);
+      expect(controller.prefixHeightOf('c2'), 668);
+      expect(controller.totalHeight, 1002);
     });
 
     test('clamps window at book start', () {
@@ -130,11 +131,13 @@ void main() {
         resolve: (id) => entries[id],
       );
 
-      final inFirst = controller.positionAtContentY(50);
+      // 章体起点 = 前缀 + 章头 36；窗口 contentY 需含 chrome 偏移。
+      final inFirst = controller.positionAtContentY(36 + 50);
       expect(inFirst!.chapterId, 'c0');
       expect(inFirst.charOffset, 25);
 
-      final inSecond = controller.positionAtContentY(250);
+      // c1 前缀 284，章体起点 320。
+      final inSecond = controller.positionAtContentY(320 + 50);
       expect(inSecond!.chapterId, 'c1');
       expect(inSecond.charOffset, 25);
     });
@@ -169,7 +172,8 @@ void main() {
           totalChars: 100,
           chapterHeight: 200,
         ),
-        300,
+        // c1 前缀 284 + 章头 36 + ratio 0.5 × 200。
+        420,
       );
     });
 

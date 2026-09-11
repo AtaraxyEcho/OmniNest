@@ -14,6 +14,7 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
+import 'package:omninest/features/reader/application/reader_progress_echo.dart';
 import 'package:omninest/features/reader/application/reader_progress_sync_service.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
@@ -138,7 +139,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Timer? _bookProgressRecomputeTimer;
   double _lastBookProgressInput = -1;
   DateTime? _lastAppliedProgressAt;
-  ReaderProgressSnapshot? _lastOwnProgressSave; // 本机最近一次推送的进度快照
   double? _pendingChapterProgress; // 恢复时的章节进度比例（0-1）
   int? _pendingRestoreCharOffset; // 模式切换时待恢复的字符偏移（用于精确像素定位）
   bool _isRestoringProgress = false; // 正在恢复阅读位置，显示加载遮罩
@@ -151,7 +151,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   DateTime _lastPointerDownTime = DateTime.fromMillisecondsSinceEpoch(
     0,
   ); // 最后一次真实触摸
-  final _restore = ScrollRestore(); // 滚动位置恢复器（封装帧回调生命周期）
+  // 滚动位置恢复器：max 阈值放宽到 24px，避免图片解码等细碎布局漂移
+  // 反复重激活监控期与用户滚动对抗。
+  final _restore = ScrollRestore(maxChangeThreshold: 24);
 
   // ── 章节导航与返回原进度 ──
   ReaderChapterNavigationIntent _chapterNavigationIntent =
@@ -182,6 +184,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   bool _bookshelfBusy = false;
   bool _selectionActive = false;
   bool _exitRequested = false;
+  // 指针按住未松开：ScrollRestore 探针据此识别"进行中的拖动"。
+  bool _pointerDownActive = false;
+
+  @override
+  bool get pointerDownActive => _pointerDownActive;
+
+  @override
+  set pointerDownActive(bool value) => _pointerDownActive = value;
+
   ParsedBook? _parsedBookSnapshot;
   // 章节列表缓存：parsedBook 身份不变时复用，避免每次 build O(章节) 重分配。
   ParsedBook? _chaptersCacheSource;
@@ -309,28 +320,28 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   set lastAppliedProgressAt(DateTime? v) => _lastAppliedProgressAt = v;
 
+  // 回声检测器：环形记录本机近期保存（见 ReaderProgressEchoDetector）。
+  final _progressEchoDetector = ReaderProgressEchoDetector();
+
   /// 记录本机推送的进度快照，供回声判定使用。
   @override
   void noteOwnProgressSave(ReaderProgressSnapshot snapshot) {
-    _lastOwnProgressSave = snapshot;
+    _progressEchoDetector.note(
+      chapterId: snapshot.chapterId,
+      charOffset: snapshot.charOffset,
+      progress: snapshot.progress,
+      at: snapshot.updatedAt ?? DateTime.now(),
+    );
   }
 
-  /// 判断服务端回灌的进度快照是否为本机刚保存的自身回声。
-  ///
-  /// 本机保存→服务端落库→详情 provider 刷新会产生一条与本地快照内容
-  /// 相同、时间戳略新的记录；不跳过就会把刚保存的位置重新施加回 UI，
-  /// 表现为每次滚动/点击后内容回跳"刷新"。跨设备更新时间必然晚于
-  /// 本机保存时刻，不受影响。
+  /// 判断服务端回灌的进度快照是否为本机近期保存的自身回声。
   bool _isOwnProgressEcho(ReaderProgressSnapshot snapshot, DateTime at) {
-    final own = _lastOwnProgressSave;
-    final ownAt = own?.updatedAt;
-    if (own == null || ownAt == null) {
-      return false;
-    }
-    return own.chapterId == snapshot.chapterId &&
-        (own.charOffset - snapshot.charOffset).abs() <= 64 &&
-        (own.progress - snapshot.progress).abs() <= 0.002 &&
-        at.isBefore(ownAt.add(const Duration(seconds: 30)));
+    return _progressEchoDetector.isEcho(
+      chapterId: snapshot.chapterId,
+      charOffset: snapshot.charOffset,
+      progress: snapshot.progress,
+      at: at,
+    );
   }
 
   @override
@@ -697,16 +708,23 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (!_restore.shouldSuppressWrites && _scrollController.hasClients) {
       final max = _scrollController.position.maxScrollExtent;
       if (max > 0) {
-        final contentY = _scrollController.offset + viewportAnchorY;
+        // 滚动 offset 是窗口绝对坐标：扣除前缀章与章头后才可映射章内。
+        final chapterBodyY =
+            _scrollController.offset +
+            viewportAnchorY -
+            _continuousScrollController.prefixHeightOf(_currentChapterId) -
+            ReaderContinuousScrollController.chapterHeaderExtent;
         final charOffset =
-            _contentLoader?.contentYToCharOffset(
-              _currentChapterId,
-              contentY,
-              pageWidth: computePageWidth(),
-              settings: _settings,
-              textScale: _lastTextScale,
-            ) ??
-            0;
+            chapterBodyY <= 0
+                ? 0
+                : _contentLoader?.contentYToCharOffset(
+                      _currentChapterId,
+                      chapterBodyY,
+                      pageWidth: computePageWidth(),
+                      settings: _settings,
+                      textScale: _lastTextScale,
+                    ) ??
+                    0;
         // chapterProgress 从 charOffset 推导
         final totalChars =
             _contentLoader?.getByChapterId(_currentChapterId)?.totalChars ?? 0;

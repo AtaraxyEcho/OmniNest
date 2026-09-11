@@ -1,6 +1,5 @@
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +8,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_image_preview.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
@@ -37,6 +37,41 @@ class ReaderContentImage extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDataUri = block.src.startsWith('data:');
     final isCachedImage = block.src.startsWith(_placeholderPrefix);
+    // 槽位在外层约束下计算：滚动 sliver 给无界高度（用完整槽位），
+    // 有界上下文（翻页页框/测试视口）按可用高度钳制避免整块溢出。
+    return LayoutBuilder(
+      builder: (context, outerConstraints) {
+        final width =
+            outerConstraints.maxWidth.isFinite && outerConstraints.maxWidth > 0
+                ? outerConstraints.maxWidth
+                : MediaQuery.sizeOf(context).width;
+        var slotHeight = ReaderPaginationEngine.imageSlotHeight(width);
+        final available = outerConstraints.maxHeight;
+        final hasCaption = block.caption?.isNotEmpty == true;
+        if (available.isFinite && available > 0) {
+          // 预留：上下内边距 48 + 容器边框 2 + 题注区（顶距 10 + 行高 + 余量）。
+          final reserved = 54.0 + (hasCaption ? 32.0 : 0.0);
+          final bounded = available - reserved;
+          if (bounded > 0 && slotHeight > bounded) {
+            slotHeight = bounded;
+          }
+        }
+        return _buildContent(
+          context,
+          slotHeight: slotHeight,
+          isDataUri: isDataUri,
+          isCachedImage: isCachedImage,
+        );
+      },
+    );
+  }
+
+  Widget _buildContent(
+    BuildContext context, {
+    required double slotHeight,
+    required bool isDataUri,
+    required bool isCachedImage,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 24),
       child: Semantics(
@@ -71,52 +106,38 @@ class ReaderContentImage extends StatelessWidget {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: LayoutBuilder(
-                    builder: (context, constraints) {
-                      final maxImageHeight = _maxImageHeight(
-                        context,
-                        constraints.maxWidth.isFinite
-                            ? constraints.maxWidth
-                            : MediaQuery.sizeOf(context).width,
-                      );
-                      return ConstrainedBox(
-                        constraints: BoxConstraints(maxHeight: maxImageHeight),
-                        child:
-                            isCachedImage
-                                ? _buildCachedImage()
-                                : isDataUri
-                                ? _buildDataUriImage()
-                                : Image.network(
-                                  retryCount > 0
-                                      ? '${block.src}#retry=$retryCount'
-                                      : block.src,
-                                  key: ValueKey('${block.src}#$retryCount'),
-                                  width: double.infinity,
-                                  fit: BoxFit.fitWidth,
-                                  filterQuality: FilterQuality.medium,
-                                  cacheWidth: 800,
-                                  loadingBuilder: (context, child, progress) {
-                                    if (progress == null) return child;
-                                    return SizedBox(
-                                      height: 120,
-                                      child: Center(
-                                        child: CircularProgressIndicator(
-                                          value:
-                                              progress.expectedTotalBytes ==
-                                                      null
-                                                  ? null
-                                                  : progress
-                                                          .cumulativeBytesLoaded /
-                                                      progress
-                                                          .expectedTotalBytes!,
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                  errorBuilder: (_, _, _) => _buildError(),
-                                ),
-                      );
-                    },
+                  child: SizedBox(
+                    height: slotHeight,
+                    width: double.infinity,
+                    child:
+                        isCachedImage
+                            ? _buildCachedImage(slotHeight)
+                            : isDataUri
+                            ? _buildDataUriImage(slotHeight)
+                            : Image.network(
+                              retryCount > 0
+                                  ? '${block.src}#retry=$retryCount'
+                                  : block.src,
+                              key: ValueKey('${block.src}#$retryCount'),
+                              fit: BoxFit.contain,
+                              filterQuality: FilterQuality.medium,
+                              cacheWidth: 800,
+                              loadingBuilder: (context, child, progress) {
+                                if (progress == null) return child;
+                                return _slotPlaceholder(
+                                  slotHeight,
+                                  CircularProgressIndicator(
+                                    value:
+                                        progress.expectedTotalBytes == null
+                                            ? null
+                                            : progress.cumulativeBytesLoaded /
+                                                progress.expectedTotalBytes!,
+                                  ),
+                                );
+                              },
+                              errorBuilder:
+                                  (_, _, _) => _buildError(slotHeight),
+                            ),
                   ),
                 ),
               ),
@@ -140,14 +161,17 @@ class ReaderContentImage extends StatelessWidget {
     );
   }
 
-  /// 限制超高图：避免 SliverList 中整块长图被一次滑动“翻过”。
-  double _maxImageHeight(BuildContext context, double width) {
-    final viewportHeight = MediaQuery.sizeOf(context).height;
-    return math.min(width * 1.35, viewportHeight * 0.78);
+  /// 槽位内占位（加载中）：与最终图片同高，布局零漂移。
+  Widget _slotPlaceholder(double slotHeight, Widget child) {
+    return SizedBox(
+      height: slotHeight,
+      width: double.infinity,
+      child: Center(child: child),
+    );
   }
 
-  Widget _buildCachedImage() {
-    if (itemId == null) return _buildError();
+  Widget _buildCachedImage(double slotHeight) {
+    if (itemId == null) return _buildError(slotHeight);
     final imagePath = block.src.substring(
       _placeholderPrefix.length,
       block.src.length - 2,
@@ -156,18 +180,19 @@ class ReaderContentImage extends StatelessWidget {
       itemId: itemId!,
       imagePath: imagePath,
       bust: retryCount,
-      errorBuilder: _buildError,
+      slotHeight: slotHeight,
+      errorBuilder: () => _buildError(slotHeight),
     );
   }
 
-  Widget _buildDataUriImage() {
+  Widget _buildDataUriImage(double slotHeight) {
     try {
       final commaIndex = block.src.indexOf(',');
       if (commaIndex < 0) {
         if (kDebugMode) {
           readerDebugLog('ViewContent: invalid data URI — no comma found');
         }
-        return _buildError();
+        return _buildError(slotHeight);
       }
       final bytes = _dataUriDecodeCache.decode(
         block.src,
@@ -181,21 +206,20 @@ class ReaderContentImage extends StatelessWidget {
       }
       return Image.memory(
         bytes,
-        width: double.infinity,
-        fit: BoxFit.fitWidth,
+        fit: BoxFit.contain,
         filterQuality: FilterQuality.medium,
-        errorBuilder: (_, _, _) => _buildError(),
+        errorBuilder: (_, _, _) => _buildError(slotHeight),
       );
     } on Exception {
-      return _buildError();
+      return _buildError(slotHeight);
     }
   }
 
-  Widget _buildError() {
+  Widget _buildError(double slotHeight) {
     return GestureDetector(
       onTap: onRetry,
       child: Container(
-        height: 120,
+        height: slotHeight,
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: settings.onSurfaceVariantColor.withValues(alpha: 0.06),
@@ -235,12 +259,14 @@ class _CachedReaderImage extends ConsumerWidget {
     required this.itemId,
     required this.imagePath,
     required this.bust,
+    required this.slotHeight,
     required this.errorBuilder,
   });
 
   final String itemId;
   final String imagePath;
   final int bust;
+  final double slotHeight;
   final Widget Function() errorBuilder;
 
   @override
@@ -253,11 +279,7 @@ class _CachedReaderImage extends ConsumerWidget {
       )),
     );
     return image.when(
-      loading:
-          () => const SizedBox(
-            height: 120,
-            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-          ),
+      loading: () => _LoadingSlot(slotHeight: slotHeight),
       error: (_, _) => errorBuilder(),
       data: (bytes) {
         if (bytes == null || bytes.isEmpty) {
@@ -265,12 +287,27 @@ class _CachedReaderImage extends ConsumerWidget {
         }
         return Image.memory(
           bytes,
-          width: double.infinity,
-          fit: BoxFit.fitWidth,
+          fit: BoxFit.contain,
           filterQuality: FilterQuality.medium,
           errorBuilder: (_, _, _) => errorBuilder(),
         );
       },
+    );
+  }
+}
+
+/// 加载占位：与图片槽同高，解码前后布局零漂移。
+class _LoadingSlot extends StatelessWidget {
+  const _LoadingSlot({required this.slotHeight});
+
+  final double slotHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: slotHeight,
+      width: double.infinity,
+      child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
     );
   }
 }

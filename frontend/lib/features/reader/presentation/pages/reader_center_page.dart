@@ -167,8 +167,23 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
     if (!mounted) {
       return;
     }
-    if (localSnapshot.hasReadableProgress) {
-      final chapterId = Uri.encodeComponent(localSnapshot.chapterId);
+    // 跨设备：并行取服务器进度（500ms 超时兜底），按 updatedAt 取全局
+    // 最新解析章节；服务器不可达时退回本地，阅读器内加载层仍会修正。
+    ReaderProgressSnapshot? serverSnapshot;
+    try {
+      final detail = await ref
+          .read(readerItemDetailProvider(item.id).future)
+          .timeout(const Duration(milliseconds: 500));
+      serverSnapshot = ReaderProgressSnapshot.fromServer(detail.progress);
+    } on Exception {
+      serverSnapshot = null;
+    }
+    if (!mounted) {
+      return;
+    }
+    final best = ReaderProgressSnapshot.latest(localSnapshot, serverSnapshot);
+    if (best != null && best.hasReadableProgress) {
+      final chapterId = Uri.encodeComponent(best.chapterId);
       context.push('/reader/items/${item.id}/chapters/$chapterId');
       return;
     }
