@@ -7,6 +7,9 @@ import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/features/photos/application/photo_controller.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_media_thumbnail.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_mobile_shell.dart';
 
 void main() {
@@ -20,6 +23,9 @@ void main() {
       ProviderScope(
         overrides: [
           authSessionStoreProvider.overrideWithValue(MemoryAuthSessionStore()),
+          photoDashboardProvider.overrideWith(
+            _FakePhotoDashboardController.new,
+          ),
         ],
         child: MaterialApp(
           localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -52,5 +58,46 @@ void main() {
       }),
       findsOneWidget,
     );
+    // 缩略图解码一律单维约束：同时设宽高会把源图拉伸到精确尺寸，
+    // 横/竖构图被压扁；由 BoxFit.cover 保持真实纵横比裁切。
+    final thumbnails = tester.widgetList<PortalMediaThumbnail>(
+      find.byType(PortalMediaThumbnail),
+    );
+    expect(thumbnails, isNotEmpty);
+    for (final thumbnail in thumbnails) {
+      expect(
+        thumbnail.cacheWidth == null || thumbnail.cacheHeight == null,
+        isTrue,
+        reason: '缩略图不得同时约束解码宽高',
+      );
+    }
   });
+}
+
+/// 注入六张假照片驱动「最近照片」网格渲染真实缩略图。
+class _FakePhotoDashboardController extends PhotoDashboardController {
+  @override
+  Future<PhotoDashboard> build() async {
+    return PhotoDashboard(
+      totalPhotos: 6,
+      totalAlbums: 0,
+      totalFavorites: 0,
+      recentPhotos: List.generate(6, (index) => _photo(index)),
+      favoritePhotos: const [],
+    );
+  }
+
+  PhotoItem _photo(int index) {
+    return PhotoItem(
+      id: 'photo-$index',
+      fileNodeId: 'node-$index',
+      title: '照片 $index',
+      format: 'JPEG',
+      fileSize: 1024,
+      metadataStatus: 'READY',
+      favorite: false,
+      createdAt: DateTime(2026, 9, 1),
+      coverUrl: 'https://example.com/photo-$index.jpg',
+    );
+  }
 }

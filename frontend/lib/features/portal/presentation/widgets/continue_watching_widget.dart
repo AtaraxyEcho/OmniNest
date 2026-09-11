@@ -55,8 +55,9 @@ class ContinueWatchingWidget extends StatelessWidget {
                               imageUrl: item.posterUrl,
                               width: 40,
                               height: 56,
-                              cacheWidth: 80,
-                              cacheHeight: 112,
+                              // 单维约束解码：高度主导槽位仅约束高度，
+                              // 海报真实纵横比由 cover 裁切保持。
+                              cacheHeight: 168,
                               borderRadius: BorderRadius.circular(4),
                               fallback: Container(
                                 color:

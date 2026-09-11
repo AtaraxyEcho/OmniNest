@@ -532,8 +532,9 @@ class _PortalFocusPreviewImage extends StatelessWidget {
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,
-      cacheWidth: 420,
-      cacheHeight: 560,
+      // 单维约束解码：双维会把海报拉伸到固定比例，仅约束高度后由
+      // cover 裁切，覆盖 540 上限槽位在常见 DPR 下的清晰度。
+      cacheHeight: 720,
       borderRadius: BorderRadius.circular(7),
       fallback: fallback,
     );

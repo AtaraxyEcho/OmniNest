@@ -59,8 +59,9 @@ class RecentPhotosWidget extends StatelessWidget {
                                   aspectRatio: 1,
                                   child: PortalMediaThumbnail(
                                     imageUrl: p.coverUrl,
-                                    cacheWidth: 160,
-                                    cacheHeight: 160,
+                                    // 单维约束解码：方形双维会把源图拉伸
+                                    // 压扁，宽度约束后由 cover 居中裁切。
+                                    cacheWidth: 320,
                                     borderRadius: BorderRadius.circular(6),
                                     fallback: Container(
                                       color:

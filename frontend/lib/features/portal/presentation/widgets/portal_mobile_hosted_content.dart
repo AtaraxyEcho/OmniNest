@@ -558,14 +558,15 @@ class _PortalContinueTile extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
+                        // 槽位高主导（≤88 高）：仅约束解码高度，竖版海报
+                        // 与横版缩略图均无需拉伸即可 cover 裁切。
                         PortalMediaThumbnail(
                           imageUrl: item.imageUrl,
                           fit: BoxFit.cover,
-                          cacheWidth:
-                              item.shape == _PortalContinueMediaShape.portrait
-                                  ? 116
-                                  : 176,
-                          cacheHeight: 176,
+                          cacheHeight: (88 *
+                                  MediaQuery.devicePixelRatioOf(context))
+                              .ceil()
+                              .clamp(176, 352),
                           borderRadius: BorderRadius.zero,
                           fallback: ColoredBox(
                             color: context.mobileColors.surfaceRaised,
@@ -651,36 +652,45 @@ class _PortalRecentPhotoGrid extends StatelessWidget {
             message: AppLocalizations.of(context).portalNoPhotos,
           );
         }
-        return GridView.builder(
-          shrinkWrap: true,
-          primary: false,
-          itemCount: items.length,
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            mainAxisSpacing: 8,
-            crossAxisSpacing: 8,
-          ),
-          itemBuilder: (context, index) {
-            final photo = items[index];
-            return MobilePressable(
-              semanticLabel: photo.title,
-              onTap: () => context.push('/photos/${photo.id}'),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: PortalMediaThumbnail(
-                  imageUrl: photo.coverUrl,
-                  cacheWidth: 240,
-                  cacheHeight: 240,
-                  borderRadius: BorderRadius.zero,
-                  fallback: ColoredBox(
-                    color: context.mobileColors.surfaceRaised,
-                    child: Icon(
-                      Icons.image_outlined,
-                      color: context.mobileColors.textSecondary,
+        // 单维约束解码：同时设宽高会把源图拉伸到精确方形（横/竖构图
+        // 被压扁），仅约束宽度并由 cover 裁切保持真实纵横比；按单元格
+        // 物理宽度加 4:3 余量，横构图裁切后仍清晰。
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final cellWidth = (constraints.maxWidth - 16) / 3;
+            final dpr = MediaQuery.devicePixelRatioOf(context);
+            final cacheWidth = (cellWidth * dpr * 4 / 3).ceil().clamp(200, 640);
+            return GridView.builder(
+              shrinkWrap: true,
+              primary: false,
+              itemCount: items.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+              ),
+              itemBuilder: (context, index) {
+                final photo = items[index];
+                return MobilePressable(
+                  semanticLabel: photo.title,
+                  onTap: () => context.push('/photos/${photo.id}'),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: PortalMediaThumbnail(
+                      imageUrl: photo.coverUrl,
+                      cacheWidth: cacheWidth,
+                      borderRadius: BorderRadius.zero,
+                      fallback: ColoredBox(
+                        color: context.mobileColors.surfaceRaised,
+                        child: Icon(
+                          Icons.image_outlined,
+                          color: context.mobileColors.textSecondary,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             );
           },
         );
