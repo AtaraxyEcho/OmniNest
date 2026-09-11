@@ -419,20 +419,39 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                 ? MainAxisAlignment.spaceBetween
                 : MainAxisAlignment.start,
         children: [
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(w.weatherIcon, style: const TextStyle(fontSize: 22)),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  w.text,
-                  style: TextStyle(
-                    fontSize: AppTypography.titleSmall,
-                    color: Colors.white.withValues(alpha: 0.50),
+              Row(
+                children: [
+                  Text(w.weatherIcon, style: const TextStyle(fontSize: 22)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      w.locationName.isNotEmpty ? w.locationName : w.text,
+                      style: TextStyle(
+                        fontSize: AppTypography.titleSmall,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white.withValues(alpha: 0.92),
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+                ],
               ),
+              if (w.locationName.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, left: 30),
+                  child: Text(
+                    w.text,
+                    style: TextStyle(
+                      fontSize: AppTypography.bodySmall,
+                      color: Colors.white.withValues(alpha: 0.45),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
             ],
           ),
           if (!metrics.useHeroSplit) const SizedBox(height: 20),
@@ -662,14 +681,16 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
   }
 
   Widget _buildHourlyList(AppLocalizations l10n, List<WeatherHourly> hourly) {
+    // 详情页仅展示未来 8 小时（含当前小时）。
+    final items = hourly.take(8).toList(growable: false);
     return SizedBox(
       height: 104,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        itemCount: hourly.length,
+        itemCount: items.length,
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
-          final item = hourly[index];
+          final item = items[index];
           final isFirst = index == 0;
           return Container(
             constraints: const BoxConstraints(minWidth: 64),
@@ -685,7 +706,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  isFirst ? l10n.portalWeatherForecastToday : item.displayTime,
+                  isFirst ? l10n.portalWeatherForecastNow : item.displayTime,
                   style: TextStyle(
                     fontSize: AppTypography.labelSmall,
                     color: Colors.white.withValues(alpha: 0.50),

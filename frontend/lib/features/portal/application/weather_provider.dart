@@ -116,6 +116,7 @@ class WeatherData {
     this.textNight = '--',
     this.hourly = const [],
     this.daily = const [],
+    this.locationName = '',
   });
 
   final int temp;
@@ -143,6 +144,9 @@ class WeatherData {
   final String textNight;
   final List<WeatherHourly> hourly;
   final List<WeatherDaily> daily;
+
+  /// 可读地区名（城市），GPS 直连时可能为空。
+  final String locationName;
 
   factory WeatherData.fromJson(Map<String, dynamic> json) {
     final hourlyRaw = json['hourly'] as List<dynamic>? ?? const [];
@@ -179,6 +183,7 @@ class WeatherData {
         for (final item in dailyRaw)
           if (item is Map<String, dynamic>) WeatherDaily.fromJson(item),
       ],
+      locationName: json['locationName'] as String? ?? '',
     );
   }
 

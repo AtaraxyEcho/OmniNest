@@ -4519,6 +4519,12 @@ abstract class AppLocalizations {
   /// **'Today'**
   String get portalWeatherForecastToday;
 
+  /// No description provided for @portalWeatherForecastNow.
+  ///
+  /// In en, this message translates to:
+  /// **'Now'**
+  String get portalWeatherForecastNow;
+
   /// No description provided for @portalWeatherForecastEmpty.
   ///
   /// In en, this message translates to:

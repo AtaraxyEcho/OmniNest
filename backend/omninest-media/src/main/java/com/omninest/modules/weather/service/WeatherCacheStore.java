@@ -78,7 +78,12 @@ public interface WeatherCacheStore {
      *
      * @param weatherLocation 天气 API 使用的位置标识
      * @param latLon 经度和纬度
+     * @param locationName 可读地区名（城市名），GPS 直连时可能为空
      */
-    record ResolvedWeatherLocation(String weatherLocation, String latLon) {
+    record ResolvedWeatherLocation(String weatherLocation, String latLon, String locationName) {
+
+        public ResolvedWeatherLocation(String weatherLocation, String latLon) {
+            this(weatherLocation, latLon, "");
+        }
     }
 }

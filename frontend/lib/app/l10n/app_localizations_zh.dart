@@ -2359,6 +2359,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalWeatherForecastToday => '今天';
 
   @override
+  String get portalWeatherForecastNow => '现在';
+
+  @override
   String get portalWeatherForecastEmpty => '暂无预报数据';
 
   @override

@@ -919,6 +919,7 @@
   "portalWeatherForecastHourly": "逐小时",
   "portalWeatherForecastWeekly": "一周预报",
   "portalWeatherForecastToday": "今天",
+  "portalWeatherForecastNow": "现在",
   "portalWeatherForecastEmpty": "暂无预报数据",
   "portalWeatherDebugTooltip": "调试天气视觉",
   "portalWeatherDebugLive": "实时天气",

@@ -32,7 +32,8 @@ public record WeatherDto(
     String textDay,
     String textNight,
     List<HourlyForecast> hourly,
-    List<DailyForecast> daily
+    List<DailyForecast> daily,
+    String locationName
 ) {
 
     /** 逐小时预报条目。 */
@@ -66,7 +67,7 @@ public record WeatherDto(
             0, "--", "--",
             0, 0, "--", "", "",
             0.0, 0.0, "--", "--", "--", "--",
-            List.of(), List.of()
+            List.of(), List.of(), ""
         );
     }
 }

@@ -72,12 +72,13 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
         if (cached.isEmpty()) {
             return Optional.empty();
         }
-        String[] parts = cached.orElseThrow().split("\\|", 2);
-        if (parts.length != 2 || parts[0].isBlank() || parts[1].isBlank()) {
+        String[] parts = cached.orElseThrow().split("\\|", 3);
+        if (parts.length < 2 || parts[0].isBlank() || parts[1].isBlank()) {
             log.warn("天气位置缓存格式无效");
             return Optional.empty();
         }
-        return Optional.of(new ResolvedWeatherLocation(parts[0], parts[1]));
+        String locationName = parts.length >= 3 ? parts[2] : "";
+        return Optional.of(new ResolvedWeatherLocation(parts[0], parts[1], locationName));
     }
 
     /**
@@ -101,7 +102,8 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
      */
     @Override
     public void saveLocation(String cityName, ResolvedWeatherLocation location) {
-        String value = location.weatherLocation() + "|" + location.latLon();
+        String name = location.locationName() == null ? "" : location.locationName();
+        String value = location.weatherLocation() + "|" + location.latLon() + "|" + name;
         write(GEO_KEY_PREFIX + cityName, value, GEO_TTL, "保存天气位置缓存失败");
         delete(GEO_MISS_KEY_PREFIX + cityName, "清除天气位置负命中缓存失败");
     }
@@ -213,6 +215,7 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
         json.put("textNight", weather.textNight());
         json.put("hourly", serializeHourly(weather.hourly()));
         json.put("daily", serializeDaily(weather.daily()));
+        json.put("locationName", weather.locationName() != null ? weather.locationName() : "");
         return json.toJSONString();
     }
 
@@ -278,7 +281,8 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
                 json.getString("textDay") != null ? json.getString("textDay") : "--",
                 json.getString("textNight") != null ? json.getString("textNight") : "--",
                 parseHourly(json.getJSONArray("hourly")),
-                parseDaily(json.getJSONArray("daily"))
+                parseDaily(json.getJSONArray("daily")),
+                json.getString("locationName") != null ? json.getString("locationName") : ""
         );
     }
 

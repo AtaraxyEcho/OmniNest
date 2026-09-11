@@ -192,7 +192,8 @@ class RedisWeatherCacheStoreTest {
                         new WeatherDto.DailyForecast(
                                 "2026-07-22", 27, 18, "101", "多云", "150", "晴"
                         )
-                )
+                ),
+                "贵阳"
         );
     }
 }

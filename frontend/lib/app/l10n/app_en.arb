@@ -1045,6 +1045,7 @@
   "portalWeatherForecastHourly": "Hourly",
   "portalWeatherForecastWeekly": "7-Day",
   "portalWeatherForecastToday": "Today",
+  "portalWeatherForecastNow": "Now",
   "portalWeatherForecastEmpty": "No forecast data",
   "portalWeatherDebugTooltip": "Debug weather visuals",
   "portalWeatherDebugLive": "Live weather",

@@ -2417,6 +2417,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalWeatherForecastToday => 'Today';
 
   @override
+  String get portalWeatherForecastNow => 'Now';
+
+  @override
   String get portalWeatherForecastEmpty => 'No forecast data';
 
   @override

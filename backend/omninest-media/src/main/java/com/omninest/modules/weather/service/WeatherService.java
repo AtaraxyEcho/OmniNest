@@ -185,7 +185,9 @@ public class WeatherService {
                     return WeatherDto.empty();
                 }
 
-                WeatherDto result = aggregateWeather(weatherNow, airNow, weather7d, weather24h);
+                WeatherDto result = aggregateWeather(
+                        weatherNow, airNow, weather7d, weather24h,
+                        finalResolved.locationName() != null ? finalResolved.locationName() : "");
                 weatherCacheStore.saveWeather(finalResolved.latLon(), result);
                 return result;
             } catch (Exception e) {
@@ -220,7 +222,7 @@ public class WeatherService {
 
     private ResolvedWeatherLocation resolveLocation(String location, Map<String, String> config) {
         if (isLatLon(location)) {
-            return new ResolvedWeatherLocation(location, location);
+            return new ResolvedWeatherLocation(location, location, "");
         }
         return lookupGeoLocation(location, config);
     }
@@ -263,12 +265,14 @@ public class WeatherService {
             String id = first.getString("id");
             String lat = first.getString("lat");
             String lon = first.getString("lon");
+            String name = first.getString("name");
             if (id == null || lat == null || lon == null) {
                 return null;
             }
 
             String latLon = lon + "," + lat;
-            ResolvedWeatherLocation location = new ResolvedWeatherLocation(id, latLon);
+            ResolvedWeatherLocation location = new ResolvedWeatherLocation(
+                    id, latLon, name != null ? name : "");
             weatherCacheStore.saveLocation(cityName, location);
             return location;
         } catch (Exception e) {
@@ -380,7 +384,8 @@ public class WeatherService {
             JSONObject weatherNow,
             JSONObject airNow,
             JSONObject weather7d,
-            JSONObject weather24h) {
+            JSONObject weather24h,
+            String locationName) {
         if (weatherNow == null || !"200".equals(weatherNow.getString("code"))) {
             return WeatherDto.empty();
         }
@@ -424,7 +429,8 @@ public class WeatherService {
             today != null ? getStringSafe(today, "textDay", "--") : "--",
             today != null ? getStringSafe(today, "textNight", "--") : "--",
             hourlyForecasts,
-            dailyForecasts
+            dailyForecasts,
+            locationName != null ? locationName : ""
         );
     }
 
