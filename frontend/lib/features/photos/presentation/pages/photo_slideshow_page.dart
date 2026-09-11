@@ -740,6 +740,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   Widget _buildTopBar(BuildContext context, PhotoItem photo, bool visible) {
     final l10n = AppLocalizations.of(context);
+    final width = MediaQuery.sizeOf(context).width;
+    // 窄屏隐藏模块标题并收紧按钮间距，避免顶栏 RenderFlex 横向溢出。
+    final showModuleTitle = width >= 520;
+    final horizontalPadding = width >= 600 ? 24.0 : 16.0;
+    final actionGap = width >= 600 ? 16.0 : 8.0;
     return Positioned(
       top: 0,
       left: 0,
@@ -753,9 +758,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           curve: Curves.ease,
           child: Padding(
             padding: EdgeInsets.fromLTRB(
-              24,
+              horizontalPadding,
               20 + MediaQuery.paddingOf(context).top,
-              24,
+              horizontalPadding,
               32,
             ),
             child: Row(
@@ -765,79 +770,86 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   icon: Icons.close_rounded,
                   onTap: () => Navigator.of(context).maybePop(),
                 ),
-                const SizedBox(width: 8),
-                Text(
-                  l10n.photosModuleDisplayName,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.70),
-                    fontSize: AppTypography.bodyMedium,
-                    letterSpacing: 0.04,
+                if (showModuleTitle) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      l10n.photosModuleDisplayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.70),
+                        fontSize: AppTypography.bodyMedium,
+                        letterSpacing: 0.04,
+                      ),
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                Flexible(
+                  child: Text(
+                    '${(_current + 1).toString().padLeft(2, '0')} / '
+                    '${_photos.length.toString().padLeft(2, '0')}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.end,
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.50),
+                      fontSize: AppTypography.bodySmall,
+                      letterSpacing: 0.08,
+                      fontWeight: FontWeight.w300,
+                    ),
                   ),
                 ),
-                const Spacer(),
-                Text(
-                  '${(_current + 1).toString().padLeft(2, '0')} / '
-                  '${_photos.length.toString().padLeft(2, '0')}',
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.50),
-                    fontSize: AppTypography.bodySmall,
-                    letterSpacing: 0.08,
-                    fontWeight: FontWeight.w300,
-                  ),
+                SizedBox(width: actionGap),
+                _ViewerIconButton(
+                  tooltip: l10n.photosFavorite,
+                  icon:
+                      photo.favorite
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                  color:
+                      photo.favorite
+                          ? const Color(0xFFFB7185)
+                          : Colors.white.withValues(alpha: 0.70),
+                  onTap: () => _toggleFavorite(photo),
                 ),
-                const Spacer(),
-                Row(
-                  children: [
-                    _ViewerIconButton(
-                      tooltip: l10n.photosFavorite,
-                      icon:
-                          photo.favorite
-                              ? Icons.favorite_rounded
-                              : Icons.favorite_border_rounded,
-                      color:
-                          photo.favorite
-                              ? const Color(0xFFFB7185)
-                              : Colors.white.withValues(alpha: 0.70),
-                      onTap: () => _toggleFavorite(photo),
-                    ),
-                    const SizedBox(width: 16),
-                    _ViewerIconButton(
-                      tooltip: l10n.photosSharePhoto,
-                      icon: Icons.share_rounded,
-                      color:
-                          _showShare
-                              ? Colors.white
-                              : Colors.white.withValues(alpha: 0.70),
-                      onTap:
-                          () => setState(() {
-                            _showShare = !_showShare;
-                            if (_showShare) _showInfo = false;
-                          }),
-                    ),
-                    const SizedBox(width: 16),
-                    _ViewerIconButton(
-                      tooltip: l10n.photosDownloadPhoto,
-                      icon: Icons.download_rounded,
-                      onTap: () => unawaited(_downloadPhoto(photo)),
-                    ),
-                    const SizedBox(width: 16),
-                    _ViewerIconButton(
-                      tooltip:
-                          _showInfo ? l10n.photosHideInfo : l10n.photosShowInfo,
-                      icon: Icons.info_outline_rounded,
-                      color:
-                          _showInfo
-                              ? Colors.white
-                              : Colors.white.withValues(alpha: 0.70),
-                      onTap: () => setState(() => _showInfo = !_showInfo),
-                    ),
-                    const SizedBox(width: 16),
-                    _ViewerIconButton(
-                      tooltip: l10n.photosFullscreen,
-                      icon: Icons.fullscreen_rounded,
-                      onTap: _toggleFullscreen,
-                    ),
-                  ],
+                SizedBox(width: actionGap),
+                _ViewerIconButton(
+                  tooltip: l10n.photosSharePhoto,
+                  icon: Icons.share_rounded,
+                  color:
+                      _showShare
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.70),
+                  onTap:
+                      () => setState(() {
+                        _showShare = !_showShare;
+                        if (_showShare) _showInfo = false;
+                      }),
+                ),
+                SizedBox(width: actionGap),
+                _ViewerIconButton(
+                  tooltip: l10n.photosDownloadPhoto,
+                  icon: Icons.download_rounded,
+                  onTap: () => unawaited(_downloadPhoto(photo)),
+                ),
+                SizedBox(width: actionGap),
+                _ViewerIconButton(
+                  tooltip:
+                      _showInfo ? l10n.photosHideInfo : l10n.photosShowInfo,
+                  icon: Icons.info_outline_rounded,
+                  color:
+                      _showInfo
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.70),
+                  onTap: () => setState(() => _showInfo = !_showInfo),
+                ),
+                SizedBox(width: actionGap),
+                _ViewerIconButton(
+                  tooltip: l10n.photosFullscreen,
+                  icon: Icons.fullscreen_rounded,
+                  onTap: _toggleFullscreen,
                 ),
               ],
             ),
@@ -1237,6 +1249,7 @@ class _ViewerIconButton extends StatelessWidget {
       tooltip: tooltip,
       onPressed: onTap,
       visualDensity: VisualDensity.compact,
+      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
       icon: Icon(
         icon,
         size: 20,
