@@ -107,30 +107,36 @@ public class PhotoLibraryService {
         long totalPhotos = photoItemRepository.countByOwnerUserId(ownerUserId);
         long totalAlbums = albumRepository.countByOwnerUserId(ownerUserId);
         long trashCount = photoItemRepository.countByOwnerUserIdAndDeletedAtIsNotNull(ownerUserId);
-
-        // 一次查询获取所有收藏数据，避免三次重复查询
-        List<PhotoFavorite> allFavorites = favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId);
-        Set<UUID> favoriteIds = allFavorites.stream().map(PhotoFavorite::getPhotoId).collect(Collectors.toSet());
-        List<UUID> favoritePhotoIds = allFavorites.stream().map(PhotoFavorite::getPhotoId).toList();
+        long totalFavorites = favoriteRepository.countByOwnerUserId(ownerUserId);
 
         List<PhotoItem> recent = photoItemRepository.findTopNByOwnerUserIdOrderByCreatedAtDesc(ownerUserId, 12);
+        List<UUID> recentIds = recent.stream().map(PhotoItem::getId).toList();
+        Set<UUID> recentFavoriteIds = recentIds.isEmpty()
+                ? Set.of()
+                : Set.copyOf(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, recentIds));
 
-        // 加载收藏照片（最多12张）
-        List<PhotoItem> favorites = List.of();
-        if (!favoritePhotoIds.isEmpty()) {
-            List<UUID> limitedIds = favoritePhotoIds.subList(0, Math.min(12, favoritePhotoIds.size()));
-            Map<UUID, PhotoItem> items = photoItemRepository
-                    .findActiveByOwnerUserIdAndIdIn(ownerUserId, limitedIds).stream()
-                    .collect(Collectors.toMap(PhotoItem::getId, p -> p));
-            favorites = limitedIds.stream().map(items::get).filter(Objects::nonNull).toList();
-        }
+        // 仅取最近 12 条收藏，避免为计数与预览加载全表收藏。
+        List<UUID> favoritePreviewIds = favoriteRepository
+                .findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId, PageRequest.of(0, 12))
+                .stream()
+                .map(PhotoFavorite::getPhotoId)
+                .toList();
+        Map<UUID, PhotoItem> favoriteItems = favoritePreviewIds.isEmpty()
+                ? Map.of()
+                : photoItemRepository.findActiveByOwnerUserIdAndIdIn(ownerUserId, favoritePreviewIds)
+                        .stream()
+                        .collect(Collectors.toMap(PhotoItem::getId, p -> p));
+        List<PhotoItem> favorites = favoritePreviewIds.stream()
+                .map(favoriteItems::get)
+                .filter(Objects::nonNull)
+                .toList();
 
         return new PhotoDashboardDto(
                 totalPhotos,
                 totalAlbums,
-                favoriteIds.size(),
+                totalFavorites,
                 trashCount,
-                recent.stream().map(p -> toDto(p, favoriteIds.contains(p.getId()))).toList(),
+                recent.stream().map(p -> toDto(p, recentFavoriteIds.contains(p.getId()))).toList(),
                 favorites.stream().map(p -> toDto(p, true)).toList()
         );
     }

@@ -4,6 +4,7 @@ import com.omninest.modules.photos.domain.PhotoFavorite;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -19,6 +20,16 @@ public interface PhotoFavoriteRepository extends JpaRepository<PhotoFavorite, UU
      * 按用户查询收藏列表，按创建时间倒序
      */
     List<PhotoFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
+
+    /**
+     * 按用户分页查询收藏列表，按创建时间倒序。
+     */
+    List<PhotoFavorite> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId, Pageable pageable);
+
+    /**
+     * 统计用户收藏总数。
+     */
+    long countByOwnerUserId(UUID ownerUserId);
 
     /**
      * 批量查询用户收藏的照片标识。

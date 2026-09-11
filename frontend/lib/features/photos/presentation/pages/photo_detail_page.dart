@@ -123,6 +123,9 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   int _currentPage = 0;
   String? _currentPhotoId;
 
+  /// 上次对齐 PageView 的照片 id；仅锚点变化时 jump，避免手势中抢页。
+  String? _lastPageAnchorId;
+
   /// 动态照片长按预览中；松手复位。
   bool _motionHoldPlaying = false;
 
@@ -433,25 +436,33 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
     final compact = MediaQuery.sizeOf(context).width < 700;
     // 响应式解析浏览序列：浏览范围或照片列表晚到时页面集合随之扩展，
     // 当前照片以 id 锚定，不因序列变化丢失位置。
+    // 仅订阅 photos 列表本身，避免多选/分页等无关变更重建查看器。
     final browseScope = ref.watch(photoBrowseScopeProvider);
     final centerPhotos =
-        ref.watch(photoCenterControllerProvider).asData?.value.photos ??
+        ref.watch(
+          photoCenterControllerProvider.select(
+            (value) => value.asData?.value.photos,
+          ),
+        ) ??
         const <PhotoItem>[];
     final pages = _resolvePages(browseScope, centerPhotos);
     _pages = pages;
-    final index = pages.indexWhere(
-      (p) => p.id == (_currentPhotoId ?? widget.photo.id),
-    );
+    final anchorId = _currentPhotoId ?? widget.photo.id;
+    final index = pages.indexWhere((p) => p.id == anchorId);
     _currentPage = index < 0 ? 0 : index.clamp(0, pages.length - 1);
     final current = _pages[_currentPage];
     final currentFresh =
         ref.watch(photoDetailProvider(current.id)).asData?.value ?? current;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_pageController.hasClients) return;
-      if (_pageController.page?.round() != _currentPage) {
-        _pageController.jumpToPage(_currentPage);
-      }
-    });
+    // 仅在 id 锚点变化时对齐 PageView，避免手势翻页过程中被 post-frame 抢页。
+    if (_lastPageAnchorId != anchorId) {
+      _lastPageAnchorId = anchorId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_pageController.hasClients) return;
+        if (_pageController.page?.round() != _currentPage) {
+          _pageController.jumpToPage(_currentPage);
+        }
+      });
+    }
 
     return Stack(
       children: [
@@ -464,6 +475,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
               setState(() {
                 _currentPage = index;
                 _currentPhotoId = _pages[index].id;
+                _lastPageAnchorId = _pages[index].id;
                 _motionHoldPlaying = false;
                 _motionPinnedPlaying = false;
               });

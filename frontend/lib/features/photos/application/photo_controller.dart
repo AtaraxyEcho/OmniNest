@@ -650,7 +650,15 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     }
     _searchDebounce?.cancel();
     _searchDebounce = Timer(const Duration(milliseconds: 300), () {
-      unawaited(_reloadVisiblePage(current.tab, query));
+      final latest = state.asData?.value;
+      if (latest == null) {
+        return;
+      }
+      final latestQuery = latest.searchQuery;
+      if (latestQuery != query) {
+        return;
+      }
+      unawaited(_reloadVisiblePage(latest.tab, latestQuery));
     });
   }
 
@@ -658,20 +666,67 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
   ///
   /// [currentFavorite] 必须由调用方传入照片的真实当前值（如详情页持有的
   /// photo.favorite），避免分页快照缺失或过期时把取消收藏误判为收藏。
+  ///
+  /// 采用乐观更新：先改本地 photos/favorites，失败再回滚；成功不再整库
+  /// refresh，避免单击心形触发 dashboard+列表四连请求。
   Future<void> toggleFavorite(
     String photoId, {
     required bool currentFavorite,
   }) async {
     final current = state.asData?.value;
     if (current == null) return;
+    final nextFavorite = !currentFavorite;
+    PhotoItem? seed;
+    for (final photo in current.photos) {
+      if (photo.id == photoId) {
+        seed = photo;
+        break;
+      }
+    }
+    seed ??= () {
+      for (final photo in current.favorites) {
+        if (photo.id == photoId) {
+          return photo;
+        }
+      }
+      return null;
+    }();
+    final previous = state;
+    if (seed != null) {
+      final updated = seed.copyWith(favorite: nextFavorite);
+      state = AsyncData(
+        current.copyWith(
+          photos: [
+            for (final photo in current.photos)
+              photo.id == photoId ? updated : photo,
+          ],
+          favorites:
+              nextFavorite
+                  ? [
+                    for (final photo in current.favorites)
+                      photo.id == photoId ? updated : photo,
+                    if (!current.favorites.any((photo) => photo.id == photoId))
+                      updated,
+                  ]
+                  : [
+                    for (final photo in current.favorites)
+                      if (photo.id != photoId) photo,
+                  ],
+        ),
+      );
+      ref.read(photoDetailMemoryCacheProvider).put(updated);
+    }
     try {
       if (currentFavorite) {
         await _repo.removeFavorite(photoId);
       } else {
         await _repo.addFavorite(photoId);
       }
-      await refresh();
+      ref.invalidate(photoDetailProvider(photoId));
     } on Exception catch (e) {
+      if (ref.mounted) {
+        state = previous;
+      }
       _setError(describeUserFacingError(e).message);
       rethrow;
     }

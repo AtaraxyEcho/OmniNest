@@ -30,6 +30,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
+import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_media_thumbnail.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';

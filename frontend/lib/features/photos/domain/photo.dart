@@ -143,6 +143,48 @@ class PhotoItem {
     );
   }
 
+  /// 仅覆盖收藏标志；其余字段保持不变。
+  PhotoItem copyWith({bool? favorite}) {
+    if (favorite == null || favorite == this.favorite) {
+      return this;
+    }
+    return PhotoItem(
+      id: id,
+      fileNodeId: fileNodeId,
+      title: title,
+      format: format,
+      fileSize: fileSize,
+      metadataStatus: metadataStatus,
+      favorite: favorite,
+      createdAt: createdAt,
+      description: description,
+      width: width,
+      height: height,
+      orientation: orientation,
+      dateTaken: dateTaken,
+      cameraMake: cameraMake,
+      cameraModel: cameraModel,
+      aperture: aperture,
+      shutterSpeed: shutterSpeed,
+      iso: iso,
+      focalLength: focalLength,
+      flash: flash,
+      whiteBalance: whiteBalance,
+      meteringMode: meteringMode,
+      lensModel: lensModel,
+      gpsLatitude: gpsLatitude,
+      gpsLongitude: gpsLongitude,
+      coverUrl: coverUrl,
+      sourceUrl: sourceUrl,
+      gpsLocation: gpsLocation,
+      tags: tags,
+      providerMetadata: providerMetadata,
+      contentAnalysis: contentAnalysis,
+      motionState: motionState,
+      motionVideoUrl: motionVideoUrl,
+    );
+  }
+
   /// 是否有封面
   bool get hasCover => coverUrl != null && coverUrl!.isNotEmpty;
 

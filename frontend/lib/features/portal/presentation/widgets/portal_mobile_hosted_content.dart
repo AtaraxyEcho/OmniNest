@@ -654,14 +654,14 @@ class _PortalContinueTile extends StatelessWidget {
   }
 }
 
-class _PortalRecentPhotoGrid extends StatelessWidget {
+class _PortalRecentPhotoGrid extends ConsumerWidget {
   const _PortalRecentPhotoGrid({required this.photos, required this.onRetry});
 
   final AsyncValue<PhotoDashboard> photos;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return photos.when(
       data: (dashboard) {
         final items = dashboard.recentPhotos.take(6).toList();
@@ -692,7 +692,13 @@ class _PortalRecentPhotoGrid extends StatelessWidget {
                 final photo = items[index];
                 return MobilePressable(
                   semanticLabel: photo.title,
-                  onTap: () => context.push('/photos/${photo.id}'),
+                  onTap: () {
+                    ref.read(photoBrowseScopeProvider.notifier).set(
+                      items,
+                      PhotoBrowseSource.library,
+                    );
+                    context.push('/photos/${photo.id}');
+                  },
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(6),
                     child: PortalMediaThumbnail(
