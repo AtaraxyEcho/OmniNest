@@ -274,6 +274,46 @@ void main() {
     expect(find.byKey(const Key('branch-files')), findsOneWidget);
     expect(chromeColor(chromeOf(tester, top: true)), const Color(0xFFF7F8F6));
   });
+
+  testWidgets('实底分支壳层自绘面板底色，玻璃分支保持透明', (tester) async {
+    Future<Color?> shellBackground() async {
+      final scaffold = tester.widget<Scaffold>(
+        find
+            .ancestor(of: bottomNavigation(), matching: find.byType(Scaffold))
+            .first,
+      );
+      return scaffold.backgroundColor;
+    }
+
+    // 照片：Frame 暖纸底（hosted 页面透明，壳层不绘制会露出窗口黑底）。
+    await pumpShell(tester, initialLocation: '/photos');
+    expect(await shellBackground(), const Color(0xFFFAFAF8));
+
+    // 文件：全局浅色表面。
+    await tapNav(tester, '文件');
+    expect(await shellBackground(), const Color(0xFFF7F8F6));
+
+    // 首页（玻璃）：透明，由壁纸绘制底。
+    await tapNav(tester, '首页');
+    expect(await shellBackground(), Colors.transparent);
+  });
+
+  testWidgets('玻璃分支 chrome 不绘制描边（浅色白线移除）', (tester) async {
+    await pumpShell(tester, initialLocation: '/portal', backdropActive: true);
+    final decoration = chromeOf(tester, top: true).decoration as BoxDecoration;
+    expect(decoration.border?.bottom.color, Colors.transparent);
+
+    await tapNav(tester, '音乐');
+    final bottomDecoration =
+        chromeOf(tester, top: false).decoration as BoxDecoration;
+    expect(bottomDecoration.border?.top.color, Colors.transparent);
+
+    // 实底分支描边保留。
+    await tapNav(tester, '文件');
+    final solidDecoration =
+        chromeOf(tester, top: true).decoration as BoxDecoration;
+    expect(solidDecoration.border?.bottom.color, isNot(Colors.transparent));
+  });
 }
 
 /// 壳层测试使用的静音播放器，避免测试环境加载 soloud 原生库。

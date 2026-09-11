@@ -100,14 +100,25 @@ class _StatsOverview extends StatelessWidget {
                     ],
                   );
                 }
-                return GridView.count(
-                  crossAxisCount: 2,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  mainAxisSpacing: 16,
-                  crossAxisSpacing: 16,
-                  childAspectRatio: 2.4,
-                  children: cards,
+                // 2×2 行式布局：卡片高度随内容伸缩（GridView 定宽高比在窄屏溢出）。
+                return Column(
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(child: cards[0]),
+                        const SizedBox(width: 16),
+                        Expanded(child: cards[1]),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(child: cards[2]),
+                        const SizedBox(width: 16),
+                        Expanded(child: cards[3]),
+                      ],
+                    ),
+                  ],
                 );
               },
             ),

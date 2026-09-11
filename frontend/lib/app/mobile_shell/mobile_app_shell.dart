@@ -71,7 +71,7 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
       child: MobileShellScope(
         hosted: true,
         child: Scaffold(
-          backgroundColor: Colors.transparent,
+          backgroundColor: _shellBackground(context, branch: branch),
           body:
               useRail
                   ? _buildRailLayout(
@@ -262,9 +262,10 @@ class _MobileTopBar extends ConsumerWidget {
               bottom: false,
             )
             : _solidChromeSurface(context, branch: branch);
+    // 玻璃分支不画描边（浅色下白线显突兀），层次由玻璃面本身承担。
     final outline =
         glassStyle
-            ? _glassChromeOutline(context, backdropActive: backdropActive)
+            ? Colors.transparent
             : _solidChromeOutline(context, branch: branch);
     final foreground = _chromeForeground(context, branch: branch);
     return SafeArea(
@@ -530,9 +531,10 @@ class _MobileBottomNavigation extends ConsumerWidget {
               bottom: true,
             )
             : _solidChromeSurface(context, branch: branch);
+    // 玻璃分支不画描边（浅色下白线显突兀）。
     final outline =
         portalStyle || musicStyle
-            ? _glassChromeOutline(context, backdropActive: backdropActive)
+            ? Colors.transparent
             : _solidChromeOutline(context, branch: branch);
     final selectedColor = _chromeForeground(context, branch: branch);
     final unselectedColor = _chromeUnselectedColor(context, branch: branch);
@@ -620,9 +622,10 @@ class _MobileNavigationRail extends ConsumerWidget {
               bottom: false,
             )
             : _solidChromeSurface(context, branch: branch);
+    // 玻璃分支不画描边（浅色下白线显突兀）。
     final outline =
         portalStyle || musicStyle
-            ? _glassChromeOutline(context, backdropActive: backdropActive)
+            ? Colors.transparent
             : _solidChromeOutline(context, branch: branch);
     final selectedColor = _chromeForeground(context, branch: branch);
     final unselectedColor = _chromeUnselectedColor(context, branch: branch);
@@ -687,21 +690,22 @@ Color _glassChromeSurface(
   return base.withValues(alpha: light ? 0.90 : (bottom ? 0.82 : 0.78));
 }
 
-/// 玻璃分支统一 chrome 描边：壁纸激活取（烟熏）outlineVariant 提档，
-/// 无壁纸浅色为 onSurface 12% 发丝线，深色为 outlineVariant 72%。
-Color _glassChromeOutline(
-  BuildContext context, {
-  required bool backdropActive,
-}) {
-  final scheme = Theme.of(context).colorScheme;
-  final light = scheme.brightness == Brightness.light;
-  if (backdropActive) {
-    return scheme.outlineVariant.withValues(alpha: light ? 0.9 : 0.72);
+/// 壳层底色：玻璃分支保持透明（壁纸绘制底）；实底分支自绘面板底色——
+/// hosted 页面按透明设计（壁纸时代遗留），壁纸隐藏后不绘制会在窗口露出黑底。
+Color _shellBackground(BuildContext context, {required int branch}) {
+  final glassStyle =
+      branch == MobileNavigationConfig.portalBranch ||
+      branch == MobileNavigationConfig.musicBranch;
+  if (glassStyle) {
+    return Colors.transparent;
   }
-  if (light) {
-    return scheme.onSurface.withValues(alpha: 0.12);
+  if (branch == MobileNavigationConfig.readerBranch) {
+    return context.readerColors.surface;
   }
-  return scheme.outlineVariant.withValues(alpha: 0.72);
+  if (branch == MobileNavigationConfig.photosBranch) {
+    return context.frameColors.bg;
+  }
+  return Theme.of(context).colorScheme.surface;
 }
 
 /// 实底分支的 chrome 表面：与页面同源——阅读取纸感表面、照片取 Frame
