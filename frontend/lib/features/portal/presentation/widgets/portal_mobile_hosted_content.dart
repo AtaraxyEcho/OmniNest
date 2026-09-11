@@ -401,7 +401,10 @@ class _PortalContinueStrip extends StatelessWidget {
         _PortalContinueItem(
           title: item.title,
           subtitle: AppLocalizations.of(context).portalReading,
-          imageUrl: item.coverUrl,
+          // 后端 coverUrl 是 /files/{id}/download-url 接口路径而非图片地址，
+          // 必须走 AuthCoverImage 拉认证字节；无封面时保留 null 以显示占位。
+          imageUrl: item.hasCover ? null : item.coverUrl,
+          readerItemId: item.hasCover ? item.id : null,
           progress: (item.progressPercent ?? 0) / 100,
           icon: Icons.menu_book_outlined,
           route: '/reader/items/${item.id}',
@@ -512,11 +515,15 @@ class _PortalContinueItem {
     required this.icon,
     required this.route,
     required this.shape,
+    this.readerItemId,
   });
 
   final String title;
   final String subtitle;
   final String? imageUrl;
+
+  /// 阅读条目 ID；非空时用 AuthCoverImage 拉取认证封面。
+  final String? readerItemId;
   final double? progress;
   final IconData icon;
   final String route;
@@ -532,6 +539,18 @@ class _PortalContinueTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final coverFallback = ColoredBox(
+      color: context.mobileColors.surfaceRaised,
+      child: Center(
+        child: Icon(
+          item.icon,
+          color: context.mobileColors.textSecondary,
+          size: 26,
+        ),
+      ),
+    );
+    final readerItemId = item.readerItemId?.trim();
+    final imageUrl = item.imageUrl?.trim();
     return SizedBox(
       width: 248,
       child: MobilePressable(
@@ -558,28 +577,28 @@ class _PortalContinueTile extends StatelessWidget {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        // 槽位高主导（≤88 高）：仅约束解码高度，竖版海报
-                        // 与横版缩略图均无需拉伸即可 cover 裁切。
-                        PortalMediaThumbnail(
-                          imageUrl: item.imageUrl,
-                          fit: BoxFit.cover,
-                          cacheHeight: (88 *
-                                  MediaQuery.devicePixelRatioOf(context))
-                              .ceil()
-                              .clamp(176, 352),
-                          borderRadius: BorderRadius.zero,
-                          fallback: ColoredBox(
-                            color: context.mobileColors.surfaceRaised,
-                          ),
-                        ),
-                        if (item.imageUrl == null)
-                          Center(
-                            child: Icon(
-                              item.icon,
-                              color: context.mobileColors.textSecondary,
-                              size: 26,
-                            ),
-                          ),
+                        // 阅读封面需鉴权下载；其余媒体用可直渲 URL。
+                        if (readerItemId != null && readerItemId.isNotEmpty)
+                          AuthCoverImage(
+                            itemId: readerItemId,
+                            fit: BoxFit.cover,
+                            fallback: coverFallback,
+                          )
+                        else if (imageUrl != null && imageUrl.isNotEmpty)
+                          // 槽位高主导（≤88 高）：仅约束解码高度，竖版海报
+                          // 与横版缩略图均无需拉伸即可 cover 裁切。
+                          PortalMediaThumbnail(
+                            imageUrl: imageUrl,
+                            fit: BoxFit.cover,
+                            cacheHeight: (88 *
+                                    MediaQuery.devicePixelRatioOf(context))
+                                .ceil()
+                                .clamp(176, 352),
+                            borderRadius: BorderRadius.zero,
+                            fallback: coverFallback,
+                          )
+                        else
+                          coverFallback,
                         if (item.progress != null)
                           Positioned(
                             left: 0,

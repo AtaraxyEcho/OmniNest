@@ -33,6 +33,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_media_thumbnail.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
