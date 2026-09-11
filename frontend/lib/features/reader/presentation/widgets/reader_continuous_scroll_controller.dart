@@ -366,7 +366,9 @@ class ReaderContinuousScrollController extends ChangeNotifier {
   /// 是否需要向后扩挂（视口接近窗口末尾）。
   bool shouldExpandForward(double contentY, double viewportHeight) {
     if (_entries.isEmpty) return false;
-    return contentY + viewportHeight * 1.2 >= totalHeight;
+    // 2 个视口的提前量：扩挂需预取 + phase-one 测高 + 窗口重建，
+    // 1.2 视口在快速滚动下会先看到估算高度甚至空白。
+    return contentY + viewportHeight * 2.0 >= totalHeight;
   }
 
   /// 是否需要向前扩挂（视口接近窗口开头）。

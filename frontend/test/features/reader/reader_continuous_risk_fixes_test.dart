@@ -117,43 +117,46 @@ void main() {
     });
   });
 
-  group('P4 drop neighbor HTML', () {
-    test('drops html body for non-active chapters', () async {
+  group('P4 neighbor HTML retention', () {
+    test('±1 邻章保留 HTML 供切章直达，更远章节被驱逐', () async {
       final loader = ReaderContentLoader(
         allChapters: [
           ReaderChapter(id: 'c0', title: 'A'),
           ReaderChapter(id: 'c1', title: 'B'),
+          ReaderChapter(id: 'c2', title: 'C'),
         ],
       );
       final settings = ReaderViewSettings();
-      await loader.loadChapter(
-        chapterId: 'c0',
-        content: ReaderChapterContent(title: 'A', content: '<p>章节甲内容</p>'),
-        pageWidth: 400,
-        pageHeight: 0,
-        settings: settings,
-        prepareScrollLayout: true,
-      );
-      await loader.loadChapter(
-        chapterId: 'c1',
-        content: ReaderChapterContent(title: 'B', content: '<p>章节乙内容</p>'),
-        pageWidth: 400,
-        pageHeight: 0,
-        settings: settings,
-        prepareScrollLayout: true,
-      );
+      for (final chapter in loader.allChapters) {
+        await loader.loadChapter(
+          chapterId: chapter.id,
+          content: ReaderChapterContent(
+            title: chapter.title,
+            content: '<p>${chapter.title}内容</p>',
+          ),
+          pageWidth: 400,
+          pageHeight: 0,
+          settings: settings,
+          prepareScrollLayout: true,
+        );
+      }
       loader.setActive('c0');
       loader.dropHtmlForNeighbors('c0');
 
       final neighbor = loader.getByChapterId('c1');
       expect(neighbor, isNotNull);
       expect(neighbor!.blocks, isNotEmpty);
-      expect(neighbor.content.content, isEmpty);
+      expect(neighbor.content.content, isNotEmpty);
       expect(neighbor.content.title, 'B');
       expect(neighbor.blockCharPrefixes.length, neighbor.blocks.length + 1);
+      expect(loader.contentFor('c1'), isNotNull);
 
       final active = loader.getByChapterId('c0');
       expect(active!.content.content, isNotEmpty);
+
+      // 超出 ±1 的章节被整体驱逐，不再占用内存。
+      expect(loader.getByChapterId('c2'), isNull);
+      expect(loader.contentFor('c2'), isNull);
     });
   });
 }

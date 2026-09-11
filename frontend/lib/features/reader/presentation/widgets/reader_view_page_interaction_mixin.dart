@@ -47,8 +47,8 @@ mixin ReaderViewPageInteractionMixin
     }
 
     // 连续滚动：进度由 ReaderContinuousScrollView 的 onScrollPosition 驱动。
-    // 此处仅保留近端预取，不再在章末硬切章。
-    if (max - scrollController.offset < max * 0.2) {
+    // 此处仅保留近端预取，不再在章末硬切章；阈值与 onContinuousScrollPosition 一致。
+    if (max - scrollController.offset < max * 0.5) {
       preloadAdjacent();
     }
   }
@@ -117,7 +117,9 @@ mixin ReaderViewPageInteractionMixin
 
     if (scrollController.hasClients) {
       final max = scrollController.position.maxScrollExtent;
-      if (max - scrollController.offset < max * 0.2) {
+      // 提前到过半即预取：邻章解析 + phase-one 测高需要数百毫秒，
+      // 20% 余量在快速滚动下来不及就绪。
+      if (max - scrollController.offset < max * 0.5) {
         preloadAdjacent();
       }
     }
@@ -133,6 +135,13 @@ mixin ReaderViewPageInteractionMixin
     final needFetch = contentLoader?.setActive(chapterId) ?? const [];
     for (final id in needFetch) {
       unawaited(prefetchChapter(id));
+    }
+    // blocks 与 HTML 均就绪时同步加载标记：避免 build 后
+    // loadChapterContentIfNeeded 对锚点章冗余重取正文。
+    final content = contentLoader?.contentFor(chapterId);
+    if (contentLoader?.getByChapterId(chapterId) != null && content != null) {
+      cachedContent = content;
+      lastLoadedChapterId = chapterId;
     }
     if (mounted) {
       setState(() {});
@@ -152,9 +161,17 @@ mixin ReaderViewPageInteractionMixin
       return;
     }
     final targetId = chapterIds[targetIndex];
-    if (loader.getByChapterId(targetId) != null &&
-        loader.isScrollLayoutReady(targetId)) {
-      // 已就绪：仅重建窗口（锚点仍可能是当前章）。
+    final targetData = loader.getByChapterId(targetId);
+    if (targetData != null) {
+      // blocks 已就绪：只补滚动测高（未就绪时），不重取正文 HTML。
+      if (!loader.isScrollLayoutReady(targetId)) {
+        loader.ensureScrollLayoutForNeighbors(
+          currentChapterId,
+          pageWidth: computePageWidth(),
+          settings: settings,
+          textScale: MediaQuery.textScalerOf(context).scale(1.0),
+        );
+      }
       rebuildContinuousWindow();
       return;
     }

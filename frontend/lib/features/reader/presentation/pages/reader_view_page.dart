@@ -283,9 +283,25 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       if (!mounted) {
         return;
       }
+      // 切章/加载期间 tracker 仍是旧章偏移，此时重算会得到错误中间值；
+      // 挂起重算，待加载完成后由 refreshBookProgressNow 一次到位。
+      if (_isSwitchingChapter || _isLoadingChapter) {
+        return;
+      }
       _lastBookProgressInput = _scrollProgressNotifier.value;
       _bookProgressNotifier.value = _bookProgress;
     });
+  }
+
+  @override
+  void refreshBookProgressNow() {
+    if (!mounted) {
+      return;
+    }
+    _bookProgressRecomputeTimer?.cancel();
+    _bookProgressRecomputeTimer = null;
+    _lastBookProgressInput = _scrollProgressNotifier.value;
+    _bookProgressNotifier.value = _bookProgress;
   }
 
   @override

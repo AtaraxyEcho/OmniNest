@@ -119,6 +119,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void applyProgressSnapshot(ReaderProgressSnapshot snapshot);
   void onContinuousScrollPosition(ContinuousScrollPosition position);
   void onContinuousWindowExpand({required bool forward});
+  void prefetchNextChapterAtBoundary(int pageIndex);
 
   // ── 页面尺寸 ──
 
@@ -415,6 +416,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                   charOffset: charOffset,
                 );
                 onAnimationComplete();
+                prefetchNextChapterAtBoundary(index);
               },
               onPreviousChapterFn: () => tryNavigateChapter(-1),
               onNextChapterFn: () => tryNavigateChapter(1),

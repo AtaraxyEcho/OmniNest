@@ -118,12 +118,12 @@ void main() {
       prepareScrollLayout: false,
     );
 
-    // 邻章预载后 HTML 会被 drop 以省内存；切章复用的是 blocks。
-    expect(loader.contentFor('chapter-2'), isNull);
+    // ±1 邻章保留 HTML：切章时 contentFor 直达，免骨架闪烁与正文重取。
+    expect(loader.contentFor('chapter-2'), same(content));
     final neighbor = loader.get('chapter-2', settings);
     expect(neighbor, isNotNull);
     expect(neighbor!.blocks, isNotEmpty);
-    expect(neighbor.content.content, isEmpty);
+    expect(neighbor.content.content, isNotEmpty);
     expect(neighbor.content.title, '第二章');
   });
 

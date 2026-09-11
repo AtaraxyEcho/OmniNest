@@ -560,11 +560,13 @@ class ReaderContentLoader {
         schedulePrecise:
             _activeChapterId == null || chapterId == _activeChapterId,
       );
-      // 预取的邻章解析完成后即可丢 HTML，blocks 已足够滚动渲染。
+      // ±1 邻章保留 HTML，切章时经 contentFor 直达免骨架；
+      // 更远章节解析完成后丢 HTML，blocks 已足够滚动渲染。
       // 尚无活动章时保留 HTML，避免首次加载正文被清空。
       if (_activeChapterId != null &&
           chapterId != _activeChapterId &&
-          data.blocks.isNotEmpty) {
+          data.blocks.isNotEmpty &&
+          !_isImmediateNeighbor(chapterId)) {
         data.dropHtmlBody();
         _contentCache.remove(chapterId);
       }
@@ -626,20 +628,35 @@ class ReaderContentLoader {
     );
   }
 
-  /// 邻章 blocks 就绪后丢弃 HTML 正文（活动章保留）。
+  /// 超出 ±1 的章节 blocks 就绪后丢弃 HTML 正文。
   ///
-  /// 同时从 [_contentCache] 移除，使 [contentFor] 返回 null，
+  /// 活动章与 ±1 邻章保留 HTML：邻章 HTML 供切章时 contentFor 直达，
+  /// 免骨架闪烁与正文重取。更远章节从 [_contentCache] 移除，
   /// 切章时走 provider 重新取正文，避免用空 HTML 闪空白页。
   void dropHtmlForNeighbors(String activeChapterId) {
     for (final entry in _cache.entries) {
-      if (entry.key.chapterId == activeChapterId) {
+      if (entry.key.chapterId == activeChapterId ||
+          _isImmediateNeighbor(entry.key.chapterId)) {
         continue;
       }
       if (entry.value.blocks.isNotEmpty) {
         entry.value.dropHtmlBody();
       }
     }
-    _contentCache.removeWhere((id, _) => id != activeChapterId);
+    _contentCache.removeWhere(
+      (id, _) => id != activeChapterId && !_isImmediateNeighbor(id),
+    );
+  }
+
+  /// 章节是否位于活动章 ±1 范围内。
+  bool _isImmediateNeighbor(String chapterId) {
+    final activeChapterId = _activeChapterId;
+    if (activeChapterId == null) {
+      return false;
+    }
+    final activeIdx = _chapterIndex(activeChapterId);
+    final idx = _chapterIndex(chapterId);
+    return activeIdx >= 0 && idx >= 0 && (idx - activeIdx).abs() <= 1;
   }
 
   void _prepareScrollMetricsIfNeeded(
@@ -655,6 +672,8 @@ class ReaderContentLoader {
     }
     // 第一阶段：精确测量头部若干块，以平均块高估算整章，立即填充
     // cumulative 数组，保证滚动映射从首帧起无空洞。
+    // 估算基线优先取已精测章节的分块型高度均值（同书排版一致），
+    // 降低 estimate→precise 转换时的窗口高度跳变。
     final blocks = data.blocks;
     final headCount = math.min(_metricsPhaseOneBlocks, blocks.length);
     final headHeights = <double>[];
@@ -670,13 +689,14 @@ class ReaderContentLoader {
     }
     final estimateBase =
         headHeights.isEmpty ? 0.0 : headHeights.last / headCount;
+    final typeAverages = _measuredBlockAverages();
     final estimated = List<double>.filled(blocks.length, 0);
     var running = 0.0;
     for (var i = 0; i < blocks.length; i++) {
       running +=
           i < headCount
               ? headHeights[i] - (i == 0 ? 0.0 : headHeights[i - 1])
-              : estimateBase;
+              : (typeAverages?[blocks[i].runtimeType] ?? estimateBase);
       estimated[i] = running;
     }
     data.updateCumulativeHeights(estimated);
@@ -691,6 +711,35 @@ class ReaderContentLoader {
         ),
       );
     }
+  }
+
+  /// 从首个已精测章节提取各块类型的平均高度，供邻章 phase-one 估算。
+  ///
+  /// 同一书排版一致，跨章块型均值比仅头部块实测更接近全章真实均值；
+  /// 无已精测章节时返回 null，调用方退回头部均值。
+  Map<Type, double>? _measuredBlockAverages() {
+    for (final data in _cache.values) {
+      if (!data.hasPreciseHeights || data.blocks.isEmpty) {
+        continue;
+      }
+      final heights = data.cumulativeHeights;
+      if (heights.length != data.blocks.length) {
+        continue;
+      }
+      final sums = <Type, double>{};
+      final counts = <Type, int>{};
+      for (var i = 0; i < data.blocks.length; i++) {
+        final type = data.blocks[i].runtimeType;
+        final height = heights[i] - (i == 0 ? 0.0 : heights[i - 1]);
+        sums[type] = (sums[type] ?? 0) + height;
+        counts[type] = (counts[type] ?? 0) + 1;
+      }
+      return {
+        for (final entry in sums.entries)
+          entry.key: entry.value / counts[entry.key]!,
+      };
+    }
+    return null;
   }
 
   /// 第二阶段：分批精确测量并替换估算值。

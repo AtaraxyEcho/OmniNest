@@ -65,6 +65,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 记录本机推送的进度快照，供 provider 回灌时判定自身回声。
   void noteOwnProgressSave(ReaderProgressSnapshot snapshot);
+
+  /// 章节加载/切换完成后立即重算全书进度一次（切章期间防抖重算被挂起）。
+  void refreshBookProgressNow();
   double? get pendingChapterProgress;
   set pendingChapterProgress(double? value);
   int? get pendingRestoreCharOffset;
@@ -327,6 +330,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       showChapterLoadingOverlay = false;
       isSwitchingChapter = false;
       isLoadingChapter = false;
+      refreshBookProgressNow();
       if (mounted) setState(() {});
     } catch (e) {
       if (kDebugMode) {
@@ -344,6 +348,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         showChapterLoadingOverlay = false;
         isSwitchingChapter = false;
         isLoadingChapter = false;
+        refreshBookProgressNow();
         setState(() {});
       }
     }
@@ -411,6 +416,51 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     for (final chapterId in needFetch) {
       unawaited(prefetchChapter(chapterId));
     }
+  }
+
+  /// 翻页模式接近章末时预取下章前几页。
+  ///
+  /// 章末切换走 switchToChapter，下章冷启动需逐页 TextPainter 测量；
+  /// 提前把下章前 3 页算入 PageNavigator，切换后首帧即可渲染。
+  void prefetchNextChapterAtBoundary(int pageIndex) {
+    final loader = contentLoader;
+    if (!isPageMode || loader == null || !mounted) return;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final pageWidth = computePageWidth();
+    final pageHeight = computePageHeight();
+    final data = loader.get(currentChapterId, settings);
+    if (data == null) return;
+    final navigator = data.getOrCreatePageNavigator(
+      pageWidth,
+      pageHeight,
+      settings,
+      textScale: textScale,
+    );
+    // 未分页完成时总数未知，宁早勿晚；完成后限末 3 页触发。
+    if (navigator.isFullyPaginated &&
+        pageIndex < navigator.readablePageCount - 3) {
+      return;
+    }
+    final chapters = loader.allChapters;
+    final idx = chapters.indexWhere((c) => c.id == currentChapterId);
+    if (idx < 0 || idx + 1 >= chapters.length) return;
+    final nextId = chapters[idx + 1].id;
+    unawaited(() async {
+      if (contentLoader?.get(nextId, settings) == null) {
+        await prefetchChapter(nextId);
+        if (!mounted || contentLoader == null) return;
+      }
+      for (var page = 0; page < 3; page++) {
+        contentLoader!.computePage(
+          chapterId: nextId,
+          settings: settings,
+          pageWidth: pageWidth,
+          pageHeight: pageHeight,
+          pageIndex: page,
+          textScale: textScale,
+        );
+      }
+    }());
   }
 
   /// 预加载指定章节内容。
@@ -1032,8 +1082,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         setState(() => showChapterLoadingOverlay = true);
       });
     }
+    // 不在此处重置 scrollProgress：进度值由导航意图/进度快照在加载完成后
+    // 一次写入，避免先闪 0 再跳目标的中间态。
     setState(() {
-      scrollProgress = 0;
       isBookmarked = false;
     });
     checkBookmarkState();
