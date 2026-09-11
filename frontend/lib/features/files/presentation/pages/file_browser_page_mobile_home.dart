@@ -337,35 +337,38 @@ void showFileMoreSectionsSheet(
     builder:
         (sheetContext) => SafeArea(
           top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final entry in groups.entries) ...[
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
-                  child: Text(
-                    entry.key.labelOf(l10n),
-                    style: TextStyle(
-                      fontSize: AppTypography.labelMedium,
-                      fontWeight: FontWeight.w700,
-                      color: context.filesColors.onSurfaceVariant,
+          // 小屏/大字号下分组列表可能超出 sheet 可用高，滚动兜底。
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final entry in groups.entries) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
+                    child: Text(
+                      entry.key.labelOf(l10n),
+                      style: TextStyle(
+                        fontSize: AppTypography.labelMedium,
+                        fontWeight: FontWeight.w700,
+                        color: context.filesColors.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                ),
-                for (final item in entry.value)
-                  ListTile(
-                    leading: Icon(item.icon),
-                    title: Text(item.labelOf(l10n)),
-                    dense: true,
-                    onTap: () {
-                      Navigator.of(sheetContext).pop();
-                      onOpen(item);
-                    },
-                  ),
-                const SizedBox(height: 8),
+                  for (final item in entry.value)
+                    ListTile(
+                      leading: Icon(item.icon),
+                      title: Text(item.labelOf(l10n)),
+                      dense: true,
+                      onTap: () {
+                        Navigator.of(sheetContext).pop();
+                        onOpen(item);
+                      },
+                    ),
+                  const SizedBox(height: 8),
+                ],
               ],
-            ],
+            ),
           ),
         ),
   );

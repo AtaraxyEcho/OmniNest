@@ -80,6 +80,12 @@ void main() {
     // 首页态不出现列表内容与 FAB。
     expect(find.text('Documents'), findsNothing);
     expect(find.byType(FloatingActionButton), findsNothing);
+
+    // 「更多」面板在小屏大字号下打开不溢出（内容滚动兜底）。
+    await tester.tap(find.text('更多分区'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SingleChildScrollView), findsAtLeastNWidgets(1));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('点分区卡进入列表态，返回行与系统返回都回首页', (tester) async {
