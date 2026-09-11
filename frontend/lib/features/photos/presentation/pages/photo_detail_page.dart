@@ -276,10 +276,24 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   // ─── 下载原片 ───
 
   Future<void> _downloadPhoto() async {
-    final photo = _current;
-    final sourceUrl = photo.sourceUrl;
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
+    final photoId = _current.id;
+    // 下载必须使用详情接口新签发的 sourceUrl：列表种子无 sourceUrl，
+    // 内存缓存与会话内旧详情都可能持有已过期的预签名地址。
+    final PhotoItem photo;
+    try {
+      ref.invalidate(photoDetailProvider(photoId));
+      photo = await ref.read(photoDetailProvider(photoId).future);
+    } on Exception {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.photosDownloadFailed)),
+      );
+      return;
+    }
+    if (!mounted) return;
+    final sourceUrl = photo.sourceUrl;
     if (sourceUrl == null || sourceUrl.isEmpty) {
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.photosDownloadSourceUnavailable)),
@@ -302,11 +316,12 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
             sizeBytes: photo.fileSize,
             suggestedName: fileName,
           );
-      if (savedPath == null) return;
+      if (!mounted || savedPath == null) return;
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.photosDownloadSaved(savedPath))),
       );
     } on Exception {
+      if (!mounted) return;
       messenger.showSnackBar(
         SnackBar(content: Text(l10n.photosDownloadFailed)),
       );
