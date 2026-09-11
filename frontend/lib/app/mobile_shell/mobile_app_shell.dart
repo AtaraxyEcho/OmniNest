@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -190,11 +191,40 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
 }
 
 /// 判断当前平台和视口是否应启用统一移动端壳层。
+///
+/// 宽度自适应仅作用于手机浏览器（Web 且浏览器宿主 OS 为 Android/iOS）
+/// 与桌面应用窄窗；桌面浏览器收缩窗口不切换移动壳层。
 bool shouldUseResponsiveMobileShell({
   required bool mobilePlatform,
   required double width,
 }) {
-  return mobilePlatform || ResponsiveBreakpoints.isCompact(width);
+  return resolveMobileShell(
+    mobilePlatform: mobilePlatform,
+    web: kIsWeb,
+    hostPlatform: defaultTargetPlatform,
+    width: width,
+  );
+}
+
+/// [shouldUseResponsiveMobileShell] 的纯函数形态，便于按宿主场景测试。
+@visibleForTesting
+bool resolveMobileShell({
+  required bool mobilePlatform,
+  required bool web,
+  required TargetPlatform hostPlatform,
+  required double width,
+}) {
+  if (mobilePlatform) {
+    return true;
+  }
+  final compact = ResponsiveBreakpoints.isCompact(width);
+  if (web) {
+    final mobileBrowser =
+        hostPlatform == TargetPlatform.android ||
+        hostPlatform == TargetPlatform.iOS;
+    return mobileBrowser && compact;
+  }
+  return compact;
 }
 
 class _MobileTopBar extends ConsumerWidget {
