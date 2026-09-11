@@ -224,7 +224,13 @@ public class WeatherService {
         if (isLatLon(location)) {
             return new ResolvedWeatherLocation(location, location, "");
         }
-        return lookupGeoLocation(location, config);
+        // 城市名由用户偏好/配置直接提供，展示名优先用入参，不依赖 Geo 返回字段。
+        ResolvedWeatherLocation resolved = lookupGeoLocation(location, config);
+        if (resolved == null) {
+            return null;
+        }
+        return new ResolvedWeatherLocation(
+                resolved.weatherLocation(), resolved.latLon(), location);
     }
 
     /**
@@ -265,14 +271,13 @@ public class WeatherService {
             String id = first.getString("id");
             String lat = first.getString("lat");
             String lon = first.getString("lon");
-            String name = first.getString("name");
             if (id == null || lat == null || lon == null) {
                 return null;
             }
 
             String latLon = lon + "," + lat;
-            ResolvedWeatherLocation location = new ResolvedWeatherLocation(
-                    id, latLon, name != null ? name : "");
+            // Geo 仅用于 LocationID + 经纬度；展示名由调用方用用户提供的城市名覆盖。
+            ResolvedWeatherLocation location = new ResolvedWeatherLocation(id, latLon, "");
             weatherCacheStore.saveLocation(cityName, location);
             return location;
         } catch (Exception e) {

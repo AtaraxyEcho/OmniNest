@@ -76,6 +76,41 @@ class _GlassCard extends StatelessWidget {
   }
 }
 
+/// 悬停反馈层（对齐样例 hover:bg-white/8）。
+class _HoverTile extends StatefulWidget {
+  const _HoverTile({required this.child, required this.radius});
+
+  final Widget child;
+  final BorderRadius radius;
+
+  @override
+  State<_HoverTile> createState() => _HoverTileState();
+}
+
+class _HoverTileState extends State<_HoverTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color:
+              _hovered
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : Colors.transparent,
+          borderRadius: widget.radius,
+        ),
+        child: widget.child,
+      ),
+    );
+  }
+}
+
 /// 样例 MetricItem：p-4，标签 xs，数值 xl。
 class _MetricCell extends StatelessWidget {
   const _MetricCell({
@@ -92,43 +127,50 @@ class _MetricCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 13, color: Colors.white.withValues(alpha: 0.45)),
-              const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: AppTypography.labelSmall,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.45),
-                  ),
-                  overflow: TextOverflow.ellipsis,
+    return _HoverTile(
+      radius: BorderRadius.circular(10),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 13,
+                  color: Colors.white.withValues(alpha: 0.45),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: AppTypography.titleMedium,
-              fontWeight: FontWeight.w600,
-              color: Colors.white,
-              height: 1.05,
+                const SizedBox(width: 6),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: AppTypography.labelSmall,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white.withValues(alpha: 0.45),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
-          if (trailing != null) ...[const SizedBox(height: 8), trailing!],
-        ],
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: AppTypography.titleMedium,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                height: 1.05,
+              ),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+            if (trailing != null) ...[const SizedBox(height: 8), trailing!],
+          ],
+        ),
       ),
     );
   }

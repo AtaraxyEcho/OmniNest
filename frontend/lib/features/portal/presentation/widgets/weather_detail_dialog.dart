@@ -578,26 +578,29 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
   Widget _buildAqiStrip(WeatherDetailLayoutMetrics metrics) {
     final w = widget.weather;
     final accent = w.aqiColorValue;
-    return _GlassCard(
-      radius: metrics.innerRadius,
-      tint: accent.withValues(alpha: 0.16),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      child: Row(
-        children: [
-          Icon(Icons.air, color: accent, size: 16),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              'AQI ${w.aqi} · ${w.aqiCategory} · PM2.5 ${w.pm2p5} μg/m³',
-              style: TextStyle(
-                fontSize: AppTypography.bodySmall,
-                fontWeight: FontWeight.w600,
-                color: Colors.white.withValues(alpha: 0.90),
+    return _HoverTile(
+      radius: BorderRadius.circular(12),
+      child: _GlassCard(
+        radius: metrics.innerRadius,
+        tint: accent.withValues(alpha: 0.16),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          children: [
+            Icon(Icons.air, color: accent, size: 16),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'AQI ${w.aqi} · ${w.aqiCategory} · PM2.5 ${w.pm2p5} μg/m³',
+                style: TextStyle(
+                  fontSize: AppTypography.bodySmall,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white.withValues(alpha: 0.90),
+                ),
+                overflow: TextOverflow.ellipsis,
               ),
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -692,38 +695,41 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
         itemBuilder: (context, index) {
           final item = items[index];
           final isFirst = index == 0;
-          return Container(
-            constraints: const BoxConstraints(minWidth: 64),
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-            decoration: BoxDecoration(
-              color:
-                  isFirst
-                      ? Colors.white.withValues(alpha: 0.14)
-                      : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  isFirst ? l10n.portalWeatherForecastNow : item.displayTime,
-                  style: TextStyle(
-                    fontSize: AppTypography.labelSmall,
-                    color: Colors.white.withValues(alpha: 0.50),
+          return _HoverTile(
+            radius: BorderRadius.circular(12),
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 64),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              decoration: BoxDecoration(
+                color:
+                    isFirst
+                        ? Colors.white.withValues(alpha: 0.14)
+                        : Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    isFirst ? l10n.portalWeatherForecastNow : item.displayTime,
+                    style: TextStyle(
+                      fontSize: AppTypography.labelSmall,
+                      color: Colors.white.withValues(alpha: 0.50),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(item.weatherIcon, style: const TextStyle(fontSize: 18)),
-                const SizedBox(height: 8),
-                Text(
-                  '${item.temp}°',
-                  style: const TextStyle(
-                    fontSize: AppTypography.bodyLarge,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                  const SizedBox(height: 8),
+                  Text(item.weatherIcon, style: const TextStyle(fontSize: 18)),
+                  const SizedBox(height: 8),
+                  Text(
+                    '${item.temp}°',
+                    style: const TextStyle(
+                      fontSize: AppTypography.bodyLarge,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -749,60 +755,70 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
               color: Colors.white.withValues(alpha: 0.08),
             ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-            child: Row(
-              children: [
-                SizedBox(
-                  width: 56,
-                  child: Text(
-                    labels[i],
-                    style: TextStyle(
-                      fontSize: AppTypography.bodySmall,
-                      fontWeight: i == 0 ? FontWeight.w600 : FontWeight.w400,
-                      color: Colors.white.withValues(
-                        alpha: i == 0 ? 0.95 : 0.60,
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: _HoverTile(
+              radius: BorderRadius.circular(10),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 56,
+                      child: Text(
+                        labels[i],
+                        style: TextStyle(
+                          fontSize: AppTypography.bodySmall,
+                          fontWeight:
+                              i == 0 ? FontWeight.w600 : FontWeight.w400,
+                          color: Colors.white.withValues(
+                            alpha: i == 0 ? 0.95 : 0.60,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ),
-                Text(
-                  daily[i].weatherIcon,
-                  style: const TextStyle(fontSize: 18),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    daily[i].textDay,
-                    style: TextStyle(
-                      fontSize: AppTypography.bodySmall,
-                      color: Colors.white.withValues(alpha: 0.45),
+                    Text(
+                      daily[i].weatherIcon,
+                      style: const TextStyle(fontSize: 18),
                     ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        daily[i].textDay,
+                        style: TextStyle(
+                          fontSize: AppTypography.bodySmall,
+                          color: Colors.white.withValues(alpha: 0.45),
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '${daily[i].tempMax}°',
+                      style: const TextStyle(
+                        fontSize: AppTypography.bodyMedium,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      ' / ',
+                      style: TextStyle(
+                        fontSize: AppTypography.bodyMedium,
+                        color: Colors.white.withValues(alpha: 0.30),
+                      ),
+                    ),
+                    Text(
+                      '${daily[i].tempMin}°',
+                      style: TextStyle(
+                        fontSize: AppTypography.bodyMedium,
+                        color: Colors.white.withValues(alpha: 0.55),
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '${daily[i].tempMax}°',
-                  style: const TextStyle(
-                    fontSize: AppTypography.bodyMedium,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white,
-                  ),
-                ),
-                Text(
-                  ' / ',
-                  style: TextStyle(
-                    fontSize: AppTypography.bodyMedium,
-                    color: Colors.white.withValues(alpha: 0.30),
-                  ),
-                ),
-                Text(
-                  '${daily[i].tempMin}°',
-                  style: TextStyle(
-                    fontSize: AppTypography.bodyMedium,
-                    color: Colors.white.withValues(alpha: 0.55),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],
