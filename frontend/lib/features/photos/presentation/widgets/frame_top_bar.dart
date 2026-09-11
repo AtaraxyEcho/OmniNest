@@ -79,45 +79,53 @@ class FrameTopBar extends ConsumerWidget {
       searchField = Expanded(child: searchField);
     }
 
-    return Container(
-      height: height,
-      padding: EdgeInsets.symmetric(horizontal: showTitle ? 24 : 16),
+    // 装饰铺满含状态栏，SafeArea 只避让内容。
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.navBg,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
-      child: Row(
-        children: [
-          if (showBack) ...[
-            FrameIconButton(
-              icon: Icons.arrow_back_rounded,
-              tooltip: l10n.photosBackToPortal,
-              onTap: () => context.go('/portal'),
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: height,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: showTitle ? 24 : 16),
+            child: Row(
+              children: [
+                if (showBack) ...[
+                  FrameIconButton(
+                    icon: Icons.arrow_back_rounded,
+                    tooltip: l10n.photosBackToPortal,
+                    onTap: () => context.go('/portal'),
+                  ),
+                  const SizedBox(width: 12),
+                ],
+                if (showTitle)
+                  Text(
+                    frameViewLabel(l10n, view),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontFamily: FramePalette.serifFamily,
+                      fontFamilyFallback: FramePalette.serifFallback,
+                      color: colors.ink,
+                      fontSize: AppTypography.titleLarge,
+                    ),
+                  ),
+                const Spacer(),
+                searchField,
+                const SizedBox(width: 12),
+                const FrameImportAction(),
+                const SizedBox(width: 12),
+                const FontScaleControl(size: 20),
+                const NotificationIcon(size: 20),
+                const SizedBox(width: 12),
+                const UserAvatarMenu(),
+              ],
             ),
-            const SizedBox(width: 12),
-          ],
-          if (showTitle)
-            Text(
-              frameViewLabel(l10n, view),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontFamily: FramePalette.serifFamily,
-                fontFamilyFallback: FramePalette.serifFallback,
-                color: colors.ink,
-                fontSize: AppTypography.titleLarge,
-              ),
-            ),
-          const Spacer(),
-          searchField,
-          const SizedBox(width: 12),
-          const FrameImportAction(),
-          const SizedBox(width: 12),
-          const FontScaleControl(size: 20),
-          const NotificationIcon(size: 20),
-          const SizedBox(width: 12),
-          const UserAvatarMenu(),
-        ],
+          ),
+        ),
       ),
     );
   }

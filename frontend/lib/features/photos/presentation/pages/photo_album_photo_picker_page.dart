@@ -68,53 +68,57 @@ class _PhotoAlbumPhotoPickerPageState
       body: Column(
         children: [
           // 顶部栏：返回 + 标题 + 已选计数
-          SafeArea(
-            bottom: false,
-            child: Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: context.photosColors.surfaceContainer.withValues(
-                  alpha: 0.70,
-                ),
-                border: Border(
-                  bottom: BorderSide(
-                    color: context.photosColors.outlineVariant.withValues(
-                      alpha: 0.32,
-                    ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: context.photosColors.surfaceContainer.withValues(
+                alpha: 0.70,
+              ),
+              border: Border(
+                bottom: BorderSide(
+                  color: context.photosColors.outlineVariant.withValues(
+                    alpha: 0.32,
                   ),
                 ),
               ),
-              child: Row(
-                children: [
-                  IconButton(
-                    tooltip: l10n.photosBack,
-                    onPressed: () => context.pop(),
-                    icon: Icon(
-                      Icons.arrow_back_rounded,
-                      color: context.photosColors.onSurface,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      l10n.photosAddPhotos,
-                      style: TextStyle(
-                        color: context.photosColors.onSurface,
-                        fontSize: AppTypography.titleMedium,
-                        fontWeight: FontWeight.w600,
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox(
+                height: 56,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      IconButton(
+                        tooltip: l10n.photosBack,
+                        onPressed: () => context.pop(),
+                        icon: Icon(
+                          Icons.arrow_back_rounded,
+                          color: context.photosColors.onSurface,
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          l10n.photosAddPhotos,
+                          style: TextStyle(
+                            color: context.photosColors.onSurface,
+                            fontSize: AppTypography.titleMedium,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        l10n.photosSelectedCount(state.selectedIds.length),
+                        style: TextStyle(
+                          color: context.photosColors.onSurfaceVariant,
+                          fontSize: AppTypography.bodyMedium,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
                   ),
-                  Text(
-                    l10n.photosSelectedCount(state.selectedIds.length),
-                    style: TextStyle(
-                      color: context.photosColors.onSurfaceVariant,
-                      fontSize: AppTypography.bodyMedium,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -210,49 +214,52 @@ class _PhotoAlbumPhotoPickerPageState
         ],
       ),
       // 底部提交栏
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
-          decoration: BoxDecoration(
-            color: context.photosColors.surfaceContainer.withValues(alpha: 0.9),
-            border: Border(
-              top: BorderSide(
-                color: context.photosColors.outlineVariant.withValues(
-                  alpha: 0.32,
-                ),
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          color: context.photosColors.surfaceContainer.withValues(alpha: 0.9),
+          border: Border(
+            top: BorderSide(
+              color: context.photosColors.outlineVariant.withValues(
+                alpha: 0.32,
               ),
             ),
           ),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  state.error ?? '',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.error,
-                    fontSize: AppTypography.bodySmall,
+        ),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    state.error ?? '',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                      fontSize: AppTypography.bodySmall,
+                    ),
                   ),
                 ),
-              ),
-              FilledButton.icon(
-                onPressed:
-                    state.selectedIds.isEmpty || state.isSubmitting
-                        ? null
-                        : _submit,
-                icon:
-                    state.isSubmitting
-                        ? const SizedBox.square(
-                          dimension: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                        : const Icon(Icons.add_rounded, size: 18),
-                label: Text(
-                  l10n.photosPickerAddCount(state.selectedIds.length),
+                FilledButton.icon(
+                  onPressed:
+                      state.selectedIds.isEmpty || state.isSubmitting
+                          ? null
+                          : _submit,
+                  icon:
+                      state.isSubmitting
+                          ? const SizedBox.square(
+                            dimension: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.add_rounded, size: 18),
+                  label: Text(
+                    l10n.photosPickerAddCount(state.selectedIds.length),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

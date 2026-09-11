@@ -465,16 +465,16 @@ void main() {
     );
     expect((panel.decoration! as BoxDecoration).color, const Color(0xF00A0A0A));
 
-    final bar = tester.widget<Container>(
+    final bar = tester.widget<DecoratedBox>(
       find
           .descendant(
             of: find.byType(PhotoViewerTopBar),
-            matching: find.byType(Container),
+            matching: find.byType(DecoratedBox),
           )
           .first,
     );
     expect(
-      (bar.decoration! as BoxDecoration).color,
+      (bar.decoration as BoxDecoration).color,
       Colors.black.withValues(alpha: 0.38),
     );
   });

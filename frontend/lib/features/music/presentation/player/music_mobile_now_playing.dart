@@ -52,12 +52,12 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
     final item = center?.currentItem;
     final track = item?.track ?? center?.activeTrack;
     final lyrics = track?.lyricLines ?? const <MusicLyricLine>[];
-    return SafeArea(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          const _MobileCoverBackdrop(),
-          Padding(
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const _MobileCoverBackdrop(),
+        SafeArea(
+          child: Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
             child: Column(
               children: [
@@ -189,8 +189,8 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
               ],
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

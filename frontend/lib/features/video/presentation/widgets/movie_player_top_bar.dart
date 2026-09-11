@@ -28,68 +28,71 @@ class MoviePlayerTopBar extends StatelessWidget {
       top: 0,
       left: 0,
       right: 0,
-      child: SafeArea(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Colors.black.withValues(alpha: 0.78),
-                Colors.transparent,
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              Color(0xC7000000), // black 0.78
+              Colors.transparent,
+            ],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
           ),
-          child: Row(
-            children: [
-              MoviePlayerIconButton(
-                icon: Icons.arrow_back_rounded,
-                tooltip: AppLocalizations.of(context).videoBackToDetail,
-                onPressed: onBack,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: colors.playerControlForeground,
-                        fontSize: isMobile ? 15 : 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (!isMobile && subtitle?.isNotEmpty == true) ...[
-                      const SizedBox(height: 2),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            child: Row(
+              children: [
+                MoviePlayerIconButton(
+                  icon: Icons.arrow_back_rounded,
+                  tooltip: AppLocalizations.of(context).videoBackToDetail,
+                  onPressed: onBack,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                       Text(
-                        subtitle!,
+                        title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: colors.playerControlMuted,
-                          fontSize: AppTypography.bodySmall,
-                          fontWeight: FontWeight.w500,
+                          color: colors.playerControlForeground,
+                          fontSize: isMobile ? 15 : 16,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (!isMobile && subtitle?.isNotEmpty == true) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          subtitle!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: colors.playerControlMuted,
+                            fontSize: AppTypography.bodySmall,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              MoviePlayerIconButton(
-                icon: isMobile ? Icons.more_vert_rounded : Icons.info_outline,
-                tooltip:
-                    isMobile
-                        ? AppLocalizations.of(context).videoPlaybackSettings
-                        : AppLocalizations.of(context).videoPlaybackInfo,
-                onPressed: onInfoTap,
-              ),
-            ],
+                const SizedBox(width: 8),
+                MoviePlayerIconButton(
+                  icon: isMobile ? Icons.more_vert_rounded : Icons.info_outline,
+                  tooltip:
+                      isMobile
+                          ? AppLocalizations.of(context).videoPlaybackSettings
+                          : AppLocalizations.of(context).videoPlaybackInfo,
+                  onPressed: onInfoTap,
+                ),
+              ],
+            ),
           ),
         ),
       ),

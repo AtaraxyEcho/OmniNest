@@ -75,9 +75,8 @@ class PhotoViewerTopBar extends StatelessWidget {
         photo.locationDisplay(preferZh: _isZhLocale(context)) ?? photo.title;
     final date = photo.dateTaken ?? photo.createdAt;
 
-    return Container(
-      height: 52,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
+    // 装饰面铺满含状态栏，SafeArea 只避让内容，避免顶栏与系统栏断层。
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: barColor,
         border:
@@ -91,206 +90,236 @@ class PhotoViewerTopBar extends StatelessWidget {
                   ),
                 ),
       ),
-      child: Row(
-        children: [
-          IconButton(
-            tooltip: AppLocalizations.of(context).coreClose,
-            onPressed: onClose,
-            icon: Icon(Icons.close_rounded, color: iconColor),
-            visualDensity: VisualDensity.compact,
-          ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 52,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
               children: [
-                Text(
-                  centerTitle,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: titleColor,
-                    fontSize: AppTypography.bodyMedium,
-                    fontWeight: FontWeight.w500,
+                IconButton(
+                  tooltip: AppLocalizations.of(context).coreClose,
+                  onPressed: onClose,
+                  icon: Icon(Icons.close_rounded, color: iconColor),
+                  visualDensity: VisualDensity.compact,
+                ),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        centerTitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: titleColor,
+                          fontSize: AppTypography.bodyMedium,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      if (compact && countText != null)
+                        Text(
+                          countText!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: dateColor,
+                            fontSize: AppTypography.labelSmall,
+                          ),
+                        )
+                      else if (date != null)
+                        Text(
+                          viewerShortDate(date),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: dateColor,
+                            fontSize: AppTypography.labelSmall,
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-                if (compact && countText != null)
-                  Text(
-                    countText!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: dateColor,
-                      fontSize: AppTypography.labelSmall,
-                    ),
+                if (compact)
+                  PopupMenuButton<_PhotoMenuAction>(
+                    tooltip:
+                        MaterialLocalizations.of(context).moreButtonTooltip,
+                    color: context.photosColors.surfaceContainerHigh,
+                    icon: Icon(Icons.more_vert_rounded, color: iconColor),
+                    onSelected: (action) {
+                      switch (action) {
+                        case _PhotoMenuAction.favorite:
+                          onToggleFavorite();
+                        case _PhotoMenuAction.info:
+                          onToggleInfo();
+                        case _PhotoMenuAction.edit:
+                          onEdit();
+                        case _PhotoMenuAction.slideshow:
+                          onSlideshow();
+                        case _PhotoMenuAction.addToAlbum:
+                          onAddToAlbum();
+                        case _PhotoMenuAction.share:
+                          onShare();
+                        case _PhotoMenuAction.download:
+                          onDownload();
+                        case _PhotoMenuAction.delete:
+                          onDelete();
+                      }
+                    },
+                    itemBuilder:
+                        (context) => [
+                          PopupMenuItem(
+                            value: _PhotoMenuAction.favorite,
+                            child: Text(
+                              photo.favorite
+                                  ? AppLocalizations.of(
+                                    context,
+                                  ).photosUnfavorite
+                                  : AppLocalizations.of(context).photosFavorite,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _PhotoMenuAction.share,
+                            child: Text(
+                              AppLocalizations.of(context).photosSharePhoto,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _PhotoMenuAction.download,
+                            child: Text(
+                              AppLocalizations.of(context).photosDownloadPhoto,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _PhotoMenuAction.edit,
+                            child: Text(
+                              AppLocalizations.of(context).photosEdit,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _PhotoMenuAction.slideshow,
+                            child: Text(
+                              AppLocalizations.of(context).photosSlideshow,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _PhotoMenuAction.addToAlbum,
+                            child: Text(
+                              AppLocalizations.of(context).photosAddToAlbum,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _PhotoMenuAction.info,
+                            child: Text(
+                              showInfo
+                                  ? AppLocalizations.of(context).photosHideInfo
+                                  : AppLocalizations.of(context).photosShowInfo,
+                            ),
+                          ),
+                          PopupMenuItem(
+                            value: _PhotoMenuAction.delete,
+                            child: Text(
+                              AppLocalizations.of(context).photosDelete,
+                              style: TextStyle(
+                                color: context.photosColors.danger,
+                              ),
+                            ),
+                          ),
+                        ],
                   )
-                else if (date != null)
-                  Text(
-                    viewerShortDate(date),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: dateColor,
-                      fontSize: AppTypography.labelSmall,
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          if (compact)
-            PopupMenuButton<_PhotoMenuAction>(
-              tooltip: MaterialLocalizations.of(context).moreButtonTooltip,
-              color: context.photosColors.surfaceContainerHigh,
-              icon: Icon(Icons.more_vert_rounded, color: iconColor),
-              onSelected: (action) {
-                switch (action) {
-                  case _PhotoMenuAction.favorite:
-                    onToggleFavorite();
-                  case _PhotoMenuAction.info:
-                    onToggleInfo();
-                  case _PhotoMenuAction.edit:
-                    onEdit();
-                  case _PhotoMenuAction.slideshow:
-                    onSlideshow();
-                  case _PhotoMenuAction.addToAlbum:
-                    onAddToAlbum();
-                  case _PhotoMenuAction.share:
-                    onShare();
-                  case _PhotoMenuAction.download:
-                    onDownload();
-                  case _PhotoMenuAction.delete:
-                    onDelete();
-                }
-              },
-              itemBuilder:
-                  (context) => [
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.favorite,
-                      child: Text(
+                else ...[
+                  IconButton(
+                    tooltip:
                         photo.favorite
                             ? AppLocalizations.of(context).photosUnfavorite
                             : AppLocalizations.of(context).photosFavorite,
-                      ),
+                    onPressed: onToggleFavorite,
+                    icon: Icon(
+                      photo.favorite
+                          ? Icons.favorite_rounded
+                          : Icons.favorite_border_rounded,
+                      color: photo.favorite ? activeColor : iconColor,
+                      size: 20,
                     ),
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.share,
-                      child: Text(
-                        AppLocalizations.of(context).photosSharePhoto,
-                      ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  // Heart/Share/Download 前置组与设计稿（幻灯片顶栏）一致。
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).photosSharePhoto,
+                    onPressed: onShare,
+                    icon: Icon(
+                      Icons.share_outlined,
+                      color: iconColor,
+                      size: 20,
                     ),
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.download,
-                      child: Text(
-                        AppLocalizations.of(context).photosDownloadPhoto,
-                      ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).photosDownloadPhoto,
+                    onPressed: onDownload,
+                    icon: Icon(
+                      Icons.download_outlined,
+                      color: iconColor,
+                      size: 20,
                     ),
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.edit,
-                      child: Text(AppLocalizations.of(context).photosEdit),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).photosEdit,
+                    onPressed: onEdit,
+                    icon: Icon(Icons.edit_outlined, color: iconColor, size: 20),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).photosSlideshow,
+                    onPressed: onSlideshow,
+                    icon: Icon(
+                      Icons.play_arrow_rounded,
+                      color: iconColor,
+                      size: 22,
                     ),
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.slideshow,
-                      child: Text(AppLocalizations.of(context).photosSlideshow),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).photosAddToAlbum,
+                    onPressed: onAddToAlbum,
+                    icon: Icon(
+                      Icons.create_new_folder_outlined,
+                      color: iconColor,
+                      size: 20,
                     ),
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.addToAlbum,
-                      child: Text(
-                        AppLocalizations.of(context).photosAddToAlbum,
-                      ),
-                    ),
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.info,
-                      child: Text(
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip:
                         showInfo
                             ? AppLocalizations.of(context).photosHideInfo
                             : AppLocalizations.of(context).photosShowInfo,
-                      ),
+                    onPressed: onToggleInfo,
+                    icon: Icon(
+                      Icons.info_outline_rounded,
+                      color: showInfo ? activeColor : iconColor,
+                      size: 20,
                     ),
-                    PopupMenuItem(
-                      value: _PhotoMenuAction.delete,
-                      child: Text(
-                        AppLocalizations.of(context).photosDelete,
-                        style: TextStyle(color: context.photosColors.danger),
-                      ),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).photosDelete,
+                    onPressed: onDelete,
+                    icon: Icon(
+                      Icons.delete_outline_rounded,
+                      color: iconColor,
+                      size: 20,
                     ),
-                  ],
-            )
-          else ...[
-            IconButton(
-              tooltip:
-                  photo.favorite
-                      ? AppLocalizations.of(context).photosUnfavorite
-                      : AppLocalizations.of(context).photosFavorite,
-              onPressed: onToggleFavorite,
-              icon: Icon(
-                photo.favorite
-                    ? Icons.favorite_rounded
-                    : Icons.favorite_border_rounded,
-                color: photo.favorite ? activeColor : iconColor,
-                size: 20,
-              ),
-              visualDensity: VisualDensity.compact,
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ],
+              ],
             ),
-            // Heart/Share/Download 前置组与设计稿（幻灯片顶栏）一致。
-            IconButton(
-              tooltip: AppLocalizations.of(context).photosSharePhoto,
-              onPressed: onShare,
-              icon: Icon(Icons.share_outlined, color: iconColor, size: 20),
-              visualDensity: VisualDensity.compact,
-            ),
-            IconButton(
-              tooltip: AppLocalizations.of(context).photosDownloadPhoto,
-              onPressed: onDownload,
-              icon: Icon(Icons.download_outlined, color: iconColor, size: 20),
-              visualDensity: VisualDensity.compact,
-            ),
-            IconButton(
-              tooltip: AppLocalizations.of(context).photosEdit,
-              onPressed: onEdit,
-              icon: Icon(Icons.edit_outlined, color: iconColor, size: 20),
-              visualDensity: VisualDensity.compact,
-            ),
-            IconButton(
-              tooltip: AppLocalizations.of(context).photosSlideshow,
-              onPressed: onSlideshow,
-              icon: Icon(Icons.play_arrow_rounded, color: iconColor, size: 22),
-              visualDensity: VisualDensity.compact,
-            ),
-            IconButton(
-              tooltip: AppLocalizations.of(context).photosAddToAlbum,
-              onPressed: onAddToAlbum,
-              icon: Icon(
-                Icons.create_new_folder_outlined,
-                color: iconColor,
-                size: 20,
-              ),
-              visualDensity: VisualDensity.compact,
-            ),
-            IconButton(
-              tooltip:
-                  showInfo
-                      ? AppLocalizations.of(context).photosHideInfo
-                      : AppLocalizations.of(context).photosShowInfo,
-              onPressed: onToggleInfo,
-              icon: Icon(
-                Icons.info_outline_rounded,
-                color: showInfo ? activeColor : iconColor,
-                size: 20,
-              ),
-              visualDensity: VisualDensity.compact,
-            ),
-            IconButton(
-              tooltip: AppLocalizations.of(context).photosDelete,
-              onPressed: onDelete,
-              icon: Icon(
-                Icons.delete_outline_rounded,
-                color: iconColor,
-                size: 20,
-              ),
-              visualDensity: VisualDensity.compact,
-            ),
-          ],
-        ],
+          ),
+        ),
       ),
     );
   }

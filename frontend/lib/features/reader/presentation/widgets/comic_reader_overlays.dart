@@ -37,10 +37,10 @@ class ComicReaderTopBar extends StatelessWidget {
       top: 0,
       left: 0,
       right: 0,
-      child: SafeArea(
-        bottom: false,
-        child: Material(
-          color: settings.controlSurfaceColor.withValues(alpha: 0.94),
+      child: Material(
+        color: settings.controlSurfaceColor.withValues(alpha: 0.94),
+        child: SafeArea(
+          bottom: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final layout = ReaderControlLayout.resolve(
@@ -224,10 +224,10 @@ class ComicReaderBottomBar extends StatelessWidget {
       left: 0,
       right: 0,
       bottom: 0,
-      child: SafeArea(
-        top: false,
-        child: Material(
-          color: settings.controlSurfaceColor.withValues(alpha: 0.94),
+      child: Material(
+        color: settings.controlSurfaceColor.withValues(alpha: 0.94),
+        child: SafeArea(
+          top: false,
           child: LayoutBuilder(
             builder: (context, constraints) {
               final layout = ReaderControlLayout.resolve(

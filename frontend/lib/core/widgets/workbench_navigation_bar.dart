@@ -15,21 +15,28 @@ class WorkbenchNavigationBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      child: NavigationBar(
-        selectedIndex: currentIndex,
-        onDestinationSelected: onTap,
-        destinations: items
-            .map(
-              (item) => NavigationDestination(
-                icon: Icon(item.icon),
-                selectedIcon: Icon(item.selectedIcon),
-                label: item.label,
-                tooltip: item.label,
-              ),
-            )
-            .toList(growable: false),
+    // NavigationBar 自带表面色；用 ColoredBox 把同一表面铺进手势区。
+    final scheme = Theme.of(context).colorScheme;
+    return ColoredBox(
+      color:
+          Theme.of(context).navigationBarTheme.backgroundColor ??
+          scheme.surface,
+      child: SafeArea(
+        top: false,
+        child: NavigationBar(
+          selectedIndex: currentIndex,
+          onDestinationSelected: onTap,
+          destinations: items
+              .map(
+                (item) => NavigationDestination(
+                  icon: Icon(item.icon),
+                  selectedIcon: Icon(item.selectedIcon),
+                  label: item.label,
+                  tooltip: item.label,
+                ),
+              )
+              .toList(growable: false),
+        ),
       ),
     );
   }

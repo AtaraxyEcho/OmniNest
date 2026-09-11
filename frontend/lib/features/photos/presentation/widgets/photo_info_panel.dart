@@ -49,72 +49,75 @@ class PhotoInfoPanel extends ConsumerWidget {
     return Container(
       width: double.infinity,
       decoration: photoPanelContainerDecoration(context),
-      child: SingleChildScrollView(
-        padding:
-            MediaQuery.sizeOf(context).width < photoPanelCompactBreakpoint
-                ? const EdgeInsets.fromLTRB(24, 20, 24, 24)
-                : const EdgeInsets.fromLTRB(24, 64, 24, 24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(l10n.photosPhotoInfo, style: _eyebrowStyle),
-            const SizedBox(height: 4),
-            Text(
-              fresh.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: AppTypography.titleLarge,
-                fontWeight: FontWeight.w300,
-              ),
-            ),
-            const SizedBox(height: 32),
-            if (rows.isEmpty)
+      child: SafeArea(
+        top: false,
+        child: SingleChildScrollView(
+          padding:
+              MediaQuery.sizeOf(context).width < photoPanelCompactBreakpoint
+                  ? const EdgeInsets.fromLTRB(24, 20, 24, 24)
+                  : const EdgeInsets.fromLTRB(24, 64, 24, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.photosPhotoInfo, style: _eyebrowStyle),
+              const SizedBox(height: 4),
               Text(
-                '—',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.35),
-                  fontSize: AppTypography.bodySmall,
+                fresh.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: AppTypography.titleLarge,
+                  fontWeight: FontWeight.w300,
                 ),
-              )
-            else
-              for (final row in rows)
-                PhotoInfoRow(label: row.label, value: row.value),
-            ..._buildAiSection(context, fresh),
-            ..._buildDescriptionSection(context, fresh),
-            _buildTagSection(context, ref, fresh),
-            const SizedBox(height: 24),
-            Row(
-              children: [
-                Expanded(
-                  child: PhotoPanelActionButton(
-                    icon:
-                        fresh.favorite
-                            ? Icons.favorite_rounded
-                            : Icons.favorite_border_rounded,
-                    iconColor:
-                        fresh.favorite
-                            ? const Color(0xFFFB7185)
-                            : Colors.white.withValues(alpha: 0.80),
-                    label:
-                        fresh.favorite
-                            ? AppLocalizations.of(context).photosUnfavorite
-                            : AppLocalizations.of(context).photosFavorite,
-                    onTap: () => _toggleFavorite(context, ref, fresh),
+              ),
+              const SizedBox(height: 32),
+              if (rows.isEmpty)
+                Text(
+                  '—',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.35),
+                    fontSize: AppTypography.bodySmall,
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: PhotoPanelActionButton(
-                    icon: Icons.share_rounded,
-                    label: l10n.photosSharePhoto,
-                    onTap: onShare,
+                )
+              else
+                for (final row in rows)
+                  PhotoInfoRow(label: row.label, value: row.value),
+              ..._buildAiSection(context, fresh),
+              ..._buildDescriptionSection(context, fresh),
+              _buildTagSection(context, ref, fresh),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: PhotoPanelActionButton(
+                      icon:
+                          fresh.favorite
+                              ? Icons.favorite_rounded
+                              : Icons.favorite_border_rounded,
+                      iconColor:
+                          fresh.favorite
+                              ? const Color(0xFFFB7185)
+                              : Colors.white.withValues(alpha: 0.80),
+                      label:
+                          fresh.favorite
+                              ? AppLocalizations.of(context).photosUnfavorite
+                              : AppLocalizations.of(context).photosFavorite,
+                      onTap: () => _toggleFavorite(context, ref, fresh),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: PhotoPanelActionButton(
+                      icon: Icons.share_rounded,
+                      label: l10n.photosSharePhoto,
+                      onTap: onShare,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -45,12 +45,8 @@ class PhotoPanelHost extends StatelessWidget {
               constraints: BoxConstraints(
                 maxHeight: math.max(240, size.height * 0.8),
               ),
-              child: Padding(
-                padding: EdgeInsets.only(
-                  bottom: MediaQuery.paddingOf(context).bottom,
-                ),
-                child: child,
-              ),
+              // 底部安全区由面板装饰内侧的 SafeArea 处理，避免手势区空白。
+              child: child,
             ),
           ),
         ),

@@ -79,45 +79,43 @@ class MoviePlayerBottomBar extends StatelessWidget {
       bottom: 0,
       left: 0,
       right: 0,
-      child: SafeArea(
-        top: false,
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final viewport = MediaQuery.sizeOf(context);
-            final textScale = MediaQuery.textScalerOf(context).scale(1);
-            final controlMaxWidth = constraints.maxWidth;
-            final density = _resolveDensity(controlMaxWidth, textScale);
-            final animationsDisabled = MediaQuery.disableAnimationsOf(context);
-            final horizontalPadding = (controlMaxWidth * 0.012).clamp(
-              12.0,
-              density == _MoviePlayerControlDensity.expanded ? 28.0 : 22.0,
-            );
-            final proportionalBottomInset =
-                viewport.height *
-                switch ((isFullscreen, isMobile)) {
-                  (true, true) => 0.035,
-                  (true, false) => 0.06,
-                  (false, true) => 0.012,
-                  (false, false) => 0.018,
-                };
-            final bottomInset = proportionalBottomInset.clamp(
-              isMobile ? 8.0 : 12.0,
-              isFullscreen
-                  ? (isMobile ? 36.0 : 80.0)
-                  : (isMobile ? 18.0 : 28.0),
-            );
-            final topPadding = (viewport.height *
-                    (isFullscreen ? 0.032 : 0.024))
-                .clamp(24.0, 44.0);
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final viewport = MediaQuery.sizeOf(context);
+          final textScale = MediaQuery.textScalerOf(context).scale(1);
+          final controlMaxWidth = constraints.maxWidth;
+          final density = _resolveDensity(controlMaxWidth, textScale);
+          final animationsDisabled = MediaQuery.disableAnimationsOf(context);
+          final horizontalPadding = (controlMaxWidth * 0.012).clamp(
+            12.0,
+            density == _MoviePlayerControlDensity.expanded ? 28.0 : 22.0,
+          );
+          final proportionalBottomInset =
+              viewport.height *
+              switch ((isFullscreen, isMobile)) {
+                (true, true) => 0.035,
+                (true, false) => 0.06,
+                (false, true) => 0.012,
+                (false, false) => 0.018,
+              };
+          final bottomInset = proportionalBottomInset.clamp(
+            isMobile ? 8.0 : 12.0,
+            isFullscreen ? (isMobile ? 36.0 : 80.0) : (isMobile ? 18.0 : 28.0),
+          );
+          final topPadding = (viewport.height * (isFullscreen ? 0.032 : 0.024))
+              .clamp(24.0, 44.0);
 
-            return DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.transparent, context.videoColors.playerBarBg],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
+          // 渐变铺满含手势导航区，SafeArea 只避让控制内容。
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.transparent, context.videoColors.playerBarBg],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
               ),
+            ),
+            child: SafeArea(
+              top: false,
               child: SizedBox(
                 key: const Key('moviePlayerControlViewport'),
                 width: double.infinity,
@@ -171,9 +169,9 @@ class MoviePlayerBottomBar extends StatelessWidget {
                   ),
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }

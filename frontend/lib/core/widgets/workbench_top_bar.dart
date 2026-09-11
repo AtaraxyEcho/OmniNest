@@ -23,15 +23,16 @@ class WorkbenchTopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return SafeArea(
-      bottom: false,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: surfaceColor ?? scheme.surface,
-          border: Border(
-            bottom: BorderSide(color: borderColor ?? scheme.outlineVariant),
-          ),
+    // 装饰铺满含状态栏，SafeArea 只避让工具栏内容。
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: surfaceColor ?? scheme.surface,
+        border: Border(
+          bottom: BorderSide(color: borderColor ?? scheme.outlineVariant),
         ),
+      ),
+      child: SafeArea(
+        bottom: false,
         child: SizedBox(height: height, child: child),
       ),
     );

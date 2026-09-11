@@ -202,66 +202,69 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       onClose: () => widget.onDone?.call(),
       child: Container(
         decoration: photoPanelContainerDecoration(context),
-        child: SingleChildScrollView(
-          padding:
-              MediaQuery.sizeOf(context).width < photoPanelCompactBreakpoint
-                  ? const EdgeInsets.fromLTRB(24, 20, 24, 24)
-                  : const EdgeInsets.fromLTRB(24, 64, 24, 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                l10n.photosShareEyebrow,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.30),
-                  fontSize: AppTypography.labelSmall,
-                  letterSpacing: 0.14,
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding:
+                MediaQuery.sizeOf(context).width < photoPanelCompactBreakpoint
+                    ? const EdgeInsets.fromLTRB(24, 20, 24, 24)
+                    : const EdgeInsets.fromLTRB(24, 64, 24, 24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  l10n.photosShareEyebrow,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.30),
+                    fontSize: AppTypography.labelSmall,
+                    letterSpacing: 0.14,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                widget.photo.title,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: AppTypography.titleLarge,
-                  fontWeight: FontWeight.w300,
+                const SizedBox(height: 4),
+                Text(
+                  widget.photo.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: AppTypography.titleLarge,
+                    fontWeight: FontWeight.w300,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 28),
-              _buildPreviewCard(location),
-              const SizedBox(height: 24),
-              _buildLinkSection(l10n),
-              const SizedBox(height: 24),
-              _buildShareToGrid(l10n),
-              const SizedBox(height: 24),
-              _buildOptions(l10n, location),
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: widget.onDone,
-                  style: TextButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.10),
-                    foregroundColor: Colors.white.withValues(alpha: 0.90),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: Colors.white.withValues(alpha: 0.10),
+                const SizedBox(height: 28),
+                _buildPreviewCard(location),
+                const SizedBox(height: 24),
+                _buildLinkSection(l10n),
+                const SizedBox(height: 24),
+                _buildShareToGrid(l10n),
+                const SizedBox(height: 24),
+                _buildOptions(l10n, location),
+                const SizedBox(height: 32),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: widget.onDone,
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.10),
+                      foregroundColor: Colors.white.withValues(alpha: 0.90),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.10),
+                        ),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    child: Text(
+                      l10n.photosShareDone,
+                      style: const TextStyle(
+                        fontSize: AppTypography.bodyMedium,
+                        letterSpacing: 0.04,
+                        fontWeight: FontWeight.w300,
                       ),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  child: Text(
-                    l10n.photosShareDone,
-                    style: const TextStyle(
-                      fontSize: AppTypography.bodyMedium,
-                      letterSpacing: 0.04,
-                      fontWeight: FontWeight.w300,
-                    ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),

@@ -255,16 +255,13 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
         }
         return Column(
           children: [
-            SafeArea(
-              bottom: false,
-              child: FrameTopBar(
-                view: data.frameView,
-                searchController: _searchController,
-                onSearchChanged: notifier.setSearchQuery,
-                showTitle: false,
-                searchExpanded: true,
-                showBack: true,
-              ),
+            FrameTopBar(
+              view: data.frameView,
+              searchController: _searchController,
+              onSearchChanged: notifier.setSearchQuery,
+              showTitle: false,
+              searchExpanded: true,
+              showBack: true,
             ),
             Expanded(child: content),
             if (bottomNav != null) bottomNav,

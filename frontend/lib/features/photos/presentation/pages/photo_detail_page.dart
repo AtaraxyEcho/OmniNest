@@ -458,50 +458,46 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
           top: 0,
           left: 0,
           right: 0,
-          child: SafeArea(
-            bottom: false,
-            child: PhotoViewerTopBar(
-              photo: currentFresh,
-              onClose: _closeViewer,
-              onToggleFavorite: () async {
-                try {
-                  if (!mounted) return;
-                  await ref
-                      .read(photoCenterControllerProvider.notifier)
-                      .toggleFavorite(
-                        currentFresh.id,
-                        currentFavorite: currentFresh.favorite,
-                      );
-                  if (!mounted) return;
-                  // 刷新详情
-                  ref.invalidate(photoDetailProvider(currentFresh.id));
-                } on Exception {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          AppLocalizations.of(context).photosOperationFailed,
-                        ),
-                      ),
+          child: PhotoViewerTopBar(
+            photo: currentFresh,
+            onClose: _closeViewer,
+            onToggleFavorite: () async {
+              try {
+                if (!mounted) return;
+                await ref
+                    .read(photoCenterControllerProvider.notifier)
+                    .toggleFavorite(
+                      currentFresh.id,
+                      currentFavorite: currentFresh.favorite,
                     );
-                  }
+                if (!mounted) return;
+                // 刷新详情
+                ref.invalidate(photoDetailProvider(currentFresh.id));
+              } on Exception {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppLocalizations.of(context).photosOperationFailed,
+                      ),
+                    ),
+                  );
                 }
-              },
-              onDelete: _confirmDelete,
-              onToggleInfo:
-                  () =>
-                      ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
-              onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
-              onEdit: () {
-                context.push('/photos/${currentFresh.id}/edit');
-              },
-              onSlideshow: _launchSlideshow,
-              onDownload: () => unawaited(_downloadPhoto()),
-              onShare: _openSharePanel,
-              showInfo: _showInfo,
-              compact: compact,
-              countText: '${_currentPage + 1} / ${_pages.length}',
-            ),
+              }
+            },
+            onDelete: _confirmDelete,
+            onToggleInfo:
+                () => ref.read(photoInfoPanelVisibleProvider.notifier).toggle(),
+            onAddToAlbum: () => _showAddToAlbumDialog(context, ref),
+            onEdit: () {
+              context.push('/photos/${currentFresh.id}/edit');
+            },
+            onSlideshow: _launchSlideshow,
+            onDownload: () => unawaited(_downloadPhoto()),
+            onShare: _openSharePanel,
+            showInfo: _showInfo,
+            compact: compact,
+            countText: '${_currentPage + 1} / ${_pages.length}',
           ),
         ),
         // 分享侧栏：与幻灯片共用组件，scrim 在面板之下。

@@ -42,10 +42,10 @@ class ReaderViewTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      bottom: false,
-      child: ColoredBox(
-        color: settings.controlSurfaceColor.withValues(alpha: 0.97),
+    return ColoredBox(
+      color: settings.controlSurfaceColor.withValues(alpha: 0.97),
+      child: SafeArea(
+        bottom: false,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final textScale = MediaQuery.textScalerOf(context).scale(1);

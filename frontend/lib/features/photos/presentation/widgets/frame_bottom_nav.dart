@@ -32,30 +32,28 @@ class FrameBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.frameColors;
-    final nav = Container(
+    final content = Row(
+      children: [
+        for (final view in _views)
+          Expanded(
+            child: _FrameBottomItem(
+              key: ValueKey('frame-tab-${view.name}'),
+              view: view,
+              label: frameViewLabel(l10n, view),
+              active: activeView == view,
+              onTap: () => onSelectView(view),
+            ),
+          ),
+      ],
+    );
+    // 装饰铺满含手势导航区，SafeArea 只避让内容。
+    return DecoratedBox(
       decoration: BoxDecoration(
         color: colors.navBg,
         border: Border(top: BorderSide(color: colors.border)),
       ),
-      child: Row(
-        children: [
-          for (final view in _views)
-            Expanded(
-              child: _FrameBottomItem(
-                key: ValueKey('frame-tab-${view.name}'),
-                view: view,
-                label: frameViewLabel(l10n, view),
-                active: activeView == view,
-                onTap: () => onSelectView(view),
-              ),
-            ),
-        ],
-      ),
+      child: useSafeArea ? SafeArea(top: false, child: content) : content,
     );
-    if (!useSafeArea) {
-      return nav;
-    }
-    return SafeArea(top: false, child: nav);
   }
 }
 
