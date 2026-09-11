@@ -106,7 +106,8 @@ mixin ReaderViewPageInteractionMixin
     );
     if ((newProgress - scrollProgress).abs() > 0.001 ||
         position.chapterId == currentChapterId) {
-      setState(() => scrollProgress = newProgress);
+      // 热路径：只更新通知器（UI 消费者局部重建），不再 setState 整页。
+      scrollProgress = newProgress;
       scheduleLocalProgressSave(
         chapterProgress: newProgress,
         mode: 'scroll',

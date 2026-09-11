@@ -332,7 +332,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     final totalChars = chapterData?.totalChars ?? 0;
     final progress =
         totalChars > 0 ? (clamped / totalChars).clamp(0.0, 1.0) : 0.0;
-    _scrollProgress = progress;
+    scrollProgress = progress;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {

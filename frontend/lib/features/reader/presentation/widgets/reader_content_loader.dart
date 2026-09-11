@@ -285,7 +285,23 @@ class PageNavigator {
     _cache[pageIndex] = slice;
     _currentPage = pageIndex;
     if (pageIndex > _maxComputedPage) _maxComputedPage = pageIndex;
+    _evictFarPages();
     return slice;
+  }
+
+  /// 窗口保护式淘汰：只清除距当前页 ±_evictWindow 以外的页。
+  /// _computeSlice 递归依赖前一页缓存，朴素 LRU 会级联重算。
+  static const _evictWindow = 32;
+  static const _maxCacheSize = 128;
+
+  void _evictFarPages() {
+    if (_cache.length <= _maxCacheSize) {
+      return;
+    }
+    final lo = _currentPage - _evictWindow;
+    final hi = _currentPage + _evictWindow;
+    // _maxComputedPage 以下的页可能被递归依赖（_computeSlice(pageIndex-1) 链），保留 [0, hi] 窗口。
+    _cache.removeWhere((page, _) => page < lo || page > hi);
   }
 
   /// 计算指定页的切片（递归依赖前一页）。

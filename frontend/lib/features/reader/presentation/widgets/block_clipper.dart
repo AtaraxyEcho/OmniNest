@@ -7,10 +7,44 @@ import 'package:omninest/features/reader/presentation/widgets/reader_html_parser
 class BlockClipper {
   BlockClipper._();
 
+  /// 前缀缓存：blocks 身份不变时复用累积字符偏移，O(1) 命中。
+  static List<ContentBlock>? _prefixBlocks;
+  static List<int>? _prefixOffsets;
+
+  /// 构建或复用 blocks 的累积字符前缀（blocks[i] 起始偏移，长度 = blocks.length + 1）。
+  static List<int> _prefixFor(List<ContentBlock> blocks) {
+    if (identical(_prefixBlocks, blocks) && _prefixOffsets != null) {
+      return _prefixOffsets!;
+    }
+    final offsets = List<int>.filled(blocks.length + 1, 0);
+    for (var i = 0; i < blocks.length; i++) {
+      offsets[i + 1] = offsets[i] + blockCharCount(blocks[i]);
+    }
+    _prefixBlocks = blocks;
+    _prefixOffsets = offsets;
+    return offsets;
+  }
+
+  /// 在有序前缀中二分查找首个结束偏移 > target 的块索引。
+  static int _lowerBound(List<int> offsets, int target) {
+    var lo = 0;
+    var hi = offsets.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (offsets[mid + 1] <= target) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    return lo;
+  }
+
   /// 按字符范围裁剪 blocks 列表。
   ///
   /// 只保留 [startCharOffset, endCharOffset) 范围内的内容。
   /// 对首尾块做 span 级字符裁剪，中间块原样保留。
+  /// 使用前缀索引二分定位起始块，避免 O(块数) 线性扫描。
   static List<ContentBlock> clipBlocksByCharRange(
     List<ContentBlock> blocks,
     int startCharOffset,
@@ -18,20 +52,20 @@ class BlockClipper {
   ) {
     if (blocks.isEmpty || startCharOffset >= endCharOffset) return [];
 
-    var blockStart = 0;
+    final offsets = _prefixFor(blocks);
+    // 二分定位第一个 blockEnd > startCharOffset 的块
+    final firstIdx = _lowerBound(offsets, startCharOffset);
+    if (firstIdx >= blocks.length) return [];
+
     final result = <ContentBlock>[];
+    for (var i = firstIdx; i < blocks.length; i++) {
+      final blockStart = offsets[i];
+      final blockEnd = offsets[i + 1];
 
-    for (final block in blocks) {
-      final blockEnd = blockStart + blockCharCount(block);
-
-      if (blockEnd <= startCharOffset || blockStart >= endCharOffset) {
-        blockStart = blockEnd;
-        continue;
-      }
+      if (blockStart >= endCharOffset) break;
 
       if (blockStart >= startCharOffset && blockEnd <= endCharOffset) {
-        result.add(block);
-        blockStart = blockEnd;
+        result.add(blocks[i]);
         continue;
       }
 
@@ -43,10 +77,8 @@ class BlockClipper {
         0,
         blockEnd - blockStart,
       );
-      final trimmed = trimBlockByCharRange(block, clipStart, clipEnd);
+      final trimmed = trimBlockByCharRange(blocks[i], clipStart, clipEnd);
       if (trimmed != null) result.add(trimmed);
-
-      blockStart = blockEnd;
     }
 
     return result;

@@ -106,7 +106,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
 
   // ── 自定义动画 (cover/fade 模式) ──
   AnimationController? _animController;
-  double _flipProgress = 0;
+  final ValueNotifier<double> _flipProgressNotifier = ValueNotifier<double>(0);
+  double get _flipProgress => _flipProgressNotifier.value;
+  set _flipProgress(double v) => _flipProgressNotifier.value = v;
   bool _isForward = true;
   bool _isAnimating = false;
   bool _isDragging = false;
@@ -191,6 +193,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   void dispose() {
     widget.controller?.removeListener(_onExternalPageCommand);
     _disposeControllers();
+    _flipProgressNotifier.dispose();
     super.dispose();
   }
 
@@ -217,12 +220,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _animController = AnimationController(
         vsync: this,
         duration: const Duration(milliseconds: _flipDurationMs),
-      )..addListener(() {
-        if (!mounted) return;
-        setState(() {
-          _flipProgress = _animController!.value;
-        });
-      });
+      );
     }
     _cacheCurrentPage();
   }
@@ -607,16 +605,15 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _flipProgress = (_totalDeltaX / w).clamp(0.0, 1.0);
     }
 
-    // 拖动超过阈值时预构建目标页
+    // 拖动超过阈值时预构建目标页（仅首次需要 setState 让 AnimatedBuilder 生效）
     if (_flipProgress > 0.05 && _targetPageWidget == null) {
       final targetIndex =
           _isForward ? widget.state.pageIndex + 1 : widget.state.pageIndex - 1;
       if (targetIndex >= 0) {
         _targetPageWidget = widget.pageBuilder(targetIndex);
+        if (mounted) setState(() {});
       }
     }
-
-    setState(() {});
   }
 
   void _onDragEnd(DragEndDetails details) {
@@ -656,6 +653,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
     );
 
     ctrl.value = _flipProgress;
+    // 动画启动时触发一次 build 进入 AnimatedBuilder 分支；
+    // 后续每帧由 AnimatedBuilder 直接驱动，不再经过 setState。
+    if (mounted) setState(() {});
     ctrl.animateTo(1, duration: ctrl.duration, curve: _turnCurve);
     ctrl.addStatusListener(_onAutoFlipStatus);
   }
@@ -743,7 +743,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
           child: AnimatedBuilder(
             animation: _animController!,
             builder: (context, _) {
-              final t = _flipProgress;
+              final t = _animController!.value;
               return switch (widget.turnMode) {
                 PageTurnMode.cover => _buildCover(current, target, t, width),
                 PageTurnMode.fade => _buildFade(current, target, t),
