@@ -113,21 +113,29 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
               active: widget.playing && hasUsableLayout,
               layoutUsable: hasUsableLayout,
             );
-            if (session.openError != null ||
-                !session.ready ||
-                !session.renderable ||
-                session.controller == null) {
+            // 视频层保持挂载：仅用透明度门控。拆卸 Video 会在 Android 后台
+            // 纹理回收后重新创建纹理，表现为恢复瞬间黑屏再“重启”。
+            final visible =
+                session.ready &&
+                session.renderable &&
+                session.controller != null;
+            if (session.controller == null) {
               return const SizedBox.shrink();
             }
             return RepaintBoundary(
-              child: Video(
-                key: ValueKey(session.controller),
-                controller: session.controller!,
-                fit: widget.fit,
-                controls: NoVideoControls,
-                wakelock: false,
-                pauseUponEnteringBackgroundMode: true,
-                resumeUponEnteringForegroundMode: true,
+              child: AnimatedOpacity(
+                opacity: visible ? 1 : 0,
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOut,
+                child: Video(
+                  key: ValueKey(session.controller),
+                  controller: session.controller!,
+                  fit: widget.fit,
+                  controls: NoVideoControls,
+                  wakelock: false,
+                  pauseUponEnteringBackgroundMode: true,
+                  resumeUponEnteringForegroundMode: true,
+                ),
               ),
             );
           },

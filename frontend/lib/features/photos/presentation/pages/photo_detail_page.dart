@@ -32,42 +32,76 @@ class PhotoDetailPage extends ConsumerWidget {
 
   final String photoId;
 
+  /// 列表侧已持有的种子数据：浏览范围优先，其次中心列表/收藏/回收站，最后内存缓存。
+  ///
+  /// 使点击缩略图后立刻用已解码封面渲染查看器，不再阻塞在详情接口上。
+  PhotoItem? _resolveSeedPhoto(WidgetRef ref, String photoId) {
+    final scope = ref.read(photoBrowseScopeProvider);
+    for (final photo in scope.photos) {
+      if (photo.id == photoId) {
+        return photo;
+      }
+    }
+    final center = ref.read(photoCenterControllerProvider).asData?.value;
+    if (center != null) {
+      for (final photo in [
+        ...center.photos,
+        ...center.favorites,
+        ...center.trashPhotos,
+      ]) {
+        if (photo.id == photoId) {
+          return photo;
+        }
+      }
+    }
+    return ref.read(photoDetailMemoryCacheProvider).get(photoId);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final photoAsync = ref.watch(photoDetailProvider(photoId));
+    final seed = _resolveSeedPhoto(ref, photoId);
+    final photo = photoAsync.asData?.value ?? seed;
     // 查看器为沉浸暗色场景（与幻灯片一致）：整页子树强制暗色主题，
     // 顶栏/箭头/徽标/对话框/加载与错误态自动使用暗色变体。
     return Theme(
       data: OmniNestTheme.from(AppThemePalette.dark),
       child: Scaffold(
         backgroundColor: context.photosColors.surface,
-        body: photoAsync.when(
-          data: (photo) => _PhotoDetailBody(photo: photo),
-          error:
-              (error, stackTrace) => Column(
-                children: [
-                  SafeArea(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: IconButton(
-                        tooltip:
-                            AppLocalizations.of(context).photosBackToPhotos,
-                        onPressed: () => context.popOrGo('/photos'),
-                        icon: const Icon(Icons.arrow_back_rounded),
+        body:
+            photo != null
+                ? _PhotoDetailBody(photo: photo)
+                : photoAsync.when(
+                  data: (resolved) => _PhotoDetailBody(photo: resolved),
+                  error:
+                      (error, stackTrace) => Column(
+                        children: [
+                          SafeArea(
+                            child: Align(
+                              alignment: Alignment.centerLeft,
+                              child: IconButton(
+                                tooltip:
+                                    AppLocalizations.of(
+                                      context,
+                                    ).photosBackToPhotos,
+                                onPressed: () => context.popOrGo('/photos'),
+                                icon: const Icon(Icons.arrow_back_rounded),
+                              ),
+                            ),
+                          ),
+                          Expanded(
+                            child: AppErrorView(
+                              message: describeUserFacingError(error).message,
+                              onRetry:
+                                  () => ref.invalidate(
+                                    photoDetailProvider(photoId),
+                                  ),
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
-                  ),
-                  Expanded(
-                    child: AppErrorView(
-                      message: describeUserFacingError(error).message,
-                      onRetry:
-                          () => ref.invalidate(photoDetailProvider(photoId)),
-                    ),
-                  ),
-                ],
-              ),
-          loading: () => const AppLoading.detail(),
-        ),
+                  loading: () => const AppLoading.detail(),
+                ),
       ),
     );
   }
@@ -564,51 +598,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                               minScale: 1,
                               maxScale: 5,
                               child: SizedBox.expand(
-                                child: CachedNetworkImage(
-                                  imageUrl: imageUrl,
-                                  cacheKey:
-                                      photo.sourceUrl != null
-                                          ? photo.sourceCacheKey
-                                          : photo.coverCacheKey,
-                                  fit: BoxFit.contain,
-                                  placeholder:
-                                      (context, url) => Center(
-                                        child: CircularProgressIndicator(
-                                          color:
-                                              context
-                                                  .photosColors
-                                                  .primaryContainer,
-                                        ),
-                                      ),
-                                  errorWidget:
-                                      (context, url, error) => Center(
-                                        child: Column(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            Icon(
-                                              Icons.broken_image_outlined,
-                                              color: context
-                                                  .photosColors
-                                                  .onSurfaceVariant
-                                                  .withValues(alpha: 0.4),
-                                              size: 48,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Text(
-                                              AppLocalizations.of(
-                                                context,
-                                              ).photosImageLoadFailed,
-                                              style: TextStyle(
-                                                color:
-                                                    context
-                                                        .photosColors
-                                                        .onSurfaceVariant,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                ),
+                                child: _ProgressivePhotoImage(photo: photo),
                               ),
                             ),
                           )
@@ -680,6 +670,118 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
             ),
         ],
       ),
+    );
+  }
+}
+
+/// 查看器渐进图层：列表封面先亮，原图就绪后无缝覆盖。
+///
+/// 列表接口不返回 sourceUrl，原图需详情接口签发；网格已解码的封面可立刻
+/// 展示，原图按屏宽降采样解码，避免移动端整幅原图解码卡顿。
+class _ProgressivePhotoImage extends StatelessWidget {
+  const _ProgressivePhotoImage({required this.photo});
+
+  final PhotoItem photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final coverUrl = photo.coverUrl;
+    final sourceUrl = photo.sourceUrl;
+    final size = MediaQuery.sizeOf(context);
+    final dpr = MediaQuery.devicePixelRatioOf(context);
+    final sourceDecodeWidth = (size.width * dpr).round().clamp(512, 4096);
+
+    if (sourceUrl == null || sourceUrl.isEmpty) {
+      if (coverUrl == null || coverUrl.isEmpty) {
+        return const SizedBox.shrink();
+      }
+      return _ViewerNetworkImage(
+        imageUrl: coverUrl,
+        cacheKey: photo.coverCacheKey,
+        memCacheWidth: sourceDecodeWidth,
+      );
+    }
+
+    final hasCover = coverUrl != null && coverUrl.isNotEmpty;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (hasCover)
+          _ViewerNetworkImage(
+            imageUrl: coverUrl,
+            cacheKey: photo.coverCacheKey,
+            memCacheWidth: (size.width * dpr).round().clamp(400, 1024),
+          ),
+        _ViewerNetworkImage(
+          imageUrl: sourceUrl,
+          cacheKey: photo.sourceCacheKey,
+          memCacheWidth: sourceDecodeWidth,
+          // 封面已在底层：原图加载中不再叠 spinner，失败时保留封面。
+          transparentWhilePending: hasCover,
+          hideError: hasCover,
+        ),
+      ],
+    );
+  }
+}
+
+class _ViewerNetworkImage extends StatelessWidget {
+  const _ViewerNetworkImage({
+    required this.imageUrl,
+    required this.cacheKey,
+    required this.memCacheWidth,
+    this.transparentWhilePending = false,
+    this.hideError = false,
+  });
+
+  final String imageUrl;
+  final String cacheKey;
+  final int memCacheWidth;
+  final bool transparentWhilePending;
+  final bool hideError;
+
+  @override
+  Widget build(BuildContext context) {
+    return CachedNetworkImage(
+      imageUrl: imageUrl,
+      cacheKey: cacheKey,
+      memCacheWidth: memCacheWidth,
+      fit: BoxFit.contain,
+      fadeInDuration: Duration.zero,
+      fadeOutDuration: Duration.zero,
+      useOldImageOnUrlChange: true,
+      placeholder:
+          transparentWhilePending
+              ? (context, url) => const SizedBox.shrink()
+              : (context, url) => Center(
+                child: CircularProgressIndicator(
+                  color: context.photosColors.primaryContainer,
+                ),
+              ),
+      errorWidget:
+          hideError
+              ? (context, url, error) => const SizedBox.shrink()
+              : (context, url, error) => Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.broken_image_outlined,
+                      color: context.photosColors.onSurfaceVariant.withValues(
+                        alpha: 0.4,
+                      ),
+                      size: 48,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      AppLocalizations.of(context).photosImageLoadFailed,
+                      style: TextStyle(
+                        color: context.photosColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
     );
   }
 }

@@ -82,13 +82,16 @@ void main() {
       );
     });
 
-    test('IO 视图按 renderable 门控回落海报（源断言）', () {
+    test('IO 视图保持 Video 挂载并用透明度门控（源断言）', () {
       final source =
           File(
             'lib/features/backdrop/presentation/app_backdrop_video_view_io.dart',
           ).readAsStringSync();
-      expect(source, contains('!session.renderable'));
+      expect(source, contains('AnimatedOpacity'));
+      expect(source, contains('session.renderable'));
       expect(source, contains('SizedBox.shrink'));
+      // controller 存在时不得因 !renderable 整层拆掉 Video。
+      expect(source, contains('opacity: visible ? 1 : 0'));
     });
   });
 }

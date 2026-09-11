@@ -36,9 +36,11 @@ class AppBackdropVideoSession extends ChangeNotifier {
   StreamSubscription<bool>? _completedSub;
   StreamSubscription<Duration>? _positionSub;
   Timer? _retryTimer;
+  Timer? _resumeRecoveryTimer;
   String _path = '';
   String? _activePath;
   Object? _openError;
+  Duration? _resumeBaselinePosition;
   bool _muted = true;
   bool _layoutUsable = false;
   bool _sceneActive = false;
@@ -202,17 +204,56 @@ class AppBackdropVideoSession extends ChangeNotifier {
     }
     _appVisible = visible;
     // 后台期间纹理内容可能被系统回收：恢复后先回落静态海报，等待
-    // 首个解码帧到达再显示视频，避免黑纹理盖住海报形成黑闪。
+    // 播放位置真正推进（首个解码帧）再显示视频，避免黑纹理盖住海报形成黑闪。
     final renderableWasValid = _renderable;
     _renderable = false;
     if (visible) {
+      _resumeBaselinePosition = _player?.state.position;
       _resumeCurrentPlayerIfNeeded();
+      _scheduleResumeRecovery();
     } else {
+      _resumeRecoveryTimer?.cancel();
+      _resumeRecoveryTimer = null;
+      _resumeBaselinePosition = null;
       _pauseCurrentPlayer();
     }
     if (renderableWasValid) {
       _notifySafely();
     }
+  }
+
+  /// 恢复后若纹理长期无可渲染帧，强制重开会话。
+  ///
+  /// Android 后台回收纹理后，仅 play() 有时无法恢复原生输出；海报层会
+  /// 持续兜底，超时后重开播放器以重新接上有效纹理。
+  void _scheduleResumeRecovery() {
+    _resumeRecoveryTimer?.cancel();
+    _resumeRecoveryTimer = Timer(const Duration(milliseconds: 600), () {
+      if (_disposed ||
+          !_appVisible ||
+          !_layoutUsable ||
+          !_sceneActive ||
+          _renderable ||
+          _path.isEmpty) {
+        return;
+      }
+      if (_ready && _player != null && _openError == null) {
+        _generation++;
+        _cancelRetry();
+        _openAttempts = 0;
+        _openError = null;
+        _activePath = null;
+        _resumeBaselinePosition = null;
+        unawaited(
+          _disposeCurrentSession().then((_) {
+            if (!_disposed) {
+              _scheduleOpenIfNeeded(force: true);
+              _notifySafely();
+            }
+          }),
+        );
+      }
+    });
   }
 
   /// 手动重试当前视频。
@@ -268,6 +309,10 @@ class AppBackdropVideoSession extends ChangeNotifier {
     _opening = true;
     _openingGeneration = generation;
     _openError = null;
+    _resumeBaselinePosition = null;
+    if (_renderable) {
+      _renderable = false;
+    }
     _notifySafely();
     await _disposeCurrentSession();
     if (!_canUseGeneration(generation, path)) {
@@ -321,13 +366,22 @@ class AppBackdropVideoSession extends ChangeNotifier {
           unawaited(player.play());
         }
       });
-      _positionSub = player.stream.position.listen((_) {
+      _positionSub = player.stream.position.listen((position) {
         if (_disposed || !identical(_player, player)) {
           return;
         }
         if (!_renderable) {
-          _renderable = true;
-          _notifySafely();
+          final baseline = _resumeBaselinePosition;
+          // 仅当播放位置相对恢复基点推进时，才认为纹理已持有新帧；
+          // 否则首帧事件可能对应仍是被回收的黑纹理。
+          final advanced =
+              baseline == null ||
+              position > baseline + const Duration(milliseconds: 50);
+          if (advanced) {
+            _resumeBaselinePosition = null;
+            _renderable = true;
+            _notifySafely();
+          }
         }
       });
       _ready = true;
@@ -393,6 +447,11 @@ class AppBackdropVideoSession extends ChangeNotifier {
   void _cancelRetry() {
     _retryTimer?.cancel();
     _retryTimer = null;
+  }
+
+  void _cancelResumeRecovery() {
+    _resumeRecoveryTimer?.cancel();
+    _resumeRecoveryTimer = null;
   }
 
   void _pauseCurrentPlayer() {
@@ -514,6 +573,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
     _disposed = true;
     _generation++;
     _cancelRetry();
+    _cancelResumeRecovery();
     _unregisterPath(_path);
     final detached = _takeCurrentSession();
     if (detached != null) {
