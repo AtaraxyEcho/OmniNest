@@ -109,17 +109,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// 顶栏 = DecoratedBox(height 56)；底栏 = DecoratedBox(child: SafeArea)。
+  /// 顶栏 = DecoratedBox(child: SafeArea(bottom: false))；
+  /// 底栏 = DecoratedBox(child: SafeArea(top: false))。
   DecoratedBox chromeOf(WidgetTester tester, {required bool top}) {
     final matches =
         tester
             .widgetList<DecoratedBox>(find.byType(DecoratedBox))
             .where(
               (widget) =>
-                  top
-                      ? widget.child is SizedBox &&
-                          (widget.child as SizedBox).height == 56
-                      : widget.child is SafeArea,
+                  widget.child is SafeArea &&
+                  (top
+                      ? (widget.child as SafeArea).bottom == false
+                      : (widget.child as SafeArea).top == false),
             )
             .toList();
     expect(matches, hasLength(1), reason: top ? '顶栏唯一' : '底栏唯一');
@@ -128,7 +129,10 @@ void main() {
 
   Finder bottomNavigation() {
     return find.byWidgetPredicate(
-      (widget) => widget is DecoratedBox && widget.child is SafeArea,
+      (widget) =>
+          widget is DecoratedBox &&
+          widget.child is SafeArea &&
+          (widget.child as SafeArea).top == false,
     );
   }
 
@@ -143,6 +147,32 @@ void main() {
     final decoration = chrome.decoration as BoxDecoration;
     return decoration.color!;
   }
+
+  testWidgets('顶栏表面覆盖状态栏区域，内容避让系统插图', (tester) async {
+    // FakeViewPadding 以物理像素计，dpr 固定 1 使插图与逻辑坐标一致。
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(top: 44);
+    addTearDown(tester.view.resetPadding);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await pumpShell(tester, initialLocation: '/portal');
+
+    final topBar = chromeOf(tester, top: true);
+    final barRect = tester.getRect(
+      find.byWidgetPredicate((widget) => widget == topBar),
+    );
+    // 表面自屏幕顶端画起，状态栏区域不再露出透明底。
+    expect(barRect.top, 0);
+    final contentRow = find.descendant(
+      of: find.byWidgetPredicate((widget) => widget == topBar),
+      matching: find.byWidgetPredicate(
+        (widget) => widget is SizedBox && widget.height == 56,
+      ),
+    );
+    expect(contentRow, findsOneWidget);
+    // 内容行自状态栏下沿开始（44 插图 + 56 栏高）。
+    expect(tester.getTopLeft(contentRow).dy, 44);
+    expect(barRect.height, 100);
+  });
 
   testWidgets('一级导航顺序为 首页·音乐·照片·媒体·阅读·文件', (tester) async {
     await pumpShell(tester, initialLocation: '/portal');

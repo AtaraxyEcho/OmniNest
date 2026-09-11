@@ -295,13 +295,15 @@ class _MobileTopBar extends ConsumerWidget {
             minimumSize: const Size.square(MobileLayoutTokens.minimumTarget),
           ),
         );
-        return SafeArea(
-          bottom: false,
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: surface,
-              border: Border(bottom: BorderSide(color: outline)),
-            ),
+        // 表面画满含状态栏区域（与底栏同法）：SafeArea 放在装饰盒内
+        // 只避让内容，玻璃/实底色延伸到屏幕顶端，消除状态栏透明断层。
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            color: surface,
+            border: Border(bottom: BorderSide(color: outline)),
+          ),
+          child: SafeArea(
+            bottom: false,
             child: SizedBox(
               height: 56,
               child: Padding(
