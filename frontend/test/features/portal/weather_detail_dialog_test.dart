@@ -133,4 +133,27 @@ void main() {
     expect(find.textContaining('PM2.5'), findsOneWidget);
     expect(find.textContaining('05:42'), findsOneWidget);
   });
+
+  testWidgets('小窗口弹窗不溢出且可滚动', (tester) async {
+    await _openWeatherDetail(tester, size: const Size(320, 480));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('26°'), findsOneWidget);
+    expect(find.byIcon(Icons.close_rounded), findsOneWidget);
+
+    final dialogRect = tester.getRect(find.byType(Dialog).first);
+    expect(dialogRect.width, lessThanOrEqualTo(320));
+    expect(dialogRect.height, lessThanOrEqualTo(480));
+  });
+
+  testWidgets('弹窗矩形不超过窗口视口', (tester) async {
+    const viewport = Size(1000, 700);
+    await _openWeatherDetail(tester, size: viewport);
+
+    final dialogRect = tester.getRect(find.byType(Dialog).first);
+    expect(dialogRect.left, greaterThanOrEqualTo(0));
+    expect(dialogRect.top, greaterThanOrEqualTo(0));
+    expect(dialogRect.right, lessThanOrEqualTo(viewport.width));
+    expect(dialogRect.bottom, lessThanOrEqualTo(viewport.height));
+  });
 }

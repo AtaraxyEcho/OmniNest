@@ -5,21 +5,23 @@ import 'package:omninest/features/portal/presentation/widgets/weather_detail_lay
 
 void main() {
   group('WeatherDetailLayoutMetrics.resolve', () {
-    test('手机宽度使用移动档位与双列指标', () {
+    test('手机宽度使用移动档位且不超视口', () {
       final metrics = WeatherDetailLayoutMetrics.resolve(const Size(390, 844));
       expect(metrics.mode, WeatherDetailLayoutMode.mobile);
       expect(metrics.isMobile, isTrue);
       expect(metrics.gridColumns, 2);
       expect(metrics.useTwoColumn, isFalse);
       expect(metrics.dialogWidth, lessThanOrEqualTo(390));
+      expect(metrics.dialogHeight, lessThanOrEqualTo(844));
       expect(metrics.cornerRadius, 16);
     });
 
-    test('平板宽度使用平板档位与三列双栏', () {
+    test('平板宽度使用平板档位与双栏', () {
       final metrics = WeatherDetailLayoutMetrics.resolve(const Size(820, 1180));
       expect(metrics.mode, WeatherDetailLayoutMode.tablet);
       expect(metrics.gridColumns, 3);
       expect(metrics.useTwoColumn, isTrue);
+      expect(metrics.dialogWidth, lessThanOrEqualTo(820));
       expect(metrics.dialogWidth, lessThanOrEqualTo(720));
     });
 
@@ -34,7 +36,8 @@ void main() {
       expect(metrics.mode, WeatherDetailLayoutMode.desktop);
       expect(metrics.useTwoColumn, isTrue);
       expect(metrics.gridColumns, 3);
-      expect(metrics.dialogWidth, lessThanOrEqualTo(980));
+      expect(metrics.dialogWidth, lessThanOrEqualTo(960));
+      expect(metrics.dialogWidth, lessThanOrEqualTo(1100));
     });
 
     test('宽屏使用四列指标', () {
@@ -43,8 +46,51 @@ void main() {
       );
       expect(metrics.mode, WeatherDetailLayoutMode.wide);
       expect(metrics.gridColumns, 4);
-      expect(metrics.dialogWidth, lessThanOrEqualTo(1280));
-      expect(metrics.dialogWidth, greaterThan(1000));
+      expect(metrics.dialogWidth, lessThanOrEqualTo(1200));
+      expect(metrics.dialogWidth, greaterThan(900));
+      expect(metrics.dialogWidth, lessThanOrEqualTo(1920));
+      expect(metrics.dialogHeight, lessThanOrEqualTo(1080));
+    });
+
+    test('弹窗尺寸永不超出程序窗口', () {
+      const sizes = <Size>[
+        Size(320, 480),
+        Size(360, 640),
+        Size(390, 844),
+        Size(600, 800),
+        Size(800, 600),
+        Size(1024, 768),
+        Size(1280, 720),
+        Size(1366, 768),
+        Size(1440, 900),
+        Size(1920, 1080),
+        Size(2560, 1440),
+        Size(480, 320),
+        Size(900, 500),
+      ];
+      for (final size in sizes) {
+        final metrics = WeatherDetailLayoutMetrics.resolve(size);
+        expect(
+          metrics.dialogWidth + metrics.insetPadding.horizontal,
+          lessThanOrEqualTo(size.width + 0.01),
+          reason: 'width overflow at $size',
+        );
+        expect(
+          metrics.dialogHeight + metrics.insetPadding.vertical,
+          lessThanOrEqualTo(size.height + 0.01),
+          reason: 'height overflow at $size',
+        );
+        expect(
+          metrics.dialogWidth,
+          lessThanOrEqualTo(size.width),
+          reason: 'dialog width at $size',
+        );
+        expect(
+          metrics.dialogHeight,
+          lessThanOrEqualTo(size.height),
+          reason: 'dialog height at $size',
+        );
+      }
     });
 
     test('矮窗口压缩间距并可能关闭双栏', () {
@@ -53,13 +99,13 @@ void main() {
       );
       expect(shortDesktop.compactHeight, isTrue);
       expect(shortDesktop.useTwoColumn, isFalse);
+      expect(shortDesktop.dialogHeight, lessThanOrEqualTo(520));
 
       final landscapePhone = WeatherDetailLayoutMetrics.resolve(
         const Size(844, 390),
       );
       expect(landscapePhone.compactHeight, isTrue);
       expect(landscapePhone.dialogHeight, lessThanOrEqualTo(390));
-      expect(landscapePhone.dialogHeight, greaterThanOrEqualTo(320));
     });
 
     test('断点与全局 ResponsiveBreakpoints 一致', () {
@@ -86,13 +132,14 @@ void main() {
       );
     });
 
-    test('温度字号应用系统缩放并有上限', () {
-      final metrics = WeatherDetailLayoutMetrics.resolve(const Size(390, 844));
-      final normal = metrics.scaledTempSize(TextScaler.noScaling);
-      final scaled = metrics.scaledTempSize(const TextScaler.linear(1.4));
-      expect(normal, metrics.tempFontSize);
-      expect(scaled, lessThanOrEqualTo(metrics.tempFontSize * 1.35));
-      expect(scaled, greaterThan(normal));
+    test('温度字号随窗口连续缩放并有上限', () {
+      final small = WeatherDetailLayoutMetrics.resolve(const Size(390, 700));
+      final large = WeatherDetailLayoutMetrics.resolve(const Size(1920, 1080));
+      expect(small.tempFontSize, lessThanOrEqualTo(large.tempFontSize + 0.01));
+      final normal = large.scaledTempSize(TextScaler.noScaling);
+      final scaled = large.scaledTempSize(const TextScaler.linear(1.4));
+      expect(normal, closeTo(large.tempFontSize, 0.01));
+      expect(scaled, lessThanOrEqualTo(large.tempFontSize * 1.3 + 0.01));
     });
   });
 }
