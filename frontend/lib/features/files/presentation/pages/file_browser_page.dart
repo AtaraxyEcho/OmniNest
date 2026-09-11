@@ -335,7 +335,9 @@ class _FileManagerShell extends ConsumerWidget {
     final hosted = MobileShellScope.isHosted(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 1100;
+        // 宽屏门限与桌面最小窗口(1024)对齐：避免 1024-1099 落入
+        // 非托管窄窗路径（与移动壳层并行的第二套实现）。
+        final isWide = constraints.maxWidth >= 1024;
         final currentDest = _destinationForSection(state.section);
         final selectedIndex =
             currentDest != null

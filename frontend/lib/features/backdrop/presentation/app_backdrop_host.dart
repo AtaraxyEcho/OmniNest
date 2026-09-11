@@ -80,7 +80,14 @@ class _DefaultAppBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(color: Theme.of(context).colorScheme.surface);
+    final scheme = Theme.of(context).colorScheme;
+    // 无壁纸（Web / 未启用）时的舞台底：深色提亮一档，避免玻璃模块
+    // 内容卡与纯黑底叠出整体过暗的观感；浅色维持表面色。
+    final stage =
+        scheme.brightness == Brightness.dark
+            ? scheme.surfaceContainerLow
+            : scheme.surface;
+    return ColoredBox(color: stage);
   }
 }
 

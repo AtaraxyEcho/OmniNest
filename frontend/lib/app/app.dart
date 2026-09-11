@@ -6,16 +6,19 @@ import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
+import 'package:omninest/app/app_min_width_guard.dart';
 import 'package:omninest/app/appearance/application/composed_scaler.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
+import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/router.dart';
 import 'package:omninest/app/app_scroll_behavior.dart';
 import 'package:omninest/app/sync/app_sync_coordinator.dart';
 import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
@@ -105,7 +108,16 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
           data: mediaQuery.copyWith(textScaler: effectiveScaler),
           child: content,
         );
-        return FontScaleScope(systemScaler: systemScaler, child: content);
+        // 桌面形态最小内容宽护栏：桌面浏览器缩窗低于 1024 时固定宽度横向
+        // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支。
+        final mobileForm = shouldUseResponsiveMobileShell(
+          mobilePlatform: isMobilePlatform,
+          width: mediaQuery.size.width,
+        );
+        return FontScaleScope(
+          systemScaler: systemScaler,
+          child: DesktopFormMinWidth(mobileForm: mobileForm, child: content),
+        );
       },
     );
   }
