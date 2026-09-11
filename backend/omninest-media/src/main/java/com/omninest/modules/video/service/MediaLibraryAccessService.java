@@ -49,6 +49,15 @@ public class MediaLibraryAccessService {
         requirePermission(operatorUserId, Permissions.MEDIA_LIBRARY_MANAGE);
     }
 
+    /**
+     * 校验系统配置管理权限，用于挂载直达创建存储位置的分支；
+     * 该分支能力超出媒体库管理权限，需以数据库授权档案单独把关。
+     */
+    @Transactional(readOnly = true)
+    public void requireSystemConfigManage(UUID operatorUserId) {
+        requirePermission(operatorUserId, Permissions.SYSTEM_CONFIG_MANAGE);
+    }
+
     /** 校验媒体消费权限和账号状态。 */
     @Transactional(readOnly = true)
     public void requireReadPermission(UUID requesterUserId) {

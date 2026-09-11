@@ -20,6 +20,7 @@ import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +43,7 @@ public class StorageLocationService {
     private final LocalMediaPathResolver pathResolver;
     private final LocalMediaStorageProperties properties;
     private final LocalMediaRuntimeConfigService runtimeConfigService;
+    private final StorageLocationInserter locationInserter;
     private final List<StorageLocationUsageInspector> usageInspectors;
 
     /**
@@ -91,12 +93,7 @@ public class StorageLocationService {
         applyScope(location, request.scopeType(), request.scopeId());
         location.setEnabled(request.enabled());
         location.setCreatedBy(operatorId);
-        if (storageLocationRepository.existsByMountKeyAndRelativeRootAndScopeTypeAndScopeId(
-                location.getMountKey(),
-                location.getRelativeRoot(),
-                location.getScopeType(),
-                location.getScopeId()
-        )) {
+        if (isDuplicateLocation(location)) {
             throw new BusinessException(ErrorCode.CONFLICT, "相同作用域的存储位置已存在");
         }
         validateLocation(location);
@@ -193,9 +190,96 @@ public class StorageLocationService {
         return requireLocation(locationId);
     }
 
+    /**
+     * 按挂载键列出全部存储位置，供业务模块做同挂载跨位置的物理路径冲突检查。
+     *
+     * @param mountKey 挂载键
+     * @return 同挂载键的存储位置列表
+     */
+    @Transactional(readOnly = true)
+    public List<StorageLocation> listByMountKeyForBusiness(String mountKey) {
+        return storageLocationRepository.findByMountKey(normalizeMountKey(mountKey));
+    }
+
+    /**
+     * 查找或创建系统级存储位置，供持有系统配置管理权限的业务流程挂载直达使用。
+     *
+     * <p>命中同挂载与相对根的系统级位置时直接复用；未命中时在独立事务中创建，
+     * 并发撞唯一键时回查返回既有记录。创建的记录独立提交，调用方后续业务失败
+     * 可能留下无引用位置，属可接受的幂等残留。</p>
+     *
+     * @param operatorId 操作用户 ID
+     * @param mountKey 部署可信挂载键
+     * @param relativeRoot 位置相对根目录
+     * @return 已存在或新建的系统级存储位置
+     */
+    public StorageLocation findOrCreateSystemLocation(UUID operatorId, String mountKey, String relativeRoot) {
+        ensureRuntimeEnabled();
+        String normalizedMountKey = normalizeMountKey(mountKey);
+        String normalizedRoot = normalizeRelativeRoot(relativeRoot);
+        StorageLocation existing = storageLocationRepository
+                .findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
+                        normalizedMountKey, normalizedRoot, SYSTEM)
+                .orElse(null);
+        if (existing != null) {
+            if (!existing.isEnabled()) {
+                throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "存储位置已停用");
+            }
+            return existing;
+        }
+        StorageLocation location = new StorageLocation();
+        location.setName(autoLocationName(normalizedMountKey, normalizedRoot));
+        location.setProviderType(LOCAL_FILESYSTEM);
+        location.setManagementMode(READ_ONLY);
+        location.setMountKey(normalizedMountKey);
+        location.setRelativeRoot(normalizedRoot);
+        location.setScopeType(SYSTEM);
+        location.setScopeId(null);
+        location.setEnabled(true);
+        location.setCreatedBy(operatorId);
+        validateLocation(location);
+        try {
+            return locationInserter.insert(location);
+        } catch (DataIntegrityViolationException exception) {
+            return storageLocationRepository
+                    .findFirstByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
+                            normalizedMountKey, normalizedRoot, SYSTEM)
+                    .orElseThrow(() -> exception);
+        }
+    }
+
+    /**
+     * 自动生成位置显示名：挂载根直接用挂载键，子目录用挂载键加末段，超长截断。
+     */
+    private String autoLocationName(String mountKey, String relativeRoot) {
+        String name = ".".equals(relativeRoot)
+                ? mountKey
+                : mountKey + "/" + Path.of(relativeRoot).getFileName();
+        return name.length() > 160 ? name.substring(0, 160) : name;
+    }
+
     private StorageLocation requireLocation(UUID locationId) {
         return storageLocationRepository.findById(locationId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "存储位置不存在"));
+    }
+
+    /**
+     * 系统作用域 scope_id 为 NULL，等值查询无法匹配，必须走 IsNull 变体。
+     */
+    private boolean isDuplicateLocation(StorageLocation location) {
+        if (SYSTEM.equals(location.getScopeType())) {
+            return storageLocationRepository.existsByMountKeyAndRelativeRootAndScopeTypeAndScopeIdIsNull(
+                    location.getMountKey(),
+                    location.getRelativeRoot(),
+                    location.getScopeType()
+            );
+        }
+        return storageLocationRepository.existsByMountKeyAndRelativeRootAndScopeTypeAndScopeId(
+                location.getMountKey(),
+                location.getRelativeRoot(),
+                location.getScopeType(),
+                location.getScopeId()
+        );
     }
 
     private void validateLocation(StorageLocation location) {

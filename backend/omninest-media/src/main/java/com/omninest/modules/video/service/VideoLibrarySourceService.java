@@ -64,18 +64,19 @@ public class VideoLibrarySourceService {
     @Transactional(rollbackFor = Exception.class)
     public VideoLibrarySourceDto create(UUID operatorUserId, CreateVideoLibrarySourceRequest request) {
         accessService.requireManagePermission(operatorUserId);
+        UUID storageLocationId = resolveStorageLocationId(operatorUserId, request);
         StorageLocation location = storageLocationService.requireAccessibleLocation(
                 operatorUserId,
-                request.storageLocationId()
+                storageLocationId
         );
         if (!"SYSTEM".equals(location.getScopeType())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "共享媒体库只能使用系统级存储位置");
         }
         String relativeRoot = normalizeRelativeRoot(request.relativeRoot());
-        requireNoPathConflict(null, request.storageLocationId(), relativeRoot);
+        requireNoPathConflict(null, location, relativeRoot);
         VideoLibrarySource source = new VideoLibrarySource();
         source.setOwnerUserId(operatorUserId);
-        source.setStorageLocationId(request.storageLocationId());
+        source.setStorageLocationId(storageLocationId);
         source.setName(normalizeName(request.name()));
         source.setRelativeRoot(relativeRoot);
         source.setLibraryType(normalizeLibraryType(request.libraryType()).name());
@@ -85,6 +86,26 @@ public class VideoLibrarySourceService {
         source.setScanStatus("NEVER_SCANNED");
         source.setHealthStatus(request.enabled() ? "AVAILABLE" : "DISABLED");
         return toDto(sourceRepository.save(source));
+    }
+
+    /**
+     * 解析来源归属的存储位置：storageLocationId 与 mountKey 二选一。
+     * mountKey 分支要求调用者额外持有系统配置管理权限，并在挂载根查找或创建
+     * 系统级存储位置；位置记录独立提交，来源创建失败时可能留下可复用的幂等残留。
+     */
+    private UUID resolveStorageLocationId(UUID operatorUserId, CreateVideoLibrarySourceRequest request) {
+        boolean hasLocationId = request.storageLocationId() != null;
+        boolean hasMountKey = request.mountKey() != null && !request.mountKey().isBlank();
+        if (hasLocationId == hasMountKey) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "storageLocationId 与 mountKey 必须二选一");
+        }
+        if (hasLocationId) {
+            return request.storageLocationId();
+        }
+        accessService.requireSystemConfigManage(operatorUserId);
+        return storageLocationService
+                .findOrCreateSystemLocation(operatorUserId, request.mountKey(), ".")
+                .getId();
     }
 
     /**
@@ -122,9 +143,12 @@ public class VideoLibrarySourceService {
         if (ACTIVE_RUN_STATUSES.contains(source.getScanStatus())) {
             throw new BusinessException(ErrorCode.CONFLICT, "媒体发现或入库期间不能修改影视库来源");
         }
-        storageLocationService.requireAccessibleLocation(operatorUserId, source.getStorageLocationId());
+        StorageLocation location = storageLocationService.requireAccessibleLocation(
+                operatorUserId,
+                source.getStorageLocationId()
+        );
         String relativeRoot = normalizeRelativeRoot(request.relativeRoot());
-        requireNoPathConflict(sourceId, source.getStorageLocationId(), relativeRoot);
+        requireNoPathConflict(sourceId, location, relativeRoot);
         MediaLibraryType libraryType = request.libraryType() == null
                 ? MediaLibraryType.valueOf(source.getLibraryType())
                 : request.libraryType();
@@ -245,14 +269,39 @@ public class VideoLibrarySourceService {
         }
     }
 
-    private void requireNoPathConflict(UUID sourceId, UUID storageLocationId, String relativeRoot) {
-        boolean conflict = sourceRepository.findByStorageLocationId(storageLocationId).stream()
-                .filter(candidate -> sourceId == null || !candidate.getId().equals(sourceId))
-                .map(VideoLibrarySource::getRelativeRoot)
-                .anyMatch(existing -> pathsOverlap(existing, relativeRoot));
-        if (conflict) {
-            throw new BusinessException(ErrorCode.CONFLICT, "该目录与现有媒体库目录重复或重叠");
+    /**
+     * 校验目标目录不与同挂载下任何既有库源物理重叠。
+     *
+     * <p>同一挂载可能同时存在挂载根位置和子目录位置（向导登记与挂载直达并存），
+     * 仅比较同一位置内的相对根会放行跨位置的物理重叠，导致同一目录重复扫描入库，
+     * 因此按"位置相对根 + 库源相对根"拼接后的物理根参与比较。</p>
+     */
+    private void requireNoPathConflict(UUID sourceId, StorageLocation targetLocation, String relativeRoot) {
+        String targetRoot = composePhysicalRoot(targetLocation.getRelativeRoot(), relativeRoot);
+        for (StorageLocation location : storageLocationService.listByMountKeyForBusiness(targetLocation.getMountKey())) {
+            for (VideoLibrarySource candidate : sourceRepository.findByStorageLocationId(location.getId())) {
+                if (sourceId != null && candidate.getId().equals(sourceId)) {
+                    continue;
+                }
+                String candidateRoot = composePhysicalRoot(location.getRelativeRoot(), candidate.getRelativeRoot());
+                if (pathsOverlap(candidateRoot, targetRoot)) {
+                    throw new BusinessException(ErrorCode.CONFLICT, "该目录与现有媒体库目录重复或重叠");
+                }
+            }
         }
+    }
+
+    private String composePhysicalRoot(String locationRoot, String sourceRoot) {
+        String left = isBlankRoot(locationRoot) ? "" : locationRoot;
+        String right = isBlankRoot(sourceRoot) ? "" : sourceRoot;
+        if (left.isEmpty()) {
+            return right;
+        }
+        return right.isEmpty() ? left : left + "/" + right;
+    }
+
+    private boolean isBlankRoot(String value) {
+        return value == null || value.isBlank() || ".".equals(value);
     }
 
     private boolean pathsOverlap(String left, String right) {
