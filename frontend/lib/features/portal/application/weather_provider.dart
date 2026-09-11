@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
+import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
 
 /// 天气图标映射（和风图标代码 → emoji）
 String weatherIconFromCode(String icon) {
@@ -338,6 +339,9 @@ final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
   }
 
   final location = await ref.watch(userLocationProvider.future);
+  // 后端可能因 GPS 优先而未回填地区名，这里用用户偏好城市兜底。
+  final preferredCity =
+      ref.watch(weatherLocationProvider).asData?.value ?? '';
 
   try {
     final apiClient = ref.watch(apiClientProvider);
@@ -349,7 +353,40 @@ final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
     if (response.statusCode == 200 && response.data != null) {
       final data = response.data!;
       if (data['code'] == 200 && data['data'] != null) {
-        return WeatherData.fromJson(data['data'] as Map<String, dynamic>);
+        final weather = WeatherData.fromJson(
+          data['data'] as Map<String, dynamic>,
+        );
+        if (weather.locationName.isNotEmpty || preferredCity.isEmpty) {
+          return weather;
+        }
+        return WeatherData(
+          temp: weather.temp,
+          feelsLike: weather.feelsLike,
+          text: weather.text,
+          icon: weather.icon,
+          humidity: weather.humidity,
+          windSpeed: weather.windSpeed,
+          windDir: weather.windDir,
+          pressure: weather.pressure,
+          visibility: weather.visibility,
+          uvIndex: weather.uvIndex,
+          sunrise: weather.sunrise,
+          sunset: weather.sunset,
+          aqi: weather.aqi,
+          pm2p5: weather.pm2p5,
+          aqiCategory: weather.aqiCategory,
+          updateTime: weather.updateTime,
+          healthAdvice: weather.healthAdvice,
+          tempMax: weather.tempMax,
+          tempMin: weather.tempMin,
+          precip: weather.precip,
+          windScale: weather.windScale,
+          textDay: weather.textDay,
+          textNight: weather.textNight,
+          hourly: weather.hourly,
+          daily: weather.daily,
+          locationName: preferredCity,
+        );
       }
     }
     return WeatherData.empty();

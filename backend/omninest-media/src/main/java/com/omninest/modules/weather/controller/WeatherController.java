@@ -68,6 +68,7 @@ public class WeatherController {
 
         // 优先级：Redis GPS（设备上报） > 前端 GPS 坐标 > 用户偏好城市 > 配置中心默认值
         String resolvedLocation = null;
+        String displayName = null;
         try {
             UUID userId = currentUserContext.requireCurrentUserId();
             // 1. 最高优先级：设备上报的 GPS 坐标（最精确、最实时）
@@ -78,9 +79,15 @@ public class WeatherController {
                     resolvedLocation = location.trim();
                 }
             }
-            // 3. 用户偏好城市
+            // 3. 用户偏好城市（用于展示名；也可能是 API 查询位置）
+            String preferenceLocation = getPreferenceLocation(userId);
             if (resolvedLocation == null || resolvedLocation.isBlank()) {
-                resolvedLocation = getPreferenceLocation(userId);
+                resolvedLocation = preferenceLocation;
+            } else if (preferenceLocation != null
+                    && !preferenceLocation.isBlank()
+                    && !isLatLon(preferenceLocation)) {
+                // GPS 已定位时仍用用户设置的城市名作为展示地区
+                displayName = preferenceLocation;
             }
         } catch (Exception e) {
             // 未登录，前端坐标可直接使用
@@ -88,7 +95,7 @@ public class WeatherController {
                 resolvedLocation = location.trim();
             }
         }
-        WeatherDto weather = weatherService.getRealtimeWeather(resolvedLocation);
+        WeatherDto weather = weatherService.getRealtimeWeather(resolvedLocation, displayName);
         return ApiResponse.success(weather);
     }
 

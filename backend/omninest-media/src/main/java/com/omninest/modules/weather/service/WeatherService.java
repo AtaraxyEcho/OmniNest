@@ -114,6 +114,16 @@ public class WeatherService {
      * 配置错误等关键问题抛出 BusinessException。
      */
     public WeatherDto getRealtimeWeather(String location) {
+        return getRealtimeWeather(location, null);
+    }
+
+    /**
+     * 获取实时天气。
+     *
+     * @param location API 查询位置（GPS 经纬度或城市名）
+     * @param displayName 展示用地区名；location 为 GPS 时用于回填用户偏好城市
+     */
+    public WeatherDto getRealtimeWeather(String location, String displayName) {
         final Map<String, String> config = loadConfig();
 
         if (!"true".equalsIgnoreCase(config.get("weather.enabled"))) {
@@ -123,6 +133,7 @@ public class WeatherService {
         String baseUrl = config.get("weather.qweather.url");
         String rawLocation = (location != null && !location.isBlank()) ? location.trim()
                 : config.get("weather.location");
+        final String effectiveDisplayName = resolveDisplayName(rawLocation, displayName, config);
 
         // 解析位置
         ResolvedWeatherLocation resolved = resolveLocation(rawLocation, config);
@@ -144,7 +155,7 @@ public class WeatherService {
         final String requestKey = finalResolved.latLon();
         WeatherDto cachedWeather = weatherCacheStore.findWeather(finalResolved.latLon()).orElse(null);
         if (cachedWeather != null) {
-            return cachedWeather;
+            return withLocationName(cachedWeather, effectiveDisplayName);
         }
 
         // singleflight：同一位置的并发请求复用同一个 Future，防止缓存击穿
@@ -187,7 +198,9 @@ public class WeatherService {
 
                 WeatherDto result = aggregateWeather(
                         weatherNow, airNow, weather7d, weather24h,
-                        finalResolved.locationName() != null ? finalResolved.locationName() : "");
+                        finalResolved.locationName() != null && !finalResolved.locationName().isBlank()
+                                ? finalResolved.locationName()
+                                : effectiveDisplayName);
                 weatherCacheStore.saveWeather(finalResolved.latLon(), result);
                 return result;
             } catch (Exception e) {
@@ -231,6 +244,48 @@ public class WeatherService {
         }
         return new ResolvedWeatherLocation(
                 resolved.weatherLocation(), resolved.latLon(), location);
+    }
+
+    /**
+     * 解析展示用地区名：用户入参城市 > 调用方传入展示名 > 配置默认城市。
+     */
+    private String resolveDisplayName(
+            String rawLocation, String displayName, Map<String, String> config) {
+        if (rawLocation != null && !rawLocation.isBlank() && !isLatLon(rawLocation)) {
+            return rawLocation.trim();
+        }
+        if (displayName != null && !displayName.isBlank() && !isLatLon(displayName)) {
+            return displayName.trim();
+        }
+        String configLocation = config.get("weather.location");
+        if (configLocation != null && !configLocation.isBlank() && !isLatLon(configLocation)) {
+            return configLocation.trim();
+        }
+        return "";
+    }
+
+    /**
+     * 缓存命中时补齐展示地区名（旧缓存可能没有 locationName）。
+     */
+    private WeatherDto withLocationName(WeatherDto weather, String locationName) {
+        String target = locationName != null ? locationName : "";
+        if (weather == null) {
+            return WeatherDto.empty();
+        }
+        if (target.isBlank() || target.equals(weather.locationName())) {
+            return weather;
+        }
+        return new WeatherDto(
+                weather.temp(), weather.feelsLike(), weather.text(), weather.icon(),
+                weather.humidity(), weather.windSpeed(), weather.windDir(),
+                weather.pressure(), weather.visibility(), weather.uvIndex(),
+                weather.sunrise(), weather.sunset(), weather.aqi(), weather.pm2p5(),
+                weather.aqiCategory(), weather.updateTime(), weather.healthAdvice(),
+                weather.tempMax(), weather.tempMin(), weather.precip(), weather.windScale(),
+                weather.textDay(), weather.textNight(),
+                weather.hourly(), weather.daily(),
+                target
+        );
     }
 
     /**
