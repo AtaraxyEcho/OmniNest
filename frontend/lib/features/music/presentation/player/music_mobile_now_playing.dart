@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' as math;
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,7 +56,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          _MobileCoverBackdrop(track: track),
+          const _MobileCoverBackdrop(),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
             child: Column(
@@ -228,46 +227,22 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
 }
 
 class _MobileCoverBackdrop extends StatelessWidget {
-  const _MobileCoverBackdrop({required this.track});
-
-  final MusicTrack? track;
+  const _MobileCoverBackdrop();
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 360),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          child: SizedBox.expand(
-            key: ValueKey<String?>('mobile-backdrop-${track?.id}'),
-            child: Transform.scale(
-              scale: 1.18,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 34, sigmaY: 34),
-                child: MusicDeckArtwork(
-                  title: track?.title ?? '',
-                  imageUrl: track?.coverUrl,
-                  borderRadius: 0,
-                ),
-              ),
-            ),
-          ),
+    // 桌面同语言：动态壁纸由应用背景宿主透出，播放页不再叠专辑图模糊
+    // 底图与重遮罩，只保留纵向可读性渐变——回切 Music 页时两侧同底，
+    // 过渡快照淡出不再产生亮度跳变（黑闪）。
+    return const DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0x33000000), Color(0xB3000000)],
+          stops: [0.35, 1],
         ),
-        ColoredBox(color: const Color(0xB8050B0F)),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0x24000000), Color(0xA6080C0F)],
-              stops: [0.35, 1],
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }

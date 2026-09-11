@@ -62,27 +62,27 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
               }
               return KeyEventResult.ignored;
             },
-            child: ColoredBox(
-              color: fullVisual ? Colors.transparent : const Color(0xC9050B0F),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (fullVisual)
-                    MusicImmersivePlayer(reservedTopInset: safeTop + 58)
-                  else
-                    MusicMobileNowPlaying(onClose: widget.onClose),
-                  if (fullVisual)
-                    Positioned(
-                      top: safeTop,
-                      left: 12,
-                      right: 12,
-                      child: _buildDesktopTopBar(
-                        context,
-                        isFullscreen: windowChrome.isFullscreen,
-                      ),
+            // 移动端与桌面同语言：不叠自有色层，动态壁纸由应用背景宿主
+            // 透出，可读性由宿主 immersive 渐变与播放页自身轻量渐变承担，
+            // 回切 Music 页时两侧同底无缝衔接。
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                if (fullVisual)
+                  MusicImmersivePlayer(reservedTopInset: safeTop + 58)
+                else
+                  MusicMobileNowPlaying(onClose: widget.onClose),
+                if (fullVisual)
+                  Positioned(
+                    top: safeTop,
+                    left: 12,
+                    right: 12,
+                    child: _buildDesktopTopBar(
+                      context,
+                      isFullscreen: windowChrome.isFullscreen,
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),

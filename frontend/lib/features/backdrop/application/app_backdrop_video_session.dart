@@ -34,6 +34,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
   Player? _player;
   VideoController? _controller;
   StreamSubscription<bool>? _completedSub;
+  StreamSubscription<Duration>? _positionSub;
   Timer? _retryTimer;
   String _path = '';
   String? _activePath;
@@ -44,6 +45,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
   bool _appVisible = true;
   bool _opening = false;
   bool _ready = false;
+  bool _renderable = true;
   bool _disposed = false;
   bool _openScheduled = false;
   int _generation = 0;
@@ -57,6 +59,13 @@ class AppBackdropVideoSession extends ChangeNotifier {
 
   /// 当前视频是否已完成打开并可渲染。
   bool get ready => _ready && _controller != null;
+
+  /// 视频纹理是否持有有效帧。
+  ///
+  /// 后台期间 Android 会回收纹理内容，恢复后直接渲染会得到覆盖海报的
+  /// 黑纹理；置为 false 后视图回落到静态海报，等首个解码帧（position
+  /// 流推进）到达再恢复视频渲染。
+  bool get renderable => _renderable;
 
   /// 最近一次打开失败的错误。
   Object? get openError => _openError;
@@ -114,8 +123,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
     final activeChanged = _sceneActive != active;
     final queryRotated =
         !identityChanged && oldPath.isNotEmpty && oldPath != normalizedPath;
-    if (identityChanged || queryRotated || activeChanged) {
-      }
+    if (identityChanged || queryRotated || activeChanged) {}
     // 仅签名参数变化时更新引用,不销毁正在播放的会话。
     _path = normalizedPath;
     _muted = muted;
@@ -193,10 +201,17 @@ class AppBackdropVideoSession extends ChangeNotifier {
       return;
     }
     _appVisible = visible;
+    // 后台期间纹理内容可能被系统回收：恢复后先回落静态海报，等待
+    // 首个解码帧到达再显示视频，避免黑纹理盖住海报形成黑闪。
+    final renderableWasValid = _renderable;
+    _renderable = false;
     if (visible) {
       _resumeCurrentPlayerIfNeeded();
     } else {
       _pauseCurrentPlayer();
+    }
+    if (renderableWasValid) {
+      _notifySafely();
     }
   }
 
@@ -306,6 +321,15 @@ class AppBackdropVideoSession extends ChangeNotifier {
           unawaited(player.play());
         }
       });
+      _positionSub = player.stream.position.listen((_) {
+        if (_disposed || !identical(_player, player)) {
+          return;
+        }
+        if (!_renderable) {
+          _renderable = true;
+          _notifySafely();
+        }
+      });
       _ready = true;
       _successfulOpenCount++;
       _openError = null;
@@ -399,6 +423,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
     if (player == null) {
       _controller = null;
       _completedSub = null;
+      _positionSub = null;
       _ready = false;
       _activePath = null;
       return null;
@@ -406,10 +431,12 @@ class AppBackdropVideoSession extends ChangeNotifier {
     final detached = _DetachedVideoSession(
       player: player,
       completedSub: _completedSub,
+      positionSub: _positionSub,
     );
     _player = null;
     _controller = null;
     _completedSub = null;
+    _positionSub = null;
     _ready = false;
     _activePath = null;
     return detached;
@@ -418,6 +445,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
   Future<void> _disposeDetachedSession(_DetachedVideoSession session) {
     return _withNativeVideoGate(() async {
       await session.completedSub?.cancel();
+      await session.positionSub?.cancel();
       await _stopAndDisposePlayer(session.player);
     });
   }
@@ -516,8 +544,10 @@ class _DetachedVideoSession {
   const _DetachedVideoSession({
     required this.player,
     required this.completedSub,
+    this.positionSub,
   });
 
   final Player player;
   final StreamSubscription<bool>? completedSub;
+  final StreamSubscription<Duration>? positionSub;
 }

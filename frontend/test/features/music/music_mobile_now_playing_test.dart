@@ -11,6 +11,7 @@ import 'package:omninest/features/music/application/music_playback_session.dart'
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
+import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_overlay.dart';
 
 void main() {
@@ -32,6 +33,34 @@ void main() {
     expect(find.byIcon(Icons.shuffle_rounded), findsOneWidget);
     expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
     expect(find.byType(PageView), findsOneWidget);
+    // 背景改为动态壁纸透出：不再有专辑图模糊底图与重遮罩色层。
+    expect(find.byType(ImageFiltered), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox && widget.color == const Color(0xB8050B0F),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox && widget.color == const Color(0xC9050B0F),
+      ),
+      findsNothing,
+    );
+    // 封面卡保留，模糊底图键不再出现。
+    expect(find.byType(MusicDeckArtwork), findsAtLeastNWidgets(1));
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget.key is ValueKey &&
+            (widget.key as ValueKey).value.toString().startsWith(
+              'mobile-backdrop-',
+            ),
+      ),
+      findsNothing,
+    );
 
     await tester.drag(find.byType(PageView), const Offset(-360, 0));
     await tester.pump(const Duration(milliseconds: 360));

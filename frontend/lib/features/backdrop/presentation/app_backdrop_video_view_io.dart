@@ -115,6 +115,7 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
             );
             if (session.openError != null ||
                 !session.ready ||
+                !session.renderable ||
                 session.controller == null) {
               return const SizedBox.shrink();
             }
