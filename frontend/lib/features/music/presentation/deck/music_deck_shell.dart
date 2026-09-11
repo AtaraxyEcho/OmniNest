@@ -8,8 +8,10 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -234,7 +236,18 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
             onPressed: () => context.go('/portal'),
             icon: Icon(Icons.arrow_back_rounded, color: colors.onSurface),
           ),
-          const SizedBox(width: 6),
+          // 三端统一品牌入口：桌面顶栏以 logo 领起，与 Portal 顶栏同语言。
+          const BrandLogo(size: 22, radius: 6),
+          const SizedBox(width: 8),
+          Text(
+            'OmniNest',
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: AppTypography.titleMedium,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: ConstrainedBox(
               constraints: BoxConstraints(maxWidth: searchMaxWidth),
@@ -374,7 +387,17 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
       ),
     );
     if (hosted) {
-      return content;
+      // 平板宽度触屏内容按壳层 chrome 同宽封顶居中：卡片行/列表行
+      // 不被整屏拉伸，与底栏 tab 组同语言；手机宽度无感直通。
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: MobileLayoutTokens.chromeMaxWidth,
+          ),
+          child: content,
+        ),
+      );
     }
     return SafeArea(child: content);
   }

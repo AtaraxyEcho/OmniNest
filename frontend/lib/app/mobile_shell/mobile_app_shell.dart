@@ -13,6 +13,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart
 import 'package:omninest/app/theme/mobile_app_theme.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/module_switch_transition.dart';
@@ -62,7 +63,6 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
       return MobileShellScope(hosted: false, child: _moduleContent());
     }
     final branch = widget.navigationShell.currentIndex;
-    final useRail = width >= 840;
     final selectionActive = ref.watch(
       mobileShellSelectionActiveProvider(branch),
     );
@@ -73,18 +73,13 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
         hosted: true,
         child: Scaffold(
           backgroundColor: _shellBackground(context, branch: branch),
-          body:
-              useRail
-                  ? _buildRailLayout(
-                    context,
-                    selectionActive: selectionActive,
-                    offline: offline,
-                  )
-                  : _buildBottomNavigationLayout(
-                    context,
-                    selectionActive: selectionActive,
-                    offline: offline,
-                  ),
+          // 平板与手机统一底部导航（tab 组限宽居中），不再切换左侧 rail：
+          // 触屏可达性与三端一致性优先于 M3 的 medium/expanded 导航规范。
+          body: _buildBottomNavigationLayout(
+            context,
+            selectionActive: selectionActive,
+            offline: offline,
+          ),
         ),
       ),
     );
@@ -121,45 +116,6 @@ class _MobileAppShellState extends ConsumerState<MobileAppShell> {
           ),
         ],
       ],
-    );
-  }
-
-  Widget _buildRailLayout(
-    BuildContext context, {
-    required bool selectionActive,
-    required bool offline,
-  }) {
-    return SafeArea(
-      child: Row(
-        children: [
-          if (!selectionActive)
-            _MobileNavigationRail(
-              branch: widget.navigationShell.currentIndex,
-              selectedIndex: _destinationIndex,
-              onSelected: _selectDestination,
-              portalStyle:
-                  widget.navigationShell.currentIndex ==
-                  MobileNavigationConfig.portalBranch,
-              musicStyle:
-                  widget.navigationShell.currentIndex ==
-                  MobileNavigationConfig.musicBranch,
-            ),
-          Expanded(
-            child: Column(
-              children: [
-                _MobileTopBar(branch: widget.navigationShell.currentIndex),
-                if (offline)
-                  _MobileSystemBanner(
-                    branch: widget.navigationShell.currentIndex,
-                  ),
-                Expanded(child: _moduleContent()),
-                if (!selectionActive)
-                  MusicMobileMiniPlayerSlot(onOpenPlayer: _openNowPlaying),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -298,93 +254,178 @@ class _MobileTopBar extends ConsumerWidget {
             ? Colors.transparent
             : _solidChromeOutline(context, branch: branch);
     final foreground = _chromeForeground(context, branch: branch);
-    return SafeArea(
-      bottom: false,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: surface,
-          border: Border(bottom: BorderSide(color: outline)),
-        ),
-        child: SizedBox(
-          height: 56,
-          child: Padding(
-            padding: const EdgeInsets.only(left: 16, right: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    _title(l10n),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: foreground,
-                      fontSize: 22,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                if (branch == MobileNavigationConfig.musicBranch)
-                  const MusicMobileTopBarActions(),
-                // Files/Photos 分支搜索改为模块页内搜索条（按宿主隔离），
-                // 其余分支跳全局搜索。
-                if (_searchHostForBranch(branch) case final searchHost?)
-                  IconButton(
-                    tooltip: l10n.searchTitle,
-                    onPressed:
-                        () =>
-                            ref
-                                .read(
-                                  mobileModuleSearchActiveProvider(
-                                    searchHost,
-                                  ).notifier,
-                                )
-                                .toggle(),
-                    icon: Icon(Icons.search_rounded, size: 22),
-                    style: IconButton.styleFrom(
-                      foregroundColor: foreground,
-                      minimumSize: const Size.square(
-                        MobileLayoutTokens.minimumTarget,
-                      ),
-                    ),
-                  )
-                else
-                  IconButton(
-                    tooltip: l10n.searchTitle,
-                    onPressed:
-                        () => context.push(
-                          '/search?scope=${MobileNavigationConfig.searchScopeForBranch(branch)}',
+    final titleStyle = TextStyle(
+      color: foreground,
+      fontSize: 22,
+      fontWeight: FontWeight.w700,
+    );
+    // Files/Photos 分支搜索改为模块页内搜索条（按宿主隔离），
+    // 其余分支跳全局搜索；搜索框与图标共用同一目标。
+    final VoidCallback onSearch;
+    if (_searchHostForBranch(branch) case final searchHost?) {
+      onSearch =
+          () =>
+              ref
+                  .read(mobileModuleSearchActiveProvider(searchHost).notifier)
+                  .toggle();
+    } else {
+      onSearch =
+          () => context.push(
+            '/search?scope=${MobileNavigationConfig.searchScopeForBranch(branch)}',
+          );
+    }
+    final titleText = Text(
+      _title(l10n),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: titleStyle,
+    );
+    // 平板及以上顶栏把搜索图标升级为展开搜索框，宽度被有效利用；
+    // 以布局约束而非 MediaQuery 判定宽度，测试视口与真机行为一致。
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide =
+            constraints.maxWidth >= MobileLayoutTokens.topBarSearchMinWidth;
+        Widget searchIconButton(Color foreground) => IconButton(
+          tooltip: l10n.searchTitle,
+          onPressed: onSearch,
+          icon: Icon(Icons.search_rounded, size: 22),
+          style: IconButton.styleFrom(
+            foregroundColor: foreground,
+            minimumSize: const Size.square(MobileLayoutTokens.minimumTarget),
+          ),
+        );
+        return SafeArea(
+          bottom: false,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: surface,
+              border: Border(bottom: BorderSide(color: outline)),
+            ),
+            child: SizedBox(
+              height: 56,
+              child: Padding(
+                padding: const EdgeInsets.only(left: 16, right: 8),
+                child: Row(
+                  children: [
+                    // 三端统一品牌入口：顶栏以 logo 领起，Portal 首页
+                    // 紧随品牌字标，其余分支保持分支名提供上下文。
+                    BrandLogo(size: wide ? 28 : 24, radius: wide ? 8 : 7),
+                    SizedBox(width: wide ? 12 : 10),
+                    if (wide && portalStyle) ...[
+                      titleText,
+                      // 全局搜索框只在 Portal 首页展示，限宽并紧随品牌，
+                      // 不再横向拉满整条顶栏。
+                      const SizedBox(width: 16),
+                      SizedBox(
+                        width: MobileLayoutTokens.topBarSearchMaxWidth,
+                        child: _TopBarSearchField(
+                          foreground: foreground,
+                          hint: l10n.searchTitle,
+                          onTap: onSearch,
                         ),
-                    icon: Icon(Icons.search_rounded, size: 22),
-                    style: IconButton.styleFrom(
-                      foregroundColor: foreground,
-                      minimumSize: const Size.square(
-                        MobileLayoutTokens.minimumTarget,
                       ),
+                      const Spacer(),
+                    ] else if (wide) ...[
+                      titleText,
+                      const Spacer(),
+                    ] else
+                      Expanded(child: titleText),
+                    if (branch == MobileNavigationConfig.musicBranch)
+                      const MusicMobileTopBarActions(),
+                    // 搜索图标仅保留在手机宽度与 Files/Photos（页内搜索条
+                    // 的唯一触发）；Music/Video/Reader 平板宽度走模块自带
+                    // 搜索，不再重复展示全局搜索入口。
+                    if (!wide || _searchHostForBranch(branch) != null)
+                      searchIconButton(foreground),
+                    // 平板 hosted 桌面视觉不再绘制自身顶栏，背景库入口
+                    // 由壳层顶栏接管；窄幅手机仍走移动 Portal 自身入口。
+                    if (wide && branch == MobileNavigationConfig.portalBranch)
+                      IconButton(
+                        tooltip: l10n.portalLocalBackdropTitle,
+                        onPressed: () => showAppBackdropSettings(context),
+                        icon: Icon(Icons.wallpaper_rounded, size: 22),
+                        style: IconButton.styleFrom(
+                          foregroundColor: foreground,
+                          minimumSize: const Size.square(
+                            MobileLayoutTokens.minimumTarget,
+                          ),
+                        ),
+                      ),
+                    _MobileActivityButton(
+                      foregroundColor: foreground,
+                      borderColor: surface,
                     ),
-                  ),
-                _MobileActivityButton(
-                  foregroundColor: foreground,
-                  borderColor: surface,
+                    const SizedBox(width: 4),
+                    const UserAvatarMenu(size: 32, directToProfile: true),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                const UserAvatarMenu(size: 32, directToProfile: true),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
   String _title(AppLocalizations l10n) {
     return switch (branch) {
-      MobileNavigationConfig.portalBranch => l10n.mobileNavHome,
+      // Portal 首页顶栏展示品牌字标（与桌面 Portal 顶栏同语言）。
+      MobileNavigationConfig.portalBranch => 'OmniNest',
       MobileNavigationConfig.musicBranch => l10n.mobileNavMusic,
       MobileNavigationConfig.photosBranch => l10n.portalDockPhotos,
       MobileNavigationConfig.videoBranch => l10n.portalDockMovies,
       MobileNavigationConfig.readerBranch => l10n.mobileNavReader,
       _ => l10n.mobileNavFiles,
     };
+  }
+}
+
+/// 顶栏展开搜索框（平板及以上替代搜索图标）。
+/// 非输入态的引导控件：点击后进入与图标一致的模块搜索或全局搜索。
+class _TopBarSearchField extends StatelessWidget {
+  const _TopBarSearchField({
+    required this.foreground,
+    required this.hint,
+    required this.onTap,
+  });
+
+  final Color foreground;
+  final String hint;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = foreground.withValues(alpha: 0.62);
+    return Material(
+      key: const ValueKey('omninest.mobile.top-bar-search'),
+      color: foreground.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(19),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(19),
+        onTap: onTap,
+        child: SizedBox(
+          height: 38,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                Icon(Icons.search_rounded, size: 19, color: muted),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    hint,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: muted, fontSize: 15),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -575,111 +616,41 @@ class _MobileBottomNavigation extends ConsumerWidget {
       ),
       child: SafeArea(
         top: false,
-        child: SizedBox(
-          height: 68,
-          child: Row(
-            children: [
-              for (var index = 0; index < destinations.length; index++)
-                Expanded(
-                  child: _MobileBottomDestination(
-                    destination: destinations[index],
-                    selected: selectedIndex == index,
-                    selectedColor: selectedColor,
-                    unselectedColor: unselectedColor,
-                    onTap: () => onSelected(index),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // 平板宽度收紧栏高：横屏竖向空间宝贵，图标+文字纵向堆叠
+            // 在 56 内仍有充分呼吸；手机保持拇指友好的 68。
+            final compactHeight =
+                constraints.maxWidth >= MobileLayoutTokens.topBarSearchMinWidth;
+            return SizedBox(
+              height: compactHeight ? 56 : 68,
+              // 平板宽度下 tab 组限宽居中：间距不被整屏拉伸，
+              // 两侧留给玻璃/壁纸自然过渡。
+              child: Center(
+                child: ConstrainedBox(
+                  key: const ValueKey('omninest.mobile.bottom-nav'),
+                  constraints: const BoxConstraints(
+                    maxWidth: MobileLayoutTokens.chromeMaxWidth,
+                  ),
+                  child: Row(
+                    children: [
+                      for (var index = 0; index < destinations.length; index++)
+                        Expanded(
+                          child: _MobileBottomDestination(
+                            destination: destinations[index],
+                            selected: selectedIndex == index,
+                            selectedColor: selectedColor,
+                            unselectedColor: unselectedColor,
+                            onTap: () => onSelected(index),
+                          ),
+                        ),
+                    ],
                   ),
                 ),
-            ],
-          ),
+              ),
+            );
+          },
         ),
-      ),
-    );
-  }
-}
-
-class _MobileNavigationRail extends ConsumerWidget {
-  const _MobileNavigationRail({
-    required this.branch,
-    required this.selectedIndex,
-    required this.onSelected,
-    required this.portalStyle,
-    required this.musicStyle,
-  });
-
-  final int branch;
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-  final bool portalStyle;
-  final bool musicStyle;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final backdropActive = _localBackdropActive(ref);
-    if (portalStyle) {
-      return Theme(
-        data: PortalMobileTheme.resolve(
-          context,
-          backdropActive: backdropActive,
-        ),
-        child: Builder(
-          builder:
-              (context) => _buildRail(context, backdropActive: backdropActive),
-        ),
-      );
-    }
-    if (musicStyle) {
-      return Theme(
-        data: MusicBackdropTheme.resolve(
-          Theme.of(context),
-          backdropActive: backdropActive,
-        ),
-        child: Builder(
-          builder:
-              (context) => _buildRail(context, backdropActive: backdropActive),
-        ),
-      );
-    }
-    return _buildRail(context, backdropActive: false);
-  }
-
-  Widget _buildRail(BuildContext context, {required bool backdropActive}) {
-    final destinations = _destinations(AppLocalizations.of(context));
-    final surface =
-        portalStyle || musicStyle
-            ? _glassChromeSurface(
-              context,
-              backdropActive: backdropActive,
-              bottom: false,
-            )
-            : _solidChromeSurface(context, branch: branch);
-    // 玻璃分支不画描边（浅色下白线显突兀）。
-    final outline =
-        portalStyle || musicStyle
-            ? Colors.transparent
-            : _solidChromeOutline(context, branch: branch);
-    final selectedColor = _chromeForeground(context, branch: branch);
-    final unselectedColor = _chromeUnselectedColor(context, branch: branch);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: surface,
-        border: Border(right: BorderSide(color: outline)),
-      ),
-      child: NavigationRail(
-        minWidth: 80,
-        selectedIndex: selectedIndex,
-        onDestinationSelected: onSelected,
-        indicatorColor: Colors.transparent,
-        selectedIconTheme: IconThemeData(color: selectedColor),
-        unselectedIconTheme: IconThemeData(color: unselectedColor),
-        labelType: NavigationRailLabelType.all,
-        destinations: [
-          for (final destination in destinations)
-            NavigationRailDestination(
-              icon: Icon(destination.icon),
-              selectedIcon: Icon(destination.selectedIcon),
-              label: Text(destination.label),
-            ),
-        ],
       ),
     );
   }
@@ -702,7 +673,8 @@ String? _searchHostForBranch(int branch) {
 ///
 /// 两分支主题在「浅色 + 动态壁纸」时都已把 scheme 换为烟熏组，此处直接
 /// 取 scheme 表面即可同语言：壁纸激活 = 烟熏玻璃（α 不低于 Portal 内容卡
-/// 的 68%，底栏再高一档）；无壁纸浅色 = 近实底浅玻璃；深色 = 深玻璃。
+/// 的 68%，底栏再高一档）；无壁纸时上下栏同档近实底——半透明烟熏在近黑
+/// 内容上会拼出明暗/冷暖断裂的色带，深色与浅色 0.90 对称取 0.92。
 Color _glassChromeSurface(
   BuildContext context, {
   required bool backdropActive,
@@ -717,7 +689,7 @@ Color _glassChromeSurface(
     );
   }
   final base = light ? scheme.surfaceContainerHigh : scheme.surfaceContainerLow;
-  return base.withValues(alpha: light ? 0.90 : (bottom ? 0.82 : 0.78));
+  return base.withValues(alpha: light ? 0.90 : 0.92);
 }
 
 /// 壳层底色：玻璃分支保持透明（壁纸绘制底）；实底分支自绘面板底色——

@@ -38,6 +38,71 @@ void main() {
     expect(wrap.crossAxisAlignment, WrapCrossAlignment.start);
   });
 
+  testWidgets('可点击指标行胶囊高亮留出内边距且与静态行对齐', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: const [Locale('zh'), Locale('en')],
+        home: Scaffold(
+          body: Builder(
+            builder:
+                (context) => Align(
+                  alignment: Alignment.topLeft,
+                  child: SizedBox(
+                    width: 272,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        PortalMetricLine(
+                          palette: PortalVisualPalette.of(context),
+                          label: '天气',
+                          value: '晴',
+                          onTap: () {},
+                        ),
+                        PortalMetricLine(
+                          palette: PortalVisualPalette.of(context),
+                          label: '存储',
+                          value: '1.2TB',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+          ),
+        ),
+      ),
+    );
+
+    // 行内容统一带横向 12 内边距：胶囊高亮与文字保持呼吸空间。
+    final tapRow = tester.widget<Padding>(
+      find.ancestor(of: find.text('天气'), matching: find.byType(Padding)).first,
+    );
+    expect(
+      tapRow.padding,
+      const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+    );
+    final staticRow = tester.widget<Padding>(
+      find.ancestor(of: find.text('存储'), matching: find.byType(Padding)).first,
+    );
+    expect(
+      staticRow.padding,
+      const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+    );
+    // 可点击行与静态行标签左缘对齐。
+    expect(
+      tester.getTopLeft(find.text('天气')).dx,
+      tester.getTopLeft(find.text('存储')).dx,
+    );
+    // 胶囊高亮（InkWell 边界）与文字左缘保持 12 呼吸空间。
+    final inkRect = tester.getRect(find.byType(InkWell));
+    expect(tester.getTopLeft(find.text('天气')).dx - inkRect.left, 12);
+  });
+
   test('Portal 音乐卡片优先使用恢复的播放会话', () {
     final dataSource =
         File(

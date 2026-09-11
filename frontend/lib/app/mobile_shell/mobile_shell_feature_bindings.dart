@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/mobile_shell/mobile_navigation_config.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
@@ -50,8 +49,8 @@ final mobileShellActivityProvider = Provider<MobileShellActivityState>((ref) {
   );
 });
 
-/// 返回当前设备是否启用了可用的本机动态背景。
+/// 返回当前是否启用了可用的动态背景（Web 壁纸与原生壁纸同源）。
 final mobileShellLocalBackdropActiveProvider = Provider<bool>((ref) {
   final state = ref.watch(appBackdropControllerProvider).asData?.value;
-  return !kIsWeb && state?.hasActiveBackdrop == true;
+  return state?.hasActiveBackdrop == true;
 });

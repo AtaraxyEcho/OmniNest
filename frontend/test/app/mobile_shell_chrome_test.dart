@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
@@ -230,14 +231,16 @@ void main() {
     );
   });
 
-  testWidgets('深色下玻璃分支统一 0.78/0.82 档', (tester) async {
+  testWidgets('深色无壁纸上下栏统一近实底 0.92', (tester) async {
     await pumpShell(
       tester,
       initialLocation: '/portal',
       brightness: Brightness.dark,
     );
-    expect(chromeColor(chromeOf(tester, top: true)).a, closeTo(0.78, 0.001));
-    expect(chromeColor(chromeOf(tester, top: false)).a, closeTo(0.82, 0.001));
+    // 半透明烟熏会在近黑内容上拼出明暗/冷暖断裂色带：无壁纸时上下栏
+    // 同档近实底，与浅色 0.90 对称。
+    expect(chromeColor(chromeOf(tester, top: true)).a, closeTo(0.92, 0.001));
+    expect(chromeColor(chromeOf(tester, top: false)).a, closeTo(0.92, 0.001));
   });
 
   testWidgets('深色下照片 chrome 跟随 Frame 暖炭面，文件保持全局暗面', (tester) async {
@@ -313,6 +316,80 @@ void main() {
     final solidDecoration =
         chromeOf(tester, top: true).decoration as BoxDecoration;
     expect(solidDecoration.border?.bottom.color, isNot(Colors.transparent));
+  });
+
+  testWidgets('平板宽度统一底部导航：无左侧 rail 且 tab 组限宽居中', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1280, 800));
+    addTearDown(() async {
+      await tester.binding.setSurfaceSize(null);
+    });
+    await tester.pumpWidget(host(initialLocation: '/portal'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    // 平板不再切换左侧导航 rail。
+    expect(find.byType(NavigationRail), findsNothing);
+    // tab 组限宽 720 且水平居中，间距不被整屏拉伸。
+    final nav = find.byKey(const ValueKey('omninest.mobile.bottom-nav'));
+    expect(nav, findsOneWidget);
+    expect(tester.getSize(nav).width, 720);
+    // 平板宽度收紧栏高（手机保持 68），横屏竖向空间不被底栏挤占。
+    expect(tester.getSize(nav).height, 56);
+    final navRect = tester.getRect(nav);
+    expect(navRect.left, closeTo((1280 - 720) / 2, 0.5));
+    // 三端统一品牌入口：顶栏以 logo 领起，Portal 首页展示品牌字标。
+    expect(find.byType(BrandLogo), findsOneWidget);
+    expect(find.text('OmniNest'), findsOneWidget);
+    // 全局搜索框只在 Portal 首页展示：限宽 460 且紧随品牌居左排布。
+    final search = find.byKey(const ValueKey('omninest.mobile.top-bar-search'));
+    expect(search, findsOneWidget);
+    expect(tester.getSize(search).width, 460);
+    final searchRect = tester.getRect(search);
+    expect(searchRect.left, greaterThan(140));
+    expect(searchRect.left, lessThan(320));
+    // 右缘远离右侧操作区，确认整体居左而非居中/拉满。
+    expect(searchRect.right, lessThan(800));
+    expect(find.byIcon(Icons.search_rounded), findsOneWidget);
+    // 平板 hosted 桌面视觉不再绘制自身顶栏，背景库入口由壳层顶栏接管。
+    expect(find.byIcon(Icons.wallpaper_rounded), findsOneWidget);
+
+    // Music/Video/Reader 平板宽度走模块自带搜索，顶栏不再重复展示。
+    await tapNav(tester, '音乐');
+    expect(
+      find.byKey(const ValueKey('omninest.mobile.top-bar-search')),
+      findsNothing,
+    );
+    expect(find.byIcon(Icons.search_rounded), findsNothing);
+    // Files/Photos 的搜索图标是页内搜索条唯一触发，保留为图标形态。
+    await tapNav(tester, '文件');
+    expect(
+      find.byKey(const ValueKey('omninest.mobile.top-bar-search')),
+      findsNothing,
+    );
+    expect(find.byIcon(Icons.search_rounded), findsOneWidget);
+  });
+
+  testWidgets('手机宽度底栏铺满且顶栏保持搜索图标', (tester) async {
+    await pumpShell(tester, initialLocation: '/reader');
+    final nav = find.byKey(const ValueKey('omninest.mobile.bottom-nav'));
+    expect(nav, findsOneWidget);
+    expect(tester.getSize(nav).width, 360);
+    // 手机宽度保持拇指友好的 68 栏高。
+    expect(tester.getSize(nav).height, 68);
+    // 品牌入口同样覆盖手机：logo 领起 + 分支名提供上下文。
+    expect(find.byType(BrandLogo), findsOneWidget);
+    // 顶栏标题与底栏选中页签都会出现「阅读」。
+    expect(find.text('阅读'), findsAtLeastNWidgets(1));
+    expect(
+      find.byKey(const ValueKey('omninest.mobile.top-bar-search')),
+      findsNothing,
+    );
+    expect(find.byIcon(Icons.search_rounded), findsOneWidget);
+    // 背景库入口仅在平板宽度接管到壳层顶栏；手机走移动 Portal 自身入口。
+    await tapNav(tester, '首页');
+    expect(find.byIcon(Icons.wallpaper_rounded), findsNothing);
+    // Portal 首页在手机上以品牌字标替代「首页」分支名。
+    expect(find.text('OmniNest'), findsOneWidget);
   });
 }
 

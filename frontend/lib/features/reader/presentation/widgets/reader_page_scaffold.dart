@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
@@ -214,6 +215,12 @@ class _ReaderModuleTopBar extends ConsumerWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  // 三端统一品牌入口：衬线面包屑以 logo 领起（窄幅省略，
+                  // 与「门户」返回钮共存时保留完整文字层级）。
+                  if (wide) ...[
+                    const BrandLogo(size: 20, radius: 6),
+                    const SizedBox(width: 8),
+                  ],
                   Flexible(
                     child: Text(
                       'OmniNest',

@@ -11,6 +11,16 @@ abstract final class MobileLayoutTokens {
   static const double minimumTarget = 48;
   static const double listRowHeight = 64;
 
+  /// 平板及以上壳层内容（底栏 tab 组、迷你播放条、顶栏搜索框）的最大
+  /// 宽度：超出部分两侧留白交给壁纸/玻璃，避免控件被整屏拉伸。
+  static const double chromeMaxWidth = 720;
+
+  /// 达到该宽度后顶栏展示展开搜索框（替代标题右侧的搜索图标）。
+  static const double topBarSearchMinWidth = 840;
+
+  /// 展开搜索框的最大宽度：平板整条顶栏直接拉满会压过标题与操作区。
+  static const double topBarSearchMaxWidth = 460;
+
   static const Duration pressDuration = Duration(milliseconds: 120);
   static const Duration stateDuration = Duration(milliseconds: 190);
   static const Duration pageDuration = Duration(milliseconds: 240);

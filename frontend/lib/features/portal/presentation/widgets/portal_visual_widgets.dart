@@ -788,8 +788,10 @@ class PortalMetricLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final content = Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+    // 行内容统一带横向 12 内边距：可点击行的胶囊高亮与文字保持呼吸
+    // 空间，静态行（无高亮）与可点击行左缘对齐。
+    final row = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
       child: Row(
         children: [
           Expanded(
@@ -823,14 +825,14 @@ class PortalMetricLine extends StatelessWidget {
       ),
     );
     if (onTap == null) {
-      return content;
+      return row;
     }
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: onTap,
-        child: content,
+        child: row,
       ),
     );
   }

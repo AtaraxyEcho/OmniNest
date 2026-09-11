@@ -40,7 +40,7 @@ class _BackdropLibraryPortalState
     final failedSection = data.firstFailedSection;
     final content = LayoutBuilder(
       builder: (context, constraints) {
-        final compact = constraints.maxWidth < 1180;
+        final tier = resolvePortalDesktopLayoutTier(constraints.maxWidth);
         final availableHeight = _resolvePortalViewportHeight(
           context,
           constraints,
@@ -48,114 +48,231 @@ class _BackdropLibraryPortalState
         final verticalTight = availableHeight < 700;
         final layoutHeight = availableHeight.clamp(520.0, 980.0).toDouble();
         final heightScale = (layoutHeight / 720).clamp(0.84, 1.0).toDouble();
+        // 排版缩放与内容限宽同源：超宽窗口下内容封顶，字号不再随窗口放大。
+        final contentWidth = math.min(
+          constraints.maxWidth,
+          kPortalDesktopContentMaxWidth,
+        );
         final heroFontScale =
-            (constraints.maxWidth / 1720).clamp(0.94, 1.18).toDouble() *
+            (contentWidth / kPortalDesktopContentMaxWidth)
+                .clamp(0.94, 1.0)
+                .toDouble() *
             heightScale;
-        final panelGap = verticalTight ? 12.0 : 18.0;
-        final railWidth = verticalTight ? 204.0 : 236.0;
-        final attentionWidth = verticalTight ? 268.0 : 300.0;
-        final heroPadding = EdgeInsets.all(verticalTight ? 20 : 28);
+        // 三栏在 1120-1399（平板与窄桌面窗）启用紧凑边栏，保证 hero
+        // 文案与封面并排不局促；边栏加宽吃掉富余宽度使文案与封面贴合。
+        final compactColumns =
+            tier == PortalDesktopLayoutTier.wide && constraints.maxWidth < 1400;
+        final dense = verticalTight || compactColumns;
+        final panelGap = dense ? 12.0 : 16.0;
+        final railWidth = dense ? 228.0 : 272.0;
+        final attentionWidth = dense ? 300.0 : 336.0;
+        final heroPadding = EdgeInsets.all(dense ? 20 : 24);
+        final heroInnerGap = dense ? 16.0 : 24.0;
         return SingleChildScrollView(
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: availableHeight),
-            child:
-                compact
-                    ? _SingleColumnVisual(
-                      palette: widget.palette,
-                      item: active,
-                      data: data,
-                      lightweight: widget.localBackdropActive,
-                      onOpenImmersivePlayback: widget.onOpenImmersivePlayback,
-                    )
-                    : SizedBox(
-                      height: layoutHeight,
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                SizedBox(
-                                  width: railWidth,
-                                  child: _StatusRail(
-                                    palette: widget.palette,
-                                    data: data,
-                                    lightweight: widget.localBackdropActive,
-                                  ),
-                                ),
-                                SizedBox(width: panelGap),
-                                Expanded(
-                                  child: PortalVisualPanel(
-                                    palette: widget.palette,
-                                    padding: heroPadding,
-                                    lightweight: widget.localBackdropActive,
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          flex: 6,
-                                          child: _HeroCopy(
-                                            palette: widget.palette,
-                                            eyebrow:
-                                                active.heroEyebrow ??
-                                                l10n.portalVisualEyebrowRecentContent,
-                                            title: active.title,
-                                            body:
-                                                active.heroBody ??
-                                                active.subtitle,
-                                            action: active.actionLabel,
-                                            fontScale: heroFontScale,
-                                            onAction:
-                                                () => context.go(active.route),
-                                            quickActions: _PortalFocusQuickActions(
-                                              palette: widget.palette,
-                                              item: active,
-                                              data: data,
-                                              onOpenImmersivePlayback:
-                                                  widget
-                                                      .onOpenImmersivePlayback,
-                                            ),
-                                          ),
-                                        ),
-                                        SizedBox(
-                                          width: verticalTight ? 20 : 28,
-                                        ),
-                                        Expanded(
-                                          flex: 5,
-                                          child: _PortalHeroCoverDisplay(
+            // 内容整体封顶并双向居中：超宽窗口两侧留给壁纸；高屏下
+            // 内容块（≤980 高）在顶栏与窗口底之间垂直居中，不再顶贴。
+            // minHeight 保证内容超高时仍按常规滚动。
+            child: Align(
+              alignment: Alignment.center,
+              child: ConstrainedBox(
+                key: const ValueKey('omninest.portal.content-cap'),
+                constraints: const BoxConstraints(
+                  maxWidth: kPortalDesktopContentMaxWidth,
+                ),
+                child: switch (tier) {
+                  PortalDesktopLayoutTier.singleColumn => _SingleColumnVisual(
+                    palette: widget.palette,
+                    item: active,
+                    data: data,
+                    lightweight: widget.localBackdropActive,
+                    onOpenImmersivePlayback: widget.onOpenImmersivePlayback,
+                  ),
+                  PortalDesktopLayoutTier.twoColumn => SizedBox(
+                    height: layoutHeight,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: PortalVisualPanel(
+                                  palette: widget.palette,
+                                  padding: heroPadding,
+                                  lightweight: widget.localBackdropActive,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: _HeroCopy(
+                                          palette: widget.palette,
+                                          eyebrow:
+                                              active.heroEyebrow ??
+                                              l10n.portalVisualEyebrowCompact,
+                                          title: active.title,
+                                          body:
+                                              active.heroBody ??
+                                              active.subtitle,
+                                          action: active.actionLabel,
+                                          fontScale: heroFontScale,
+                                          onAction:
+                                              () => context.go(active.route),
+                                          quickActions: _PortalFocusQuickActions(
                                             palette: widget.palette,
                                             item: active,
+                                            data: data,
+                                            onOpenImmersivePlayback:
+                                                widget.onOpenImmersivePlayback,
                                           ),
                                         ),
-                                      ],
+                                      ),
+                                      SizedBox(width: heroInnerGap),
+                                      Expanded(
+                                        child: _PortalHeroCoverDisplay(
+                                          palette: widget.palette,
+                                          item: active,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: panelGap),
+                              SizedBox(
+                                width: attentionWidth,
+                                key: const ValueKey(
+                                  'omninest.portal.side-column',
+                                ),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      flex: 5,
+                                      child: _AttentionPanel(
+                                        palette: widget.palette,
+                                        data: data,
+                                        activeModule: active.module,
+                                        lightweight: widget.localBackdropActive,
+                                      ),
                                     ),
-                                  ),
+                                    SizedBox(height: panelGap),
+                                    Expanded(
+                                      flex: 4,
+                                      child: _StatusRail(
+                                        palette: widget.palette,
+                                        data: data,
+                                        lightweight: widget.localBackdropActive,
+                                        scrollable: true,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                SizedBox(width: panelGap),
-                                SizedBox(
-                                  width: attentionWidth,
-                                  child: _AttentionPanel(
-                                    palette: widget.palette,
-                                    data: data,
-                                    activeModule: active.module,
-                                    lightweight: widget.localBackdropActive,
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                          SizedBox(height: verticalTight ? 10 : 18),
-                          _VisualFilmStrip(
-                            palette: widget.palette,
-                            items: items,
-                            activeIndex: activeIndex,
-                            lightweight: widget.localBackdropActive,
-                            onSelected:
-                                (index) =>
-                                    setState(() => _selectedIndex = index),
-                          ),
-                        ],
-                      ),
+                        ),
+                        SizedBox(height: verticalTight ? 8 : 16),
+                        _VisualFilmStrip(
+                          palette: widget.palette,
+                          items: items,
+                          activeIndex: activeIndex,
+                          lightweight: widget.localBackdropActive,
+                          onSelected:
+                              (index) => setState(() => _selectedIndex = index),
+                        ),
+                      ],
                     ),
+                  ),
+                  PortalDesktopLayoutTier.wide => SizedBox(
+                    height: layoutHeight,
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(
+                                width: railWidth,
+                                child: _StatusRail(
+                                  palette: widget.palette,
+                                  data: data,
+                                  lightweight: widget.localBackdropActive,
+                                ),
+                              ),
+                              SizedBox(width: panelGap),
+                              Expanded(
+                                child: PortalVisualPanel(
+                                  palette: widget.palette,
+                                  padding: heroPadding,
+                                  lightweight: widget.localBackdropActive,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        flex: 6,
+                                        child: _HeroCopy(
+                                          palette: widget.palette,
+                                          eyebrow:
+                                              active.heroEyebrow ??
+                                              l10n.portalVisualEyebrowRecentContent,
+                                          title: active.title,
+                                          body:
+                                              active.heroBody ??
+                                              active.subtitle,
+                                          action: active.actionLabel,
+                                          fontScale: heroFontScale,
+                                          onAction:
+                                              () => context.go(active.route),
+                                          quickActions: _PortalFocusQuickActions(
+                                            palette: widget.palette,
+                                            item: active,
+                                            data: data,
+                                            onOpenImmersivePlayback:
+                                                widget.onOpenImmersivePlayback,
+                                          ),
+                                        ),
+                                      ),
+                                      SizedBox(width: heroInnerGap),
+                                      Expanded(
+                                        flex: 5,
+                                        child: _PortalHeroCoverDisplay(
+                                          palette: widget.palette,
+                                          item: active,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              SizedBox(width: panelGap),
+                              SizedBox(
+                                width: attentionWidth,
+                                child: _AttentionPanel(
+                                  palette: widget.palette,
+                                  data: data,
+                                  activeModule: active.module,
+                                  lightweight: widget.localBackdropActive,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        SizedBox(height: verticalTight ? 8 : 16),
+                        _VisualFilmStrip(
+                          palette: widget.palette,
+                          items: items,
+                          activeIndex: activeIndex,
+                          lightweight: widget.localBackdropActive,
+                          onSelected:
+                              (index) => setState(() => _selectedIndex = index),
+                        ),
+                      ],
+                    ),
+                  ),
+                },
+              ),
+            ),
           ),
         );
       },
@@ -394,21 +511,24 @@ class _PortalHeroCoverDisplay extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableHeight =
-            constraints.maxHeight.isFinite ? constraints.maxHeight : 560.0;
+            constraints.maxHeight.isFinite ? constraints.maxHeight : 460.0;
         final availableWidth =
-            constraints.maxWidth.isFinite ? constraints.maxWidth : 460.0;
+            constraints.maxWidth.isFinite ? constraints.maxWidth : 400.0;
+        // 封面卡宽高上限 400×540：与限宽后 hero 面板的封面份额匹配，
+        // 避免高窗下封面顶满 620 高、与文案之间拉出空带。
         final coverHeight =
             math
-                .min(availableHeight * 0.84, 620.0)
-                .clamp(360.0, 620.0)
+                .min(availableHeight * 0.84, 540.0)
+                .clamp(320.0, 540.0)
                 .toDouble();
         final coverWidth =
             math
                 .min(availableWidth, coverHeight * 0.74)
-                .clamp(260.0, 460.0)
+                .clamp(240.0, 400.0)
                 .toDouble();
         return Center(
           child: SizedBox(
+            key: const ValueKey('omninest.portal.hero-cover'),
             width: coverWidth,
             height: coverHeight,
             child: PortalGradientCover(

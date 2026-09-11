@@ -119,13 +119,21 @@ class AppBackdropSurface extends ConsumerWidget {
     }
 
     if (isWebPlatform) {
-      return AppBackdropVideoView(
-        source: source,
-        fit: fit,
-        playing: active && motionAllowed,
-        muted: settings.videoMuted,
-        fallbackSource: bundledDefaultWallpaperWebAsset,
-        onSourceStale: onSourceStale,
+      // HTML video 在首帧就绪或加载失败前不绘制内容；与 IO 端一致在
+      // 底层保留静态海报（平台视图之下的画布内容仍按层级合成），避免黑闪。
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          _videoStaticFallback(context, ref, asset, fit),
+          AppBackdropVideoView(
+            source: source,
+            fit: fit,
+            playing: active && motionAllowed,
+            muted: settings.videoMuted,
+            fallbackSource: bundledDefaultWallpaperWebAsset,
+            onSourceStale: onSourceStale,
+          ),
+        ],
       );
     }
     if (!motionAllowed) {

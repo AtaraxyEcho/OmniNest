@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -61,7 +60,7 @@ class _MusicCenterPageState extends ConsumerState<MusicCenterPage> {
     });
     final state = ref.watch(musicCenterControllerProvider);
     final backdrop = ref.watch(appBackdropControllerProvider).asData?.value;
-    final backdropActive = !kIsWeb && backdrop?.hasActiveBackdrop == true;
+    final backdropActive = backdrop?.hasActiveBackdrop == true;
     final content = Theme(
       data: MusicBackdropTheme.resolve(
         Theme.of(context),

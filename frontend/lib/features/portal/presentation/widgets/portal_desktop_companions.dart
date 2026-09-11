@@ -103,19 +103,26 @@ class _StatusRail extends StatelessWidget {
     required this.palette,
     required this.data,
     this.lightweight = false,
+    this.scrollable = false,
   });
 
   final PortalVisualPalette palette;
   final _PortalDesktopData data;
   final bool lightweight;
 
+  /// 两栏中间档中与关注面板纵向分高，空间不足时改为固定间距加滚动，
+  /// 避免固定内容（日期+指标行）在缩水高度里溢出。
+  final bool scrollable;
+
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
     final l10n = AppLocalizations.of(context);
-    return PortalVisualPanel(
-      palette: palette,
-      lightweight: lightweight,
+    // 宽布局下面板拉伸满列高：日期块与指标行均布填充，消除数据空态时
+    // 日期与指标之间的大段空白；滚动变体保持固定间距顶对齐。
+    final dateBlock = Padding(
+      // 与指标行的横向 12 内边距对齐左缘。
+      padding: const EdgeInsets.only(left: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -134,26 +141,41 @@ class _StatusRail extends StatelessWidget {
             '${now.year}.${now.month.toString().padLeft(2, '0')}',
             style: TextStyle(color: palette.muted),
           ),
-          const Spacer(),
-          PortalMetricLine(
-            palette: palette,
-            label: l10n.portalWeatherTitle,
-            value: data.weatherSummary(context),
-            onTap: () => _openWeatherDetails(context, data),
-          ),
-          PortalMetricLine(
-            palette: palette,
-            label: l10n.portalAdmin,
-            value: data.taskSummary,
-            onTap: () => context.go('/admin'),
-          ),
-          PortalMetricLine(
-            palette: palette,
-            label: l10n.portalStorageTitle,
-            value: data.storageSummary(context),
-          ),
         ],
       ),
+    );
+    final content = Column(
+      mainAxisAlignment:
+          scrollable ? MainAxisAlignment.start : MainAxisAlignment.spaceEvenly,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        dateBlock,
+        const SizedBox(height: 12),
+        PortalMetricLine(
+          palette: palette,
+          label: l10n.portalWeatherTitle,
+          value: data.weatherSummary(context),
+          onTap: () => _openWeatherDetails(context, data),
+        ),
+        const SizedBox(height: 12),
+        PortalMetricLine(
+          palette: palette,
+          label: l10n.portalAdmin,
+          value: data.taskSummary,
+          onTap: () => context.go('/admin'),
+        ),
+        const SizedBox(height: 12),
+        PortalMetricLine(
+          palette: palette,
+          label: l10n.portalStorageTitle,
+          value: data.storageSummary(context),
+        ),
+      ],
+    );
+    return PortalVisualPanel(
+      palette: palette,
+      lightweight: lightweight,
+      child: scrollable ? SingleChildScrollView(child: content) : content,
     );
   }
 }
@@ -196,7 +218,7 @@ class _AttentionPanel extends StatelessWidget {
                       fontSize: AppTypography.bodySmall,
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 18),
                   if (activeModule != PortalFocusModule.music) ...[
                     MusicDeckMiniPlayer(
                       compact: true,
@@ -210,7 +232,7 @@ class _AttentionPanel extends StatelessWidget {
                       embedded: true,
                       onOpenQueue: () => showMusicDeckQueue(context),
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                   ],
                   _NoticeTile(
                     palette: palette,
@@ -233,7 +255,7 @@ class _AttentionPanel extends StatelessWidget {
                     title: l10n.portalStorageTitle,
                     subtitle: data.storageSummary(context),
                   ),
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 20),
                   PortalQuickLinks(palette: palette),
                 ],
               ),
@@ -266,7 +288,7 @@ class _NoticeTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final child = Container(
       width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 14),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: palette.structuralStrongSurface(alpha: 0.60),

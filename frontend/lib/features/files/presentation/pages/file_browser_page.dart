@@ -337,7 +337,9 @@ class _FileManagerShell extends ConsumerWidget {
       builder: (context, constraints) {
         // 宽屏门限与桌面最小窗口(1024)对齐：避免 1024-1099 落入
         // 非托管窄窗路径（与移动壳层并行的第二套实现）。
-        final isWide = constraints.maxWidth >= 1024;
+        // 托管态（手机/平板）与 Photos/Music/Reader 同规则一律走触屏
+        // 布局，桌面侧栏路径仅非托管窗口使用。
+        final isWide = !hosted && constraints.maxWidth >= 1024;
         final currentDest = _destinationForSection(state.section);
         final selectedIndex =
             currentDest != null
@@ -360,104 +362,109 @@ class _FileManagerShell extends ConsumerWidget {
                   padding: EdgeInsets.only(
                     top: hosted ? 0 : WorkbenchTopBar.totalHeightOf(context),
                   ),
-                  child: Column(
-                    children: [
-                      if (hosted && !isWide && !mobileHomeOpen) ...[
-                        _FileMobileBackRow(onBack: onBack),
-                        _FileHostedSearchBar(section: state.section),
-                      ],
-                      if (state.lastActionError case final error?)
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
-                          child: _FileActionStatusBar(
-                            error: error,
-                            onDismissError:
-                                () =>
-                                    ref
-                                        .read(
-                                          fileBrowserControllerProvider
-                                              .notifier,
-                                        )
-                                        .clearActionError(),
-                          ),
-                        ),
-                      if (isWide)
-                        Expanded(
-                          child: Row(
-                            children: [
-                              _FileSidebar(
-                                state: state,
-                                enabled: true,
-                                closeOnSelect: false,
-                                onSectionChanged:
-                                    (section) => unawaited(
-                                      _runFileAction(
-                                        context,
-                                        () => controller.loadSection(section),
-                                      ),
-                                    ),
-                              ),
-                              Expanded(
-                                child: SingleChildScrollView(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    34,
-                                    26,
-                                    34,
-                                    40,
-                                  ),
-                                  child: ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxWidth: 1500,
-                                    ),
-                                    child: _AnimatedSectionBody(state: state),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        )
-                      else if (hosted && mobileHomeOpen)
-                        Expanded(
-                          child: _FileMobileHome(
-                            state: state,
-                            onOpenSection: onOpenMobileSection,
-                          ),
-                        )
-                      else
-                        Expanded(
-                          child: RefreshIndicator(
-                            displacement: 40,
-                            edgeOffset: 64,
-                            strokeWidth: 2.5,
-                            color:
-                                hosted
-                                    ? context.mobileColors.musicAccent
-                                    : context.filesColors.primary,
-                            onRefresh: () async {
-                              await _runFileAction(
-                                context,
-                                () => controller.loadSection(state.section),
-                              );
-                              await Future<void>.delayed(
-                                const Duration(milliseconds: 200),
-                              );
-                            },
-                            child: SingleChildScrollView(
-                              physics: const AlwaysScrollableScrollPhysics(
-                                parent: BouncingScrollPhysics(),
-                              ),
-                              // 托管态无自有底栏，仅按 FAB 悬浮净距预留。
-                              padding: EdgeInsets.fromLTRB(
-                                16,
-                                10,
-                                16,
-                                hosted ? 96 : 112,
-                              ),
-                              child: _AnimatedSectionBody(state: state),
+                  // 托管态触屏内容按壳层 chrome 同宽封顶居中：平板宽度下
+                  // 卡片行/列表行不被整屏拉伸，与底栏 tab 组同语言。
+                  child: _HostedTouchCanvas(
+                    hosted: hosted,
+                    child: Column(
+                      children: [
+                        if (hosted && !isWide && !mobileHomeOpen) ...[
+                          _FileMobileBackRow(onBack: onBack),
+                          _FileHostedSearchBar(section: state.section),
+                        ],
+                        if (state.lastActionError case final error?)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(22, 14, 22, 0),
+                            child: _FileActionStatusBar(
+                              error: error,
+                              onDismissError:
+                                  () =>
+                                      ref
+                                          .read(
+                                            fileBrowserControllerProvider
+                                                .notifier,
+                                          )
+                                          .clearActionError(),
                             ),
                           ),
-                        ),
-                    ],
+                        if (isWide)
+                          Expanded(
+                            child: Row(
+                              children: [
+                                _FileSidebar(
+                                  state: state,
+                                  enabled: true,
+                                  closeOnSelect: false,
+                                  onSectionChanged:
+                                      (section) => unawaited(
+                                        _runFileAction(
+                                          context,
+                                          () => controller.loadSection(section),
+                                        ),
+                                      ),
+                                ),
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      34,
+                                      26,
+                                      34,
+                                      40,
+                                    ),
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: 1500,
+                                      ),
+                                      child: _AnimatedSectionBody(state: state),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        else if (hosted && mobileHomeOpen)
+                          Expanded(
+                            child: _FileMobileHome(
+                              state: state,
+                              onOpenSection: onOpenMobileSection,
+                            ),
+                          )
+                        else
+                          Expanded(
+                            child: RefreshIndicator(
+                              displacement: 40,
+                              edgeOffset: 64,
+                              strokeWidth: 2.5,
+                              color:
+                                  hosted
+                                      ? context.mobileColors.musicAccent
+                                      : context.filesColors.primary,
+                              onRefresh: () async {
+                                await _runFileAction(
+                                  context,
+                                  () => controller.loadSection(state.section),
+                                );
+                                await Future<void>.delayed(
+                                  const Duration(milliseconds: 200),
+                                );
+                              },
+                              child: SingleChildScrollView(
+                                physics: const AlwaysScrollableScrollPhysics(
+                                  parent: BouncingScrollPhysics(),
+                                ),
+                                // 托管态无自有底栏，仅按 FAB 悬浮净距预留。
+                                padding: EdgeInsets.fromLTRB(
+                                  16,
+                                  10,
+                                  16,
+                                  hosted ? 96 : 112,
+                                ),
+                                child: _AnimatedSectionBody(state: state),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
                 // 顶部工具栏
@@ -720,6 +727,31 @@ class _FileHostedSearchBarState extends ConsumerState<_FileHostedSearchBar> {
             icon: const Icon(Icons.close_rounded),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 托管态触屏内容画布：平板宽度下按壳层 chrome 同宽（720）封顶居中，
+/// 手机宽度无感直通；非托管窗口保持原有铺满行为。
+class _HostedTouchCanvas extends StatelessWidget {
+  const _HostedTouchCanvas({required this.hosted, required this.child});
+
+  final bool hosted;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!hosted) {
+      return child;
+    }
+    return Align(
+      alignment: Alignment.topCenter,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(
+          maxWidth: MobileLayoutTokens.chromeMaxWidth,
+        ),
+        child: child,
       ),
     );
   }

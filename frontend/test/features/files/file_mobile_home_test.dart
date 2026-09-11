@@ -88,6 +88,30 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('托管平板宽度仍走触屏布局：不出现桌面侧栏', (tester) async {
+    // 托管态与 Photos/Music/Reader 同规则：宽度只决定触屏内容的网格
+    // 密度，桌面侧栏路径仅非托管窗口使用。
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(1280, 800);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(host());
+    await tester.pump(const Duration(seconds: 1));
+
+    expect(tester.takeException(), isNull);
+    expect(find.text('位置'), findsOneWidget, reason: '移动首页卡片可见');
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget.runtimeType.toString() == '_FileSidebar',
+      ),
+      findsNothing,
+      reason: '托管平板不复用桌面侧栏',
+    );
+    // 触屏内容按壳层 chrome 同宽封顶居中：内容列左缘落在 (1280-720)/2+16。
+    final labelRect = tester.getRect(find.text('位置'));
+    expect(labelRect.left, closeTo((1280 - 720) / 2 + 16, 1));
+  });
+
   testWidgets('点分区卡进入列表态，返回行与系统返回都回首页', (tester) async {
     await pumpHost(tester);
 

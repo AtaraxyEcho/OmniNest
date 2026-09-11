@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
@@ -176,7 +177,11 @@ class _MovieShellState extends ConsumerState<MovieShell> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final isWide = !ResponsiveBreakpoints.isCompact(constraints.maxWidth);
+        // 托管态（手机/平板）一律走触屏布局：与 Music/Reader 同规则，
+        // 宽度只决定触屏内容网格的列数，不复用桌面侧栏与模块顶栏。
+        final hosted = MobileShellScope.isHosted(context);
+        final isWide =
+            !hosted && !ResponsiveBreakpoints.isCompact(constraints.maxWidth);
         // 平板宽度（md~lg）下侧栏折叠为图标栏。
         final sidebarCollapsed = isWide && constraints.maxWidth < 1024;
         return Scaffold(
@@ -323,7 +328,8 @@ class MovieTopBar extends StatelessWidget {
           ),
           if (wide) ...[
             const SizedBox(width: 8),
-            Icon(Icons.movie_outlined, size: 16, color: palette.primary),
+            // 三端统一品牌入口：以 logo 替代原电影图标，与 Portal 顶栏同语言。
+            const BrandLogo(size: 20, radius: 6),
             const SizedBox(width: 6),
             Text(
               'OmniNest',

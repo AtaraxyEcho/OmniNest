@@ -8,10 +8,12 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_fullscreen_control.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
@@ -78,6 +80,34 @@ double _resolvePortalViewportHeight(
     return screenHeight.clamp(640.0, 980.0).toDouble();
   }
   return 760.0;
+}
+
+/// 桌面 Portal 内容最大宽度：超宽窗口下三栏内容封顶居中，两侧留给壁纸。
+/// 取 1560 而非更大值，保证 1920 全屏下两侧也有可感知的留白。
+const double kPortalDesktopContentMaxWidth = 1560;
+
+/// 桌面 Portal 布局档位：按内容区可用宽度决定栏式。
+enum PortalDesktopLayoutTier {
+  /// 单栏堆叠，仅作极窄兜底（桌面护栏下常规不可达）。
+  singleColumn,
+
+  /// 两栏：中央 hero（文案+封面并排）与合并右栏，覆盖最小桌面宽度。
+  twoColumn,
+
+  /// 三栏：状态栏 + 中央 hero + 关注面板。平板与桌面共用此形态；
+  /// 1120 为三栏几何下限（文案+封面并排不局促）。
+  wide,
+}
+
+@visibleForTesting
+PortalDesktopLayoutTier resolvePortalDesktopLayoutTier(double maxWidth) {
+  if (maxWidth >= 1120) {
+    return PortalDesktopLayoutTier.wide;
+  }
+  if (maxWidth >= ResponsiveBreakpoints.desktop) {
+    return PortalDesktopLayoutTier.twoColumn;
+  }
+  return PortalDesktopLayoutTier.singleColumn;
 }
 
 class _PortalLocalBackdropButton extends StatelessWidget {
@@ -186,13 +216,15 @@ class _PortalDesktopVisualHostState
     });
     final preferences = ref.watch(portalPreferencesProvider);
     final resolved = preferences.asData?.value ?? const PortalPreferences();
+    // 平板等宽幅触屏设备在移动壳层内复用桌面视觉：壳层顶栏已提供标题、
+    // 搜索、通知与头像，且壳层各自消费了状态栏与导航栏内边距，这里不再
+    // 重复绘制顶栏，避免搜索/铃铛/头像三重堆叠与双重 SafeArea。
+    final hosted = MobileShellScope.isHosted(context);
     final immersivePlaybackVisible =
         resolved.immersiveModeEnabled || _immersivePlaybackEnabled;
     final weather = ref.watch(realtimeWeatherProvider).asData?.value;
     final localBackdropState =
-        isDesktopPlatform
-            ? ref.watch(appBackdropControllerProvider).asData?.value
-            : null;
+        ref.watch(appBackdropControllerProvider).asData?.value;
     final localBackdropActive =
         localBackdropState?.settings.enabled == true &&
         localBackdropState?.selectedBackdrop != null &&
@@ -229,11 +261,13 @@ class _PortalDesktopVisualHostState
         child: Stack(
           children: [
             SafeArea(
+              top: !hosted,
+              bottom: !hosted,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(32, 0, 32, 28),
+                padding: EdgeInsets.fromLTRB(32, hosted ? 12 : 0, 32, 28),
                 child: Column(
                   children: [
-                    if (!resolved.immersiveModeEnabled)
+                    if (!hosted && !resolved.immersiveModeEnabled)
                       _buildTopBar(palette: palette, resolved: resolved),
                     Expanded(
                       child: IgnorePointer(
@@ -272,18 +306,20 @@ class _PortalDesktopVisualHostState
             if (immersivePlaybackVisible)
               Positioned.fill(
                 top:
-                    resolved.immersiveModeEnabled
+                    hosted
+                        ? 0
+                        : resolved.immersiveModeEnabled
                         ? 0
                         : MediaQuery.paddingOf(context).top + 58,
                 child: MusicImmersivePlayer(
                   palette: _musicImmersivePalette(palette),
                   reservedTopInset:
-                      resolved.immersiveModeEnabled
+                      !hosted && resolved.immersiveModeEnabled
                           ? MediaQuery.paddingOf(context).top + 58
                           : 0,
                 ),
               ),
-            if (resolved.immersiveModeEnabled)
+            if (!hosted && resolved.immersiveModeEnabled)
               Positioned(
                 left: 32,
                 right: 32,

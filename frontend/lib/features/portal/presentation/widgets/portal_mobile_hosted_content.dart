@@ -743,7 +743,7 @@ class _PortalSystemSummary extends StatelessWidget {
                 online
                     ? l10n.portalMobileSyncOnline
                     : l10n.portalMobileSyncOffline,
-            accent:
+            statusColor:
                 online
                     ? context.mobileColors.success
                     : context.mobileColors.warmAccent,
@@ -776,16 +776,24 @@ class _PortalSystemRow extends StatelessWidget {
     required this.value,
     required this.onTap,
     this.accent,
+    this.statusColor,
   });
 
   final IconData icon;
   final String label;
   final String value;
   final VoidCallback onTap;
+
+  /// 图标用色；缺省用模块主题色，三行保持同一视觉权重。
   final Color? accent;
+
+  /// 行尾状态色点（在线/离线等状态语义），不再通过图标变色表达。
+  final Color? statusColor;
 
   @override
   Widget build(BuildContext context) {
+    final iconAccent = accent ?? context.mobileColors.musicAccent;
+    final statusColor = this.statusColor;
     return MobilePressable(
       onTap: onTap,
       semanticLabel: '$label, $value',
@@ -795,10 +803,14 @@ class _PortalSystemRow extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Row(
             children: [
-              Icon(
-                icon,
-                color: accent ?? context.mobileColors.musicAccent,
-                size: 21,
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: iconAccent.withValues(alpha: 0.13),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: iconAccent, size: 19),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -826,6 +838,17 @@ class _PortalSystemRow extends StatelessWidget {
                   ),
                 ),
               ),
+              if (statusColor != null) ...[
+                const SizedBox(width: 6),
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    color: statusColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ],
               const SizedBox(width: 4),
               Icon(
                 Icons.chevron_right_rounded,
