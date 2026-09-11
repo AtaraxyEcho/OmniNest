@@ -67,7 +67,14 @@ class ReaderAnnotationHandler {
   }
 
   /// 删除与指定范围重叠的已有批注（用于替换高亮/批注）。
-  Future<void> _deleteOverlapping(int startOffset, int endOffset) async {
+  ///
+  /// chapterId 由调用方在入口原子捕获：await 窗口内连续滚动的锚点
+  /// 收养会改写字段，旧章偏移的删除/写入不得漂移到新章。
+  Future<void> _deleteOverlapping(
+    String chapterId,
+    int startOffset,
+    int endOffset,
+  ) async {
     final overlapping =
         _annotations
             .where(
@@ -97,11 +104,12 @@ class ReaderAnnotationHandler {
     int endOffset,
     BuildContext context,
   ) async {
+    final chapter = chapterId;
     try {
-      await _deleteOverlapping(startOffset, endOffset);
+      await _deleteOverlapping(chapter, startOffset, endOffset);
       await dataManager.createAnnotation(
         itemId: itemId,
-        chapterId: chapterId,
+        chapterId: chapter,
         startOffset: startOffset,
         endOffset: endOffset,
         highlightText: selectedText,
@@ -152,6 +160,8 @@ class ReaderAnnotationHandler {
     int endOffset,
     BuildContext context,
   ) async {
+    // 弹窗 await 窗口长，章节归属必须在此刻原子捕获。
+    final chapter = chapterId;
     final l10n = AppLocalizations.of(context);
     final noteController = TextEditingController();
     String selectedColor = '#E0E0E0';
@@ -282,10 +292,10 @@ class ReaderAnnotationHandler {
 
     if (result == true && noteController.text.trim().isNotEmpty) {
       try {
-        await _deleteOverlapping(startOffset, endOffset);
+        await _deleteOverlapping(chapter, startOffset, endOffset);
         await dataManager.createAnnotation(
           itemId: itemId,
-          chapterId: chapterId,
+          chapterId: chapter,
           startOffset: startOffset,
           endOffset: endOffset,
           highlightText: selectedText,

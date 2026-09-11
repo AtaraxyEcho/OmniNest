@@ -243,9 +243,26 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (!_scrollController.hasClients) {
       return;
     }
+    // 章首/章尾是窗口坐标（前有前缀章），不能用 0/maxScrollExtent：
+    // 0 是上一章顶部，max 是下一章尾部。
+    final prefix = continuousScrollController.prefixHeightOf(_currentChapterId);
+    final entry = continuousScrollController.entryFor(_currentChapterId);
+    final max = _scrollController.position.maxScrollExtent;
+    final viewport = _scrollController.position.viewportDimension;
+    final chapterStart = prefix.clamp(0.0, max);
+    final double target;
+    if (start) {
+      target = chapterStart;
+    } else {
+      final extent =
+          entry != null
+              ? continuousScrollController.effectiveExtentOf(entry)
+              : 0.0;
+      target = (prefix + extent - viewport).clamp(chapterStart, max);
+    }
     unawaited(
       _scrollController.animateTo(
-        start ? 0 : _scrollController.position.maxScrollExtent,
+        target,
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
       ),

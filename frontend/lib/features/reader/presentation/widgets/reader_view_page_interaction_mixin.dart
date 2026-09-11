@@ -73,6 +73,14 @@ mixin ReaderViewPageInteractionMixin
       restoreTargetCharOffset = 0;
     }
 
+    handleResolvedPosition(position);
+  }
+
+  /// 以窗口控制器解析出的位置更新锚点章、进度与邻章窗口。
+  ///
+  /// 滚动回调与键盘滚动（scrollBy）共用：键盘不产生指针事件，
+  /// 距上次指针事件 >2s 的守卫会使其停更，故由 scrollBy 主动调用。
+  void handleResolvedPosition(ContinuousScrollPosition position) {
     dismissReturnSnackBar();
 
     final loader = contentLoader;
@@ -241,21 +249,14 @@ mixin ReaderViewPageInteractionMixin
       curve: Curves.easeOutCubic,
     );
     if (!mounted || !scrollController.hasClients) return true;
-    final latestMax = scrollController.position.maxScrollExtent;
-    if (latestMax > 0) {
-      final charOffset = windowContentYToCharOffset(
-        currentChapterId,
-        scrollController.offset + viewportAnchorY,
-      );
-      final totalChars =
-          contentLoader?.getByChapterId(currentChapterId)?.totalChars ?? 0;
-      final latestProgress =
-          totalChars > 0
-              ? (charOffset / totalChars).clamp(0.0, 1.0)
-              : scrollProgress;
-      if ((latestProgress - scrollProgress).abs() > 0.001) {
-        setState(() => scrollProgress = latestProgress);
-      }
+    // 键盘滚动不产生指针事件：主动取消进行中的恢复并按窗口控制器
+    // 解析结果汇报位置，绕过"距上次指针事件 >2s"守卫的停更。
+    _cancelOngoingRestoreForUserScroll();
+    final resolved = continuousScrollController.positionAtContentY(
+      scrollController.offset + viewportAnchorY,
+    );
+    if (resolved != null) {
+      handleResolvedPosition(resolved);
     }
     unawaited(syncProgressAsync());
     return true;

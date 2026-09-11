@@ -91,6 +91,8 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
   Timer? _displaySettingsSaveTimer;
   bool _pendingInitialScrollRestore = false;
   int _initialScrollRestoreAttempts = 0;
+  // 初始恢复的时间兜底：超过后放弃视觉恢复，保持意图锚点不再重试。
+  DateTime? _initialRestoreDeadline;
   bool _suppressScrollProgress = false;
   ComicAnchor? _pendingScrollRestoreAnchor;
   bool _scrollRestoreScheduled = false;
@@ -207,10 +209,15 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
       _readingMode = _modeFromName(displaySettings.readingMode);
     });
 
-    // 滚动模式：首帧后跳转到初始锚点位置
+    // 滚动模式：首帧后跳转到初始锚点位置。
+    // 抑制滚动回调：图片未加载、maxScrollExtent 未收敛时 jumpTo 会被
+    // clamp 到错误位置，未抑制的 _onScroll 会用 hitTest 覆写 _anchor，
+    // 错误随后被落库。
     if (_readingMode == ComicReadingMode.scroll &&
         (_anchor.pageIndex > 0 || _anchor.intraPageOffset > 0)) {
       _pendingInitialScrollRestore = true;
+      _suppressScrollProgress = true;
+      _initialRestoreDeadline = DateTime.now().add(const Duration(seconds: 4));
       _restoreInitialScrollAnchor();
     }
   }
@@ -228,7 +235,10 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
   }
 
   void _restoreInitialScrollAnchor() {
-    if (!_pendingInitialScrollRestore || !mounted) return;
+    if (!_pendingInitialScrollRestore || !mounted) {
+      if (mounted) _suppressScrollProgress = false;
+      return;
+    }
     if (!_scrollController.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _restoreInitialScrollAnchor();
@@ -236,7 +246,10 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
       return;
     }
     final max = _scrollController.position.maxScrollExtent;
-    if (max <= 0) return;
+    if (max <= 0) {
+      // 布局尚未产出：等待 _onPageLayout 回报真实高度后由事件驱动重试。
+      return;
+    }
     final viewportHeight = _scrollController.position.viewportDimension;
     final targetOffset = _layoutIndex.scrollTo(
       _anchor.pageIndex,
@@ -245,9 +258,24 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
     );
     _scrollController.jumpTo(targetOffset.clamp(0.0, max));
     _initialScrollRestoreAttempts++;
-    if (_initialScrollRestoreAttempts >= 3) {
+    if (_isScrollRestoreStable(_anchor)) {
       _pendingInitialScrollRestore = false;
+      _suppressScrollProgress = false;
+      return;
     }
+    final deadline = _initialRestoreDeadline;
+    if (deadline != null && DateTime.now().isAfter(deadline)) {
+      // 高度迟迟未回报：放弃视觉恢复，但 _anchor 保持意图值
+      // （suppress 已防污染），已存进度不被 clamp 位置覆盖。
+      _pendingInitialScrollRestore = false;
+      _suppressScrollProgress = false;
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _pendingInitialScrollRestore) {
+        _restoreInitialScrollAnchor();
+      }
+    });
   }
 
   void _startScrollRestore(ComicAnchor anchor) {
@@ -255,6 +283,7 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
     _suppressScrollProgress = true;
     _scrollRestoreScheduled = false;
     _initialScrollRestoreAttempts = 0;
+    _initialRestoreDeadline = null;
     _restoreScrollAnchorWhenReady();
   }
 

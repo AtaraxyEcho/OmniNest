@@ -108,7 +108,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   late final ReaderProgressSaveCoordinator _progressSaveCoordinator;
   late final WindowChromeController _windowChromeController;
   WindowChromeLease? _windowChromeLease;
-  double _lastTextScale = 1;
 
   @override
   WindowChromeController get windowChromeController => _windowChromeController;
@@ -684,8 +683,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // 分页测量只跟随系统缩放；应用字体档位变化不应触发阅读器重排。
-    _lastTextScale = FontScaleScope.systemScalerOf(context).scale(1);
     _annotationHandler ??= ReaderAnnotationHandler(
       itemId: widget.itemId,
       chapterId: widget.chapterId,
@@ -703,50 +700,38 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       itemId: widget.itemId,
       sessionStart: _sessionStart,
     );
-    // dispose 时用 localStorage 同步备份（不依赖 ref，不读 scroll controller 位置）。
-    // _syncProgressSync 不能在此调用 — ref 已卸载，_bookProgress 会崩溃。
-    if (!_restore.shouldSuppressWrites && _scrollController.hasClients) {
-      final max = _scrollController.position.maxScrollExtent;
-      if (max > 0) {
-        // 滚动 offset 是窗口绝对坐标：扣除前缀章与章头后才可映射章内。
-        final chapterBodyY =
-            _scrollController.offset +
-            viewportAnchorY -
-            _continuousScrollController.prefixHeightOf(_currentChapterId) -
-            ReaderContinuousScrollController.chapterHeaderExtent;
-        final charOffset =
-            chapterBodyY <= 0
-                ? 0
-                : _contentLoader?.contentYToCharOffset(
-                      _currentChapterId,
-                      chapterBodyY,
-                      pageWidth: computePageWidth(),
-                      settings: _settings,
-                      textScale: _lastTextScale,
-                    ) ??
-                    0;
-        // chapterProgress 从 charOffset 推导
-        final totalChars =
-            _contentLoader?.getByChapterId(_currentChapterId)?.totalChars ?? 0;
-        final progress =
-            totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
-        ReaderProgressBackupWeb.save(
+    // 退出兜底：位置取 positionTracker（滚动/翻页两种模式均由正确路径
+    // 维护），全书进度取通知器缓存值（dispose 中 ref/BuildContext 不可
+    // 用），阅读模式取实际值；翻页模式同样补报（旧实现依赖滚动视图
+    // hasClients 而整块跳过）。
+    if (!_restore.shouldSuppressWrites &&
+        (_cachedContent != null ||
+            _contentLoader?.getByChapterId(_currentChapterId) != null)) {
+      final charOffset = _positionTracker.charOffset;
+      final chapterId = _currentChapterId;
+      final totalChars =
+          _contentLoader?.getByChapterId(chapterId)?.totalChars ?? 0;
+      final chapterProgress =
+          totalChars > 0
+              ? (charOffset / totalChars).clamp(0.0, 1.0)
+              : _scrollProgressNotifier.value.clamp(0.0, 1.0);
+      ReaderProgressBackupWeb.save(
+        itemId: widget.itemId,
+        chapterId: chapterId,
+        charOffset: charOffset,
+        chapterProgress: chapterProgress,
+      );
+      // 退出时向服务端强制补报最终位置（节流不适用于离场）；
+      // progressPercent 必须是全书加权值，不是章内进度。
+      unawaited(
+        _progressSync.sync(
           itemId: widget.itemId,
-          chapterId: _currentChapterId,
           charOffset: charOffset,
-          chapterProgress: progress,
-        );
-        // 退出时向服务端强制补报最终位置（节流不适用于离场）
-        unawaited(
-          _progressSync.sync(
-            itemId: widget.itemId,
-            charOffset: charOffset,
-            progressPercent: progress,
-            readingMode: 'scroll',
-            chapterId: _currentChapterId,
-          ),
-        );
-      }
+          progressPercent: _bookProgressNotifier.value,
+          readingMode: _settings.readingMode,
+          chapterId: chapterId,
+        ),
+      );
     }
     _windowChromeLease?.release();
     if (kIsWeb) BrowserContextMenu.enableContextMenu();
