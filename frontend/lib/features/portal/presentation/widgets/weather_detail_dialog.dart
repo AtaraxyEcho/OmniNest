@@ -43,6 +43,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
   bool _effectsScheduled = false;
   double _elapsedSeconds = 0;
   DateTime? _lastTick;
+  bool _showHourlyForecast = true;
 
   @override
   void initState() {
@@ -230,6 +231,8 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                 _buildAqiStrip(metrics),
                 SizedBox(height: metrics.sectionGap),
                 _buildMetricsCard(metrics),
+                SizedBox(height: metrics.sectionGap),
+                _buildForecastCard(context, metrics),
               ],
             ),
           ),
@@ -578,6 +581,220 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
         ],
       ),
     );
+  }
+
+  // ─── 预报（逐小时 / 一周）─────────────────────────────────────────────
+
+  Widget _buildForecastCard(
+    BuildContext context,
+    WeatherDetailLayoutMetrics metrics,
+  ) {
+    final l10n = AppLocalizations.of(context);
+    final w = widget.weather;
+    final hasData = w.hourly.isNotEmpty || w.daily.isNotEmpty;
+
+    return _GlassCard(
+      radius: metrics.innerRadius,
+      padding: metrics.heroCardPadding,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildForecastTabs(l10n, metrics),
+          SizedBox(height: metrics.sectionGap),
+          if (!hasData)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Text(
+                l10n.portalWeatherForecastEmpty,
+                style: TextStyle(
+                  fontSize: AppTypography.bodySmall,
+                  color: Colors.white.withValues(alpha: 0.40),
+                ),
+                textAlign: TextAlign.center,
+              ),
+            )
+          else if (_showHourlyForecast)
+            _buildHourlyList(l10n, w.hourly)
+          else
+            _buildWeeklyList(l10n, w.daily),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildForecastTabs(
+    AppLocalizations l10n,
+    WeatherDetailLayoutMetrics metrics,
+  ) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.all(3),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _ForecastTab(
+              label: l10n.portalWeatherForecastHourly,
+              selected: _showHourlyForecast,
+              onTap: () {
+                if (!_showHourlyForecast) {
+                  setState(() => _showHourlyForecast = true);
+                }
+              },
+            ),
+            _ForecastTab(
+              label: l10n.portalWeatherForecastWeekly,
+              selected: !_showHourlyForecast,
+              onTap: () {
+                if (_showHourlyForecast) {
+                  setState(() => _showHourlyForecast = false);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHourlyList(AppLocalizations l10n, List<WeatherHourly> hourly) {
+    return SizedBox(
+      height: 104,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: hourly.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (context, index) {
+          final item = hourly[index];
+          final isFirst = index == 0;
+          return Container(
+            constraints: const BoxConstraints(minWidth: 64),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+            decoration: BoxDecoration(
+              color:
+                  isFirst
+                      ? Colors.white.withValues(alpha: 0.14)
+                      : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  isFirst ? l10n.portalWeatherForecastToday : item.displayTime,
+                  style: TextStyle(
+                    fontSize: AppTypography.labelSmall,
+                    color: Colors.white.withValues(alpha: 0.50),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(item.weatherIcon, style: const TextStyle(fontSize: 18)),
+                const SizedBox(height: 8),
+                Text(
+                  '${item.temp}°',
+                  style: const TextStyle(
+                    fontSize: AppTypography.bodyLarge,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildWeeklyList(AppLocalizations l10n, List<WeatherDaily> daily) {
+    final labels = <String>[];
+    for (var i = 0; i < daily.length; i++) {
+      labels.add(
+        i == 0 ? l10n.portalWeatherForecastToday : _formatDay(daily[i].date),
+      );
+    }
+
+    return Column(
+      children: [
+        for (var i = 0; i < daily.length; i++) ...[
+          if (i > 0)
+            Divider(
+              height: 1,
+              thickness: 1,
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 56,
+                  child: Text(
+                    labels[i],
+                    style: TextStyle(
+                      fontSize: AppTypography.bodySmall,
+                      fontWeight: i == 0 ? FontWeight.w600 : FontWeight.w400,
+                      color: Colors.white.withValues(
+                        alpha: i == 0 ? 0.95 : 0.60,
+                      ),
+                    ),
+                  ),
+                ),
+                Text(
+                  daily[i].weatherIcon,
+                  style: const TextStyle(fontSize: 18),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    daily[i].textDay,
+                    style: TextStyle(
+                      fontSize: AppTypography.bodySmall,
+                      color: Colors.white.withValues(alpha: 0.45),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Text(
+                  '${daily[i].tempMax}°',
+                  style: const TextStyle(
+                    fontSize: AppTypography.bodyMedium,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  ' / ',
+                  style: TextStyle(
+                    fontSize: AppTypography.bodyMedium,
+                    color: Colors.white.withValues(alpha: 0.30),
+                  ),
+                ),
+                Text(
+                  '${daily[i].tempMin}°',
+                  style: TextStyle(
+                    fontSize: AppTypography.bodyMedium,
+                    color: Colors.white.withValues(alpha: 0.55),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  String _formatDay(String date) {
+    // "2026-09-11" → "09-11"
+    if (date.length >= 10) {
+      return date.substring(5, 10);
+    }
+    return date;
   }
 
   // ─── 指标 ──────────────────────────────────────────────────────────────

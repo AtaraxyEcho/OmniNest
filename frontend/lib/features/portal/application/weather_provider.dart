@@ -5,6 +5,89 @@ import 'package:geolocator/geolocator.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 
+/// 天气图标映射（和风图标代码 → emoji）
+String weatherIconFromCode(String icon) {
+  final iconCode = int.tryParse(icon) ?? 999;
+  if (iconCode == 100) return '☀️';
+  if (iconCode == 101 || iconCode == 102) return '⛅';
+  if (iconCode == 103 || iconCode == 104) return '☁️';
+  if (iconCode >= 150 && iconCode <= 153) return '🌙';
+  if (iconCode >= 300 && iconCode < 400) return '🌧️';
+  if (iconCode >= 400 && iconCode < 500) return '🌨️';
+  if (iconCode >= 500) return '🌫️';
+  return '🌤️';
+}
+
+/// 逐小时预报条目。
+class WeatherHourly {
+  const WeatherHourly({
+    required this.time,
+    required this.temp,
+    required this.icon,
+    required this.text,
+  });
+
+  final String time;
+  final int temp;
+  final String icon;
+  final String text;
+
+  String get weatherIcon => weatherIconFromCode(icon);
+
+  /// 显示用时间：ISO 时间取 HH:mm，否则原样展示。
+  String get displayTime {
+    final tIndex = time.indexOf('T');
+    if (tIndex >= 0 && tIndex + 6 <= time.length) {
+      return time.substring(tIndex + 1, tIndex + 6);
+    }
+    return time;
+  }
+
+  factory WeatherHourly.fromJson(Map<String, dynamic> json) {
+    return WeatherHourly(
+      time: json['time'] as String? ?? '--',
+      temp: (json['temp'] as num?)?.toInt() ?? 0,
+      icon: json['icon'] as String? ?? '999',
+      text: json['text'] as String? ?? '--',
+    );
+  }
+}
+
+/// 逐日预报条目。
+class WeatherDaily {
+  const WeatherDaily({
+    required this.date,
+    required this.tempMax,
+    required this.tempMin,
+    required this.iconDay,
+    required this.textDay,
+    required this.iconNight,
+    required this.textNight,
+  });
+
+  final String date;
+  final int tempMax;
+  final int tempMin;
+  final String iconDay;
+  final String textDay;
+  final String iconNight;
+  final String textNight;
+
+  String get weatherIcon => weatherIconFromCode(iconDay);
+
+  factory WeatherDaily.fromJson(Map<String, dynamic> json) {
+    return WeatherDaily(
+      date: json['date'] as String? ?? '--',
+      tempMax: (json['tempMax'] as num?)?.toInt() ?? 0,
+      tempMin: (json['tempMin'] as num?)?.toInt() ?? 0,
+      iconDay: json['iconDay'] as String? ?? '999',
+      textDay: json['textDay'] as String? ?? '--',
+      iconNight: json['iconNight'] as String? ?? '999',
+      textNight: json['textNight'] as String? ?? '--',
+    );
+  }
+}
+
 /// 天气数据模型
 class WeatherData {
   const WeatherData({
@@ -31,6 +114,8 @@ class WeatherData {
     this.windScale = '--',
     this.textDay = '--',
     this.textNight = '--',
+    this.hourly = const [],
+    this.daily = const [],
   });
 
   final int temp;
@@ -56,8 +141,12 @@ class WeatherData {
   final String windScale;
   final String textDay;
   final String textNight;
+  final List<WeatherHourly> hourly;
+  final List<WeatherDaily> daily;
 
   factory WeatherData.fromJson(Map<String, dynamic> json) {
+    final hourlyRaw = json['hourly'] as List<dynamic>? ?? const [];
+    final dailyRaw = json['daily'] as List<dynamic>? ?? const [];
     return WeatherData(
       temp: (json['temp'] as num?)?.toInt() ?? 0,
       feelsLike: (json['feelsLike'] as num?)?.toInt() ?? 0,
@@ -82,6 +171,14 @@ class WeatherData {
       windScale: json['windScale'] as String? ?? '--',
       textDay: json['textDay'] as String? ?? '--',
       textNight: json['textNight'] as String? ?? '--',
+      hourly: [
+        for (final item in hourlyRaw)
+          if (item is Map<String, dynamic>) WeatherHourly.fromJson(item),
+      ],
+      daily: [
+        for (final item in dailyRaw)
+          if (item is Map<String, dynamic>) WeatherDaily.fromJson(item),
+      ],
     );
   }
 
@@ -127,16 +224,7 @@ class WeatherData {
   Color get aqiColorValue => Color(aqiColor);
 
   /// 天气图标映射
-  String get weatherIcon {
-    final iconCode = int.tryParse(icon) ?? 999;
-    if (iconCode == 100) return '☀️';
-    if (iconCode == 101 || iconCode == 102) return '⛅';
-    if (iconCode == 103 || iconCode == 104) return '☁️';
-    if (iconCode >= 300 && iconCode < 400) return '🌧️';
-    if (iconCode >= 400 && iconCode < 500) return '🌨️';
-    if (iconCode >= 500) return '🌫️';
-    return '🌤️';
-  }
+  String get weatherIcon => weatherIconFromCode(icon);
 }
 
 /// 天气配置

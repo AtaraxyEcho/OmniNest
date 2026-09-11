@@ -2350,6 +2350,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalWeatherSunsetLabel => '日落';
 
   @override
+  String get portalWeatherForecastHourly => '逐小时';
+
+  @override
+  String get portalWeatherForecastWeekly => '一周预报';
+
+  @override
+  String get portalWeatherForecastToday => '今天';
+
+  @override
+  String get portalWeatherForecastEmpty => '暂无预报数据';
+
+  @override
   String get portalWeatherDebugTooltip => '调试天气视觉';
 
   @override

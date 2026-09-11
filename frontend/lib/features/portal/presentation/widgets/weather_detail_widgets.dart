@@ -221,3 +221,43 @@ Widget _hDivider() => Divider(
   thickness: 1,
   color: Colors.white.withValues(alpha: 0.08),
 );
+
+/// 样例预报分段控件。
+class _ForecastTab extends StatelessWidget {
+  const _ForecastTab({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color:
+          selected ? Colors.white.withValues(alpha: 0.20) : Colors.transparent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: AppTypography.bodySmall,
+              fontWeight: FontWeight.w600,
+              color:
+                  selected
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: 0.40),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -27,6 +27,7 @@ import java.security.PrivateKey;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Date;
 import java.util.List;
@@ -158,7 +159,7 @@ public class WeatherService {
 
         CompletableFuture<WeatherDto> future = CompletableFuture.supplyAsync(() -> {
             try {
-                // 预生成 JWT，并行请求三个 API
+                // 预生成 JWT，并行请求外部 API
                 String jwt = generateJwt(config);
                 CompletableFuture<JSONObject> weatherNowFuture = CompletableFuture.supplyAsync(
                         () -> fetchApi(finalBaseUrl, "/v7/weather/now", finalResolved.weatherLocation(), jwt),
@@ -166,20 +167,25 @@ public class WeatherService {
                 );
                 CompletableFuture<JSONObject> airNowFuture = CompletableFuture.supplyAsync(
                         () -> fetchAirQuality(finalBaseUrl, finalResolved.latLon(), jwt), weatherExecutor);
-                CompletableFuture<JSONObject> weather3dFuture = CompletableFuture.supplyAsync(
-                        () -> fetchApi(finalBaseUrl, "/v7/weather/3d", finalResolved.weatherLocation(), jwt),
+                CompletableFuture<JSONObject> weather7dFuture = CompletableFuture.supplyAsync(
+                        () -> fetchApi(finalBaseUrl, "/v7/weather/7d", finalResolved.weatherLocation(), jwt),
+                        weatherExecutor
+                );
+                CompletableFuture<JSONObject> weather24hFuture = CompletableFuture.supplyAsync(
+                        () -> fetchApi(finalBaseUrl, "/v7/weather/24h", finalResolved.weatherLocation(), jwt),
                         weatherExecutor
                 );
 
                 JSONObject weatherNow = getOrNull(weatherNowFuture);
                 JSONObject airNow = getOrNull(airNowFuture);
-                JSONObject weather3d = getOrNull(weather3dFuture);
+                JSONObject weather7d = getOrNull(weather7dFuture);
+                JSONObject weather24h = getOrNull(weather24hFuture);
 
                 if (weatherNow == null) {
                     return WeatherDto.empty();
                 }
 
-                WeatherDto result = aggregateWeather(weatherNow, airNow, weather3d);
+                WeatherDto result = aggregateWeather(weatherNow, airNow, weather7d, weather24h);
                 weatherCacheStore.saveWeather(finalResolved.latLon(), result);
                 return result;
             } catch (Exception e) {
@@ -370,7 +376,11 @@ public class WeatherService {
         return null;
     }
 
-    private WeatherDto aggregateWeather(JSONObject weatherNow, JSONObject airNow, JSONObject weather3d) {
+    private WeatherDto aggregateWeather(
+            JSONObject weatherNow,
+            JSONObject airNow,
+            JSONObject weather7d,
+            JSONObject weather24h) {
         if (weatherNow == null || !"200".equals(weatherNow.getString("code"))) {
             return WeatherDto.empty();
         }
@@ -380,9 +390,17 @@ public class WeatherService {
         JSONObject air = airNow != null && "200".equals(airNow.getString("code"))
                 ? airNow.getJSONObject("now") : null;
         JSONObject today = null;
-        if (weather3d != null && "200".equals(weather3d.getString("code"))) {
-            var daily = weather3d.getJSONArray("daily");
-            if (daily != null && !daily.isEmpty()) today = daily.getJSONObject(0);
+        List<WeatherDto.DailyForecast> dailyForecasts = List.of();
+        if (weather7d != null && "200".equals(weather7d.getString("code"))) {
+            var daily = weather7d.getJSONArray("daily");
+            if (daily != null && !daily.isEmpty()) {
+                today = daily.getJSONObject(0);
+                dailyForecasts = parseDailyForecasts(daily);
+            }
+        }
+        List<WeatherDto.HourlyForecast> hourlyForecasts = List.of();
+        if (weather24h != null && "200".equals(weather24h.getString("code"))) {
+            hourlyForecasts = parseHourlyForecasts(weather24h.getJSONArray("hourly"));
         }
 
         return new WeatherDto(
@@ -404,8 +422,55 @@ public class WeatherService {
             now.getString("precip") + " mm",
             getStringSafe(now, "windScale", "--"),
             today != null ? getStringSafe(today, "textDay", "--") : "--",
-            today != null ? getStringSafe(today, "textNight", "--") : "--"
+            today != null ? getStringSafe(today, "textNight", "--") : "--",
+            hourlyForecasts,
+            dailyForecasts
         );
+    }
+
+    private List<WeatherDto.HourlyForecast> parseHourlyForecasts(JSONArray hourly) {
+        if (hourly == null || hourly.isEmpty()) {
+            return List.of();
+        }
+        int limit = Math.min(hourly.size(), 24);
+        ArrayList<WeatherDto.HourlyForecast> items = new ArrayList<>(limit);
+        for (int i = 0; i < limit; i++) {
+            JSONObject item = hourly.getJSONObject(i);
+            if (item == null) {
+                continue;
+            }
+            items.add(new WeatherDto.HourlyForecast(
+                    getStringSafe(item, "fxTime", "--"),
+                    (int) item.getDoubleValue("temp"),
+                    getStringSafe(item, "icon", "999"),
+                    getStringSafe(item, "text", "--")
+            ));
+        }
+        return List.copyOf(items);
+    }
+
+    private List<WeatherDto.DailyForecast> parseDailyForecasts(JSONArray daily) {
+        if (daily == null || daily.isEmpty()) {
+            return List.of();
+        }
+        int limit = Math.min(daily.size(), 7);
+        ArrayList<WeatherDto.DailyForecast> items = new ArrayList<>(limit);
+        for (int i = 0; i < limit; i++) {
+            JSONObject item = daily.getJSONObject(i);
+            if (item == null) {
+                continue;
+            }
+            items.add(new WeatherDto.DailyForecast(
+                    getStringSafe(item, "fxDate", "--"),
+                    (int) item.getDoubleValue("tempMax"),
+                    (int) item.getDoubleValue("tempMin"),
+                    getStringSafe(item, "iconDay", "999"),
+                    getStringSafe(item, "textDay", "--"),
+                    getStringSafe(item, "iconNight", "999"),
+                    getStringSafe(item, "textNight", "--")
+            ));
+        }
+        return List.copyOf(items);
     }
 
     // ==================== JWT 生成 ====================

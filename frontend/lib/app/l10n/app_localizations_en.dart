@@ -2408,6 +2408,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalWeatherSunsetLabel => 'Sunset';
 
   @override
+  String get portalWeatherForecastHourly => 'Hourly';
+
+  @override
+  String get portalWeatherForecastWeekly => '7-Day';
+
+  @override
+  String get portalWeatherForecastToday => 'Today';
+
+  @override
+  String get portalWeatherForecastEmpty => 'No forecast data';
+
+  @override
   String get portalWeatherDebugTooltip => 'Debug weather visuals';
 
   @override

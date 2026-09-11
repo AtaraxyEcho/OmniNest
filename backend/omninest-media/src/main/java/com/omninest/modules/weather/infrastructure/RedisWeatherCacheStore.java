@@ -1,12 +1,15 @@
 package com.omninest.modules.weather.infrastructure;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.omninest.common.util.RedisUtil;
 import com.omninest.modules.weather.dto.WeatherDto;
 import com.omninest.modules.weather.service.WeatherCacheStore;
 import com.omninest.modules.weather.service.WeatherCacheStore.ResolvedWeatherLocation;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -208,7 +211,44 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
         json.put("windScale", weather.windScale());
         json.put("textDay", weather.textDay());
         json.put("textNight", weather.textNight());
+        json.put("hourly", serializeHourly(weather.hourly()));
+        json.put("daily", serializeDaily(weather.daily()));
         return json.toJSONString();
+    }
+
+    private JSONArray serializeHourly(List<WeatherDto.HourlyForecast> hourly) {
+        JSONArray array = new JSONArray();
+        if (hourly == null) {
+            return array;
+        }
+        for (WeatherDto.HourlyForecast item : hourly) {
+            JSONObject json = new JSONObject();
+            json.put("time", item.time());
+            json.put("temp", item.temp());
+            json.put("icon", item.icon());
+            json.put("text", item.text());
+            array.add(json);
+        }
+        return array;
+    }
+
+    private JSONArray serializeDaily(List<WeatherDto.DailyForecast> daily) {
+        JSONArray array = new JSONArray();
+        if (daily == null) {
+            return array;
+        }
+        for (WeatherDto.DailyForecast item : daily) {
+            JSONObject json = new JSONObject();
+            json.put("date", item.date());
+            json.put("tempMax", item.tempMax());
+            json.put("tempMin", item.tempMin());
+            json.put("iconDay", item.iconDay());
+            json.put("textDay", item.textDay());
+            json.put("iconNight", item.iconNight());
+            json.put("textNight", item.textNight());
+            array.add(json);
+        }
+        return array;
     }
 
     private WeatherDto parseWeather(String cached) {
@@ -236,7 +276,52 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
                 json.getString("precip") != null ? json.getString("precip") : "--",
                 json.getString("windScale") != null ? json.getString("windScale") : "--",
                 json.getString("textDay") != null ? json.getString("textDay") : "--",
-                json.getString("textNight") != null ? json.getString("textNight") : "--"
+                json.getString("textNight") != null ? json.getString("textNight") : "--",
+                parseHourly(json.getJSONArray("hourly")),
+                parseDaily(json.getJSONArray("daily"))
         );
+    }
+
+    private List<WeatherDto.HourlyForecast> parseHourly(JSONArray array) {
+        if (array == null || array.isEmpty()) {
+            return List.of();
+        }
+        List<WeatherDto.HourlyForecast> items = new ArrayList<>(array.size());
+        for (int i = 0; i < array.size(); i++) {
+            JSONObject item = array.getJSONObject(i);
+            if (item == null) {
+                continue;
+            }
+            items.add(new WeatherDto.HourlyForecast(
+                    item.getString("time"),
+                    item.getIntValue("temp"),
+                    item.getString("icon"),
+                    item.getString("text")
+            ));
+        }
+        return List.copyOf(items);
+    }
+
+    private List<WeatherDto.DailyForecast> parseDaily(JSONArray array) {
+        if (array == null || array.isEmpty()) {
+            return List.of();
+        }
+        List<WeatherDto.DailyForecast> items = new ArrayList<>(array.size());
+        for (int i = 0; i < array.size(); i++) {
+            JSONObject item = array.getJSONObject(i);
+            if (item == null) {
+                continue;
+            }
+            items.add(new WeatherDto.DailyForecast(
+                    item.getString("date"),
+                    item.getIntValue("tempMax"),
+                    item.getIntValue("tempMin"),
+                    item.getString("iconDay"),
+                    item.getString("textDay"),
+                    item.getString("iconNight"),
+                    item.getString("textNight")
+            ));
+        }
+        return List.copyOf(items);
     }
 }

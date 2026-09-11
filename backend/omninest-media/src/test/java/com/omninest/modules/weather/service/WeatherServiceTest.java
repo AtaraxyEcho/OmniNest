@@ -214,8 +214,31 @@ class WeatherServiceTest {
                 }
                 """);
             responses.put("/airquality/v1/current/", AIR_QUALITY_V1_RESPONSE);
-            responses.put("/v7/weather/3d", """
-                {"code":"200","daily":[{"fxDate":"2025-06-01","sunrise":"04:50","sunset":"19:30","uvIndex":"7"}]}
+            responses.put("/v7/weather/7d", """
+                {
+                  "code":"200",
+                  "daily":[
+                    {
+                      "fxDate":"2025-06-01","sunrise":"04:50","sunset":"19:30","uvIndex":"7",
+                      "tempMax":"30","tempMin":"22","iconDay":"100","textDay":"晴",
+                      "iconNight":"150","textNight":"晴"
+                    },
+                    {
+                      "fxDate":"2025-06-02","sunrise":"04:49","sunset":"19:31","uvIndex":"6",
+                      "tempMax":"29","tempMin":"21","iconDay":"101","textDay":"多云",
+                      "iconNight":"151","textNight":"多云"
+                    }
+                  ]
+                }
+                """);
+            responses.put("/v7/weather/24h", """
+                {
+                  "code":"200",
+                  "hourly":[
+                    {"fxTime":"2025-06-01T13:00+08:00","temp":"28","icon":"100","text":"晴"},
+                    {"fxTime":"2025-06-01T14:00+08:00","temp":"29","icon":"100","text":"晴"}
+                  ]
+                }
                 """);
             stubRestTemplateWithResponses(responses);
 
@@ -227,6 +250,13 @@ class WeatherServiceTest {
             assertThat(result.humidity()).isEqualTo("45%");
             assertThat(result.aqi()).isEqualTo(46);
             assertThat(result.aqiCategory()).isEqualTo("Good");
+            assertThat(result.hourly()).hasSize(2);
+            assertThat(result.hourly().get(0).time()).isEqualTo("2025-06-01T13:00+08:00");
+            assertThat(result.hourly().get(0).temp()).isEqualTo(28);
+            assertThat(result.daily()).hasSize(2);
+            assertThat(result.daily().get(0).date()).isEqualTo("2025-06-01");
+            assertThat(result.daily().get(0).tempMax()).isEqualTo(30);
+            assertThat(result.daily().get(0).textDay()).isEqualTo("晴");
             assertThat(result.pm2p5()).isEqualTo(11);
             assertThat(result.sunrise()).isEqualTo("04:50");
             assertThat(result.uvIndex()).isEqualTo(7);
@@ -249,8 +279,11 @@ class WeatherServiceTest {
                   }
                 }
                 """);
-            responses.put("/v7/weather/3d", """
+            responses.put("/v7/weather/7d", """
                 {"code":"200","daily":[{"fxDate":"2025-06-01","sunrise":"04:50","sunset":"19:30","uvIndex":"5"}]}
+                """);
+            responses.put("/v7/weather/24h", """
+                {"code":"200","hourly":[{"fxTime":"2025-06-01T13:00+08:00","temp":"25","icon":"101","text":"多云"}]}
                 """);
             stubRestTemplateWithResponses(responses);
 
@@ -303,7 +336,7 @@ class WeatherServiceTest {
                   }
                 }
                 """);
-            responses.put("/v7/weather/3d", """
+            responses.put("/v7/weather/7d", """
                 {"code":"200","daily":[{"fxDate":"2025-06-01","sunrise":"06:00","sunset":"19:30","uvIndex":"5"}]}
                 """);
             // 空气质量 API 响应（经纬度路径参数）
@@ -398,7 +431,7 @@ class WeatherServiceTest {
                     }
                     """);
             responses.put("/airquality/v1/current/", AIR_QUALITY_V1_RESPONSE);
-            responses.put("/v7/weather/3d", "{\"code\":\"200\",\"daily\":[]}");
+            responses.put("/v7/weather/7d", "{\"code\":\"200\",\"daily\":[]}");
             stubRestTemplateWithResponses(responses);
 
             WeatherDto result = weatherService.getRealtimeWeather("116.41,39.92");

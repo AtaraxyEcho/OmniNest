@@ -1,7 +1,11 @@
 package com.omninest.modules.weather.dto;
 
+import java.util.List;
+
 /**
  * 天气数据传输对象
+ *
+ * 含实时观测、今日摘要、逐小时与一周预报。
  */
 public record WeatherDto(
     double temp,
@@ -26,8 +30,32 @@ public record WeatherDto(
     String precip,
     String windScale,
     String textDay,
-    String textNight
+    String textNight,
+    List<HourlyForecast> hourly,
+    List<DailyForecast> daily
 ) {
+
+    /** 逐小时预报条目。 */
+    public record HourlyForecast(
+        String time,
+        int temp,
+        String icon,
+        String text
+    ) {
+    }
+
+    /** 逐日预报条目。 */
+    public record DailyForecast(
+        String date,
+        int tempMax,
+        int tempMin,
+        String iconDay,
+        String textDay,
+        String iconNight,
+        String textNight
+    ) {
+    }
+
     /**
      * 返回空数据（用于未启用或获取失败时）
      */
@@ -37,7 +65,8 @@ public record WeatherDto(
             "--", "--", "--", "--", "--",
             0, "--", "--",
             0, 0, "--", "", "",
-            0.0, 0.0, "--", "--", "--", "--"
+            0.0, 0.0, "--", "--", "--", "--",
+            List.of(), List.of()
         );
     }
 }

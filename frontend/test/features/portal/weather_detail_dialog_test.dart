@@ -29,6 +29,41 @@ WeatherData _sampleWeather() {
     windScale: '3',
     textDay: '多云',
     textNight: '晴',
+    hourly: [
+      WeatherHourly(time: '现在', temp: 21, icon: '104', text: '阴'),
+      WeatherHourly(
+        time: '2026-09-11T18:00+08:00',
+        temp: 20,
+        icon: '101',
+        text: '多云',
+      ),
+      WeatherHourly(
+        time: '2026-09-11T19:00+08:00',
+        temp: 19,
+        icon: '150',
+        text: '晴',
+      ),
+    ],
+    daily: [
+      WeatherDaily(
+        date: '2026-09-11',
+        tempMax: 24,
+        tempMin: 16,
+        iconDay: '104',
+        textDay: '多云',
+        iconNight: '150',
+        textNight: '晴',
+      ),
+      WeatherDaily(
+        date: '2026-09-12',
+        tempMax: 26,
+        tempMin: 17,
+        iconDay: '100',
+        textDay: '晴',
+        iconNight: '150',
+        textNight: '晴',
+      ),
+    ],
   );
 }
 
@@ -105,7 +140,7 @@ void main() {
   testWidgets('手机尺寸展示温度、提示、AQI 与指标', (tester) async {
     await _openWeatherDetail(tester, size: const Size(390, 844));
 
-    expect(find.text('21°'), findsOneWidget);
+    expect(find.text('21°'), findsWidgets);
     expect(find.textContaining('适合户外'), findsOneWidget);
     expect(find.textContaining('AQI 42'), findsOneWidget);
     expect(find.textContaining('湿度'), findsOneWidget);
@@ -118,11 +153,26 @@ void main() {
   testWidgets('桌面尺寸英雄双列与指标网格', (tester) async {
     await _openWeatherDetail(tester, size: const Size(1600, 1000));
 
-    expect(find.text('21°'), findsOneWidget);
+    expect(find.text('21°'), findsWidgets);
     expect(find.textContaining('多云'), findsWidgets);
     expect(find.textContaining('06:33'), findsOneWidget);
     expect(find.textContaining('18:59'), findsOneWidget);
     expect(find.textContaining('UV 4'), findsOneWidget);
+  });
+
+  testWidgets('预报选项卡可切换逐小时与一周', (tester) async {
+    await _openWeatherDetail(tester, size: const Size(1600, 1000));
+
+    expect(find.text('逐小时'), findsOneWidget);
+    expect(find.text('一周预报'), findsOneWidget);
+    // 默认逐小时：显示“今天”与小时温度
+    expect(find.text('今天'), findsOneWidget);
+    expect(find.text('18:00'), findsOneWidget);
+
+    await tester.tap(find.text('一周预报'));
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(find.text('09-12'), findsOneWidget);
+    expect(find.text('26°'), findsOneWidget);
   });
 
   testWidgets('弹窗矩形不超过窗口视口', (tester) async {

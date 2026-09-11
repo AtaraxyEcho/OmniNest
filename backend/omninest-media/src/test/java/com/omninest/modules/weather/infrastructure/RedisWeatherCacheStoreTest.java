@@ -151,8 +151,12 @@ class RedisWeatherCacheStoreTest {
                 "precip",
                 "windScale",
                 "textDay",
-                "textNight"
+                "textNight",
+                "hourly",
+                "daily"
         );
+        assertThat(payload.getJSONArray("hourly")).hasSize(1);
+        assertThat(payload.getJSONArray("daily")).hasSize(1);
         assertThat(payload.getString("text")).isEqualTo(weather.text());
     }
 
@@ -180,7 +184,15 @@ class RedisWeatherCacheStoreTest {
                 "0.0 mm",
                 "2",
                 "多云",
-                "晴"
+                "晴",
+                java.util.List.of(
+                        new WeatherDto.HourlyForecast("2026-07-22T13:00+08:00", 22, "101", "多云")
+                ),
+                java.util.List.of(
+                        new WeatherDto.DailyForecast(
+                                "2026-07-22", 27, 18, "101", "多云", "150", "晴"
+                        )
+                )
         );
     }
 }

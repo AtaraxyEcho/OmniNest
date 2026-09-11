@@ -4501,6 +4501,30 @@ abstract class AppLocalizations {
   /// **'Sunset'**
   String get portalWeatherSunsetLabel;
 
+  /// No description provided for @portalWeatherForecastHourly.
+  ///
+  /// In en, this message translates to:
+  /// **'Hourly'**
+  String get portalWeatherForecastHourly;
+
+  /// No description provided for @portalWeatherForecastWeekly.
+  ///
+  /// In en, this message translates to:
+  /// **'7-Day'**
+  String get portalWeatherForecastWeekly;
+
+  /// No description provided for @portalWeatherForecastToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get portalWeatherForecastToday;
+
+  /// No description provided for @portalWeatherForecastEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No forecast data'**
+  String get portalWeatherForecastEmpty;
+
   /// No description provided for @portalWeatherDebugTooltip.
   ///
   /// In en, this message translates to:
