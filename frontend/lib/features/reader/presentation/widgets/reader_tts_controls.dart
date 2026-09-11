@@ -1,3 +1,5 @@
+import 'dart:async' show unawaited;
+
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,6 +35,34 @@ class _ReaderTtsControlsState extends ConsumerState<ReaderTtsControls> {
     _tts.setContinueHandler(() {
       if (mounted) setState(() => _state = TtsState.playing);
     });
+  }
+
+  @override
+  void didUpdateWidget(covariant ReaderTtsControls oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 朗读中章节切换：停止旧章朗读，从新章文本起点重新开始。
+    if (widget.text != oldWidget.text && _state != TtsState.stopped) {
+      unawaited(_restartForNewText());
+    }
+  }
+
+  Future<void> _restartForNewText() async {
+    try {
+      await _tts.stop();
+      if (!mounted) return;
+      setState(() => _state = TtsState.stopped);
+      final speed =
+          ref.read(readerTtsSpeedControllerProvider).value ??
+          ReaderTtsSpeedController.defaultSpeed;
+      await _tts.setSpeechRate(speed);
+      if (!mounted) return;
+      await _tts.setLanguage(_detectLanguage(widget.text));
+      if (!mounted) return;
+      await _tts.speak(widget.text);
+      if (mounted) setState(() => _state = TtsState.playing);
+    } on Exception catch (e) {
+      if (kDebugMode) readerDebugLog('TTS: restart failed: $e');
+    }
   }
 
   /// 根据文本内容自动检测语言，中文返回 zh-CN，其他返回 en-US。

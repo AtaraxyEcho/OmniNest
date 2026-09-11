@@ -89,6 +89,9 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
   Timer? _hideControlsTimer;
   Timer? _scrollSaveTimer;
   Timer? _displaySettingsSaveTimer;
+  // 防抖中尚未落盘的最新设置：dispose 只 cancel 会丢最后一次调整，
+  // 在 deactivate（ref 仍可用）补一次落盘。
+  ComicReaderDisplaySettings? _pendingDisplaySettings;
   bool _pendingInitialScrollRestore = false;
   int _initialScrollRestoreAttempts = 0;
   // 初始恢复的时间兜底：超过后放弃视觉恢复，保持意图锚点不再重试。
@@ -143,6 +146,19 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
     _loadSettings();
+  }
+
+  @override
+  void deactivate() {
+    // 防抖中的设置变更在离开树前落盘（dispose 中 ref 不可用）。
+    _displaySettingsSaveTimer?.cancel();
+    _displaySettingsSaveTimer = null;
+    final pending = _pendingDisplaySettings;
+    if (pending != null) {
+      _pendingDisplaySettings = null;
+      unawaited(_saveDisplaySettings(pending));
+    }
+    super.deactivate();
   }
 
   @override
@@ -604,7 +620,9 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
     });
 
     _displaySettingsSaveTimer?.cancel();
+    _pendingDisplaySettings = settings;
     _displaySettingsSaveTimer = Timer(const Duration(milliseconds: 320), () {
+      _pendingDisplaySettings = null;
       unawaited(_saveDisplaySettings(settings));
     });
   }

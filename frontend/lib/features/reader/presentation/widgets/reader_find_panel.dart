@@ -35,6 +35,16 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
   List<int> _matches = const [];
 
   @override
+  void didUpdateWidget(covariant ReaderFindPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 窗口文本会因布局失效重建而变化：旧 offset 会指向新文本的错误
+    // 位置，须以当前查询重新匹配。
+    if (oldWidget.plainText != widget.plainText) {
+      _search(_controller.text);
+    }
+  }
+
+  @override
   void dispose() {
     _controller.dispose();
     super.dispose();
