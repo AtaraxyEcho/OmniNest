@@ -50,6 +50,7 @@ import 'package:omninest/features/reader/application/reader_session_recorder.dar
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_window_search.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_view_page_coordinate_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_interaction_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_settings_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_top_bar.dart';
@@ -94,6 +95,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         ReaderViewPageControlsMixin,
         ReaderViewPageLibraryActionsMixin,
         ReaderViewPageMixin,
+        ReaderViewPageCoordinateMixin,
         ReaderViewPageInteractionMixin {
   // ── 核心组件 ──
   final _positionTracker = ReaderPositionTracker();

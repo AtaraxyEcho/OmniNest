@@ -92,18 +92,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   bool get pointerDownActive;
   set pointerDownActive(bool value);
 
-  /// ScrollRestore 用户滚动探针：识别"进行中的拖动"。
-  ///
-  /// 只认恢复启动后的新手势（时间戳）会漏掉正在进行的拖动，恢复与用户
-  /// 手指对抗；10s 兜底防止 up/cancel 被路由抢占导致标志永真。
-  bool isUserScrollActive({required DateTime since}) {
-    if (pointerDownActive &&
-        DateTime.now().difference(lastPointerDownTime).inSeconds < 10) {
-      return true;
-    }
-    return lastPointerDownTime.isAfter(since);
-  }
-
   // ── 章节切换 ──
 
   ReaderProgressSnapshot? get returnToProgressSnapshot;
@@ -755,102 +743,17 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // 连续滚动窗口坐标换算（统一入口）
+  // 连续滚动窗口坐标换算（统一入口，实现见 ReaderViewPageCoordinateMixin）
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   /// 窗口绝对 contentY（滚动 offset + viewportAnchorY）→ 章内 charOffset。
-  ///
-  /// 窗口 offset 0 是首章（通常是上一章）顶部；内部扣除前缀章与章头
-  /// chrome 后映射章体块坐标。所有"读位置"必须走本方法，禁止直接把
-  /// 窗口坐标传给 loader 的章内换算。
-  int windowContentYToCharOffset(String chapterId, double windowContentY) {
-    final loader = contentLoader;
-    if (loader == null) {
-      return 0;
-    }
-    final chapterBodyY =
-        windowContentY -
-        continuousScrollController.prefixHeightOf(chapterId) -
-        ReaderContinuousScrollController.chapterHeaderExtent;
-    if (chapterBodyY <= 0) {
-      return 0;
-    }
-    return loader.contentYToCharOffset(
-      chapterId,
-      chapterBodyY,
-      pageWidth: computePageWidth(),
-      settings: settings,
-      textScale: MediaQuery.textScalerOf(context).scale(1.0),
-    );
-  }
-
-  /// 章内 charOffset → 窗口滚动 offset（前缀 + 章头 + 章内像素 − 视口锚点）。
-  ///
-  /// charOffsetToPixelOffset 返回的是章体顶为原点的块内坐标，本方法补齐
-  /// 前缀章与章头偏移。所有"写位置"（恢复、跳转目标）必须走本方法。
-  double charOffsetToWindowScrollOffset(String chapterId, int charOffset) {
-    final loader = contentLoader;
-    if (loader == null) {
-      return 0;
-    }
-    final intraY = loader.charOffsetToPixelOffset(
-      chapterId,
-      charOffset,
-      pageWidth: computePageWidth(),
-      settings: settings,
-      textScale: MediaQuery.textScalerOf(context).scale(1.0),
-    );
-    return continuousScrollController.prefixHeightOf(chapterId) +
-        ReaderContinuousScrollController.chapterHeaderExtent +
-        intraY -
-        viewportAnchorY;
-  }
+  int windowContentYToCharOffset(String chapterId, double windowContentY);
 
   /// 章首在窗口中的滚动 offset（章头贴视口顶）。
-  double chapterStartScrollOffset(String chapterId) {
-    return continuousScrollController
-        .prefixHeightOf(chapterId)
-        .clamp(0.0, double.infinity);
-  }
+  double chapterStartScrollOffset(String chapterId);
 
-  /// 滚动模式：将视口稳定恢复到章首（窗口坐标感知 + 多帧重试）。
-  ///
-  /// 懒布局下窗口重建当帧 maxScrollExtent 可能未收敛，单次 jumpTo 会被
-  /// clamp 短跳；复用 ScrollRestore 的稳定重试。恢复期间 isRestoringProgress
-  /// 抑制滚动位置回调，防止章首落点（窗口 offset≠0，前有前缀章）被位置
-  /// 回调误收养回前章。
-  void restoreToChapterStart(String chapterId) {
-    scrollProgress = 0;
-    positionTracker.setCharOffset(0, chapterId);
-    isRestoringProgress = true;
-    restore.cancel();
-    restoreSilenceUntil = DateTime.now().add(
-      const Duration(milliseconds: restoreSilenceMs),
-    );
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final restoreScheduledAt = DateTime.now();
-      restore.start(
-        scrollController: scrollController,
-        targetOffsetBuilder: () {
-          if (!scrollController.hasClients) return 0;
-          final max = scrollController.position.maxScrollExtent;
-          return chapterStartScrollOffset(chapterId).clamp(0.0, max);
-        },
-        isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
-        onSettled: (completed) {
-          if (!completed) {
-            // 被用户滚动中断：当前真实位置即事实，立即恢复进度写入。
-            restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(0);
-          }
-          isRestoringProgress = false;
-          if (mounted) setState(() {});
-        },
-      );
-    });
-  }
+  /// 滚动模式：稳定恢复到章首；恢复期抑制位置回调防锚点误收养。
+  void restoreToChapterStart(String chapterId);
 
   /// 从候选快照中选取当前章节最新的进度。
   ReaderProgressSnapshot? latestProgressForCurrentChapter(
