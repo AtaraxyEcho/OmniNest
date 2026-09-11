@@ -46,6 +46,7 @@ part 'file_browser_page_sharing.dart';
 part 'file_browser_page_external.dart';
 part 'file_browser_page_dialogs.dart';
 part 'file_browser_page_mobile_actions.dart';
+part 'file_browser_page_mobile_home.dart';
 
 extension FileManagerSectionMeta on FileManagerSection {
   String labelOf(AppLocalizations l10n) {
@@ -232,6 +233,9 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
   final List<FileManagerSection> _sectionHistory = [];
   FileManagerSection? _lastSection;
 
+  /// 移动首页态：true 时显示位置/分区卡首页，点卡进入列表态。
+  bool _mobileHomeOpen = true;
+
   void _onSectionChanged(FileManagerSection section) {
     if (_lastSection != null && _lastSection != section) {
       _sectionHistory.add(_lastSection!);
@@ -241,6 +245,14 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
   }
 
   void _onBack() {
+    // 托管窄屏：列表态优先回首页，首页态走原有返回链（section 历史栈 → 门户）。
+    final hosted = MobileShellScope.isHosted(context);
+    final narrow = MediaQuery.sizeOf(context).width < 1100;
+    if (hosted && narrow && !_mobileHomeOpen) {
+      ref.read(fileBrowserControllerProvider.notifier).clearSelection();
+      setState(() => _mobileHomeOpen = true);
+      return;
+    }
     if (_sectionHistory.isNotEmpty) {
       final prev = _sectionHistory.removeLast();
       _lastSection = prev;
@@ -250,6 +262,15 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
     }
   }
 
+  /// 从首页打开分区：进入列表态。
+  void _openMobileSection(FileManagerSection section) {
+    _onSectionChanged(section);
+    if (!_mobileHomeOpen) {
+      return;
+    }
+    setState(() => _mobileHomeOpen = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final filesState = ref.watch(fileBrowserControllerProvider);
@@ -257,6 +278,7 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
       final data = filesState.asData?.value;
       if (data != null && data.section != widget.initialSection) {
         _initialSectionApplied = true;
+        _mobileHomeOpen = false;
         WidgetsBinding.instance.addPostFrameCallback((_) {
           ref
               .read(fileBrowserControllerProvider.notifier)
@@ -271,6 +293,8 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
           state: state,
           onBack: _onBack,
           onSectionChanged: _onSectionChanged,
+          mobileHomeOpen: _mobileHomeOpen,
+          onOpenMobileSection: _openMobileSection,
         );
       },
       error:
@@ -290,11 +314,17 @@ class _FileManagerShell extends ConsumerWidget {
     required this.state,
     required this.onBack,
     required this.onSectionChanged,
+    required this.mobileHomeOpen,
+    required this.onOpenMobileSection,
   });
 
   final FileBrowserState state;
   final VoidCallback onBack;
   final void Function(FileManagerSection) onSectionChanged;
+
+  /// 移动首页态与其打开分区的回调（仅托管窄屏使用）。
+  final bool mobileHomeOpen;
+  final void Function(FileManagerSection) onOpenMobileSection;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -327,12 +357,9 @@ class _FileManagerShell extends ConsumerWidget {
                   ),
                   child: Column(
                     children: [
-                      if (hosted && !isWide) ...[
+                      if (hosted && !isWide && !mobileHomeOpen) ...[
+                        _FileMobileBackRow(onBack: onBack),
                         _FileHostedSearchBar(section: state.section),
-                        _FileMobileSectionBar(
-                          section: state.section,
-                          onSectionChanged: onSectionChanged,
-                        ),
                       ],
                       if (state.lastActionError case final error?)
                         Padding(
@@ -384,6 +411,13 @@ class _FileManagerShell extends ConsumerWidget {
                             ],
                           ),
                         )
+                      else if (hosted && mobileHomeOpen)
+                        Expanded(
+                          child: _FileMobileHome(
+                            state: state,
+                            onOpenSection: onOpenMobileSection,
+                          ),
+                        )
                       else
                         Expanded(
                           child: RefreshIndicator(
@@ -432,7 +466,7 @@ class _FileManagerShell extends ConsumerWidget {
               ],
             ),
             floatingActionButton:
-                isWide || state.hasSelection
+                isWide || state.hasSelection || (hosted && mobileHomeOpen)
                     ? null
                     : _FileMobileCreateButton(
                       state: state,
@@ -464,117 +498,6 @@ class _FileManagerShell extends ConsumerWidget {
           ),
         );
       },
-    );
-  }
-}
-
-class _FileMobileSectionBar extends ConsumerWidget {
-  const _FileMobileSectionBar({
-    required this.section,
-    required this.onSectionChanged,
-  });
-
-  final FileManagerSection section;
-  final ValueChanged<FileManagerSection> onSectionChanged;
-
-  /// chips 直达的分区；其余分区经「更多」面板进入。
-  static const List<FileManagerSection> _primarySections = [
-    FileManagerSection.allFiles,
-    FileManagerSection.recent,
-    FileManagerSection.favorites,
-    FileManagerSection.sharedWithMe,
-    FileManagerSection.recycleBin,
-  ];
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context);
-    final sections = _primarySections;
-    return SizedBox(
-      height: 60,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-        itemCount: sections.length + 1,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          if (index == sections.length) {
-            return ActionChip(
-              avatar: const Icon(Icons.expand_more_rounded, size: 17),
-              label: Text(l10n.filesMoreSections),
-              onPressed: () => _showMoreSectionsSheet(context, ref, l10n),
-            );
-          }
-          final value = sections[index];
-          return ChoiceChip(
-            selected: value == section,
-            showCheckmark: false,
-            onSelected: (_) => onSectionChanged(value),
-            avatar: Icon(value.icon, size: 17),
-            label: Text(value.labelOf(l10n)),
-          );
-        },
-      ),
-    );
-  }
-
-  /// 其余分区（共享/传输/存储）底部面板；超管分区按权限过滤。
-  void _showMoreSectionsSheet(
-    BuildContext context,
-    WidgetRef ref,
-    AppLocalizations l10n,
-  ) {
-    final user = ref.read(authSessionProvider).asData?.value.user;
-    final canManageSystemConfig =
-        user?.permissions.contains('system:config:manage') ?? false;
-    final groups = <_FileSidebarGroup, List<FileManagerSection>>{
-      for (final entry in _fileSidebarGroups.entries)
-        entry.key: [
-          for (final item in entry.value)
-            if (!_primarySections.contains(item) &&
-                (canManageSystemConfig ||
-                    !_superAdminOnlySections.contains(item)))
-              item,
-        ],
-    }..removeWhere((_, value) => value.isEmpty);
-
-    showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder:
-          (sheetContext) => SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final entry in groups.entries) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 2),
-                    child: Text(
-                      entry.key.labelOf(l10n),
-                      style: TextStyle(
-                        fontSize: AppTypography.labelMedium,
-                        fontWeight: FontWeight.w700,
-                        color: context.filesColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  for (final item in entry.value)
-                    ListTile(
-                      leading: Icon(item.icon),
-                      title: Text(item.labelOf(l10n)),
-                      selected: item == section,
-                      onTap: () {
-                        Navigator.of(sheetContext).pop();
-                        onSectionChanged(item);
-                      },
-                    ),
-                ],
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
     );
   }
 }

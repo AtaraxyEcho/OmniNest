@@ -9024,4 +9024,28 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerComicEmpty => 'Comic content is empty';
+
+  @override
+  String get filesHomeLocations => 'Locations';
+
+  @override
+  String get filesHomeSections => 'Sections';
+
+  @override
+  String get filesHomePersonalSpaceHint => 'Your private files';
+
+  @override
+  String get filesHomeAllFilesHint => 'Browse all files and folders';
+
+  @override
+  String get filesHomeRecentHint => 'Recently added or changed';
+
+  @override
+  String get filesHomeFavoritesHint => 'Starred files';
+
+  @override
+  String get filesHomeTrashHint => 'Deleted items';
+
+  @override
+  String get filesHomeMoreHint => 'Upload queue, offline downloads and shares';
 }

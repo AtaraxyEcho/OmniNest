@@ -3955,5 +3955,13 @@
   },
   "readerComicPartialFailed": "部分漫画来源解析失败，请在详情页处理失败来源",
   "readerComicEmptyManifest": "漫画内容为空或尚未生成清单",
-  "readerComicEmpty": "漫画内容为空"
+  "readerComicEmpty": "漫画内容为空",
+  "filesHomeLocations": "位置",
+  "filesHomeSections": "分区",
+  "filesHomePersonalSpaceHint": "我的私有文件",
+  "filesHomeAllFilesHint": "浏览全部文件与文件夹",
+  "filesHomeRecentHint": "最近上传与修改",
+  "filesHomeFavoritesHint": "收藏标记的文件",
+  "filesHomeTrashHint": "已删除的项目",
+  "filesHomeMoreHint": "上传队列、离线下载与分享管理"
 }

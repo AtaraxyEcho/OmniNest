@@ -8755,4 +8755,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerComicEmpty => '漫画内容为空';
+
+  @override
+  String get filesHomeLocations => '位置';
+
+  @override
+  String get filesHomeSections => '分区';
+
+  @override
+  String get filesHomePersonalSpaceHint => '我的私有文件';
+
+  @override
+  String get filesHomeAllFilesHint => '浏览全部文件与文件夹';
+
+  @override
+  String get filesHomeRecentHint => '最近上传与修改';
+
+  @override
+  String get filesHomeFavoritesHint => '收藏标记的文件';
+
+  @override
+  String get filesHomeTrashHint => '已删除的项目';
+
+  @override
+  String get filesHomeMoreHint => '上传队列、离线下载与分享管理';
 }

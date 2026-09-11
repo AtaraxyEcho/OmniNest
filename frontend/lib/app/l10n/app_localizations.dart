@@ -16487,6 +16487,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Comic content is empty'**
   String get readerComicEmpty;
+
+  /// No description provided for @filesHomeLocations.
+  ///
+  /// In en, this message translates to:
+  /// **'Locations'**
+  String get filesHomeLocations;
+
+  /// No description provided for @filesHomeSections.
+  ///
+  /// In en, this message translates to:
+  /// **'Sections'**
+  String get filesHomeSections;
+
+  /// No description provided for @filesHomePersonalSpaceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Your private files'**
+  String get filesHomePersonalSpaceHint;
+
+  /// No description provided for @filesHomeAllFilesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse all files and folders'**
+  String get filesHomeAllFilesHint;
+
+  /// No description provided for @filesHomeRecentHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Recently added or changed'**
+  String get filesHomeRecentHint;
+
+  /// No description provided for @filesHomeFavoritesHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Starred files'**
+  String get filesHomeFavoritesHint;
+
+  /// No description provided for @filesHomeTrashHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted items'**
+  String get filesHomeTrashHint;
+
+  /// No description provided for @filesHomeMoreHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload queue, offline downloads and shares'**
+  String get filesHomeMoreHint;
 }
 
 class _AppLocalizationsDelegate

@@ -4081,5 +4081,13 @@
   },
   "readerComicPartialFailed": "Some comic sources failed to parse, handle failed sources on the detail page",
   "readerComicEmptyManifest": "Comic content is empty or the manifest has not been generated",
-  "readerComicEmpty": "Comic content is empty"
+  "readerComicEmpty": "Comic content is empty",
+  "filesHomeLocations": "Locations",
+  "filesHomeSections": "Sections",
+  "filesHomePersonalSpaceHint": "Your private files",
+  "filesHomeAllFilesHint": "Browse all files and folders",
+  "filesHomeRecentHint": "Recently added or changed",
+  "filesHomeFavoritesHint": "Starred files",
+  "filesHomeTrashHint": "Deleted items",
+  "filesHomeMoreHint": "Upload queue, offline downloads and shares"
 }
