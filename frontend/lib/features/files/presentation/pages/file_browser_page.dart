@@ -250,6 +250,9 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
     final narrow = MediaQuery.sizeOf(context).width < 1100;
     if (hosted && narrow && !_mobileHomeOpen) {
       ref.read(fileBrowserControllerProvider.notifier).clearSelection();
+      // 回到首页即回到导航根：清空分区历史栈，首页态的返回直接离站，
+      // 否则历史栈残留会让返回做一次不可见的分区回退（返回键失灵观感）。
+      _sectionHistory.clear();
       setState(() => _mobileHomeOpen = true);
       return;
     }

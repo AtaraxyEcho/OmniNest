@@ -106,6 +106,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('位置'), findsOneWidget);
     expect(find.byKey(const Key('portal-destination')), findsNothing);
+
+    // 首页态返回：历史栈已清空，直接离站回门户（不出现返回键失灵）。
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('portal-destination')), findsOneWidget);
   });
 }
 
