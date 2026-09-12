@@ -208,11 +208,11 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             // 同步歌词（LRC 格式，带时间戳）
             JSONObject lrcObj = json.getJSONObject("lrc");
             String syncedLyrics = lrcObj != null ? lrcObj.getString("lyric") : null;
-            // 翻译歌词（纯文本）
+            // 翻译歌词（LRC 格式带时间戳，与同步歌词行对齐）
             JSONObject tlyricObj = json.getJSONObject("tlyric");
-            String plainLyrics = tlyricObj != null ? tlyricObj.getString("lyric") : syncedLyrics;
+            String translatedLyrics = tlyricObj != null ? tlyricObj.getString("lyric") : null;
             log.info("网易云歌词获取完成: songId={}, hasLyrics={}", songId, syncedLyrics != null);
-            return new LyricsResult(plainLyrics, syncedLyrics);
+            return new LyricsResult(null, syncedLyrics, translatedLyrics);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             log.warn("网易云歌词请求被中断: songId={}", songId);

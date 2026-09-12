@@ -508,18 +508,30 @@ class MusicApi {
     return DailyRecommendedTracks.fromJson(parseData(response.data));
   }
 
-  /// 获取外部平台同步歌词。
-  Future<String?> platformTrackLyrics(String platform, String songId) async {
+  /// 获取外部平台歌词（原文与独立译文）。
+  Future<MusicPlatformLyrics?> platformTrackLyrics(
+    String platform,
+    String songId,
+  ) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/platforms/$platform/tracks/$songId/lyrics',
     );
     final data = parseData(response.data);
     final synced = data['syncedLyrics']?.toString();
-    if (synced != null && synced.trim().isNotEmpty) {
-      return synced;
-    }
     final plain = data['plainLyrics']?.toString();
-    return plain == null || plain.trim().isEmpty ? null : plain;
+    final translated = data['translatedLyrics']?.toString();
+    final primary =
+        synced != null && synced.trim().isNotEmpty
+            ? synced
+            : (plain != null && plain.trim().isNotEmpty ? plain : null);
+    if (primary == null) {
+      return null;
+    }
+    return MusicPlatformLyrics(
+      lyrics: primary,
+      translation:
+          translated == null || translated.trim().isEmpty ? null : translated,
+    );
   }
 
   /// 生成网易云 QR 登录

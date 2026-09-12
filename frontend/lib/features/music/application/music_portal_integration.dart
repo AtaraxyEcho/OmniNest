@@ -8,10 +8,15 @@ import 'package:omninest/features/music/domain/music_playable_item.dart';
 
 /// Portal 展示所需的歌词行快照。
 class MusicPortalLyricLine {
-  const MusicPortalLyricLine({required this.position, required this.text});
+  const MusicPortalLyricLine({
+    required this.position,
+    required this.text,
+    this.translation,
+  });
 
   final Duration position;
   final String text;
+  final String? translation;
 }
 
 /// Portal 展示所需的曲目快照。
@@ -220,8 +225,11 @@ MusicPortalTrack? _projectTrack(MusicTrack? track) {
     coverUrl: track.coverUrl,
     lyrics: List<MusicPortalLyricLine>.unmodifiable(
       track.lyricLines.map(
-        (line) =>
-            MusicPortalLyricLine(position: line.position, text: line.text),
+        (line) => MusicPortalLyricLine(
+          position: line.position,
+          text: line.text,
+          translation: line.translation,
+        ),
       ),
     ),
   );

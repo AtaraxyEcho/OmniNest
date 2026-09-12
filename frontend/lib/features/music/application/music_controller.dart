@@ -623,19 +623,23 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       return;
     }
     try {
-      final lyrics = await _api.platformTrackLyrics(
+      final result = await _api.platformTrackLyrics(
         ref.platform.apiValue,
         ref.songId,
       );
-      if (lyrics == null || generation != _playRequestGeneration) {
+      if (result == null || generation != _playRequestGeneration) {
         return;
       }
       final current = state.asData?.value;
       if (current?.currentItem?.playableKey != item.playableKey) {
         return;
       }
+      // 原文与译文双轨保存：译文为空时行级 translation 全部为 null。
       final updatedItem = item.copyWith(
-        track: item.track.copyWith(lyricsRaw: lyrics),
+        track: item.track.copyWith(
+          lyricsRaw: result.lyrics,
+          lyricsTranslation: result.translation,
+        ),
       );
       state = AsyncData(
         current!.copyWith(

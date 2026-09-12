@@ -875,9 +875,13 @@ class _FakeMusicApi implements MusicApi {
   }
 
   @override
-  Future<String?> platformTrackLyrics(String platform, String songId) async {
+  Future<MusicPlatformLyrics?> platformTrackLyrics(
+    String platform,
+    String songId,
+  ) async {
     lyricsRequests.add('$platform:$songId');
-    return onlineLyrics[songId];
+    final raw = onlineLyrics[songId];
+    return raw == null ? null : MusicPlatformLyrics(lyrics: raw);
   }
 
   @override

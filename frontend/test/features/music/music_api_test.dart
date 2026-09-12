@@ -345,7 +345,7 @@ void main() {
 
     expect(adapter.lastMethod, 'GET');
     expect(adapter.lastPath, '/music/platforms/netease/tracks/song-1/lyrics');
-    expect(lyrics, '[00:01.00]Cloud');
+    expect(lyrics?.lyrics, '[00:01.00]Cloud');
   });
 
   test('QR login and disconnect use canonical platform paths', () async {

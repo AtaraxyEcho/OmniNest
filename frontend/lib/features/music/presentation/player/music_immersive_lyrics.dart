@@ -460,6 +460,30 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       textAlign: TextAlign.center,
       style: textStyle,
     );
+    final translation = widget.line.translation?.trim();
+    final hasTranslation = translation != null && translation.isNotEmpty;
+    final content =
+        hasTranslation
+            ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                text,
+                const SizedBox(height: 4),
+                Text(
+                  translation,
+                  maxLines: 2,
+                  overflow: TextOverflow.visible,
+                  textAlign: TextAlign.center,
+                  style: textStyle.copyWith(
+                    fontSize: textStyle.fontSize! * 0.52,
+                    fontWeight:
+                        widget.active ? FontWeight.w600 : FontWeight.w400,
+                    height: 1.2,
+                  ),
+                ),
+              ],
+            )
+            : text;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => widget.onEnter(),
@@ -500,7 +524,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
                         : widget.hovered
                         ? 1.025
                         : 1,
-                child: text,
+                child: content,
               ),
             ),
           ),

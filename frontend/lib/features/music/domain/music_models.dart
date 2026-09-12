@@ -12,6 +12,7 @@ class MusicTrack {
     this.sampleRate,
     this.fileSize,
     this.lyricsRaw,
+    this.lyricsTranslation,
     this.coverUrl,
     this.updatedAt,
   });
@@ -29,6 +30,7 @@ class MusicTrack {
       sampleRate: _nullableInt(json['sampleRate']),
       fileSize: _nullableInt(json['fileSize']),
       lyricsRaw: json['lyricsRaw']?.toString(),
+      lyricsTranslation: json['lyricsTranslation']?.toString(),
       coverUrl: json['coverUrl']?.toString(),
       favorite: _asBool(json['favorite']),
       updatedAt: _parseDateTime(json['updatedAt']),
@@ -46,6 +48,9 @@ class MusicTrack {
   final int? sampleRate;
   final int? fileSize;
   final String? lyricsRaw;
+
+  /// 歌词译文（独立于原文的 LRC 或纯文本），由在线平台提供。
+  final String? lyricsTranslation;
   final String? coverUrl;
   final bool favorite;
   final DateTime? updatedAt;
@@ -70,9 +75,14 @@ class MusicTrack {
     return parts.isEmpty ? format.toUpperCase() : parts.join(' / ');
   }
 
-  List<MusicLyricLine> get lyricLines => parseMusicLyrics(lyricsRaw);
+  List<MusicLyricLine> get lyricLines =>
+      parseMusicLyrics(lyricsRaw, translation: lyricsTranslation);
 
-  MusicTrack copyWith({bool? favorite, String? lyricsRaw}) {
+  MusicTrack copyWith({
+    bool? favorite,
+    String? lyricsRaw,
+    String? lyricsTranslation,
+  }) {
     return MusicTrack(
       id: id,
       fileNodeId: fileNodeId,
@@ -85,6 +95,7 @@ class MusicTrack {
       sampleRate: sampleRate,
       fileSize: fileSize,
       lyricsRaw: lyricsRaw ?? this.lyricsRaw,
+      lyricsTranslation: lyricsTranslation ?? this.lyricsTranslation,
       coverUrl: coverUrl,
       favorite: favorite ?? this.favorite,
       updatedAt: updatedAt,
@@ -93,18 +104,48 @@ class MusicTrack {
 }
 
 class MusicLyricLine {
-  const MusicLyricLine({required this.position, required this.text});
+  const MusicLyricLine({
+    required this.position,
+    required this.text,
+    this.translation,
+  });
 
   final Duration position;
   final String text;
+  final String? translation;
 }
 
-List<MusicLyricLine> parseMusicLyrics(String? raw) {
+/// 解析歌词原文；[translation] 为独立译文（LRC 或纯文本），按时间戳就近对齐。
+List<MusicLyricLine> parseMusicLyrics(String? raw, {String? translation}) {
   if (raw == null || raw.trim().isEmpty) {
     return const [];
   }
   final lines = <MusicLyricLine>[];
   final timestampPattern = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
+  final translationByPosition = _parseTranslationTimestamps(translation);
+  String? translationFor(Duration position) {
+    if (translationByPosition.isEmpty) {
+      return null;
+    }
+    // 优先精确毫秒匹配，其次取与原文时间差最小且不超过容差的译文行。
+    final exact = translationByPosition[position];
+    if (exact != null) {
+      return exact;
+    }
+    const tolerance = Duration(milliseconds: 500);
+    String? best;
+    Duration? bestDistance;
+    for (final entry in translationByPosition.entries) {
+      final distance = (entry.key - position).abs();
+      if (distance <= tolerance &&
+          (bestDistance == null || distance < bestDistance)) {
+        bestDistance = distance;
+        best = entry.value;
+      }
+    }
+    return best;
+  }
+
   for (final rawLine in raw.split(RegExp(r'\r?\n'))) {
     final matches = timestampPattern.allMatches(rawLine).toList();
     if (matches.isEmpty) {
@@ -119,20 +160,51 @@ List<MusicLyricLine> parseMusicLyrics(String? raw) {
       final seconds = int.tryParse(match.group(2) ?? '') ?? 0;
       final fraction = match.group(3) ?? '0';
       final millis = _lyricFractionToMilliseconds(fraction);
+      final position = Duration(
+        minutes: minutes,
+        seconds: seconds,
+        milliseconds: millis,
+      );
       lines.add(
         MusicLyricLine(
-          position: Duration(
-            minutes: minutes,
-            seconds: seconds,
-            milliseconds: millis,
-          ),
+          position: position,
           text: text,
+          translation: translationFor(position),
         ),
       );
     }
   }
   lines.sort((left, right) => left.position.compareTo(right.position));
   return lines;
+}
+
+/// 解析译文时间轴；纯文本译文返回空表（逐行文本交给行级回退处理）。
+Map<Duration, String> _parseTranslationTimestamps(String? translation) {
+  final result = <Duration, String>{};
+  if (translation == null || translation.trim().isEmpty) {
+    return result;
+  }
+  final timestampPattern = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
+  for (final rawLine in translation.split(RegExp(r'\r?\n'))) {
+    final matches = timestampPattern.allMatches(rawLine).toList();
+    if (matches.isEmpty) {
+      continue;
+    }
+    final text = rawLine.replaceAll(timestampPattern, '').trim();
+    if (text.isEmpty) {
+      continue;
+    }
+    final match = matches.first;
+    final minutes = int.tryParse(match.group(1) ?? '') ?? 0;
+    final seconds = int.tryParse(match.group(2) ?? '') ?? 0;
+    final fraction = match.group(3) ?? '0';
+    final millis = _lyricFractionToMilliseconds(fraction);
+    result.putIfAbsent(
+      Duration(minutes: minutes, seconds: seconds, milliseconds: millis),
+      () => text,
+    );
+  }
+  return result;
 }
 
 int _lyricFractionToMilliseconds(String fraction) {
@@ -935,6 +1007,14 @@ class MusicPagedResult<T> {
   final int totalElements;
 
   bool get hasMore => (page + 1) * size < totalElements;
+}
+
+/// 在线平台歌词：原文与独立译文。
+class MusicPlatformLyrics {
+  const MusicPlatformLyrics({required this.lyrics, this.translation});
+
+  final String lyrics;
+  final String? translation;
 }
 
 /// Lrclib 歌词搜索候选结果。

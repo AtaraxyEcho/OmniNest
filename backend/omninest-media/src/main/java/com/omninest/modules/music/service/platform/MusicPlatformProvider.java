@@ -121,9 +121,13 @@ public interface MusicPlatformProvider {
     /**
      * 歌词结果。
      *
-     * @param plainLyrics 纯文本歌词
+     * @param plainLyrics 纯文本歌词（无独立翻译时作为译文回退）
      * @param syncedLyrics 同步歌词（LRC 格式）
+     * @param translatedLyrics 独立翻译歌词，与同步歌词按时间轴行对齐
      */
-    record LyricsResult(String plainLyrics, String syncedLyrics) {
+    record LyricsResult(String plainLyrics, String syncedLyrics, String translatedLyrics) {
+        public LyricsResult(String plainLyrics, String syncedLyrics) {
+            this(plainLyrics, syncedLyrics, null);
+        }
     }
 }

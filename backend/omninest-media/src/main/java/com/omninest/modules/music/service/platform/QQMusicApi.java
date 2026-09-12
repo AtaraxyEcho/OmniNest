@@ -175,11 +175,11 @@ public class QQMusicApi implements MusicPlatformProvider {
                 log.warn("QQ音乐歌词获取失败: songId={}, code={}", songId, code);
                 return new LyricsResult(null, null);
             }
-            // Base64 解码歌词：lyric 为 LRC 格式（带时间戳），trans 为翻译（纯文本）
+            // Base64 解码歌词：lyric 为 LRC 格式（带时间戳），trans 为翻译（LRC 格式带时间戳）
             String syncedLyrics = decodeBase64(json.getString("lyric"));
-            String plainLyrics = decodeBase64(json.getString("trans"));
-            log.info("QQ音乐歌词获取完成: songId={}, hasLyrics={}", songId, plainLyrics != null);
-            return new LyricsResult(plainLyrics, syncedLyrics);
+            String translatedLyrics = decodeBase64(json.getString("trans"));
+            log.info("QQ音乐歌词获取完成: songId={}, hasLyrics={}", songId, syncedLyrics != null);
+            return new LyricsResult(null, syncedLyrics, translatedLyrics);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             log.warn("QQ音乐歌词请求被中断: songId={}", songId);
