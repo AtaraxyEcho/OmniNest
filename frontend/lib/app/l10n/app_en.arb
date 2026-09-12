@@ -3553,6 +3553,25 @@
       "count": {}
     }
   },
+  "musicPlaybackSettings": "Playback Settings",
+  "musicSleepTimer": "Sleep Timer",
+  "musicSleepMinutes": "{minutes} min",
+  "@musicSleepMinutes": {
+    "placeholders": {
+      "minutes": {}
+    }
+  },
+  "musicSleepAfterCurrentTrack": "After current track",
+  "musicSleepOff": "Turn off timer",
+  "musicSleepRemaining": "Pausing in {minutes}:{seconds}",
+  "@musicSleepRemaining": {
+    "placeholders": {
+      "minutes": {},
+      "seconds": {}
+    }
+  },
+  "musicPlaybackSpeed": "Playback Speed",
+  "musicSpeedApplyHint": "Changes apply to the current track immediately",
   "musicQueueTitle": "Play Queue",
   "musicQueueEmpty": "Play queue is empty",
   "musicQueueClear": "Clear Queue",

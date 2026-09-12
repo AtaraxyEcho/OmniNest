@@ -7832,6 +7832,34 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get musicPlaybackSettings => '播放设置';
+
+  @override
+  String get musicSleepTimer => '定时关闭';
+
+  @override
+  String musicSleepMinutes(Object minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String get musicSleepAfterCurrentTrack => '播完当前曲';
+
+  @override
+  String get musicSleepOff => '关闭定时';
+
+  @override
+  String musicSleepRemaining(Object minutes, Object seconds) {
+    return '剩余 $minutes:$seconds 后暂停播放';
+  }
+
+  @override
+  String get musicPlaybackSpeed => '播放倍速';
+
+  @override
+  String get musicSpeedApplyHint => '切换档位对当前曲目立即生效';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

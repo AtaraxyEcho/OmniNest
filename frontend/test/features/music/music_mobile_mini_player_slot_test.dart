@@ -213,6 +213,8 @@ class _IdlePlayback implements MusicAudioPlayback {
 
   @override
   void setVolume(double volume) {}
+  @override
+  void setRelativePlaySpeed(double speed) {}
 
   @override
   void setSpectrumTrack(MusicTrack? track) {}

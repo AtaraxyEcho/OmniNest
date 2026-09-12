@@ -14795,6 +14795,54 @@ abstract class AppLocalizations {
   /// **'Added {count} tracks to the play queue'**
   String musicBatchEnqueued(Object count);
 
+  /// No description provided for @musicPlaybackSettings.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback Settings'**
+  String get musicPlaybackSettings;
+
+  /// No description provided for @musicSleepTimer.
+  ///
+  /// In en, this message translates to:
+  /// **'Sleep Timer'**
+  String get musicSleepTimer;
+
+  /// No description provided for @musicSleepMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String musicSleepMinutes(Object minutes);
+
+  /// No description provided for @musicSleepAfterCurrentTrack.
+  ///
+  /// In en, this message translates to:
+  /// **'After current track'**
+  String get musicSleepAfterCurrentTrack;
+
+  /// No description provided for @musicSleepOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off timer'**
+  String get musicSleepOff;
+
+  /// No description provided for @musicSleepRemaining.
+  ///
+  /// In en, this message translates to:
+  /// **'Pausing in {minutes}:{seconds}'**
+  String musicSleepRemaining(Object minutes, Object seconds);
+
+  /// No description provided for @musicPlaybackSpeed.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback Speed'**
+  String get musicPlaybackSpeed;
+
+  /// No description provided for @musicSpeedApplyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Changes apply to the current track immediately'**
+  String get musicSpeedApplyHint;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

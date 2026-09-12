@@ -184,6 +184,8 @@ class _FakeMusicAudioPlayback implements MusicAudioPlayback {
 
   @override
   void setVolume(double volume) {}
+  @override
+  void setRelativePlaySpeed(double speed) {}
 
   @override
   Future<void> dispose() async {

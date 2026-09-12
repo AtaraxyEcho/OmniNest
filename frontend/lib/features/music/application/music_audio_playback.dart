@@ -14,24 +14,28 @@ class MusicAudioPlayerState {
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.volume = 100,
+    this.speed = 1,
   });
 
   final bool playing;
   final Duration position;
   final Duration duration;
   final double volume;
+  final double speed;
 
   MusicAudioPlayerState copyWith({
     bool? playing,
     Duration? position,
     Duration? duration,
     double? volume,
+    double? speed,
   }) {
     return MusicAudioPlayerState(
       playing: playing ?? this.playing,
       position: position ?? this.position,
       duration: duration ?? this.duration,
       volume: volume ?? this.volume,
+      speed: speed ?? this.speed,
     );
   }
 }
@@ -78,6 +82,9 @@ abstract interface class MusicAudioPlayback {
   Future<void> seek(Duration position);
 
   void setVolume(double volume);
+
+  /// 设置相对播放速度（1.0 为原速），实现不支持时静默忽略。
+  void setRelativePlaySpeed(double speed);
 
   void setSpectrumTrack(MusicTrack? track);
 
@@ -268,6 +275,22 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _soLoud.setVolume(handle, next / 100);
     } on Exception catch (error) {
       _log('SoLoud 音量设置失败: $error');
+    }
+  }
+
+  /// 设置相对播放速度，范围为 0.5 到 2.0。
+  @override
+  void setRelativePlaySpeed(double speed) {
+    final next = speed.clamp(0.5, 2.0).toDouble();
+    _state = _state.copyWith(speed: next);
+    final handle = _handle;
+    if (handle == null) {
+      return;
+    }
+    try {
+      _soLoud.setRelativePlaySpeed(handle, next);
+    } on Exception catch (error) {
+      _log('SoLoud 倍速设置失败: $error');
     }
   }
 

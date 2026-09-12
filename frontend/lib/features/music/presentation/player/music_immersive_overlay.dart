@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/window/window_chrome_controller.dart';
@@ -10,6 +11,8 @@ import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/music/presentation/player/music_mobile_now_playing.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_player.dart';
+import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
+import 'package:omninest/features/music/application/music_sleep_timer_controller.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 
 /// Music Deck 使用的全平台沉浸播放覆盖层。
@@ -141,7 +144,18 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   _buildBackButton(context),
+                  const SleepTimerBadge(),
                   const Spacer(),
+                  IconButton(
+                    tooltip: AppLocalizations.of(context).musicPlaybackSettings,
+                    onPressed:
+                        () => showMusicPlaybackSettingsDialog(context, ref),
+                    icon: Icon(
+                      Icons.tune_rounded,
+                      color: MusicImmersivePalette.digital.text,
+                      size: 20,
+                    ),
+                  ),
                   AppFullscreenButton(
                     isFullscreen: isFullscreen,
                     foregroundColor: MusicImmersivePalette.digital.text,
@@ -193,5 +207,47 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
       return;
     }
     setState(() => _topBarHovered = hovered);
+  }
+}
+
+/// 定时关闭倒计时徽标：未开启时不占位。
+class SleepTimerBadge extends ConsumerWidget {
+  const SleepTimerBadge({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final timer = ref.watch(musicSleepTimerControllerProvider);
+    final remaining = timer.remaining;
+    if (remaining == null) {
+      return const SizedBox.shrink();
+    }
+    final minutes = remaining.inMinutes;
+    final seconds = remaining.inSeconds % 60;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.nightlight_round, size: 14, color: Colors.white70),
+            const SizedBox(width: 5),
+            Text(
+              '${minutes.toString().padLeft(2, '0')}:${seconds.toString().padLeft(2, '0')}',
+              style: const TextStyle(
+                color: Colors.white70,
+                fontSize: 12,
+                fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

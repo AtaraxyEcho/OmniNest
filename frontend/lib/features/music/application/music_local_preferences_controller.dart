@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/music/data/music_local_preference_store.dart';
+import 'package:omninest/features/music/application/music_playback_session.dart';
 
 final musicLocalPreferenceStoreProvider = Provider<MusicLocalPreferenceStore>(
   (ref) => const MusicLocalPreferenceStore(),
@@ -30,5 +31,18 @@ class MusicLocalPreferencesController extends AsyncNotifier<String> {
         .read(musicLocalPreferenceStoreProvider)
         .saveOnlineQuality(quality);
     state = AsyncData(quality);
+  }
+
+  /// 读取播放倍速（与音质同库存储，控制器主状态仍是音质）。
+  Future<double> loadPlaybackSpeed() {
+    return ref.read(musicLocalPreferenceStoreProvider).loadPlaybackSpeed();
+  }
+
+  Future<void> setPlaybackSpeed(double speed) async {
+    await ref.read(musicLocalPreferenceStoreProvider).savePlaybackSpeed(speed);
+    ref
+        .read(musicPlaybackSessionProvider)
+        .player
+        .setRelativePlaySpeed(speed);
   }
 }

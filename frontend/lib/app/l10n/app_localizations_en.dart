@@ -8069,6 +8069,35 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get musicPlaybackSettings => 'Playback Settings';
+
+  @override
+  String get musicSleepTimer => 'Sleep Timer';
+
+  @override
+  String musicSleepMinutes(Object minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String get musicSleepAfterCurrentTrack => 'After current track';
+
+  @override
+  String get musicSleepOff => 'Turn off timer';
+
+  @override
+  String musicSleepRemaining(Object minutes, Object seconds) {
+    return 'Pausing in $minutes:$seconds';
+  }
+
+  @override
+  String get musicPlaybackSpeed => 'Playback Speed';
+
+  @override
+  String get musicSpeedApplyHint =>
+      'Changes apply to the current track immediately';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

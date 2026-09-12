@@ -292,6 +292,9 @@ class _FakeMusicAudioPlayback implements MusicAudioPlayback {
   }
 
   @override
+  void setRelativePlaySpeed(double speed) {}
+
+  @override
   void setSpectrumTrack(MusicTrack? track) {}
 
   @override

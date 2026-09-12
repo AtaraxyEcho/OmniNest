@@ -3427,6 +3427,25 @@
       "count": {}
     }
   },
+  "musicPlaybackSettings": "播放设置",
+  "musicSleepTimer": "定时关闭",
+  "musicSleepMinutes": "{minutes} 分钟",
+  "@musicSleepMinutes": {
+    "placeholders": {
+      "minutes": {}
+    }
+  },
+  "musicSleepAfterCurrentTrack": "播完当前曲",
+  "musicSleepOff": "关闭定时",
+  "musicSleepRemaining": "剩余 {minutes}:{seconds} 后暂停播放",
+  "@musicSleepRemaining": {
+    "placeholders": {
+      "minutes": {},
+      "seconds": {}
+    }
+  },
+  "musicPlaybackSpeed": "播放倍速",
+  "musicSpeedApplyHint": "切换档位对当前曲目立即生效",
   "musicQueueTitle": "播放队列",
   "musicQueueEmpty": "播放队列为空",
   "musicQueueClear": "清空队列",
