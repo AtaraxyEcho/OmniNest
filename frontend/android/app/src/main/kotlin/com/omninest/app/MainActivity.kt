@@ -1,5 +1,7 @@
 package com.omninest.app
 
+import android.content.Intent
+import android.net.Uri
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.os.Build
@@ -33,6 +35,25 @@ class MainActivity : AudioServiceActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "omninest/pip"
         )
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "omninest/battery"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "isIgnoringBatteryOptimizations" -> {
+                    result.success(isIgnoringBatteryOptimizations)
+                }
+                "requestIgnoreBatteryOptimizations" -> {
+                    val intent = Intent(
+                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                        Uri.parse("package:$packageName")
+                    )
+                    startActivity(intent)
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
     }
 
     override fun onUserLeaveHint() {

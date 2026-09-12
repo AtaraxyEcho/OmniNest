@@ -8139,6 +8139,19 @@ class AppLocalizationsEn extends AppLocalizations {
       'Send a system notification when tasks complete or fail';
 
   @override
+  String get batteryOptimizationTitle => 'Allow background running';
+
+  @override
+  String get batteryOptimizationHint =>
+      'Exclude the app from battery optimization so background backups are not blocked';
+
+  @override
+  String get batteryOptimizationGranted => 'Background running allowed';
+
+  @override
+  String get batteryOptimizationAllow => 'Allow';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

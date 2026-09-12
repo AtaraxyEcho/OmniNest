@@ -14915,6 +14915,30 @@ abstract class AppLocalizations {
   /// **'Send a system notification when tasks complete or fail'**
   String get profileTaskSystemNotificationsHint;
 
+  /// No description provided for @batteryOptimizationTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow background running'**
+  String get batteryOptimizationTitle;
+
+  /// No description provided for @batteryOptimizationHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Exclude the app from battery optimization so background backups are not blocked'**
+  String get batteryOptimizationHint;
+
+  /// No description provided for @batteryOptimizationGranted.
+  ///
+  /// In en, this message translates to:
+  /// **'Background running allowed'**
+  String get batteryOptimizationGranted;
+
+  /// No description provided for @batteryOptimizationAllow.
+  ///
+  /// In en, this message translates to:
+  /// **'Allow'**
+  String get batteryOptimizationAllow;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

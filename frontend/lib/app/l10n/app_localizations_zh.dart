@@ -7898,6 +7898,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileTaskSystemNotificationsHint => '任务完成或失败时发送系统通知';
 
   @override
+  String get batteryOptimizationTitle => '允许后台运行';
+
+  @override
+  String get batteryOptimizationHint => '将本应用加入电池优化白名单，避免后台备份被系统拦截';
+
+  @override
+  String get batteryOptimizationGranted => '已允许后台运行';
+
+  @override
+  String get batteryOptimizationAllow => '去允许';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override
