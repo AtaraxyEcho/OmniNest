@@ -14759,6 +14759,42 @@ abstract class AppLocalizations {
   /// **'The job is still running in the background; progress display has stopped. Refresh later to check.'**
   String get musicScanPollTimeout;
 
+  /// No description provided for @musicSelectionCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String musicSelectionCount(Object count);
+
+  /// No description provided for @musicSelectionSelectAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Select All'**
+  String get musicSelectionSelectAll;
+
+  /// No description provided for @musicSelectionExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit selection'**
+  String get musicSelectionExit;
+
+  /// No description provided for @musicBatchAddedToPlaylist.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {count} tracks to \"{name}\"'**
+  String musicBatchAddedToPlaylist(Object count, Object name);
+
+  /// No description provided for @musicBatchPartial.
+  ///
+  /// In en, this message translates to:
+  /// **'{success} succeeded, {failed} failed'**
+  String musicBatchPartial(Object success, Object failed);
+
+  /// No description provided for @musicBatchEnqueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Added {count} tracks to the play queue'**
+  String musicBatchEnqueued(Object count);
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

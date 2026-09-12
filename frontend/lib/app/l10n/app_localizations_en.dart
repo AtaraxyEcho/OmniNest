@@ -8043,6 +8043,32 @@ class AppLocalizationsEn extends AppLocalizations {
       'The job is still running in the background; progress display has stopped. Refresh later to check.';
 
   @override
+  String musicSelectionCount(Object count) {
+    return '$count selected';
+  }
+
+  @override
+  String get musicSelectionSelectAll => 'Select All';
+
+  @override
+  String get musicSelectionExit => 'Exit selection';
+
+  @override
+  String musicBatchAddedToPlaylist(Object count, Object name) {
+    return 'Added $count tracks to \"$name\"';
+  }
+
+  @override
+  String musicBatchPartial(Object success, Object failed) {
+    return '$success succeeded, $failed failed';
+  }
+
+  @override
+  String musicBatchEnqueued(Object count) {
+    return 'Added $count tracks to the play queue';
+  }
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

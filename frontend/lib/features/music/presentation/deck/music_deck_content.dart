@@ -10,6 +10,7 @@ import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_daily_recommendation_controller.dart';
 import 'package:omninest/features/music/application/music_scan_job_controller.dart';
+import 'package:omninest/features/music/application/music_selection_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -432,17 +433,36 @@ class _LibraryContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final selection = ref.watch(musicSelectionControllerProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _LibraryHeader(view: view, onViewChanged: onViewChanged),
+        if (selection.selectionMode)
+          _MusicBatchActionBar(center: center, selection: selection)
+        else
+          _LibraryHeader(view: view, onViewChanged: onViewChanged),
         const SizedBox(height: 14),
         Expanded(
           child: switch (view) {
             MusicDeckLibraryView.tracks => MusicDeckTrackList(
               items: _libraryItems(center, platform, sources),
               currentPlayableKey: center.currentItem?.playableKey,
+              selectedIds:
+                  selection.selectionMode ? selection.selectedIds : null,
+              onLongPress:
+                  selection.selectionMode
+                      ? null
+                      : () => ref
+                          .read(musicSelectionControllerProvider.notifier)
+                          .enterSelectionMode(center.tracks.first.id),
               onPlay: (index) {
+                if (selection.selectionMode) {
+                  final item = _libraryItems(center, platform, sources)[index];
+                  ref
+                      .read(musicSelectionControllerProvider.notifier)
+                      .toggle(item.track.id);
+                  return;
+                }
                 final items = _libraryItems(center, platform, sources);
                 ref
                     .read(musicCenterControllerProvider.notifier)
@@ -967,5 +987,139 @@ Future<void> _confirmScrapeLibrary(BuildContext context, WidgetRef ref) async {
         .scrapeLibrary(force: true);
   } on Exception {
     // 命令层已把失败写入中心状态 errorMessage，由页面统一展示。
+  }
+}
+
+/// 曲库批量操作条：全选、加入歌单、下一首播放与退出多选。
+class _MusicBatchActionBar extends ConsumerWidget {
+  const _MusicBatchActionBar({required this.center, required this.selection});
+
+  final MusicCenterState center;
+  final MusicSelectionState selection;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final colors = context.musicColors;
+    final notifier = ref.read(musicSelectionControllerProvider.notifier);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHigh.withValues(alpha: 0.5),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outline.withValues(alpha: 0.4)),
+      ),
+      child: Row(
+        children: [
+          Text(
+            l10n.musicSelectionCount(selection.selectedIds.length),
+            style: TextStyle(
+              color: colors.onSurface,
+              fontSize: AppTypography.bodyMedium,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          TextButton(
+            onPressed:
+                () =>
+                    notifier.selectAll(center.tracks.map((track) => track.id)),
+            child: Text(l10n.musicSelectionSelectAll),
+          ),
+          TextButton(
+            onPressed:
+                selection.hasSelection
+                    ? () => _addToPlaylist(context, ref)
+                    : null,
+            child: Text(l10n.musicAddToPlaylist),
+          ),
+          TextButton(
+            onPressed:
+                selection.hasSelection ? () => _enqueue(context, ref) : null,
+            child: Text(l10n.musicPlayNext),
+          ),
+          IconButton(
+            tooltip: l10n.musicSelectionExit,
+            onPressed: notifier.exitSelectionMode,
+            icon: const Icon(Icons.close_rounded, size: 18),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _addToPlaylist(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final playlist = await _showPlaylistPicker(context, ref);
+    if (playlist == null || !context.mounted) {
+      return;
+    }
+    final notifier = ref.read(musicSelectionControllerProvider.notifier);
+    final (success, failed) = await notifier.addSelectedToPlaylist(
+      playlist,
+      center.tracks,
+    );
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(
+            failed == 0
+                ? l10n.musicBatchAddedToPlaylist(success, playlist.name)
+                : l10n.musicBatchPartial(success, failed),
+          ),
+        ),
+      );
+  }
+
+  Future<void> _enqueue(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context);
+    final notifier = ref.read(musicSelectionControllerProvider.notifier);
+    final success = await notifier.enqueueSelected(center.tracks);
+    notifier.exitSelectionMode();
+    if (!context.mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(l10n.musicBatchEnqueued(success))));
+  }
+
+  Future<MusicPlaylist?> _showPlaylistPicker(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    MusicPlaylist? selected;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) {
+        final playlists = center.playlists;
+        return SafeArea(
+          child: Material(
+            color: Theme.of(sheetContext).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+            child: ListView(
+              shrinkWrap: true,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              children: [
+                for (final playlist in playlists)
+                  ListTile(
+                    title: Text(playlist.name),
+                    onTap: () {
+                      selected = playlist;
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    return selected;
   }
 }

@@ -20,6 +20,8 @@ class MusicDeckTrackList extends StatefulWidget {
     this.scrollable = true,
     this.onReachEnd,
     this.footer,
+    this.onLongPress,
+    this.selectedIds,
     super.key,
   });
 
@@ -35,6 +37,8 @@ class MusicDeckTrackList extends StatefulWidget {
   final bool scrollable;
   final VoidCallback? onReachEnd;
   final Widget? footer;
+  final VoidCallback? onLongPress;
+  final Set<String>? selectedIds;
 
   @override
   State<MusicDeckTrackList> createState() => _MusicDeckTrackListState();
@@ -126,6 +130,8 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
           widget.onAddToPlaylist == null || item.ref is! LocalMusicRef
               ? null
               : () => widget.onAddToPlaylist!(item),
+      onLongPress: widget.onLongPress,
+      checked: widget.selectedIds?.contains(item.track.id),
     );
   }
 }
@@ -140,6 +146,8 @@ class _MusicDeckTrackRow extends StatefulWidget {
     this.onDelete,
     this.onEnqueue,
     this.onAddToPlaylist,
+    this.onLongPress,
+    this.checked,
   });
 
   final MusicPlayableItem item;
@@ -150,6 +158,8 @@ class _MusicDeckTrackRow extends StatefulWidget {
   final VoidCallback? onDelete;
   final VoidCallback? onEnqueue;
   final VoidCallback? onAddToPlaylist;
+  final VoidCallback? onLongPress;
+  final bool? checked;
 
   @override
   State<_MusicDeckTrackRow> createState() => _MusicDeckTrackRowState();
@@ -186,18 +196,25 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
             borderRadius: BorderRadius.circular(6),
             onHover: (value) => setState(() => _hovered = value),
             onTap: widget.onTap,
+            onLongPress: widget.onLongPress,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Row(
                 children: [
-                  SizedBox.square(
-                    dimension: 40,
-                    child: MusicDeckArtwork(
-                      title: track.title,
-                      imageUrl: track.coverUrl,
-                      borderRadius: 5,
+                  if (widget.checked != null)
+                    Checkbox(
+                      value: widget.checked,
+                      onChanged: (_) => widget.onTap(),
+                    )
+                  else
+                    SizedBox.square(
+                      dimension: 40,
+                      child: MusicDeckArtwork(
+                        title: track.title,
+                        imageUrl: track.coverUrl,
+                        borderRadius: 5,
+                      ),
                     ),
-                  ),
                   const SizedBox(width: 10),
                   Expanded(
                     flex: 5,

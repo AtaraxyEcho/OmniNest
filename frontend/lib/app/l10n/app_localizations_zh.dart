@@ -7806,6 +7806,32 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicScanPollTimeout => '任务仍在后台执行，进度展示已停止，可稍后刷新查看。';
 
   @override
+  String musicSelectionCount(Object count) {
+    return '已选 $count 项';
+  }
+
+  @override
+  String get musicSelectionSelectAll => '全选';
+
+  @override
+  String get musicSelectionExit => '退出多选';
+
+  @override
+  String musicBatchAddedToPlaylist(Object count, Object name) {
+    return '已将 $count 首曲目加入「$name」';
+  }
+
+  @override
+  String musicBatchPartial(Object success, Object failed) {
+    return '$success 首成功，$failed 首失败';
+  }
+
+  @override
+  String musicBatchEnqueued(Object count) {
+    return '已将 $count 首曲目加入播放队列';
+  }
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

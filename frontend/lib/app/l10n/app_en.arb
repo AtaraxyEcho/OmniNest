@@ -3525,6 +3525,34 @@
   },
   "musicScanConfirmMessage": "Audio files in your music directories will be scanned into the library; existing files are skipped or updated.",
   "musicScanPollTimeout": "The job is still running in the background; progress display has stopped. Refresh later to check.",
+  "musicSelectionCount": "{count} selected",
+  "@musicSelectionCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "musicSelectionSelectAll": "Select All",
+  "musicSelectionExit": "Exit selection",
+  "musicBatchAddedToPlaylist": "Added {count} tracks to \"{name}\"",
+  "@musicBatchAddedToPlaylist": {
+    "placeholders": {
+      "count": {},
+      "name": {}
+    }
+  },
+  "musicBatchPartial": "{success} succeeded, {failed} failed",
+  "@musicBatchPartial": {
+    "placeholders": {
+      "success": {},
+      "failed": {}
+    }
+  },
+  "musicBatchEnqueued": "Added {count} tracks to the play queue",
+  "@musicBatchEnqueued": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "musicQueueTitle": "Play Queue",
   "musicQueueEmpty": "Play queue is empty",
   "musicQueueClear": "Clear Queue",

@@ -3399,6 +3399,34 @@
   },
   "musicScanConfirmMessage": "将扫描音乐目录中的音频文件并入库，已有文件会被跳过或更新。",
   "musicScanPollTimeout": "任务仍在后台执行，进度展示已停止，可稍后刷新查看。",
+  "musicSelectionCount": "已选 {count} 项",
+  "@musicSelectionCount": {
+    "placeholders": {
+      "count": {}
+    }
+  },
+  "musicSelectionSelectAll": "全选",
+  "musicSelectionExit": "退出多选",
+  "musicBatchAddedToPlaylist": "已将 {count} 首曲目加入「{name}」",
+  "@musicBatchAddedToPlaylist": {
+    "placeholders": {
+      "count": {},
+      "name": {}
+    }
+  },
+  "musicBatchPartial": "{success} 首成功，{failed} 首失败",
+  "@musicBatchPartial": {
+    "placeholders": {
+      "success": {},
+      "failed": {}
+    }
+  },
+  "musicBatchEnqueued": "已将 {count} 首曲目加入播放队列",
+  "@musicBatchEnqueued": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "musicQueueTitle": "播放队列",
   "musicQueueEmpty": "播放队列为空",
   "musicQueueClear": "清空队列",
