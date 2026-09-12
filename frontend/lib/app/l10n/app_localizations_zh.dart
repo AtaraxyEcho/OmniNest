@@ -7875,6 +7875,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicGenresPickHint => '选择一个流派查看曲目';
 
   @override
+  String get taskNotifyTitleCompleted => '任务完成';
+
+  @override
+  String get taskNotifyTitleFailed => '任务失败';
+
+  @override
+  String get profileTaskSystemNotifications => '系统通知';
+
+  @override
+  String get profileTaskSystemNotificationsHint => '任务完成或失败时发送系统通知';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

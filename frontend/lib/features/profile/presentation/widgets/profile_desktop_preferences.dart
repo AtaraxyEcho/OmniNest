@@ -7,6 +7,7 @@ import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/notifications/domain/notification_type.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/features/tasks/application/task_notification_service.dart';
 
 /// 桌面端个人中心的天气城市设置。
 class ProfileWeatherCityCard extends StatefulWidget {
@@ -158,6 +159,29 @@ class _ProfileNotificationSettingsCardState
             onChanged:
                 (value) =>
                     widget.onChanged(widget.prefs.copyWith(enabled: value)),
+          ),
+          const SizedBox(height: 12),
+          Consumer(
+            builder: (context, ref, _) {
+              final taskNotifyAsync = ref.watch(
+                taskNotificationEnabledProvider,
+              );
+              return taskNotifyAsync.when(
+                data:
+                    (enabled) => _PreferenceSwitchTile(
+                      icon: Icons.system_update_outlined,
+                      title: l10n.profileTaskSystemNotifications,
+                      subtitle: l10n.profileTaskSystemNotificationsHint,
+                      value: enabled,
+                      onChanged:
+                          (value) => ref
+                              .read(taskNotificationEnabledProvider.notifier)
+                              .setEnabled(value),
+                    ),
+                loading: () => const SizedBox.shrink(),
+                error: (_, _) => const SizedBox.shrink(),
+              );
+            },
           ),
           const SizedBox(height: 12),
           widget.typesAsync.when(

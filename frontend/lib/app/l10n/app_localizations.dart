@@ -14873,6 +14873,30 @@ abstract class AppLocalizations {
   /// **'Pick a genre to browse its tracks'**
   String get musicGenresPickHint;
 
+  /// No description provided for @taskNotifyTitleCompleted.
+  ///
+  /// In en, this message translates to:
+  /// **'Task Completed'**
+  String get taskNotifyTitleCompleted;
+
+  /// No description provided for @taskNotifyTitleFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Task Failed'**
+  String get taskNotifyTitleFailed;
+
+  /// No description provided for @profileTaskSystemNotifications.
+  ///
+  /// In en, this message translates to:
+  /// **'System Notifications'**
+  String get profileTaskSystemNotifications;
+
+  /// No description provided for @profileTaskSystemNotificationsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Send a system notification when tasks complete or fail'**
+  String get profileTaskSystemNotificationsHint;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

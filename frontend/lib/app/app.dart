@@ -25,6 +25,7 @@ import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_host.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
+import 'package:omninest/features/tasks/application/task_notification_service.dart';
 
 class OmniNestApp extends ConsumerStatefulWidget {
   const OmniNestApp({super.key});
@@ -63,6 +64,8 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
 
     // 通知复用实时同步连接，仅用于副作用。
     ref.watch(notificationRealtimeSubscriptionProvider);
+    // 任务终态系统通知：监听任务列表并按偏好发送系统通知。
+    ref.watch(taskSystemNotificationBindingProvider);
 
     return MaterialApp.router(
       debugShowCheckedModeBanner: false,

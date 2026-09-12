@@ -8115,6 +8115,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicGenresPickHint => 'Pick a genre to browse its tracks';
 
   @override
+  String get taskNotifyTitleCompleted => 'Task Completed';
+
+  @override
+  String get taskNotifyTitleFailed => 'Task Failed';
+
+  @override
+  String get profileTaskSystemNotifications => 'System Notifications';
+
+  @override
+  String get profileTaskSystemNotificationsHint =>
+      'Send a system notification when tasks complete or fail';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override
