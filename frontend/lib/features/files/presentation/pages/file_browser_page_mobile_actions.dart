@@ -61,6 +61,34 @@ class _FileMobileCreateButton extends StatelessWidget {
                   ),
                   ListTile(
                     enabled: canWrite,
+                    leading: Icon(Icons.photo_camera_rounded),
+                    title: Text(l10n.filesCameraTakePhoto),
+                    onTap:
+                        canWrite
+                            ? () {
+                              Navigator.of(sheetContext).pop();
+                              unawaited(
+                                _pickPhotoFromCamera(context, controller),
+                              );
+                            }
+                            : null,
+                  ),
+                  ListTile(
+                    enabled: canWrite,
+                    leading: Icon(Icons.videocam_rounded),
+                    title: Text(l10n.filesCameraRecordVideo),
+                    onTap:
+                        canWrite
+                            ? () {
+                              Navigator.of(sheetContext).pop();
+                              unawaited(
+                                _pickVideoFromCamera(context, controller),
+                              );
+                            }
+                            : null,
+                  ),
+                  ListTile(
+                    enabled: canWrite,
                     leading: Icon(Icons.create_new_folder_outlined),
                     title: Text(l10n.filesNewFolder),
                     onTap:

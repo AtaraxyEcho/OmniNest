@@ -1198,6 +1198,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesRecycleBinEmpty => 'Recycle bin is empty';
 
   @override
+  String get filesCameraTakePhoto => 'Take Photo & Upload';
+
+  @override
+  String get filesCameraRecordVideo => 'Record Video & Upload';
+
+  @override
   String get filesUploadFile => 'Upload File';
 
   @override

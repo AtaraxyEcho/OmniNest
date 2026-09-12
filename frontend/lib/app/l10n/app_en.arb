@@ -419,6 +419,8 @@
   "filesSoftDeleted": "Soft Deleted Files",
   "filesEmpty": "No files",
   "filesRecycleBinEmpty": "Recycle bin is empty",
+  "filesCameraTakePhoto": "Take Photo & Upload",
+  "filesCameraRecordVideo": "Record Video & Upload",
   "filesUploadFile": "Upload File",
   "filesLoadMore": "Load more ({loaded} / {total} loaded)",
   "@filesLoadMore": {

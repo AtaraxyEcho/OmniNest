@@ -2306,6 +2306,18 @@ abstract class AppLocalizations {
   /// **'Recycle bin is empty'**
   String get filesRecycleBinEmpty;
 
+  /// No description provided for @filesCameraTakePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Take Photo & Upload'**
+  String get filesCameraTakePhoto;
+
+  /// No description provided for @filesCameraRecordVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Record Video & Upload'**
+  String get filesCameraRecordVideo;
+
   /// No description provided for @filesUploadFile.
   ///
   /// In en, this message translates to:

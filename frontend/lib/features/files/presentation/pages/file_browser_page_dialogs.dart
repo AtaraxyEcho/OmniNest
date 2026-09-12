@@ -500,6 +500,53 @@ class _FolderBreadcrumb {
   final String name;
 }
 
+/// 拍照后直传入库。
+Future<void> _pickPhotoFromCamera(
+  BuildContext context,
+  FileBrowserController controller,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final failureText = AppLocalizations.of(context).filesUploadDone;
+  try {
+    final shot = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      maxWidth: 4096,
+    );
+    if (shot == null || !context.mounted) {
+      return;
+    }
+    await _uploadFiles(context, controller, [shot]);
+  } on PlatformException catch (error) {
+    if (messenger.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('$failureText: ${error.code}')),
+      );
+    }
+  }
+}
+
+/// 录像后直传入库。
+Future<void> _pickVideoFromCamera(
+  BuildContext context,
+  FileBrowserController controller,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final failureText = AppLocalizations.of(context).filesUploadDone;
+  try {
+    final shot = await ImagePicker().pickVideo(source: ImageSource.camera);
+    if (shot == null || !context.mounted) {
+      return;
+    }
+    await _uploadFiles(context, controller, [shot]);
+  } on PlatformException catch (error) {
+    if (messenger.mounted) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('$failureText: ${error.code}')),
+      );
+    }
+  }
+}
+
 Future<void> _pickAndUploadFiles(
   BuildContext context,
   FileBrowserController controller,

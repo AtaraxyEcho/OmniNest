@@ -419,6 +419,8 @@
   "filesSoftDeleted": "软删除文件",
   "filesEmpty": "暂无文件",
   "filesRecycleBinEmpty": "回收站为空",
+  "filesCameraTakePhoto": "拍照上传",
+  "filesCameraRecordVideo": "录像上传",
   "filesUploadFile": "上传文件",
   "filesLoadMore": "加载更多（已加载 {loaded} / {total}）",
   "@filesLoadMore": {

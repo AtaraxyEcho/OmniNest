@@ -1149,6 +1149,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesRecycleBinEmpty => '回收站为空';
 
   @override
+  String get filesCameraTakePhoto => '拍照上传';
+
+  @override
+  String get filesCameraRecordVideo => '录像上传';
+
+  @override
   String get filesUploadFile => '上传文件';
 
   @override
