@@ -24,6 +24,9 @@ abstract interface class FileRepository {
 
   Future<FileNode> moveFile({required String fileId, required String parentId});
 
+  /// 复制文件节点到目标目录（null 表示根目录）。
+  Future<FileNode> copyFile({required String fileId, String? targetParentId});
+
   Future<String> downloadUrl(String fileId);
 
   Future<String> loadTextPreview(String fileId);

@@ -330,6 +330,14 @@ class _FileNodeWorkspace extends ConsumerWidget {
               (file) => unawaited(
                 _runFileAction(context, () => controller.restoreFile(file)),
               ),
+          onCopy:
+              recycle || isShared
+                  ? null
+                  : (file) => _showCopyDialog(
+                    context: context,
+                    controller: controller,
+                    file: file,
+                  ),
           onMove:
               recycle
                   ? null
@@ -433,6 +441,14 @@ class _FileNodeWorkspace extends ConsumerWidget {
             (file) => unawaited(
               _runFileAction(context, () => controller.restoreFile(file)),
             ),
+        onCopy:
+            recycle || isShared
+                ? null
+                : (file) => _showCopyDialog(
+                  context: context,
+                  controller: controller,
+                  file: file,
+                ),
         onMove:
             recycle
                 ? null

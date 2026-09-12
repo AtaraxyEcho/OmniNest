@@ -16,6 +16,7 @@ class FileGrid extends StatelessWidget {
     required this.onPurge,
     required this.onRestore,
     required this.onOpen,
+    this.onCopy,
     this.onMove,
     this.onMoveToSharedSpace,
     this.onMoveToPersonalSpace,
@@ -38,6 +39,7 @@ class FileGrid extends StatelessWidget {
   final ValueChanged<FileNode> onPurge;
   final ValueChanged<FileNode> onRestore;
   final ValueChanged<FileNode> onOpen;
+  final ValueChanged<FileNode>? onCopy;
   final ValueChanged<FileNode>? onMove;
   final ValueChanged<FileNode>? onMoveToSharedSpace;
   final ValueChanged<FileNode>? onMoveToPersonalSpace;
@@ -117,6 +119,7 @@ class FileGrid extends StatelessWidget {
                 onPurge: onPurge,
                 onRestore: onRestore,
                 onOpen: onOpen,
+                onCopy: onCopy,
                 onMove: onMove,
                 onMoveToSharedSpace: onMoveToSharedSpace,
                 onMoveToPersonalSpace: onMoveToPersonalSpace,
@@ -148,6 +151,7 @@ class _FileTile extends StatefulWidget {
     required this.onPurge,
     required this.onRestore,
     required this.onOpen,
+    this.onCopy,
     this.onMove,
     this.onMoveToSharedSpace,
     this.onMoveToPersonalSpace,
@@ -169,6 +173,7 @@ class _FileTile extends StatefulWidget {
   final ValueChanged<FileNode> onPurge;
   final ValueChanged<FileNode> onRestore;
   final ValueChanged<FileNode> onOpen;
+  final ValueChanged<FileNode>? onCopy;
   final ValueChanged<FileNode>? onMove;
   final ValueChanged<FileNode>? onMoveToSharedSpace;
   final ValueChanged<FileNode>? onMoveToPersonalSpace;
@@ -299,6 +304,7 @@ class _FileTileState extends State<_FileTile> {
                           onPurge: widget.onPurge,
                           onRestore: widget.onRestore,
                           onOpen: widget.onOpen,
+                          onCopy: widget.onCopy,
                           onMove: widget.onMove,
                           onMoveToSharedSpace: widget.onMoveToSharedSpace,
                           onMoveToPersonalSpace: widget.onMoveToPersonalSpace,
@@ -351,6 +357,7 @@ class _FileTileMenu extends StatelessWidget {
     required this.onPurge,
     required this.onRestore,
     required this.onOpen,
+    this.onCopy,
     this.onMove,
     this.onMoveToSharedSpace,
     this.onMoveToPersonalSpace,
@@ -369,6 +376,7 @@ class _FileTileMenu extends StatelessWidget {
   final ValueChanged<FileNode> onPurge;
   final ValueChanged<FileNode> onRestore;
   final ValueChanged<FileNode> onOpen;
+  final ValueChanged<FileNode>? onCopy;
   final ValueChanged<FileNode>? onMove;
   final ValueChanged<FileNode>? onMoveToSharedSpace;
   final ValueChanged<FileNode>? onMoveToPersonalSpace;
@@ -392,6 +400,8 @@ class _FileTileMenu extends StatelessWidget {
             onOpen(file);
           case _FileAction.rename:
             onRename(file);
+          case _FileAction.copy:
+            onCopy?.call(file);
           case _FileAction.move:
             onMove?.call(file);
           case _FileAction.moveToShared:
@@ -431,6 +441,17 @@ class _FileTileMenu extends StatelessWidget {
                 value: _FileAction.rename,
                 child: Text(AppLocalizations.of(context).filesRename),
               ),
+              if (onCopy != null && !file.isFolder)
+                PopupMenuItem(
+                  value: _FileAction.copy,
+                  child: ListTile(
+                    leading: const Icon(Icons.file_copy_outlined),
+                    title: Text(
+                      AppLocalizations.of(context).filesCopyToEllipsis,
+                    ),
+                    dense: true,
+                  ),
+                ),
               if (onMove != null)
                 PopupMenuItem(
                   value: _FileAction.move,
@@ -488,6 +509,7 @@ class _FileTileMenu extends StatelessWidget {
 enum _FileAction {
   open,
   favorite,
+  copy,
   rename,
   move,
   moveToShared,

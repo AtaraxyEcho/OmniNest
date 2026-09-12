@@ -1267,6 +1267,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesPurge => 'Permanently Delete';
 
   @override
+  String get filesCopyToEllipsis => 'Copy to…';
+
+  @override
+  String filesCopiedFile(Object name) {
+    return 'Copied \"$name\"';
+  }
+
+  @override
+  String get filesCopyFailed => 'Copy failed';
+
+  @override
   String get filesMoveToEllipsis => 'Move to…';
 
   @override

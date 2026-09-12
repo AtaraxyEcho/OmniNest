@@ -94,6 +94,18 @@ extension FileBrowserSelectionActions on FileBrowserController {
     });
   }
 
+  /// 复制文件到目标目录（null 表示根目录）。
+  Future<void> copyFile(FileNode file, String? targetParentId) async {
+    await _runAction('复制文件', () async {
+      await _repository.copyFile(
+        fileId: file.id,
+        targetParentId: targetParentId,
+      );
+      _clearSelection();
+      await refreshFileNodesForCurrentSection();
+    });
+  }
+
   Future<void> moveFile(FileNode file, String targetParentId) async {
     await _runAction('移动文件', () async {
       await _repository.moveFile(fileId: file.id, parentId: targetParentId);

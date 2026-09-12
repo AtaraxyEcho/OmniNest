@@ -63,6 +63,11 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<FileNode> copyFile({required String fileId, String? targetParentId}) {
+    return fileApi.copyFile(fileId: fileId, targetParentId: targetParentId);
+  }
+
+  @override
   Future<String> downloadUrl(String fileId) {
     return fileApi.downloadUrl(fileId);
   }

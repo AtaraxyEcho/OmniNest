@@ -1218,6 +1218,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesPurge => '彻底删除';
 
   @override
+  String get filesCopyToEllipsis => '复制到…';
+
+  @override
+  String filesCopiedFile(Object name) {
+    return '已复制 \"$name\"';
+  }
+
+  @override
+  String get filesCopyFailed => '复制失败';
+
+  @override
   String get filesMoveToEllipsis => '移动到…';
 
   @override

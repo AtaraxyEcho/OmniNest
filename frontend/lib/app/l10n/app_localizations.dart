@@ -2432,6 +2432,24 @@ abstract class AppLocalizations {
   /// **'Permanently Delete'**
   String get filesPurge;
 
+  /// No description provided for @filesCopyToEllipsis.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy to…'**
+  String get filesCopyToEllipsis;
+
+  /// No description provided for @filesCopiedFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied \"{name}\"'**
+  String filesCopiedFile(Object name);
+
+  /// No description provided for @filesCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy failed'**
+  String get filesCopyFailed;
+
   /// No description provided for @filesMoveToEllipsis.
   ///
   /// In en, this message translates to:

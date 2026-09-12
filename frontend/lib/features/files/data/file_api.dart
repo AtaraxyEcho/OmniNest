@@ -103,6 +103,18 @@ class FileApi {
     return parseFileNodeResponse(response.data);
   }
 
+  /// 复制文件节点到目标目录（null 表示根目录）。
+  Future<FileNode> copyFile({
+    required String fileId,
+    String? targetParentId,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/files/$fileId/copy',
+      data: {'targetParentId': targetParentId},
+    );
+    return parseFileNodeResponse(response.data);
+  }
+
   Future<String> downloadUrl(String fileId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/files/$fileId/download-url',

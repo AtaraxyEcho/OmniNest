@@ -213,6 +213,31 @@ Future<void> _downloadFile(
   }
 }
 
+/// 复制文件到目标目录的对话框（与移动共用目录选择器）。
+Future<void> _showCopyDialog({
+  required BuildContext context,
+  required FileBrowserController controller,
+  required FileNode file,
+}) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final l10n = AppLocalizations.of(context);
+  final targetId = await showDialog<String>(
+    context: context,
+    builder: (ctx) => _FolderPickerDialog(excludeIds: {file.id}),
+  );
+  if (targetId == null || !messenger.mounted) return;
+  await _runFileActionWithMessenger(messenger, () async {
+    await controller.copyFile(file, targetId.isEmpty ? null : targetId);
+    if (!messenger.mounted) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l10n.filesCopiedFile(file.name)),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  });
+}
+
 Future<void> _showMoveDialog({
   required BuildContext context,
   required FileBrowserController controller,

@@ -728,6 +728,12 @@ class _FakeFileRepository implements FileRepository {
   }) => throw UnimplementedError();
 
   @override
+  Future<FileNode> copyFile({
+    required String fileId,
+    String? targetParentId,
+  }) => throw UnimplementedError();
+
+  @override
   Future<String> downloadUrl(String fileId) => throw UnimplementedError();
 
   @override
