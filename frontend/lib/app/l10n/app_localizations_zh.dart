@@ -7377,6 +7377,18 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get musicLibraryAlbumsEmptyTitle => '还没有专辑';
+
+  @override
+  String get musicLibraryAlbumsEmptyMessage => '导入本地音乐或连接在线平台后，专辑会出现在这里。';
+
+  @override
+  String get musicLibraryArtistsEmptyTitle => '还没有艺人';
+
+  @override
+  String get musicLibraryArtistsEmptyMessage => '导入本地音乐或连接在线平台后，艺人会出现在这里。';
+
+  @override
   String get musicDailyRecommendationEmpty => '今日推荐暂不可用，请稍后再试';
 
   @override

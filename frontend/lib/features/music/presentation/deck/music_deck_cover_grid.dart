@@ -51,6 +51,8 @@ class MusicDeckCoverGrid extends StatelessWidget {
     required this.items,
     this.minTileWidth = 142,
     this.maxTileWidth = 196,
+    this.emptyTitle,
+    this.emptyMessage,
     super.key,
   });
 
@@ -58,8 +60,15 @@ class MusicDeckCoverGrid extends StatelessWidget {
   final double minTileWidth;
   final double maxTileWidth;
 
+  /// 空态标题；为空且 items 为空时保持原状（零高度网格）。
+  final String? emptyTitle;
+  final String? emptyMessage;
+
   @override
   Widget build(BuildContext context) {
+    if (items.isEmpty && emptyTitle != null) {
+      return _CoverGridEmpty(title: emptyTitle!, message: emptyMessage);
+    }
     return LayoutBuilder(
       builder: (context, constraints) {
         final width =
@@ -82,6 +91,53 @@ class MusicDeckCoverGrid extends StatelessWidget {
               (context, index) => _MusicDeckCoverTile(item: items[index]),
         );
       },
+    );
+  }
+}
+
+/// 封面网格空态：与曲目列表空态同构的图标 + 标题 + 说明。
+class _CoverGridEmpty extends StatelessWidget {
+  const _CoverGridEmpty({required this.title, this.message});
+
+  final String title;
+  final String? message;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 48),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.library_music_outlined,
+              size: 44,
+              color: scheme.onSurfaceVariant,
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: scheme.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (message != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                message!,
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

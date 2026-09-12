@@ -3330,6 +3330,10 @@
       "count": {}
     }
   },
+  "musicLibraryAlbumsEmptyTitle": "No albums yet",
+  "musicLibraryAlbumsEmptyMessage": "Albums will appear here after importing local music or connecting an online platform.",
+  "musicLibraryArtistsEmptyTitle": "No artists yet",
+  "musicLibraryArtistsEmptyMessage": "Artists will appear here after importing local music or connecting an online platform.",
   "musicDailyRecommendationEmpty": "Today's recommendations are unavailable. Try again later.",
   "musicDailyRecommendationLoadFailed": "Could not load daily recommendations. Try again.",
   "musicDeckAccounts": "Platform accounts",

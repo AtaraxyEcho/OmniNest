@@ -13955,6 +13955,30 @@ abstract class AppLocalizations {
   /// **'{count} tracks · Updated daily'**
   String musicDailyRecommendationTrackCount(Object count);
 
+  /// No description provided for @musicLibraryAlbumsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No albums yet'**
+  String get musicLibraryAlbumsEmptyTitle;
+
+  /// No description provided for @musicLibraryAlbumsEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums will appear here after importing local music or connecting an online platform.'**
+  String get musicLibraryAlbumsEmptyMessage;
+
+  /// No description provided for @musicLibraryArtistsEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No artists yet'**
+  String get musicLibraryArtistsEmptyTitle;
+
+  /// No description provided for @musicLibraryArtistsEmptyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Artists will appear here after importing local music or connecting an online platform.'**
+  String get musicLibraryArtistsEmptyMessage;
+
   /// No description provided for @musicDailyRecommendationEmpty.
   ///
   /// In en, this message translates to:

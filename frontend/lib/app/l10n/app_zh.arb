@@ -3204,6 +3204,10 @@
       "count": {}
     }
   },
+  "musicLibraryAlbumsEmptyTitle": "还没有专辑",
+  "musicLibraryAlbumsEmptyMessage": "导入本地音乐或连接在线平台后，专辑会出现在这里。",
+  "musicLibraryArtistsEmptyTitle": "还没有艺人",
+  "musicLibraryArtistsEmptyMessage": "导入本地音乐或连接在线平台后，艺人会出现在这里。",
   "musicDailyRecommendationEmpty": "今日推荐暂不可用，请稍后再试",
   "musicDailyRecommendationLoadFailed": "加载每日推荐失败，请稍后重试",
   "musicDeckAccounts": "平台账号",

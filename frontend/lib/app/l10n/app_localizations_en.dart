@@ -7593,6 +7593,20 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get musicLibraryAlbumsEmptyTitle => 'No albums yet';
+
+  @override
+  String get musicLibraryAlbumsEmptyMessage =>
+      'Albums will appear here after importing local music or connecting an online platform.';
+
+  @override
+  String get musicLibraryArtistsEmptyTitle => 'No artists yet';
+
+  @override
+  String get musicLibraryArtistsEmptyMessage =>
+      'Artists will appear here after importing local music or connecting an online platform.';
+
+  @override
   String get musicDailyRecommendationEmpty =>
       'Today\'s recommendations are unavailable. Try again later.';
 

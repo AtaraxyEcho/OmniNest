@@ -433,6 +433,8 @@ class _LibraryContent extends ConsumerWidget {
                 sources,
                 onOpenCollection,
               ),
+              emptyTitle: l10n.musicLibraryAlbumsEmptyTitle,
+              emptyMessage: l10n.musicLibraryAlbumsEmptyMessage,
             ),
             MusicDeckLibraryView.artists => MusicDeckCoverGrid(
               items: _artistCoverItems(
@@ -442,6 +444,8 @@ class _LibraryContent extends ConsumerWidget {
                 sources,
                 onOpenCollection,
               ),
+              emptyTitle: l10n.musicLibraryArtistsEmptyTitle,
+              emptyMessage: l10n.musicLibraryArtistsEmptyMessage,
             ),
           },
         ),
