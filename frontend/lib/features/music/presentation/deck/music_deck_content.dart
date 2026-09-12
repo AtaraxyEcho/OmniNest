@@ -234,23 +234,43 @@ class _DailyRecommendationSection extends ConsumerWidget {
             if (value.tracks.isEmpty) {
               return _InlineEmpty(message: l10n.musicDailyRecommendationEmpty);
             }
-            final item = MusicDeckCoverItem(
-              id:
-                  '${value.platform}:daily:${value.recommendationDate.toIso8601String()}',
-              title: l10n.musicDailyRecommendationTitle,
-              subtitle: l10n.musicDailyRecommendationTrackCount(
-                value.tracks.length,
-              ),
-              imageUrl: value.coverUrl,
-              platform: MusicPlatform.netease,
-              overlayPlatformBadge: true,
-              icon: Icons.today_rounded,
-              onTap:
-                  () => onOpenCollection(
-                    DailyRecommendationMusicDeckCollection(value),
-                  ),
-            );
-            return MusicDeckCoverShelf(items: [item]);
+            if (value.tracks.length < 2) {
+              final item = MusicDeckCoverItem(
+                id:
+                    '${value.platform}:daily:${value.recommendationDate.toIso8601String()}',
+                title: l10n.musicDailyRecommendationTitle,
+                subtitle: l10n.musicDailyRecommendationTrackCount(
+                  value.tracks.length,
+                ),
+                imageUrl: value.coverUrl,
+                platform: MusicPlatform.netease,
+                overlayPlatformBadge: true,
+                icon: Icons.today_rounded,
+                onTap:
+                    () => onOpenCollection(
+                      DailyRecommendationMusicDeckCollection(value),
+                    ),
+              );
+              return MusicDeckCoverShelf(items: [item]);
+            }
+            final platform = MusicPlatform.fromApiValue(value.platform);
+            final items = [
+              for (final track in value.tracks.take(10))
+                MusicDeckCoverItem(
+                  id:
+                      '${value.platform}:daily:${value.recommendationDate.toIso8601String()}:${track.songId}',
+                  title: track.title,
+                  subtitle: track.artistName,
+                  imageUrl: track.coverUrl,
+                  platform: platform,
+                  overlayPlatformBadge: true,
+                  onTap:
+                      () => ref
+                          .read(musicCenterControllerProvider.notifier)
+                          .playOnlineTrack(track),
+                ),
+            ];
+            return MusicDeckCoverShelf(items: items);
           },
           error:
               (error, stackTrace) => _PartialFailureBanner(
