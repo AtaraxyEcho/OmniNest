@@ -77,7 +77,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                         onTap: onNext,
                       ),
                       const SizedBox(width: 6),
-                      // 播放队列与播放设置属于常用控件，窄面板同样保留。
+                      // 常用次级操作聚拢，窄面板同样保留队列与设置。
                       _GlassIconButton(
                         palette: palette,
                         tooltip: l10n.musicQueueTitle,
@@ -103,12 +103,19 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                         ),
                       ] else
                         const Spacer(),
-                      if (settings.volumeEnabled && !compact) ...[
-                        SizedBox(width: 14 * scale),
-                        _GlassVolumeControl(
-                          palette: palette,
+                      // 音量统一为图标按钮：点击展开控制条，窄面板也保留。
+                      if (settings.volumeEnabled) ...[
+                        SizedBox(width: (compact ? 8 : 12) * scale),
+                        MusicVolumeButton(
                           player: player,
                           tooltip: l10n.portalMusicVisualizerVolume,
+                          style: MusicVolumeButtonStyle.glass,
+                          iconColor: palette.text.withValues(alpha: 0.86),
+                          mutedIconColor: palette.text.withValues(alpha: 0.48),
+                          activeColor: palette.accent,
+                          panelTextColor: palette.text,
+                          panelBackground: const Color(0xF00E151B),
+                          iconSize: 19,
                         ),
                       ],
                       if (!compact) ...[
@@ -265,67 +272,5 @@ class _GlassMusicProgress extends StatelessWidget {
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
-  }
-}
-
-class _GlassVolumeControl extends StatelessWidget {
-  const _GlassVolumeControl({
-    required this.palette,
-    required this.player,
-    required this.tooltip,
-  });
-
-  final MusicImmersivePalette palette;
-  final MusicAudioPlayback player;
-  final String tooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: SizedBox(
-        width: 116,
-        child: StreamBuilder<double>(
-          stream: player.stream.volume,
-          initialData: player.state.volume,
-          builder: (context, snapshot) {
-            final volume = (snapshot.data ?? 100).clamp(0.0, 100.0).toDouble();
-            return Row(
-              children: [
-                Icon(
-                  volume <= 0
-                      ? Icons.volume_off_rounded
-                      : Icons.volume_up_rounded,
-                  size: 17,
-                  color: palette.text.withValues(alpha: 0.78),
-                ),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 4,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 10,
-                      ),
-                      activeTrackColor: palette.text.withValues(alpha: 0.68),
-                      inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
-                      thumbColor: palette.text,
-                      overlayColor: palette.text.withValues(alpha: 0.10),
-                    ),
-                    child: AppSlider(
-                      value: volume / 100,
-                      onChanged: (next) => player.setVolume(next * 100),
-                    ),
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
-      ),
-    );
   }
 }

@@ -21,8 +21,11 @@ import 'package:omninest/features/music/application/music_visualizer_preset_cont
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_lyrics.dart';
+import 'package:omninest/features/music/presentation/deck/music_deck_queue_sheet.dart';
+import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
+import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
 
 part 'music_immersive_cover_deck.dart';
 part 'music_immersive_cover_plane.dart';
