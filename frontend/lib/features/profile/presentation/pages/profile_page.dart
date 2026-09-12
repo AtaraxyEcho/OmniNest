@@ -24,6 +24,7 @@ import 'package:omninest/features/profile/presentation/widgets/profile_desktop_p
 import 'package:omninest/features/profile/presentation/widgets/profile_desktop_shell.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_mobile_content.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
+import 'package:omninest/features/profile/presentation/widgets/profile_two_factor_card.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_support_panels.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
@@ -313,6 +314,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       ProfileSection.security => Column(
         children: [
           ProfileSecurityActionsPanel(onChangePassword: _showChangePassword),
+          const SizedBox(height: 18),
+          const ProfileTwoFactorCard(),
           const SizedBox(height: 18),
           const ProfileSessionManagementPanel(),
         ],

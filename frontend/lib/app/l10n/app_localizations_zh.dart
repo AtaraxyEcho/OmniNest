@@ -640,6 +640,99 @@ class AppLocalizationsZh extends AppLocalizations {
   String get changePasswordConfirmNew => '确认新密码';
 
   @override
+  String get loginTwoFactorTitle => '两步验证';
+
+  @override
+  String get loginTwoFactorSubtitle => '输入验证器 App 中的 6 位验证码完成登录';
+
+  @override
+  String get loginTwoFactorCodeLabel => '验证码';
+
+  @override
+  String get loginTwoFactorCodeHint => '请输入 6 位验证码';
+
+  @override
+  String get loginTwoFactorUseBackupHint => '丢失认证器时可输入一次性备份码（XXXX-XXXX）';
+
+  @override
+  String get loginTwoFactorVerifyAndSignIn => '验证并登录';
+
+  @override
+  String get loginTwoFactorBackToLogin => '返回重新登录';
+
+  @override
+  String get twoFactorEnrollTitle => '开启两步验证';
+
+  @override
+  String get twoFactorEnrollSubtitle => '当前角色要求开启两步验证，请先完成注册引导';
+
+  @override
+  String get twoFactorEnrollPasswordLabel => '登录密码';
+
+  @override
+  String get twoFactorEnrollPasswordHint => '请输入登录密码';
+
+  @override
+  String get twoFactorEnrollContinue => '下一步：扫码';
+
+  @override
+  String get twoFactorEnrollScanHint => '使用验证器 App 扫描二维码，或复制秘钥手动添加';
+
+  @override
+  String get twoFactorEnrollSecretLabel => '复制秘钥';
+
+  @override
+  String get twoFactorEnrollConfirmCode => '确认开启';
+
+  @override
+  String get twoFactorEnrollBackupTitle => '备份码';
+
+  @override
+  String get twoFactorEnrollBackupHint => '以下一次性备份码仅显示这一次，丢失认证器时用于恢复登录，请妥善保存。';
+
+  @override
+  String get twoFactorEnrollBackupSavedCheck => '我已保存备份码';
+
+  @override
+  String get twoFactorEnrollSavedAndFinish => '完成并登录';
+
+  @override
+  String get twoFactorCopied => '已复制到剪贴板';
+
+  @override
+  String get twoFactorCopyCodes => '复制全部备份码';
+
+  @override
+  String get twoFactorDisableHint => '关闭后登录将不再需要验证码，请确认。';
+
+  @override
+  String get profileTwoFactorTitle => '两步验证';
+
+  @override
+  String get profileTwoFactorSubtitle => '为登录增加一次性验证码保护';
+
+  @override
+  String get profileTwoFactorEnabled => '已开启';
+
+  @override
+  String get profileTwoFactorDisabled => '未开启';
+
+  @override
+  String get profileTwoFactorRequiredBadge => '当前角色要求开启，尚未开启';
+
+  @override
+  String get profileTwoFactorEnableAction => '开启';
+
+  @override
+  String get profileTwoFactorDisableAction => '关闭';
+
+  @override
+  String get profileTwoFactorDisableConfirm => '确认关闭';
+
+  @override
+  String get profileTwoFactorLoadFailed => '状态加载失败';
+
+  @override
   String get changePasswordMismatch => '两次密码不一致';
 
   @override
@@ -8759,7 +8852,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get videoDetailTabOverview => 'overview';
 
   @override
-  String get videoDetailTabVersions => 'versions';
+  String get videoDetailTabVersions => '版本';
 
   @override
   String get videoDetailTabSubtitles => 'subtitles';

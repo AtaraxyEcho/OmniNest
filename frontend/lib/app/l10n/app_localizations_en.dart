@@ -665,6 +665,107 @@ class AppLocalizationsEn extends AppLocalizations {
   String get changePasswordConfirmNew => 'Confirm New Password';
 
   @override
+  String get loginTwoFactorTitle => 'Two-Factor Verification';
+
+  @override
+  String get loginTwoFactorSubtitle =>
+      'Enter the 6-digit code from your authenticator app to sign in';
+
+  @override
+  String get loginTwoFactorCodeLabel => 'Verification code';
+
+  @override
+  String get loginTwoFactorCodeHint => 'Enter the 6-digit code';
+
+  @override
+  String get loginTwoFactorUseBackupHint =>
+      'You can also enter a one-time backup code (XXXX-XXXX)';
+
+  @override
+  String get loginTwoFactorVerifyAndSignIn => 'Verify and sign in';
+
+  @override
+  String get loginTwoFactorBackToLogin => 'Back to sign in';
+
+  @override
+  String get twoFactorEnrollTitle => 'Set Up Two-Factor Verification';
+
+  @override
+  String get twoFactorEnrollSubtitle =>
+      'Your role requires two-factor verification. Complete setup to continue';
+
+  @override
+  String get twoFactorEnrollPasswordLabel => 'Login password';
+
+  @override
+  String get twoFactorEnrollPasswordHint => 'Enter your login password';
+
+  @override
+  String get twoFactorEnrollContinue => 'Next: scan QR code';
+
+  @override
+  String get twoFactorEnrollScanHint =>
+      'Scan the QR code with your authenticator app, or copy the secret to add it manually';
+
+  @override
+  String get twoFactorEnrollSecretLabel => 'Copy secret';
+
+  @override
+  String get twoFactorEnrollConfirmCode => 'Confirm and enable';
+
+  @override
+  String get twoFactorEnrollBackupTitle => 'Backup codes';
+
+  @override
+  String get twoFactorEnrollBackupHint =>
+      'These one-time backup codes are shown only once. Save them to recover access if you lose your authenticator.';
+
+  @override
+  String get twoFactorEnrollBackupSavedCheck => 'I have saved the backup codes';
+
+  @override
+  String get twoFactorEnrollSavedAndFinish => 'Finish and sign in';
+
+  @override
+  String get twoFactorCopied => 'Copied to clipboard';
+
+  @override
+  String get twoFactorCopyCodes => 'Copy all backup codes';
+
+  @override
+  String get twoFactorDisableHint =>
+      'After disabling, sign-in will no longer require a verification code.';
+
+  @override
+  String get profileTwoFactorTitle => 'Two-Factor Verification';
+
+  @override
+  String get profileTwoFactorSubtitle =>
+      'Protect sign-in with one-time verification codes';
+
+  @override
+  String get profileTwoFactorEnabled => 'Enabled';
+
+  @override
+  String get profileTwoFactorDisabled => 'Not enabled';
+
+  @override
+  String get profileTwoFactorRequiredBadge =>
+      'Required for your role but not enabled yet';
+
+  @override
+  String get profileTwoFactorEnableAction => 'Enable';
+
+  @override
+  String get profileTwoFactorDisableAction => 'Disable';
+
+  @override
+  String get profileTwoFactorDisableConfirm => 'Disable it';
+
+  @override
+  String get profileTwoFactorLoadFailed => 'Failed to load status';
+
+  @override
   String get changePasswordMismatch => 'Passwords do not match';
 
   @override

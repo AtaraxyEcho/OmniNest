@@ -3,6 +3,8 @@ package com.omninest.modules.user.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,6 +13,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.ActiveSessionRegistry;
 import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.Permissions;
@@ -58,6 +61,9 @@ class AuthServiceTest {
     private final ObjectStorageClient objectStorageClient = mock(ObjectStorageClient.class);
     private final ObjectStorageBuckets objectStorageBuckets = createObjectStorageBuckets();
     private final AuthenticationTokenPolicy authenticationTokenPolicy = mock(AuthenticationTokenPolicy.class);
+    private final TwoFactorService twoFactorService = mock(TwoFactorService.class);
+    private final TwoFactorPolicyService twoFactorPolicyService = mock(TwoFactorPolicyService.class);
+    private final RateLimitService rateLimitService = mock(RateLimitService.class);
     private final FixedJwtEncoder jwtEncoder = new FixedJwtEncoder();
     private final FixedJwtDecoder jwtDecoder = new FixedJwtDecoder();
 
@@ -67,6 +73,8 @@ class AuthServiceTest {
     void setUp() {
         when(authenticationTokenPolicy.accessTokenTtl()).thenReturn(Duration.ofMinutes(30));
         when(authenticationTokenPolicy.refreshTokenTtl()).thenReturn(Duration.ofDays(30));
+        when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
+        when(twoFactorService.isEnabled(any(UUID.class))).thenReturn(false);
         service = new AuthService(
                 authUserRepository,
                 authRoleRepository,
@@ -81,7 +89,10 @@ class AuthServiceTest {
                 activeSessionRegistry,
                 loginAuditService,
                 activeSessionRepository,
-                notificationService
+                notificationService,
+                twoFactorService,
+                twoFactorPolicyService,
+                rateLimitService
         );
     }
 
@@ -326,6 +337,152 @@ class AuthServiceTest {
         }
     }
 
+    // ========== 两步验证测试 ==========
+
+    @Nested
+    @DisplayName("login() 两步验证分支")
+    class TwoFactorLoginTests {
+
+        @Test
+        @DisplayName("已启用两步验证：密码通过后签发 verify 挑战而不是令牌")
+        void loginReturnsVerifyChallengeWhenEnabled() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(twoFactorService.isEnabled(user.getId())).thenReturn(true);
+
+            var token = service.login(
+                    new LoginRequest("admin", "pass"), "web", null, null, "127.0.0.1", "test");
+
+            assertThat(token.twoFactorRequired()).isTrue();
+            assertThat(token.challengeType()).isEqualTo(AuthService.CHALLENGE_TYPE_VERIFY);
+            assertThat(token.accessToken()).isNull();
+            assertThat(token.refreshToken()).isNull();
+            assertThat(jwtEncoder.claimsFor(AuthService.TOKEN_USE_TWO_FACTOR).getSubject())
+                    .isEqualTo(user.getId().toString());
+            verify(activeSessionRepository, never()).save(any(AuthActiveSession.class));
+        }
+
+        @Test
+        @DisplayName("强制角色未注册：签发 enroll 挑战")
+        void loginReturnsEnrollChallengeForRequiredAdminWithoutCredential() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
+            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(twoFactorPolicyService.isRequired(user)).thenReturn(true);
+            when(twoFactorService.hasCredential(user.getId())).thenReturn(false);
+
+            var token = service.login(
+                    new LoginRequest("admin", "pass"), "web", null, null, "127.0.0.1", "test");
+
+            assertThat(token.twoFactorRequired()).isTrue();
+            assertThat(token.challengeType()).isEqualTo(AuthService.CHALLENGE_TYPE_ENROLL);
+            assertThat(jwtEncoder.claimsFor(AuthService.TOKEN_USE_TWO_FACTOR_SETUP)).isNotNull();
+            verify(activeSessionRepository, never()).save(any(AuthActiveSession.class));
+        }
+
+        @Test
+        @DisplayName("强制角色已有凭据：不进注册引导，按未启用直通登录")
+        void loginSkipsEnrollmentWhenCredentialExists() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
+            when(authUserRepository.findByUsername("admin")).thenReturn(Optional.of(user));
+            when(authUserRepository.save(user)).thenReturn(user);
+            when(twoFactorPolicyService.isRequired(user)).thenReturn(true);
+            when(twoFactorService.hasCredential(user.getId())).thenReturn(true);
+
+            var token = service.login(
+                    new LoginRequest("admin", "pass"), "web", null, null, "127.0.0.1", "test");
+
+            assertThat(token.twoFactorRequired()).isNull();
+            assertThat(token.accessToken()).isEqualTo("access-token");
+        }
+
+        @Test
+        @DisplayName("两步验证第二步：验证码正确后签发令牌")
+        void completeTwoFactorLoginIssuesTokens() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.MEMBER, "file:read"));
+            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.save(user)).thenReturn(user);
+
+            var token = service.completeTwoFactorLogin(
+                    "2fa-token", "123456", "web", null, null, "127.0.0.1", "test");
+
+            assertThat(token.accessToken()).isEqualTo("access-token");
+            assertThat(token.refreshToken()).isEqualTo("refresh-token");
+            verify(twoFactorService).verifyCode(user.getId(), "123456");
+            verify(activeSessionRepository).save(any(AuthActiveSession.class));
+        }
+
+        @Test
+        @DisplayName("两步验证第二步：非 2fa 令牌被拒绝")
+        void completeTwoFactorLoginRejectsWrongTokenUse() {
+            assertThatThrownBy(() -> service.completeTwoFactorLogin(
+                    "refresh-token", "123456", "web", null, null, "127.0.0.1", "test"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("两步验证凭证无效");
+        }
+
+        @Test
+        @DisplayName("两步验证第二步：验证码错误记录审计并抛出")
+        void completeTwoFactorLoginRejectsInvalidCodeAndAudits() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            org.mockito.Mockito.doThrow(new BusinessException(
+                    com.omninest.common.enums.ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误"))
+                    .when(twoFactorService).verifyCode(user.getId(), "000000");
+
+            assertThatThrownBy(() -> service.completeTwoFactorLogin(
+                    "2fa-token", "000000", "web", null, null, "127.0.0.1", "test"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("两步验证码错误");
+
+            verify(loginAuditService).record(eq(user), eq("admin"), eq("web"), any(), any(),
+                    eq("127.0.0.1"), eq("test"), eq("FAILED"), eq("两步验证码错误"));
+        }
+
+        @Test
+        @DisplayName("两步验证第二步：超出用户级尝试预算被限流")
+        void completeTwoFactorLoginRespectsAttemptBudget() {
+            when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(false);
+
+            assertThatThrownBy(() -> service.completeTwoFactorLogin(
+                    "2fa-token", "123456", "web", null, null, "127.0.0.1", "test"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("两步验证尝试过于频繁");
+        }
+
+        @Test
+        @DisplayName("注册引导：启用成功返回备份码与完成令牌，完成后签发令牌")
+        void bootstrapEnableAndCompleteFlowIssuesTokens() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
+            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.save(user)).thenReturn(user);
+            when(twoFactorService.enable(user.getId(), "123456"))
+                    .thenReturn(List.of("ABCD-2345"));
+            when(twoFactorService.isEnabled(user.getId())).thenReturn(true);
+
+            var enableResponse = service.bootstrapTwoFactorEnable("2fa-setup-token", "123456");
+            assertThat(enableResponse.backupCodes()).containsExactly("ABCD-2345");
+            assertThat(enableResponse.finalizeToken()).isEqualTo("2fa-finalize-token");
+
+            var token = service.completeTwoFactorEnrollment(
+                    "2fa-finalize-token", "web", null, null, "127.0.0.1", "test");
+            assertThat(token.accessToken()).isEqualTo("access-token");
+            verify(twoFactorService).enable(user.getId(), "123456");
+        }
+
+        @Test
+        @DisplayName("注册引导：完成令牌类型不匹配被拒绝")
+        void bootstrapCompleteRejectsWrongTokenUse() {
+            assertThatThrownBy(() -> service.completeTwoFactorEnrollment(
+                    "2fa-setup-token", "web", null, null, "127.0.0.1", "test"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("两步验证凭证无效");
+        }
+    }
+
     // ========== 刷新测试 ==========
 
     @Nested
@@ -483,7 +640,13 @@ class AuthServiceTest {
             JwtClaimsSet claims = parameters.getClaims();
             String tokenUse = claims.getClaimAsString("token_use");
             claimsByTokenUse.put(tokenUse, claims);
-            String tokenValue = "refresh".equals(tokenUse) ? "refresh-token" : "access-token";
+            String tokenValue = switch (tokenUse == null ? "" : tokenUse) {
+                case "refresh" -> "refresh-token";
+                case "2fa" -> "2fa-token";
+                case "2fa_setup" -> "2fa-setup-token";
+                case "2fa_finalize" -> "2fa-finalize-token";
+                default -> "access-token";
+            };
             return new Jwt(
                     tokenValue,
                     Instant.parse("2026-05-29T00:00:00Z"),
@@ -499,22 +662,26 @@ class AuthServiceTest {
     }
 
     /**
-     * 固定 JWT 解码器，返回预设的 refresh token claims。
+     * 固定 JWT 解码器，返回预设的 refresh 与两步验证令牌 claims。
      */
     private static class FixedJwtDecoder implements JwtDecoder {
         @Override
         public Jwt decode(String token) throws JwtException {
-            if (!"refresh-token".equals(token)) {
-                throw new JwtException("invalid refresh token");
-            }
+            String tokenUse = switch (token == null ? "" : token) {
+                case "refresh-token" -> "refresh";
+                case "2fa-token" -> "2fa";
+                case "2fa-setup-token" -> "2fa_setup";
+                case "2fa-finalize-token" -> "2fa_finalize";
+                default -> throw new JwtException("invalid token");
+            };
             return new Jwt(
                     token,
                     Instant.parse("2026-05-29T00:00:00Z"),
-                    Instant.parse("2026-06-28T00:00:00Z"),
+                    Instant.parse("2026-05-29T01:00:00Z"),
                     Map.of("alg", "HS256"),
                     Map.of(
                             "sub", "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
-                            "token_use", "refresh",
+                            "token_use", tokenUse,
                             "sid", "22222222-2222-2222-2222-222222222222"
                     )
             );

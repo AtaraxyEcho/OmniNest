@@ -1310,6 +1310,192 @@ abstract class AppLocalizations {
   /// **'Confirm New Password'**
   String get changePasswordConfirmNew;
 
+  /// No description provided for @loginTwoFactorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-Factor Verification'**
+  String get loginTwoFactorTitle;
+
+  /// No description provided for @loginTwoFactorSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code from your authenticator app to sign in'**
+  String get loginTwoFactorSubtitle;
+
+  /// No description provided for @loginTwoFactorCodeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification code'**
+  String get loginTwoFactorCodeLabel;
+
+  /// No description provided for @loginTwoFactorCodeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the 6-digit code'**
+  String get loginTwoFactorCodeHint;
+
+  /// No description provided for @loginTwoFactorUseBackupHint.
+  ///
+  /// In en, this message translates to:
+  /// **'You can also enter a one-time backup code (XXXX-XXXX)'**
+  String get loginTwoFactorUseBackupHint;
+
+  /// No description provided for @loginTwoFactorVerifyAndSignIn.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify and sign in'**
+  String get loginTwoFactorVerifyAndSignIn;
+
+  /// No description provided for @loginTwoFactorBackToLogin.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get loginTwoFactorBackToLogin;
+
+  /// No description provided for @twoFactorEnrollTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Set Up Two-Factor Verification'**
+  String get twoFactorEnrollTitle;
+
+  /// No description provided for @twoFactorEnrollSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Your role requires two-factor verification. Complete setup to continue'**
+  String get twoFactorEnrollSubtitle;
+
+  /// No description provided for @twoFactorEnrollPasswordLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Login password'**
+  String get twoFactorEnrollPasswordLabel;
+
+  /// No description provided for @twoFactorEnrollPasswordHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your login password'**
+  String get twoFactorEnrollPasswordHint;
+
+  /// No description provided for @twoFactorEnrollContinue.
+  ///
+  /// In en, this message translates to:
+  /// **'Next: scan QR code'**
+  String get twoFactorEnrollContinue;
+
+  /// No description provided for @twoFactorEnrollScanHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the QR code with your authenticator app, or copy the secret to add it manually'**
+  String get twoFactorEnrollScanHint;
+
+  /// No description provided for @twoFactorEnrollSecretLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy secret'**
+  String get twoFactorEnrollSecretLabel;
+
+  /// No description provided for @twoFactorEnrollConfirmCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm and enable'**
+  String get twoFactorEnrollConfirmCode;
+
+  /// No description provided for @twoFactorEnrollBackupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup codes'**
+  String get twoFactorEnrollBackupTitle;
+
+  /// No description provided for @twoFactorEnrollBackupHint.
+  ///
+  /// In en, this message translates to:
+  /// **'These one-time backup codes are shown only once. Save them to recover access if you lose your authenticator.'**
+  String get twoFactorEnrollBackupHint;
+
+  /// No description provided for @twoFactorEnrollBackupSavedCheck.
+  ///
+  /// In en, this message translates to:
+  /// **'I have saved the backup codes'**
+  String get twoFactorEnrollBackupSavedCheck;
+
+  /// No description provided for @twoFactorEnrollSavedAndFinish.
+  ///
+  /// In en, this message translates to:
+  /// **'Finish and sign in'**
+  String get twoFactorEnrollSavedAndFinish;
+
+  /// No description provided for @twoFactorCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get twoFactorCopied;
+
+  /// No description provided for @twoFactorCopyCodes.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy all backup codes'**
+  String get twoFactorCopyCodes;
+
+  /// No description provided for @twoFactorDisableHint.
+  ///
+  /// In en, this message translates to:
+  /// **'After disabling, sign-in will no longer require a verification code.'**
+  String get twoFactorDisableHint;
+
+  /// No description provided for @profileTwoFactorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-Factor Verification'**
+  String get profileTwoFactorTitle;
+
+  /// No description provided for @profileTwoFactorSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Protect sign-in with one-time verification codes'**
+  String get profileTwoFactorSubtitle;
+
+  /// No description provided for @profileTwoFactorEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Enabled'**
+  String get profileTwoFactorEnabled;
+
+  /// No description provided for @profileTwoFactorDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Not enabled'**
+  String get profileTwoFactorDisabled;
+
+  /// No description provided for @profileTwoFactorRequiredBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Required for your role but not enabled yet'**
+  String get profileTwoFactorRequiredBadge;
+
+  /// No description provided for @profileTwoFactorEnableAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get profileTwoFactorEnableAction;
+
+  /// No description provided for @profileTwoFactorDisableAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable'**
+  String get profileTwoFactorDisableAction;
+
+  /// No description provided for @profileTwoFactorDisableConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable it'**
+  String get profileTwoFactorDisableConfirm;
+
+  /// No description provided for @profileTwoFactorLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load status'**
+  String get profileTwoFactorLoadFailed;
+
   /// No description provided for @changePasswordMismatch.
   ///
   /// In en, this message translates to:

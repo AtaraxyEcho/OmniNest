@@ -2,6 +2,7 @@ package com.omninest.modules.user.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.ratelimit.RateLimitService;
 import com.omninest.common.security.ActiveSessionRegistry;
 import com.omninest.common.security.AuthenticationTokenPolicy;
 import com.omninest.common.security.Roles;
@@ -13,12 +14,15 @@ import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.dto.AuthTokenResponse;
 import com.omninest.modules.user.dto.LoginRequest;
 import com.omninest.modules.user.dto.RegisterRequest;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorBootstrapEnableResponse;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.util.AuthUserMapper;
 import com.omninest.modules.user.repository.ActiveSessionRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.user.repository.AuthRoleRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -44,6 +48,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AuthService {
     private static final String TOKEN_TYPE = "Bearer";
+    /** 两步验证挑战令牌类型：已启用待验证。 */
+    public static final String TOKEN_USE_TWO_FACTOR = "2fa";
+    /** 两步验证挑战令牌类型：强制角色待注册。 */
+    public static final String TOKEN_USE_TWO_FACTOR_SETUP = "2fa_setup";
+    /** 两步验证挑战令牌类型：注册引导已确认，待换取登录令牌。 */
+    public static final String TOKEN_USE_TWO_FACTOR_FINALIZE = "2fa_finalize";
+    public static final String CHALLENGE_TYPE_VERIFY = "verify";
+    public static final String CHALLENGE_TYPE_ENROLL = "enroll";
+    private static final Duration TWO_FACTOR_CHALLENGE_TTL = Duration.ofMinutes(5);
 
     private final AuthUserRepository authUserRepository;
     private final AuthRoleRepository authRoleRepository;
@@ -59,8 +72,9 @@ public class AuthService {
     private final LoginAuditService loginAuditService;
     private final ActiveSessionRepository activeSessionRepository;
     private final NotificationPublisher notificationService;
-
-    private record LoginResult(AuthUser profile, UUID sessionId) {}
+    private final TwoFactorService twoFactorService;
+    private final TwoFactorPolicyService twoFactorPolicyService;
+    private final RateLimitService rateLimitService;
 
     @Transactional(rollbackFor = Exception.class)
     public AuthTokenResponse register(
@@ -92,9 +106,179 @@ public class AuthService {
     public AuthTokenResponse login(LoginRequest request, String clientPlatform,
                                    String deviceId, String deviceName,
                                    String ipAddress, String userAgent) {
-        LoginResult result = loginInternal(request, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
-        log.info("用户登录成功: userId={}, platform={}, ip={}", result.profile().getId(), clientPlatform, ipAddress);
-        return issueToken(toDto(result.profile()), result.sessionId());
+        AuthUser profile = authenticatePassword(request, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+        if (twoFactorService.isEnabled(profile.getId())) {
+            return buildChallengeResponse(profile.getId(), CHALLENGE_TYPE_VERIFY);
+        }
+        if (twoFactorPolicyService.isRequired(profile) && !twoFactorService.hasCredential(profile.getId())) {
+            return buildChallengeResponse(profile.getId(), CHALLENGE_TYPE_ENROLL);
+        }
+        log.info("用户登录成功: userId={}, platform={}, ip={}", profile.getId(), clientPlatform, ipAddress);
+        return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+    }
+
+    /**
+     * 两步验证登录第二步：校验挑战令牌与验证码后完成登录。
+     *
+     * @param challengeToken 第一步返回的挑战令牌
+     * @param code 6 位验证码或备份码
+     * @param clientPlatform 客户端平台
+     * @param deviceId 设备标识
+     * @param deviceName 设备名称
+     * @param ipAddress 客户端 IP
+     * @param userAgent User-Agent
+     * @return 访问与刷新令牌
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AuthTokenResponse completeTwoFactorLogin(
+            String challengeToken,
+            String code,
+            String clientPlatform,
+            String deviceId,
+            String deviceName,
+            String ipAddress,
+            String userAgent
+    ) {
+        UUID userId = consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR);
+        requireUserLoginAttemptBudget(userId, "user:%s:2fa-login", 5, Duration.ofMinutes(1));
+        AuthUser profile = loadActiveUserWithRoles(userId);
+        try {
+            twoFactorService.verifyCode(userId, code);
+        } catch (BusinessException exception) {
+            if (ErrorCode.TWO_FACTOR_INVALID_CODE.equals(exception.errorCode())) {
+                auditLogin(profile, profile.getUsername(), clientPlatform, deviceId, deviceName,
+                        ipAddress, userAgent, "FAILED", "两步验证码错误");
+            }
+            throw exception;
+        }
+        log.info("用户两步验证登录成功: userId={}, platform={}, ip={}", userId, clientPlatform, ipAddress);
+        return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+    }
+
+    /**
+     * 强制角色注册引导：使用注册挑战令牌生成 TOTP 秘钥。
+     *
+     * @param challengeToken 注册挑战令牌
+     * @param password 登录密码
+     * @return 秘钥与 otpauth URI
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public TwoFactorSetupResponse bootstrapTwoFactorSetup(String challengeToken, String password) {
+        UUID userId = consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
+        requireUserLoginAttemptBudget(userId, "user:%s:2fa-setup", 3, Duration.ofHours(1));
+        return twoFactorService.startSetup(userId, password);
+    }
+
+    /**
+     * 强制角色注册引导：确认验证码启用两步验证，返回备份码与完成令牌。
+     *
+     * @param challengeToken 注册挑战令牌
+     * @param code 认证器验证码
+     * @return 备份码与完成令牌
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public TwoFactorBootstrapEnableResponse bootstrapTwoFactorEnable(String challengeToken, String code) {
+        UUID userId = consumeChallengeToken(challengeToken, TOKEN_USE_TWO_FACTOR_SETUP);
+        requireUserLoginAttemptBudget(userId, "user:%s:2fa-enable", 5, Duration.ofMinutes(1));
+        List<String> backupCodes = twoFactorService.enable(userId, code);
+        Instant now = Instant.now();
+        String finalizeToken = encodeChallengeToken(
+                userId, TOKEN_USE_TWO_FACTOR_FINALIZE, now, now.plus(TWO_FACTOR_CHALLENGE_TTL));
+        return new TwoFactorBootstrapEnableResponse(backupCodes, finalizeToken);
+    }
+
+    /**
+     * 强制角色注册引导：用户确认保存备份码后换取登录令牌。
+     *
+     * @param finalizeToken 完成令牌
+     * @param clientPlatform 客户端平台
+     * @param deviceId 设备标识
+     * @param deviceName 设备名称
+     * @param ipAddress 客户端 IP
+     * @param userAgent User-Agent
+     * @return 访问与刷新令牌
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public AuthTokenResponse completeTwoFactorEnrollment(
+            String finalizeToken,
+            String clientPlatform,
+            String deviceId,
+            String deviceName,
+            String ipAddress,
+            String userAgent
+    ) {
+        UUID userId = consumeChallengeToken(finalizeToken, TOKEN_USE_TWO_FACTOR_FINALIZE);
+        AuthUser profile = loadActiveUserWithRoles(userId);
+        if (!twoFactorService.isEnabled(userId)) {
+            throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "两步验证未配置");
+        }
+        log.info("管理员两步验证注册完成: userId={}, platform={}", userId, clientPlatform);
+        return completeLogin(profile, clientPlatform, deviceId, deviceName, ipAddress, userAgent);
+    }
+
+    /**
+     * 构造两步验证挑战响应，不签发任何业务令牌。
+     *
+     * @param userId 用户标识
+     * @param challengeType verify 或 enroll
+     * @return 挑战响应
+     */
+    public AuthTokenResponse buildChallengeResponse(UUID userId, String challengeType) {
+        Instant now = Instant.now();
+        Instant expiresAt = now.plus(TWO_FACTOR_CHALLENGE_TTL);
+        String tokenUse = CHALLENGE_TYPE_ENROLL.equals(challengeType)
+                ? TOKEN_USE_TWO_FACTOR_SETUP
+                : TOKEN_USE_TWO_FACTOR;
+        String challengeToken = encodeChallengeToken(userId, tokenUse, now, expiresAt);
+        return new AuthTokenResponse(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                true,
+                challengeToken,
+                challengeType,
+                formatInstant(expiresAt),
+                null
+        );
+    }
+
+    /**
+     * 消费两步验证挑战令牌，校验签名、类型与有效期。
+     *
+     * @param rawToken 挑战令牌
+     * @param expectedUse 期望的 token_use
+     * @return 用户标识
+     */
+    public UUID consumeChallengeToken(String rawToken, String expectedUse) {
+        String token = normalizeToken(rawToken);
+        Jwt jwt;
+        try {
+            jwt = jwtDecoder.decode(token);
+        } catch (RuntimeException ex) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证无效");
+        }
+        if (!expectedUse.equals(jwt.getClaimAsString("token_use"))) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "两步验证凭证无效");
+        }
+        return parseUserId(jwt.getSubject());
+    }
+
+    private void requireUserLoginAttemptBudget(UUID userId, String keyPattern, int limit, Duration window) {
+        if (!rateLimitService.tryAcquire(String.format(java.util.Locale.ROOT, keyPattern, userId), limit, window)) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "两步验证尝试过于频繁，请稍后再试");
+        }
+    }
+
+    private AuthUser loadActiveUserWithRoles(UUID userId) {
+        AuthUser profile = authUserRepository.findWithRolesById(userId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+        if (!"ACTIVE".equals(profile.getStatus())) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "账号已被禁用");
+        }
+        return profile;
     }
 
     private AuthUser registerInternal(RegisterRequest request) {
@@ -113,9 +297,9 @@ public class AuthService {
         return authUserRepository.save(profile);
     }
 
-    private LoginResult loginInternal(LoginRequest request, String clientPlatform,
-                                     String deviceId, String deviceName,
-                                     String ipAddress, String userAgent) {
+    private AuthUser authenticatePassword(LoginRequest request, String clientPlatform,
+                                          String deviceId, String deviceName,
+                                          String ipAddress, String userAgent) {
         String username = normalizeUsername(request.username());
         AuthUser profile = authUserRepository.findByUsername(username)
                 .orElseThrow(() -> {
@@ -133,7 +317,12 @@ public class AuthService {
                     ipAddress, userAgent, "FAILED", "密码错误");
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "用户名或密码错误");
         }
+        return profile;
+    }
 
+    private AuthTokenResponse completeLogin(AuthUser profile, String clientPlatform,
+                                            String deviceId, String deviceName,
+                                            String ipAddress, String userAgent) {
         boolean newDevice = isNewDevice(profile.getId(), clientPlatform, deviceId);
         UUID sessionId = createActiveSession(
                 profile,
@@ -145,7 +334,7 @@ public class AuthService {
         );
 
         // 审计
-        auditLogin(profile, username, clientPlatform, deviceId, deviceName,
+        auditLogin(profile, profile.getUsername(), clientPlatform, deviceId, deviceName,
                 ipAddress, userAgent, "SUCCESS", null);
 
         if (newDevice) {
@@ -154,7 +343,7 @@ public class AuthService {
 
         profile.setLastLoginAt(Instant.now());
         authUserRepository.save(profile);
-        return new LoginResult(profile, sessionId);
+        return issueToken(toDto(profile), sessionId);
     }
 
     private UUID createActiveSession(
@@ -266,6 +455,17 @@ public class AuthService {
         }
         JwsHeader headers = JwsHeader.with(MacAlgorithm.HS256).build();
         return jwtEncoder.encode(JwtEncoderParameters.from(headers, claims.build())).getTokenValue();
+    }
+
+    private String encodeChallengeToken(UUID userId, String tokenUse, Instant issuedAt, Instant expiresAt) {
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+                .subject(userId.toString())
+                .issuedAt(issuedAt)
+                .expiresAt(expiresAt)
+                .claim("token_use", tokenUse)
+                .build();
+        JwsHeader headers = JwsHeader.with(MacAlgorithm.HS256).build();
+        return jwtEncoder.encode(JwtEncoderParameters.from(headers, claims)).getTokenValue();
     }
 
     /**

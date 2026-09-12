@@ -124,3 +124,97 @@ DateTime? _parseOptionalDateTime(dynamic value) {
   }
   return _parseDateTime(value);
 }
+
+/// 登录两步验证挑战：密码已通过，等待第二步验证码或注册引导。
+class AuthChallenge {
+  const AuthChallenge({
+    required this.challengeToken,
+    required this.type,
+    this.expiresAt,
+  });
+
+  factory AuthChallenge.fromJson(Map<String, dynamic> json) {
+    return AuthChallenge(
+      challengeToken: json['challengeToken']?.toString() ?? '',
+      type: json['challengeType']?.toString() ?? 'verify',
+      expiresAt: _parseOptionalDateTime(json['challengeExpiresAt']),
+    );
+  }
+
+  final String challengeToken;
+
+  /// verify=已启用待验证；enroll=强制角色待注册。
+  final String type;
+  final DateTime? expiresAt;
+
+  bool get isEnrollment => type == 'enroll';
+}
+
+/// 登录结果：正常令牌，或需要两步验证的挑战。
+class AuthLoginResult {
+  const AuthLoginResult({this.token, this.challenge});
+
+  factory AuthLoginResult.fromJson(Map<String, dynamic> json) {
+    if (json['twoFactorRequired'] == true) {
+      return AuthLoginResult(challenge: AuthChallenge.fromJson(json));
+    }
+    return AuthLoginResult(token: AuthTokenResponse.fromJson(json));
+  }
+
+  final AuthTokenResponse? token;
+  final AuthChallenge? challenge;
+
+  bool get requiresTwoFactor => challenge != null;
+}
+
+/// 两步验证秘钥视图（扫码 URI 与手输秘钥）。
+class TwoFactorSetupData {
+  const TwoFactorSetupData({required this.secret, required this.otpauthUri});
+
+  factory TwoFactorSetupData.fromJson(Map<String, dynamic> json) {
+    return TwoFactorSetupData(
+      secret: json['secret']?.toString() ?? '',
+      otpauthUri: json['otpauthUri']?.toString() ?? '',
+    );
+  }
+
+  final String secret;
+  final String otpauthUri;
+}
+
+/// 注册引导启用结果：一次性备份码与完成令牌。
+class TwoFactorBootstrapEnableData {
+  const TwoFactorBootstrapEnableData({
+    required this.backupCodes,
+    required this.finalizeToken,
+  });
+
+  factory TwoFactorBootstrapEnableData.fromJson(Map<String, dynamic> json) {
+    final codes = json['backupCodes'];
+    return TwoFactorBootstrapEnableData(
+      backupCodes:
+          codes is List
+              ? codes.map((item) => item.toString()).toList()
+              : const <String>[],
+      finalizeToken: json['finalizeToken']?.toString() ?? '',
+    );
+  }
+
+  final List<String> backupCodes;
+  final String finalizeToken;
+}
+
+/// 两步验证状态。
+class TwoFactorStatusData {
+  const TwoFactorStatusData({required this.enabled, required this.required});
+
+  factory TwoFactorStatusData.fromJson(Map<String, dynamic> json) {
+    return TwoFactorStatusData(
+      enabled: json['enabled'] == true,
+      required: json['required'] == true,
+    );
+  }
+
+  final bool enabled;
+  final bool required;
+}

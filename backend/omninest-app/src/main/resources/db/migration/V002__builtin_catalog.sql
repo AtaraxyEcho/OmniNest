@@ -85,7 +85,8 @@ INSERT INTO omni.config_entries (
     ('weather.qweather.credential', '', 'STRING', 'weather', 'HOT', '和风天气凭据 ID', false),
     ('weather.qweather.url', 'https://devapi.qweather.com', 'STRING', 'weather', 'HOT', '和风天气 API 地址', false),
     ('weather.qweather.key', '', 'STRING', 'weather', 'HOT', '和风天气 Ed25519 私钥', true),
-    ('weather.location', '北京', 'STRING', 'weather', 'HOT', '天气默认位置', false);
+    ('weather.location', '北京', 'STRING', 'weather', 'HOT', '天气默认位置', false),
+    ('auth.two-factor.required-roles', 'SUPER_ADMIN,ADMIN', 'STRING', 'auth', 'HOT', '强制开启两步验证的角色编码列表（逗号分隔，留空表示全员自愿）', false);
 
 -- 内置角色。
 INSERT INTO omni.auth_roles (id, code, name, description, built_in, enabled) VALUES

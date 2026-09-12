@@ -11,6 +11,12 @@ import com.omninest.modules.user.dto.AuthTokenResponse;
 import com.omninest.modules.user.dto.LoginRequest;
 import com.omninest.modules.user.dto.RefreshRequest;
 import com.omninest.modules.user.dto.RegisterRequest;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorBootstrapEnableRequest;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorBootstrapEnableResponse;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorBootstrapSetupRequest;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorFinalizeRequest;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorLoginRequest;
+import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
 import com.omninest.modules.user.service.AuthService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -65,7 +71,7 @@ public class AuthController {
         );
     }
 
-    @Operation(summary = "用户登录", description = "用户名密码登录，支持按 IP 和用户名双重限流")
+    @Operation(summary = "用户登录", description = "用户名密码登录，支持按 IP 和用户名双重限流；已开启两步验证时返回挑战令牌")
     @PostMapping("/api/v1/auth/login")
     ApiResponse<AuthTokenResponse> login(
             @Valid @RequestBody LoginRequest request,
@@ -84,10 +90,95 @@ public class AuthController {
         if (!rateLimitService.tryAcquire("user:" + request.username() + ":login", 5, Duration.ofMinutes(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "该账号登录尝试过多，请稍后再试");
         }
+        AuthTokenResponse token = authService.login(request, clientPlatform, deviceId, deviceName, ip,
+                httpRequest.getHeader("User-Agent"));
+        if (Boolean.TRUE.equals(token.twoFactorRequired())) {
+            return ApiResponse.success(token);
+        }
+        return issueResponse(token, clientPlatform, response);
+    }
+
+    @Operation(summary = "两步验证登录", description = "使用第一步登录返回的挑战令牌与验证码完成登录")
+    @PostMapping("/api/v1/auth/login/2fa")
+    ApiResponse<AuthTokenResponse> loginWithTwoFactor(
+            @Valid @RequestBody TwoFactorLoginRequest request,
+            @RequestHeader(name = CLIENT_PLATFORM_HEADER, required = false, defaultValue = "native") String clientPlatform,
+            @RequestHeader(name = DEVICE_ID_HEADER, required = false) String deviceId,
+            @RequestHeader(name = DEVICE_NAME_HEADER, required = false) String deviceName,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response
+    ) {
+        String ip = resolveClientIp(httpRequest);
+        if (!rateLimitService.tryAcquire("ip:" + ip + ":2fa", 10, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "两步验证请求过于频繁，请稍后再试");
+        }
         return issueResponse(
-                authService.login(request, clientPlatform, deviceId, deviceName, ip,
-                        httpRequest.getHeader("User-Agent")),
-                clientPlatform, response);
+                authService.completeTwoFactorLogin(
+                        request.challengeToken(),
+                        request.code(),
+                        clientPlatform,
+                        deviceId,
+                        deviceName,
+                        ip,
+                        httpRequest.getHeader("User-Agent")
+                ),
+                clientPlatform,
+                response
+        );
+    }
+
+    @Operation(summary = "两步验证注册引导：生成秘钥", description = "强制角色首次登录未开启两步验证时，用注册挑战令牌生成 TOTP 秘钥")
+    @PostMapping("/api/v1/auth/login/2fa/setup")
+    ApiResponse<TwoFactorSetupResponse> bootstrapTwoFactorSetup(
+            @Valid @RequestBody TwoFactorBootstrapSetupRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        String ip = resolveClientIp(httpRequest);
+        if (!rateLimitService.tryAcquire("ip:" + ip + ":2fa", 10, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "两步验证请求过于频繁，请稍后再试");
+        }
+        return ApiResponse.success(authService.bootstrapTwoFactorSetup(request.challengeToken(), request.password()));
+    }
+
+    @Operation(summary = "两步验证注册引导：确认启用", description = "确认验证码启用两步验证，返回一次性备份码与完成令牌")
+    @PostMapping("/api/v1/auth/login/2fa/enable")
+    ApiResponse<TwoFactorBootstrapEnableResponse> bootstrapTwoFactorEnable(
+            @Valid @RequestBody TwoFactorBootstrapEnableRequest request,
+            HttpServletRequest httpRequest
+    ) {
+        String ip = resolveClientIp(httpRequest);
+        if (!rateLimitService.tryAcquire("ip:" + ip + ":2fa", 10, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "两步验证请求过于频繁，请稍后再试");
+        }
+        return ApiResponse.success(authService.bootstrapTwoFactorEnable(request.challengeToken(), request.code()));
+    }
+
+    @Operation(summary = "两步验证注册引导：完成注册", description = "用户确认保存备份码后，用完成令牌换取登录令牌")
+    @PostMapping("/api/v1/auth/login/2fa/complete")
+    ApiResponse<AuthTokenResponse> completeTwoFactorEnrollment(
+            @Valid @RequestBody TwoFactorFinalizeRequest request,
+            @RequestHeader(name = CLIENT_PLATFORM_HEADER, required = false, defaultValue = "native") String clientPlatform,
+            @RequestHeader(name = DEVICE_ID_HEADER, required = false) String deviceId,
+            @RequestHeader(name = DEVICE_NAME_HEADER, required = false) String deviceName,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response
+    ) {
+        String ip = resolveClientIp(httpRequest);
+        if (!rateLimitService.tryAcquire("ip:" + ip + ":2fa", 10, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "两步验证请求过于频繁，请稍后再试");
+        }
+        return issueResponse(
+                authService.completeTwoFactorEnrollment(
+                        request.finalizeToken(),
+                        clientPlatform,
+                        deviceId,
+                        deviceName,
+                        ip,
+                        httpRequest.getHeader("User-Agent")
+                ),
+                clientPlatform,
+                response
+        );
     }
 
     @Operation(summary = "刷新令牌", description = "使用刷新令牌获取新的访问令牌，支持 Web 端 HttpOnly Cookie 方式")

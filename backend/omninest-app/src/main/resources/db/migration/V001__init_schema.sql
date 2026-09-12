@@ -79,6 +79,21 @@ COMMENT ON COLUMN "omni"."auth_active_sessions"."revoked_at" IS '撤销时间';
 COMMENT ON COLUMN "omni"."auth_active_sessions"."revoke_reason" IS '撤销原因';
 COMMENT ON TABLE "omni"."auth_active_sessions" IS '活跃会话表，用于登录互斥和会话管理';
 
+CREATE TABLE "omni"."auth_backup_codes" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "user_id" uuid NOT NULL,
+  "code_hash" varchar(64) NOT NULL,
+  "used_at" timestamptz(6),
+  "created_at" timestamptz(6) NOT NULL DEFAULT now()
+)
+;
+COMMENT ON COLUMN "omni"."auth_backup_codes"."id" IS '备份码唯一标识，主键';
+COMMENT ON COLUMN "omni"."auth_backup_codes"."user_id" IS '用户ID，关联auth_users';
+COMMENT ON COLUMN "omni"."auth_backup_codes"."code_hash" IS '备份码SHA-256哈希（十六进制，输入为去分隔符大写形式）';
+COMMENT ON COLUMN "omni"."auth_backup_codes"."used_at" IS '使用时间，空表示未使用';
+COMMENT ON COLUMN "omni"."auth_backup_codes"."created_at" IS '创建时间';
+COMMENT ON TABLE "omni"."auth_backup_codes" IS '两步验证备份码表，一次性恢复码，启用两步验证时全量重置';
+
 CREATE TABLE "omni"."auth_login_audit" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "user_id" uuid,
@@ -174,6 +189,29 @@ COMMENT ON COLUMN "omni"."auth_session_revocations"."user_id" IS '用户ID，关
 COMMENT ON COLUMN "omni"."auth_session_revocations"."session_id" IS '被撤销的会话ID';
 COMMENT ON COLUMN "omni"."auth_session_revocations"."revoked_at" IS '撤销时间';
 COMMENT ON TABLE "omni"."auth_session_revocations" IS '会话撤销记录表，作为 Redis 黑名单的 DB 兜底，当 Redis 不可用时用于校验会话是否已被踢出';
+
+CREATE TABLE "omni"."auth_totp_credentials" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "user_id" uuid NOT NULL,
+  "secret" varchar(64) NOT NULL,
+  "enabled" bool NOT NULL DEFAULT false,
+  "confirmed_at" timestamptz(6),
+  "last_used_step" int8,
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "version" int8 NOT NULL DEFAULT 0
+)
+;
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."id" IS 'TOTP凭据唯一标识，主键';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."user_id" IS '用户ID，关联auth_users，唯一';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."secret" IS 'TOTP共享秘钥，Base32编码';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."enabled" IS '是否已确认启用';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."confirmed_at" IS '确认启用时间';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."last_used_step" IS '最近一次验证成功的时间步（epoch秒/30），用于防重放，仅接受更新的时间步';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."created_at" IS '创建时间';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."updated_at" IS '更新时间';
+COMMENT ON COLUMN "omni"."auth_totp_credentials"."version" IS '乐观锁版本号';
+COMMENT ON TABLE "omni"."auth_totp_credentials" IS '两步验证TOTP凭据表，每用户至多一条';
 
 CREATE TABLE "omni"."auth_user_roles" (
   "user_id" uuid NOT NULL,
@@ -2575,6 +2613,12 @@ CREATE INDEX "idx_sessions_user_platform" ON "omni"."auth_active_sessions" USING
 
 ALTER TABLE "omni"."auth_active_sessions" ADD CONSTRAINT "auth_active_sessions_pkey" PRIMARY KEY ("id");
 
+CREATE INDEX "idx_auth_backup_codes_user" ON "omni"."auth_backup_codes" USING btree (
+  "user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+
+ALTER TABLE "omni"."auth_backup_codes" ADD CONSTRAINT "auth_backup_codes_pkey" PRIMARY KEY ("id");
+
 CREATE INDEX "idx_login_audit_user" ON "omni"."auth_login_audit" USING btree (
   "user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
@@ -2602,6 +2646,12 @@ CREATE INDEX "idx_session_revocations_user_session" ON "omni"."auth_session_revo
 );
 
 ALTER TABLE "omni"."auth_session_revocations" ADD CONSTRAINT "auth_session_revocations_pkey" PRIMARY KEY ("id");
+
+CREATE UNIQUE INDEX "uniq_auth_totp_credentials_user" ON "omni"."auth_totp_credentials" USING btree (
+  "user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
+);
+
+ALTER TABLE "omni"."auth_totp_credentials" ADD CONSTRAINT "auth_totp_credentials_pkey" PRIMARY KEY ("id");
 
 CREATE INDEX "idx_auth_user_roles_role" ON "omni"."auth_user_roles" USING btree (
   "role_id" "pg_catalog"."uuid_ops" ASC NULLS LAST

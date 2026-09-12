@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/core/auth/login_two_factor_panel.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
@@ -22,6 +24,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   bool _obscurePassword = true;
   bool _submitting = false;
   String? _errorMessage;
+  AuthChallenge? _challenge;
 
   @override
   void dispose() {
@@ -43,16 +46,21 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     });
 
     try {
-      await ref
+      final result = await ref
           .read(authSessionProvider.notifier)
           .signInWithCredentials(
             username: _usernameController.text.trim(),
             password: _passwordController.text,
           );
 
-      if (mounted) {
-        context.go(_redirectLocation() ?? '/portal');
+      if (!mounted) {
+        return;
       }
+      if (result.requiresTwoFactor) {
+        setState(() => _challenge = result.challenge);
+        return;
+      }
+      context.go(_redirectLocation() ?? '/portal');
     } on DioException catch (error) {
       setState(() => _errorMessage = _messageFromDio(error, l10n));
     } on AppException catch (error) {
@@ -64,6 +72,17 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  void _exitChallenge() {
+    setState(() => _challenge = null);
+  }
+
+  void _onTwoFactorLoginSucceeded() {
+    if (!mounted) {
+      return;
+    }
+    context.go(_redirectLocation() ?? '/portal');
   }
 
   String _messageFromDio(DioException error, AppLocalizations l10n) {
@@ -103,19 +122,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 children: [
                                   const Expanded(child: _BrandPanel()),
                                   const SizedBox(width: 48),
-                                  SizedBox(
-                                    width: 420,
-                                    child: _LoginFormCard(
-                                      formKey: _formKey,
-                                      usernameController: _usernameController,
-                                      passwordController: _passwordController,
-                                      obscurePassword: _obscurePassword,
-                                      submitting: _submitting,
-                                      errorMessage: _errorMessage,
-                                      onTogglePassword: _togglePassword,
-                                      onSubmit: _submit,
-                                    ),
-                                  ),
+                                  SizedBox(width: 420, child: _buildAuthCard()),
                                 ],
                               )
                               : Column(
@@ -123,16 +130,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                                 children: [
                                   const _BrandPanel(compact: true),
                                   const SizedBox(height: 28),
-                                  _LoginFormCard(
-                                    formKey: _formKey,
-                                    usernameController: _usernameController,
-                                    passwordController: _passwordController,
-                                    obscurePassword: _obscurePassword,
-                                    submitting: _submitting,
-                                    errorMessage: _errorMessage,
-                                    onTogglePassword: _togglePassword,
-                                    onSubmit: _submit,
-                                  ),
+                                  _buildAuthCard(),
                                 ],
                               ),
                     ),
@@ -143,6 +141,27 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           );
         },
       ),
+    );
+  }
+
+  Widget _buildAuthCard() {
+    final challenge = _challenge;
+    if (challenge != null) {
+      return LoginTwoFactorPanel(
+        challenge: challenge,
+        onLoginSucceeded: _onTwoFactorLoginSucceeded,
+        onBackToLogin: _exitChallenge,
+      );
+    }
+    return _LoginFormCard(
+      formKey: _formKey,
+      usernameController: _usernameController,
+      passwordController: _passwordController,
+      obscurePassword: _obscurePassword,
+      submitting: _submitting,
+      errorMessage: _errorMessage,
+      onTogglePassword: _togglePassword,
+      onSubmit: _submit,
     );
   }
 

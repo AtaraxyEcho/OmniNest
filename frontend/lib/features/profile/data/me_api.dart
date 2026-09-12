@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
 
@@ -33,6 +34,56 @@ class MeApi {
       '/me/password',
       data: {'oldPassword': oldPassword, 'newPassword': newPassword},
     );
+  }
+
+  /// 查询两步验证状态（是否已开启、策略是否强制当前角色）。
+  Future<TwoFactorStatusData> twoFactorStatus() async {
+    return TwoFactorStatusData.fromJson(await _getData('/me/2fa/status'));
+  }
+
+  /// 自助生成两步验证秘钥（密码复核）。
+  Future<TwoFactorSetupData> twoFactorSetup({required String password}) async {
+    return TwoFactorSetupData.fromJson(
+      await _postData('/me/2fa/setup', {'password': password}),
+    );
+  }
+
+  /// 自助确认开启两步验证，返回一次性备份码。
+  Future<List<String>> twoFactorEnable({required String code}) async {
+    final data = await _postData('/me/2fa/enable', {'code': code});
+    final codes = data['backupCodes'];
+    return codes is List
+        ? codes.map((item) => item.toString()).toList()
+        : const <String>[];
+  }
+
+  /// 关闭两步验证（密码复核）。
+  Future<void> twoFactorDisable({required String password}) async {
+    await _postData('/me/2fa/disable', {'password': password});
+  }
+
+  Future<Map<String, dynamic>> _getData(String path) async {
+    final response = await _client.dio.get<Map<String, dynamic>>(path);
+    return _unwrap(response.data);
+  }
+
+  Future<Map<String, dynamic>> _postData(
+    String path,
+    Map<String, dynamic> body,
+  ) async {
+    final response = await _client.dio.post<Map<String, dynamic>>(
+      path,
+      data: body,
+    );
+    return _unwrap(response.data);
+  }
+
+  Map<String, dynamic> _unwrap(Map<String, dynamic>? body) {
+    final data = body?['data'];
+    if (data is Map<String, dynamic>) {
+      return data;
+    }
+    throw Exception('响应格式不正确');
   }
 
   /// 获取当前用户的活跃会话列表。

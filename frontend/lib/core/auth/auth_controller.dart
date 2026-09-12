@@ -67,23 +67,69 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     return restored ?? const AuthSessionState.unauthenticated();
   }
 
-  Future<void> signInWithCredentials({
+  /// 密码登录：正常返回并建立会话；需要两步验证时返回挑战结果，不改变当前会话状态。
+  Future<AuthLoginResult> signInWithCredentials({
     required String username,
     required String password,
   }) async {
     state = const AsyncLoading();
     try {
-      final session = await ref
+      final result = await ref
           .read(authClientProvider)
           .login(username: username, password: password);
-      await _saveSession(session);
-      final authState = _toState(session);
-      _scheduleRefresh(authState.expiresAt);
-      state = AsyncData(authState);
+      final session = result.token;
+      if (session != null) {
+        await _applySession(session);
+      } else {
+        state = const AsyncData(AuthSessionState.unauthenticated());
+      }
+      return result;
     } catch (error, stackTrace) {
       state = AsyncError(error, stackTrace);
       rethrow;
     }
+  }
+
+  /// 两步验证登录第二步：验证码或备份码换取并建立会话。
+  Future<void> signInWithTwoFactor({
+    required String challengeToken,
+    required String code,
+  }) async {
+    await _applyRemoteSession(() {
+      return ref
+          .read(authClientProvider)
+          .verifyTwoFactor(challengeToken: challengeToken, code: code);
+    });
+  }
+
+  /// 注册引导完成：备份码确认保存后换取并建立会话。
+  Future<void> completeTwoFactorEnrollment({
+    required String finalizeToken,
+  }) async {
+    await _applyRemoteSession(() {
+      return ref
+          .read(authClientProvider)
+          .completeTwoFactorEnrollment(finalizeToken: finalizeToken);
+    });
+  }
+
+  Future<void> _applyRemoteSession(
+    Future<AuthTokenResponse> Function() fetch,
+  ) async {
+    state = const AsyncLoading();
+    try {
+      await _applySession(await fetch());
+    } catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> _applySession(AuthTokenResponse session) async {
+    await _saveSession(session);
+    final authState = _toState(session);
+    _scheduleRefresh(authState.expiresAt);
+    state = AsyncData(authState);
   }
 
   Future<bool> refreshSession() async {

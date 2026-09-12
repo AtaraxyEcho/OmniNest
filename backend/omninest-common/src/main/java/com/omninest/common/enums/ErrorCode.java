@@ -67,7 +67,12 @@ public enum ErrorCode {
     BACKDROP_FILE_TOO_LARGE(8004, "背景素材文件过大"),
     BACKDROP_SCAN_UNAVAILABLE(8005, "安全扫描服务不可用"),
     BACKDROP_MALWARE_DETECTED(8006, "背景素材检测到安全威胁"),
-    BACKDROP_SCAN_FAILED(8007, "背景素材安全扫描失败");
+    BACKDROP_SCAN_FAILED(8007, "背景素材安全扫描失败"),
+
+    // ==================== 认证扩展 9xxx ====================
+    TWO_FACTOR_INVALID_CODE(9001, "两步验证码错误"),
+    TWO_FACTOR_NOT_CONFIGURED(9002, "两步验证未配置"),
+    TWO_FACTOR_ALREADY_ENABLED(9003, "两步验证已开启");
 
     private final Integer code;
     private final String message;
