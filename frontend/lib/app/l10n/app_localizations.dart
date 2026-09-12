@@ -13361,6 +13361,30 @@ abstract class AppLocalizations {
   /// **'More'**
   String get photosShareToMore;
 
+  /// No description provided for @photosShareToWeChat.
+  ///
+  /// In en, this message translates to:
+  /// **'WeChat'**
+  String get photosShareToWeChat;
+
+  /// No description provided for @photosShareToQr.
+  ///
+  /// In en, this message translates to:
+  /// **'QR code'**
+  String get photosShareToQr;
+
+  /// No description provided for @photosShareWeChatCopiedFallback.
+  ///
+  /// In en, this message translates to:
+  /// **'Link copied. Paste it into WeChat to send.'**
+  String get photosShareWeChatCopiedFallback;
+
+  /// No description provided for @photosShareQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this link on your phone in WeChat:\n{url}'**
+  String photosShareQrHint(String url);
+
   /// No description provided for @photosShareOptionLocation.
   ///
   /// In en, this message translates to:

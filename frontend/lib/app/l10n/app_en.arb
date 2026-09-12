@@ -3196,6 +3196,15 @@
   "photosShareToMail": "Mail",
   "photosShareToInstagram": "Instagram",
   "photosShareToMore": "More",
+  "photosShareToWeChat": "WeChat",
+  "photosShareToQr": "QR code",
+  "photosShareWeChatCopiedFallback": "Link copied. Paste it into WeChat to send.",
+  "photosShareQrHint": "Open this link on your phone in WeChat:\n{url}",
+  "@photosShareQrHint": {
+    "placeholders": {
+      "url": {"type": "String"}
+    }
+  },
   "photosShareOptionLocation": "Include location",
   "photosShareOptionOriginal": "Original quality",
   "photosShareManage": "Manage existing links",

@@ -7271,6 +7271,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosShareToMore => 'More';
 
   @override
+  String get photosShareToWeChat => 'WeChat';
+
+  @override
+  String get photosShareToQr => 'QR code';
+
+  @override
+  String get photosShareWeChatCopiedFallback =>
+      'Link copied. Paste it into WeChat to send.';
+
+  @override
+  String photosShareQrHint(String url) {
+    return 'Open this link on your phone in WeChat:\n$url';
+  }
+
+  @override
   String get photosShareOptionLocation => 'Include location';
 
   @override

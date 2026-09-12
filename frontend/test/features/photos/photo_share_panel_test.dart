@@ -96,14 +96,17 @@ void main() {
     expect(find.text('Bern'), findsNWidgets(2));
     // 链接基于前端站点地址（默认退化 origin），而非 API 地址；复制为手动操作。
     expect(find.text('http://localhost:8080/share/tok-1'), findsOneWidget);
-    expect(find.text('复制'), findsOneWidget);
+    // 链接区复制 + 渠道宫格「复制链接」共用「复制」文案。
+    expect(find.text('复制'), findsWidgets);
     expect(find.text('✓ 已复制'), findsNothing);
-    await tester.tap(find.text('复制'));
+    await tester.tap(find.text('复制').first);
     await tester.pump();
     await tester.pump();
     expect(find.text('✓ 已复制'), findsOneWidget);
     // 渠道宫格、OPTIONS 开关与管理入口。
     expect(find.text('分享至'), findsOneWidget);
+    expect(find.text('微信'), findsOneWidget);
+    expect(find.text('二维码'), findsOneWidget);
     expect(find.text('有效期'), findsOneWidget);
     expect(find.text('密码保护'), findsOneWidget);
     expect(find.text('未设置'), findsOneWidget);

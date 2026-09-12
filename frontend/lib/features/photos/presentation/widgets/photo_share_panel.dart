@@ -10,14 +10,15 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
+import 'package:omninest/features/photos/platform/photo_share_channel.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 
 /// 照片分享侧栏：SHARE 眉题 + 预览卡 + LINK 复制 + 分享渠道宫格 + OPTIONS 开关。
 ///
-/// 打开时优先复用该照片已有的最新分享链接，不存在则创建（默认 30 天有效、无密码）；
-/// 链接创建后自动复制到剪贴板。渠道宫格与 OPTIONS 为展示占位，尚未接通系统分享。
+/// 打开时撤销该照片旧有效链并新建；链接创建后自动复制。渠道：微信走
+/// [photoShareChannel]（未接 SDK 时降级复制），复制/更多复制链接，二维码展示说明。
 class PhotoSharePanel extends ConsumerStatefulWidget {
   const PhotoSharePanel({
     required this.visible,
@@ -486,26 +487,31 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   }
 
   Widget _buildShareToGrid(AppLocalizations l10n) {
-    final targets = <(Color, IconData, String)>[
+    final canWeChat = photoShareChannel.supportsWeChat;
+    final targets = <(Color, IconData, String, VoidCallback)>[
       (
-        const Color(0xFF34C759),
+        const Color(0xFF07C160),
         Icons.chat_bubble_rounded,
-        l10n.photosShareToMessages,
+        l10n.photosShareToWeChat,
+        () => unawaited(_shareToWeChat(l10n)),
       ),
       (
         const Color(0xFF007AFF),
-        Icons.mail_outline_rounded,
-        l10n.photosShareToMail,
+        Icons.link_rounded,
+        l10n.photosShareCopy,
+        () => unawaited(_copyToClipboard()),
       ),
       (
-        const Color(0xFFE1306C),
-        Icons.camera_alt_outlined,
-        l10n.photosShareToInstagram,
+        const Color(0xFF8E8E93),
+        Icons.qr_code_2_rounded,
+        l10n.photosShareToQr,
+        () => _showQrHint(l10n),
       ),
       (
         const Color(0xFF8E8E93),
         Icons.more_horiz_rounded,
         l10n.photosShareToMore,
+        () => unawaited(_copyToClipboard()),
       ),
     ];
     return Column(
@@ -524,7 +530,15 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           children: [
             for (var i = 0; i < targets.length; i++) ...[
               if (i > 0) const SizedBox(width: 8),
-              Expanded(child: _buildShareTarget(targets[i])),
+              Expanded(
+                child: _buildShareTarget(
+                  targets[i].$1,
+                  targets[i].$2,
+                  targets[i].$3,
+                  targets[i].$4,
+                  enabled: i != 0 || canWeChat || _shareUrl != null,
+                ),
+              ),
             ],
           ],
         ),
@@ -532,30 +546,100 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     );
   }
 
-  Widget _buildShareTarget((Color, IconData, String) target) {
-    final (color, icon, label) = target;
+  Future<void> _shareToWeChat(AppLocalizations l10n) async {
+    final url = _shareUrl;
+    if (url == null || url.isEmpty) {
+      return;
+    }
+    final result = await photoShareChannel.shareLinkToWeChat(
+      title: widget.photo.title,
+      webUrl: url,
+      thumbUrl: widget.photo.coverUrl,
+    );
+    if (!mounted) {
+      return;
+    }
+    switch (result) {
+      case PhotoShareChannelSuccess():
+        return;
+      case PhotoShareChannelUnsupported(:final reason):
+        debugPrint('微信分享未接入，降级复制链接：$reason');
+        await _copyToClipboard();
+        if (!mounted) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.photosShareWeChatCopiedFallback)),
+        );
+      case PhotoShareChannelFailure(:final message):
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+    }
+  }
+
+  void _showQrHint(AppLocalizations l10n) {
+    final url = _shareUrl;
+    if (!mounted) {
+      return;
+    }
+    showDialog<void>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(l10n.photosShareToQr),
+            content: Text(
+              url == null || url.isEmpty
+                  ? l10n.photosShareLinkFailed
+                  : l10n.photosShareQrHint(url),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text(l10n.coreConfirm),
+              ),
+            ],
+          ),
+    );
+  }
+
+  Widget _buildShareTarget(
+    Color color,
+    IconData icon,
+    String label,
+    VoidCallback onTap, {
+    required bool enabled,
+  }) {
     return Tooltip(
       message: label,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.05),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
-        ),
-        child: Column(
-          children: [
-            Icon(icon, size: 20, color: color),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.40),
-                fontSize: AppTypography.labelSmall,
-                letterSpacing: 0.04,
+      child: InkWell(
+        onTap: enabled ? onTap : null,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.05),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.07)),
+          ),
+          child: Column(
+            children: [
+              Icon(
+                icon,
+                size: 20,
+                color: enabled ? color : color.withValues(alpha: 0.35),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.40),
+                  fontSize: AppTypography.labelSmall,
+                  letterSpacing: 0.04,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -7065,6 +7065,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosShareToMore => '更多';
 
   @override
+  String get photosShareToWeChat => '微信';
+
+  @override
+  String get photosShareToQr => '二维码';
+
+  @override
+  String get photosShareWeChatCopiedFallback => '已复制链接，请粘贴到微信发送';
+
+  @override
+  String photosShareQrHint(String url) {
+    return '请在手机微信中打开：\n$url';
+  }
+
+  @override
   String get photosShareOptionLocation => '包含位置信息';
 
   @override

@@ -3070,6 +3070,15 @@
   "photosShareToMail": "邮件",
   "photosShareToInstagram": "Instagram",
   "photosShareToMore": "更多",
+  "photosShareToWeChat": "微信",
+  "photosShareToQr": "二维码",
+  "photosShareWeChatCopiedFallback": "已复制链接，请粘贴到微信发送",
+  "photosShareQrHint": "请在手机微信中打开：\n{url}",
+  "@photosShareQrHint": {
+    "placeholders": {
+      "url": {"type": "String"}
+    }
+  },
   "photosShareOptionLocation": "包含位置信息",
   "photosShareOptionOriginal": "原图画质",
   "photosShareManage": "管理已有链接",
