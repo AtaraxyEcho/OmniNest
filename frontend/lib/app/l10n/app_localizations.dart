@@ -587,7 +587,7 @@ abstract class AppLocalizations {
   /// No description provided for @setupPasswordLength.
   ///
   /// In en, this message translates to:
-  /// **'The super administrator password must be between 6 and 32 characters'**
+  /// **'The super administrator password must be between 8 and 24 characters'**
   String get setupPasswordLength;
 
   /// No description provided for @setupPasswordMismatch.
@@ -1295,13 +1295,13 @@ abstract class AppLocalizations {
   /// No description provided for @changePasswordMinLength.
   ///
   /// In en, this message translates to:
-  /// **'Password must be at least 6 characters'**
+  /// **'Password must be at least 8 characters'**
   String get changePasswordMinLength;
 
   /// No description provided for @changePasswordMaxLength.
   ///
   /// In en, this message translates to:
-  /// **'Password must be at most 128 characters'**
+  /// **'Password must be at most 24 characters'**
   String get changePasswordMaxLength;
 
   /// No description provided for @changePasswordConfirmNew.
@@ -7894,6 +7894,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Password must be at least 8 characters'**
   String get adminPasswordMinChars;
+
+  /// No description provided for @adminPasswordMaxChars.
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at most 24 characters'**
+  String get adminPasswordMaxChars;
 
   /// No description provided for @adminRoleLabel.
   ///

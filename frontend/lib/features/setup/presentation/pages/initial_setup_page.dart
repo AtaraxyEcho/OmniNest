@@ -372,7 +372,7 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                   ),
                 ),
                 validator: (value) {
-                  if (value == null || value.length < 6 || value.length > 32) {
+                  if (value == null || value.length < 8 || value.length > 24) {
                     return l10n.setupPasswordLength;
                   }
                   return null;

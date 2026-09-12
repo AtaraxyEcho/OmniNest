@@ -25,7 +25,7 @@ public record InitialSetupRequest(
         String email,
         @Schema(description = "密码")
         @NotBlank(message = "密码不能为空")
-        @Size(min = 8, max = 72, message = "密码长度必须在 8 到 72 个字符之间")
+        @Size(min = 8, max = 24, message = "密码长度必须在 8 到 24 个字符之间")
         String password,
         @Schema(description = "实例名称", example = "OmniNest")
         @Size(max = 120, message = "实例名称长度不能超过 120 个字符")

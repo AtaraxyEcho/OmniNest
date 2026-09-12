@@ -68,8 +68,8 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
               onToggle: () => setState(() => _obscureNew = !_obscureNew),
               validator: (v) {
                 if (v == null || v.isEmpty) return l10n.changePasswordEnterNew;
-                if (v.length < 6) return l10n.changePasswordMinLength;
-                if (v.length > 128) return l10n.changePasswordMaxLength;
+                if (v.length < 8) return l10n.changePasswordMinLength;
+                if (v.length > 24) return l10n.changePasswordMaxLength;
                 return null;
               },
             ),

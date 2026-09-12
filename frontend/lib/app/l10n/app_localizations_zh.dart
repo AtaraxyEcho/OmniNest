@@ -263,7 +263,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get setupConfirmPassword => '确认密码';
 
   @override
-  String get setupPasswordLength => '超级管理员密码长度必须在 6 到 32 个字符之间';
+  String get setupPasswordLength => '超级管理员密码长度必须在 8 到 24 个字符之间';
 
   @override
   String get setupPasswordMismatch => '两次输入的密码不一致';
@@ -631,10 +631,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get changePasswordEnterNew => '请输入新密码';
 
   @override
-  String get changePasswordMinLength => '密码至少 6 位';
+  String get changePasswordMinLength => '密码至少 8 位';
 
   @override
-  String get changePasswordMaxLength => '密码最多 128 位';
+  String get changePasswordMaxLength => '密码最多 24 位';
 
   @override
   String get changePasswordConfirmNew => '确认新密码';
@@ -4146,6 +4146,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminPasswordMinChars => '密码至少 8 个字符';
+
+  @override
+  String get adminPasswordMaxChars => '密码不能超过 24 个字符';
 
   @override
   String get adminRoleLabel => '角色';

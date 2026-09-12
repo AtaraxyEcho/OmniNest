@@ -25,14 +25,14 @@ class PasswordPolicyTest {
     void rejectsShortPassword() {
         assertThatThrownBy(() -> passwordPolicy.validate("root", "short"))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("8 个字符");
+                .hasMessageContaining("8 到 24");
     }
 
     @Test
-    void rejectsPasswordLongerThanBcryptByteLimit() {
-        assertThatThrownBy(() -> passwordPolicy.validate("root", "中文密码".repeat(10)))
+    void rejectsOverlongPassword() {
+        assertThatThrownBy(() -> passwordPolicy.validate("root", "a".repeat(25)))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("72 字节");
+                .hasMessageContaining("8 到 24");
     }
 
     @Test

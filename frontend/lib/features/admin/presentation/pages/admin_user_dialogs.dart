@@ -438,6 +438,9 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
                     if (value.length < 8) {
                       return l10n.adminPasswordMinChars;
                     }
+                    if (value.length > 24) {
+                      return l10n.adminPasswordMaxChars;
+                    }
                     return null;
                   },
                 ),

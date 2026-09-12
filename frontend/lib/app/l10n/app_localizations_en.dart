@@ -268,7 +268,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get setupPasswordLength =>
-      'The super administrator password must be between 6 and 32 characters';
+      'The super administrator password must be between 8 and 24 characters';
 
   @override
   String get setupPasswordMismatch => 'Passwords do not match';
@@ -655,11 +655,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get changePasswordMinLength =>
-      'Password must be at least 6 characters';
+      'Password must be at least 8 characters';
 
   @override
   String get changePasswordMaxLength =>
-      'Password must be at most 128 characters';
+      'Password must be at most 24 characters';
 
   @override
   String get changePasswordConfirmNew => 'Confirm New Password';
@@ -4275,6 +4275,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminPasswordMinChars => 'Password must be at least 8 characters';
+
+  @override
+  String get adminPasswordMaxChars => 'Password must be at most 24 characters';
 
   @override
   String get adminRoleLabel => 'Role';
