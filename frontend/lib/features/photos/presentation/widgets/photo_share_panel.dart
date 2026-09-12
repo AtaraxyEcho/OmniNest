@@ -86,8 +86,8 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     super.dispose();
   }
 
-  /// 创建分享链接。后端只存 token 哈希、列表接口不回明文（仅创建时返回一次），
-  /// 因此不做"复用已有链接"——每次打开面板创建新链接，旧链接经"管理"撤销。
+  /// 创建分享链接。后端只存 token 哈希，明文仅创建时返回一次；
+  /// 打开/重建面板时撤销该照片仍有效旧链，再新建，避免僵尸链接堆积。
   Future<void> _ensureShareLink() async {
     final photoId = widget.photo.id;
     if (_creating || (_loadedForPhotoId == photoId && _shareUrl != null)) {
