@@ -8035,6 +8035,14 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get musicScanConfirmMessage =>
+      'Audio files in your music directories will be scanned into the library; existing files are skipped or updated.';
+
+  @override
+  String get musicScanPollTimeout =>
+      'The job is still running in the background; progress display has stopped. Refresh later to check.';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

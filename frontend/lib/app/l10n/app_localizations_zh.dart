@@ -7800,6 +7800,12 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get musicScanConfirmMessage => '将扫描音乐目录中的音频文件并入库，已有文件会被跳过或更新。';
+
+  @override
+  String get musicScanPollTimeout => '任务仍在后台执行，进度展示已停止，可稍后刷新查看。';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

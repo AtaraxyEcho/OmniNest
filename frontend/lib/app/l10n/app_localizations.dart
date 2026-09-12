@@ -14747,6 +14747,18 @@ abstract class AppLocalizations {
   /// **'Lyrics applied to \"{title}\"'**
   String musicLyricsApplied(Object title);
 
+  /// No description provided for @musicScanConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Audio files in your music directories will be scanned into the library; existing files are skipped or updated.'**
+  String get musicScanConfirmMessage;
+
+  /// No description provided for @musicScanPollTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'The job is still running in the background; progress display has stopped. Refresh later to check.'**
+  String get musicScanPollTimeout;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

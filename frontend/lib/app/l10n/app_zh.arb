@@ -3397,6 +3397,8 @@
       "title": {}
     }
   },
+  "musicScanConfirmMessage": "将扫描音乐目录中的音频文件并入库，已有文件会被跳过或更新。",
+  "musicScanPollTimeout": "任务仍在后台执行，进度展示已停止，可稍后刷新查看。",
   "musicQueueTitle": "播放队列",
   "musicQueueEmpty": "播放队列为空",
   "musicQueueClear": "清空队列",

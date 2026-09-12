@@ -9,6 +9,7 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_daily_recommendation_controller.dart';
+import 'package:omninest/features/music/application/music_scan_job_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -779,6 +780,9 @@ class _LocalManagementContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final scanJob = ref.watch(musicScanJobControllerProvider);
+    final activeScan = scanJob.job ?? center.lastScanJob;
+    final scanRunning = scanJob.polling;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -796,30 +800,58 @@ class _LocalManagementContent extends ConsumerWidget {
               const SizedBox(width: 12),
               FilledButton.icon(
                 onPressed:
-                    () =>
-                        ref
-                            .read(musicCenterControllerProvider.notifier)
-                            .createScanJob(),
+                    scanRunning ? null : () => _confirmStartScan(context, ref),
                 icon: const Icon(Icons.radar_rounded, size: 18),
                 label: Text(l10n.musicStartScan),
               ),
             ],
           ),
         ),
-        if (center.lastScanJob case final scan?) ...[
+        if (activeScan != null) ...[
           const SizedBox(height: 12),
           Text(
             l10n.musicScanStatus(
-              scan.id,
-              scan.status,
-              scan.progress,
-              scan.scannedFiles,
+              activeScan.id,
+              activeScan.status,
+              activeScan.progress,
+              activeScan.scannedFiles,
             ),
             style: TextStyle(
               color: context.musicColors.onSurfaceVariant,
               fontSize: AppTypography.bodySmall,
             ),
           ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: activeScan.progress > 0 ? activeScan.progress / 100 : null,
+              minHeight: 4,
+            ),
+          ),
+          if (activeScan.message != null && activeScan.message!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              activeScan.message!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: context.musicColors.onSurfaceVariant,
+                fontSize: AppTypography.bodySmall,
+              ),
+            ),
+          ],
+          if (scanJob.timedOut)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                l10n.musicScanPollTimeout,
+                style: TextStyle(
+                  color: context.musicColors.onSurfaceVariant,
+                  fontSize: AppTypography.bodySmall,
+                ),
+              ),
+            ),
         ],
         const SizedBox(height: 16),
         Expanded(
@@ -878,6 +910,32 @@ class _LocalManagementContent extends ConsumerWidget {
       ],
     );
   }
+}
+
+Future<void> _confirmStartScan(BuildContext context, WidgetRef ref) async {
+  final l10n = AppLocalizations.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder:
+        (dialogContext) => AlertDialog(
+          title: Text(l10n.musicStartScan),
+          content: Text(l10n.musicScanConfirmMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.musicCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.musicStartScan),
+            ),
+          ],
+        ),
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+  await ref.read(musicScanJobControllerProvider.notifier).startScan();
 }
 
 Future<void> _confirmScrapeLibrary(BuildContext context, WidgetRef ref) async {

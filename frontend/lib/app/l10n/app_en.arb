@@ -3523,6 +3523,8 @@
       "title": {}
     }
   },
+  "musicScanConfirmMessage": "Audio files in your music directories will be scanned into the library; existing files are skipped or updated.",
+  "musicScanPollTimeout": "The job is still running in the background; progress display has stopped. Refresh later to check.",
   "musicQueueTitle": "Play Queue",
   "musicQueueEmpty": "Play queue is empty",
   "musicQueueClear": "Clear Queue",
