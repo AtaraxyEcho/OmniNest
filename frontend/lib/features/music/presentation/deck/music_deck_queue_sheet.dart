@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 
 /// 显示当前播放队列的响应式抽屉。
 Future<void> showMusicDeckQueue(BuildContext context) {
@@ -78,6 +79,18 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                         ],
                       ),
                       const Spacer(),
+                      IconButton(
+                        tooltip:
+                            AppLocalizations.of(context).musicPlaybackSettings,
+                        visualDensity: VisualDensity.compact,
+                        onPressed:
+                            () => showMusicPlaybackSettingsDialog(context, ref),
+                        icon: Icon(
+                          Icons.equalizer_rounded,
+                          size: 19,
+                          color: context.musicColors.onSurfaceVariant,
+                        ),
+                      ),
                       TextButton.icon(
                         style: TextButton.styleFrom(
                           padding: const EdgeInsets.symmetric(
@@ -136,7 +149,9 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                             padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
                             buildDefaultDragHandles: false,
                             onReorderItem: (oldIndex, adjustedIndex) {
-                              debugPrint('[QueueSheet] onReorderItem($oldIndex,$adjustedIndex)');
+                              debugPrint(
+                                '[QueueSheet] onReorderItem($oldIndex,$adjustedIndex)',
+                              );
                               // reorderQueue 沿用旧版 onReorder 的原始索引约定，
                               // 后移时把已调整索引补回一位。
                               final rawIndex =

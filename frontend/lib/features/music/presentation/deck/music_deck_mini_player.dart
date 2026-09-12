@@ -12,6 +12,7 @@ import 'package:omninest/features/music/application/music_playback_session.dart'
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 
 /// Mini Player 可注入配色。
@@ -263,6 +264,14 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                   ),
                   Text(_formatDuration(_duration), style: _timeStyle),
                 ],
+              ),
+            ),
+            IconButton(
+              tooltip: AppLocalizations.of(context).musicPlaybackSettings,
+              onPressed: () => showMusicPlaybackSettingsDialog(context, ref),
+              icon: Icon(
+                Icons.equalizer_rounded,
+                color: _palette(context).text,
               ),
             ),
             IconButton(

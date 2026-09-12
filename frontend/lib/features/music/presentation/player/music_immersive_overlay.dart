@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/window/window_chrome_controller.dart';
@@ -11,7 +10,6 @@ import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/music/presentation/player/music_mobile_now_playing.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_player.dart';
-import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 import 'package:omninest/features/music/application/music_sleep_timer_controller.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 
@@ -97,7 +95,7 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
                   MusicMobileNowPlaying(onClose: widget.onClose),
                 if (fullVisual)
                   Positioned(
-                    top: safeTop,
+                    top: safeTop + 14,
                     left: 12,
                     right: 12,
                     child: _buildDesktopTopBar(
@@ -146,16 +144,6 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
                   _buildBackButton(context),
                   const SleepTimerBadge(),
                   const Spacer(),
-                  IconButton(
-                    tooltip: AppLocalizations.of(context).musicPlaybackSettings,
-                    onPressed:
-                        () => showMusicPlaybackSettingsDialog(context, ref),
-                    icon: Icon(
-                      Icons.tune_rounded,
-                      color: MusicImmersivePalette.digital.text,
-                      size: 20,
-                    ),
-                  ),
                   AppFullscreenButton(
                     isFullscreen: isFullscreen,
                     foregroundColor: MusicImmersivePalette.digital.text,

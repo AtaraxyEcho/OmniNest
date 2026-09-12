@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/widgets/skeleton_shimmer.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
+import 'package:omninest/features/files/presentation/widgets/media_import_button.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_daily_recommendation_controller.dart';
 import 'package:omninest/features/music/application/music_scan_job_controller.dart';
@@ -268,20 +269,28 @@ class _DailyRecommendationSection extends ConsumerWidget {
               return MusicDeckCoverShelf(items: [item]);
             }
             final platform = MusicPlatform.fromApiValue(value.platform);
-            final items = [
-              for (final track in value.tracks.take(10))
+            // 队列载入全量推荐曲目（替换旧队列），卡片仅展示前 10 张。
+            final playableItems = value.tracks
+                .map(MusicPlayableItem.online)
+                .toList(growable: false);
+            final items = <MusicDeckCoverItem>[
+              for (
+                var index = 0;
+                index < playableItems.length && index < 10;
+                index++
+              )
                 MusicDeckCoverItem(
                   id:
-                      '${value.platform}:daily:${value.recommendationDate.toIso8601String()}:${track.songId}',
-                  title: track.title,
-                  subtitle: track.artistName,
-                  imageUrl: track.coverUrl,
+                      '${value.platform}:daily:${value.recommendationDate.toIso8601String()}:${playableItems[index].playableKey}',
+                  title: playableItems[index].track.title,
+                  subtitle: playableItems[index].track.artistName,
+                  imageUrl: playableItems[index].track.coverUrl,
                   platform: platform,
                   overlayPlatformBadge: true,
                   onTap:
                       () => ref
                           .read(musicCenterControllerProvider.notifier)
-                          .playOnlineTrack(track),
+                          .playItems(playableItems, startIndex: index),
                 ),
             ];
             return MusicDeckCoverShelf(items: items);
@@ -830,6 +839,31 @@ class _LocalManagementContent extends ConsumerWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              MediaImportButton(
+                subsystemDirectory: 'Music',
+                acceptedExtensions: const [
+                  'mp3',
+                  'flac',
+                  'aac',
+                  'm4a',
+                  'ogg',
+                  'opus',
+                  'wav',
+                  'aiff',
+                  'alac',
+                ],
+                onImportComplete: () async {
+                  // 上传完成后立即扫描，把新文件导入曲库并刷新列表。
+                  await ref
+                      .read(musicScanJobControllerProvider.notifier)
+                      .startScan();
+                  await ref
+                      .read(musicCenterControllerProvider.notifier)
+                      .refresh();
+                },
+                style: ImportButtonStyle.textButton,
+              ),
+              const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: () => _confirmScrapeLibrary(context, ref),
                 icon: const Icon(Icons.travel_explore_rounded, size: 18),
