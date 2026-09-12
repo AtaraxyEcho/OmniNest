@@ -152,6 +152,20 @@ public class MusicLibraryService {
         return Sort.by(direction, field);
     }
 
+    /**
+     * 查询指定艺术家下至少包含一个活动曲目的专辑，按更新时间倒序。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param artistId 艺术家 ID
+     * @return 专辑列表
+     */
+    @Transactional(readOnly = true)
+    public List<MusicAlbumDto> artistAlbums(UUID ownerUserId, UUID artistId) {
+        return albumRepository.findActiveByOwnerUserIdAndArtistId(ownerUserId, artistId).stream()
+                .map(this::toAlbumDto)
+                .toList();
+    }
+
     @Transactional(readOnly = true)
     public List<MusicTrackDto> favorites(UUID ownerUserId) {
         List<UUID> trackIds = favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId).stream()

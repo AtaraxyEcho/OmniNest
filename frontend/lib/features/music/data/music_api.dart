@@ -393,6 +393,14 @@ class MusicApi {
     return MusicScanJob.fromJson(parseData(response.data));
   }
 
+  /// 查询指定艺术家下的活动专辑列表。
+  Future<List<MusicAlbum>> artistAlbums(String artistId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/artists/$artistId/albums',
+    );
+    return _parseList(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
+  }
+
   /// 按当前曲目的艺术家/标题/专辑搜索在线歌词候选。
   Future<MusicLyricsResult?> searchLyrics(String trackId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(

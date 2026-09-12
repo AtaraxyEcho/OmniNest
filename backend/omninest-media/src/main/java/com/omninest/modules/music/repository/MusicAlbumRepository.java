@@ -30,6 +30,25 @@ public interface MusicAlbumRepository extends JpaRepository<MusicAlbum, UUID> {
             @Param("ownerUserId") UUID ownerUserId,
             Pageable pageable);
 
+    /**
+     * 查询指定艺术家下至少包含一个活动曲目的专辑。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param artistId 艺术家 ID
+     * @return 活动专辑，按更新时间倒序
+     */
+    @Query("""
+            select distinct album from MusicAlbum album
+            join MusicTrack track on track.albumId = album.id
+            join FileNode file on track.fileNodeId = file.id
+            where album.ownerUserId = :ownerUserId and track.artistId = :artistId
+            and file.deleted = false
+            order by album.updatedAt desc
+            """)
+    List<MusicAlbum> findActiveByOwnerUserIdAndArtistId(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("artistId") UUID artistId);
+
     Optional<MusicAlbum> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     Optional<MusicAlbum> findByOwnerUserIdAndTitleIgnoreCase(UUID ownerUserId, String title);

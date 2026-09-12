@@ -178,6 +178,15 @@ public class MusicController {
         return ApiResponse.success(musicLibraryService.recentItems(currentUserContext.requireCurrentUserId()));
     }
 
+    @Operation(summary = "查询艺术家专辑", description = "返回指定艺术家下至少包含一个活动曲目的专辑")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/music/artists/{artistId}/albums")
+    ApiResponse<List<MusicAlbumDto>> artistAlbums(@PathVariable UUID artistId) {
+        return ApiResponse.success(musicLibraryService.artistAlbums(
+                currentUserContext.requireCurrentUserId(),
+                artistId));
+    }
+
     @Operation(summary = "分页查询播放历史", description = "按播放时间倒序分页返回当前用户的播放历史")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/history")

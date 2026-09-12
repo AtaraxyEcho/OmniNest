@@ -10,6 +10,7 @@ import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_daily_recommendation_controller.dart';
 import 'package:omninest/features/music/application/music_scan_job_controller.dart';
+import 'package:omninest/features/music/application/music_artist_albums_controller.dart';
 import 'package:omninest/features/music/application/music_selection_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
@@ -750,6 +751,8 @@ class _CollectionDetail extends ConsumerWidget {
                       .playItems(items, startIndex: 0),
         ),
         const SizedBox(height: 18),
+        if (selection case ArtistMusicDeckCollection(:final artist))
+          _ArtistAlbumsShelf(artistId: artist.id),
         Expanded(
           child:
               loading
@@ -1121,5 +1124,57 @@ class _MusicBatchActionBar extends ConsumerWidget {
       },
     );
     return selected;
+  }
+}
+
+/// 艺人详情页的专辑横向封面架，进入详情时按需加载。
+class _ArtistAlbumsShelf extends ConsumerStatefulWidget {
+  const _ArtistAlbumsShelf({required this.artistId});
+
+  final String artistId;
+
+  @override
+  ConsumerState<_ArtistAlbumsShelf> createState() => _ArtistAlbumsShelfState();
+}
+
+class _ArtistAlbumsShelfState extends ConsumerState<_ArtistAlbumsShelf> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref
+            .read(musicArtistAlbumsControllerProvider.notifier)
+            .ensureLoaded(widget.artistId);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(musicArtistAlbumsControllerProvider);
+    final albums = state.albumsByArtist[widget.artistId];
+    if (albums == null || albums.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    final items = [
+      for (final album in albums)
+        MusicDeckCoverItem(
+          id: album.id,
+          title: album.title,
+          subtitle: l10n.musicDeckTrackCount(album.trackCount),
+          imageUrl: album.coverUrl,
+          icon: Icons.album_rounded,
+          onTap:
+              () => ref
+                  .read(musicCenterControllerProvider.notifier)
+                  .openAlbum(album),
+        ),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 18),
+      child: MusicDeckCoverShelf(items: items),
+    );
   }
 }

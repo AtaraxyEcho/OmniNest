@@ -785,6 +785,10 @@ class _FakeMusicApi implements MusicApi {
   }
 
   @override
+  Future<List<MusicAlbum>> artistAlbums(String artistId) async =>
+      const <MusicAlbum>[];
+
+  @override
   Future<MusicPagedResult<MusicAlbum>> albums({
     int page = 0,
     int size = 100,
