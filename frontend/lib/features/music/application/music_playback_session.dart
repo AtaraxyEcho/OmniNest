@@ -5,8 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/media/web_media_session.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
+import 'package:omninest/features/music/application/music_media_session.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 
@@ -63,6 +65,10 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   Future<void>? _persistFuture;
   AppLifecycleListener? _lifecycleListener;
   int _lastSavedSecond = -1;
+  MusicMediaSessionHandler? _mediaHandler;
+  WebMediaSessionBinder? _webMediaBinder;
+  StreamSubscription<Duration>? _mediaPositionSub;
+  DateTime _lastMediaSyncAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   @override
   MusicPlaybackSession build() {
@@ -81,15 +87,117 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       onDetach: _flushPlaybackQueue,
       onExitRequested: _flushPlaybackQueueBeforeExit,
     );
+    _registerSystemMediaSession();
+    ref.listen(musicCenterControllerProvider, (previous, next) {
+      _syncSystemMediaState(force: true);
+    });
     ref.onDispose(() {
       _lifecycleListener?.dispose();
       _lifecycleListener = null;
+      unawaited(_mediaPositionSub?.cancel());
       unawaited(_persistCurrent());
       unawaited(_completedSub?.cancel());
       unawaited(_logSub?.cancel());
       unawaited(_positionSub?.cancel());
     });
     return MusicPlaybackSession(player: _player, lastError: null);
+  }
+
+  /// 注册系统媒体会话：Android/iOS 通知栏与音频焦点、Web 媒体控件。
+  void _registerSystemMediaSession() {
+    final commands = MusicMediaCommandCallbacks(
+      onPlay:
+          () => _runMediaCommand(
+            () => ref
+                .read(musicCenterControllerProvider.notifier)
+                .setPlaying(true),
+          ),
+      onPause:
+          () => _runMediaCommand(
+            () => ref
+                .read(musicCenterControllerProvider.notifier)
+                .setPlaying(false),
+          ),
+      onNext:
+          () => _runMediaCommand(
+            () => ref.read(musicCenterControllerProvider.notifier).nextTrack(),
+          ),
+      onPrevious:
+          () => _runMediaCommand(
+            () =>
+                ref
+                    .read(musicCenterControllerProvider.notifier)
+                    .previousTrack(),
+          ),
+    );
+    if (kIsWeb) {
+      _webMediaBinder = WebMediaSessionBinder.register(
+        onPlay: commands.onPlay,
+        onPause: commands.onPause,
+        onNext: commands.onNext,
+        onPrevious: commands.onPrevious,
+      );
+      _mediaPositionSub = _player.stream.position.listen((_) {
+        _syncSystemMediaState();
+      });
+      return;
+    }
+    // 桌面媒体键：命令经 MusicMediaKeyBridge 转接。
+    MusicMediaKeyBridge.register(commands);
+    if (!musicMediaSessionSupported) {
+      return;
+    }
+    unawaited(
+      ensureMusicMediaSession(commands).then((handler) {
+        _mediaHandler = handler;
+        _syncSystemMediaState();
+      }),
+    );
+    _mediaPositionSub = _player.stream.position.listen((_) {
+      _syncSystemMediaState();
+    });
+  }
+
+  Future<void> _runMediaCommand(Future<void> Function() command) async {
+    await command();
+    await syncFromCenterState();
+  }
+
+  /// 把当前曲目与播放状态同步给系统媒体控件（通知栏/锁屏/浏览器面板）。
+  ///
+  /// [force] 为 true 时跳过节流（切歌/暂停等关键状态变化），进度流按 1s 节流。
+  void _syncSystemMediaState({bool force = false}) {
+    final now = DateTime.now();
+    if (!force &&
+        now.difference(_lastMediaSyncAt) < const Duration(seconds: 1)) {
+      return;
+    }
+    _lastMediaSyncAt = now;
+    final center = ref.read(musicCenterControllerProvider).asData?.value;
+    final track = center?.currentItem?.track;
+    final playing = _player.state.playing && (center?.isPlaying ?? false);
+    final position = _player.state.position;
+    final duration = _player.state.duration;
+    _mediaHandler?.updateNowPlaying(
+      track: track,
+      playing: playing,
+      position: position,
+      duration: duration,
+    );
+    final binder = _webMediaBinder;
+    if (binder != null && track != null) {
+      binder.updateMetadata(
+        title: track.title,
+        artistName: track.artistName,
+        albumTitle: track.albumTitle,
+        coverUrl: track.coverUrl,
+      );
+    }
+    binder?.updatePlaybackState(
+      playing: playing,
+      position: position,
+      duration: duration,
+    );
   }
 
   void _flushPlaybackQueue() {

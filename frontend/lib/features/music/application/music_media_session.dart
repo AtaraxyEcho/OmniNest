@@ -1,0 +1,167 @@
+import 'dart:async';
+
+import 'package:audio_service/audio_service.dart';
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/foundation.dart';
+import 'package:omninest/features/music/domain/music_models.dart';
+
+/// 播放系统命令回调：由音乐播放会话层注入，转接 MusicCenter 命令。
+class MusicMediaCommandCallbacks {
+  const MusicMediaCommandCallbacks({
+    required this.onPlay,
+    required this.onPause,
+    required this.onNext,
+    required this.onPrevious,
+  });
+
+  final Future<void> Function() onPlay;
+  final Future<void> Function() onPause;
+  final Future<void> Function() onNext;
+  final Future<void> Function() onPrevious;
+}
+
+/// 音乐系统媒体会话处理：Android/iOS 通知栏媒体卡片与系统媒体键的统一出口。
+///
+/// playbackState/position 由 soloud 事件经播放会话层驱动；metadata 来自当前曲。
+class MusicMediaSessionHandler extends BaseAudioHandler with SeekHandler {
+  MusicMediaSessionHandler({required MusicMediaCommandCallbacks callbacks})
+    : _callbacks = callbacks;
+
+  final MusicMediaCommandCallbacks _callbacks;
+
+  /// 系统媒体卡片元数据（标题/艺人/专辑/封面/时长）。
+  Future<void> updateNowPlaying({
+    required MusicTrack? track,
+    required bool playing,
+    required Duration position,
+    required Duration duration,
+  }) async {
+    if (track != null) {
+      mediaItem.add(
+        MediaItem(
+          id: 'local:${track.id}',
+          album: track.albumTitle,
+          title: track.title,
+          artist: track.artistName,
+          duration:
+              track.durationSeconds != null
+                  ? Duration(seconds: track.durationSeconds!)
+                  : (duration > Duration.zero ? duration : null),
+          artUri: _artUri(track.coverUrl),
+        ),
+      );
+    }
+    playbackState.add(
+      playbackState.value.copyWith(
+        processingState:
+            track == null
+                ? AudioProcessingState.idle
+                : AudioProcessingState.ready,
+        playing: playing,
+        updatePosition: position,
+        bufferedPosition: duration,
+        speed: 1.0,
+        systemActions: const <MediaAction>{MediaAction.seek},
+      ),
+    );
+  }
+
+  Uri? _artUri(String? coverUrl) {
+    final url = coverUrl?.trim();
+    if (url == null || url.isEmpty) {
+      return null;
+    }
+    return Uri.tryParse(url);
+  }
+
+  @override
+  Future<void> play() async {
+    await _callbacks.onPlay();
+  }
+
+  @override
+  Future<void> pause() async {
+    await _callbacks.onPause();
+  }
+
+  @override
+  Future<void> skipToNext() async {
+    await _callbacks.onNext();
+  }
+
+  @override
+  Future<void> skipToPrevious() async {
+    await _callbacks.onPrevious();
+  }
+}
+
+/// 全局会话实例，由初始化流程创建，播放会话层与系统命令共享。
+MusicMediaSessionHandler? _activeHandler;
+
+/// 是否在本平台启用 audio_service 媒体会话（仅 Android/iOS）。
+bool get musicMediaSessionSupported =>
+    !kIsWeb &&
+    (defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS);
+
+/// 初始化系统媒体会话：音频焦点（audio_session）+ 通知栏媒体卡片（audio_service）。
+///
+/// 幂等：重复调用返回既有实例。
+Future<MusicMediaSessionHandler?> ensureMusicMediaSession(
+  MusicMediaCommandCallbacks callbacks,
+) async {
+  if (!musicMediaSessionSupported) {
+    return null;
+  }
+  final existing = _activeHandler;
+  if (existing != null) {
+    return existing;
+  }
+  final session = await AudioSession.instance;
+  // 音乐类别：被电话/导航抢占时暂停，结束后恢复；混音场景自动闪避降音量。
+  await session.configure(const AudioSessionConfiguration.music());
+  final handler = MusicMediaSessionHandler(callbacks: callbacks);
+  await AudioService.init(
+    builder: () => handler,
+    config: const AudioServiceConfig(
+      androidNotificationChannelId: 'com.omninest.app.audio.playback',
+      androidNotificationChannelName: '音乐播放',
+      androidNotificationChannelDescription: '音乐后台播放与媒体控制',
+      androidNotificationOngoing: true,
+      androidStopForegroundOnPause: true,
+    ),
+  );
+  _activeHandler = handler;
+  return handler;
+}
+
+/// 桌面媒体键桥：桌面热键服务（系统级媒体键）转接音乐命令。
+abstract final class MusicMediaKeyBridge {
+  static MusicMediaCommandCallbacks? _callbacks;
+
+  /// 由音乐播放会话层注册命令回调。
+  static void register(MusicMediaCommandCallbacks callbacks) {
+    _callbacks = callbacks;
+  }
+
+  static Future<void> dispatch({
+    required bool play,
+    bool pause = false,
+    bool next = false,
+    bool previous = false,
+  }) async {
+    final callbacks = _callbacks;
+    if (callbacks == null) {
+      return;
+    }
+    if (pause) {
+      await callbacks.onPause();
+    } else if (next) {
+      await callbacks.onNext();
+    } else if (previous) {
+      await callbacks.onPrevious();
+    } else if (play) {
+      await callbacks.onPlay();
+    }
+  }
+}

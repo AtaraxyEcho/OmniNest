@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:flutter/services.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:omninest/features/music/application/music_media_session.dart';
 
 /// Desktop 全局快捷键服务。
 /// 注册系统级快捷键用于快速显示/隐藏窗口。
@@ -30,6 +33,47 @@ class DesktopHotkeyService {
       },
     );
     _registered.add(toggleHotKey);
+  }
+
+  /// 注册系统级媒体键（播放/暂停、上一首、下一首）。
+  ///
+  /// 回调经 MusicMediaKeyBridge 转接音乐播放会话层注入的命令。
+  Future<void> registerMediaKeys() async {
+    final playPauseKey = HotKey(
+      key: PhysicalKeyboardKey.mediaPlay,
+      scope: HotKeyScope.system,
+    );
+    await hotKeyManager.register(
+      playPauseKey,
+      keyDownHandler: (_) {
+        unawaited(MusicMediaKeyBridge.dispatch(play: true, pause: true));
+      },
+    );
+    _registered.add(playPauseKey);
+
+    final nextKey = HotKey(
+      key: PhysicalKeyboardKey.mediaTrackNext,
+      scope: HotKeyScope.system,
+    );
+    await hotKeyManager.register(
+      nextKey,
+      keyDownHandler: (_) {
+        unawaited(MusicMediaKeyBridge.dispatch(play: false, next: true));
+      },
+    );
+    _registered.add(nextKey);
+
+    final previousKey = HotKey(
+      key: PhysicalKeyboardKey.mediaTrackPrevious,
+      scope: HotKeyScope.system,
+    );
+    await hotKeyManager.register(
+      previousKey,
+      keyDownHandler: (_) {
+        unawaited(MusicMediaKeyBridge.dispatch(play: false, previous: true));
+      },
+    );
+    _registered.add(previousKey);
   }
 
   /// 注销所有快捷键。
