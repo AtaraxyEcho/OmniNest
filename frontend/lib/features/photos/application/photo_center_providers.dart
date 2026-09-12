@@ -1,15 +1,5 @@
 part of 'photo_controller.dart';
 
-// -- 基础 Provider --
-
-final photoApiProvider = Provider<PhotoApi>((ref) {
-  return PhotoApi(ref.watch(apiClientProvider));
-});
-
-final photoRepositoryProvider = Provider<PhotoRepository>((ref) {
-  return PhotoRepositoryImpl(ref.watch(photoApiProvider));
-});
-
 // -- 数据 Provider --
 
 final photoDashboardProvider =
