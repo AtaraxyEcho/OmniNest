@@ -7765,6 +7765,24 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicPlatformLogout => '退出登录';
 
   @override
+  String get musicHistoryTitle => '播放历史';
+
+  @override
+  String get musicHistoryEmpty => '最近 7 天没有播放记录';
+
+  @override
+  String get musicHistoryLoadMore => '加载更多';
+
+  @override
+  String get musicHistoryToday => '今天';
+
+  @override
+  String get musicHistoryYesterday => '昨天';
+
+  @override
+  String get musicHistoryViewAll => '查看全部';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

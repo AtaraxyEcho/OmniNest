@@ -6,6 +6,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -49,6 +51,20 @@ public interface MusicPlayHistoryRepository extends JpaRepository<MusicPlayHisto
      * @return 本地音乐历史
      */
     Optional<MusicPlayHistory> findFirstByOwnerUserIdAndTrackIdIsNotNullOrderByPlayedAtDesc(UUID ownerUserId);
+
+    /**
+     * 分页查询用户播放历史，按播放时间倒序。
+     *
+     * @param ownerUserId 用户 ID
+     * @param cutoff 只返回该时间之后的历史
+     * @param pageable 分页参数
+     * @return 播放历史分页
+     */
+    Page<MusicPlayHistory> findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+            UUID ownerUserId,
+            Instant cutoff,
+            Pageable pageable
+    );
 
     /**
      * 统计用户播放历史数量。

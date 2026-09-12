@@ -131,6 +131,21 @@ public final class MusicDtos {
     ) {
     }
 
+    /** 播放历史条目，覆盖本地与在线播放来源。 */
+    public record MusicPlayHistoryDto(
+            String playableKey,
+            String title,
+            String artistName,
+            String albumTitle,
+            String coverUrl,
+            Integer durationSeconds,
+            Integer playDuration,
+            String platform,
+            String externalSongId,
+            Instant playedAt
+    ) {
+    }
+
     /** 播放队列中的稳定曲目引用和展示快照。 */
     public record MusicPlaybackQueueItemDto(
             @NotBlank @Size(max = 512) String playableKey,

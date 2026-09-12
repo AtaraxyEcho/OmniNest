@@ -8000,6 +8000,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicPlatformLogout => 'Logout';
 
   @override
+  String get musicHistoryTitle => 'Play History';
+
+  @override
+  String get musicHistoryEmpty => 'No plays in the last 7 days';
+
+  @override
+  String get musicHistoryLoadMore => 'Load More';
+
+  @override
+  String get musicHistoryToday => 'Today';
+
+  @override
+  String get musicHistoryYesterday => 'Yesterday';
+
+  @override
+  String get musicHistoryViewAll => 'View All';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

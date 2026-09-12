@@ -140,6 +140,26 @@ class MusicLibraryServiceTest {
     }
 
     @Test
+    void playHistoryPagesWithinRetentionWindow() {
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setPlayableKey("local:" + TRACK_ID);
+        history.setTitle("Night Drive");
+        history.setPlayedAt(Instant.now());
+        var pageable = PageRequest.of(0, 50);
+        when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
+
+        var result = libraryService.playHistory(OWNER_ID, 0, 50);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().getFirst().title()).isEqualTo("Night Drive");
+        assertThat(result.getContent().getFirst().playableKey()).isEqualTo("local:" + TRACK_ID);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
     void tracksPagingFallsBackToDefaultSortForUnknownField() {
         MusicTrack track = new MusicTrack();
         track.setId(TRACK_ID);

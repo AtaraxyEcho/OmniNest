@@ -11,6 +11,7 @@ import com.omninest.modules.music.dto.MusicDtos.MusicArtistDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicDashboardDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicCoverUploadDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryRequest;
+import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicRecentItemDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaylistDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackPlanDto;
@@ -175,6 +176,20 @@ public class MusicController {
     @GetMapping("/api/v1/music/recent-items")
     ApiResponse<List<MusicRecentItemDto>> recentItems() {
         return ApiResponse.success(musicLibraryService.recentItems(currentUserContext.requireCurrentUserId()));
+    }
+
+    @Operation(summary = "分页查询播放历史", description = "按播放时间倒序分页返回当前用户的播放历史")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/music/history")
+    ApiResponse<PageResponse<MusicPlayHistoryDto>> history(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        var result = musicLibraryService.playHistory(currentUserContext.requireCurrentUserId(), page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")

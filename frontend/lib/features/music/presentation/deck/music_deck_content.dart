@@ -98,6 +98,7 @@ class MusicDeckContent extends ConsumerWidget {
         subtitle: AppLocalizations.of(context).musicDeckRecentSubtitle,
         items: _recentItems(center, sources),
         center: center,
+        isRecentSection: true,
       ),
       MusicDeckSection.offline => const _OfflineContent(),
       MusicDeckSection.localManagement => _LocalManagementContent(
@@ -452,16 +453,17 @@ class _LibraryContent extends ConsumerWidget {
               onAddToPlaylist: _addToPlaylistHandler(context, ref),
               onReachEnd:
                   center.hasMoreTracks
-                      ? () => ref
-                          .read(musicCenterControllerProvider.notifier)
-                          .loadMoreTracks()
+                      ? () =>
+                          ref
+                              .read(musicCenterControllerProvider.notifier)
+                              .loadMoreTracks()
                       : null,
               footer:
                   center.tracksLoadingMore
                       ? const SizedBox.square(
-                          dimension: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                       : null,
             ),
             MusicDeckLibraryView.albums => MusicDeckCoverGrid(
@@ -550,19 +552,32 @@ class _TrackSection extends ConsumerWidget {
     required this.subtitle,
     required this.items,
     required this.center,
+    this.isRecentSection = false,
   });
 
   final String title;
   final String subtitle;
   final List<MusicPlayableItem> items;
   final MusicCenterState center;
+  final bool isRecentSection;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _ContentHeader(title: title, subtitle: subtitle),
+        _ContentHeader(
+          title: title,
+          subtitle: subtitle,
+          trailing:
+              isRecentSection
+                  ? TextButton(
+                    onPressed: () => context.push('/music/history'),
+                    child: Text(l10n.musicHistoryViewAll),
+                  )
+                  : null,
+        ),
         const SizedBox(height: 12),
         Expanded(
           child: MusicDeckTrackList(

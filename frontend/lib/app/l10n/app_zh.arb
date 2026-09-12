@@ -3381,6 +3381,12 @@
     }
   },
   "musicPlatformLogout": "退出登录",
+  "musicHistoryTitle": "播放历史",
+  "musicHistoryEmpty": "最近 7 天没有播放记录",
+  "musicHistoryLoadMore": "加载更多",
+  "musicHistoryToday": "今天",
+  "musicHistoryYesterday": "昨天",
+  "musicHistoryViewAll": "查看全部",
   "musicQueueTitle": "播放队列",
   "musicQueueEmpty": "播放队列为空",
   "musicQueueClear": "清空队列",

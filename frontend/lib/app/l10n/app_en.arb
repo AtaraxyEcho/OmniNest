@@ -3507,6 +3507,12 @@
     }
   },
   "musicPlatformLogout": "Logout",
+  "musicHistoryTitle": "Play History",
+  "musicHistoryEmpty": "No plays in the last 7 days",
+  "musicHistoryLoadMore": "Load More",
+  "musicHistoryToday": "Today",
+  "musicHistoryYesterday": "Yesterday",
+  "musicHistoryViewAll": "View All",
   "musicQueueTitle": "Play Queue",
   "musicQueueEmpty": "Play queue is empty",
   "musicQueueClear": "Clear Queue",

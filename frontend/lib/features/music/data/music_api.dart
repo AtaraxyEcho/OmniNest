@@ -83,6 +83,21 @@ class MusicApi {
     return _parseList(response.data, MusicRecentEntry.fromJson, '最近播放列表格式不正确');
   }
 
+  Future<MusicPagedResult<MusicPlayHistoryEntry>> playHistory({
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/history',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return _parsePage(
+      response.data,
+      MusicPlayHistoryEntry.fromJson,
+      '播放历史格式不正确',
+    );
+  }
+
   Future<List<MusicPlaylist>> playlists() async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/playlists',

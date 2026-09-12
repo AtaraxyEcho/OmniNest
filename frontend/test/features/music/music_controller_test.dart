@@ -1011,6 +1011,14 @@ class _FakeMusicApi implements MusicApi {
       List<MusicRecentEntry>.of(recentEntries);
 
   @override
+  Future<MusicPagedResult<MusicPlayHistoryEntry>> playHistory({
+    int page = 0,
+    int size = 50,
+  }) async => const MusicPagedResult<MusicPlayHistoryEntry>(
+    items: <MusicPlayHistoryEntry>[],
+  );
+
+  @override
   Future<List<MusicTrack>> playlistTracks(String playlistId) =>
       Future.value([track, secondTrack]).then((tracks) {
         loadedPlaylistIds.add(playlistId);

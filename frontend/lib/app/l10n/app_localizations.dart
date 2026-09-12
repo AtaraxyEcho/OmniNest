@@ -14681,6 +14681,42 @@ abstract class AppLocalizations {
   /// **'Logout'**
   String get musicPlatformLogout;
 
+  /// No description provided for @musicHistoryTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Play History'**
+  String get musicHistoryTitle;
+
+  /// No description provided for @musicHistoryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No plays in the last 7 days'**
+  String get musicHistoryEmpty;
+
+  /// No description provided for @musicHistoryLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load More'**
+  String get musicHistoryLoadMore;
+
+  /// No description provided for @musicHistoryToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get musicHistoryToday;
+
+  /// No description provided for @musicHistoryYesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get musicHistoryYesterday;
+
+  /// No description provided for @musicHistoryViewAll.
+  ///
+  /// In en, this message translates to:
+  /// **'View All'**
+  String get musicHistoryViewAll;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

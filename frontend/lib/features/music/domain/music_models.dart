@@ -734,6 +734,45 @@ class MusicRecentEntry {
   }
 }
 
+/// 播放历史条目，覆盖本地与在线播放来源。
+class MusicPlayHistoryEntry {
+  const MusicPlayHistoryEntry({
+    required this.playableKey,
+    required this.title,
+    required this.artistName,
+    required this.playedAt,
+    this.albumTitle,
+    this.coverUrl,
+    this.durationSeconds,
+    this.platform,
+  });
+
+  final String playableKey;
+  final String title;
+  final String artistName;
+  final String? albumTitle;
+  final String? coverUrl;
+  final int? durationSeconds;
+  final String? platform;
+  final DateTime playedAt;
+
+  factory MusicPlayHistoryEntry.fromJson(Map<String, dynamic> json) {
+    return MusicPlayHistoryEntry(
+      playableKey: json['playableKey']?.toString() ?? '',
+      title: json['title']?.toString() ?? '',
+      artistName: json['artistName']?.toString() ?? '',
+      albumTitle: json['albumTitle']?.toString(),
+      coverUrl: json['coverUrl']?.toString(),
+      durationSeconds:
+          json['durationSeconds'] is num
+              ? (json['durationSeconds'] as num).toInt()
+              : null,
+      platform: json['platform']?.toString(),
+      playedAt: _parseDateTime(json['playedAt']) ?? DateTime.now(),
+    );
+  }
+}
+
 /// 在线平台能力
 class MusicPlatformCapabilities {
   const MusicPlatformCapabilities({

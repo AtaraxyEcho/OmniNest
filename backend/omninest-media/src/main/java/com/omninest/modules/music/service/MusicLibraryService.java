@@ -20,6 +20,7 @@ import com.omninest.modules.music.dto.MusicDtos.MusicArtistDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicDashboardDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryRequest;
 import com.omninest.modules.music.dto.MusicDtos.MusicRecentItemDto;
+import com.omninest.modules.music.dto.MusicDtos.MusicPlayHistoryDto;
 import com.omninest.modules.music.dto.MusicDtos.RecordMusicPlayHistoryRequest;
 import com.omninest.modules.music.dto.MusicDtos.MusicSearchResultDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicTrackDto;
@@ -322,6 +323,36 @@ public class MusicLibraryService {
             return;
         }
         throw new BusinessException(ErrorCode.PARAM_ERROR, "音乐播放键格式不正确");
+    }
+
+    /**
+     * 分页查询用户播放历史，按播放时间倒序。
+     *
+     * @param ownerUserId 当前用户 ID
+     * @param page 页码
+     * @param size 每页数量
+     * @return 播放历史分页
+     */
+    @Transactional(readOnly = true)
+    public Page<MusicPlayHistoryDto> playHistory(UUID ownerUserId, int page, int size) {
+        Instant cutoff = Instant.now().minus(PLAY_HISTORY_RETENTION);
+        var result = playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                ownerUserId,
+                cutoff,
+                PageRequest.of(page, size)
+        );
+        return result.map(history -> new MusicPlayHistoryDto(
+                history.getPlayableKey(),
+                history.getTitle(),
+                history.getArtistName(),
+                history.getAlbumTitle(),
+                history.getCoverUrl(),
+                history.getDurationSeconds(),
+                history.getPlayDuration(),
+                history.getPlatform(),
+                history.getExternalSongId(),
+                history.getPlayedAt()
+        ));
     }
 
     @Transactional(readOnly = true)
