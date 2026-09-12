@@ -5,4 +5,6 @@ class FullscreenHelperWeb {
   static void toggleFullscreen(dynamic element) {}
   static bool get isFullscreenEnabled => false;
   static dynamic get documentElement => null;
+  static void addChangeListener(void Function(bool active) onChanged) {}
+  static void removeChangeListener(void Function(bool active) onChanged) {}
 }

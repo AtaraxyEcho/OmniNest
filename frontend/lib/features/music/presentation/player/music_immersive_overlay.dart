@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_fullscreen_control.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
@@ -24,6 +25,7 @@ class MusicImmersiveOverlay extends ConsumerStatefulWidget {
 
 class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
   bool _topBarHovered = false;
+  bool _webFullscreen = false;
   late final WindowChromeController _windowChromeController;
   WindowChromeLease? _fullscreenLease;
 
@@ -31,10 +33,28 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
   void initState() {
     super.initState();
     _windowChromeController = ref.read(windowChromeControllerProvider.notifier);
+    if (kIsWeb) {
+      _webFullscreen = fs.isFullscreen;
+      fs.addFullscreenChangeListener(_handleWebFullscreenChange);
+    }
+  }
+
+  void _handleWebFullscreenChange(bool active) {
+    if (mounted) {
+      setState(() => _webFullscreen = active);
+    } else {
+      _webFullscreen = active;
+    }
   }
 
   @override
   void dispose() {
+    if (kIsWeb) {
+      fs.removeFullscreenChangeListener(_handleWebFullscreenChange);
+      if (fs.isFullscreen) {
+        fs.toggleFullscreen();
+      }
+    }
     _fullscreenLease?.release();
     super.dispose();
   }
@@ -42,7 +62,7 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final fullVisual = isDesktopPlatform && !kIsWeb && width >= 900;
+    final fullVisual = (isDesktopPlatform || kIsWeb) && width >= 900;
     final safeTop = MediaQuery.paddingOf(context).top;
     final windowChrome = ref.watch(windowChromeControllerProvider);
     return AppBackdropSceneScope(
@@ -51,7 +71,7 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
       child: Material(
         type: MaterialType.transparency,
         child: AppFullscreenShortcutScope(
-          onToggle: _toggleFullscreen,
+          onToggle: kIsWeb ? _noopFullscreenShortcut : _toggleFullscreen,
           child: Focus(
             autofocus: true,
             onKeyEvent: (node, event) {
@@ -79,7 +99,8 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
                     right: 12,
                     child: _buildDesktopTopBar(
                       context,
-                      isFullscreen: windowChrome.isFullscreen,
+                      isFullscreen:
+                          kIsWeb ? _webFullscreen : windowChrome.isFullscreen,
                     ),
                   ),
               ],
@@ -150,6 +171,10 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
   }
 
   void _toggleFullscreen() {
+    if (kIsWeb) {
+      fs.toggleFullscreen();
+      return;
+    }
     final lease = _fullscreenLease;
     if (lease == null) {
       _fullscreenLease = _windowChromeController.acquireFullscreen(
@@ -160,6 +185,8 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
     lease.release();
     _fullscreenLease = null;
   }
+
+  static void _noopFullscreenShortcut() {}
 
   void _setTopBarHovered(bool hovered) {
     if (_topBarHovered == hovered) {

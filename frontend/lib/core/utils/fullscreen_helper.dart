@@ -13,3 +13,13 @@ void toggleFullscreen() {
     );
   }
 }
+
+/// 订阅全屏状态变化，Web 之外的平台不产生事件。
+void addFullscreenChangeListener(void Function(bool active) onChanged) {
+  platform.FullscreenHelperWeb.addChangeListener(onChanged);
+}
+
+/// 取消订阅全屏状态变化。
+void removeFullscreenChangeListener(void Function(bool active) onChanged) {
+  platform.FullscreenHelperWeb.removeChangeListener(onChanged);
+}
