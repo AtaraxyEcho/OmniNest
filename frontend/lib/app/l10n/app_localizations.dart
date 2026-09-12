@@ -14525,6 +14525,12 @@ abstract class AppLocalizations {
   /// **'Playback falls back automatically to tiers your connected platforms support'**
   String get musicQualityHint;
 
+  /// No description provided for @musicQualityUnsupported.
+  ///
+  /// In en, this message translates to:
+  /// **'Not supported by connected platforms'**
+  String get musicQualityUnsupported;
+
   /// No description provided for @musicQualityTitle.
   ///
   /// In en, this message translates to:

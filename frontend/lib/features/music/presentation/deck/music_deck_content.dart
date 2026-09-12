@@ -305,6 +305,8 @@ class _DailyRecommendationSection extends ConsumerWidget {
                             .retry(),
               ),
           loading: () => const _DailyRecommendationSkeleton(),
+          // provider 因依赖状态重建时保留旧数据，避免封面卡闪烁加载。
+          skipLoadingOnReload: true,
         ),
       ],
     );

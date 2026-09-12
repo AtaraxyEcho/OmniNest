@@ -20,16 +20,27 @@ class MusicDailyRecommendationController
 
   @override
   Future<DailyRecommendedTracks?> build() async {
-    final platformLibrary =
-        ref.watch(musicPlatformLibraryProvider).asData?.value;
+    // 只订阅"网易云推荐是否可见"这一布尔结果，避免平台曲库其它
+    // 字段（歌单/喜欢曲目缓存）变化时连带重建本 provider。
+    final neteaseVisible = ref.watch(
+      musicPlatformLibraryProvider.select((async) {
+        final statuses = async.asData?.value.statuses;
+        if (statuses == null) {
+          return false;
+        }
+        for (final status in statuses) {
+          if (status.platform == MusicPlatform.netease.apiValue) {
+            return status.enabled &&
+                status.connected &&
+                status.capabilities.dailyRecommendations;
+          }
+        }
+        return false;
+      }),
+    );
     final sources = ref.watch(musicDeckSourceSelectionProvider);
-    final neteaseStatus = _neteaseStatus(platformLibrary);
     final visible =
-        neteaseStatus != null &&
-        neteaseStatus.enabled &&
-        neteaseStatus.connected &&
-        neteaseStatus.capabilities.dailyRecommendations &&
-        sources.contains(MusicPlatform.netease);
+        neteaseVisible && sources.contains(MusicPlatform.netease);
     if (!visible) {
       return null;
     }
@@ -55,17 +66,4 @@ class MusicDailyRecommendationController
     ref.invalidateSelf();
   }
 
-  MusicPlatformStatus? _neteaseStatus(
-    MusicPlatformLibraryState? platformLibrary,
-  ) {
-    if (platformLibrary == null) {
-      return null;
-    }
-    for (final status in platformLibrary.statuses) {
-      if (status.platform == MusicPlatform.netease.apiValue) {
-        return status;
-      }
-    }
-    return null;
-  }
 }

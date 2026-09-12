@@ -3471,7 +3471,7 @@
   "musicScrapeLibraryConfirmTitle": "Rescrape entire library?",
   "musicScrapeLibraryConfirmMessage": "Every local track will be re-matched online, including already scraped ones. Continue?",
   "musicQualityHint": "Playback falls back automatically to tiers your connected platforms support",
-  "musicQualityTitle": "Playback Quality",
+  "musicQualityUnsupported": "Not supported by connected platforms",  "musicQualityTitle": "Playback Quality",
   "musicQualityJymaster": "Master",
   "musicQualityJyeffect": "HD Surround",
   "musicQualitySky": "Immersive Surround",

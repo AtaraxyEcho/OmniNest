@@ -7915,6 +7915,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Playback falls back automatically to tiers your connected platforms support';
 
   @override
+  String get musicQualityUnsupported => 'Not supported by connected platforms';
+
+  @override
   String get musicQualityTitle => 'Playback Quality';
 
   @override

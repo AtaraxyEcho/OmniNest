@@ -266,6 +266,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                 ],
               ),
             ),
+            _MiniPlayerVolumeButton(palette: _palette(context)),
             IconButton(
               tooltip: AppLocalizations.of(context).musicPlaybackSettings,
               onPressed: () => showMusicPlaybackSettingsDialog(context, ref),
@@ -542,5 +543,204 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
     final minutes = totalSeconds ~/ 60;
     final seconds = totalSeconds % 60;
     return '$minutes:${seconds.toString().padLeft(2, '0')}';
+  }
+}
+
+/// 音量控制按钮：点击后在按钮上方弹出垂直柱形滑条，点击面板外关闭。
+class _MiniPlayerVolumeButton extends ConsumerStatefulWidget {
+  const _MiniPlayerVolumeButton({required this.palette});
+
+  final MusicMiniPlayerPalette palette;
+
+  @override
+  ConsumerState<_MiniPlayerVolumeButton> createState() =>
+      _MiniPlayerVolumeButtonState();
+}
+
+class _MiniPlayerVolumeButtonState
+    extends ConsumerState<_MiniPlayerVolumeButton> {
+  final LayerLink _link = LayerLink();
+  final OverlayPortalController _portal = OverlayPortalController();
+  StreamSubscription<double>? _volumeSub;
+  double _volume = 100;
+
+  @override
+  void initState() {
+    super.initState();
+    final player = ref.read(musicPlaybackSessionProvider).player;
+    _volume = player.state.volume.clamp(0.0, 100.0).toDouble();
+    _volumeSub = player.stream.volume.listen((value) {
+      if (mounted) {
+        setState(() => _volume = value.clamp(0.0, 100.0).toDouble());
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _volumeSub?.cancel();
+    if (_portal.isShowing) {
+      _portal.hide();
+    }
+    super.dispose();
+  }
+
+  void _toggle() {
+    if (_portal.isShowing) {
+      _portal.hide();
+    } else {
+      _portal.show();
+    }
+  }
+
+  void _setVolume(double value) {
+    final next = value.clamp(0.0, 100.0).toDouble();
+    ref.read(musicPlaybackSessionProvider).player.setVolume(next);
+    setState(() => _volume = next);
+  }
+
+  IconData get _volumeIcon {
+    if (_volume <= 0) {
+      return Icons.volume_off_rounded;
+    }
+    if (_volume < 50) {
+      return Icons.volume_down_rounded;
+    }
+    return Icons.volume_up_rounded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return OverlayPortal(
+      controller: _portal,
+      overlayChildBuilder: (overlayContext) {
+        return Stack(
+          children: [
+            // 全屏点击捕获层：点击面板外任意区域关闭。
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _portal.hide,
+              ),
+            ),
+            CompositedTransformFollower(
+              link: _link,
+              targetAnchor: Alignment.topCenter,
+              followerAnchor: Alignment.bottomCenter,
+              offset: const Offset(0, -10),
+              child: _VolumeSliderPanel(
+                palette: widget.palette,
+                volume: _volume,
+                onChanged: _setVolume,
+                onDismiss: _portal.hide,
+              ),
+            ),
+          ],
+        );
+      },
+      child: CompositedTransformTarget(
+        link: _link,
+        child: IconButton(
+          tooltip: AppLocalizations.of(context).portalMusicVisualizerVolume,
+          onPressed: _toggle,
+          icon: Icon(
+            _volumeIcon,
+            size: 22,
+            color:
+                _volume > 0
+                    ? widget.palette.text
+                    : widget.palette.muted.withValues(alpha: 0.7),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 垂直柱形音量滑条面板。
+class _VolumeSliderPanel extends StatelessWidget {
+  const _VolumeSliderPanel({
+    required this.palette,
+    required this.volume,
+    required this.onChanged,
+    required this.onDismiss,
+  });
+
+  final MusicMiniPlayerPalette palette;
+  final double volume;
+  final ValueChanged<double> onChanged;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        width: 56,
+        height: 172,
+        decoration: BoxDecoration(
+          color: const Color(0xF00E151B),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                volume.round().toString(),
+                style: TextStyle(
+                  color: palette.text,
+                  fontSize: AppTypography.labelSmall,
+                  fontWeight: FontWeight.w700,
+                  fontFeatures: const [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+            Expanded(
+              child: Center(
+                child: SizedBox(
+                  width: 160,
+                  height: 32,
+                  child: RotatedBox(
+                    quarterTurns: -1,
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 4,
+                        thumbShape: const RoundSliderThumbShape(
+                          enabledThumbRadius: 6,
+                        ),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 11,
+                        ),
+                        activeTrackColor: palette.accent,
+                        inactiveTrackColor: Colors.white.withValues(
+                          alpha: 0.16,
+                        ),
+                        thumbColor: palette.text,
+                        overlayColor: palette.accent.withValues(alpha: 0.14),
+                      ),
+                      child: Slider(
+                        value: (volume / 100).clamp(0.0, 1.0),
+                        onChanged: (next) => onChanged(next * 100),
+                        onChangeEnd: (_) => onDismiss(),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 }

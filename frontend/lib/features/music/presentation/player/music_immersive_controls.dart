@@ -1,6 +1,6 @@
 part of 'music_immersive_player.dart';
 
-class _DigitalImmersiveGlassPlayerControls extends StatelessWidget {
+class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
   const _DigitalImmersiveGlassPlayerControls({
     required this.palette,
     required this.player,
@@ -24,7 +24,7 @@ class _DigitalImmersiveGlassPlayerControls extends StatelessWidget {
   final VoidCallback onNext;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -75,6 +75,22 @@ class _DigitalImmersiveGlassPlayerControls extends StatelessWidget {
                         tooltip: l10n.videoNextEpisode,
                         icon: Icons.skip_next_rounded,
                         onTap: onNext,
+                      ),
+                      const SizedBox(width: 6),
+                      // 播放队列与播放设置属于常用控件，窄面板同样保留。
+                      _GlassIconButton(
+                        palette: palette,
+                        tooltip: l10n.musicQueueTitle,
+                        icon: Icons.queue_music_rounded,
+                        onTap: () => showMusicDeckQueue(context),
+                      ),
+                      const SizedBox(width: 6),
+                      _GlassIconButton(
+                        palette: palette,
+                        tooltip: l10n.musicPlaybackSettings,
+                        icon: Icons.equalizer_rounded,
+                        onTap:
+                            () => showMusicPlaybackSettingsDialog(context, ref),
                       ),
                       if (settings.progressEnabled) ...[
                         SizedBox(width: compact ? 10 : 16),

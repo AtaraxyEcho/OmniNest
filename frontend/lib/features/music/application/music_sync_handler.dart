@@ -11,6 +11,10 @@ class MusicSyncHandler implements RealtimeScopeHandler {
   final Ref ref;
   final RealtimeRevisionTracker _auxiliaryRevisions = RealtimeRevisionTracker();
 
+  /// 播放历史事件已由本地状态即时呈现（recentItems 提升与历史页记录），
+  /// 无需全量重拉曲库——重拉会更换封面签名 URL，导致封面卡重载闪烁。
+  static const String _playHistoryResourceType = 'MUSIC_PLAY_HISTORY';
+
   @override
   RealtimeScope get scope => RealtimeScope.music;
 
@@ -20,6 +24,13 @@ class MusicSyncHandler implements RealtimeScopeHandler {
   @override
   Future<bool> refresh(List<RealtimeInvalidation> invalidations) async {
     final auxiliary = _auxiliaryRevisions.pending(invalidations);
+    if (_isPlayHistoryOnly(auxiliary)) {
+      if (ref.exists(musicCenterControllerProvider)) {
+        await ref.read(musicCenterControllerProvider.future);
+      }
+      _auxiliaryRevisions.clear(invalidations);
+      return true;
+    }
     if (auxiliary.isNotEmpty && ref.exists(musicDashboardProvider)) {
       final _ = await ref.refresh(musicDashboardProvider.future);
     }
@@ -35,5 +46,13 @@ class MusicSyncHandler implements RealtimeScopeHandler {
     await ref.read(musicCenterControllerProvider.notifier).refreshForRealtime();
     _auxiliaryRevisions.clear(invalidations);
     return true;
+  }
+
+  bool _isPlayHistoryOnly(List<RealtimeInvalidation> invalidations) {
+    return invalidations.isNotEmpty &&
+        invalidations.every(
+          (invalidation) =>
+              invalidation.resourceType == _playHistoryResourceType,
+        );
   }
 }
