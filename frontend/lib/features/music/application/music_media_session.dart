@@ -12,12 +12,16 @@ class MusicMediaCommandCallbacks {
     required this.onPause,
     required this.onNext,
     required this.onPrevious,
+    required this.onPlayPauseToggle,
   });
 
   final Future<void> Function() onPlay;
   final Future<void> Function() onPause;
   final Future<void> Function() onNext;
   final Future<void> Function() onPrevious;
+
+  /// 播放/暂停媒体键触发的状态切换，实现方按当前播放状态选择播放或暂停。
+  final Future<void> Function() onPlayPauseToggle;
 }
 
 /// 音乐系统媒体会话处理：Android/iOS 通知栏媒体卡片与系统媒体键的统一出口。
@@ -142,6 +146,15 @@ abstract final class MusicMediaKeyBridge {
   /// 由音乐播放会话层注册命令回调。
   static void register(MusicMediaCommandCallbacks callbacks) {
     _callbacks = callbacks;
+  }
+
+  /// 播放/暂停媒体键：按当前播放状态切换，不做固定的单向下发。
+  static Future<void> dispatchPlayPauseToggle() async {
+    final callbacks = _callbacks;
+    if (callbacks == null) {
+      return;
+    }
+    await callbacks.onPlayPauseToggle();
   }
 
   static Future<void> dispatch({

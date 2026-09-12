@@ -27,6 +27,7 @@ void main() {
         onPause: () async => pauseCalls++,
         onNext: () async => nextCalls++,
         onPrevious: () async => previousCalls++,
+        onPlayPauseToggle: () async {},
       ),
     );
 
@@ -66,6 +67,7 @@ void main() {
         onPause: () async {},
         onNext: () async {},
         onPrevious: () async {},
+        onPlayPauseToggle: () async {},
       ),
     );
 

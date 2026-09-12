@@ -129,6 +129,13 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
                     .read(musicCenterControllerProvider.notifier)
                     .previousTrack(),
           ),
+      onPlayPauseToggle:
+          () => _runMediaCommand(
+            () =>
+                ref
+                    .read(musicCenterControllerProvider.notifier)
+                    .togglePlayback(),
+          ),
     );
     if (kIsWeb) {
       _webMediaBinder = WebMediaSessionBinder.register(
