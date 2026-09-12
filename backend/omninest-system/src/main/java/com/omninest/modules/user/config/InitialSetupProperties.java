@@ -18,7 +18,7 @@ public class InitialSetupProperties {
 
     /**
      * 安装向导是否要求完成两步验证注册；对应环境变量 OMNINEST_SETUP_TWOFACTORREQUIRED。
-     * 公网部署保持默认 true，内网/开发环境显式设为 false。
+     * 默认 false（不强制），公网部署在 deploy/prod 模板显式设为 true。
      */
-    private boolean twoFactorRequired = true;
+    private boolean twoFactorRequired = false;
 }

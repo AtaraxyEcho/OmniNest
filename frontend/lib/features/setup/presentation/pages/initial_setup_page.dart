@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -112,6 +113,10 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
     setState(() => _submitting = true);
     try {
       await ref.read(initialSetupProvider.notifier).refresh();
+      // 两步验证路径无自动登录，路由守卫不会因 auth 变化触发，需显式前往登录页。
+      if (mounted) {
+        context.go('/login');
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
