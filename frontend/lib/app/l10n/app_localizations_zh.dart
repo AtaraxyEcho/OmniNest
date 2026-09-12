@@ -7860,6 +7860,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicSpeedApplyHint => '切换档位对当前曲目立即生效';
 
   @override
+  String get musicNavGenres => '流派';
+
+  @override
+  String get musicGenresEmpty => '本地曲目暂无流派信息，可在元数据编辑中补充';
+
+  @override
+  String get musicGenresPickHint => '选择一个流派查看曲目';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

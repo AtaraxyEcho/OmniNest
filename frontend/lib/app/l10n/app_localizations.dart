@@ -14843,6 +14843,24 @@ abstract class AppLocalizations {
   /// **'Changes apply to the current track immediately'**
   String get musicSpeedApplyHint;
 
+  /// No description provided for @musicNavGenres.
+  ///
+  /// In en, this message translates to:
+  /// **'Genres'**
+  String get musicNavGenres;
+
+  /// No description provided for @musicGenresEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No genre info on local tracks yet; add it in metadata editing'**
+  String get musicGenresEmpty;
+
+  /// No description provided for @musicGenresPickHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a genre to browse its tracks'**
+  String get musicGenresPickHint;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

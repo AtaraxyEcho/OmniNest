@@ -8098,6 +8098,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'Changes apply to the current track immediately';
 
   @override
+  String get musicNavGenres => 'Genres';
+
+  @override
+  String get musicGenresEmpty =>
+      'No genre info on local tracks yet; add it in metadata editing';
+
+  @override
+  String get musicGenresPickHint => 'Pick a genre to browse its tracks';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

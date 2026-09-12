@@ -59,4 +59,18 @@ void main() {
     expect(track.lyricLines.single.position, const Duration(seconds: 1));
     expect(track.lyricLines.single.text, 'Hello');
   });
+
+  test('music track parses genre from json', () {
+    const track = MusicTrack(
+      id: 't',
+      fileNodeId: 'f',
+      title: 'T',
+      artistName: 'A',
+      albumTitle: 'Al',
+      format: 'mp3',
+      favorite: false,
+      genre: 'Pop',
+    );
+    expect(track.genre, 'Pop');
+  });
 }

@@ -527,6 +527,7 @@ public class MusicLibraryService {
                 track.getSampleRate(),
                 track.getFileSize(),
                 track.getLyricsRaw(),
+                track.getGenre(),
                 firstText(
                         resolveCoverUrl(track.getOwnerUserId(), track.getCoverFileId()),
                         firstText(

@@ -498,6 +498,11 @@ class _LibraryContent extends ConsumerWidget {
               emptyTitle: l10n.musicLibraryAlbumsEmptyTitle,
               emptyMessage: l10n.musicLibraryAlbumsEmptyMessage,
             ),
+            MusicDeckLibraryView.genres => _GenresContent(
+              center: center,
+              platform: platform,
+              sources: sources,
+            ),
             MusicDeckLibraryView.artists => MusicDeckCoverGrid(
               items: _artistCoverItems(
                 l10n,
@@ -1175,6 +1180,111 @@ class _ArtistAlbumsShelfState extends ConsumerState<_ArtistAlbumsShelf> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
       child: MusicDeckCoverShelf(items: items),
+    );
+  }
+}
+
+/// 流派浏览：客户端聚合本地曲目 genre → 计数，点按流派过滤曲目。
+class _GenresContent extends ConsumerStatefulWidget {
+  const _GenresContent({
+    required this.center,
+    required this.platform,
+    required this.sources,
+  });
+
+  final MusicCenterState center;
+  final MusicPlatformLibraryState platform;
+  final Set<MusicPlatform> sources;
+
+  @override
+  ConsumerState<_GenresContent> createState() => _GenresContentState();
+}
+
+class _GenresContentState extends ConsumerState<_GenresContent> {
+  String? _selectedGenre;
+
+  Map<String, List<MusicTrack>> _groupByGenre(List<MusicTrack> tracks) {
+    final result = <String, List<MusicTrack>>{};
+    for (final track in tracks) {
+      final genre = track.genre?.trim();
+      if (genre == null || genre.isEmpty) {
+        continue;
+      }
+      result.putIfAbsent(genre, () => []).add(track);
+    }
+    return result;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final byGenre = _groupByGenre(widget.center.tracks);
+    final genres = byGenre.keys.toList()..sort();
+    if (genres.isEmpty) {
+      return _InlineEmpty(message: l10n.musicGenresEmpty);
+    }
+    final selectedGenre =
+        _selectedGenre != null && genres.contains(_selectedGenre)
+            ? _selectedGenre!
+            : null;
+    final filteredTracks =
+        selectedGenre == null ? <MusicTrack>[] : byGenre[selectedGenre]!;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            children: [
+              for (final genre in genres)
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: Text('$genre (${byGenre[genre]!.length})'),
+                    selected: selectedGenre == genre,
+                    onSelected: (selected) {
+                      setState(() {
+                        _selectedGenre = selected ? genre : null;
+                      });
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+        Expanded(
+          child:
+              selectedGenre == null
+                  ? Center(
+                    child: Text(
+                      l10n.musicGenresPickHint,
+                      style: TextStyle(
+                        color: context.musicColors.onSurfaceVariant,
+                      ),
+                    ),
+                  )
+                  : MusicDeckTrackList(
+                    items: filteredTracks
+                        .map(MusicPlayableItem.local)
+                        .toList(growable: false),
+                    currentPlayableKey: widget.center.currentItem?.playableKey,
+                    onPlay:
+                        (index) => ref
+                            .read(musicCenterControllerProvider.notifier)
+                            .playItems(
+                              filteredTracks
+                                  .map(MusicPlayableItem.local)
+                                  .toList(growable: false),
+                              startIndex: index,
+                            ),
+                    onToggleFavorite: _favoriteHandler(ref),
+                    onDelete: _deleteTrackHandler(context, ref),
+                    onEnqueue: _enqueueTrackHandler(context, ref),
+                    onAddToPlaylist: _addToPlaylistHandler(context, ref),
+                  ),
+        ),
+      ],
     );
   }
 }

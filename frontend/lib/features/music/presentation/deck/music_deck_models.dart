@@ -30,7 +30,7 @@ enum MusicDeckSection {
 }
 
 /// 曲库内部视图。
-enum MusicDeckLibraryView { tracks, albums, artists }
+enum MusicDeckLibraryView { tracks, albums, artists, genres }
 
 /// Music Deck 当前打开的集合。
 sealed class MusicDeckCollectionSelection {

@@ -13,6 +13,7 @@ class MusicTrack {
     this.fileSize,
     this.lyricsRaw,
     this.lyricsTranslation,
+    this.genre,
     this.coverUrl,
     this.updatedAt,
   });
@@ -31,6 +32,7 @@ class MusicTrack {
       fileSize: _nullableInt(json['fileSize']),
       lyricsRaw: json['lyricsRaw']?.toString(),
       lyricsTranslation: json['lyricsTranslation']?.toString(),
+      genre: json['genre']?.toString(),
       coverUrl: json['coverUrl']?.toString(),
       favorite: _asBool(json['favorite']),
       updatedAt: _parseDateTime(json['updatedAt']),
@@ -51,6 +53,7 @@ class MusicTrack {
 
   /// 歌词译文（独立于原文的 LRC 或纯文本），由在线平台提供。
   final String? lyricsTranslation;
+  final String? genre;
   final String? coverUrl;
   final bool favorite;
   final DateTime? updatedAt;
@@ -82,6 +85,7 @@ class MusicTrack {
     bool? favorite,
     String? lyricsRaw,
     String? lyricsTranslation,
+    String? genre,
   }) {
     return MusicTrack(
       id: id,
@@ -96,6 +100,7 @@ class MusicTrack {
       fileSize: fileSize,
       lyricsRaw: lyricsRaw ?? this.lyricsRaw,
       lyricsTranslation: lyricsTranslation ?? this.lyricsTranslation,
+      genre: genre ?? this.genre,
       coverUrl: coverUrl,
       favorite: favorite ?? this.favorite,
       updatedAt: updatedAt,

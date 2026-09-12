@@ -189,6 +189,10 @@ class _LibraryHeader extends StatelessWidget {
             value: MusicDeckLibraryView.artists,
             label: Text(l10n.musicNavArtists),
           ),
+          ButtonSegment(
+            value: MusicDeckLibraryView.genres,
+            label: Text(l10n.musicNavGenres),
+          ),
         ],
         selected: <MusicDeckLibraryView>{view},
         showSelectedIcon: false,
