@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -34,18 +36,38 @@ class DesktopTrayService with TrayListener, WindowListener {
     _initialized = true;
   }
 
-  /// 设置托盘图标；窗口/托盘宿主未就绪时会静默失败，短延迟重试一次。
+  /// 将图标资源解出为临时文件后以绝对路径设置。
+  ///
+  /// Windows 下 setIcon 对相对 asset 路径的解析依赖 flutter_assets 布局，
+  /// release 包中存在静默失败案例；绝对文件路径在三个桌面平台行为一致。
   Future<void> _setIconWithRetry() async {
-    try {
-      await trayManager.setIcon(BrandLogo.assetPath, isTemplate: false);
-    } on Object catch (error) {
-      debugPrint('托盘图标首次设置失败，稍后重试: $error');
-      await Future<void>.delayed(const Duration(milliseconds: 400));
+    final absolutePath = await _extractIconToTempFile();
+    for (var attempt = 1; attempt <= 3; attempt++) {
       try {
-        await trayManager.setIcon(BrandLogo.assetPath, isTemplate: false);
-      } on Object catch (retryError) {
-        debugPrint('托盘图标设置仍失败: $retryError');
+        if (absolutePath != null) {
+          await trayManager.setIcon(absolutePath, isTemplate: false);
+        } else {
+          await trayManager.setIcon(BrandLogo.assetPath, isTemplate: false);
+        }
+        return;
+      } on Object catch (error) {
+        debugPrint('托盘图标设置失败（第 $attempt 次）: $error');
+        await Future<void>.delayed(const Duration(milliseconds: 400));
       }
+    }
+  }
+
+  Future<String?> _extractIconToTempFile() async {
+    try {
+      final data = await rootBundle.load(BrandLogo.assetPath);
+      final file = File(
+        '${Directory.systemTemp.path}${Platform.pathSeparator}omninest_tray_icon.png',
+      );
+      await file.writeAsBytes(data.buffer.asUint8List(), flush: true);
+      return file.path;
+    } on Object catch (error) {
+      debugPrint('托盘图标资源解出失败: $error');
+      return null;
     }
   }
 
@@ -57,18 +79,31 @@ class DesktopTrayService with TrayListener, WindowListener {
     _initialized = false;
   }
 
-  /// 托盘菜单退出：先摘除关闭拦截与托盘，再销毁窗口，
-  /// 避免 preventClose 的 onWindowClose(hide) 拖住销毁流程造成假死。
+  /// 托盘菜单退出：先摘除关闭拦截、解除 preventClose，再销毁托盘与窗口；
+  /// 销毁超 3 秒未完成时强制结束进程，避免消息循环被拦出假死。
   Future<void> quit() async {
     if (_quitting) return;
     _quitting = true;
+    debugPrint('托盘退出流程开始');
     windowManager.removeListener(this);
     try {
       await trayManager.destroy();
     } on Object catch (error) {
       debugPrint('托盘销毁失败（忽略继续退出）: $error');
     }
-    await windowManager.destroy();
+    try {
+      // preventClose 的拦截发生在原生层，必须显式解除后销毁。
+      await windowManager.setPreventClose(false);
+    } on Object catch (error) {
+      debugPrint('解除关闭拦截失败: $error');
+    }
+    try {
+      await windowManager.destroy().timeout(const Duration(seconds: 3));
+      debugPrint('窗口销毁完成');
+    } on Object {
+      debugPrint('窗口销毁超时，强制结束进程');
+      exit(0);
+    }
   }
 
   @override
