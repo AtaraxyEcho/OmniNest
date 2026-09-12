@@ -3387,6 +3387,16 @@
   "musicHistoryToday": "今天",
   "musicHistoryYesterday": "昨天",
   "musicHistoryViewAll": "查看全部",
+  "musicLyricsSearch": "搜索歌词",
+  "musicLyricsApply": "应用歌词",
+  "musicLyricsNoResult": "未找到匹配歌词",
+  "musicLyricsOnlineSource": "在线歌词",
+  "musicLyricsApplied": "歌词已应用到「{title}」",
+  "@musicLyricsApplied": {
+    "placeholders": {
+      "title": {}
+    }
+  },
   "musicQueueTitle": "播放队列",
   "musicQueueEmpty": "播放队列为空",
   "musicQueueClear": "清空队列",

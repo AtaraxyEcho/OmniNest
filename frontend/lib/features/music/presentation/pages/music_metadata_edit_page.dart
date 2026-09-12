@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -49,6 +50,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
   late final TextEditingController _genreController;
   bool _saving = false;
   bool _scrapeLoading = false;
+  bool _lyricsSearching = false;
   List<MusicScrapeCandidate>? _scrapeCandidates;
   // 封面
   String? _coverFileName;
@@ -102,6 +104,8 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
                 onMatchOnline: _scrapeLoading ? null : _matchOnline,
                 onPickCover: _pickCover,
                 onPickLyrics: _pickLyrics,
+                onSearchLyrics: _lyricsSearching ? null : _searchLyrics,
+                searchingLyrics: _lyricsSearching,
                 onCancel: _saving ? null : () => Navigator.of(context).pop(),
                 onSave: _saving ? null : _save,
               );
@@ -188,6 +192,110 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     } finally {
       if (mounted) {
         setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _searchLyrics() async {
+    setState(() => _lyricsSearching = true);
+    MusicLyricsResult? result;
+    Object? failure;
+    try {
+      result = await ref
+          .read(musicCenterControllerProvider.notifier)
+          .searchLyrics(widget.track);
+    } on Object catch (error) {
+      failure = error;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() => _lyricsSearching = false);
+    if (failure != null) {
+      _showMessage(
+        AppLocalizations.of(context).musicSaveFailed(failure.toString()),
+      );
+      return;
+    }
+    final lyrics = result?.bestLyrics;
+    if (lyrics == null) {
+      _showMessage(AppLocalizations.of(context).musicLyricsNoResult);
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        final l10n = AppLocalizations.of(dialogContext);
+        final candidate = result!;
+        final preview = candidate.bestLyrics ?? '';
+        return AlertDialog(
+          title: Text(l10n.musicLyricsSearch),
+          content: SizedBox(
+            width: 420,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${candidate.trackName ?? widget.track.title} — ${candidate.artistName ?? widget.track.artistName}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(dialogContext).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 12),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 320),
+                  child: SingleChildScrollView(
+                    child: Text(
+                      preview,
+                      style: Theme.of(dialogContext).textTheme.bodySmall
+                          ?.copyWith(fontFamily: AppTypography.monoFamily),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.musicCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.musicLyricsApply),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() => _lyricsSearching = true);
+    try {
+      final updated = await ref
+          .read(musicCenterControllerProvider.notifier)
+          .applyLyrics(widget.track, lyrics);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lyricsContent = lyrics;
+        _lyricsFileName = AppLocalizations.of(context).musicLyricsOnlineSource;
+      });
+      _showMessage(
+        AppLocalizations.of(context).musicLyricsApplied(updated.title),
+      );
+    } on Object catch (error) {
+      if (mounted) {
+        _showMessage(
+          AppLocalizations.of(context).musicSaveFailed(error.toString()),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _lyricsSearching = false);
       }
     }
   }
@@ -475,6 +583,8 @@ class _FormPanel extends StatelessWidget {
     this.onMatchOnline,
     this.onPickCover,
     this.onPickLyrics,
+    this.onSearchLyrics,
+    this.searchingLyrics = false,
     this.onCancel,
     this.onSave,
   });
@@ -490,6 +600,8 @@ class _FormPanel extends StatelessWidget {
   final VoidCallback? onMatchOnline;
   final VoidCallback? onPickCover;
   final VoidCallback? onPickLyrics;
+  final VoidCallback? onSearchLyrics;
+  final bool searchingLyrics;
   final VoidCallback? onCancel;
   final VoidCallback? onSave;
 
@@ -585,18 +697,37 @@ class _FormPanel extends StatelessWidget {
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
-              onPressed: onPickLyrics,
-              icon: const Icon(Icons.lyrics_rounded, size: 18),
-              label: Text(
-                lyricsFileName ?? AppLocalizations.of(context).musicLyricsPick,
-              ),
-              style: OutlinedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onPickLyrics,
+                    icon: const Icon(Icons.lyrics_rounded, size: 18),
+                    label: Text(
+                      lyricsFileName ??
+                          AppLocalizations.of(context).musicLyricsPick,
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: onSearchLyrics,
+                  icon:
+                      searchingLyrics
+                          ? const SizedBox.square(
+                            dimension: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.travel_explore_rounded, size: 18),
+                  label: Text(AppLocalizations.of(context).musicLyricsSearch),
+                ),
+              ],
             ),
             const SizedBox(height: 24),
             Row(

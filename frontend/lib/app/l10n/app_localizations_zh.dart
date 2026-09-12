@@ -7783,6 +7783,23 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicHistoryViewAll => '查看全部';
 
   @override
+  String get musicLyricsSearch => '搜索歌词';
+
+  @override
+  String get musicLyricsApply => '应用歌词';
+
+  @override
+  String get musicLyricsNoResult => '未找到匹配歌词';
+
+  @override
+  String get musicLyricsOnlineSource => '在线歌词';
+
+  @override
+  String musicLyricsApplied(Object title) {
+    return '歌词已应用到「$title」';
+  }
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

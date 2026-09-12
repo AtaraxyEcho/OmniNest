@@ -936,3 +936,43 @@ class MusicPagedResult<T> {
 
   bool get hasMore => (page + 1) * size < totalElements;
 }
+
+/// Lrclib 歌词搜索候选结果。
+class MusicLyricsResult {
+  const MusicLyricsResult({
+    this.plainLyrics,
+    this.syncedLyrics,
+    this.trackName,
+    this.artistName,
+    this.albumName,
+  });
+
+  final String? plainLyrics;
+  final String? syncedLyrics;
+  final String? trackName;
+  final String? artistName;
+  final String? albumName;
+
+  factory MusicLyricsResult.fromJson(Map<String, dynamic> json) {
+    return MusicLyricsResult(
+      plainLyrics: json['plainLyrics']?.toString(),
+      syncedLyrics: json['syncedLyrics']?.toString(),
+      trackName: json['trackName']?.toString(),
+      artistName: json['artistName']?.toString(),
+      albumName: json['albumName']?.toString(),
+    );
+  }
+
+  /// 优先返回带时间轴的歌词，其次纯文本。
+  String? get bestLyrics {
+    final synced = syncedLyrics?.trim();
+    if (synced != null && synced.isNotEmpty) {
+      return synced;
+    }
+    final plain = plainLyrics?.trim();
+    if (plain != null && plain.isNotEmpty) {
+      return plain;
+    }
+    return null;
+  }
+}

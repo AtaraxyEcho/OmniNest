@@ -89,6 +89,51 @@ void main() {
     );
     expect(titleField.controller?.text, 'Matched Title');
   });
+
+  testWidgets('搜索歌词预览后应用并展示成功反馈', (tester) async {
+    final api = _StubMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith(
+          (ref) async => 'user-a',
+        ),
+        musicPlaybackQueueStoreProvider.overrideWithValue(
+          _MemoryMusicPlaybackQueueStore(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const MusicMetadataEditPage(trackId: 'track-1'),
+        ),
+      ),
+    );
+    await container.read(musicCenterControllerProvider.future);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('搜索歌词'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('搜索歌词'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+
+    expect(find.text('应用歌词'), findsOneWidget);
+    expect(find.text('[00:01.00] First line'), findsOneWidget);
+
+    await tester.tap(find.text('应用歌词'));
+    await tester.pumpAndSettle();
+
+    expect(api.appliedLyricsTrackIds, ['track-1']);
+    expect(api.appliedLyricsTexts.single, '[00:01.00] First line');
+    expect(find.text('歌词已应用到「Matched Title」'), findsOneWidget);
+    expect(find.text('在线歌词'), findsOneWidget);
+  });
 }
 
 class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
@@ -115,16 +160,35 @@ class _StubMusicApi implements MusicApi {
   Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
 
   @override
-  Future<MusicPagedResult<MusicTrack>> tracks({int page = 0, int size = 100, String sort = 'title,asc'}) async =>
-      MusicPagedResult<MusicTrack>(items: currentTracks);
+  Future<MusicPagedResult<MusicTrack>> tracks({
+    int page = 0,
+    int size = 100,
+    String sort = 'title,asc',
+  }) async => MusicPagedResult<MusicTrack>(items: currentTracks);
 
   @override
-  Future<MusicPagedResult<MusicAlbum>> albums({int page = 0, int size = 100, String sort = 'updatedAt,desc'}) async =>
-      const MusicPagedResult<MusicAlbum>(items: <MusicAlbum>[], page: 0, size: 0, totalElements: 0);
+  Future<MusicPagedResult<MusicAlbum>> albums({
+    int page = 0,
+    int size = 100,
+    String sort = 'updatedAt,desc',
+  }) async => const MusicPagedResult<MusicAlbum>(
+    items: <MusicAlbum>[],
+    page: 0,
+    size: 0,
+    totalElements: 0,
+  );
 
   @override
-  Future<MusicPagedResult<MusicArtist>> artists({int page = 0, int size = 100, String sort = 'name,asc'}) async =>
-      const MusicPagedResult<MusicArtist>(items: <MusicArtist>[], page: 0, size: 0, totalElements: 0);
+  Future<MusicPagedResult<MusicArtist>> artists({
+    int page = 0,
+    int size = 100,
+    String sort = 'name,asc',
+  }) async => const MusicPagedResult<MusicArtist>(
+    items: <MusicArtist>[],
+    page: 0,
+    size: 0,
+    totalElements: 0,
+  );
 
   @override
   Future<List<MusicPlaylist>> playlists() async => const <MusicPlaylist>[];
@@ -145,6 +209,24 @@ class _StubMusicApi implements MusicApi {
 
   @override
   Future<PlatformUserInfo?> platformInfo(String platform) async => null;
+
+  final appliedLyricsTrackIds = <String>[];
+  final appliedLyricsTexts = <String>[];
+
+  @override
+  Future<MusicLyricsResult?> searchLyrics(String trackId) async =>
+      const MusicLyricsResult(
+        syncedLyrics: '[00:01.00] First line',
+        trackName: 'Raw Filename',
+        artistName: 'Unknown Artist',
+      );
+
+  @override
+  Future<MusicTrack> applyLyrics(String trackId, String lyrics) async {
+    appliedLyricsTrackIds.add(trackId);
+    appliedLyricsTexts.add(lyrics);
+    return _appliedTrack;
+  }
 
   @override
   Future<List<MusicScrapeCandidate>> scrapeCandidates(String trackId) async {

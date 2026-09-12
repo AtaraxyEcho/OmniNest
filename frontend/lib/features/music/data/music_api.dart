@@ -393,6 +393,28 @@ class MusicApi {
     return MusicScanJob.fromJson(parseData(response.data));
   }
 
+  /// 按当前曲目的艺术家/标题/专辑搜索在线歌词候选。
+  Future<MusicLyricsResult?> searchLyrics(String trackId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/admin/music/tracks/$trackId/lyrics/search',
+    );
+    final envelope = parseEnvelope(response.data);
+    final data = envelope['data'];
+    if (data is! Map) {
+      return null;
+    }
+    return MusicLyricsResult.fromJson(Map<String, dynamic>.from(data));
+  }
+
+  /// 应用歌词文本到指定曲目并返回更新后的曲目。
+  Future<MusicTrack> applyLyrics(String trackId, String lyrics) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/music/tracks/$trackId/lyrics/apply',
+      data: {'lyrics': lyrics},
+    );
+    return MusicTrack.fromJson(parseData(response.data));
+  }
+
   /// 在线搜索（网易云/QQ音乐）
   Future<List<OnlineTrack>> onlineSearch(
     String query, {

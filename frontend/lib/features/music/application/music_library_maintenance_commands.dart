@@ -63,6 +63,31 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
     }
   }
 
+  /// 搜索指定曲目的在线歌词候选。
+  Future<MusicLyricsResult?> searchLyrics(MusicTrack track) {
+    return _api.searchLyrics(track.id);
+  }
+
+  /// 应用在线歌词并刷新曲目元数据。
+  Future<MusicTrack> applyLyrics(MusicTrack track, String lyrics) async {
+    final current = _currentState;
+    if (current == null) {
+      return track;
+    }
+    try {
+      final updated = await _api.applyLyrics(track.id, lyrics);
+      final nextTracks =
+          current.tracks
+              .map((item) => item.id == updated.id ? updated : item)
+              .toList();
+      _replaceState(current.copyWith(tracks: nextTracks));
+      return updated;
+    } on Exception catch (error) {
+      _setError(describeUserFacingError(error).message);
+      rethrow;
+    }
+  }
+
   /// 创建全曲库元数据刮削任务并刷新任务状态。
   Future<void> scrapeLibrary({bool force = false}) async {
     final current = _currentState;

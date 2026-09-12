@@ -745,6 +745,8 @@ class _FakeMusicApi implements MusicApi {
   String? updatedTrackCoverFileId;
   final scrapeCandidateTrackIds = <String>[];
   final appliedScrapeTrackIds = <String>[];
+  final appliedLyricsTrackIds = <String>[];
+  final appliedLyricsTexts = <String>[];
   final scrapeLibraryForceFlags = <bool>[];
   List<MusicPlatformStatus> platformStatuses = const <MusicPlatformStatus>[];
   final Set<String> failingPlaylistPlatforms = <String>{};
@@ -1207,6 +1209,21 @@ class _FakeMusicApi implements MusicApi {
 
   @override
   Future<PlatformUserInfo?> platformInfo(String platform) async => null;
+
+  @override
+  Future<MusicLyricsResult?> searchLyrics(String trackId) async =>
+      const MusicLyricsResult(
+        syncedLyrics: '[00:01.00] stub',
+        trackName: 'Night Drive',
+        artistName: 'Omni Band',
+      );
+
+  @override
+  Future<MusicTrack> applyLyrics(String trackId, String lyrics) async {
+    appliedLyricsTrackIds.add(trackId);
+    appliedLyricsTexts.add(lyrics);
+    return libraryTracks.firstWhere((track) => track.id == trackId);
+  }
 }
 
 class _DelayedMusicApi extends _FakeMusicApi {

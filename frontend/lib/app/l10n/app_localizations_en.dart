@@ -8018,6 +8018,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicHistoryViewAll => 'View All';
 
   @override
+  String get musicLyricsSearch => 'Search Lyrics';
+
+  @override
+  String get musicLyricsApply => 'Apply Lyrics';
+
+  @override
+  String get musicLyricsNoResult => 'No matching lyrics found';
+
+  @override
+  String get musicLyricsOnlineSource => 'Online lyrics';
+
+  @override
+  String musicLyricsApplied(Object title) {
+    return 'Lyrics applied to \"$title\"';
+  }
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

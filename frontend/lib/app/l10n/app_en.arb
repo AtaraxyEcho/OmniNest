@@ -3513,6 +3513,16 @@
   "musicHistoryToday": "Today",
   "musicHistoryYesterday": "Yesterday",
   "musicHistoryViewAll": "View All",
+  "musicLyricsSearch": "Search Lyrics",
+  "musicLyricsApply": "Apply Lyrics",
+  "musicLyricsNoResult": "No matching lyrics found",
+  "musicLyricsOnlineSource": "Online lyrics",
+  "musicLyricsApplied": "Lyrics applied to \"{title}\"",
+  "@musicLyricsApplied": {
+    "placeholders": {
+      "title": {}
+    }
+  },
   "musicQueueTitle": "Play Queue",
   "musicQueueEmpty": "Play queue is empty",
   "musicQueueClear": "Clear Queue",

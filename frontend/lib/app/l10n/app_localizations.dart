@@ -14717,6 +14717,36 @@ abstract class AppLocalizations {
   /// **'View All'**
   String get musicHistoryViewAll;
 
+  /// No description provided for @musicLyricsSearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search Lyrics'**
+  String get musicLyricsSearch;
+
+  /// No description provided for @musicLyricsApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply Lyrics'**
+  String get musicLyricsApply;
+
+  /// No description provided for @musicLyricsNoResult.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching lyrics found'**
+  String get musicLyricsNoResult;
+
+  /// No description provided for @musicLyricsOnlineSource.
+  ///
+  /// In en, this message translates to:
+  /// **'Online lyrics'**
+  String get musicLyricsOnlineSource;
+
+  /// No description provided for @musicLyricsApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyrics applied to \"{title}\"'**
+  String musicLyricsApplied(Object title);
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:
