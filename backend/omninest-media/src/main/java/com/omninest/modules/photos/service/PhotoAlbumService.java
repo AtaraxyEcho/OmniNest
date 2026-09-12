@@ -23,7 +23,11 @@ import com.omninest.modules.photos.repository.PhotoAlbumRepository;
 import com.omninest.modules.photos.repository.PhotoItemRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +43,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PhotoAlbumService {
+
+    private static final int DEFAULT_PAGE_SIZE = 50;
+    private static final int MAX_PAGE_SIZE = 100;
 
     private final PhotoAlbumRepository albumRepository;
     private final PhotoAlbumItemRepository albumItemRepository;
@@ -98,15 +105,39 @@ public class PhotoAlbumService {
     }
 
     /**
-     * 查询相册详情，包含相册中所有照片
+     * 查询相册详情：相册元信息 + 首页照片（默认 50 张）。
+     *
+     * 大相册不再一次加载全量；后续页走 {@link #albumPhotosPage}。
      */
     @Transactional(readOnly = true)
     public PhotoAlbumDetailDto albumDetail(UUID ownerUserId, UUID albumId) {
         PhotoAlbum album = requireAlbum(ownerUserId, albumId);
-        List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(albumId);
+        List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(
+                albumId, PageRequest.of(0, DEFAULT_PAGE_SIZE));
         List<PhotoItemDto> photos = libraryService.listPhotosByIds(ownerUserId, photoIds);
         PhotoAlbumDto albumDto = toDto(album);
         return new PhotoAlbumDetailDto(albumDto, photos);
+    }
+
+    /**
+     * 分页查询相册内照片，按相册排序序号升序。
+     */
+    @Transactional(readOnly = true)
+    public Page<PhotoItemDto> albumPhotosPage(UUID ownerUserId, UUID albumId, int page, int size) {
+        requireAlbum(ownerUserId, albumId);
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
+        long total = albumItemRepository.countByAlbumId(albumId);
+        List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(
+                albumId, PageRequest.of(safePage, safeSize));
+        Map<UUID, PhotoItemDto> byId = libraryService.listPhotosByIds(ownerUserId, photoIds)
+                .stream()
+                .collect(Collectors.toMap(PhotoItemDto::id, photo -> photo));
+        List<PhotoItemDto> content = photoIds.stream()
+                .map(byId::get)
+                .filter(Objects::nonNull)
+                .toList();
+        return new PageImpl<>(content, PageRequest.of(safePage, safeSize), total);
     }
 
     /**

@@ -50,6 +50,13 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     );
   }
 
+  /// 分页获取相册内照片。
+  Future<PhotoPage> listAlbumPhotos({
+    required String albumId,
+    int page = 0,
+    int size = 50,
+  }) => _repo.listAlbumPhotos(albumId: albumId, page: page, size: size);
+
   /// 添加标签
   Future<void> addTag(String photoId, String tag) async {
     try {

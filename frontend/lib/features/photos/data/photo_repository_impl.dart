@@ -112,6 +112,13 @@ class PhotoRepositoryImpl implements PhotoRepository {
       _api.getAlbumDetail(albumId);
 
   @override
+  Future<PhotoPage> listAlbumPhotos({
+    required String albumId,
+    int page = 0,
+    int size = 50,
+  }) => _api.listAlbumPhotos(albumId: albumId, page: page, size: size);
+
+  @override
   Future<PhotoAlbum> updateAlbum({
     required String albumId,
     String? name,

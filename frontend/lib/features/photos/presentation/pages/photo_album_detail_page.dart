@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -46,7 +48,7 @@ class PhotoAlbumDetailPage extends ConsumerWidget {
   }
 }
 
-class _AlbumDetailBody extends ConsumerWidget {
+class _AlbumDetailBody extends ConsumerStatefulWidget {
   const _AlbumDetailBody({
     required this.album,
     required this.photos,
@@ -58,7 +60,78 @@ class _AlbumDetailBody extends ConsumerWidget {
   final String albumId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_AlbumDetailBody> createState() => _AlbumDetailBodyState();
+}
+
+class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
+  late List<PhotoItem> _photos;
+  int _page = 0;
+  bool _isLoadingMore = false;
+  Object? _loadMoreError;
+
+  @override
+  void initState() {
+    super.initState();
+    _photos = List<PhotoItem>.of(widget.photos);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AlbumDetailBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 详情 Provider 刷新（增删照片后）以服务端首页为准并重置分页。
+    if (oldWidget.albumId != widget.albumId ||
+        !identical(oldWidget.photos, widget.photos)) {
+      _photos = List<PhotoItem>.of(widget.photos);
+      _page = 0;
+      _isLoadingMore = false;
+      _loadMoreError = null;
+    }
+  }
+
+  bool get _hasMore => _photos.length < widget.album.photoCount;
+
+  Future<void> _loadMorePhotos() async {
+    if (_isLoadingMore || !_hasMore) {
+      return;
+    }
+    setState(() {
+      _isLoadingMore = true;
+      _loadMoreError = null;
+    });
+    try {
+      final nextPage = _page + 1;
+      final result = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .listAlbumPhotos(albumId: widget.albumId, page: nextPage);
+      if (!mounted) {
+        return;
+      }
+      final existingIds = _photos.map((photo) => photo.id).toSet();
+      setState(() {
+        _page = result.page;
+        _photos = [
+          ..._photos,
+          for (final photo in result.items)
+            if (existingIds.add(photo.id)) photo,
+        ];
+        _isLoadingMore = false;
+      });
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isLoadingMore = false;
+        _loadMoreError = error;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final photos = _photos;
+    final album = widget.album;
+    final albumId = widget.albumId;
     return Column(
       children: [
         // 顶部栏
@@ -107,74 +180,113 @@ class _AlbumDetailBody extends ConsumerWidget {
                       ],
                     ),
                   )
-                  : CustomScrollView(
-                    slivers: [
-                      SliverPadding(
-                        padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
-                        sliver: SliverLayoutBuilder(
-                          builder: (context, constraints) {
-                            final columns =
-                                constraints.crossAxisExtent >= 1600
-                                    ? 7
-                                    : constraints.crossAxisExtent >= 1300
-                                    ? 6
-                                    : constraints.crossAxisExtent >= 1000
-                                    ? 5
-                                    : constraints.crossAxisExtent >= 700
-                                    ? 4
-                                    : constraints.crossAxisExtent >= 500
-                                    ? 3
-                                    : 2;
-                            return SliverGrid.builder(
-                              itemCount: photos.length + 1,
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: columns,
-                                    crossAxisSpacing: 8,
-                                    mainAxisSpacing: 8,
-                                    childAspectRatio: 1,
-                                  ),
-                              itemBuilder: (context, index) {
-                                if (index == 0) {
-                                  return _AddPhotoTile(
-                                    onTap: () async {
-                                      await context.push(
-                                        '/photos/albums/$albumId/add',
-                                      );
-                                      ref.invalidate(
-                                        photoAlbumDetailProvider(albumId),
-                                      );
-                                    },
-                                  );
-                                }
-                                final photo = photos[index - 1];
-                                return PhotoGridTile(
-                                  key: ValueKey(photo.id),
-                                  photo: photo,
-                                  onTap: () {
-                                    // 浏览范围 = 当前相册的照片序列。
-                                    ref
-                                        .read(photoBrowseScopeProvider.notifier)
-                                        .set(
-                                          photos,
-                                          PhotoBrowseSource.album,
-                                          sourceKey: album.id,
+                  : NotificationListener<ScrollNotification>(
+                    onNotification: (notification) {
+                      if (notification.metrics.extentAfter < 480) {
+                        unawaited(_loadMorePhotos());
+                      }
+                      return false;
+                    },
+                    child: CustomScrollView(
+                      slivers: [
+                        SliverPadding(
+                          padding: const EdgeInsets.fromLTRB(24, 24, 24, 40),
+                          sliver: SliverLayoutBuilder(
+                            builder: (context, constraints) {
+                              final columns =
+                                  constraints.crossAxisExtent >= 1600
+                                      ? 7
+                                      : constraints.crossAxisExtent >= 1300
+                                      ? 6
+                                      : constraints.crossAxisExtent >= 1000
+                                      ? 5
+                                      : constraints.crossAxisExtent >= 700
+                                      ? 4
+                                      : constraints.crossAxisExtent >= 500
+                                      ? 3
+                                      : 2;
+                              return SliverGrid.builder(
+                                itemCount:
+                                    photos.length +
+                                    1 +
+                                    (_isLoadingMore || _loadMoreError != null
+                                        ? 1
+                                        : 0),
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columns,
+                                      crossAxisSpacing: 8,
+                                      mainAxisSpacing: 8,
+                                      childAspectRatio: 1,
+                                    ),
+                                itemBuilder: (context, index) {
+                                  if (index == 0) {
+                                    return _AddPhotoTile(
+                                      onTap: () async {
+                                        await context.push(
+                                          '/photos/albums/$albumId/add',
                                         );
-                                    context.push('/photos/${photo.id}');
-                                  },
-                                  onLongPress:
-                                      () => _confirmRemoveFromAlbum(
-                                        context,
-                                        ref,
-                                        photo,
-                                      ),
-                                );
-                              },
-                            );
-                          },
+                                        ref.invalidate(
+                                          photoAlbumDetailProvider(albumId),
+                                        );
+                                      },
+                                    );
+                                  }
+                                  if (index == photos.length + 1) {
+                                    return Center(
+                                      child:
+                                          _isLoadingMore
+                                              ? const SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                    ),
+                                              )
+                                              : TextButton(
+                                                onPressed:
+                                                    () => unawaited(
+                                                      _loadMorePhotos(),
+                                                    ),
+                                                child: Text(
+                                                  AppLocalizations.of(context)
+                                                      .photosOperationFailed,
+                                                ),
+                                              ),
+                                    );
+                                  }
+                                  final photo = photos[index - 1];
+                                  return PhotoGridTile(
+                                    key: ValueKey(photo.id),
+                                    photo: photo,
+                                    onTap: () {
+                                      // 浏览范围 = 当前已加载的相册照片序列。
+                                      ref
+                                          .read(
+                                            photoBrowseScopeProvider.notifier,
+                                          )
+                                          .set(
+                                            photos,
+                                            PhotoBrowseSource.album,
+                                            sourceKey: album.id,
+                                          );
+                                      context.push('/photos/${photo.id}');
+                                    },
+                                    onLongPress:
+                                        () => _confirmRemoveFromAlbum(
+                                          context,
+                                          ref,
+                                          photo,
+                                        ),
+                                  );
+                                },
+                              );
+                            },
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
         ),
       ],
@@ -186,7 +298,7 @@ class _AlbumDetailBody extends ConsumerWidget {
     final confirmed = await showFrameConfirmDialog(
       context,
       title: l10n.photosDeleteAlbumTitle,
-      body: l10n.photosDeleteAlbumConfirm(album.name),
+      body: l10n.photosDeleteAlbumConfirm(widget.album.name),
       confirmLabel: l10n.photosDelete,
       destructive: true,
     );
@@ -194,13 +306,15 @@ class _AlbumDetailBody extends ConsumerWidget {
       try {
         await ref
             .read(photoCenterControllerProvider.notifier)
-            .deleteAlbum(albumId);
+            .deleteAlbum(widget.albumId);
         if (context.mounted) {
           context.pop();
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                AppLocalizations.of(context).photosDeletedAlbum(album.name),
+                AppLocalizations.of(
+                  context,
+                ).photosDeletedAlbum(widget.album.name),
               ),
             ),
           );
@@ -300,11 +414,14 @@ class _AlbumDetailBody extends ConsumerWidget {
       try {
         await ref
             .read(photoCenterControllerProvider.notifier)
-            .removePhotoFromAlbum(albumId: albumId, photoId: photo.id);
+            .removePhotoFromAlbum(
+              albumId: widget.albumId,
+              photoId: photo.id,
+            );
         // 页面可能在等待期间被关闭，ref 失效前先终止。
         if (!context.mounted) return;
         // 刷新相册详情
-        ref.invalidate(photoAlbumDetailProvider(albumId));
+        ref.invalidate(photoAlbumDetailProvider(widget.albumId));
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(

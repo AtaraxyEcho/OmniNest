@@ -381,12 +381,30 @@ public class PhotoLibraryController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "获取相册详情", description = "返回指定相册的详细信息及其包含的照片")
+    @Operation(summary = "获取相册详情", description = "返回相册元信息及首页照片（默认 50 张）")
     @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
     @GetMapping("/api/v1/photos/albums/{albumId}")
     ApiResponse<PhotoAlbumDetailDto> albumDetail(@PathVariable UUID albumId) {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(albumService.albumDetail(userId, albumId));
+    }
+
+    @Operation(summary = "分页获取相册照片", description = "按相册排序序号分页返回照片")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @GetMapping("/api/v1/photos/albums/{albumId}/photos/page")
+    ApiResponse<PageResponse<PhotoItemDto>> albumPhotosPage(
+            @PathVariable UUID albumId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        Page<PhotoItemDto> result = albumService.albumPhotosPage(userId, albumId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()
+        ));
     }
 
     @Operation(summary = "添加照片到相册", description = "向指定相册中添加照片")

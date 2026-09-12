@@ -85,6 +85,13 @@ abstract interface class PhotoRepository {
   /// 获取相册详情
   Future<PhotoAlbumDetail> getAlbumDetail(String albumId);
 
+  /// 分页获取相册内照片。
+  Future<PhotoPage> listAlbumPhotos({
+    required String albumId,
+    int page = 0,
+    int size = 50,
+  });
+
   /// 更新相册
   Future<PhotoAlbum> updateAlbum({
     required String albumId,

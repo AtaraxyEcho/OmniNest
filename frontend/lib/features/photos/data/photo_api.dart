@@ -220,12 +220,25 @@ class PhotoApi {
     return PhotoAlbum.fromJson(parseData(response.data));
   }
 
-  /// 获取相册详情
+  /// 获取相册详情（元信息 + 首页照片）
   Future<PhotoAlbumDetail> getAlbumDetail(String albumId) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/photos/albums/$albumId',
     );
     return PhotoAlbumDetail.fromJson(parseData(response.data));
+  }
+
+  /// 分页获取相册内照片。
+  Future<PhotoPage> listAlbumPhotos({
+    required String albumId,
+    int page = 0,
+    int size = 50,
+  }) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/photos/albums/$albumId/photos/page',
+      queryParameters: {'page': page, 'size': size},
+    );
+    return PhotoPage.fromJson(parseData(response.data));
   }
 
   /// 更新相册
