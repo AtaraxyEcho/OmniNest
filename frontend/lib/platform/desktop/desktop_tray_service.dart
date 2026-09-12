@@ -1,18 +1,19 @@
-import 'package:tray_manager/tray_manager.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
-/// Desktop 系统托盘服务。
-/// 提供托盘图标、右键菜单和窗口显示/隐藏控制。
-class DesktopTrayService with TrayListener {
+/// 桌面系统托盘服务。
+/// 提供托盘图标、右键菜单、单击还原和关窗隐藏；退出仅经托盘菜单。
+class DesktopTrayService with TrayListener, WindowListener {
   DesktopTrayService();
 
   bool _initialized = false;
 
-  /// 初始化系统托盘。
+  /// 初始化系统托盘与窗口关闭拦截。
   Future<void> init() async {
     if (_initialized) return;
     trayManager.addListener(this);
+    windowManager.addListener(this);
 
     await trayManager.setIcon(BrandLogo.assetPath, isTemplate: false);
 
@@ -29,9 +30,10 @@ class DesktopTrayService with TrayListener {
     _initialized = true;
   }
 
-  /// 移除托盘图标。
+  /// 移除托盘图标并注销监听。
   Future<void> dispose() async {
     trayManager.removeListener(this);
+    windowManager.removeListener(this);
     await trayManager.destroy();
     _initialized = false;
   }
@@ -58,5 +60,11 @@ class DesktopTrayService with TrayListener {
       default:
         break;
     }
+  }
+
+  @override
+  void onWindowClose() {
+    // preventClose 已开启：关闭按钮隐藏到托盘，退出仅走托盘菜单。
+    windowManager.hide();
   }
 }

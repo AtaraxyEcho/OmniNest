@@ -11,6 +11,7 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/services/app_image_cache_policy.dart';
 import 'package:omninest/core/window/window_geometry_service.dart';
 import 'package:omninest/features/photos/application/photo_backup_preferences.dart';
+import 'package:omninest/platform/desktop/desktop_shell_bootstrap.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:omninest/app/bootstrap_stub.dart'
@@ -48,6 +49,8 @@ void bootstrap(Widget Function(AppBootstrapData data) builder) {
       // 桌面端在启动前摆放窗口：记忆边界优先，首启按工作区收窄，
       // Windows 原生窗口隐藏由本服务负责展示。
       unawaited(windowGeometryService.applyStartupGeometry());
+      // 桌面壳层：单实例锁 + 托盘 + 关窗隐藏（Web/移动端空实现）。
+      unawaited(bootstrapDesktopShell());
       runApp(AppBootstrapGate(builder: builder, loader: _loadBootstrapData));
     },
     (error, stackTrace) {
