@@ -7678,6 +7678,9 @@ class AppLocalizationsZh extends AppLocalizations {
       '将对所有本地曲目重新匹配在线元数据，包括已刮削的曲目。是否继续？';
 
   @override
+  String get musicQualityHint => '按已连接平台支持的档位自动降级播放';
+
+  @override
   String get musicQualityTitle => '播放音质';
 
   @override

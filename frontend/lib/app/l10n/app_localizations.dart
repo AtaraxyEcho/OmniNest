@@ -14519,6 +14519,12 @@ abstract class AppLocalizations {
   /// **'Every local track will be re-matched online, including already scraped ones. Continue?'**
   String get musicScrapeLibraryConfirmMessage;
 
+  /// No description provided for @musicQualityHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback falls back automatically to tiers your connected platforms support'**
+  String get musicQualityHint;
+
   /// No description provided for @musicQualityTitle.
   ///
   /// In en, this message translates to:

@@ -45,13 +45,17 @@ void main() {
     final harness = await _pumpQueueSheet(tester);
 
     final firstHandle = find.byType(ReorderableDragStartListener).first;
+    debugPrint(
+      'view: ${tester.view.physicalSize} / ${tester.view.devicePixelRatio}',
+    );
+
     final gesture = await tester.startGesture(
       tester.getCenter(firstHandle),
       pointer: 7,
     );
     await tester.pump(kLongPressTimeout + kPressTimeout);
     // 单次大位移会级联交换，首行直接拖到队尾验证后移换算。
-    await gesture.moveTo(tester.getCenter(firstHandle) + const Offset(0, 90));
+    await gesture.moveTo(tester.getCenter(firstHandle) + const Offset(0, 200));
     await gesture.up();
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 250));
@@ -65,7 +69,7 @@ void main() {
     );
   });
 
-  testWidgets('队列抽屉支持把队尾曲目拖到队首', (tester) async {
+  testWidgets('队列抽屉支持把队尾曲目前移一行', (tester) async {
     final harness = await _pumpQueueSheet(tester);
 
     final lastHandle = find.byType(ReorderableDragStartListener).last;
@@ -74,7 +78,13 @@ void main() {
       pointer: 7,
     );
     await tester.pump(kLongPressTimeout + kPressTimeout);
-    await gesture.moveTo(tester.getCenter(lastHandle) - const Offset(0, 175));
+    final start = tester.getCenter(lastHandle);
+    await gesture.moveTo(start - const Offset(0, 70));
+    await tester.pump();
+    await gesture.moveTo(start - const Offset(0, 130));
+    await tester.pump();
+    await gesture.moveTo(start - const Offset(0, 175));
+    await tester.pump();
     await gesture.up();
     await tester.pumpAndSettle();
     await tester.pump(const Duration(milliseconds: 250));
@@ -84,7 +94,7 @@ void main() {
       state.asData!.value.playbackItems
           .map((item) => item.track.title)
           .toList(),
-      ['Queue Gamma', 'Queue Alpha', 'Queue Beta'],
+      ['Queue Alpha', 'Queue Gamma', 'Queue Beta'],
     );
   });
 
@@ -197,16 +207,35 @@ class _StubMusicApi implements MusicApi {
   Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
 
   @override
-  Future<MusicPagedResult<MusicTrack>> tracks({int page = 0, int size = 100, String sort = 'title,asc'}) async =>
-      MusicPagedResult<MusicTrack>(items: _tracks);
+  Future<MusicPagedResult<MusicTrack>> tracks({
+    int page = 0,
+    int size = 100,
+    String sort = 'title,asc',
+  }) async => MusicPagedResult<MusicTrack>(items: _tracks);
 
   @override
-  Future<MusicPagedResult<MusicAlbum>> albums({int page = 0, int size = 100, String sort = 'updatedAt,desc'}) async =>
-      const MusicPagedResult<MusicAlbum>(items: <MusicAlbum>[], page: 0, size: 0, totalElements: 0);
+  Future<MusicPagedResult<MusicAlbum>> albums({
+    int page = 0,
+    int size = 100,
+    String sort = 'updatedAt,desc',
+  }) async => const MusicPagedResult<MusicAlbum>(
+    items: <MusicAlbum>[],
+    page: 0,
+    size: 0,
+    totalElements: 0,
+  );
 
   @override
-  Future<MusicPagedResult<MusicArtist>> artists({int page = 0, int size = 100, String sort = 'name,asc'}) async =>
-      const MusicPagedResult<MusicArtist>(items: <MusicArtist>[], page: 0, size: 0, totalElements: 0);
+  Future<MusicPagedResult<MusicArtist>> artists({
+    int page = 0,
+    int size = 100,
+    String sort = 'name,asc',
+  }) async => const MusicPagedResult<MusicArtist>(
+    items: <MusicArtist>[],
+    page: 0,
+    size: 0,
+    totalElements: 0,
+  );
 
   @override
   Future<List<MusicPlaylist>> playlists() async => const <MusicPlaylist>[];

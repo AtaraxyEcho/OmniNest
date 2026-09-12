@@ -30,7 +30,6 @@ import 'package:omninest/features/music/presentation/deck/music_deck_mini_player
 import 'package:omninest/features/music/presentation/deck/music_deck_models.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_navigation.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
-import 'package:omninest/features/music/presentation/deck/music_quality_dialog.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_queue_sheet.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_search.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login.dart';
@@ -267,12 +266,6 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
             availableSources: _availableSources(),
             onToggle: _toggleSource,
           ),
-          const SizedBox(width: 10),
-          _TopAction(
-            tooltip: l10n.musicQualityTitle,
-            icon: Icons.high_quality_rounded,
-            onPressed: () => showMusicQualityDialog(context, ref),
-          ),
           const Spacer(),
           _TopAction(
             tooltip: l10n.portalLocalBackdropTitle,
@@ -336,11 +329,6 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                     sources: sources,
                     availableSources: _availableSources(),
                     onToggle: _toggleSource,
-                  ),
-                  IconButton(
-                    tooltip: l10n.musicQualityTitle,
-                    onPressed: () => showMusicQualityDialog(context, ref),
-                    icon: const Icon(Icons.high_quality_rounded),
                   ),
                   IconButton(
                     tooltip: l10n.musicDeckManageAccounts,

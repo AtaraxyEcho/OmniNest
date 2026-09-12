@@ -3344,6 +3344,7 @@
   "musicScrapeLibrary": "全库重刮",
   "musicScrapeLibraryConfirmTitle": "确认全库重刮",
   "musicScrapeLibraryConfirmMessage": "将对所有本地曲目重新匹配在线元数据，包括已刮削的曲目。是否继续？",
+  "musicQualityHint": "按已连接平台支持的档位自动降级播放",
   "musicQualityTitle": "播放音质",
   "musicQualityJymaster": "超清母带",
   "musicQualityJyeffect": "高清环绕声",

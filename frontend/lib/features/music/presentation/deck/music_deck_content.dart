@@ -225,10 +225,20 @@ class _DailyRecommendationSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final value = recommendation.asData?.value;
+    final onOpenAll =
+        value == null || value.tracks.isEmpty
+            ? null
+            : () =>
+                onOpenCollection(DailyRecommendationMusicDeckCollection(value));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _SectionTitle(title: l10n.musicDailyRecommendationSection),
+        _SectionTitle(
+          title: l10n.musicDailyRecommendationSection,
+          actionLabel: onOpenAll == null ? null : l10n.musicViewAllSimple,
+          onAction: onOpenAll,
+        ),
         const SizedBox(height: 12),
         recommendation.when(
           data: (value) {

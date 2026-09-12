@@ -122,6 +122,33 @@ void registerMusicQueueTests() {
     );
   });
 
+  test('reorderQueue supports moving a later item to the head', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .playItems(<MusicPlayableItem>[
+          MusicPlayableItem.local(api.track),
+          MusicPlayableItem.local(api.secondTrack),
+        ], startIndex: 0);
+    container.read(musicCenterControllerProvider.notifier).reorderQueue(1, 0);
+    final state = container.read(musicCenterControllerProvider).asData!.value;
+
+    expect(state.playbackItems.map((item) => item.playableKey).toList(), [
+      'local:track-2',
+      'local:track-1',
+    ]);
+    expect(state.playbackIndex, 1);
+  });
+
   test(
     'clearing the queue empties items, pauses and keeps current item',
     () async {

@@ -74,6 +74,7 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
               curve: Curves.easeOutCubic,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
+                // 无播放数据（禁用）时用扁平中性盘，避免亮色渐变盘误导可点性。
                 gradient:
                     enabled
                         ? LinearGradient(
@@ -88,19 +89,17 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
                             widget.backgroundColor,
                           ],
                         )
-                        : LinearGradient(
-                          colors: <Color>[
-                            Colors.white.withValues(alpha: 0.14),
-                            Colors.white.withValues(alpha: 0.08),
-                          ],
-                        ),
+                        : null,
+                color: enabled ? null : Colors.white.withValues(alpha: 0.06),
                 border: Border.all(
                   color:
                       _focused
                           ? widget.foregroundColor.withValues(alpha: 0.90)
-                          : widget.accentColor.withValues(
-                            alpha: enabled ? (_hovered ? 0.68 : 0.42) : 0.10,
-                          ),
+                          : enabled
+                          ? widget.accentColor.withValues(
+                            alpha: _hovered ? 0.68 : 0.42,
+                          )
+                          : Colors.white.withValues(alpha: 0.10),
                   width: _focused ? 1.8 : 1,
                 ),
                 boxShadow:
@@ -164,7 +163,7 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
                               enabled
                                   ? widget.foregroundColor
                                   : widget.foregroundColor.withValues(
-                                    alpha: 0.36,
+                                    alpha: 0.42,
                                   ),
                         ),
                       ),

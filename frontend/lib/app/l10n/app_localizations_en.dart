@@ -7911,6 +7911,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Every local track will be re-matched online, including already scraped ones. Continue?';
 
   @override
+  String get musicQualityHint =>
+      'Playback falls back automatically to tiers your connected platforms support';
+
+  @override
   String get musicQualityTitle => 'Playback Quality';
 
   @override
