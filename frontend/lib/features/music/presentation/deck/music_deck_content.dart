@@ -737,14 +737,25 @@ class _LocalManagementContent extends ConsumerWidget {
         _ContentHeader(
           title: l10n.musicDeckLocalManagement,
           subtitle: l10n.musicLocalManagementSubtitle,
-          trailing: FilledButton.icon(
-            onPressed:
-                () =>
-                    ref
-                        .read(musicCenterControllerProvider.notifier)
-                        .createScanJob(),
-            icon: const Icon(Icons.radar_rounded, size: 18),
-            label: Text(l10n.musicStartScan),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              OutlinedButton.icon(
+                onPressed: () => _confirmScrapeLibrary(context, ref),
+                icon: const Icon(Icons.travel_explore_rounded, size: 18),
+                label: Text(l10n.musicScrapeLibrary),
+              ),
+              const SizedBox(width: 12),
+              FilledButton.icon(
+                onPressed:
+                    () =>
+                        ref
+                            .read(musicCenterControllerProvider.notifier)
+                            .createScanJob(),
+                icon: const Icon(Icons.radar_rounded, size: 18),
+                label: Text(l10n.musicStartScan),
+              ),
+            ],
           ),
         ),
         if (center.lastScanJob case final scan?) ...[
@@ -818,5 +829,37 @@ class _LocalManagementContent extends ConsumerWidget {
         ),
       ],
     );
+  }
+}
+
+Future<void> _confirmScrapeLibrary(BuildContext context, WidgetRef ref) async {
+  final l10n = AppLocalizations.of(context);
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder:
+        (dialogContext) => AlertDialog(
+          title: Text(l10n.musicScrapeLibraryConfirmTitle),
+          content: Text(l10n.musicScrapeLibraryConfirmMessage),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: Text(l10n.musicCancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text(l10n.musicScrapeLibrary),
+            ),
+          ],
+        ),
+  );
+  if (confirmed != true || !context.mounted) {
+    return;
+  }
+  try {
+    await ref
+        .read(musicCenterControllerProvider.notifier)
+        .scrapeLibrary(force: true);
+  } on Exception {
+    // 命令层已把失败写入中心状态 errorMessage，由页面统一展示。
   }
 }

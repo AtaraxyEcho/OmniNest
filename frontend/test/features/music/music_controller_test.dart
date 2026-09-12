@@ -115,6 +115,60 @@ void main() {
 
   registerMusicQueueTests();
 
+  test('scrape library passes force flag and records the job', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .scrapeLibrary(force: true);
+    final state = container.read(musicCenterControllerProvider).asData!.value;
+
+    expect(api.scrapeLibraryForceFlags, [true]);
+    expect(state.lastScanJob?.id, 'scrape-job');
+    expect(state.lastScanJob?.status, 'COMPLETED');
+  });
+
+  test('apply scrape candidate updates track metadata in state', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    const candidate = MusicScrapeCandidate(
+      provider: 'netease',
+      externalId: '199',
+      title: 'Scraped Title',
+      artistName: 'Scraped Artist',
+      albumTitle: 'Scraped Album',
+    );
+    api.libraryTracks[0] = const MusicTrack(
+      id: 'track-1',
+      fileNodeId: 'file-1',
+      title: 'Scraped Title',
+      artistName: 'Scraped Artist',
+      albumTitle: 'Scraped Album',
+      format: 'flac',
+      favorite: false,
+    );
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .applyScrapeCandidate(api.track, candidate);
+    final state = container.read(musicCenterControllerProvider).asData!.value;
+
+    expect(api.appliedScrapeTrackIds, ['track-1']);
+    expect(
+      state.tracks.where((track) => track.id == 'track-1').single.title,
+      'Scraped Title',
+    );
+  });
+
   test('empty music history does not select the first local track', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(

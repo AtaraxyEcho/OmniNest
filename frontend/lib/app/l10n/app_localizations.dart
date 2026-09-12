@@ -14471,6 +14471,54 @@ abstract class AppLocalizations {
   /// **'Failed to add to playlist'**
   String get musicAddToPlaylistFailed;
 
+  /// No description provided for @musicScrapeMatch.
+  ///
+  /// In en, this message translates to:
+  /// **'Match Online'**
+  String get musicScrapeMatch;
+
+  /// No description provided for @musicScrapeCandidatesTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Match Results'**
+  String get musicScrapeCandidatesTitle;
+
+  /// No description provided for @musicScrapeNoCandidates.
+  ///
+  /// In en, this message translates to:
+  /// **'No matching candidates found'**
+  String get musicScrapeNoCandidates;
+
+  /// No description provided for @musicScrapeApply.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get musicScrapeApply;
+
+  /// No description provided for @musicScrapeApplied.
+  ///
+  /// In en, this message translates to:
+  /// **'Matched metadata applied'**
+  String get musicScrapeApplied;
+
+  /// No description provided for @musicScrapeLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Rescrape Library'**
+  String get musicScrapeLibrary;
+
+  /// No description provided for @musicScrapeLibraryConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rescrape entire library?'**
+  String get musicScrapeLibraryConfirmTitle;
+
+  /// No description provided for @musicScrapeLibraryConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Every local track will be re-matched online, including already scraped ones. Continue?'**
+  String get musicScrapeLibraryConfirmMessage;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

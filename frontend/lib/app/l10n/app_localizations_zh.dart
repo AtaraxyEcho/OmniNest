@@ -7653,6 +7653,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicAddToPlaylistFailed => '加入歌单失败';
 
   @override
+  String get musicScrapeMatch => '在线匹配';
+
+  @override
+  String get musicScrapeCandidatesTitle => '匹配候选';
+
+  @override
+  String get musicScrapeNoCandidates => '未找到匹配候选';
+
+  @override
+  String get musicScrapeApply => '应用';
+
+  @override
+  String get musicScrapeApplied => '已应用匹配元数据';
+
+  @override
+  String get musicScrapeLibrary => '全库重刮';
+
+  @override
+  String get musicScrapeLibraryConfirmTitle => '确认全库重刮';
+
+  @override
+  String get musicScrapeLibraryConfirmMessage =>
+      '将对所有本地曲目重新匹配在线元数据，包括已刮削的曲目。是否继续？';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

@@ -42,11 +42,14 @@ class _MetadataEditForm extends ConsumerStatefulWidget {
 
 class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
   int _filePickGeneration = 0;
+  int _scrapeGeneration = 0;
   late final TextEditingController _titleController;
   late final TextEditingController _artistController;
   late final TextEditingController _albumController;
   late final TextEditingController _genreController;
   bool _saving = false;
+  bool _scrapeLoading = false;
+  List<MusicScrapeCandidate>? _scrapeCandidates;
   // 封面
   String? _coverFileName;
   List<int>? _coverBytes;
@@ -93,13 +96,23 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
                 albumController: _albumController,
                 genreController: _genreController,
                 saving: _saving,
+                scrapeLoading: _scrapeLoading,
                 coverFileName: _coverFileName,
                 lyricsFileName: _lyricsFileName,
+                onMatchOnline: _scrapeLoading ? null : _matchOnline,
                 onPickCover: _pickCover,
                 onPickLyrics: _pickLyrics,
                 onCancel: _saving ? null : () => Navigator.of(context).pop(),
                 onSave: _saving ? null : _save,
               );
+              final candidatesPanel =
+                  _scrapeCandidates == null
+                      ? null
+                      : _ScrapeCandidatesPanel(
+                        candidates: _scrapeCandidates!,
+                        applying: _scrapeLoading,
+                        onApply: _applyCandidate,
+                      );
               if (!wide) {
                 return SingleChildScrollView(
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -108,18 +121,30 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
                       coverPanel,
                       const SizedBox(height: 18),
                       formPanel,
+                      if (candidatesPanel != null) ...[
+                        const SizedBox(height: 18),
+                        candidatesPanel,
+                      ],
                     ],
                   ),
                 );
               }
               return SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Column(
                   children: [
-                    SizedBox(width: 300, child: coverPanel),
-                    const SizedBox(width: 24),
-                    Expanded(child: formPanel),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(width: 300, child: coverPanel),
+                        const SizedBox(width: 24),
+                        Expanded(child: formPanel),
+                      ],
+                    ),
+                    if (candidatesPanel != null) ...[
+                      const SizedBox(height: 18),
+                      candidatesPanel,
+                    ],
                   ],
                 ),
               );
@@ -163,6 +188,72 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     } finally {
       if (mounted) {
         setState(() => _saving = false);
+      }
+    }
+  }
+
+  Future<void> _matchOnline() async {
+    final generation = ++_scrapeGeneration;
+    setState(() {
+      _scrapeLoading = true;
+      _scrapeCandidates = null;
+    });
+    try {
+      final candidates = await ref
+          .read(musicCenterControllerProvider.notifier)
+          .scrapeCandidates(widget.track);
+      if (!mounted || generation != _scrapeGeneration) {
+        return;
+      }
+      setState(() => _scrapeCandidates = candidates);
+    } on Object catch (error) {
+      if (!mounted || generation != _scrapeGeneration) {
+        return;
+      }
+      setState(() => _scrapeCandidates = const <MusicScrapeCandidate>[]);
+      _showMessage(
+        AppLocalizations.of(context).musicSaveFailed(error.toString()),
+      );
+    } finally {
+      if (mounted && generation == _scrapeGeneration) {
+        setState(() => _scrapeLoading = false);
+      }
+    }
+  }
+
+  Future<void> _applyCandidate(MusicScrapeCandidate candidate) async {
+    final generation = ++_scrapeGeneration;
+    setState(() => _scrapeLoading = true);
+    try {
+      await ref
+          .read(musicCenterControllerProvider.notifier)
+          .applyScrapeCandidate(widget.track, candidate);
+      if (!mounted) {
+        return;
+      }
+      final updated =
+          ref
+              .read(musicCenterControllerProvider)
+              .asData
+              ?.value
+              .tracks
+              .where((t) => t.id == widget.track.id)
+              .firstOrNull;
+      if (updated != null) {
+        _titleController.text = updated.title;
+        _artistController.text = updated.artistName;
+        _albumController.text = updated.albumTitle;
+      }
+      _showMessage(AppLocalizations.of(context).musicScrapeApplied);
+    } on Object catch (error) {
+      if (mounted) {
+        _showMessage(
+          AppLocalizations.of(context).musicSaveFailed(error.toString()),
+        );
+      }
+    } finally {
+      if (mounted && generation == _scrapeGeneration) {
+        setState(() => _scrapeLoading = false);
       }
     }
   }
@@ -378,8 +469,10 @@ class _FormPanel extends StatelessWidget {
     required this.albumController,
     required this.genreController,
     required this.saving,
+    required this.scrapeLoading,
     this.coverFileName,
     this.lyricsFileName,
+    this.onMatchOnline,
     this.onPickCover,
     this.onPickLyrics,
     this.onCancel,
@@ -391,8 +484,10 @@ class _FormPanel extends StatelessWidget {
   final TextEditingController albumController;
   final TextEditingController genreController;
   final bool saving;
+  final bool scrapeLoading;
   final String? coverFileName;
   final String? lyricsFileName;
+  final VoidCallback? onMatchOnline;
   final VoidCallback? onPickCover;
   final VoidCallback? onPickLyrics;
   final VoidCallback? onCancel;
@@ -411,6 +506,30 @@ class _FormPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    AppLocalizations.of(context).musicEditMetadata,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onMatchOnline,
+                  icon:
+                      scrapeLoading
+                          ? const SizedBox.square(
+                            dimension: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                          : const Icon(Icons.travel_explore_rounded, size: 18),
+                  label: Text(AppLocalizations.of(context).musicScrapeMatch),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
             _field(
               AppLocalizations.of(context).musicFieldTitle,
               titleController,
@@ -527,5 +646,165 @@ class _FormPanel extends StatelessWidget {
         filled: true,
       ),
     );
+  }
+}
+
+/// 在线刮削候选列表，应用后由宿主回填表单字段。
+class _ScrapeCandidatesPanel extends StatelessWidget {
+  const _ScrapeCandidatesPanel({
+    required this.candidates,
+    required this.applying,
+    required this.onApply,
+  });
+
+  final List<MusicScrapeCandidate> candidates;
+  final bool applying;
+  final ValueChanged<MusicScrapeCandidate> onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Card(
+      elevation: 0,
+      color: Theme.of(
+        context,
+      ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              l10n.musicScrapeCandidatesTitle,
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 12),
+            if (candidates.isEmpty)
+              Text(
+                l10n.musicScrapeNoCandidates,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: context.musicColors.onSurfaceVariant,
+                ),
+              )
+            else
+              for (final candidate in candidates)
+                _ScrapeCandidateCard(
+                  candidate: candidate,
+                  applying: applying,
+                  onApply: () => onApply(candidate),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ScrapeCandidateCard extends StatelessWidget {
+  const _ScrapeCandidateCard({
+    required this.candidate,
+    required this.applying,
+    required this.onApply,
+  });
+
+  final MusicScrapeCandidate candidate;
+  final bool applying;
+  final VoidCallback onApply;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final chips = <String>[
+      if (candidate.releaseDate != null)
+        '${candidate.releaseDate!.year}-${candidate.releaseDate!.month.toString().padLeft(2, '0')}-${candidate.releaseDate!.day.toString().padLeft(2, '0')}',
+      if (candidate.durationSeconds != null)
+        _formatDuration(candidate.durationSeconds!),
+      if (candidate.trackNumber != null) '#${candidate.trackNumber}',
+      if (candidate.coverUrl != null) l10n.musicCoverImage,
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: context.musicColors.outline),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    candidate.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '${candidate.artistName} · ${candidate.albumTitle}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.musicColors.onSurfaceVariant,
+                    ),
+                  ),
+                  if (chips.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final chip in chips)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  Theme.of(
+                                    context,
+                                  ).colorScheme.surfaceContainerHighest,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              chip,
+                              style: Theme.of(
+                                context,
+                              ).textTheme.labelSmall?.copyWith(
+                                color: context.musicColors.onSurfaceVariant,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.tonal(
+              onPressed: applying ? null : onApply,
+              child: Text(l10n.musicScrapeApply),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatDuration(int seconds) {
+    final minutes = seconds ~/ 60;
+    final rest = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${rest.toString().padLeft(2, '0')}';
   }
 }

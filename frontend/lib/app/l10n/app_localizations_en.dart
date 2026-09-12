@@ -7886,6 +7886,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicAddToPlaylistFailed => 'Failed to add to playlist';
 
   @override
+  String get musicScrapeMatch => 'Match Online';
+
+  @override
+  String get musicScrapeCandidatesTitle => 'Match Results';
+
+  @override
+  String get musicScrapeNoCandidates => 'No matching candidates found';
+
+  @override
+  String get musicScrapeApply => 'Apply';
+
+  @override
+  String get musicScrapeApplied => 'Matched metadata applied';
+
+  @override
+  String get musicScrapeLibrary => 'Rescrape Library';
+
+  @override
+  String get musicScrapeLibraryConfirmTitle => 'Rescrape entire library?';
+
+  @override
+  String get musicScrapeLibraryConfirmMessage =>
+      'Every local track will be re-matched online, including already scraped ones. Continue?';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override
