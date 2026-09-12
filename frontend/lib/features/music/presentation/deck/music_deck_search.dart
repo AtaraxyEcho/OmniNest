@@ -9,6 +9,7 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_deck_search_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
+import 'package:omninest/features/music/presentation/deck/music_deck_add_to_playlist_sheet.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 
@@ -135,6 +136,11 @@ class MusicDeckSearchOverlay extends ConsumerWidget {
                       .playItems(items, startIndex: index);
                   onDismiss();
                 },
+                onAddToPlaylist:
+                    source == MusicPlatform.local
+                        ? (item) =>
+                            showMusicAddToPlaylistSheet(context, ref, item)
+                        : null,
               ),
           ],
         ),
@@ -270,6 +276,14 @@ class _MusicDeckMobileSearchPageState
                                     .playItems(items, startIndex: index);
                                 Navigator.of(context).pop();
                               },
+                              onAddToPlaylist:
+                                  source == MusicPlatform.local
+                                      ? (item) => showMusicAddToPlaylistSheet(
+                                        context,
+                                        ref,
+                                        item,
+                                      )
+                                      : null,
                             ),
                       ],
                     ),
@@ -306,6 +320,7 @@ class _SearchSourceGroup extends StatelessWidget {
     required this.loading,
     required this.onPlay,
     this.failure,
+    this.onAddToPlaylist,
   });
 
   final MusicPlatform source;
@@ -313,6 +328,7 @@ class _SearchSourceGroup extends StatelessWidget {
   final bool loading;
   final String? failure;
   final void Function(List<MusicPlayableItem> items, int index) onPlay;
+  final ValueChanged<MusicPlayableItem>? onAddToPlaylist;
 
   @override
   Widget build(BuildContext context) {
@@ -363,6 +379,10 @@ class _SearchSourceGroup extends StatelessWidget {
               _SearchTrackRow(
                 item: items[index],
                 onTap: () => onPlay(items, index),
+                onAddToPlaylist:
+                    onAddToPlaylist == null
+                        ? null
+                        : () => onAddToPlaylist!(items[index]),
               ),
         ],
       ),
@@ -371,10 +391,15 @@ class _SearchSourceGroup extends StatelessWidget {
 }
 
 class _SearchTrackRow extends StatelessWidget {
-  const _SearchTrackRow({required this.item, required this.onTap});
+  const _SearchTrackRow({
+    required this.item,
+    required this.onTap,
+    this.onAddToPlaylist,
+  });
 
   final MusicPlayableItem item;
   final VoidCallback onTap;
+  final VoidCallback? onAddToPlaylist;
 
   @override
   Widget build(BuildContext context) {
@@ -408,11 +433,49 @@ class _SearchTrackRow extends StatelessWidget {
             fontSize: AppTypography.labelSmall,
           ),
         ),
-        trailing: MusicPlaybackButton(
-          isPlaying: false,
-          tooltip: AppLocalizations.of(context).musicPlay,
-          onPressed: onTap,
-          buttonSize: MusicPlaybackButtonSize.inline,
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            MusicPlaybackButton(
+              isPlaying: false,
+              tooltip: AppLocalizations.of(context).musicPlay,
+              onPressed: onTap,
+              buttonSize: MusicPlaybackButtonSize.inline,
+            ),
+            if (onAddToPlaylist != null)
+              PopupMenuButton<String>(
+                tooltip: AppLocalizations.of(context).coreMore,
+                icon: Icon(
+                  Icons.more_vert_rounded,
+                  size: 18,
+                  color: context.musicColors.onSurfaceVariant,
+                ),
+                onSelected: (value) {
+                  if (value == 'addToPlaylist') {
+                    onAddToPlaylist?.call();
+                  }
+                },
+                itemBuilder:
+                    (context) => [
+                      PopupMenuItem(
+                        value: 'addToPlaylist',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.playlist_add_rounded,
+                              size: 20,
+                              color: context.musicColors.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: 10),
+                            Text(
+                              AppLocalizations.of(context).musicAddToPlaylist,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+              ),
+          ],
         ),
       ),
     );

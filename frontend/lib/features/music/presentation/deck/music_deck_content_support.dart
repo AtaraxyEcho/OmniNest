@@ -695,6 +695,15 @@ ValueChanged<MusicPlayableItem> _enqueueTrackHandler(
   };
 }
 
+ValueChanged<MusicPlayableItem> _addToPlaylistHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  return (item) {
+    showMusicAddToPlaylistSheet(context, ref, item);
+  };
+}
+
 ValueChanged<MusicPlayableItem> _deleteTrackHandler(
   BuildContext context,
   WidgetRef ref,

@@ -14,6 +14,7 @@ class MusicDeckTrackList extends StatefulWidget {
     this.onToggleFavorite,
     this.onDelete,
     this.onEnqueue,
+    this.onAddToPlaylist,
     this.emptyTitle,
     this.emptyMessage,
     this.scrollable = true,
@@ -26,6 +27,7 @@ class MusicDeckTrackList extends StatefulWidget {
   final ValueChanged<MusicPlayableItem>? onToggleFavorite;
   final ValueChanged<MusicPlayableItem>? onDelete;
   final ValueChanged<MusicPlayableItem>? onEnqueue;
+  final ValueChanged<MusicPlayableItem>? onAddToPlaylist;
   final String? emptyTitle;
   final String? emptyMessage;
   final bool scrollable;
@@ -94,6 +96,10 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
               : () => widget.onDelete!(item),
       onEnqueue:
           widget.onEnqueue == null ? null : () => widget.onEnqueue!(item),
+      onAddToPlaylist:
+          widget.onAddToPlaylist == null || item.ref is! LocalMusicRef
+              ? null
+              : () => widget.onAddToPlaylist!(item),
     );
   }
 }
@@ -107,6 +113,7 @@ class _MusicDeckTrackRow extends StatefulWidget {
     this.onToggleFavorite,
     this.onDelete,
     this.onEnqueue,
+    this.onAddToPlaylist,
   });
 
   final MusicPlayableItem item;
@@ -116,6 +123,7 @@ class _MusicDeckTrackRow extends StatefulWidget {
   final VoidCallback? onToggleFavorite;
   final VoidCallback? onDelete;
   final VoidCallback? onEnqueue;
+  final VoidCallback? onAddToPlaylist;
 
   @override
   State<_MusicDeckTrackRow> createState() => _MusicDeckTrackRowState();
@@ -255,7 +263,9 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                       ),
                     ),
                   ],
-                  if (widget.onEnqueue != null || widget.onDelete != null)
+                  if (widget.onEnqueue != null ||
+                      widget.onAddToPlaylist != null ||
+                      widget.onDelete != null)
                     PopupMenuButton<String>(
                       tooltip: AppLocalizations.of(context).coreMore,
                       icon: Icon(
@@ -266,6 +276,8 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                       onSelected: (value) {
                         if (value == 'enqueue') {
                           widget.onEnqueue?.call();
+                        } else if (value == 'addToPlaylist') {
+                          widget.onAddToPlaylist?.call();
                         } else if (value == 'delete') {
                           widget.onDelete?.call();
                         }
@@ -287,6 +299,25 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                                       AppLocalizations.of(
                                         context,
                                       ).musicPlayNext,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (widget.onAddToPlaylist != null)
+                              PopupMenuItem(
+                                value: 'addToPlaylist',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.playlist_add_rounded,
+                                      size: 20,
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      ).musicAddToPlaylist,
                                     ),
                                   ],
                                 ),

@@ -103,8 +103,8 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
   }
 
-  /// 创建自定义歌单。
-  Future<void> createPlaylist({
+  /// 创建自定义歌单并返回创建结果。
+  Future<MusicPlaylist?> createPlaylist({
     required String name,
     String? description,
     List<int>? coverBytes,
@@ -112,7 +112,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
   }) async {
     final current = _currentState;
     if (current == null) {
-      return;
+      return null;
     }
     try {
       final coverFileId =
@@ -130,6 +130,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       _replaceState(
         current.copyWith(playlists: [playlist, ...current.playlists]),
       );
+      return playlist;
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
       rethrow;

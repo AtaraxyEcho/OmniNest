@@ -3455,6 +3455,13 @@
   "musicCoverPick": "Select Cover Image",
   "musicLyricsFile": "Lyrics File",
   "musicLyricsPick": "Select Lyrics File (LRC / TXT / SRT / VTT)",
+  "musicAddToPlaylistSuccess": "Added to \"{name}\"",
+  "@musicAddToPlaylistSuccess": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "musicAddToPlaylistFailed": "Failed to add to playlist",
   "musicQueueTitle": "Play Queue",
   "musicQueueEmpty": "Play queue is empty",
   "musicQueueClear": "Clear Queue",

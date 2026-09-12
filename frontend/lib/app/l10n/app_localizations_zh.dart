@@ -7645,6 +7645,14 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicLyricsPick => '选择歌词文件（LRC / TXT / SRT / VTT）';
 
   @override
+  String musicAddToPlaylistSuccess(Object name) {
+    return '已加入「$name」';
+  }
+
+  @override
+  String get musicAddToPlaylistFailed => '加入歌单失败';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

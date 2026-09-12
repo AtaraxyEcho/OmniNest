@@ -12,6 +12,7 @@ import 'package:omninest/features/music/application/music_daily_recommendation_c
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
+import 'package:omninest/features/music/presentation/deck/music_deck_add_to_playlist_sheet.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_cover_grid.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_create_playlist_dialog.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_models.dart';
@@ -172,6 +173,7 @@ class _HomeContent extends ConsumerWidget {
                 onToggleFavorite: _favoriteHandler(ref),
                 onDelete: _deleteTrackHandler(context, ref),
                 onEnqueue: _enqueueTrackHandler(context, ref),
+                onAddToPlaylist: _addToPlaylistHandler(context, ref),
               ),
             ),
           const SizedBox(height: 28),
@@ -427,6 +429,7 @@ class _LibraryContent extends ConsumerWidget {
               onToggleFavorite: _favoriteHandler(ref),
               onDelete: _deleteTrackHandler(context, ref),
               onEnqueue: _enqueueTrackHandler(context, ref),
+              onAddToPlaylist: _addToPlaylistHandler(context, ref),
             ),
             MusicDeckLibraryView.albums => MusicDeckCoverGrid(
               items: _albumCoverItems(
@@ -539,6 +542,7 @@ class _TrackSection extends ConsumerWidget {
             onToggleFavorite: _favoriteHandler(ref),
             onDelete: _deleteTrackHandler(context, ref),
             onEnqueue: _enqueueTrackHandler(context, ref),
+            onAddToPlaylist: _addToPlaylistHandler(context, ref),
           ),
         ),
       ],
@@ -691,6 +695,7 @@ class _CollectionDetail extends ConsumerWidget {
                     onToggleFavorite: _favoriteHandler(ref),
                     onDelete: _deleteTrackHandler(context, ref),
                     onEnqueue: _enqueueTrackHandler(context, ref),
+                    onAddToPlaylist: _addToPlaylistHandler(context, ref),
                   ),
         ),
       ],

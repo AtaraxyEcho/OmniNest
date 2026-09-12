@@ -3329,6 +3329,13 @@
   "musicCoverPick": "选择封面图片",
   "musicLyricsFile": "歌词文件",
   "musicLyricsPick": "选择歌词文件（LRC / TXT / SRT / VTT）",
+  "musicAddToPlaylistSuccess": "已加入「{name}」",
+  "@musicAddToPlaylistSuccess": {
+    "placeholders": {
+      "name": {}
+    }
+  },
+  "musicAddToPlaylistFailed": "加入歌单失败",
   "musicQueueTitle": "播放队列",
   "musicQueueEmpty": "播放队列为空",
   "musicQueueClear": "清空队列",

@@ -7878,6 +7878,14 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicLyricsPick => 'Select Lyrics File (LRC / TXT / SRT / VTT)';
 
   @override
+  String musicAddToPlaylistSuccess(Object name) {
+    return 'Added to \"$name\"';
+  }
+
+  @override
+  String get musicAddToPlaylistFailed => 'Failed to add to playlist';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

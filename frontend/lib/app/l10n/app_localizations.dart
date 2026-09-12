@@ -14459,6 +14459,18 @@ abstract class AppLocalizations {
   /// **'Select Lyrics File (LRC / TXT / SRT / VTT)'**
   String get musicLyricsPick;
 
+  /// No description provided for @musicAddToPlaylistSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to \"{name}\"'**
+  String musicAddToPlaylistSuccess(Object name);
+
+  /// No description provided for @musicAddToPlaylistFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to add to playlist'**
+  String get musicAddToPlaylistFailed;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:
