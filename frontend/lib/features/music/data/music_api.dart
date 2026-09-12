@@ -26,25 +26,40 @@ class MusicApi {
     return MusicSearchResult.fromJson(parseData(response.data));
   }
 
-  Future<List<MusicTrack>> tracks() async {
+  Future<MusicPagedResult<MusicTrack>> tracks({
+    int page = 0,
+    int size = 100,
+    String sort = 'title,asc',
+  }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/tracks',
+      queryParameters: {'page': page, 'size': size, 'sort': sort},
     );
-    return _parseList(response.data, MusicTrack.fromJson, '歌曲列表格式不正确');
+    return _parsePage(response.data, MusicTrack.fromJson, '歌曲列表格式不正确');
   }
 
-  Future<List<MusicAlbum>> albums() async {
+  Future<MusicPagedResult<MusicAlbum>> albums({
+    int page = 0,
+    int size = 100,
+    String sort = 'updatedAt,desc',
+  }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/albums',
+      queryParameters: {'page': page, 'size': size, 'sort': sort},
     );
-    return _parseList(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
+    return _parsePage(response.data, MusicAlbum.fromJson, '专辑列表格式不正确');
   }
 
-  Future<List<MusicArtist>> artists() async {
+  Future<MusicPagedResult<MusicArtist>> artists({
+    int page = 0,
+    int size = 100,
+    String sort = 'name,asc',
+  }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/artists',
+      queryParameters: {'page': page, 'size': size, 'sort': sort},
     );
-    return _parseList(response.data, MusicArtist.fromJson, '艺术家列表格式不正确');
+    return _parsePage(response.data, MusicArtist.fromJson, '艺术家列表格式不正确');
   }
 
   Future<List<MusicTrack>> favorites() async {
@@ -564,6 +579,41 @@ class MusicApi {
       );
     }
     return body;
+  }
+
+  MusicPagedResult<T> _parsePage<T>(
+    Map<String, dynamic>? body,
+    T Function(Map<String, dynamic>) mapper,
+    String errorMessage,
+  ) {
+    final data = parseEnvelope(body)['data'];
+    if (data is! Map) {
+      throw AppException(code: 'INVALID_RESPONSE', message: errorMessage);
+    }
+    final rawItems = data['items'];
+    if (rawItems is! List) {
+      throw AppException(code: 'INVALID_RESPONSE', message: errorMessage);
+    }
+    return MusicPagedResult<T>(
+      items:
+          rawItems
+              .whereType<Map>()
+              .map((item) => mapper(Map<String, dynamic>.from(item)))
+              .toList(),
+      page: _asIntOrNull(data['page']),
+      size: _asIntOrNull(data['size']),
+      totalElements: _asIntOrNull(data['totalElements']),
+    );
+  }
+
+  int _asIntOrNull(Object? value) {
+    if (value is int) {
+      return value;
+    }
+    if (value is num) {
+      return value.toInt();
+    }
+    return 0;
   }
 
   List<T> _parseList<T>(

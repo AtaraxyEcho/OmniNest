@@ -1,6 +1,7 @@
 package com.omninest.modules.music.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.dto.FilePurgeTaskDto;
@@ -113,22 +114,49 @@ public class MusicController {
         return ApiResponse.success(musicLibraryService.search(currentUserContext.requireCurrentUserId(), q));
     }
 
+    @Operation(summary = "分页查询曲目", description = "按白名单字段分页列出当前用户可见的曲目")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/tracks")
-    ApiResponse<List<MusicTrackDto>> tracks() {
-        return ApiResponse.success(musicLibraryService.tracks(currentUserContext.requireCurrentUserId()));
+    ApiResponse<PageResponse<MusicTrackDto>> tracks(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size,
+            @RequestParam(defaultValue = "title,asc") String sort) {
+        var result = musicLibraryService.tracks(currentUserContext.requireCurrentUserId(), page, size, sort);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()));
     }
 
+    @Operation(summary = "分页查询专辑", description = "按白名单字段分页列出至少包含一个活动曲目的专辑")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/albums")
-    ApiResponse<List<MusicAlbumDto>> albums() {
-        return ApiResponse.success(musicLibraryService.albums(currentUserContext.requireCurrentUserId()));
+    ApiResponse<PageResponse<MusicAlbumDto>> albums(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size,
+            @RequestParam(defaultValue = "updatedAt,desc") String sort) {
+        var result = musicLibraryService.albums(currentUserContext.requireCurrentUserId(), page, size, sort);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()));
     }
 
+    @Operation(summary = "分页查询艺术家", description = "按名称分页列出至少包含一个活动曲目的艺术家")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/artists")
-    ApiResponse<List<MusicArtistDto>> artists() {
-        return ApiResponse.success(musicLibraryService.artists(currentUserContext.requireCurrentUserId()));
+    ApiResponse<PageResponse<MusicArtistDto>> artists(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size,
+            @RequestParam(defaultValue = "name,asc") String sort) {
+        var result = musicLibraryService.artists(currentUserContext.requireCurrentUserId(), page, size, sort);
+        return ApiResponse.success(PageResponse.of(
+                result.getContent(),
+                result.getNumber(),
+                result.getSize(),
+                result.getTotalElements()));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")

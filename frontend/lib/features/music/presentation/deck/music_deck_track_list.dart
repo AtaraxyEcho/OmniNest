@@ -18,6 +18,8 @@ class MusicDeckTrackList extends StatefulWidget {
     this.emptyTitle,
     this.emptyMessage,
     this.scrollable = true,
+    this.onReachEnd,
+    this.footer,
     super.key,
   });
 
@@ -31,6 +33,8 @@ class MusicDeckTrackList extends StatefulWidget {
   final String? emptyTitle;
   final String? emptyMessage;
   final bool scrollable;
+  final VoidCallback? onReachEnd;
+  final Widget? footer;
 
   @override
   State<MusicDeckTrackList> createState() => _MusicDeckTrackListState();
@@ -40,9 +44,27 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
   final ScrollController _scrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
+
+  @override
   void dispose() {
+    _scrollController.removeListener(_handleScroll);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _handleScroll() {
+    final onReachEnd = widget.onReachEnd;
+    if (onReachEnd == null || !_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.maxScrollExtent - position.pixels <= 480) {
+      onReachEnd();
+    }
   }
 
   @override
@@ -62,6 +84,7 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
         ],
       );
     }
+    final footer = widget.footer;
     return Scrollbar(
       controller: _scrollController,
       interactive: true,
@@ -69,10 +92,13 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
         controller: _scrollController,
         primary: false,
         padding: const EdgeInsets.only(bottom: 108),
-        itemCount: widget.items.length,
+        itemCount: widget.items.length + (footer == null ? 0 : 1),
         itemExtent: 66,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         itemBuilder: (context, index) {
+          if (footer != null && index == widget.items.length) {
+            return SizedBox(height: 66, child: Center(child: footer));
+          }
           return _buildTrackRow(index);
         },
       ),

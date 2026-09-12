@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -149,7 +150,7 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     long countDistinctAlbumIdsByOwnerUserIdAndArtistId(@Param("ownerUserId") UUID ownerUserId, @Param("artistId") UUID artistId);
 
     /**
-     * 查询用户可见的所有音乐（个人 + 共享合并）。
+     * 分页查询用户可见的所有音乐（个人 + 共享合并），排序由调用方白名单约束。
      */
     @Query("""
             SELECT DISTINCT t FROM MusicTrack t
@@ -159,7 +160,9 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
                 t.ownerUserId = :userId
                 OR f.spaceType = :sharedType
             )
-            ORDER BY t.title ASC
             """)
-    List<MusicTrack> findTracksVisibleToUser(@Param("userId") UUID userId, @Param("sharedType") SpaceType sharedType);
+    Page<MusicTrack> findTracksVisibleToUser(
+            @Param("userId") UUID userId,
+            @Param("sharedType") SpaceType sharedType,
+            Pageable pageable);
 }

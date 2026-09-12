@@ -4,6 +4,8 @@ import com.omninest.modules.music.domain.MusicArtist;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -23,9 +25,10 @@ public interface MusicArtistRepository extends JpaRepository<MusicArtist, UUID> 
             join MusicTrack track on track.artistId = artist.id
             join FileNode file on track.fileNodeId = file.id
             where artist.ownerUserId = :ownerUserId and file.deleted = false
-            order by artist.name asc
             """)
-    List<MusicArtist> findActiveByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+    Page<MusicArtist> findActiveByOwnerUserId(
+            @Param("ownerUserId") UUID ownerUserId,
+            Pageable pageable);
 
     Optional<MusicArtist> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 

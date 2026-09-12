@@ -450,6 +450,19 @@ class _LibraryContent extends ConsumerWidget {
               onDelete: _deleteTrackHandler(context, ref),
               onEnqueue: _enqueueTrackHandler(context, ref),
               onAddToPlaylist: _addToPlaylistHandler(context, ref),
+              onReachEnd:
+                  center.hasMoreTracks
+                      ? () => ref
+                          .read(musicCenterControllerProvider.notifier)
+                          .loadMoreTracks()
+                      : null,
+              footer:
+                  center.tracksLoadingMore
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : null,
             ),
             MusicDeckLibraryView.albums => MusicDeckCoverGrid(
               items: _albumCoverItems(

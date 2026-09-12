@@ -43,7 +43,10 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -57,6 +60,11 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MusicLibraryService {
     private static final Duration PLAY_HISTORY_RETENTION = Duration.ofDays(7);
+
+    /** 曲库三端点允许的动态排序字段白名单。 */
+    private static final Set<String> TRACK_SORT_FIELDS = Set.of("title", "artistName", "updatedAt");
+    private static final Set<String> ALBUM_SORT_FIELDS = Set.of("updatedAt", "name");
+    private static final Set<String> ARTIST_SORT_FIELDS = Set.of("name");
 
     private final MusicTrackRepository trackRepository;
     private final MusicAlbumRepository albumRepository;
@@ -96,22 +104,51 @@ public class MusicLibraryService {
     }
 
     @Transactional(readOnly = true)
-    public List<MusicTrackDto> tracks(UUID ownerUserId) {
-        return toTrackDtos(ownerUserId, trackRepository.findTracksVisibleToUser(ownerUserId, SpaceType.SHARED));
+    public Page<MusicTrackDto> tracks(UUID ownerUserId, int page, int size, String sort) {
+        Page<MusicTrack> result = trackRepository.findTracksVisibleToUser(
+                ownerUserId,
+                SpaceType.SHARED,
+                PageRequest.of(page, size, resolveSort(sort, TRACK_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "title"))));
+        return new PageImpl<>(
+                toTrackDtos(ownerUserId, result.getContent()),
+                result.getPageable(),
+                result.getTotalElements());
     }
 
     @Transactional(readOnly = true)
-    public List<MusicAlbumDto> albums(UUID ownerUserId) {
-        return albumRepository.findActiveByOwnerUserId(ownerUserId).stream()
-                .map(this::toAlbumDto)
-                .toList();
+    public Page<MusicAlbumDto> albums(UUID ownerUserId, int page, int size, String sort) {
+        return albumRepository
+                .findActiveByOwnerUserId(
+                        ownerUserId,
+                        PageRequest.of(page, size, resolveSort(sort, ALBUM_SORT_FIELDS, Sort.by(Sort.Direction.DESC, "updatedAt"))))
+                .map(this::toAlbumDto);
     }
 
     @Transactional(readOnly = true)
-    public List<MusicArtistDto> artists(UUID ownerUserId) {
-        return artistRepository.findActiveByOwnerUserId(ownerUserId).stream()
-                .map(this::toArtistDto)
-                .toList();
+    public Page<MusicArtistDto> artists(UUID ownerUserId, int page, int size, String sort) {
+        return artistRepository
+                .findActiveByOwnerUserId(
+                        ownerUserId,
+                        PageRequest.of(page, size, resolveSort(sort, ARTIST_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "name"))))
+                .map(this::toArtistDto);
+    }
+
+    /**
+     * 将逗号分隔的排序参数解析为受白名单约束的 Sort，非法字段回退默认排序。
+     */
+    private Sort resolveSort(String sort, Set<String> allowedFields, Sort fallback) {
+        if (sort == null || sort.isBlank()) {
+            return fallback;
+        }
+        String[] parts = sort.split(",");
+        String field = parts[0].trim();
+        if (!allowedFields.contains(field)) {
+            return fallback;
+        }
+        Sort.Direction direction = parts.length > 1 && "desc".equalsIgnoreCase(parts[1].trim())
+                ? Sort.Direction.DESC
+                : Sort.Direction.ASC;
+        return Sort.by(direction, field);
     }
 
     @Transactional(readOnly = true)

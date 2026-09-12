@@ -94,13 +94,16 @@ class _StubMusicApi implements MusicApi {
   Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
 
   @override
-  Future<List<MusicTrack>> tracks() async => const [_track];
+  Future<MusicPagedResult<MusicTrack>> tracks({int page = 0, int size = 100, String sort = 'title,asc'}) async =>
+      MusicPagedResult<MusicTrack>(items: const [_track]);
 
   @override
-  Future<List<MusicAlbum>> albums() async => const <MusicAlbum>[];
+  Future<MusicPagedResult<MusicAlbum>> albums({int page = 0, int size = 100, String sort = 'updatedAt,desc'}) async =>
+      const MusicPagedResult<MusicAlbum>(items: <MusicAlbum>[], page: 0, size: 0, totalElements: 0);
 
   @override
-  Future<List<MusicArtist>> artists() async => const <MusicArtist>[];
+  Future<MusicPagedResult<MusicArtist>> artists({int page = 0, int size = 100, String sort = 'name,asc'}) async =>
+      const MusicPagedResult<MusicArtist>(items: <MusicArtist>[], page: 0, size: 0, totalElements: 0);
 
   @override
   Future<List<MusicPlaylist>> playlists() async => const [_playlist];

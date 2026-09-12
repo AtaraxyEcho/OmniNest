@@ -31,6 +31,18 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   String? _queuePersistenceErrorMessage;
   bool _controllerDisposed = false;
 
+  /// 曲库曲目分页大小，初始加载与增量加载保持一致。
+  static const int musicLibraryPageSize = 100;
+
+  /// 按已加载数量向上取整到分页大小，保证刷新请求完整覆盖已加载页。
+  static int _tracksPageSizeFor(int? loadedCount) {
+    if (loadedCount == null || loadedCount <= musicLibraryPageSize) {
+      return musicLibraryPageSize;
+    }
+    final pages = (loadedCount / musicLibraryPageSize).ceil();
+    return pages * musicLibraryPageSize;
+  }
+
   MusicApi get _api => ref.read(musicApiProvider);
 
   MusicCenterState? get _currentState => state.asData?.value;
@@ -106,6 +118,8 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       selectedPlaylistTracks: current?.selectedPlaylistTracks,
       selectedAlbum: current?.selectedAlbum,
       selectedArtist: current?.selectedArtist,
+      // 刷新时对齐已加载页数，避免增量加载过的曲目列表被重置回首页。
+      tracksPageSize: _tracksPageSizeFor(current?.tracks.length),
     );
     if (_controllerDisposed ||
         !ref.mounted ||
@@ -153,13 +167,22 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     List<MusicTrack>? selectedPlaylistTracks,
     MusicAlbum? selectedAlbum,
     MusicArtist? selectedArtist,
+    int tracksPageSize = musicLibraryPageSize,
   }) async {
     _partialErrors.clear();
     final results = await Future.wait([
       _safe(_api.dashboard, MusicDashboard.empty()),
-      _safe(_api.tracks, <MusicTrack>[]),
-      _safe(_api.albums, <MusicAlbum>[]),
-      _safe(_api.artists, <MusicArtist>[]),
+      _safe(() async {
+        final page = await _api.tracks(size: tracksPageSize);
+        return _LibraryTracksPage(
+          items: page.items,
+          totalElements: page.totalElements,
+          page: page.page,
+          size: page.size,
+        );
+      }, _LibraryTracksPage.empty()),
+      _safe(() async => (await _api.albums(size: 200)).items, <MusicAlbum>[]),
+      _safe(() async => (await _api.artists(size: 200)).items, <MusicArtist>[]),
       _safe(_api.playlists, <MusicPlaylist>[]),
       _safe(_api.recentItems, <MusicRecentEntry>[]),
       _safe(_api.lastPlayed, null),
@@ -167,7 +190,9 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       _safePlatformInfo(),
     ]);
     final dashboard = results[0] as MusicDashboard;
-    final tracks = results[1] as List<MusicTrack>;
+    final tracksPage = results[1] as _LibraryTracksPage;
+    final tracks = tracksPage.items;
+    final hasMoreTracks = tracksPage.hasMore;
     final albums = results[2] as List<MusicAlbum>;
     final artists = results[3] as List<MusicArtist>;
     final playlists = results[4] as List<MusicPlaylist>;
@@ -298,6 +323,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       albums: albums,
       artists: artists,
       playlists: playlists,
+      hasMoreTracks: hasMoreTracks,
       recentItems: recentItems,
       section: section,
       currentItem: selectedItem,
@@ -721,4 +747,27 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       _setError(describeUserFacingError(error).message);
     }
   }
+}
+
+/// 曲库加载内部使用的曲目分页载体，用于区分加载失败与空结果。
+class _LibraryTracksPage {
+  const _LibraryTracksPage({
+    required this.items,
+    required this.page,
+    required this.size,
+    required this.totalElements,
+  });
+
+  const _LibraryTracksPage.empty()
+    : items = const <MusicTrack>[],
+      page = 0,
+      size = MusicCenterController.musicLibraryPageSize,
+      totalElements = 0;
+
+  final List<MusicTrack> items;
+  final int page;
+  final int size;
+  final int totalElements;
+
+  bool get hasMore => size > 0 && (page + 1) * size < totalElements;
 }

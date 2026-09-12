@@ -880,3 +880,20 @@ class MusicPlatformStatus {
     );
   }
 }
+
+/// 音乐曲库分页结果，与后端 PageResponse 对齐。
+class MusicPagedResult<T> {
+  const MusicPagedResult({
+    required this.items,
+    this.page = 0,
+    this.size = 0,
+    this.totalElements = 0,
+  });
+
+  final List<T> items;
+  final int page;
+  final int size;
+  final int totalElements;
+
+  bool get hasMore => (page + 1) * size < totalElements;
+}

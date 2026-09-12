@@ -35,6 +35,8 @@ class MusicCenterState {
     this.selectedAlbumTracks = const [],
     this.selectedArtist,
     this.selectedArtistTracks = const [],
+    this.hasMoreTracks = false,
+    this.tracksLoadingMore = false,
     this.lastScanJob,
     this.errorMessage,
     this.neteaseUserInfo,
@@ -61,6 +63,8 @@ class MusicCenterState {
   final List<MusicTrack> selectedAlbumTracks;
   final MusicArtist? selectedArtist;
   final List<MusicTrack> selectedArtistTracks;
+  final bool hasMoreTracks;
+  final bool tracksLoadingMore;
   final MusicScanJob? lastScanJob;
   final String? errorMessage;
   final PlatformUserInfo? neteaseUserInfo;
@@ -98,6 +102,8 @@ class MusicCenterState {
     List<MusicTrack>? selectedAlbumTracks,
     MusicArtist? selectedArtist,
     List<MusicTrack>? selectedArtistTracks,
+    bool? hasMoreTracks,
+    bool? tracksLoadingMore,
     bool clearCurrentTrack = false,
     bool clearPlaybackPlan = false,
     bool clearSelectedPlaylist = false,
@@ -149,6 +155,8 @@ class MusicCenterState {
           clearSelectedArtist
               ? const []
               : selectedArtistTracks ?? this.selectedArtistTracks,
+      hasMoreTracks: hasMoreTracks ?? this.hasMoreTracks,
+      tracksLoadingMore: tracksLoadingMore ?? this.tracksLoadingMore,
       lastScanJob: lastScanJob ?? this.lastScanJob,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       neteaseUserInfo:

@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
@@ -29,7 +30,9 @@ import java.util.UUID;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.junit.jupiter.api.Test;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 
 /**
  * 本地音乐曲库服务测试。
@@ -134,6 +137,36 @@ class MusicLibraryServiceTest {
         var dto = libraryService.toTrackDto(track, false);
 
         assertThat(dto.coverUrl()).isEqualTo("https://minio.example/cover.jpg");
+    }
+
+    @Test
+    void tracksPagingFallsBackToDefaultSortForUnknownField() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setTitle("Night Drive");
+        var pageable = PageRequest.of(2, 50, Sort.by(Sort.Direction.ASC, "title"));
+        when(trackRepository.findTracksVisibleToUser(eq(OWNER_ID), eq(SpaceType.SHARED), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(track), pageable, 151));
+
+        var result = libraryService.tracks(OWNER_ID, 2, 50, "ownerUserId,desc");
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getTotalElements()).isEqualTo(151);
+        verify(trackRepository).findTracksVisibleToUser(OWNER_ID, SpaceType.SHARED, pageable);
+    }
+
+    @Test
+    void tracksPagingAppliesWhitelistedDescendingSort() {
+        var pageable = PageRequest.of(0, 100, Sort.by(Sort.Direction.DESC, "updatedAt"));
+        when(trackRepository.findTracksVisibleToUser(eq(OWNER_ID), eq(SpaceType.SHARED), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        var result = libraryService.tracks(OWNER_ID, 0, 100, "updatedAt,desc");
+
+        assertThat(result.getTotalElements()).isZero();
+        verify(trackRepository).findTracksVisibleToUser(OWNER_ID, SpaceType.SHARED, pageable);
     }
 
     @Test

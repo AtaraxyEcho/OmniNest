@@ -169,6 +169,81 @@ void main() {
     );
   });
 
+  test('loadMoreTracks appends the next page and stops at the end', () async {
+    final api = _FakeMusicApi();
+    for (var index = 0; index < 148; index++) {
+      api.libraryTracks.add(
+        MusicTrack(
+          id: 'bulk-$index',
+          fileNodeId: 'file-bulk-$index',
+          title: 'Bulk $index',
+          artistName: 'Bulk Artist',
+          albumTitle: 'Bulk Album',
+          format: 'mp3',
+          favorite: false,
+        ),
+      );
+    }
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    expect(state.tracks, hasLength(100));
+    expect(state.hasMoreTracks, isTrue);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .loadMoreTracks();
+    final next = container.read(musicCenterControllerProvider).asData!.value;
+
+    expect(next.tracks, hasLength(150));
+    expect(next.hasMoreTracks, isFalse);
+    expect(next.tracksLoadingMore, isFalse);
+    expect(api.tracksPageRequests, [0, 1]);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .loadMoreTracks();
+    final afterEnd =
+        container.read(musicCenterControllerProvider).asData!.value;
+    expect(afterEnd.tracks, hasLength(150));
+    expect(api.tracksPageRequests, [0, 1]);
+  });
+
+  test('refresh keeps incrementally loaded tracks', () async {
+    final api = _FakeMusicApi();
+    for (var index = 0; index < 148; index++) {
+      api.libraryTracks.add(
+        MusicTrack(
+          id: 'bulk-$index',
+          fileNodeId: 'file-bulk-$index',
+          title: 'Bulk $index',
+          artistName: 'Bulk Artist',
+          albumTitle: 'Bulk Album',
+          format: 'mp3',
+          favorite: false,
+        ),
+      );
+    }
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .loadMoreTracks();
+
+    await container.read(musicCenterControllerProvider.notifier).refresh();
+    final refreshed =
+        container.read(musicCenterControllerProvider).asData!.value;
+
+    expect(refreshed.tracks, hasLength(150));
+    expect(refreshed.hasMoreTracks, isFalse);
+  });
+
   test('empty music history does not select the first local track', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
@@ -684,14 +759,52 @@ class _FakeMusicApi implements MusicApi {
   @override
   Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
 
-  @override
-  Future<List<MusicTrack>> tracks() async => List.of(libraryTracks);
+  final tracksPageRequests = <int>[];
 
   @override
-  Future<List<MusicAlbum>> albums() async => const [];
+  Future<MusicPagedResult<MusicTrack>> tracks({
+    int page = 0,
+    int size = 100,
+    String sort = 'title,asc',
+  }) async {
+    tracksPageRequests.add(page);
+    final all = libraryTracks;
+    final start = page * size;
+    final items =
+        start >= all.length
+            ? const <MusicTrack>[]
+            : all.sublist(start, (start + size).clamp(0, all.length));
+    return MusicPagedResult<MusicTrack>(
+      items: items,
+      page: page,
+      size: size,
+      totalElements: all.length,
+    );
+  }
 
   @override
-  Future<List<MusicArtist>> artists() async => const [];
+  Future<MusicPagedResult<MusicAlbum>> albums({
+    int page = 0,
+    int size = 100,
+    String sort = 'updatedAt,desc',
+  }) async => const MusicPagedResult<MusicAlbum>(
+    items: <MusicAlbum>[],
+    page: 0,
+    size: 0,
+    totalElements: 0,
+  );
+
+  @override
+  Future<MusicPagedResult<MusicArtist>> artists({
+    int page = 0,
+    int size = 100,
+    String sort = 'name,asc',
+  }) async => const MusicPagedResult<MusicArtist>(
+    items: <MusicArtist>[],
+    page: 0,
+    size: 0,
+    totalElements: 0,
+  );
 
   @override
   Future<List<MusicPlaylist>> playlists() async => [playlist];

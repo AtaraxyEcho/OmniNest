@@ -2,6 +2,50 @@ part of 'music_controller.dart';
 
 /// 管理音乐曲库内容、歌单和详情导航命令。
 extension MusicLibraryContentCommands on MusicCenterController {
+  /// 增量加载下一页曲目，按 id 去重后追加并维护分页状态。
+  Future<void> loadMoreTracks() async {
+    final current = _currentState;
+    if (current == null ||
+        !current.hasMoreTracks ||
+        current.tracksLoadingMore) {
+      return;
+    }
+    _replaceState(current.copyWith(tracksLoadingMore: true));
+    final generation = _refreshGeneration;
+    try {
+      final page = current.tracks.length ~/ MusicCenterController.musicLibraryPageSize;
+      final result = await _api.tracks(
+        page: page,
+        size: MusicCenterController.musicLibraryPageSize,
+      );
+      if (_controllerDisposed || generation != _refreshGeneration) {
+        return;
+      }
+      final latest = _currentState;
+      if (latest == null) {
+        return;
+      }
+      final knownIds = latest.tracks.map((track) => track.id).toSet();
+      final merged = List<MusicTrack>.of(latest.tracks)
+        ..addAll(
+          result.items.where((track) => knownIds.add(track.id)),
+        );
+      _replaceState(
+        latest.copyWith(
+          tracks: List<MusicTrack>.unmodifiable(merged),
+          hasMoreTracks: result.hasMore,
+          tracksLoadingMore: false,
+        ),
+      );
+    } on Exception catch (error) {
+      final latest = _currentState;
+      if (latest != null && latest.tracksLoadingMore) {
+        _replaceState(latest.copyWith(tracksLoadingMore: false));
+      }
+      _setError(describeUserFacingError(error).message);
+    }
+  }
+
   /// 更新本地曲目元数据，并在需要时先上传自定义封面。
   Future<void> updateTrackMetadata({
     required String trackId,
