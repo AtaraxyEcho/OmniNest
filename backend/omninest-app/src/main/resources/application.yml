@@ -103,6 +103,10 @@ reader:
 omninest:
   runtime:
     role: ${OMNINEST_ROLE:api}
+  setup:
+    # 占位符桥接：.env 以 properties 形式导入时大写下划线键对 @ConfigurationProperties 宽松绑定不可靠，
+    # 经精确占位符同时覆盖 .env、真实环境变量与缺省值三种来源。
+    two-factor-required: ${OMNINEST_SETUP_TWOFACTORREQUIRED:false}
   task:
     outbox:
       enabled: true
