@@ -15,4 +15,10 @@ public class InitialSetupProperties {
     private String token;
     private boolean persistentStateEnabled = true;
     private String webBaseUrl;
+
+    /**
+     * 安装向导是否要求完成两步验证注册；对应环境变量 OMNINEST_SETUP_TWOFACTORREQUIRED。
+     * 公网部署保持默认 true，内网/开发环境显式设为 false。
+     */
+    private boolean twoFactorRequired = true;
 }

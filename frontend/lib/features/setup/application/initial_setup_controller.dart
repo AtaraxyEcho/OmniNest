@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/setup/data/initial_setup_api.dart';
 import 'package:omninest/features/setup/domain/initial_setup_status.dart';
 
@@ -23,7 +24,15 @@ class InitialSetupController extends AsyncNotifier<InitialSetupStatus> {
     state = await AsyncValue.guard(ref.read(initialSetupApiProvider).status);
   }
 
-  Future<void> createSuperAdmin({
+  /// 生成安装向导两步验证秘钥。
+  Future<TwoFactorSetupData> newTwoFactorSecret({String? username}) {
+    return ref
+        .read(initialSetupApiProvider)
+        .newTwoFactorSecret(username: username);
+  }
+
+  /// 创建超管；要求两步验证时返回一次性备份码，否则返回 null。
+  Future<List<String>?> createSuperAdmin({
     required String setupToken,
     required String username,
     required String displayName,
@@ -32,6 +41,8 @@ class InitialSetupController extends AsyncNotifier<InitialSetupStatus> {
     required String instanceName,
     required String defaultLocale,
     required String defaultTimezone,
+    String? totpSecret,
+    String? totpCode,
   }) {
     return ref
         .read(initialSetupApiProvider)
@@ -44,6 +55,8 @@ class InitialSetupController extends AsyncNotifier<InitialSetupStatus> {
           instanceName: instanceName,
           defaultLocale: defaultLocale,
           defaultTimezone: defaultTimezone,
+          totpSecret: totpSecret,
+          totpCode: totpCode,
         );
   }
 }

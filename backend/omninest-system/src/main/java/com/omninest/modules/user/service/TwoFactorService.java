@@ -116,6 +116,47 @@ public class TwoFactorService {
     }
 
     /**
+     * 为安装向导生成全新秘钥（无用户上下文，仅返回秘钥与扫码 URI）。
+     *
+     * @param username 向导中输入的超管用户名，用于认证器展示
+     * @return 秘钥与 otpauth URI
+     */
+    @Transactional(readOnly = true)
+    public TwoFactorSetupResponse newSetupSecret(String username) {
+        String account = username == null || username.isBlank() ? "admin" : username.trim();
+        String secret = TotpUtil.generateSecret();
+        return new TwoFactorSetupResponse(secret, TotpUtil.otpauthUri(OTPAUTH_ISSUER, account, secret));
+    }
+
+    /**
+     * 为刚创建的用户直接落成已确认的两步验证凭据（安装向导专用，跳过待确认状态）。
+     *
+     * @param userId 用户标识
+     * @param secret 安装向导生成的 Base32 秘钥
+     * @param code 认证器验证码
+     * @return 一次性明文备份码列表
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public List<String> provisionForNewUser(UUID userId, String secret, String code) {
+        if (secret == null || secret.isBlank()) {
+            throw new BusinessException(ErrorCode.TWO_FACTOR_NOT_CONFIGURED, "请先生成两步验证秘钥");
+        }
+        long step = TotpUtil.matchingStep(secret, code, Instant.now(), TotpUtil.DEFAULT_SKEW, Long.MIN_VALUE);
+        if (step == TotpUtil.NO_MATCH) {
+            throw new BusinessException(ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误");
+        }
+        AuthTotpCredential credential = totpCredentialRepository.findByUserId(userId)
+                .orElseGet(AuthTotpCredential::new);
+        credential.setUserId(userId);
+        credential.setSecret(secret);
+        credential.setEnabled(true);
+        credential.setConfirmedAt(Instant.now());
+        credential.setLastUsedStep(step);
+        totpCredentialRepository.save(credential);
+        return resetBackupCodes(userId);
+    }
+
+    /**
      * 判断用户是否已确认启用两步验证。
      *
      * @param userId 用户标识

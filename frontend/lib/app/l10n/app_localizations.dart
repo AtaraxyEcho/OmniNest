@@ -590,6 +590,42 @@ abstract class AppLocalizations {
   /// **'The super administrator password must be between 8 and 24 characters'**
   String get setupPasswordLength;
 
+  /// No description provided for @setupTwoFactorSection.
+  ///
+  /// In en, this message translates to:
+  /// **'Two-Factor Verification'**
+  String get setupTwoFactorSection;
+
+  /// No description provided for @setupTwoFactorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'This deployment requires two-factor verification for the super administrator: scan the QR code with an authenticator app and enter the 6-digit code to finish setup.'**
+  String get setupTwoFactorHint;
+
+  /// No description provided for @setupTwoFactorGenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate QR code'**
+  String get setupTwoFactorGenerate;
+
+  /// No description provided for @setupTwoFactorRegenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Regenerate secret'**
+  String get setupTwoFactorRegenerate;
+
+  /// No description provided for @setupTwoFactorGenerateFirst.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate the two-factor QR code and enter the verification code first'**
+  String get setupTwoFactorGenerateFirst;
+
+  /// No description provided for @setupTwoFactorGoLogin.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup codes saved, continue to sign in'**
+  String get setupTwoFactorGoLogin;
+
   /// No description provided for @setupPasswordMismatch.
   ///
   /// In en, this message translates to:

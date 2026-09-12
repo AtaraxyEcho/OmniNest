@@ -142,6 +142,8 @@ public final class ConfigDefinitionCatalog {
                 "config.security.clamav.host", "ClamAV 服务主机", false, 255));
         add(values, number("clamav.port", "3310", "security", ConfigSurface.GENERAL,
                 "config.security.clamav.port", "ClamAV 服务端口", 1, 65_535));
+        add(values, string("auth.two-factor.required-roles", "SUPER_ADMIN,ADMIN", "auth", ConfigSurface.GENERAL,
+                "config.auth.twoFactorRequiredRoles", "强制开启两步验证的角色编码列表（逗号分隔，留空表示全员自愿）", false, 200));
         add(values, bool("weather.enabled", true, "weather", ConfigSurface.INTEGRATION,
                 "config.weather.enabled", "是否启用天气服务"));
 

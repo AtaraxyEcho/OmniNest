@@ -35,6 +35,12 @@ public record InitialSetupRequest(
         String defaultLocale,
         @Schema(description = "默认时区", example = "Asia/Shanghai")
         @Size(max = 64, message = "默认时区长度不能超过 64 个字符")
-        String defaultTimezone
+        String defaultTimezone,
+        @Schema(description = "两步验证秘钥（安装向导要求两步验证时必填）")
+        @Size(max = 64, message = "两步验证秘钥长度不合法")
+        String totpSecret,
+        @Schema(description = "两步验证确认码（安装向导要求两步验证时必填）")
+        @Size(min = 6, max = 6, message = "两步验证码必须是 6 位")
+        String totpCode
 ) {
 }

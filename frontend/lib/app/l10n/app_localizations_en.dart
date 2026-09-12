@@ -271,6 +271,26 @@ class AppLocalizationsEn extends AppLocalizations {
       'The super administrator password must be between 8 and 24 characters';
 
   @override
+  String get setupTwoFactorSection => 'Two-Factor Verification';
+
+  @override
+  String get setupTwoFactorHint =>
+      'This deployment requires two-factor verification for the super administrator: scan the QR code with an authenticator app and enter the 6-digit code to finish setup.';
+
+  @override
+  String get setupTwoFactorGenerate => 'Generate QR code';
+
+  @override
+  String get setupTwoFactorRegenerate => 'Regenerate secret';
+
+  @override
+  String get setupTwoFactorGenerateFirst =>
+      'Generate the two-factor QR code and enter the verification code first';
+
+  @override
+  String get setupTwoFactorGoLogin => 'Backup codes saved, continue to sign in';
+
+  @override
   String get setupPasswordMismatch => 'Passwords do not match';
 
   @override

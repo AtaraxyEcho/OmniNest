@@ -2,8 +2,15 @@ package com.omninest.modules.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.isNull;
+
+import com.omninest.common.config.RuntimeConfigCache;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.Roles;
+import com.omninest.modules.configcenter.domain.ConfigEntry;
+import com.omninest.modules.configcenter.repository.ConfigEntryRepository;
 import com.omninest.modules.user.config.InitialSetupProperties;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
@@ -13,6 +20,7 @@ import com.omninest.modules.user.dto.InitialSetupRequest;
 import com.omninest.modules.user.repository.AuthRoleRepository;
 import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.repository.SystemInstanceRepository;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,13 +43,19 @@ class InitialSetupServiceTest {
     private final AuthRoleRepository authRoleRepository = Mockito.mock(AuthRoleRepository.class);
     private final SystemInstanceRepository systemInstanceRepository = Mockito.mock(SystemInstanceRepository.class);
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final TwoFactorService twoFactorService = Mockito.mock(TwoFactorService.class);
+    private final ConfigEntryRepository configEntryRepository = Mockito.mock(ConfigEntryRepository.class);
+    private final RuntimeConfigCache runtimeConfigCache = Mockito.mock(RuntimeConfigCache.class);
     private final InitialSetupService service = new InitialSetupService(
             properties,
             authUserRepository,
             authRoleRepository,
             systemInstanceRepository,
             passwordEncoder,
-            new PasswordPolicy()
+            new PasswordPolicy(),
+            twoFactorService,
+            configEntryRepository,
+            runtimeConfigCache
     );
 
     @BeforeEach
@@ -49,6 +63,9 @@ class InitialSetupServiceTest {
         properties.setEnabled(true);
         properties.setToken(SETUP_TOKEN);
         properties.setPersistentStateEnabled(true);
+        properties.setTwoFactorRequired(false);
+        Mockito.when(configEntryRepository.findByConfigKey(TwoFactorPolicyService.REQUIRED_ROLES_KEY))
+                .thenReturn(Optional.of(Mockito.mock(ConfigEntry.class)));
     }
 
     @Test
@@ -114,7 +131,9 @@ class InitialSetupServiceTest {
                         "ChangeMe123!",
                         " 家庭中心 ",
                         "zh-cn",
-                        "Asia/Shanghai"
+                        "Asia/Shanghai",
+                        null,
+                        null
                 )
         );
 
@@ -202,12 +221,117 @@ class InitialSetupServiceTest {
         Mockito.verify(authUserRepository, Mockito.never()).saveAndFlush(Mockito.any());
     }
 
+    @Test
+    void createsSuperAdminWithTwoFactorAndSeedsDefaultPolicy() {
+        properties.setTwoFactorRequired(true);
+        SystemInstance systemInstance = requiredInstance();
+        AuthRole role = superAdminRole();
+        Mockito.when(systemInstanceRepository.findByIdForUpdate(SystemInstance.SINGLETON_ID))
+                .thenReturn(Optional.of(systemInstance));
+        Mockito.when(authRoleRepository.findByCodeForUpdate(Roles.SUPER_ADMIN)).thenReturn(Optional.of(role));
+        Mockito.when(authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN)).thenReturn(false);
+        Mockito.when(authUserRepository.existsByUsername("root")).thenReturn(false);
+        UUID createdUserId = UUID.randomUUID();
+        Mockito.when(authUserRepository.saveAndFlush(any())).thenAnswer(invocation -> {
+            AuthUser user = invocation.getArgument(0);
+            user.setId(createdUserId);
+            return user;
+        });
+        Mockito.when(twoFactorService.provisionForNewUser(createdUserId, "SECRET32", "123456"))
+                .thenReturn(List.of("ABCD-2345"));
+        ConfigEntry entry = Mockito.mock(ConfigEntry.class);
+
+        Mockito.when(configEntryRepository.findByConfigKey(TwoFactorPolicyService.REQUIRED_ROLES_KEY))
+                .thenReturn(Optional.of(entry));
+
+        var backupCodes = service.createSuperAdmin(
+                SETUP_TOKEN,
+                new InitialSetupRequest(
+                        "root", null, null, "ChangeMe123!", null, null, null,
+                        "SECRET32", "123456"
+                )
+        );
+
+        assertThat(backupCodes).containsExactly("ABCD-2345");
+        Mockito.verify(twoFactorService).provisionForNewUser(createdUserId, "SECRET32", "123456");
+        Mockito.verify(entry).setConfigValue("SUPER_ADMIN,ADMIN");
+        Mockito.verify(configEntryRepository).save(entry);
+        Mockito.verify(runtimeConfigCache).evict(TwoFactorPolicyService.REQUIRED_ROLES_KEY);
+    }
+
+    @Test
+    void rejectsSetupWithoutTotpWhenTwoFactorRequired() {
+        properties.setTwoFactorRequired(true);
+        Mockito.when(systemInstanceRepository.findByIdForUpdate(SystemInstance.SINGLETON_ID))
+                .thenReturn(Optional.of(requiredInstance()));
+        Mockito.when(authRoleRepository.findByCodeForUpdate(Roles.SUPER_ADMIN))
+                .thenReturn(Optional.of(superAdminRole()));
+        Mockito.when(authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN)).thenReturn(false);
+        Mockito.when(authUserRepository.existsByUsername("root")).thenReturn(false);
+
+        assertThatThrownBy(() -> service.createSuperAdmin(
+                SETUP_TOKEN,
+                request("ChangeMe123!")
+        )).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("安装向导要求完成两步验证注册");
+
+        Mockito.verify(authUserRepository, Mockito.never()).saveAndFlush(any());
+        Mockito.verify(twoFactorService, Mockito.never())
+                .provisionForNewUser(any(), isNull(), isNull());
+    }
+
+    @Test
+    void seedsVoluntaryPolicyWhenTwoFactorDisabled() {
+        SystemInstance systemInstance = requiredInstance();
+        Mockito.when(systemInstanceRepository.findByIdForUpdate(SystemInstance.SINGLETON_ID))
+                .thenReturn(Optional.of(systemInstance));
+        Mockito.when(authRoleRepository.findByCodeForUpdate(Roles.SUPER_ADMIN))
+                .thenReturn(Optional.of(superAdminRole()));
+        Mockito.when(authUserRepository.existsByRoles_Code(Roles.SUPER_ADMIN)).thenReturn(false);
+        Mockito.when(authUserRepository.existsByUsername("root")).thenReturn(false);
+        Mockito.when(authUserRepository.saveAndFlush(any())).thenAnswer(invocation -> {
+            AuthUser user = invocation.getArgument(0);
+            user.setId(UUID.randomUUID());
+            return user;
+        });
+        ConfigEntry entry = Mockito.mock(ConfigEntry.class);
+        Mockito.when(configEntryRepository.findByConfigKey(TwoFactorPolicyService.REQUIRED_ROLES_KEY))
+                .thenReturn(Optional.of(entry));
+
+        var backupCodes = service.createSuperAdmin(SETUP_TOKEN, request("ChangeMe123!"));
+
+        assertThat(backupCodes).isNull();
+        Mockito.verify(twoFactorService, Mockito.never()).provisionForNewUser(any(), any(), any());
+        Mockito.verify(entry).setConfigValue("");
+        Mockito.verify(runtimeConfigCache).evict(TwoFactorPolicyService.REQUIRED_ROLES_KEY);
+    }
+
+    @Test
+    void statusReportsTwoFactorRequirement() {
+        properties.setTwoFactorRequired(true);
+        Mockito.when(systemInstanceRepository.findById(SystemInstance.SINGLETON_ID))
+                .thenReturn(Optional.of(requiredInstance()));
+
+        var status = service.status();
+
+        assertThat(status.twoFactorRequired()).isTrue();
+    }
+
+    private AuthRole superAdminRole() {
+        AuthRole role = new AuthRole();
+        role.setId(UUID.randomUUID());
+        role.setCode(Roles.SUPER_ADMIN);
+        return role;
+    }
+
     private InitialSetupRequest request(String password) {
         return new InitialSetupRequest(
                 "root",
                 null,
                 null,
                 password,
+                null,
+                null,
                 null,
                 null,
                 null

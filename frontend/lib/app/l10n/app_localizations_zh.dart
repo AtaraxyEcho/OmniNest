@@ -266,6 +266,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get setupPasswordLength => '超级管理员密码长度必须在 8 到 24 个字符之间';
 
   @override
+  String get setupTwoFactorSection => '两步验证';
+
+  @override
+  String get setupTwoFactorHint =>
+      '当前部署要求为超级管理员开启两步验证：使用验证器 App 扫码后输入 6 位验证码完成安装。';
+
+  @override
+  String get setupTwoFactorGenerate => '生成二维码';
+
+  @override
+  String get setupTwoFactorRegenerate => '重新生成秘钥';
+
+  @override
+  String get setupTwoFactorGenerateFirst => '请先生成两步验证二维码并输入验证码';
+
+  @override
+  String get setupTwoFactorGoLogin => '备份码已保存，前往登录';
+
+  @override
   String get setupPasswordMismatch => '两次输入的密码不一致';
 
   @override

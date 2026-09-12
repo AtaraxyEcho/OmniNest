@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
@@ -8,10 +9,12 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/widgets/app_dropdown.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 class InitialSetupPage extends ConsumerStatefulWidget {
   const InitialSetupPage({super.key});
@@ -62,6 +65,12 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
   bool _obscurePassword = true;
   bool _submitting = false;
   String? _errorMessage;
+  bool _twoFactorRequired = false;
+  bool _totpLoading = false;
+  bool _codesSaved = false;
+  TwoFactorSetupData? _totpSetup;
+  List<String>? _pendingBackupCodes;
+  final _totpCodeController = TextEditingController();
 
   @override
   void dispose() {
@@ -72,7 +81,40 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _totpCodeController.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchTotpSecret() async {
+    if (_totpLoading) return;
+    setState(() {
+      _totpLoading = true;
+      _errorMessage = null;
+    });
+    try {
+      final setup = await ref
+          .read(initialSetupProvider.notifier)
+          .newTwoFactorSecret(username: _usernameController.text.trim());
+      if (!mounted) return;
+      setState(() {
+        _totpSetup = setup;
+        _totpCodeController.clear();
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _errorMessage = error.toString());
+    } finally {
+      if (mounted) setState(() => _totpLoading = false);
+    }
+  }
+
+  Future<void> _finishBackupCodes() async {
+    setState(() => _submitting = true);
+    try {
+      await ref.read(initialSetupProvider.notifier).refresh();
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   Future<void> _submit() async {
@@ -86,12 +128,16 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
     final instanceName = _instanceNameController.text.trim();
     final defaultLocale = _defaultLocale;
     final defaultTimezone = _defaultTimezone;
+    if (_twoFactorRequired && _totpSetup == null) {
+      setState(() => _errorMessage = l10n.setupTwoFactorGenerateFirst);
+      return;
+    }
     setState(() {
       _submitting = true;
       _errorMessage = null;
     });
     try {
-      await ref
+      final backupCodes = await ref
           .read(initialSetupProvider.notifier)
           .createSuperAdmin(
             setupToken: setupToken,
@@ -102,8 +148,16 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
             instanceName: instanceName,
             defaultLocale: defaultLocale,
             defaultTimezone: defaultTimezone,
+            totpSecret: _twoFactorRequired ? _totpSetup!.secret : null,
+            totpCode:
+                _twoFactorRequired ? _totpCodeController.text.trim() : null,
           );
       if (!mounted) return;
+      if (backupCodes != null && backupCodes.isNotEmpty) {
+        // 启用两步验证：不自动登录（验证码已被注册消费），确认保存备份码后经登录页进入。
+        setState(() => _pendingBackupCodes = backupCodes);
+        return;
+      }
       await ref
           .read(authSessionProvider.notifier)
           .signInWithCredentials(username: username, password: password);
@@ -144,6 +198,11 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                       onRetry: ref.read(initialSetupProvider.notifier).refresh,
                     );
                   }
+                  final pendingCodes = _pendingBackupCodes;
+                  if (pendingCodes != null) {
+                    return _backupCodesPanel(context, pendingCodes);
+                  }
+                  _twoFactorRequired = status.twoFactorRequired;
                   return _buildForm(context);
                 },
               ),
@@ -214,6 +273,165 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 安装向导两步验证分区：生成秘钥（QR/手输）+ 确认码输入。
+  List<Widget> _twoFactorSection(AppLocalizations l10n) {
+    final setup = _totpSetup;
+    return [
+      const SizedBox(height: 6),
+      _sectionHeader(
+        context,
+        l10n.setupTwoFactorSection,
+        Icons.phonelink_lock_outlined,
+      ),
+      const SizedBox(height: 12),
+      Text(
+        l10n.setupTwoFactorHint,
+        style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+      const SizedBox(height: 14),
+      if (setup == null)
+        FilledButton.tonalIcon(
+          key: const Key('setupTwoFactorGenerateButton'),
+          onPressed: _totpLoading ? null : _fetchTotpSecret,
+          icon:
+              _totpLoading
+                  ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                  : const Icon(Icons.qr_code_rounded),
+          label: Text(l10n.setupTwoFactorGenerate),
+        )
+      else ...[
+        Center(
+          child: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: QrImageView(
+              key: const Key('setupTwoFactorQr'),
+              data: setup.otpauthUri,
+              size: 168,
+              backgroundColor: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          l10n.twoFactorEnrollScanHint,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: () {
+            Clipboard.setData(ClipboardData(text: setup.secret));
+            if (mounted) {
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(SnackBar(content: Text(l10n.twoFactorCopied)));
+            }
+          },
+          icon: const Icon(Icons.copy_rounded, size: 18),
+          label: Text(l10n.twoFactorEnrollSecretLabel),
+        ),
+        const SizedBox(height: 8),
+        TextButton.icon(
+          onPressed: _totpLoading ? null : _fetchTotpSecret,
+          icon: const Icon(Icons.refresh_rounded, size: 18),
+          label: Text(l10n.setupTwoFactorRegenerate),
+        ),
+        const SizedBox(height: 10),
+        TextFormField(
+          key: const Key('setupTwoFactorCodeField'),
+          controller: _totpCodeController,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: InputDecoration(
+            labelText: l10n.loginTwoFactorCodeLabel,
+            hintText: l10n.loginTwoFactorCodeHint,
+            prefixIcon: const Icon(Icons.pin_outlined),
+          ),
+          validator: (value) {
+            if (value == null || value.trim().length != 6) {
+              return l10n.loginTwoFactorCodeHint;
+            }
+            return null;
+          },
+        ),
+      ],
+    ];
+  }
+
+  /// 备份码确认面板：安装启用两步验证后的一次性备份码展示与保存确认。
+  Widget _backupCodesPanel(BuildContext context, List<String> codes) {
+    final l10n = AppLocalizations.of(context);
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 480),
+          child: WorkbenchPanel(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  l10n.twoFactorEnrollBackupTitle,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  l10n.twoFactorEnrollBackupHint,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [for (final code in codes) SelectableText(code)],
+                ),
+                const SizedBox(height: 14),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: codes.join('\n')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(l10n.twoFactorCopied)),
+                    );
+                  },
+                  icon: const Icon(Icons.copy_all_rounded, size: 18),
+                  label: Text(l10n.twoFactorCopyCodes),
+                ),
+                const SizedBox(height: 10),
+                CheckboxListTile(
+                  key: const Key('setupBackupCodesSavedCheck'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: _codesSaved,
+                  onChanged:
+                      (value) => setState(() => _codesSaved = value ?? false),
+                  title: Text(l10n.twoFactorEnrollBackupSavedCheck),
+                ),
+                const SizedBox(height: 12),
+                FilledButton.icon(
+                  key: const Key('setupBackupCodesDoneButton'),
+                  onPressed: _codesSaved ? _finishBackupCodes : null,
+                  icon: const Icon(Icons.login_rounded),
+                  label: Text(l10n.setupTwoFactorGoLogin),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -394,6 +612,7 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                             : null,
                 onFieldSubmitted: (_) => _submitting ? null : _submit(),
               ),
+              if (_twoFactorRequired) ..._twoFactorSection(l10n),
               if (_errorMessage != null) ...[
                 const SizedBox(height: 14),
                 Text(

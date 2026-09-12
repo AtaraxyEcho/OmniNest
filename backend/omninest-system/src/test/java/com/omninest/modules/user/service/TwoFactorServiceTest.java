@@ -207,6 +207,48 @@ class TwoFactorServiceTest {
     }
 
     @Test
+    @DisplayName("新用户直落凭据：验证码正确时直接启用并返回备份码")
+    void provisionForNewUserConfirmsCredentialDirectly() {
+        String secret = TotpUtil.generateSecret();
+        when(totpCredentialRepository.findByUserId(userId)).thenReturn(Optional.empty());
+        when(totpCredentialRepository.save(any(AuthTotpCredential.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(backupCodeRepository.saveAll(anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        List<String> backupCodes = service.provisionForNewUser(
+                userId, secret, TotpUtil.currentCode(secret, Instant.now()));
+
+        assertThat(backupCodes).hasSize(TwoFactorService.BACKUP_CODE_COUNT);
+        ArgumentCaptor<AuthTotpCredential> captor = ArgumentCaptor.forClass(AuthTotpCredential.class);
+        verify(totpCredentialRepository).save(captor.capture());
+        assertThat(captor.getValue().isEnabled()).isTrue();
+        assertThat(captor.getValue().getConfirmedAt()).isNotNull();
+        assertThat(captor.getValue().getLastUsedStep()).isNotNull();
+        assertThat(captor.getValue().getSecret()).isEqualTo(secret);
+    }
+
+    @Test
+    @DisplayName("新用户直落凭据：验证码错误被拒绝")
+    void provisionForNewUserRejectsWrongCode() {
+        String secret = TotpUtil.generateSecret();
+        String futureCode = TotpUtil.currentCode(secret, Instant.now().plusSeconds(600));
+
+        assertThatThrownBy(() -> service.provisionForNewUser(userId, secret, futureCode))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("两步验证码错误");
+        verify(totpCredentialRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("新用户直落凭据：缺少秘钥提示先生成")
+    void provisionForNewUserRejectsBlankSecret() {
+        assertThatThrownBy(() -> service.provisionForNewUser(userId, " ", "123456"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("请先生成两步验证秘钥");
+    }
+
+    @Test
     @DisplayName("关闭：密码复核通过后清除全部凭据与备份码")
     void disableRemovesAllCredentials() {
         service.disable(userId, "secret123");
