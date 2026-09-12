@@ -3480,6 +3480,33 @@
   "musicQualityExhigh": "Very High",
   "musicQualityHigher": "High",
   "musicQualityStandard": "Standard",
+  "musicPlatformLoginTitle": "Platform Accounts",
+  "musicPlatformNeteaseName": "Netease Cloud Music",
+  "musicPlatformNeteaseQrHint": "Scan the QR code with the Netease Cloud Music app to log in",
+  "musicPlatformQrGenerating": "Generating QR code...",
+  "musicPlatformQrAction": "Scan QR Login",
+  "musicPlatformQqName": "QQ Music",
+  "musicPlatformQqCookieRequired": "Please paste your QQ Music cookie",
+  "musicPlatformQqVerifyFailed": "Verification failed: {error}",
+  "@musicPlatformQqVerifyFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "musicPlatformQqCookieHint": "Log in at y.qq.com in your browser, then copy the full cookie and paste it below.",
+  "musicPlatformQqCookieKeyHint": "Must include qm_keyst or qqmusic_key for playback.",
+  "musicPlatformQqCookiePlaceholder": "Paste cookie here...",
+  "musicPlatformQqVerifying": "Verifying...",
+  "musicPlatformQqVerifyAction": "Verify & Save",
+  "musicPlatformAnonymousUser": "User",
+  "musicPlatformVipBadge": "VIP",
+  "musicPlatformUserId": "ID: {userId}",
+  "@musicPlatformUserId": {
+    "placeholders": {
+      "userId": {}
+    }
+  },
+  "musicPlatformLogout": "Logout",
   "musicQueueTitle": "Play Queue",
   "musicQueueEmpty": "Play queue is empty",
   "musicQueueClear": "Clear Queue",

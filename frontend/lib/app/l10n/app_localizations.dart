@@ -14579,6 +14579,108 @@ abstract class AppLocalizations {
   /// **'Standard'**
   String get musicQualityStandard;
 
+  /// No description provided for @musicPlatformLoginTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Platform Accounts'**
+  String get musicPlatformLoginTitle;
+
+  /// No description provided for @musicPlatformNeteaseName.
+  ///
+  /// In en, this message translates to:
+  /// **'Netease Cloud Music'**
+  String get musicPlatformNeteaseName;
+
+  /// No description provided for @musicPlatformNeteaseQrHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan the QR code with the Netease Cloud Music app to log in'**
+  String get musicPlatformNeteaseQrHint;
+
+  /// No description provided for @musicPlatformQrGenerating.
+  ///
+  /// In en, this message translates to:
+  /// **'Generating QR code...'**
+  String get musicPlatformQrGenerating;
+
+  /// No description provided for @musicPlatformQrAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan QR Login'**
+  String get musicPlatformQrAction;
+
+  /// No description provided for @musicPlatformQqName.
+  ///
+  /// In en, this message translates to:
+  /// **'QQ Music'**
+  String get musicPlatformQqName;
+
+  /// No description provided for @musicPlatformQqCookieRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Please paste your QQ Music cookie'**
+  String get musicPlatformQqCookieRequired;
+
+  /// No description provided for @musicPlatformQqVerifyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Verification failed: {error}'**
+  String musicPlatformQqVerifyFailed(Object error);
+
+  /// No description provided for @musicPlatformQqCookieHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Log in at y.qq.com in your browser, then copy the full cookie and paste it below.'**
+  String get musicPlatformQqCookieHint;
+
+  /// No description provided for @musicPlatformQqCookieKeyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Must include qm_keyst or qqmusic_key for playback.'**
+  String get musicPlatformQqCookieKeyHint;
+
+  /// No description provided for @musicPlatformQqCookiePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste cookie here...'**
+  String get musicPlatformQqCookiePlaceholder;
+
+  /// No description provided for @musicPlatformQqVerifying.
+  ///
+  /// In en, this message translates to:
+  /// **'Verifying...'**
+  String get musicPlatformQqVerifying;
+
+  /// No description provided for @musicPlatformQqVerifyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Verify & Save'**
+  String get musicPlatformQqVerifyAction;
+
+  /// No description provided for @musicPlatformAnonymousUser.
+  ///
+  /// In en, this message translates to:
+  /// **'User'**
+  String get musicPlatformAnonymousUser;
+
+  /// No description provided for @musicPlatformVipBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'VIP'**
+  String get musicPlatformVipBadge;
+
+  /// No description provided for @musicPlatformUserId.
+  ///
+  /// In en, this message translates to:
+  /// **'ID: {userId}'**
+  String musicPlatformUserId(Object userId);
+
+  /// No description provided for @musicPlatformLogout.
+  ///
+  /// In en, this message translates to:
+  /// **'Logout'**
+  String get musicPlatformLogout;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

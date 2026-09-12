@@ -69,7 +69,7 @@ class PlatformLoginSheet extends ConsumerWidget {
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Platform Accounts',
+                        AppLocalizations.of(context).musicPlatformLoginTitle,
                         style: TextStyle(
                           color: colors.onSurface,
                           fontSize: AppTypography.titleLarge,
@@ -156,7 +156,7 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
     return _PlatformCard(
       icon: Icons.cloud_circle_outlined,
       iconColor: const Color(0xFFEC4141),
-      title: 'Netease Cloud Music',
+      title: AppLocalizations.of(context).musicPlatformNeteaseName,
       child:
           user != null
               ? _LoggedInInfo(
@@ -171,7 +171,7 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Scan QR code with Netease Cloud Music app to log in',
+                    AppLocalizations.of(context).musicPlatformNeteaseQrHint,
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
                       fontSize: AppTypography.bodyMedium,
@@ -202,7 +202,13 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
                               )
                               : const Icon(Icons.qr_code_rounded, size: 18),
                       label: Text(
-                        _loadingQr ? 'Generating...' : 'Scan QR Login',
+                        _loadingQr
+                            ? AppLocalizations.of(
+                              context,
+                            ).musicPlatformQrGenerating
+                            : AppLocalizations.of(
+                              context,
+                            ).musicPlatformQrAction,
                         style: const TextStyle(
                           fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w600,
@@ -240,9 +246,10 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
   }
 
   Future<void> _verifyAndSave() async {
+    final l10n = AppLocalizations.of(context);
     final cookie = _cookieController.text.trim();
     if (cookie.isEmpty) {
-      setState(() => _error = 'Please paste your QQ Music cookie');
+      setState(() => _error = l10n.musicPlatformQqCookieRequired);
       return;
     }
     setState(() {
@@ -260,7 +267,7 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
       if (!mounted) {
         return;
       }
-      setState(() => _error = 'Verification failed: ${e.toString()}');
+      setState(() => _error = l10n.musicPlatformQqVerifyFailed(e.toString()));
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
@@ -273,7 +280,7 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
     return _PlatformCard(
       icon: Icons.headphones_outlined,
       iconColor: const Color(0xFF31C27C),
-      title: 'QQ Music',
+      title: AppLocalizations.of(context).musicPlatformQqName,
       child:
           user != null
               ? _LoggedInInfo(
@@ -288,7 +295,7 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Log in at y.qq.com in your browser, then copy the full cookie and paste below.',
+                    AppLocalizations.of(context).musicPlatformQqCookieHint,
                     style: TextStyle(
                       color: colors.onSurfaceVariant,
                       fontSize: AppTypography.bodyMedium,
@@ -296,7 +303,7 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Must include qm_keyst or qqmusic_key for playback.',
+                    AppLocalizations.of(context).musicPlatformQqCookieKeyHint,
                     style: TextStyle(
                       color: colors.onSurfaceVariant.withValues(alpha: 0.65),
                       fontSize: AppTypography.labelSmall,
@@ -313,7 +320,10 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                       fontFamilyFallback: AppTypography.monoFamilyFallback,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Paste cookie here...',
+                      hintText:
+                          AppLocalizations.of(
+                            context,
+                          ).musicPlatformQqCookiePlaceholder,
                       hintStyle: TextStyle(
                         color: colors.onSurfaceVariant.withValues(alpha: 0.5),
                       ),
@@ -377,7 +387,13 @@ class _QqMusicLoginSectionState extends ConsumerState<_QqMusicLoginSection> {
                               )
                               : const Icon(Icons.check_rounded, size: 18),
                       label: Text(
-                        _verifying ? 'Verifying...' : 'Verify & Save',
+                        _verifying
+                            ? AppLocalizations.of(
+                              context,
+                            ).musicPlatformQqVerifying
+                            : AppLocalizations.of(
+                              context,
+                            ).musicPlatformQqVerifyAction,
                         style: const TextStyle(
                           fontSize: AppTypography.bodyLarge,
                           fontWeight: FontWeight.w600,
@@ -488,7 +504,11 @@ class _LoggedInInfo extends StatelessWidget {
                 children: [
                   Flexible(
                     child: Text(
-                      user.nickname.isEmpty ? 'User' : user.nickname,
+                      user.nickname.isEmpty
+                          ? AppLocalizations.of(
+                            context,
+                          ).musicPlatformAnonymousUser
+                          : user.nickname,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -510,7 +530,7 @@ class _LoggedInInfo extends StatelessWidget {
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        'VIP',
+                        AppLocalizations.of(context).musicPlatformVipBadge,
                         style: TextStyle(
                           color: accentColor,
                           fontSize: AppTypography.labelSmall,
@@ -523,7 +543,7 @@ class _LoggedInInfo extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                'ID: ${user.userId}',
+                AppLocalizations.of(context).musicPlatformUserId(user.userId),
                 style: TextStyle(
                   color: colors.onSurfaceVariant.withValues(alpha: 0.6),
                   fontSize: AppTypography.bodySmall,
@@ -539,8 +559,8 @@ class _LoggedInInfo extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
           onPressed: onLogout,
-          child: const Text(
-            'Logout',
+          child: Text(
+            AppLocalizations.of(context).musicPlatformLogout,
             style: TextStyle(
               fontSize: AppTypography.bodyMedium,
               fontWeight: FontWeight.w600,

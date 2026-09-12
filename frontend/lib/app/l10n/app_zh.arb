@@ -3354,6 +3354,33 @@
   "musicQualityExhigh": "极高",
   "musicQualityHigher": "较高",
   "musicQualityStandard": "标准",
+  "musicPlatformLoginTitle": "平台账号",
+  "musicPlatformNeteaseName": "网易云音乐",
+  "musicPlatformNeteaseQrHint": "使用网易云音乐 App 扫码登录",
+  "musicPlatformQrGenerating": "正在生成二维码…",
+  "musicPlatformQrAction": "扫码登录",
+  "musicPlatformQqName": "QQ 音乐",
+  "musicPlatformQqCookieRequired": "请粘贴 QQ 音乐 Cookie",
+  "musicPlatformQqVerifyFailed": "验证失败：{error}",
+  "@musicPlatformQqVerifyFailed": {
+    "placeholders": {
+      "error": {}
+    }
+  },
+  "musicPlatformQqCookieHint": "请先在浏览器登录 y.qq.com，再复制完整 Cookie 粘贴到下方。",
+  "musicPlatformQqCookieKeyHint": "必须包含 qm_keyst 或 qqmusic_key 才能播放。",
+  "musicPlatformQqCookiePlaceholder": "在此粘贴 Cookie…",
+  "musicPlatformQqVerifying": "正在验证…",
+  "musicPlatformQqVerifyAction": "验证并保存",
+  "musicPlatformAnonymousUser": "用户",
+  "musicPlatformVipBadge": "VIP",
+  "musicPlatformUserId": "ID: {userId}",
+  "@musicPlatformUserId": {
+    "placeholders": {
+      "userId": {}
+    }
+  },
+  "musicPlatformLogout": "退出登录",
   "musicQueueTitle": "播放队列",
   "musicQueueEmpty": "播放队列为空",
   "musicQueueClear": "清空队列",

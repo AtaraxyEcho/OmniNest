@@ -7708,6 +7708,63 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicQualityStandard => '标准';
 
   @override
+  String get musicPlatformLoginTitle => '平台账号';
+
+  @override
+  String get musicPlatformNeteaseName => '网易云音乐';
+
+  @override
+  String get musicPlatformNeteaseQrHint => '使用网易云音乐 App 扫码登录';
+
+  @override
+  String get musicPlatformQrGenerating => '正在生成二维码…';
+
+  @override
+  String get musicPlatformQrAction => '扫码登录';
+
+  @override
+  String get musicPlatformQqName => 'QQ 音乐';
+
+  @override
+  String get musicPlatformQqCookieRequired => '请粘贴 QQ 音乐 Cookie';
+
+  @override
+  String musicPlatformQqVerifyFailed(Object error) {
+    return '验证失败：$error';
+  }
+
+  @override
+  String get musicPlatformQqCookieHint =>
+      '请先在浏览器登录 y.qq.com，再复制完整 Cookie 粘贴到下方。';
+
+  @override
+  String get musicPlatformQqCookieKeyHint =>
+      '必须包含 qm_keyst 或 qqmusic_key 才能播放。';
+
+  @override
+  String get musicPlatformQqCookiePlaceholder => '在此粘贴 Cookie…';
+
+  @override
+  String get musicPlatformQqVerifying => '正在验证…';
+
+  @override
+  String get musicPlatformQqVerifyAction => '验证并保存';
+
+  @override
+  String get musicPlatformAnonymousUser => '用户';
+
+  @override
+  String get musicPlatformVipBadge => 'VIP';
+
+  @override
+  String musicPlatformUserId(Object userId) {
+    return 'ID: $userId';
+  }
+
+  @override
+  String get musicPlatformLogout => '退出登录';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

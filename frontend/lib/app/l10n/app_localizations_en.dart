@@ -7941,6 +7941,65 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicQualityStandard => 'Standard';
 
   @override
+  String get musicPlatformLoginTitle => 'Platform Accounts';
+
+  @override
+  String get musicPlatformNeteaseName => 'Netease Cloud Music';
+
+  @override
+  String get musicPlatformNeteaseQrHint =>
+      'Scan the QR code with the Netease Cloud Music app to log in';
+
+  @override
+  String get musicPlatformQrGenerating => 'Generating QR code...';
+
+  @override
+  String get musicPlatformQrAction => 'Scan QR Login';
+
+  @override
+  String get musicPlatformQqName => 'QQ Music';
+
+  @override
+  String get musicPlatformQqCookieRequired =>
+      'Please paste your QQ Music cookie';
+
+  @override
+  String musicPlatformQqVerifyFailed(Object error) {
+    return 'Verification failed: $error';
+  }
+
+  @override
+  String get musicPlatformQqCookieHint =>
+      'Log in at y.qq.com in your browser, then copy the full cookie and paste it below.';
+
+  @override
+  String get musicPlatformQqCookieKeyHint =>
+      'Must include qm_keyst or qqmusic_key for playback.';
+
+  @override
+  String get musicPlatformQqCookiePlaceholder => 'Paste cookie here...';
+
+  @override
+  String get musicPlatformQqVerifying => 'Verifying...';
+
+  @override
+  String get musicPlatformQqVerifyAction => 'Verify & Save';
+
+  @override
+  String get musicPlatformAnonymousUser => 'User';
+
+  @override
+  String get musicPlatformVipBadge => 'VIP';
+
+  @override
+  String musicPlatformUserId(Object userId) {
+    return 'ID: $userId';
+  }
+
+  @override
+  String get musicPlatformLogout => 'Logout';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override
