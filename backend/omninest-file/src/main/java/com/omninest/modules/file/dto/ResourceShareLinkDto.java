@@ -13,6 +13,8 @@ import java.util.UUID;
  * @param expiresAt 过期时间
  * @param maxAccessCount 最大访问次数
  * @param accessCount 已访问次数
+ * @param includeLocation 公开访问是否包含位置（仅 PHOTO_* 解释）
+ * @param originalQuality 公开访问是否签发原图（仅 PHOTO_* 解释）
  * @param createdAt 创建时间
  * @author OmniNest
  */
@@ -24,6 +26,8 @@ public record ResourceShareLinkDto(
         Instant expiresAt,
         Integer maxAccessCount,
         int accessCount,
+        boolean includeLocation,
+        boolean originalQuality,
         Instant createdAt
 ) {
 }

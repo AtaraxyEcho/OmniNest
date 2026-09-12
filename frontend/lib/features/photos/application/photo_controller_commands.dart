@@ -200,11 +200,15 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
     String? password,
     DateTime? expiresAt,
     int? maxAccessCount,
+    bool includeLocation = true,
+    bool originalQuality = true,
   }) => _repo.createPhotoShare(
     photoId,
     password: password,
     expiresAt: expiresAt,
     maxAccessCount: maxAccessCount,
+    includeLocation: includeLocation,
+    originalQuality: originalQuality,
   );
 
   /// 列出单张照片分享链接

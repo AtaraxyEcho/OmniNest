@@ -169,6 +169,34 @@ public class ResourceShareLinkService {
             String password,
             Instant expiresAt,
             Integer maxAccessCount) {
+        return create(
+                ownerUserId,
+                resourceType,
+                resourceId,
+                password,
+                expiresAt,
+                maxAccessCount,
+                true,
+                true
+        );
+    }
+
+    /**
+     * 创建资源分享链接，可附带照片分享策略。
+     *
+     * @param includeLocation 公开访问是否包含位置（非照片类型忽略）
+     * @param originalQuality 公开访问是否签发原图（非照片类型忽略）
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public ResourceShareLinkDto create(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            String password,
+            Instant expiresAt,
+            Integer maxAccessCount,
+            boolean includeLocation,
+            boolean originalQuality) {
         String rawToken = UUID.randomUUID().toString().replace("-", "");
         ShareLink share = new ShareLink();
         share.setOwnerUserId(ownerUserId);
@@ -177,6 +205,8 @@ public class ResourceShareLinkService {
         share.setTokenHash(sha256(rawToken));
         share.setExpiresAt(expiresAt);
         share.setMaxAccessCount(maxAccessCount);
+        share.setIncludeLocation(includeLocation);
+        share.setOriginalQuality(originalQuality);
         if (password != null && !password.isBlank()) {
             share.setPasswordHash(passwordEncoder.encode(password));
         }
@@ -284,6 +314,8 @@ public class ResourceShareLinkService {
                 share.getExpiresAt(),
                 share.getMaxAccessCount(),
                 share.getAccessCount(),
+                share.isIncludeLocation(),
+                share.isOriginalQuality(),
                 share.getCreatedAt()
         );
     }

@@ -251,11 +251,15 @@ class PhotoRepositoryImpl implements PhotoRepository {
     String? password,
     DateTime? expiresAt,
     int? maxAccessCount,
+    bool includeLocation = true,
+    bool originalQuality = true,
   }) => _api.createPhotoShare(
     photoId,
     password: password,
     expiresAt: expiresAt,
     maxAccessCount: maxAccessCount,
+    includeLocation: includeLocation,
+    originalQuality: originalQuality,
   );
 
   @override

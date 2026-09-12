@@ -2264,6 +2264,8 @@ CREATE TABLE "omni"."share_links" (
   "expires_at" timestamptz(6),
   "max_access_count" int4,
   "access_count" int4 NOT NULL DEFAULT 0,
+  "include_location" bool NOT NULL DEFAULT true,
+  "original_quality" bool NOT NULL DEFAULT true,
   "disabled_at" timestamptz(6),
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
@@ -2279,6 +2281,8 @@ COMMENT ON COLUMN "omni"."share_links"."password_hash" IS '访问密码哈希';
 COMMENT ON COLUMN "omni"."share_links"."expires_at" IS '过期时间';
 COMMENT ON COLUMN "omni"."share_links"."max_access_count" IS '最大访问次数';
 COMMENT ON COLUMN "omni"."share_links"."access_count" IS '已访问次数';
+COMMENT ON COLUMN "omni"."share_links"."include_location" IS '公开访问是否包含位置信息';
+COMMENT ON COLUMN "omni"."share_links"."original_quality" IS '公开访问是否签发原图地址';
 COMMENT ON COLUMN "omni"."share_links"."disabled_at" IS '禁用时间';
 COMMENT ON COLUMN "omni"."share_links"."created_at" IS '创建时间';
 COMMENT ON COLUMN "omni"."share_links"."updated_at" IS '更新时间';

@@ -508,6 +508,8 @@ class PhotoApi {
     String? password,
     DateTime? expiresAt,
     int? maxAccessCount,
+    bool includeLocation = true,
+    bool originalQuality = true,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/photos/$photoId/share',
@@ -515,6 +517,8 @@ class PhotoApi {
         if (password != null && password.isNotEmpty) 'password': password,
         if (expiresAt != null) 'expiresAt': expiresAt.toUtc().toIso8601String(),
         if (maxAccessCount != null) 'maxAccessCount': maxAccessCount,
+        'includeLocation': includeLocation,
+        'originalQuality': originalQuality,
       },
     );
     return PhotoShareLink.fromJson(parseData(response.data));

@@ -46,6 +46,12 @@ public class ShareLink {
     @Column(name = "access_count", nullable = false)
     private int accessCount;
 
+    @Column(name = "include_location", nullable = false)
+    private boolean includeLocation = true;
+
+    @Column(name = "original_quality", nullable = false)
+    private boolean originalQuality = true;
+
     @Column(name = "disabled_at")
     private Instant disabledAt;
 

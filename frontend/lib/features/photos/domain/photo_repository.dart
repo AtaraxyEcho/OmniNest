@@ -204,6 +204,8 @@ abstract interface class PhotoRepository {
     String? password,
     DateTime? expiresAt,
     int? maxAccessCount,
+    bool includeLocation = true,
+    bool originalQuality = true,
   });
 
   /// 列出单张照片分享链接

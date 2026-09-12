@@ -367,13 +367,17 @@ public final class PhotoDtos {
             Instant expiresAt,
             Integer maxAccessCount,
             int accessCount,
+            boolean includeLocation,
+            boolean originalQuality,
             Instant createdAt
     ) {}
 
     public record CreateAlbumShareRequest(
             String password,
             Instant expiresAt,
-            Integer maxAccessCount
+            Integer maxAccessCount,
+            Boolean includeLocation,
+            Boolean originalQuality
     ) {}
 
     public record PhotoSharedAlbumDto(

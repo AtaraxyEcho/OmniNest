@@ -203,7 +203,9 @@ public class PhotoAlbumService {
                 albumId,
                 request.password(),
                 request.expiresAt(),
-                request.maxAccessCount()
+                request.maxAccessCount(),
+                request.includeLocation() == null || request.includeLocation(),
+                request.originalQuality() == null || request.originalQuality()
         ));
     }
 
@@ -239,7 +241,9 @@ public class PhotoAlbumService {
                 photoId,
                 request.password(),
                 request.expiresAt(),
-                request.maxAccessCount()
+                request.maxAccessCount(),
+                request.includeLocation() == null || request.includeLocation(),
+                request.originalQuality() == null || request.originalQuality()
         ));
     }
 
@@ -277,10 +281,57 @@ public class PhotoAlbumService {
                 rawToken, sessionToken, "PHOTO_ITEM");
         PhotoItem photo = photoItemRepository.findById(link.resourceId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
-        return libraryService.listPhotosByIds(photo.getOwnerUserId(), List.of(photo.getId()))
-                .stream()
-                .findFirst()
-                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "图片不存在"));
+        // 使用详情路径以支持原图签发，再按分享策略裁剪。
+        PhotoItemDto dto = libraryService.photo(photo.getOwnerUserId(), photo.getId());
+        return applySharePolicy(dto, link.includeLocation(), link.originalQuality());
+    }
+
+    /**
+     * 按分享策略裁剪公开照片 DTO：关闭位置时剥离 GPS；关闭原图时不签发 sourceUrl。
+     */
+    static PhotoItemDto applySharePolicy(
+            PhotoItemDto dto,
+            boolean includeLocation,
+            boolean originalQuality
+    ) {
+        if (includeLocation && originalQuality) {
+            return dto;
+        }
+        return new PhotoItemDto(
+                dto.id(),
+                dto.fileNodeId(),
+                dto.title(),
+                dto.description(),
+                dto.width(),
+                dto.height(),
+                dto.orientation(),
+                dto.dateTaken(),
+                dto.cameraMake(),
+                dto.cameraModel(),
+                dto.aperture(),
+                dto.shutterSpeed(),
+                dto.iso(),
+                dto.focalLength(),
+                dto.flash(),
+                dto.whiteBalance(),
+                dto.meteringMode(),
+                dto.lensModel(),
+                includeLocation ? dto.gpsLatitude() : null,
+                includeLocation ? dto.gpsLongitude() : null,
+                includeLocation ? dto.gpsLocation() : null,
+                dto.format(),
+                dto.fileSize(),
+                dto.coverUrl(),
+                originalQuality ? dto.sourceUrl() : null,
+                dto.metadataStatus(),
+                dto.favorite(),
+                dto.createdAt(),
+                dto.tags(),
+                dto.providerMetadata(),
+                dto.contentAnalysis(),
+                dto.motionState(),
+                originalQuality ? dto.motionVideoUrl() : null
+        );
     }
 
     private PhotoItem requirePhoto(UUID ownerUserId, UUID photoId) {
@@ -318,7 +369,10 @@ public class PhotoAlbumService {
         int safeSize = Math.min(Math.max(1, size), 100);
         List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(
                 albumId, PageRequest.of(safePage, safeSize));
-        List<PhotoItemDto> photos = libraryService.listPhotosByIds(album.getOwnerUserId(), photoIds);
+        List<PhotoItemDto> photos = libraryService.listPhotosByIds(album.getOwnerUserId(), photoIds)
+                .stream()
+                .map(photo -> applySharePolicy(photo, link.includeLocation(), link.originalQuality()))
+                .toList();
         return new PhotoSharedAlbumDto(
                 album.getName(), album.getDescription(), photos,
                 safePage, safeSize, albumItemRepository.countByAlbumId(albumId));
@@ -333,6 +387,8 @@ public class PhotoAlbumService {
                 share.expiresAt(),
                 share.maxAccessCount(),
                 share.accessCount(),
+                share.includeLocation(),
+                share.originalQuality(),
                 share.createdAt()
         );
     }

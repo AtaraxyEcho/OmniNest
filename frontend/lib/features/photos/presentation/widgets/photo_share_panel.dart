@@ -98,10 +98,13 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     });
     try {
       final controller = ref.read(photoCenterControllerProvider.notifier);
+      await _revokeActivePhotoShares(controller, photoId);
       final link = await controller.createPhotoShare(
         photoId,
         password: _password,
         expiresAt: resolveShareExpiry(_expiryOption),
+        includeLocation: _includeLocation,
+        originalQuality: _originalQuality,
       );
       if (!mounted || photoId != widget.photo.id) return;
       setState(() {
@@ -115,6 +118,23 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         _creating = false;
         _error = describeShareError(error);
       });
+    }
+  }
+
+  /// 撤销该照片仍有效的分享链，避免每次打开面板堆积僵尸链接。
+  Future<void> _revokeActivePhotoShares(
+    PhotoCenterController controller,
+    String photoId,
+  ) async {
+    try {
+      final existing = await controller.listPhotoShares(photoId);
+      for (final share in existing) {
+        if (!share.isExpired && !share.isExhausted) {
+          await controller.revokeAlbumShare(share.id);
+        }
+      }
+    } on Exception {
+      // 撤销失败不阻断创建；管理入口仍可手动撤销。
     }
   }
 
@@ -140,13 +160,15 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       _error = null;
     });
     try {
-      final link = await ref
-          .read(photoCenterControllerProvider.notifier)
-          .createPhotoShare(
-            photoId,
-            password: _password,
-            expiresAt: resolveShareExpiry(_expiryOption),
-          );
+      final controller = ref.read(photoCenterControllerProvider.notifier);
+      await _revokeActivePhotoShares(controller, photoId);
+      final link = await controller.createPhotoShare(
+        photoId,
+        password: _password,
+        expiresAt: resolveShareExpiry(_expiryOption),
+        includeLocation: _includeLocation,
+        originalQuality: _originalQuality,
+      );
       if (!mounted || photoId != widget.photo.id) return;
       setState(() {
         _shareUrl = _buildShareUrl(link.token);
@@ -444,6 +466,8 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                 widget.photo.id,
                 password: password,
                 expiresAt: resolveShareExpiry(expiryOption),
+                includeLocation: _includeLocation,
+                originalQuality: _originalQuality,
               );
           if (!mounted) return;
           setState(() {

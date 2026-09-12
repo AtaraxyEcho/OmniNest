@@ -11,6 +11,8 @@ class PhotoShareLink {
     required this.createdAt,
     this.expiresAt,
     this.maxAccessCount,
+    this.includeLocation = true,
+    this.originalQuality = true,
   });
 
   final String id;
@@ -21,6 +23,12 @@ class PhotoShareLink {
   final int? maxAccessCount;
   final int accessCount;
   final DateTime? createdAt;
+
+  /// 公开访问是否包含位置。
+  final bool includeLocation;
+
+  /// 公开访问是否签发原图。
+  final bool originalQuality;
 
   factory PhotoShareLink.fromJson(Map<String, dynamic> json) {
     return PhotoShareLink(
@@ -35,6 +43,8 @@ class PhotoShareLink {
               : (json['maxAccessCount'] as num).toInt(),
       accessCount:
           json['accessCount'] is num ? (json['accessCount'] as num).toInt() : 0,
+      includeLocation: json['includeLocation'] != false,
+      originalQuality: json['originalQuality'] != false,
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal(),
     );
