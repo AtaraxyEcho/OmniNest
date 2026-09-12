@@ -122,6 +122,41 @@ void registerMusicQueueTests() {
     );
   });
 
+  test(
+    'clearing the queue empties items, pauses and keeps current item',
+    () async {
+      final api = _FakeMusicApi();
+      final container = ProviderContainer.test(
+        overrides: [
+          musicApiProvider.overrideWithValue(api),
+          musicPlaybackQueueOwnerIdProvider.overrideWith(
+            (ref) async => 'user-a',
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await container.read(musicCenterControllerProvider.future);
+
+      await container
+          .read(musicCenterControllerProvider.notifier)
+          .playItems(<MusicPlayableItem>[
+            MusicPlayableItem.local(api.track),
+            MusicPlayableItem.local(api.secondTrack),
+          ], startIndex: 0);
+      container.read(musicCenterControllerProvider.notifier).clearQueue();
+      final state = container.read(musicCenterControllerProvider).asData!.value;
+
+      expect(state.playbackItems, isEmpty);
+      expect(state.playbackIndex, -1);
+      expect(state.isPlaying, isFalse);
+      expect(state.currentItem?.playableKey, 'local:track-1');
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+
+      expect(api.savedPlaybackQueues, isNotEmpty);
+      expect(api.savedPlaybackQueues.last.items, isEmpty);
+    },
+  );
+
   test('playback queue persistence keeps at most one hundred items', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(

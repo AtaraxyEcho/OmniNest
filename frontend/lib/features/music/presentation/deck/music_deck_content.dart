@@ -171,6 +171,7 @@ class _HomeContent extends ConsumerWidget {
                         .playItems(recent, startIndex: index),
                 onToggleFavorite: _favoriteHandler(ref),
                 onDelete: _deleteTrackHandler(context, ref),
+                onEnqueue: _enqueueTrackHandler(context, ref),
               ),
             ),
           const SizedBox(height: 28),
@@ -425,6 +426,7 @@ class _LibraryContent extends ConsumerWidget {
               },
               onToggleFavorite: _favoriteHandler(ref),
               onDelete: _deleteTrackHandler(context, ref),
+              onEnqueue: _enqueueTrackHandler(context, ref),
             ),
             MusicDeckLibraryView.albums => MusicDeckCoverGrid(
               items: _albumCoverItems(
@@ -536,6 +538,7 @@ class _TrackSection extends ConsumerWidget {
                     .playItems(items, startIndex: index),
             onToggleFavorite: _favoriteHandler(ref),
             onDelete: _deleteTrackHandler(context, ref),
+            onEnqueue: _enqueueTrackHandler(context, ref),
           ),
         ),
       ],
@@ -687,6 +690,7 @@ class _CollectionDetail extends ConsumerWidget {
                             .playItems(items, startIndex: index),
                     onToggleFavorite: _favoriteHandler(ref),
                     onDelete: _deleteTrackHandler(context, ref),
+                    onEnqueue: _enqueueTrackHandler(context, ref),
                   ),
         ),
       ],

@@ -7651,6 +7651,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicQueueEmpty => '播放队列为空';
 
   @override
+  String get musicQueueClear => '清空队列';
+
+  @override
+  String get musicPlayNext => '下一首播放';
+
+  @override
+  String get musicQueueReorderHint => '拖动调整播放顺序';
+
+  @override
+  String get musicPlayNextAdded => '已加入播放队列';
+
+  @override
   String get musicShuffle => '随机播放';
 
   @override

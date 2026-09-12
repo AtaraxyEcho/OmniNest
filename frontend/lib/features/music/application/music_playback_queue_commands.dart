@@ -78,6 +78,21 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     _queuePersistence.schedule(nextState);
   }
 
+  /// 清空播放队列并停止播放，当前曲目仅保留展示。
+  void clearQueue() {
+    final current = _currentState;
+    if (current == null || current.playbackItems.isEmpty) {
+      return;
+    }
+    final nextState = current.copyWith(
+      playbackItems: const <MusicPlayableItem>[],
+      playbackIndex: -1,
+      isPlaying: false,
+    );
+    _replaceState(nextState);
+    _queuePersistence.schedule(nextState);
+  }
+
   /// 调整统一播放队列顺序。
   void reorderQueue(int oldIndex, int newIndex) {
     final current = _currentState;

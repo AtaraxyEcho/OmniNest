@@ -7884,6 +7884,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicQueueEmpty => 'Play queue is empty';
 
   @override
+  String get musicQueueClear => 'Clear Queue';
+
+  @override
+  String get musicPlayNext => 'Play Next';
+
+  @override
+  String get musicQueueReorderHint => 'Drag to reorder the queue';
+
+  @override
+  String get musicPlayNextAdded => 'Added to play queue';
+
+  @override
   String get musicShuffle => 'Shuffle';
 
   @override

@@ -682,6 +682,19 @@ ValueChanged<MusicPlayableItem> _favoriteHandler(WidgetRef ref) {
   };
 }
 
+ValueChanged<MusicPlayableItem> _enqueueTrackHandler(
+  BuildContext context,
+  WidgetRef ref,
+) {
+  return (item) {
+    ref.read(musicCenterControllerProvider.notifier).enqueue(item);
+    _showPlaylistMessage(
+      context,
+      AppLocalizations.of(context).musicPlayNextAdded,
+    );
+  };
+}
+
 ValueChanged<MusicPlayableItem> _deleteTrackHandler(
   BuildContext context,
   WidgetRef ref,

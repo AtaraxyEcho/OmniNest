@@ -14471,6 +14471,30 @@ abstract class AppLocalizations {
   /// **'Play queue is empty'**
   String get musicQueueEmpty;
 
+  /// No description provided for @musicQueueClear.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear Queue'**
+  String get musicQueueClear;
+
+  /// No description provided for @musicPlayNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Play Next'**
+  String get musicPlayNext;
+
+  /// No description provided for @musicQueueReorderHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag to reorder the queue'**
+  String get musicQueueReorderHint;
+
+  /// No description provided for @musicPlayNextAdded.
+  ///
+  /// In en, this message translates to:
+  /// **'Added to play queue'**
+  String get musicPlayNextAdded;
+
   /// No description provided for @musicShuffle.
   ///
   /// In en, this message translates to:

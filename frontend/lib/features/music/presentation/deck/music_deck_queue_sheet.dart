@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
+import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 
 /// 显示当前播放队列的响应式抽屉。
@@ -43,6 +44,18 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                   ),
                 ),
                 const Spacer(),
+                TextButton.icon(
+                  onPressed:
+                      items.isEmpty
+                          ? null
+                          : () =>
+                              ref
+                                  .read(musicCenterControllerProvider.notifier)
+                                  .clearQueue(),
+                  icon: const Icon(Icons.delete_sweep_rounded, size: 18),
+                  label: Text(AppLocalizations.of(context).musicQueueClear),
+                ),
+                const SizedBox(width: 4),
                 IconButton(
                   tooltip: AppLocalizations.of(context).musicClose,
                   onPressed: () => Navigator.of(context).pop(),
@@ -62,52 +75,150 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                           ),
                         ),
                       )
-                      : ListView.builder(
-                        itemCount: items.length,
+                      : ReorderableListView.builder(
                         itemExtent: 58,
+                        padding: const EdgeInsets.only(bottom: 12),
+                        buildDefaultDragHandles: false,
+                        onReorderItem: (oldIndex, adjustedIndex) {
+                          // reorderQueue 沿用旧版 onReorder 的原始索引约定，
+                          // 后移时把已调整索引补回一位。
+                          final rawIndex =
+                              adjustedIndex >= oldIndex
+                                  ? adjustedIndex + 1
+                                  : adjustedIndex;
+                          ref
+                              .read(musicCenterControllerProvider.notifier)
+                              .reorderQueue(oldIndex, rawIndex);
+                        },
+                        itemCount: items.length,
                         itemBuilder: (context, index) {
                           final item = items[index];
                           final selected =
                               item.playableKey ==
                               music?.currentItem?.playableKey;
-                          return ListTile(
+                          return _MusicQueueRow(
+                            key: ValueKey<String>(item.playableKey),
+                            item: item,
+                            index: index,
                             selected: selected,
-                            selectedTileColor: context.musicColors.selectedBg,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(6),
-                            ),
                             onTap: () {
                               ref
                                   .read(musicCenterControllerProvider.notifier)
                                   .playItems(items, startIndex: index);
                             },
-                            leading: SizedBox.square(
-                              dimension: 40,
-                              child: MusicDeckArtwork(
-                                title: item.track.title,
-                                imageUrl: item.track.coverUrl,
-                              ),
-                            ),
-                            title: Text(
-                              item.track.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text(
-                              item.track.artistName,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            trailing:
-                                selected
-                                    ? const Icon(Icons.graphic_eq_rounded)
-                                    : null,
+                            onDismissed:
+                                () => ref
+                                    .read(
+                                      musicCenterControllerProvider.notifier,
+                                    )
+                                    .removeFromQueue(item.playableKey),
                           );
                         },
                       ),
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _MusicQueueRow extends StatelessWidget {
+  const _MusicQueueRow({
+    required this.item,
+    required this.index,
+    required this.selected,
+    required this.onTap,
+    required this.onDismissed,
+    super.key,
+  });
+
+  final MusicPlayableItem item;
+  final int index;
+  final bool selected;
+  final VoidCallback onTap;
+  final VoidCallback onDismissed;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Dismissible(
+      key: ValueKey<String>('queue-dismiss-${item.playableKey}'),
+      direction: DismissDirection.endToStart,
+      background: _MusicQueueDismissBackground(
+        color: Theme.of(context).colorScheme.errorContainer,
+        iconColor: Theme.of(context).colorScheme.onErrorContainer,
+      ),
+      onDismissed: (_) => onDismissed(),
+      child: ListTile(
+        selected: selected,
+        selectedTileColor: context.musicColors.selectedBg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        onTap: onTap,
+        leading: SizedBox.square(
+          dimension: 40,
+          child: MusicDeckArtwork(
+            title: item.track.title,
+            imageUrl: item.track.coverUrl,
+          ),
+        ),
+        title: Text(
+          item.track.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          item.track.artistName,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (selected)
+              Icon(
+                Icons.graphic_eq_rounded,
+                color: context.musicColors.primary,
+              ),
+            ReorderableDragStartListener(
+              index: index,
+              child: Semantics(
+                label: l10n.musicQueueReorderHint,
+                button: true,
+                child: Icon(
+                  Icons.drag_indicator_rounded,
+                  size: 20,
+                  color: context.musicColors.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MusicQueueDismissBackground extends StatelessWidget {
+  const _MusicQueueDismissBackground({
+    required this.color,
+    required this.iconColor,
+  });
+
+  final Color color;
+  final Color iconColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerRight,
+      child: Container(
+        width: 64,
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Icon(Icons.delete_outline_rounded, color: iconColor),
       ),
     );
   }

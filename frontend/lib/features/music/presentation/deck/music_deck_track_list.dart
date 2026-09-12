@@ -13,6 +13,7 @@ class MusicDeckTrackList extends StatefulWidget {
     this.currentPlayableKey,
     this.onToggleFavorite,
     this.onDelete,
+    this.onEnqueue,
     this.emptyTitle,
     this.emptyMessage,
     this.scrollable = true,
@@ -24,6 +25,7 @@ class MusicDeckTrackList extends StatefulWidget {
   final ValueChanged<int> onPlay;
   final ValueChanged<MusicPlayableItem>? onToggleFavorite;
   final ValueChanged<MusicPlayableItem>? onDelete;
+  final ValueChanged<MusicPlayableItem>? onEnqueue;
   final String? emptyTitle;
   final String? emptyMessage;
   final bool scrollable;
@@ -90,6 +92,8 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
           widget.onDelete == null || item.ref is! LocalMusicRef
               ? null
               : () => widget.onDelete!(item),
+      onEnqueue:
+          widget.onEnqueue == null ? null : () => widget.onEnqueue!(item),
     );
   }
 }
@@ -102,6 +106,7 @@ class _MusicDeckTrackRow extends StatefulWidget {
     required this.onTap,
     this.onToggleFavorite,
     this.onDelete,
+    this.onEnqueue,
   });
 
   final MusicPlayableItem item;
@@ -110,6 +115,7 @@ class _MusicDeckTrackRow extends StatefulWidget {
   final VoidCallback onTap;
   final VoidCallback? onToggleFavorite;
   final VoidCallback? onDelete;
+  final VoidCallback? onEnqueue;
 
   @override
   State<_MusicDeckTrackRow> createState() => _MusicDeckTrackRowState();
@@ -249,7 +255,7 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                       ),
                     ),
                   ],
-                  if (widget.onDelete != null)
+                  if (widget.onEnqueue != null || widget.onDelete != null)
                     PopupMenuButton<String>(
                       tooltip: AppLocalizations.of(context).coreMore,
                       icon: Icon(
@@ -257,26 +263,53 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                         size: 18,
                         color: colors.onSurfaceVariant,
                       ),
-                      onSelected: (_) => widget.onDelete?.call(),
+                      onSelected: (value) {
+                        if (value == 'enqueue') {
+                          widget.onEnqueue?.call();
+                        } else if (value == 'delete') {
+                          widget.onDelete?.call();
+                        }
+                      },
                       itemBuilder:
                           (context) => [
-                            PopupMenuItem(
-                              value: 'delete',
-                              child: Row(
-                                children: [
-                                  Icon(
-                                    Icons.delete_outline_rounded,
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Text(
-                                    AppLocalizations.of(
-                                      context,
-                                    ).musicDeleteLocalTrack,
-                                  ),
-                                ],
+                            if (widget.onEnqueue != null)
+                              PopupMenuItem(
+                                value: 'enqueue',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.queue_music_rounded,
+                                      size: 20,
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      ).musicPlayNext,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
+                            if (widget.onDelete != null)
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete_outline_rounded,
+                                      color:
+                                          Theme.of(context).colorScheme.error,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      AppLocalizations.of(
+                                        context,
+                                      ).musicDeleteLocalTrack,
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                     ),
                 ],
