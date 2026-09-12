@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
@@ -8,6 +11,7 @@ class DesktopTrayService with TrayListener, WindowListener {
   DesktopTrayService();
 
   bool _initialized = false;
+  bool _quitting = false;
 
   /// 初始化系统托盘与窗口关闭拦截。
   Future<void> init() async {
@@ -15,7 +19,7 @@ class DesktopTrayService with TrayListener, WindowListener {
     trayManager.addListener(this);
     windowManager.addListener(this);
 
-    await trayManager.setIcon(BrandLogo.assetPath, isTemplate: false);
+    await _setIconWithRetry();
 
     await trayManager.setContextMenu(
       Menu(
@@ -30,12 +34,41 @@ class DesktopTrayService with TrayListener, WindowListener {
     _initialized = true;
   }
 
+  /// 设置托盘图标；窗口/托盘宿主未就绪时会静默失败，短延迟重试一次。
+  Future<void> _setIconWithRetry() async {
+    try {
+      await trayManager.setIcon(BrandLogo.assetPath, isTemplate: false);
+    } on Object catch (error) {
+      debugPrint('托盘图标首次设置失败，稍后重试: $error');
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+      try {
+        await trayManager.setIcon(BrandLogo.assetPath, isTemplate: false);
+      } on Object catch (retryError) {
+        debugPrint('托盘图标设置仍失败: $retryError');
+      }
+    }
+  }
+
   /// 移除托盘图标并注销监听。
   Future<void> dispose() async {
     trayManager.removeListener(this);
     windowManager.removeListener(this);
     await trayManager.destroy();
     _initialized = false;
+  }
+
+  /// 托盘菜单退出：先摘除关闭拦截与托盘，再销毁窗口，
+  /// 避免 preventClose 的 onWindowClose(hide) 拖住销毁流程造成假死。
+  Future<void> quit() async {
+    if (_quitting) return;
+    _quitting = true;
+    windowManager.removeListener(this);
+    try {
+      await trayManager.destroy();
+    } on Object catch (error) {
+      debugPrint('托盘销毁失败（忽略继续退出）: $error');
+    }
+    await windowManager.destroy();
   }
 
   @override
@@ -56,7 +89,7 @@ class DesktopTrayService with TrayListener, WindowListener {
         windowManager.show();
         windowManager.focus();
       case 'quit':
-        windowManager.destroy();
+        unawaited(quit());
       default:
         break;
     }
