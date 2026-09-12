@@ -8158,6 +8158,25 @@ class AppLocalizationsEn extends AppLocalizations {
   String get batteryOptimizationAllow => 'Allow';
 
   @override
+  String get settingsCheckUpdate => 'Check for Updates';
+
+  @override
+  String settingsCheckUpdateFailed(Object error) {
+    return 'Check for updates failed: $error';
+  }
+
+  @override
+  String get settingsAlreadyLatest => 'You are on the latest version';
+
+  @override
+  String settingsNewVersionFound(Object version) {
+    return 'New version $version available';
+  }
+
+  @override
+  String get settingsOpenDownloadPage => 'Open download page';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

@@ -14951,6 +14951,36 @@ abstract class AppLocalizations {
   /// **'Allow'**
   String get batteryOptimizationAllow;
 
+  /// No description provided for @settingsCheckUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for Updates'**
+  String get settingsCheckUpdate;
+
+  /// No description provided for @settingsCheckUpdateFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Check for updates failed: {error}'**
+  String settingsCheckUpdateFailed(Object error);
+
+  /// No description provided for @settingsAlreadyLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'You are on the latest version'**
+  String get settingsAlreadyLatest;
+
+  /// No description provided for @settingsNewVersionFound.
+  ///
+  /// In en, this message translates to:
+  /// **'New version {version} available'**
+  String settingsNewVersionFound(Object version);
+
+  /// No description provided for @settingsOpenDownloadPage.
+  ///
+  /// In en, this message translates to:
+  /// **'Open download page'**
+  String get settingsOpenDownloadPage;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

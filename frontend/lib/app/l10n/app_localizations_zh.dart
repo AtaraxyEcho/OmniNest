@@ -7916,6 +7916,25 @@ class AppLocalizationsZh extends AppLocalizations {
   String get batteryOptimizationAllow => '去允许';
 
   @override
+  String get settingsCheckUpdate => '检查更新';
+
+  @override
+  String settingsCheckUpdateFailed(Object error) {
+    return '检查更新失败：$error';
+  }
+
+  @override
+  String get settingsAlreadyLatest => '已是最新版本';
+
+  @override
+  String settingsNewVersionFound(Object version) {
+    return '发现新版本 $version';
+  }
+
+  @override
+  String get settingsOpenDownloadPage => '打开下载页';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

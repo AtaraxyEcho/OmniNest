@@ -37,6 +37,7 @@ dependencies:
   audio_session: ^0.2.2
   app_links: ^6.4.0
   image_picker: ^1.2.0
+  image_picker: ^1.2.0
   fl_chart: ^0.70.2
   flutter_local_notifications: ^18.0.1
   workmanager: ^0.6.0

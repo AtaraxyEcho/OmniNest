@@ -24,6 +24,9 @@ INSERT INTO omni.config_entries (
     is_sensitive
 ) VALUES
     ('media.transcode.enabled', 'true', 'BOOLEAN', 'media', 'HOT', '是否启用媒体转码', false),
+    ('app.version.latest', '', 'STRING', 'general', 'HOT', '客户端最新版本号（留空表示已最新）', false),
+    ('app.version.release-notes-url', '', 'STRING', 'general', 'HOT', '当前版本发布说明地址', false),
+    ('app.version.download-url', '', 'STRING', 'general', 'HOT', '安装包下载页地址', false),
     ('media.import.enabled', 'true', 'BOOLEAN', 'media', 'HOT', '是否启用媒体自动导入', false),
     ('reader.import.enabled', 'true', 'BOOLEAN', 'reader', 'HOT', '是否启用阅读内容自动导入', false),
     ('photo.backup', 'true', 'BOOLEAN', 'photo', 'HOT', '是否启用照片自动备份', false),

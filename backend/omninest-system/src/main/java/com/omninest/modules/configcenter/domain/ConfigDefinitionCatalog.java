@@ -240,6 +240,12 @@ public final class ConfigDefinitionCatalog {
                 "config.integration.qweather.privateKey", "和风天气 Ed25519 私钥", 8192));
         add(values, string("weather.location", "北京", "weather", ConfigSurface.INTEGRATION,
                 "config.integration.qweather.location", "天气默认位置", false, 128));
+        add(values, string("app.version.latest", "", "general", ConfigSurface.GENERAL,
+                "config.appVersion.latest", "客户端最新版本号（留空表示已最新）", false, 64));
+        add(values, string("app.version.release-notes-url", "", "general", ConfigSurface.GENERAL,
+                "config.appVersion.releaseNotesUrl", "当前版本发布说明地址", false, 512));
+        add(values, string("app.version.download-url", "", "general", ConfigSurface.GENERAL,
+                "config.appVersion.downloadUrl", "安装包下载页地址", false, 512));
         return Map.copyOf(values);
     }
 

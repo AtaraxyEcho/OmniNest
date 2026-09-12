@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/version/app_version_api.dart';
+import 'dart:async' show unawaited;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:web/web.dart' as web_window;
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
@@ -27,13 +32,49 @@ class ProfileSecurityActionsPanel extends StatelessWidget {
   }
 }
 
-class ProfileAboutPanel extends StatelessWidget {
+class ProfileAboutPanel extends ConsumerStatefulWidget {
   const ProfileAboutPanel({super.key});
+
+  @override
+  ConsumerState<ProfileAboutPanel> createState() => _ProfileAboutPanelState();
+}
+
+class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
+  bool _checking = false;
+  AppVersionInfo? _result;
+  String? _error;
+
+  Future<void> _checkUpdate() async {
+    if (_checking) {
+      return;
+    }
+    setState(() {
+      _checking = true;
+      _error = null;
+      _result = null;
+    });
+    try {
+      final api = ref.read(appVersionApiProvider);
+      final info = await api.version();
+      if (mounted) {
+        setState(() => _result = info);
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() => _error = error.toString());
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _checking = false);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final info = _result;
     return WorkbenchPanel(
       padding: const EdgeInsets.all(28),
       child: Column(
@@ -52,8 +93,70 @@ class ProfileAboutPanel extends StatelessWidget {
             l10n.settingsAboutHint,
             style: TextStyle(color: scheme.onSurfaceVariant),
           ),
+          const SizedBox(height: 20),
+          OutlinedButton.icon(
+            onPressed: _checking ? null : _checkUpdate,
+            icon:
+                _checking
+                    ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                    : const Icon(Icons.system_update_rounded, size: 18),
+            label: Text(l10n.settingsCheckUpdate),
+          ),
+          if (_error != null) ...[
+            const SizedBox(height: 12),
+            Text(
+              l10n.settingsCheckUpdateFailed(_error!),
+              style: TextStyle(color: scheme.error),
+            ),
+          ],
+          if (info != null) ...[
+            const SizedBox(height: 12),
+            if (info.latestVersion == null)
+              Text(
+                l10n.settingsAlreadyLatest,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              )
+            else ...[
+              Text(
+                l10n.settingsNewVersionFound(info.latestVersion!),
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (info.downloadUrl != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: FilledButton.tonal(
+                    onPressed:
+                        () => unawaited(_openDownloadPage(info.downloadUrl!)),
+                    child: Text(l10n.settingsOpenDownloadPage),
+                  ),
+                ),
+            ],
+          ],
         ],
       ),
     );
+  }
+
+  Future<void> _openDownloadPage(String url) async {
+    // Web 直接新开下载页；桌面/移动无 url_launcher 依赖，回退展示地址。
+    if (kIsWeb) {
+      web_window.window.open(url);
+      return;
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${AppLocalizations.of(context).settingsOpenDownloadPage}: $url',
+          ),
+        ),
+      );
+    }
   }
 }
