@@ -14519,6 +14519,66 @@ abstract class AppLocalizations {
   /// **'Every local track will be re-matched online, including already scraped ones. Continue?'**
   String get musicScrapeLibraryConfirmMessage;
 
+  /// No description provided for @musicQualityTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Playback Quality'**
+  String get musicQualityTitle;
+
+  /// No description provided for @musicQualityJymaster.
+  ///
+  /// In en, this message translates to:
+  /// **'Master'**
+  String get musicQualityJymaster;
+
+  /// No description provided for @musicQualityJyeffect.
+  ///
+  /// In en, this message translates to:
+  /// **'HD Surround'**
+  String get musicQualityJyeffect;
+
+  /// No description provided for @musicQualitySky.
+  ///
+  /// In en, this message translates to:
+  /// **'Immersive Surround'**
+  String get musicQualitySky;
+
+  /// No description provided for @musicQualityDolby.
+  ///
+  /// In en, this message translates to:
+  /// **'Dolby Atmos'**
+  String get musicQualityDolby;
+
+  /// No description provided for @musicQualityHires.
+  ///
+  /// In en, this message translates to:
+  /// **'Hi-Res'**
+  String get musicQualityHires;
+
+  /// No description provided for @musicQualityLossless.
+  ///
+  /// In en, this message translates to:
+  /// **'Lossless'**
+  String get musicQualityLossless;
+
+  /// No description provided for @musicQualityExhigh.
+  ///
+  /// In en, this message translates to:
+  /// **'Very High'**
+  String get musicQualityExhigh;
+
+  /// No description provided for @musicQualityHigher.
+  ///
+  /// In en, this message translates to:
+  /// **'High'**
+  String get musicQualityHigher;
+
+  /// No description provided for @musicQualityStandard.
+  ///
+  /// In en, this message translates to:
+  /// **'Standard'**
+  String get musicQualityStandard;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

@@ -4,9 +4,11 @@ import 'package:omninest/features/music/domain/music_playable_item.dart';
 
 /// 将统一可播放对象解析为后端签发的播放计划。
 class MusicPlaybackResolver {
-  MusicPlaybackResolver(this._api);
+  MusicPlaybackResolver(this._api, {String Function()? preferredOnlineQuality})
+    : _preferredOnlineQuality = preferredOnlineQuality;
 
   final MusicApi _api;
+  final String Function()? _preferredOnlineQuality;
   final Map<String, _CachedPlaybackPlan> _cache = {};
   final Map<String, Future<MusicPlaybackPlan>> _pending = {};
 
@@ -45,7 +47,12 @@ class MusicPlaybackResolver {
     final plan = switch (item.ref) {
       LocalMusicRef(:final trackId) => _api.playbackPlan(trackId),
       OnlineMusicRef(:final platform, :final songId, :final mediaMid) => _api
-          .onlinePlaybackPlan(platform.apiValue, songId, mediaMid: mediaMid),
+          .onlinePlaybackPlan(
+            platform.apiValue,
+            songId,
+            mediaMid: mediaMid,
+            quality: _preferredOnlineQuality?.call() ?? 'exhigh',
+          ),
     };
     final resolved = await plan;
     return resolved.copyWith(

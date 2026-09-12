@@ -7911,6 +7911,36 @@ class AppLocalizationsEn extends AppLocalizations {
       'Every local track will be re-matched online, including already scraped ones. Continue?';
 
   @override
+  String get musicQualityTitle => 'Playback Quality';
+
+  @override
+  String get musicQualityJymaster => 'Master';
+
+  @override
+  String get musicQualityJyeffect => 'HD Surround';
+
+  @override
+  String get musicQualitySky => 'Immersive Surround';
+
+  @override
+  String get musicQualityDolby => 'Dolby Atmos';
+
+  @override
+  String get musicQualityHires => 'Hi-Res';
+
+  @override
+  String get musicQualityLossless => 'Lossless';
+
+  @override
+  String get musicQualityExhigh => 'Very High';
+
+  @override
+  String get musicQualityHigher => 'High';
+
+  @override
+  String get musicQualityStandard => 'Standard';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

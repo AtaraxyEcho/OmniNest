@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_playback_resolver.dart';
 import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_playback_queue_store.dart';
@@ -48,6 +49,10 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
 
   late final MusicPlaybackResolver _playbackResolver = MusicPlaybackResolver(
     _api,
+    preferredOnlineQuality:
+        () =>
+            ref.read(musicLocalPreferencesControllerProvider).asData?.value ??
+            'exhigh',
   );
 
   @override

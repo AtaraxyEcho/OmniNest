@@ -7678,6 +7678,36 @@ class AppLocalizationsZh extends AppLocalizations {
       '将对所有本地曲目重新匹配在线元数据，包括已刮削的曲目。是否继续？';
 
   @override
+  String get musicQualityTitle => '播放音质';
+
+  @override
+  String get musicQualityJymaster => '超清母带';
+
+  @override
+  String get musicQualityJyeffect => '高清环绕声';
+
+  @override
+  String get musicQualitySky => '沉浸环绕声';
+
+  @override
+  String get musicQualityDolby => '杜比全景声';
+
+  @override
+  String get musicQualityHires => 'Hi-Res';
+
+  @override
+  String get musicQualityLossless => '无损';
+
+  @override
+  String get musicQualityExhigh => '极高';
+
+  @override
+  String get musicQualityHigher => '较高';
+
+  @override
+  String get musicQualityStandard => '标准';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override
