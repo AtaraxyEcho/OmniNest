@@ -71,7 +71,7 @@ class MusicPlaylistServiceTest {
         playlist.setId(PLAYLIST_ID);
         playlist.setOwnerUserId(OWNER_ID);
         playlist.setName("Daily Mix");
-        playlist.setPlaylistType("SMART");
+        playlist.setPlaylistType("LEGACY");
         when(playlistRepository.findByIdAndOwnerUserId(PLAYLIST_ID, OWNER_ID))
                 .thenReturn(Optional.of(playlist));
 

@@ -178,7 +178,7 @@ public class MusicPlaylistService {
     @Transactional(rollbackFor = Exception.class)
     public MusicPlaylistDto removeItems(UUID ownerUserId, UUID playlistId, PlaylistItemsRequest request) {
         log.info("移除播放列表曲目: playlistId={}, count={}", playlistId, request.trackIds().size());
-        MusicPlaylist playlist = requirePlaylist(ownerUserId, playlistId);
+        MusicPlaylist playlist = requireCustomPlaylist(ownerUserId, playlistId);
         playlistItemRepository.deleteByOwnerUserIdAndPlaylistIdAndTrackIdIn(
                 ownerUserId,
                 playlistId,

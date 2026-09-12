@@ -9,8 +9,7 @@ import lombok.Getter;
 @Getter
 @AllArgsConstructor
 public enum PlaylistType {
-    CUSTOM("CUSTOM"),
-    SMART("SMART");
+    CUSTOM("CUSTOM");
 
     private final String value;
 
