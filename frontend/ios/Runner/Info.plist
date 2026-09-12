@@ -78,5 +78,16 @@
 		<string>processing</string>
 		<string>audio</string>
 	</array>
+<key>CFBundleURLTypes</key>
+<array>
+	<dict>
+		<key>CFBundleURLName</key>
+		<string>com.omninest.app</string>
+		<key>CFBundleURLSchemes</key>
+		<array>
+			<string>omninest</string>
+		</array>
+	</dict>
+</array>
 </dict>
 </plist>

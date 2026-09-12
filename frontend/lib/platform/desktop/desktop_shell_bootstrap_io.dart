@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -24,5 +26,44 @@ Future<void> bootstrapDesktopShell() async {
   await DesktopTrayService().init();
   // E1：系统级媒体键（播放/暂停、上一首、下一首），命令由音乐播放会话层桥接。
   await DesktopHotkeyService().registerMediaKeys();
+  unawaited(_registerWindowsProtocol());
   debugPrint('桌面壳层初始化完成：托盘与关窗隐藏已启用');
+}
+
+/// Windows 注册 omninest:// 协议到当前用户注册表（无需管理员）。
+Future<void> _registerWindowsProtocol() async {
+  if (!Platform.isWindows) {
+    return;
+  }
+  try {
+    final exe = Platform.resolvedExecutable;
+    final command = '"$exe" "%1"';
+    await Process.run('reg', [
+      'add',
+      r'HKCU\Software\Classes\omninest',
+      '/ve',
+      '/d',
+      'URL:OmniNest Protocol',
+      '/f',
+    ]);
+    await Process.run('reg', [
+      'add',
+      r'HKCU\Software\Classes\omninest',
+      '/v',
+      'URL Protocol',
+      '/d',
+      '',
+      '/f',
+    ]);
+    await Process.run('reg', [
+      'add',
+      r'HKCU\Software\Classes\omninest\shell\open\command',
+      '/ve',
+      '/d',
+      command,
+      '/f',
+    ]);
+  } on Exception {
+    // 协议注册失败不影响应用主体功能。
+  }
 }
