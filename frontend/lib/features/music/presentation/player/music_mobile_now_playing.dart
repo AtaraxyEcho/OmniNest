@@ -52,145 +52,160 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
     final item = center?.currentItem;
     final track = item?.track ?? center?.activeTrack;
     final lyrics = track?.lyricLines ?? const <MusicLyricLine>[];
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        const _MobileCoverBackdrop(),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
-            child: Column(
-              children: [
-                SizedBox(
-                  height: 44,
-                  child: Row(
-                    children: [
-                      _MobileHeaderButton(
-                        tooltip:
-                            MaterialLocalizations.of(context).backButtonTooltip,
-                        icon: Icons.keyboard_arrow_down_rounded,
-                        onPressed: widget.onClose,
-                      ),
-                      Expanded(
-                        child: Text(
-                          track?.title ?? l10n.musicDeckNowPlaying,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: AppTypography.titleMedium,
-                            fontWeight: FontWeight.w700,
+    // 下滑关闭：与 mini player 收起手势同阈值；页面内歌词区有自己的手势
+    // 竞争，垂直拖拽仅在未被内层消费时触发。
+    return GestureDetector(
+      behavior: HitTestBehavior.deferToChild,
+      onVerticalDragEnd: (details) {
+        if ((details.primaryVelocity ?? 0) > 240) {
+          widget.onClose();
+        }
+      },
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          const _MobileCoverBackdrop(),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+              child: Column(
+                children: [
+                  SizedBox(
+                    height: 44,
+                    child: Row(
+                      children: [
+                        _MobileHeaderButton(
+                          tooltip:
+                              MaterialLocalizations.of(
+                                context,
+                              ).backButtonTooltip,
+                          icon: Icons.keyboard_arrow_down_rounded,
+                          onPressed: widget.onClose,
+                        ),
+                        Expanded(
+                          child: Text(
+                            track?.title ?? l10n.musicDeckNowPlaying,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: AppTypography.titleMedium,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
-                      ),
-                      _MobileHeaderButton(
-                        tooltip: l10n.musicQueueTitle,
-                        icon: Icons.queue_music_rounded,
-                        onPressed: () => showMusicDeckQueue(context),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: PageView(
-                    controller: _pageController,
-                    onPageChanged:
-                        (index) => setState(() => _selectedView = index),
-                    children: [
-                      _MobileArtworkView(
-                        track: track,
-                        onShowLyrics: () => _selectView(1),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
-                        child: MusicImmersiveLyrics(
-                          palette: MusicImmersivePalette.digital,
-                          player: session.player,
-                          track: track,
-                          lyrics: lyrics,
-                          scale:
-                              MediaQuery.sizeOf(context).width < 390
-                                  ? 0.86
-                                  : 0.94,
-                          onTogglePlayback:
-                              () =>
-                                  ref
-                                      .read(
-                                        musicCenterControllerProvider.notifier,
-                                      )
-                                      .togglePlayback(),
-                          onPrevious:
-                              () =>
-                                  ref
-                                      .read(
-                                        musicCenterControllerProvider.notifier,
-                                      )
-                                      .previousTrack(),
-                          onNext:
-                              () =>
-                                  ref
-                                      .read(
-                                        musicCenterControllerProvider.notifier,
-                                      )
-                                      .nextTrack(),
+                        _MobileHeaderButton(
+                          tooltip: l10n.musicQueueTitle,
+                          icon: Icons.queue_music_rounded,
+                          onPressed: () => showMusicDeckQueue(context),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                _MobileViewSwitcher(
-                  selectedIndex: _selectedView,
-                  artworkLabel: l10n.musicNowPlayingArtwork,
-                  lyricsLabel: l10n.musicNowPlayingLyrics,
-                  onSelected: _selectView,
-                ),
-                const SizedBox(height: 8),
-                _MobileTrackHeader(
-                  item: item,
-                  track: track,
-                  onToggleFavorite:
-                      track == null || item?.ref is! LocalMusicRef
-                          ? null
-                          : () => _toggleFavorite(context, track),
-                ),
-                const SizedBox(height: 6),
-                _MobilePlaybackControls(
-                  player: session.player,
-                  enabled: track != null,
-                  isPlaying: center?.isPlaying == true,
-                  shuffleEnabled: center?.shuffleEnabled == true,
-                  repeatMode: center?.repeatMode ?? MusicRepeatMode.off,
-                  onToggleShuffle:
-                      () =>
-                          ref
-                              .read(musicCenterControllerProvider.notifier)
-                              .toggleShuffle(),
-                  onPrevious:
-                      () =>
-                          ref
-                              .read(musicCenterControllerProvider.notifier)
-                              .previousTrack(),
-                  onTogglePlayback:
-                      () =>
-                          ref
-                              .read(musicCenterControllerProvider.notifier)
-                              .togglePlayback(),
-                  onNext:
-                      () =>
-                          ref
-                              .read(musicCenterControllerProvider.notifier)
-                              .nextTrack(),
-                  onToggleRepeat:
-                      () =>
-                          ref
-                              .read(musicCenterControllerProvider.notifier)
-                              .toggleRepeatMode(),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Expanded(
+                    child: PageView(
+                      controller: _pageController,
+                      onPageChanged:
+                          (index) => setState(() => _selectedView = index),
+                      children: [
+                        _MobileArtworkView(
+                          track: track,
+                          onShowLyrics: () => _selectView(1),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
+                          child: MusicImmersiveLyrics(
+                            palette: MusicImmersivePalette.digital,
+                            player: session.player,
+                            track: track,
+                            lyrics: lyrics,
+                            scale:
+                                MediaQuery.sizeOf(context).width < 390
+                                    ? 0.86
+                                    : 0.94,
+                            onTogglePlayback:
+                                () =>
+                                    ref
+                                        .read(
+                                          musicCenterControllerProvider
+                                              .notifier,
+                                        )
+                                        .togglePlayback(),
+                            onPrevious:
+                                () =>
+                                    ref
+                                        .read(
+                                          musicCenterControllerProvider
+                                              .notifier,
+                                        )
+                                        .previousTrack(),
+                            onNext:
+                                () =>
+                                    ref
+                                        .read(
+                                          musicCenterControllerProvider
+                                              .notifier,
+                                        )
+                                        .nextTrack(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _MobileViewSwitcher(
+                    selectedIndex: _selectedView,
+                    artworkLabel: l10n.musicNowPlayingArtwork,
+                    lyricsLabel: l10n.musicNowPlayingLyrics,
+                    onSelected: _selectView,
+                  ),
+                  const SizedBox(height: 8),
+                  _MobileTrackHeader(
+                    item: item,
+                    track: track,
+                    onToggleFavorite:
+                        track == null || item?.ref is! LocalMusicRef
+                            ? null
+                            : () => _toggleFavorite(context, track),
+                  ),
+                  const SizedBox(height: 6),
+                  _MobilePlaybackControls(
+                    player: session.player,
+                    enabled: track != null,
+                    isPlaying: center?.isPlaying == true,
+                    shuffleEnabled: center?.shuffleEnabled == true,
+                    repeatMode: center?.repeatMode ?? MusicRepeatMode.off,
+                    onToggleShuffle:
+                        () =>
+                            ref
+                                .read(musicCenterControllerProvider.notifier)
+                                .toggleShuffle(),
+                    onPrevious:
+                        () =>
+                            ref
+                                .read(musicCenterControllerProvider.notifier)
+                                .previousTrack(),
+                    onTogglePlayback:
+                        () =>
+                            ref
+                                .read(musicCenterControllerProvider.notifier)
+                                .togglePlayback(),
+                    onNext:
+                        () =>
+                            ref
+                                .read(musicCenterControllerProvider.notifier)
+                                .nextTrack(),
+                    onToggleRepeat:
+                        () =>
+                            ref
+                                .read(musicCenterControllerProvider.notifier)
+                                .toggleRepeatMode(),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
