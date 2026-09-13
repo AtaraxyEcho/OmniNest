@@ -2,17 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 
 /// Music 音量按钮的呈现风格，与所在播放条的按钮语言对齐。
 enum MusicVolumeButtonStyle { glass, flat }
 
-/// Music 统一音量控件：圆形音量图标，点击后在按钮上方展开控制条。
+/// Music 统一音量控件：圆形音量图标，悬停后在按钮上方展开竖向音量柱。
 ///
-/// 控制条为横向玻璃胶囊：静音切换 + 滑条 + 百分比。Mini Player 与
-/// 沉浸播放详情页共用同一交互与视觉语言。
+/// 交互对齐主流播放器：桌面端悬停即展开，拖动柱条调音量；触屏/点击
+/// 仍可切换面板。Mini Player 与沉浸播放详情页共用同一交互与视觉语言。
 class MusicVolumeButton extends StatefulWidget {
   const MusicVolumeButton({
     required this.player,
@@ -47,8 +45,12 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
   final LayerLink _link = LayerLink();
   final OverlayPortalController _portal = OverlayPortalController();
   StreamSubscription<double>? _volumeSub;
+  Timer? _hideTimer;
   double _volume = 100;
   bool _hovered = false;
+  bool _pointerOverPanel = false;
+
+  static const _hideDelay = Duration(milliseconds: 160);
 
   @override
   void initState() {
@@ -63,6 +65,7 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
 
   @override
   void dispose() {
+    _hideTimer?.cancel();
     _volumeSub?.cancel();
     if (_portal.isShowing) {
       _portal.hide();
@@ -70,17 +73,60 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
     super.dispose();
   }
 
+  void _cancelHide() {
+    _hideTimer?.cancel();
+    _hideTimer = null;
+  }
+
+  void _scheduleHide() {
+    _cancelHide();
+    _hideTimer = Timer(_hideDelay, () {
+      if (!mounted) {
+        return;
+      }
+      if (_hovered || _pointerOverPanel) {
+        return;
+      }
+      _hidePanel();
+    });
+  }
+
+  void _showPanel() {
+    _cancelHide();
+    if (!_portal.isShowing) {
+      _portal.show();
+    }
+  }
+
   void _togglePanel() {
     if (_portal.isShowing) {
-      _portal.hide();
+      _hidePanel();
     } else {
-      _portal.show();
+      _showPanel();
     }
   }
 
   void _hidePanel() {
     if (_portal.isShowing) {
       _portal.hide();
+    }
+  }
+
+  void _setButtonHovered(bool value) {
+    setState(() => _hovered = value);
+    if (value) {
+      _showPanel();
+    } else {
+      _scheduleHide();
+    }
+  }
+
+  void _setPanelHovered(bool value) {
+    _pointerOverPanel = value;
+    if (value) {
+      _showPanel();
+    } else {
+      _scheduleHide();
     }
   }
 
@@ -143,16 +189,21 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
               targetAnchor: Alignment.topCenter,
               followerAnchor: Alignment.bottomCenter,
               offset: const Offset(0, -10),
-              child: _MusicVolumeControlPanel(
-                volume: _volume,
-                accentColor:
-                    widget.activeColor ?? iconColor.withValues(alpha: 0.92),
-                background: widget.panelBackground,
-                textColor:
-                    widget.panelTextColor ?? (widget.iconColor ?? Colors.white),
-                iconColor: iconColor,
-                onChanged: _setVolume,
-                onToggleMute: _toggleMute,
+              child: MouseRegion(
+                onEnter: (_) => _setPanelHovered(true),
+                onExit: (_) => _setPanelHovered(false),
+                child: _MusicVolumeColumn(
+                  volume: _volume,
+                  accentColor:
+                      widget.activeColor ?? iconColor.withValues(alpha: 0.92),
+                  background: widget.panelBackground,
+                  textColor:
+                      widget.panelTextColor ??
+                      (widget.iconColor ?? Colors.white),
+                  iconColor: iconColor,
+                  onChanged: _setVolume,
+                  onToggleMute: _toggleMute,
+                ),
               ),
             ),
           ],
@@ -173,8 +224,8 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
         return Tooltip(
           message: message,
           child: MouseRegion(
-            onEnter: (_) => setState(() => _hovered = true),
-            onExit: (_) => setState(() => _hovered = false),
+            onEnter: (_) => _setButtonHovered(true),
+            onExit: (_) => _setButtonHovered(false),
             child: InkWell(
               borderRadius: BorderRadius.circular(999),
               onTap: _togglePanel,
@@ -199,24 +250,30 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
           ),
         );
       case MusicVolumeButtonStyle.flat:
-        return IconButton(
-          tooltip: message,
-          onPressed: _togglePanel,
-          style:
-              _portal.isShowing
-                  ? IconButton.styleFrom(
-                    backgroundColor: Colors.white.withValues(alpha: 0.10),
-                  )
-                  : null,
-          icon: icon,
+        return Tooltip(
+          message: message,
+          child: MouseRegion(
+            onEnter: (_) => _setButtonHovered(true),
+            onExit: (_) => _setButtonHovered(false),
+            child: IconButton(
+              onPressed: _togglePanel,
+              style:
+                  _portal.isShowing
+                      ? IconButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.10),
+                      )
+                      : null,
+              icon: icon,
+            ),
+          ),
         );
     }
   }
 }
 
-/// 音量展开控制条：静音切换 + 横向滑条 + 百分比。
-class _MusicVolumeControlPanel extends StatelessWidget {
-  const _MusicVolumeControlPanel({
+/// 竖向音量柱：底部为当前音量填充，顶部留白；底部附静音与百分比。
+class _MusicVolumeColumn extends StatelessWidget {
+  const _MusicVolumeColumn({
     required this.volume,
     required this.accentColor,
     required this.background,
@@ -234,18 +291,24 @@ class _MusicVolumeControlPanel extends StatelessWidget {
   final ValueChanged<double> onChanged;
   final VoidCallback onToggleMute;
 
+  static const double _width = 40;
+  static const double _trackHeight = 120;
+  static const double _footerHeight = 36;
+  static const double _trackWidth = 6;
+
   @override
   Widget build(BuildContext context) {
     final muted = volume <= 0;
+    final normalized = (volume / 100).clamp(0.0, 1.0);
     return Material(
       color: Colors.transparent,
       child: Container(
-        width: 208,
-        height: 48,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        width: _width,
+        height: _trackHeight + _footerHeight + 12,
+        padding: const EdgeInsets.only(top: 10, bottom: 6),
         decoration: BoxDecoration(
           color: background,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
           boxShadow: [
             BoxShadow(
@@ -255,61 +318,159 @@ class _MusicVolumeControlPanel extends StatelessWidget {
             ),
           ],
         ),
-        child: Row(
+        child: Column(
           children: [
-            Tooltip(
-              message: AppLocalizations.of(context).portalMusicVisualizerVolume,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(999),
-                onTap: onToggleMute,
-                child: SizedBox.square(
-                  dimension: 32,
-                  child: Icon(
-                    muted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
-                    size: 18,
-                    color: muted ? iconColor.withValues(alpha: 0.7) : iconColor,
-                  ),
-                ),
-              ),
-            ),
             Expanded(
-              child: SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackHeight: 3.5,
-                  thumbShape: const RoundSliderThumbShape(
-                    enabledThumbRadius: 5.5,
-                  ),
-                  overlayShape: const RoundSliderOverlayShape(
-                    overlayRadius: 11,
-                  ),
-                  activeTrackColor: accentColor,
-                  inactiveTrackColor: Colors.white.withValues(alpha: 0.16),
+              child: Center(
+                child: _VerticalVolumeTrack(
+                  value: normalized,
+                  trackWidth: _trackWidth,
+                  accentColor: accentColor,
+                  trackColor: Colors.white.withValues(alpha: 0.16),
                   thumbColor: textColor,
-                  overlayColor: accentColor.withValues(alpha: 0.14),
-                  showValueIndicator: ShowValueIndicator.never,
-                ),
-                child: AppSlider(
-                  value: (volume / 100).clamp(0.0, 1.0),
                   onChanged: (next) => onChanged(next * 100),
                 ),
               ),
             ),
             SizedBox(
-              width: 32,
-              child: Text(
-                volume.round().toString(),
-                textAlign: TextAlign.right,
-                style: TextStyle(
-                  color: textColor.withValues(alpha: 0.88),
-                  fontSize: AppTypography.labelSmall,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+              height: _footerHeight,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Tooltip(
+                    message:
+                        AppLocalizations.of(
+                          context,
+                        ).portalMusicVisualizerVolume,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(999),
+                      onTap: onToggleMute,
+                      child: SizedBox.square(
+                        dimension: 22,
+                        child: Icon(
+                          muted
+                              ? Icons.volume_off_rounded
+                              : Icons.volume_up_rounded,
+                          size: 14,
+                          color:
+                              muted
+                                  ? iconColor.withValues(alpha: 0.7)
+                                  : iconColor,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Text(
+                    volume.round().toString(),
+                    style: TextStyle(
+                      color: textColor.withValues(alpha: 0.80),
+                      fontSize: 10,
+                      height: 1.1,
+                      fontWeight: FontWeight.w700,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 竖向拖动音量轨：从底部向上填充，与主流桌面播放器一致。
+class _VerticalVolumeTrack extends StatelessWidget {
+  const _VerticalVolumeTrack({
+    required this.value,
+    required this.trackWidth,
+    required this.accentColor,
+    required this.trackColor,
+    required this.thumbColor,
+    required this.onChanged,
+  });
+
+  final double value;
+  final double trackWidth;
+  final Color accentColor;
+  final Color trackColor;
+  final Color thumbColor;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final height = constraints.maxHeight;
+        final width = constraints.maxWidth;
+        final fillHeight = height * value;
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragUpdate: (details) {
+              final next = (1 - (details.localPosition.dy / height)).clamp(
+                0.0,
+                1.0,
+              );
+              onChanged(next);
+            },
+            onTapDown: (details) {
+              final next = (1 - (details.localPosition.dy / height)).clamp(
+                0.0,
+                1.0,
+              );
+              onChanged(next);
+            },
+            child: SizedBox(
+              width: width,
+              height: height,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: trackWidth,
+                    height: height,
+                    decoration: BoxDecoration(
+                      color: trackColor,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 0,
+                    child: Container(
+                      width: trackWidth,
+                      height: fillHeight.clamp(0.0, height),
+                      decoration: BoxDecoration(
+                        color: accentColor,
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: (fillHeight - 5).clamp(0.0, height - 10),
+                    child: Container(
+                      width: 12,
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: thumbColor,
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.28),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

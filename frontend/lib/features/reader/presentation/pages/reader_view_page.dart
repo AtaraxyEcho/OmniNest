@@ -588,17 +588,19 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     return result;
   }
 
-  /// 当前章节标题，用于加载遮罩显示。
+  /// 当前章节标题，用于顶栏与加载遮罩显示。
+  ///
+  /// 始终以 currentChapterId 解析，禁止优先使用可能滞后的 _cachedContent，
+  /// 否则连续滚动进入下一章后顶栏仍显示上一章标题。
   String get _currentChapterTitle {
-    // 优先从已加载的章节内容获取
-    if (_cachedContent?.title.isNotEmpty == true) return _cachedContent!.title;
-    // 从 contentLoader 获取
     final data = _contentLoader?.getByChapterId(_currentChapterId);
-    if (data != null) return data.content.title;
-    // 从章节列表获取
+    if (data != null && data.content.title.isNotEmpty) {
+      return data.content.title;
+    }
     final chapters = _contentLoader?.allChapters ?? [];
     final idx = chapters.indexWhere((c) => c.id == _currentChapterId);
     if (idx >= 0 && chapters[idx].title.isNotEmpty) return chapters[idx].title;
+    if (_cachedContent?.title.isNotEmpty == true) return _cachedContent!.title;
     return '';
   }
 
@@ -1159,7 +1161,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
             child: ReaderViewTopBar(
               settings: _settings,
               bookTitle: detail.item.title,
-              chapterTitle: content.title,
+              chapterTitle: _currentChapterTitle,
               onBack: () {
                 syncProgressSync();
                 safePop();

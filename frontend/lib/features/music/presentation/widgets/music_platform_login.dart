@@ -139,11 +139,8 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
       if (!mounted || status?.status != 'confirmed') {
         return;
       }
-      await musicController.loadPlatformInfo();
-      if (!mounted) {
-        return;
-      }
-      ref.invalidate(musicPlatformLibraryProvider);
+      // 后台刷新账号与曲库，避免扫码确认后同步全量拉取造成数秒卡顿。
+      unawaited(_refreshPlatformData(musicController));
     } on Exception catch (error) {
       if (!mounted) {
         return;
@@ -157,6 +154,18 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
         ),
       );
     }
+  }
+
+  Future<void> _refreshPlatformData(dynamic musicController) async {
+    try {
+      await musicController.loadPlatformInfo();
+    } on Object {
+      // 账号资料刷新失败不阻塞曲库刷新。
+    }
+    if (!mounted) {
+      return;
+    }
+    ref.invalidate(musicPlatformLibraryProvider);
   }
 
   @override

@@ -86,16 +86,23 @@ mixin ReaderViewPageInteractionMixin
     final loader = contentLoader;
     if (loader == null) return;
 
+    // 顺序滚动进入邻章：先收养锚点，避免封面/短章 totalChars<=0 时
+    // 视口已过章但 currentChapterId 停留旧章导致跳章与扩窗错位。
+    if (position.chapterId != currentChapterId) {
+      adoptContinuousAnchorChapter(position.chapterId);
+    }
+
     // 图片主导的封面等章节 totalChars 为 0：不要用 charOffset=0 覆盖进度。
     final chapterData = loader.getByChapterId(position.chapterId);
     final totalChars = chapterData?.totalChars ?? 0;
     if (totalChars <= 0) {
+      if (scrollController.hasClients) {
+        final max = scrollController.position.maxScrollExtent;
+        if (max - scrollController.offset < max * 0.5) {
+          preloadAdjacent();
+        }
+      }
       return;
-    }
-
-    // 锚点章切换：顺序续读，不走 switchToChapter 硬切。
-    if (position.chapterId != currentChapterId) {
-      adoptContinuousAnchorChapter(position.chapterId);
     }
 
     // 连续滚动：以窗口控制器的块级映射为准，避免与 contentYToCharOffset 双路径不一致。
@@ -136,8 +143,16 @@ mixin ReaderViewPageInteractionMixin
   /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。
   void adoptContinuousAnchorChapter(String chapterId) {
     if (chapterId == currentChapterId) return;
-    // 加载中改写 currentChapterId 会使在途 loadCurrentChapter 判定失效。
-    if (isLoadingChapter || isSwitchingChapter) return;
+    // 加载中改写 currentChapterId 会使在途 loadCurrentChapter 判定失效；
+    // 但若正文/块均已就绪，仍允许收养，避免封面章后锚点卡死。
+    if (isLoadingChapter || isSwitchingChapter) {
+      final ready =
+          contentLoader?.getByChapterId(chapterId) != null &&
+          contentLoader?.contentFor(chapterId) != null;
+      if (!ready) {
+        return;
+      }
+    }
     currentChapterId = chapterId;
     annotationHandler?.updateChapter(chapterId);
     final needFetch = contentLoader?.setActive(chapterId) ?? const [];

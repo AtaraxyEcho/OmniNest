@@ -8894,6 +8894,13 @@ class AppLocalizationsZh extends AppLocalizations {
       '必须与 application.yml 中 file.local-media.mounts 的键一致';
 
   @override
+  String get adminAutoCreateLibrarySource => '同时创建影视库源';
+
+  @override
+  String get adminAutoCreateLibrarySourceHint =>
+      '创建挂载位置后自动建立对应的影视库来源，无需再单独配置一次';
+
+  @override
   String get adminRelativeRoot => '相对根目录';
 
   @override
@@ -9362,31 +9369,31 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fontScalePreviewSample => '你好，OmniNest';
 
   @override
-  String get videoDetailBack => 'BACK';
+  String get videoDetailBack => '返回';
 
   @override
-  String get videoDetailEdit => 'EDIT';
+  String get videoDetailEdit => '编辑';
 
   @override
-  String get videoDetailSave => 'SAVE';
+  String get videoDetailSave => '保存';
 
   @override
-  String get videoDetailPlay => 'PLAY';
+  String get videoDetailPlay => '播放';
 
   @override
-  String get videoDetailTabOverview => 'overview';
+  String get videoDetailTabOverview => '简介';
 
   @override
   String get videoDetailTabVersions => '版本';
 
   @override
-  String get videoDetailTabSubtitles => 'subtitles';
+  String get videoDetailTabSubtitles => '字幕';
 
   @override
-  String get videoDetailCast => 'Cast';
+  String get videoDetailCast => '演员';
 
   @override
-  String get videoDetailDirector => 'DIR.';
+  String get videoDetailDirector => '导演';
 
   @override
   String get videoDetailNoVersions => '暂无可用版本';

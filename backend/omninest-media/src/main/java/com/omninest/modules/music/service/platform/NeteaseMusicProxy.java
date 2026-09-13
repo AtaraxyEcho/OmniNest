@@ -463,8 +463,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 case 801 -> new QrLoginStatus("pending", null);
                 case 802 -> new QrLoginStatus("scanned", null);
                 case 803 -> {
-                    // 登录成功，保存 Cookie 并获取用户信息
-                    // 若 cookie 为空（容器返回 502），加 noCookie=true 重试
+                    // 登录成功：先落盘 Cookie 并立即返回，资料拉取交给后续 getUserInfo，
+                    // 避免扫码确认响应被串行外部资料接口拖慢 1~4 秒。
                     if (cookie == null || cookie.isBlank()) {
                         String retryPath = "/login/qr/check?key=" + encode(loginKey)
                                 + "&noCookie=true&timestamp=" + System.currentTimeMillis();
@@ -474,19 +474,13 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                                 retryResponse.body() == null ? null : retryResponse.body().getString("cookie")
                         );
                     }
-                    PlatformUserInfo userInfo = emptyUserInfo();
-                    if (cookie != null && !cookie.isBlank()) {
-                        userInfo = fetchUserInfo(cookie);
-                        if (userInfo.userId() == null || userInfo.userId().isBlank()) {
-                            userInfo = fallbackUserInfo();
-                            log.warn("网易云QR登录凭据有效但资料暂不可用，已保存凭据等待刷新: userId={}", ownerUserId);
-                        }
-                        credentialService.save(ownerUserId, MusicPlatform.NETEASE, cookie, userInfo);
-                        log.info("网易云QR登录成功: userId={}, nickname={}", ownerUserId, userInfo.nickname());
-                    } else {
+                    if (cookie == null || cookie.isBlank()) {
                         log.warn("网易云QR登录确认后未返回Cookie: userId={}", ownerUserId);
                         yield new QrLoginStatus("expired", null);
                     }
+                    PlatformUserInfo userInfo = fallbackUserInfo();
+                    credentialService.save(ownerUserId, MusicPlatform.NETEASE, cookie, userInfo);
+                    log.info("网易云QR登录成功: userId={}", ownerUserId);
                     yield new QrLoginStatus("confirmed", userInfo);
                 }
                 case 800 -> new QrLoginStatus("expired", null);

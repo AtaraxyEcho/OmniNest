@@ -185,15 +185,23 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
     }
     LONG_PTR style = normal_window_style_;
     LONG_PTR ex_style = normal_window_ex_style_;
-    style &= ~(WS_CAPTION | WS_THICKFRAME);
+    style &= ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_DLGFRAME);
     style |= WS_POPUP;
-    ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+    ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE |
+                  WS_EX_WINDOWEDGE);
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
+    // 先清零 DWM 扩展边距，再贴齐显示器矩形，避免过渡期出现白边。
+    MARGINS margins = {0, 0, 0, 0};
+    DwmExtendFrameIntoClientArea(hwnd, &margins);
     const RECT monitor = monitor_info.rcMonitor;
     SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
                  monitor.right - monitor.left, monitor.bottom - monitor.top,
                  SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    // 再次贴齐，吸收 DPI/帧变更后的 1px 偏差。
+    SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
+                 monitor.right - monitor.left, monitor.bottom - monitor.top,
+                 SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     window_fullscreen_ = true;
     window_frame_hidden_ = true;
     return;

@@ -9167,6 +9167,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Must match a key under file.local-media.mounts in application.yml';
 
   @override
+  String get adminAutoCreateLibrarySource => 'Create video library source';
+
+  @override
+  String get adminAutoCreateLibrarySourceHint =>
+      'Automatically create a matching video library source after the mount location is created';
+
+  @override
   String get adminRelativeRoot => 'Relative root';
 
   @override
@@ -9663,13 +9670,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get videoDetailPlay => 'PLAY';
 
   @override
-  String get videoDetailTabOverview => 'overview';
+  String get videoDetailTabOverview => 'Overview';
 
   @override
-  String get videoDetailTabVersions => 'versions';
+  String get videoDetailTabVersions => 'Versions';
 
   @override
-  String get videoDetailTabSubtitles => 'subtitles';
+  String get videoDetailTabSubtitles => 'Subtitles';
 
   @override
   String get videoDetailCast => 'Cast';

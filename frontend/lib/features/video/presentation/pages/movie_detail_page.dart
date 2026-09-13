@@ -60,14 +60,14 @@ class MovieDetailPage extends ConsumerWidget {
                           () =>
                               ref.invalidate(movieDetailProvider(videoItemId)),
                       borderRadius: MovieRedesignPalette.borderRadius,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
                         ),
                         child: Text(
-                          'RETRY',
-                          style: TextStyle(
+                          AppLocalizations.of(context).coreRetry,
+                          style: const TextStyle(
                             fontFamily: 'JetBrainsMono',
                             fontSize: AppTypography.bodySmall,
                             color: MovieDetailTheme.secondaryText,
@@ -885,7 +885,7 @@ class _OverviewTab extends StatelessWidget {
         if (item.castMembers.isNotEmpty) ...[
           const SizedBox(height: 32),
           Text(
-            'CAST',
+            AppLocalizations.of(context).videoDetailCast,
             style: MovieDetailTheme.mono(
               AppTypography.bodySmall,
               letterSpacing: 2,
@@ -986,64 +986,118 @@ class _VersionsTab extends ConsumerWidget {
             style: MovieDetailTheme.mono(AppTypography.bodySmall),
           );
         }
+        final activeId = item.id;
         return Column(
           children: [
             for (final version in versions)
-              Container(
-                width: double.infinity,
-                margin: const EdgeInsets.only(bottom: 1),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                decoration: BoxDecoration(
-                  border: Border.all(color: MovieDetailTheme.border),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            version.versionLabel ?? 'Original',
-                            style: MovieDetailTheme.body(
-                              14,
-                              color: MovieDetailTheme.foreground,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            [
-                              if (version.videoCodec != null &&
-                                  version.videoCodec!.trim().isNotEmpty)
-                                version.videoCodec!.trim().toUpperCase(),
-                              if (version.containerFormat != null &&
-                                  version.containerFormat!.trim().isNotEmpty)
-                                version.containerFormat!.trim().toLowerCase(),
-                            ].join(' · '),
-                            style: MovieDetailTheme.mono(
-                              AppTypography.bodySmall,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (version.resolutionHeight != null &&
-                        version.resolutionHeight! > 0)
-                      Text(
-                        '${version.resolutionHeight}p',
-                        style: MovieDetailTheme.mono(
-                          12,
-                          color: MovieDetailTheme.accent,
-                        ),
-                      ),
-                  ],
-                ),
+              _VersionRow(
+                version: version,
+                isActive: version.id == activeId,
+                onPlay: () => context.push('/video/${version.id}/play'),
               ),
           ],
         );
       },
+    );
+  }
+}
+
+/// 可点击播放的版本行；高亮当前条目对应版本。
+class _VersionRow extends StatelessWidget {
+  const _VersionRow({
+    required this.version,
+    required this.isActive,
+    required this.onPlay,
+  });
+
+  final MovieVideoItem version;
+  final bool isActive;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final label = version.versionLabel ?? l10n.videoRedesignOriginalVersion;
+    final meta = [
+      if (version.videoCodec != null && version.videoCodec!.trim().isNotEmpty)
+        version.videoCodec!.trim().toUpperCase(),
+      if (version.containerFormat != null &&
+          version.containerFormat!.trim().isNotEmpty)
+        version.containerFormat!.trim().toLowerCase(),
+    ].join(' · ');
+    final resolution =
+        version.resolutionHeight != null && version.resolutionHeight! > 0
+            ? '${version.resolutionHeight}p'
+            : null;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onPlay,
+        child: Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 1),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color:
+                isActive
+                    ? MovieDetailTheme.accent.withValues(alpha: 0.08)
+                    : null,
+            border: Border.all(
+              color:
+                  isActive
+                      ? MovieDetailTheme.accent.withValues(alpha: 0.55)
+                      : MovieDetailTheme.border,
+            ),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: MovieDetailTheme.body(
+                        14,
+                        color: MovieDetailTheme.foreground,
+                      ),
+                    ),
+                    if (meta.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        meta,
+                        style: MovieDetailTheme.mono(AppTypography.bodySmall),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (resolution != null)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Text(
+                    resolution,
+                    style: MovieDetailTheme.mono(
+                      12,
+                      color: MovieDetailTheme.accent,
+                    ),
+                  ),
+                ),
+              Tooltip(
+                message: l10n.videoDetailPlay,
+                child: Icon(
+                  Icons.play_arrow_rounded,
+                  size: 22,
+                  color:
+                      isActive
+                          ? MovieDetailTheme.accent
+                          : MovieDetailTheme.secondaryText,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

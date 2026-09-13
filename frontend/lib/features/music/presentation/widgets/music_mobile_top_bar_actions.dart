@@ -1,4 +1,6 @@
-﻿import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
@@ -76,9 +78,9 @@ class MusicMobileTopBarActions extends ConsumerWidget {
     if (!context.mounted) {
       return;
     }
-    await container
-        .read(musicCenterControllerProvider.notifier)
-        .loadPlatformInfo();
-    container.invalidate(musicPlatformLibraryProvider);
+    // 关闭面板仅轻量刷新账号信息；曲库全量刷新由登录成功路径触发。
+    unawaited(
+      container.read(musicCenterControllerProvider.notifier).loadPlatformInfo(),
+    );
   }
 }

@@ -381,7 +381,8 @@ class WindowChromeController extends Notifier<WindowChromeState> {
   }
 
   Future<void> _settleNativeWindow() {
-    return Future<void>.delayed(const Duration(milliseconds: 90));
+    // 等待 Flutter 完成扩窗后的首帧布局，避免原生窗口已铺满但内容未同步时露白边。
+    return Future<void>.delayed(const Duration(milliseconds: 160));
   }
 
   Future<void> _saveNativeWindowPlacement() async {

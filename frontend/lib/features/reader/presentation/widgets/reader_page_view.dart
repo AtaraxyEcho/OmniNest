@@ -192,6 +192,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   @override
   void dispose() {
     widget.controller?.removeListener(_onExternalPageCommand);
+    _boundaryResetTimer?.cancel();
     _disposeControllers();
     _flipProgressNotifier.dispose();
     super.dispose();
@@ -341,22 +342,31 @@ class _ReaderPageViewState extends State<ReaderPageView>
     }
   }
 
+  Timer? _boundaryResetTimer;
+
   void _dispatchBoundaryRequest(
     VoidCallback callback, {
     required bool hasNeighbor,
   }) {
+    _boundaryResetTimer?.cancel();
     _boundaryRequestInFlight = true;
     _transitionInFlight = true;
     callback();
-    if (!hasNeighbor) {
-      Future<void>.delayed(const Duration(milliseconds: 250), () {
-        if (!mounted) return;
-        setState(() {
-          _boundaryRequestInFlight = false;
-          _transitionInFlight = false;
-        });
+    // 无论是否有邻章，都设置超时复位：切章失败/被吞时防止输入永久锁死。
+    final delay =
+        hasNeighbor
+            ? const Duration(milliseconds: 1200)
+            : const Duration(milliseconds: 250);
+    _boundaryResetTimer = Timer(delay, () {
+      if (!mounted) return;
+      if (!_boundaryRequestInFlight && !_transitionInFlight) {
+        return;
+      }
+      setState(() {
+        _boundaryRequestInFlight = false;
+        _transitionInFlight = false;
       });
-    }
+    });
   }
 
   // ══════════════════════════════════════════

@@ -16764,6 +16764,18 @@ abstract class AppLocalizations {
   /// **'Must match a key under file.local-media.mounts in application.yml'**
   String get adminMountKeyHint;
 
+  /// No description provided for @adminAutoCreateLibrarySource.
+  ///
+  /// In en, this message translates to:
+  /// **'Create video library source'**
+  String get adminAutoCreateLibrarySource;
+
+  /// No description provided for @adminAutoCreateLibrarySourceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically create a matching video library source after the mount location is created'**
+  String get adminAutoCreateLibrarySourceHint;
+
   /// No description provided for @adminRelativeRoot.
   ///
   /// In en, this message translates to:
@@ -17667,19 +17679,19 @@ abstract class AppLocalizations {
   /// No description provided for @videoDetailTabOverview.
   ///
   /// In en, this message translates to:
-  /// **'overview'**
+  /// **'Overview'**
   String get videoDetailTabOverview;
 
   /// No description provided for @videoDetailTabVersions.
   ///
   /// In en, this message translates to:
-  /// **'versions'**
+  /// **'Versions'**
   String get videoDetailTabVersions;
 
   /// No description provided for @videoDetailTabSubtitles.
   ///
   /// In en, this message translates to:
-  /// **'subtitles'**
+  /// **'Subtitles'**
   String get videoDetailTabSubtitles;
 
   /// No description provided for @videoDetailCast.

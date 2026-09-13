@@ -86,10 +86,8 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
       transitionBuilder:
           (child, animation) => FadeTransition(
             opacity: animation,
-            child: ScaleTransition(
-              scale: Tween<double>(begin: 0.985, end: 1).animate(animation),
-              child: child,
-            ),
+            // 仅淡入：避免缩放时透明沉浸层露出底层白/浅色边。
+            child: child,
           ),
       child:
           _immersivePlayerVisible
@@ -504,12 +502,9 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
     if (!mounted) {
       return;
     }
+    // 关闭面板仅轻量刷新账号信息；曲库全量刷新由登录成功路径触发，避免双触发卡顿。
     final musicController = ref.read(musicCenterControllerProvider.notifier);
-    await musicController.loadPlatformInfo();
-    if (!mounted) {
-      return;
-    }
-    ref.invalidate(musicPlatformLibraryProvider);
+    unawaited(musicController.loadPlatformInfo());
   }
 
   Future<void> _openBackdropSettings() {

@@ -356,6 +356,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       isLoadingChapter = false;
       refreshBookProgressNow();
       if (mounted) setState(() {});
+      _maybeSkipCoverChapter(chapterData);
     } catch (e) {
       if (kDebugMode) {
         readerDebugLog('ReaderView: loadCurrentChapter failed: $e');
@@ -382,6 +383,28 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     return mounted &&
         generation == loadGeneration &&
         chapterId == currentChapterId;
+  }
+
+  /// 封面/书讯章通常只有极少正文：首次进入或顺序切到此类短章时自动前进，
+  /// 避免用户卡在单页信息章上只能靠侧点二次加载。
+  void _maybeSkipCoverChapter(ChapterData chapterData) {
+    if (!mounted || isLoadingChapter || isSwitchingChapter) {
+      return;
+    }
+    final chapters = contentLoader?.allChapters ?? const <ReaderChapter>[];
+    if (chapters.length < 2) {
+      return;
+    }
+    final idx = chapters.indexWhere((c) => c.id == currentChapterId);
+    if (idx < 0 || idx >= chapters.length - 1) {
+      return;
+    }
+    final totalChars = chapterData.totalChars;
+    final isCoverLike = totalChars <= 80;
+    if (!isCoverLike) {
+      return;
+    }
+    unawaited(switchToChapter(chapters[idx + 1].id));
   }
 
   void _applyChapterNavigationIntent(

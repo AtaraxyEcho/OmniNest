@@ -473,7 +473,11 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
             spacing: 8,
             children: [
               IconButton.filledTonal(
-                onPressed: () => ref.invalidate(adminStorageProvider),
+                onPressed: () {
+                  ref.invalidate(adminStorageProvider);
+                  ref.invalidate(videoStorageLocationsProvider);
+                  ref.invalidate(videoLibrarySourcesProvider);
+                },
                 icon: const Icon(Icons.refresh_rounded),
                 tooltip: l10n.adminRefresh,
               ),
@@ -588,6 +592,8 @@ class _StorageLocationWizardState
   String? _mountKey;
   String? _parent;
   bool _saving = false;
+  bool _createLibrarySource = true;
+  VideoLibraryType _libraryType = VideoLibraryType.movie;
 
   @override
   void initState() {
@@ -610,13 +616,29 @@ class _StorageLocationWizardState
     if (name.isEmpty || mountKey == null) return;
     setState(() => _saving = true);
     try {
-      await ref
+      final location = await ref
           .read(adminOperationsActionsProvider)
           .createStorageLocation(
             name: name,
             mountKey: mountKey,
             relativeRoot: relativeRoot,
           );
+      if (!mounted) return;
+      if (_createLibrarySource) {
+        // 合并流程：建完挂载位置后立即创建影视库源，无需再走第二步。
+        await ref
+            .read(videoLibrarySourceActionsProvider)
+            .create(
+              name: name,
+              storageLocationId: location.id,
+              relativeRoot: '.',
+              libraryType: _libraryType,
+            );
+      }
+      if (!mounted) return;
+      ref.invalidate(adminStorageProvider);
+      ref.invalidate(videoStorageLocationsProvider);
+      ref.invalidate(videoLibrarySourcesProvider);
       if (!mounted) return;
       Navigator.of(context).pop();
     } on Exception catch (error) {
@@ -672,6 +694,48 @@ class _StorageLocationWizardState
               label: l10n.adminMountKey,
               helperText: l10n.adminMountKeyHint,
             ),
+            const SizedBox(height: 8),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(l10n.adminAutoCreateLibrarySource),
+              subtitle: Text(l10n.adminAutoCreateLibrarySourceHint),
+              value: _createLibrarySource,
+              onChanged:
+                  _saving
+                      ? null
+                      : (value) => setState(() => _createLibrarySource = value),
+            ),
+            if (_createLibrarySource) ...[
+              const SizedBox(height: 8),
+              AppDropdown<VideoLibraryType>(
+                value: _libraryType,
+                items: [
+                  for (final type in const [
+                    VideoLibraryType.movie,
+                    VideoLibraryType.tvSeries,
+                    VideoLibraryType.anime,
+                    VideoLibraryType.root,
+                  ])
+                    AppDropdownItem(
+                      value: type,
+                      label: switch (type) {
+                        VideoLibraryType.movie => l10n.videoLibraryTypeMovie,
+                        VideoLibraryType.tvSeries =>
+                          l10n.videoLibraryTypeTvSeries,
+                        VideoLibraryType.anime => l10n.videoLibraryTypeAnime,
+                        VideoLibraryType.root => l10n.videoLibraryTypeRoot,
+                      },
+                    ),
+                ],
+                onChanged:
+                    _saving
+                        ? null
+                        : (value) => setState(() => _libraryType = value!),
+                label: l10n.videoLibraryType,
+                helperText: l10n.videoLibraryTypeHint,
+              ),
+            ],
             const SizedBox(height: 14),
             Row(
               children: [

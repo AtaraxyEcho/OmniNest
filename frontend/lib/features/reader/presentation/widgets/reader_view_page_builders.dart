@@ -287,10 +287,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     final chapters = contentLoader?.allChapters ?? [];
     final chapterIdx = chapters.indexWhere((c) => c.id == currentChapterId);
     final currentChapter = chapterIdx >= 0 ? chapters[chapterIdx] : null;
+    // 以 currentChapterId 解析标题，避免切章后仍用上一章 content.title。
     final chapterTitle =
-        content.title.isNotEmpty
-            ? content.title
-            : (currentChapter?.title ?? '');
+        (currentChapter?.title.isNotEmpty == true)
+            ? currentChapter!.title
+            : (content.title.isNotEmpty ? content.title : '');
 
     return LayoutBuilder(
       builder: (context, constraints) {

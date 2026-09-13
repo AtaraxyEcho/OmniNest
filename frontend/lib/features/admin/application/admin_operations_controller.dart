@@ -5,6 +5,7 @@ import 'package:omninest/features/admin/domain/admin_analytics.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
+import 'package:omninest/features/video/application/movie_controller.dart';
 
 final adminSearchProvider = NotifierProvider<AdminSearchNotifier, String>(
   AdminSearchNotifier.new,
@@ -235,17 +236,18 @@ class AdminOperationsActions {
     return count;
   }
 
-  Future<void> createStorageLocation({
+  Future<AdminStorageLocation> createStorageLocation({
     required String name,
     required String mountKey,
     required String relativeRoot,
   }) async {
-    await _api.createStorageLocation(
+    final location = await _api.createStorageLocation(
       name: name,
       mountKey: mountKey,
       relativeRoot: relativeRoot,
     );
-    ref.invalidate(adminStorageProvider);
+    _invalidateStorageRelated();
+    return location;
   }
 
   Future<void> updateStorageLocation({
@@ -257,12 +259,19 @@ class AdminOperationsActions {
       name: location.name,
       enabled: enabled,
     );
-    ref.invalidate(adminStorageProvider);
+    _invalidateStorageRelated();
   }
 
   Future<void> deleteStorageLocation(String id) async {
     await _api.deleteStorageLocation(id);
+    _invalidateStorageRelated();
+  }
+
+  void _invalidateStorageRelated() {
     ref.invalidate(adminStorageProvider);
+    // 同页库源区依赖位置列表与库源列表，挂载变更后必须同步失效。
+    ref.invalidate(videoStorageLocationsProvider);
+    ref.invalidate(videoLibrarySourcesProvider);
   }
 
   Future<void> createExternalStorage({

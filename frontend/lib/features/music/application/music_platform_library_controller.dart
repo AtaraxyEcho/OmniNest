@@ -90,9 +90,16 @@ class MusicPlatformLibraryController
   }
 
   /// 重新加载全部平台账号内容。
+  ///
+  /// 刷新期间保留上一次成功数据，避免 UI 回落空状态闪烁。
   Future<void> refresh() async {
-    state = const AsyncLoading<MusicPlatformLibraryState>();
-    state = await AsyncValue.guard(_load);
+    final previous = state.asData?.value;
+    final next = await AsyncValue.guard(_load);
+    if (next.hasError && previous != null) {
+      state = AsyncData(previous);
+      return;
+    }
+    state = next;
   }
 
   /// 严格刷新实时事件涉及的平台账号曲库。
@@ -179,28 +186,35 @@ class MusicPlatformLibraryController
       statuses.where((status) => status.enabled && status.connected).map((
         status,
       ) async {
+        // 同平台内歌单与喜欢曲目并行加载，避免串行叠加外部延迟。
+        final futures = <Future<void>>[];
         if (status.capabilities.playlists) {
-          try {
-            playlistsByPlatform[status
-                .platform] = List<OnlinePlaylist>.unmodifiable(
-              await api.platformPlaylists(status.platform),
-            );
-          } on Object catch (error) {
-            failures['${status.platform}:playlists'] =
-                describeUserFacingError(error).message;
-          }
+          futures.add(() async {
+            try {
+              playlistsByPlatform[status
+                  .platform] = List<OnlinePlaylist>.unmodifiable(
+                await api.platformPlaylists(status.platform),
+              );
+            } on Object catch (error) {
+              failures['${status.platform}:playlists'] =
+                  describeUserFacingError(error).message;
+            }
+          }());
         }
         if (status.capabilities.likedTracks) {
-          try {
-            likedTracksByPlatform[status
-                .platform] = List<OnlineTrack>.unmodifiable(
-              await api.platformLikedTracks(status.platform),
-            );
-          } on Object catch (error) {
-            failures['${status.platform}:liked'] =
-                describeUserFacingError(error).message;
-          }
+          futures.add(() async {
+            try {
+              likedTracksByPlatform[status
+                  .platform] = List<OnlineTrack>.unmodifiable(
+                await api.platformLikedTracks(status.platform),
+              );
+            } on Object catch (error) {
+              failures['${status.platform}:liked'] =
+                  describeUserFacingError(error).message;
+            }
+          }());
         }
+        await Future.wait(futures);
       }),
     );
     final nextState = MusicPlatformLibraryState(
