@@ -2303,10 +2303,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicVisualizerColorHue => 'Hue';
 
   @override
-  String get musicVisualizerColorSaturation => 'Saturation';
+  String get musicVisualizerColorPreset => 'Preset colors';
 
   @override
-  String get musicVisualizerColorBrightness => 'Brightness';
+  String get musicVisualizerColorTheme => 'Theme colors';
+
+  @override
+  String get musicVisualizerColorCustom => 'Custom color';
+
+  @override
+  String get musicVisualizerColorHex => 'HEX value';
+
+  @override
+  String get musicVisualizerColorResetDefault => 'Reset to default';
 
   @override
   String get portalMusicVisualizerLyricGlow => 'Lyric glow';
@@ -5136,6 +5145,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerCollapse => 'Collapse';
+
+  @override
+  String get readerExpand => 'Expand';
 
   @override
   String get readerExpandFull => 'Show full text';

@@ -23,6 +23,7 @@ import 'package:omninest/features/music/presentation/player/music_immersive_lyri
 import 'package:omninest/features/music/presentation/deck/music_deck_queue_sheet.dart';
 import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
+import 'package:omninest/features/music/presentation/player/music_visual_color_picker.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
 
@@ -32,7 +33,6 @@ part 'music_immersive_audio_bar.dart';
 part 'music_immersive_controls.dart';
 part 'music_immersive_player_stage.dart';
 part 'music_immersive_preset_editor.dart';
-part 'music_immersive_visual_controls.dart';
 part 'music_immersive_track_header.dart';
 
 /// Music 模块拥有的桌面数字沉浸播放器。

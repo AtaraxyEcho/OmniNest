@@ -235,10 +235,15 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                   ),
                                 ),
                           ),
-                          _VisualColorField(
+                          MusicVisualColorField(
                             palette: widget.palette,
                             label: l10n.musicVisualizerLyricActiveColor,
                             value: Color(_draft.lyrics.activeColorValue),
+                            defaultValue: Color(
+                              PortalLyricVisualSettings
+                                  .defaults
+                                  .activeColorValue,
+                            ),
                             onChanged:
                                 (color) => _update(
                                   _draft.copyWith(
@@ -248,10 +253,13 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                   ),
                                 ),
                           ),
-                          _VisualColorField(
+                          MusicVisualColorField(
                             palette: widget.palette,
                             label: l10n.musicVisualizerLyricReadColor,
                             value: Color(_draft.lyrics.readColorValue),
+                            defaultValue: Color(
+                              PortalLyricVisualSettings.defaults.readColorValue,
+                            ),
                             onChanged:
                                 (color) => _update(
                                   _draft.copyWith(
@@ -261,10 +269,15 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                   ),
                                 ),
                           ),
-                          _VisualColorField(
+                          MusicVisualColorField(
                             palette: widget.palette,
                             label: l10n.musicVisualizerLyricUnreadColor,
                             value: Color(_draft.lyrics.unreadColorValue),
+                            defaultValue: Color(
+                              PortalLyricVisualSettings
+                                  .defaults
+                                  .unreadColorValue,
+                            ),
                             onChanged:
                                 (color) => _update(
                                   _draft.copyWith(
@@ -373,10 +386,15 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                     ),
                                   ),
                             ),
-                            _VisualColorField(
+                            MusicVisualColorField(
                               palette: widget.palette,
                               label: l10n.musicVisualizerLyricGlowColor,
                               value: Color(_draft.lyrics.glowColorValue),
+                              defaultValue: Color(
+                                PortalLyricVisualSettings
+                                    .defaults
+                                    .glowColorValue,
+                              ),
                               onChanged:
                                   (color) => _update(
                                     _draft.copyWith(

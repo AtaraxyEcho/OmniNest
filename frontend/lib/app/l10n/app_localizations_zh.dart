@@ -2236,10 +2236,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicVisualizerColorHue => '色相';
 
   @override
-  String get musicVisualizerColorSaturation => '饱和度';
+  String get musicVisualizerColorPreset => '预设颜色';
 
   @override
-  String get musicVisualizerColorBrightness => '亮度';
+  String get musicVisualizerColorTheme => '主题配色';
+
+  @override
+  String get musicVisualizerColorCustom => '自定义颜色';
+
+  @override
+  String get musicVisualizerColorHex => 'HEX 色值';
+
+  @override
+  String get musicVisualizerColorResetDefault => '恢复默认色';
 
   @override
   String get portalMusicVisualizerLyricGlow => '歌词溢光';
@@ -4973,6 +4982,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get readerCollapse => '收起';
+
+  @override
+  String get readerExpand => '展开';
 
   @override
   String get readerExpandFull => '展开全文';

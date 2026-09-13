@@ -4291,17 +4291,35 @@ abstract class AppLocalizations {
   /// **'Hue'**
   String get musicVisualizerColorHue;
 
-  /// No description provided for @musicVisualizerColorSaturation.
+  /// No description provided for @musicVisualizerColorPreset.
   ///
   /// In en, this message translates to:
-  /// **'Saturation'**
-  String get musicVisualizerColorSaturation;
+  /// **'Preset colors'**
+  String get musicVisualizerColorPreset;
 
-  /// No description provided for @musicVisualizerColorBrightness.
+  /// No description provided for @musicVisualizerColorTheme.
   ///
   /// In en, this message translates to:
-  /// **'Brightness'**
-  String get musicVisualizerColorBrightness;
+  /// **'Theme colors'**
+  String get musicVisualizerColorTheme;
+
+  /// No description provided for @musicVisualizerColorCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom color'**
+  String get musicVisualizerColorCustom;
+
+  /// No description provided for @musicVisualizerColorHex.
+  ///
+  /// In en, this message translates to:
+  /// **'HEX value'**
+  String get musicVisualizerColorHex;
+
+  /// No description provided for @musicVisualizerColorResetDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset to default'**
+  String get musicVisualizerColorResetDefault;
 
   /// No description provided for @portalMusicVisualizerLyricGlow.
   ///
@@ -9490,6 +9508,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Collapse'**
   String get readerCollapse;
+
+  /// No description provided for @readerExpand.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand'**
+  String get readerExpand;
 
   /// No description provided for @readerExpandFull.
   ///
