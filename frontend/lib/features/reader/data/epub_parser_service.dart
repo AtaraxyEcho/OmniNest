@@ -455,16 +455,10 @@ class EpubParserService {
     }
     try {
       final content = entry.content;
-      final bytes =
-          content is Uint8List
-              ? content
-              : content is List<int>
-              ? Uint8List.fromList(content)
-              : Uint8List(0);
-      if (bytes.length > maxBytes) {
+      if (content.length > maxBytes) {
         throw EpubParseLimitException('归档条目解压后超过解析上限: ${entry.name}');
       }
-      return bytes;
+      return content;
     } finally {
       entry.clear();
     }

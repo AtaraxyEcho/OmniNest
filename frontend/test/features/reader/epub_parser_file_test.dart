@@ -99,7 +99,7 @@ Future<void> _writeEpub(File file, String chapterContent) async {
         '</package>',
   );
   _addText(archive, 'OEBPS/chapter1.xhtml', chapterContent);
-  await file.writeAsBytes(ZipEncoder().encode(archive)!);
+  await file.writeAsBytes(ZipEncoder().encode(archive));
 }
 
 void _addText(Archive archive, String path, String value) {

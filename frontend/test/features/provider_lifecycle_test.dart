@@ -101,7 +101,7 @@ void main() {
             utf8.encode('application/epub+zip'),
           ),
         );
-    final encoded = ZipEncoder().encode(archive)!;
+    final encoded = ZipEncoder().encode(archive);
 
     service.isFixedLayout(Uint8List.fromList(encoded));
     expect(service.cachedArchive, isNotNull);

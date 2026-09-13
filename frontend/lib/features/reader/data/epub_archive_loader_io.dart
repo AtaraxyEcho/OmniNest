@@ -5,7 +5,7 @@ import 'package:omninest/features/reader/data/epub_archive_source.dart';
 EpubArchiveSource openEpubArchiveFile(String path) {
   final input = InputFileStream(path);
   try {
-    final archive = ZipDecoder().decodeBuffer(input);
+    final archive = ZipDecoder().decodeStream(input);
     return _IoEpubArchiveSource(input: input, archive: archive);
   } catch (_) {
     input.closeSync();

@@ -297,16 +297,10 @@ class ReaderContentPreprocessor {
     }
     try {
       final content = entry.content;
-      final bytes =
-          content is Uint8List
-              ? content
-              : content is List<int>
-              ? Uint8List.fromList(content)
-              : Uint8List(0);
-      if (bytes.length > maxBytes) {
+      if (content.length > maxBytes) {
         throw FormatException('归档图片解压后超过容量上限: ${entry.name}');
       }
-      return bytes;
+      return content;
     } finally {
       entry.clear();
     }
