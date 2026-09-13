@@ -71,8 +71,10 @@ class PortalCoverElementSettings {
       return defaults;
     }
     return PortalCoverElementSettings(
-      originalCoverEnabled: json['originalCoverEnabled'] as bool? ?? true,
-      borderEnabled: json['borderEnabled'] as bool? ?? true,
+      originalCoverEnabled:
+          json['originalCoverEnabled'] as bool? ??
+          defaults.originalCoverEnabled,
+      borderEnabled: json['borderEnabled'] as bool? ?? defaults.borderEnabled,
       sizeScale: _readDouble(json['sizeScale'], defaults.sizeScale),
       cornerRadius: _readDouble(json['cornerRadius'], defaults.cornerRadius),
       opacity: _readDouble(json['opacity'], defaults.opacity),
@@ -85,11 +87,11 @@ class PortalCoverElementSettings {
   }
 
   static const defaults = PortalCoverElementSettings(
-    originalCoverEnabled: true,
-    borderEnabled: true,
+    originalCoverEnabled: false,
+    borderEnabled: false,
     sizeScale: 1,
     cornerRadius: 8,
-    opacity: 0.18,
+    opacity: 1,
     tiltDegrees: 0,
   );
 

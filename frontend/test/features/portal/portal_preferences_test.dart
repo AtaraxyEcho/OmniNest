@@ -31,7 +31,9 @@ void main() {
       const preferences = PortalMusicVisualizerPreferences();
 
       expect(preferences.visual.spectrum.lowResponse, 1.08);
-      expect(preferences.visual.coverElements.opacity, 0.18);
+      expect(preferences.visual.coverElements.originalCoverEnabled, isFalse);
+      expect(preferences.visual.coverElements.borderEnabled, isFalse);
+      expect(preferences.visual.coverElements.opacity, 1);
       expect(preferences.visual.coverElements.tiltDegrees, 0);
       expect(preferences.visual.player.enabled, isTrue);
       expect(preferences.visual.player.audioBarEnabled, isTrue);
@@ -95,7 +97,8 @@ void main() {
         },
       );
 
-      expect(restored.visual.coverElements.opacity, 0.18);
+      expect(restored.visual.coverElements.originalCoverEnabled, isTrue);
+      expect(restored.visual.coverElements.opacity, 1);
       expect(restored.visual.coverElements.tiltDegrees, 0);
     });
 
