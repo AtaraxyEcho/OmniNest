@@ -1,6 +1,7 @@
 #include "flutter_window.h"
 
 #include <flutter/standard_method_codec.h>
+#include <dwmapi.h>
 #include <optional>
 #include <variant>
 
@@ -16,7 +17,7 @@ constexpr const char kShowWindowMethod[] = "showWindow";
 constexpr const char kIsWindowFullscreenMethod[] = "isWindowFullscreen";
 constexpr const char kHiddenArgument[] = "hidden";
 constexpr const char kFullscreenArgument[] = "fullscreen";
-}  // 命名空间
+}  // namespace
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -191,14 +192,15 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
                   WS_EX_WINDOWEDGE);
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
-    // 先清零 DWM 扩展边距，再贴齐显示器矩形，避免过渡期出现白边。
+    // Zero the DWM frame margins before snapping to the monitor rect so no
+    // white edges show up during the transition.
     MARGINS margins = {0, 0, 0, 0};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
     const RECT monitor = monitor_info.rcMonitor;
     SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
                  monitor.right - monitor.left, monitor.bottom - monitor.top,
                  SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-    // 再次贴齐，吸收 DPI/帧变更后的 1px 偏差。
+    // Snap again to absorb the 1px offset caused by DPI or frame changes.
     SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
                  monitor.right - monitor.left, monitor.bottom - monitor.top,
                  SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);

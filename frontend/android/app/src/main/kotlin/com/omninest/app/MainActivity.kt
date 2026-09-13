@@ -1,10 +1,12 @@
 package com.omninest.app
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.os.Build
+import android.os.PowerManager
 import android.util.Rational
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.android.FlutterActivity
@@ -41,7 +43,8 @@ class MainActivity : AudioServiceActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "isIgnoringBatteryOptimizations" -> {
-                    result.success(isIgnoringBatteryOptimizations)
+                    val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
+                    result.success(powerManager?.isIgnoringBatteryOptimizations(packageName) == true)
                 }
                 "requestIgnoreBatteryOptimizations" -> {
                     val intent = Intent(
