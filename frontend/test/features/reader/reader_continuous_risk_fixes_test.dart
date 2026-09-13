@@ -119,12 +119,13 @@ void main() {
   });
 
   group('P4 neighbor HTML retention', () {
-    test('±1 邻章保留 HTML 供切章直达，更远章节被驱逐', () async {
+    test('±2 邻章保留 HTML 供切章直达，更远章节被驱逐', () async {
       final loader = ReaderContentLoader(
         allChapters: [
           ReaderChapter(id: 'c0', title: 'A'),
           ReaderChapter(id: 'c1', title: 'B'),
           ReaderChapter(id: 'c2', title: 'C'),
+          ReaderChapter(id: 'c3', title: 'D'),
         ],
       );
       final settings = ReaderViewSettings();
@@ -155,9 +156,13 @@ void main() {
       final active = loader.getByChapterId('c0');
       expect(active!.content.content, isNotEmpty);
 
-      // 超出 ±1 的章节被整体驱逐，不再占用内存。
-      expect(loader.getByChapterId('c2'), isNull);
-      expect(loader.contentFor('c2'), isNull);
+      // ±2 窗口内章节保留。
+      expect(loader.getByChapterId('c2'), isNotNull);
+      expect(loader.contentFor('c2'), isNotNull);
+
+      // 超出 ±2 的章节被整体驱逐，不再占用内存。
+      expect(loader.getByChapterId('c3'), isNull);
+      expect(loader.contentFor('c3'), isNull);
     });
   });
 }

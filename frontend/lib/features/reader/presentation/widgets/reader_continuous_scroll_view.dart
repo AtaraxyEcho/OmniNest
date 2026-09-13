@@ -111,17 +111,7 @@ class _ReaderContinuousScrollViewState
     if (resolved != null) {
       widget.onScrollPosition?.call(resolved);
     }
-    final onExpand = widget.onExpandWindow;
-    if (onExpand == null) {
-      return;
-    }
-    // 以实际 maxScrollExtent 为准：窗口 totalHeight 含估算，与真实布局可能不一致。
-    final max = position.maxScrollExtent;
-    if (max > 0 && position.pixels + position.viewportDimension * 1.5 >= max) {
-      onExpand(forward: true);
-    } else if (widget.controller.shouldExpandBackward(position.pixels)) {
-      onExpand(forward: false);
-    }
+    // 扩窗只走 handleResolvedPosition 的节流路径，此处不重复触发。
   }
 
   double _viewportAnchorY() {
@@ -200,9 +190,9 @@ class _ReaderContinuousScrollViewState
         ),
       );
       if (!entry.isReady) {
-        // 未就绪章占用估算高度，保证 maxScrollExtent 与窗口 totalHeight 一致，
-        // 用户可继续滚入并触发扩挂，而不是卡在小 spinner 上。
-        final estimated = entry.totalHeight.clamp(120.0, 4000.0);
+        // 未就绪章按估算高度占位（与 estimateHeight 同源），去掉硬 4000 钳制，
+        // 保证 maxScrollExtent 与窗口 totalHeight 一致，可继续滚入并扩挂。
+        final estimated = entry.totalHeight.clamp(160.0, 20000.0);
         slivers.add(
           SliverToBoxAdapter(
             key: ValueKey('ch-loading-${entry.chapterId}'),

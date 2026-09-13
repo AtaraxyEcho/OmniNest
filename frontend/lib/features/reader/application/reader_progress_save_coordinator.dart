@@ -10,7 +10,7 @@ typedef ReaderProgressWriter =
 class ReaderProgressSaveCoordinator {
   ReaderProgressSaveCoordinator({
     required ReaderProgressWriter writer,
-    this.debounce = const Duration(milliseconds: 500),
+    this.debounce = const Duration(milliseconds: 900),
     void Function(Object error, StackTrace stackTrace)? onError,
   }) : _writer = writer,
        _onError = onError;

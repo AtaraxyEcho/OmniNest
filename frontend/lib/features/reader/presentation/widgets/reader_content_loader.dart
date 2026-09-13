@@ -216,6 +216,9 @@ class ChapterData {
 const _metricsPhaseOneBlocks = 12;
 const _metricsBatchBlocks = 80;
 
+/// 连续滚动窗口缓存半径，须与 sideChapterCount / setActive cacheRadius 一致。
+const kContinuousCacheRadius = 2;
+
 /// 翻页模式的懒分页导航器。
 ///
 /// 按需计算单页并保留页边界，避免重复执行文本测量。
@@ -660,7 +663,7 @@ class ReaderContentLoader {
     );
   }
 
-  /// 章节是否位于活动章 ±1 范围内。
+  /// 章节是否位于活动章缓存半径内（与连续滚动窗口对齐）。
   bool _isImmediateNeighbor(String chapterId) {
     final activeChapterId = _activeChapterId;
     if (activeChapterId == null) {
@@ -668,7 +671,9 @@ class ReaderContentLoader {
     }
     final activeIdx = _chapterIndex(activeChapterId);
     final idx = _chapterIndex(chapterId);
-    return activeIdx >= 0 && idx >= 0 && (idx - activeIdx).abs() <= 1;
+    return activeIdx >= 0 &&
+        idx >= 0 &&
+        (idx - activeIdx).abs() <= kContinuousCacheRadius;
   }
 
   void _prepareScrollMetricsIfNeeded(
@@ -831,7 +836,7 @@ class ReaderContentLoader {
     final chapterIndex = _chapterIndex(chapterId);
     return activeIndex < 0 ||
         chapterIndex < 0 ||
-        (chapterIndex - activeIndex).abs() <= 1;
+        (chapterIndex - activeIndex).abs() <= kContinuousCacheRadius;
   }
 
   /// 获取章节数据（需传入当前 settings 以匹配缓存 key）。
@@ -895,11 +900,11 @@ class ReaderContentLoader {
 
   /// 切换活动章节，驱逐远章，返回需预加载的 chapterId 列表。
   ///
-  /// 缓存半径与翻页页流 windowSide（2）对齐，避免 ±2 章恒为空。
+  /// 缓存半径与连续滚动窗口 sideChapterCount 对齐。
   List<String> setActive(String chapterId) {
     _activeChapterId = chapterId;
     final activeIdx = _chapterIndex(chapterId);
-    const cacheRadius = 2;
+    const cacheRadius = kContinuousCacheRadius;
 
     _cache.removeWhere((key, _) {
       final idx = _chapterIndex(key.chapterId);
@@ -1076,7 +1081,7 @@ class ReaderContentLoader {
     required double pageWidth,
     required ReaderViewSettings settings,
     double textScale = 1.0,
-    int radius = 1,
+    int radius = kContinuousCacheRadius,
   }) {
     for (final id in [
       anchorChapterId,

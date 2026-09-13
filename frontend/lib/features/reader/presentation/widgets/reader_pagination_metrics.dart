@@ -24,7 +24,8 @@ abstract final class _ReaderPaginationMetrics {
       textDirection: TextDirection.ltr,
       maxLines: null,
     )..layout(maxWidth: effectiveWidth);
-    return 8 + painter.height + 24;
+    // 与 ReaderContentBlockItem._heading 的 Padding(top:8, bottom:8) 对齐。
+    return 8 + painter.height + 8;
   }
 
   static double paragraphHeight(
@@ -35,8 +36,9 @@ abstract final class _ReaderPaginationMetrics {
     double textScale,
   ) {
     var height = 0.0;
+    // 与渲染一致：仅 hasTrailingSpacing 时加 0.6 字号间距，不再另加 lineHeight。
     if (hasTrailingSpacing) {
-      height += settings.fontSize * settings.lineHeight;
+      height += settings.fontSize * 0.6;
     }
     for (final line in lines) {
       final spans = lineTextSpans(line.spans, settings, textScale);
@@ -52,7 +54,7 @@ abstract final class _ReaderPaginationMetrics {
       )..layout(maxWidth: effectiveWidth);
       height += painter.height;
     }
-    return height + settings.fontSize * 0.6;
+    return height;
   }
 
   /// 图片固定槽位高度：与 ReaderContentImage 的渲染槽一致。

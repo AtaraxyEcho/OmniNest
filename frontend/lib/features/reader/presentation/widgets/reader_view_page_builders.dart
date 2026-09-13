@@ -959,18 +959,26 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     );
     final ids = [
       currentChapterId,
-      ...loader.neighborChapterIds(currentChapterId),
+      ...loader.neighborChapterIds(
+        currentChapterId,
+        radius: kContinuousCacheRadius,
+      ),
     ];
     for (final id in ids) {
       final data = loader.getByChapterId(id);
       final heights = data?.cumulativeHeights;
+      // 不用 layoutVersion：精测分批会频繁 bump，导致每批整页 rebuild。
+      final heightBucket =
+          heights == null || heights.isEmpty
+              ? -1.0
+              : (heights.last / 64).roundToDouble() * 64;
       hash = Object.hash(
         hash,
         id,
         data?.blocks.length ?? 0,
         data?.totalChars ?? 0,
-        data?.layoutVersion ?? -1,
-        heights == null || heights.isEmpty ? -1.0 : heights.last,
+        data?.hasPreciseHeights ?? false,
+        heightBucket,
       );
     }
     return hash;
@@ -1057,6 +1065,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   }
 
   /// 前缀章高度变化时补偿滚动偏移，避免测高收敛导致视口跳动。
+  ///
+  /// 滚轮连续滚动时 offset 每帧都在变：不能因此丢弃补偿，改为
+  /// 相对前缀 delta 立即 jumpTo，并同步观测 offset，避免二次误判。
   void _compensateScrollForPrefixDelta(double? previousPrefix) {
     if (previousPrefix == null ||
         isRestoringProgress ||
@@ -1065,22 +1076,10 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         isSwitchingChapter) {
       return;
     }
-    // 用户正在拖动/点击时不做像素补偿，避免封面图加载导致的回跳。
-    final timeSincePointerDown =
-        DateTime.now().difference(lastPointerDownTime).inMilliseconds;
-    if (timeSincePointerDown < 800) {
+    // 手指按住时延迟到抬手后由下一次布局补偿，避免与拖动抢位置。
+    if (pointerDownActive) {
       return;
     }
-    // 滚轮/触控板滚动：offset 持续变化时也不补偿，避免与用户抢位置。
-    final nowOffset =
-        scrollController.hasClients ? scrollController.offset : -1.0;
-    if (nowOffset >= 0 &&
-        _lastCompensationObservedOffset >= 0 &&
-        (nowOffset - _lastCompensationObservedOffset).abs() > 1.0) {
-      _lastCompensationObservedOffset = nowOffset;
-      return;
-    }
-    _lastCompensationObservedOffset = nowOffset;
     final nextPrefix = continuousScrollController.prefixHeightOf(
       currentChapterId,
     );
@@ -1096,11 +1095,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       final max = scrollController.position.maxScrollExtent;
       final target = (scrollController.offset + captured).clamp(0.0, max);
       scrollController.jumpTo(target);
-      _lastCompensationObservedOffset = target;
     });
   }
-
-  double _lastCompensationObservedOffset = -1;
 
   Map<String, List<ReaderAnnotation>> _continuousAnnotationsByChapter() {
     final loader = contentLoader;
