@@ -203,12 +203,14 @@ class _ReaderPageViewState extends State<ReaderPageView>
   }
 
   void _onExternalPageCommand() {
-    if (_inputBlocked) return;
+    // 底栏/快捷键是显式翻页意图，不能被上一次手势残留的滚动状态吞掉；
+    // 重复触发仍由 _tapTurnBlocked 内的动画与边界请求标志挡住。
+    if (_tapTurnBlocked) return;
     final direction = widget.controller?.direction ?? 0;
     if (direction > 0) {
-      _goNextPage();
+      _goNextPage(tapTurn: true);
     } else if (direction < 0) {
-      _goPreviousPage();
+      _goPreviousPage(tapTurn: true);
     }
   }
 
@@ -242,9 +244,20 @@ class _ReaderPageViewState extends State<ReaderPageView>
     final ctrl = _pageController;
     if (ctrl == null || !ctrl.hasClients) return;
     final target = widget.state.pageIndex;
-    if ((ctrl.page ?? target).round() != target) {
-      ctrl.jumpToPage(target);
+    if ((ctrl.page ?? target).round() == target) {
+      return;
     }
+    // LayoutBuilder 重建期间 didUpdateWidget 可能发生在 layout 回调内；
+    // 同步 jumpToPage 会立刻派发 ScrollNotification / onPageChanged，
+    // 上游若在回调里 setState 会触发 build 期标记脏树。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final controller = _pageController;
+      if (controller == null || !controller.hasClients) return;
+      if ((controller.page ?? target).round() != target) {
+        controller.jumpToPage(target);
+      }
+    });
   }
 
   void _cacheCurrentPage() {
@@ -271,9 +284,18 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _transitionInFlight ||
       _boundaryRequestInFlight;
 
+  /// 点击热区触发的翻页只受程序化动画与边界请求约束。
+  ///
+  /// 指针按下时 PageView 的拖拽识别器会先赢得手势竞技场并派发 ScrollStart，
+  /// 而原始 Listener 的 onPointerUp 早于该手势的结束处理执行：此刻
+  /// [_slideScrolling]/[_transitionInFlight] 仍为 true。若沿用 [_inputBlocked]，
+  /// 点击翻页会被自身按下动作产生的状态吞掉（点击右侧无效的根因）。
+  bool get _tapTurnBlocked =>
+      widget.state.isPaginating || _isAnimating || _boundaryRequestInFlight;
+
   /// 统一：下一页。
-  void _goNextPage() {
-    if (_inputBlocked) return;
+  void _goNextPage({bool tapTurn = false}) {
+    if (tapTurn ? _tapTurnBlocked : _inputBlocked) return;
 
     final nextIndex = widget.state.pageIndex + 1;
     final atBoundary = nextIndex >= _localPageCount && !widget.state.hasMore;
@@ -291,6 +313,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
       if (ctrl != null && ctrl.hasClients) {
         _transitionInFlight = true;
         unawaited(_animateSlideTo(ctrl, nextIndex));
+      } else {
+        // 控制器尚未挂载：下一帧重试，避免点击右侧/底栏无响应。
+        _scheduleSlideRetry();
       }
     } else {
       _transitionInFlight = true;
@@ -300,9 +325,29 @@ class _ReaderPageViewState extends State<ReaderPageView>
     }
   }
 
+  bool _slideRetryScheduled = false;
+
+  void _scheduleSlideRetry() {
+    if (_slideRetryScheduled) return;
+    _slideRetryScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _slideRetryScheduled = false;
+      if (!mounted || _tapTurnBlocked) return;
+      final ctrl = _pageController;
+      if (ctrl != null && ctrl.hasClients) {
+        final nextIndex = widget.state.pageIndex + 1;
+        final atBoundary =
+            nextIndex >= _localPageCount && !widget.state.hasMore;
+        if (atBoundary) return;
+        _transitionInFlight = true;
+        unawaited(_animateSlideTo(ctrl, nextIndex));
+      }
+    });
+  }
+
   /// 统一：上一页。
-  void _goPreviousPage() {
-    if (_inputBlocked) return;
+  void _goPreviousPage({bool tapTurn = false}) {
+    if (tapTurn ? _tapTurnBlocked : _inputBlocked) return;
 
     final atBoundary = widget.state.pageIndex == 0;
 
@@ -319,6 +364,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
       if (ctrl != null && ctrl.hasClients) {
         _transitionInFlight = true;
         unawaited(_animateSlideTo(ctrl, widget.state.pageIndex - 1));
+      } else {
+        _scheduleSlideRetry();
       }
     } else {
       _transitionInFlight = true;
@@ -340,10 +387,26 @@ class _ReaderPageViewState extends State<ReaderPageView>
         );
       }
     } finally {
-      if (mounted && widget.state.pageIndex != pageIndex) {
-        setState(() => _transitionInFlight = false);
+      // 动画/jump 结束后必须解锁输入：父级 pageIndex 更新有帧延迟，
+      // 不能只在目标页未到达时清理，否则 _transitionInFlight 会卡死翻页。
+      if (mounted) {
+        _scheduleTransitionRelease();
       }
     }
+  }
+
+  void _scheduleTransitionRelease() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _slideScrolling ||
+          _boundaryRequestInFlight ||
+          _probingNext) {
+        return;
+      }
+      if (_transitionInFlight) {
+        setState(() => _transitionInFlight = false);
+      }
+    });
   }
 
   Timer? _boundaryResetTimer;
@@ -442,6 +505,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
     }
 
     widget.callbacks.onPageChanged(index);
+    // 翻页可能由 jumpToPage 触发（无 ScrollEnd 复位机会），统一补一次解锁。
+    _scheduleTransitionRelease();
   }
 
   // ── 交互层：点击热区 ──
@@ -522,9 +587,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
     final rightBound = w * (1 - _rightZoneRatio);
 
     if (x < leftBound) {
-      _goPreviousPage();
+      _goPreviousPage(tapTurn: true);
     } else if (x > rightBound) {
-      _goNextPage();
+      _goNextPage(tapTurn: true);
     } else {
       widget.callbacks.onToggleControls();
     }
@@ -563,6 +628,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
         _probingNext = false;
       });
       widget.callbacks.onPageChanged(probeIndex);
+      // 探测页由 jumpToPage 到达时没有 ScrollEnd 复位输入锁，补一次解锁。
+      _scheduleTransitionRelease();
     } else {
       _probingNext = false;
       _dispatchBoundaryRequest(

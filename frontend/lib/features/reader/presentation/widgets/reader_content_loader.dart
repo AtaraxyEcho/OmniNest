@@ -310,16 +310,30 @@ class PageNavigator {
 
   /// 计算指定页的切片（递归依赖前一页）。
   ///
-  /// 直接用上一页的 endCharOffset 作为起始点，
-  /// 确保 pages[i].endCharOffset == pages[i+1].startCharOffset。
+  /// 用上一页的链接游标作为起始点。图片等零字符块的页面真实字符区间为零宽，
+  /// 必须依赖 [PageSlice.nextCursor] 推进，否则页链会卡死或跳过图片。
   PageSlice? _computeSlice(int pageIndex) {
     final prevSlice = pageIndex > 0 ? getSlice(pageIndex - 1) : null;
     if (prevSlice != null &&
-        prevSlice.endCharOffset <= prevSlice.startCharOffset) {
+        prevSlice.nextCursor <= prevSlice.startCharOffset) {
       return null;
     }
-    final startCharOffset = prevSlice?.endCharOffset ?? 0;
-    return computeFn(startCharOffset);
+    final startCharOffset = prevSlice?.nextCursor ?? 0;
+    final slice = computeFn(startCharOffset);
+    if (slice == null) {
+      return null;
+    }
+    // 无进展保护：游标校正后若得到与上一页完全相同的页（块与行范围一致），
+    // 说明无法继续推进，判定内容结束，避免页链死循环。
+    if (prevSlice != null &&
+        slice.startIndex == prevSlice.startIndex &&
+        slice.startLine == prevSlice.startLine &&
+        slice.endIndex == prevSlice.endIndex &&
+        slice.endLine == prevSlice.endLine &&
+        slice.nextCursor <= prevSlice.nextCursor) {
+      return null;
+    }
+    return slice;
   }
 
   /// 预算相邻页（异步安全，不阻塞）。
@@ -745,10 +759,23 @@ class ReaderContentLoader {
     final estimated = List<double>.filled(blocks.length, 0);
     var running = 0.0;
     for (var i = 0; i < blocks.length; i++) {
-      running +=
-          i < headCount
-              ? headHeights[i] - (i == 0 ? 0.0 : headHeights[i - 1])
-              : (typeAverages?[blocks[i].runtimeType] ?? estimateBase);
+      final block = blocks[i];
+      double height;
+      if (i < headCount) {
+        height = headHeights[i] - (i == 0 ? 0.0 : headHeights[i - 1]);
+      } else if (block is ImageBlock || block is DividerBlock) {
+        // 图片/分隔线高度由宽度公式确定，不可用类型均值估算；
+        // 错误估算会在精测收敛时造成滚动进度跳变。
+        height = ReaderPaginationEngine.measureBlockHeight(
+          block,
+          pageWidth,
+          settings,
+          textScale: textScale,
+        );
+      } else {
+        height = typeAverages?[block.runtimeType] ?? estimateBase;
+      }
+      running += height;
       estimated[i] = running;
     }
     data.updateCumulativeHeights(estimated);
@@ -808,7 +835,15 @@ class ReaderContentLoader {
       return;
     }
     final blocks = data.blocks;
-    final heights = List<double>.filled(blocks.length, 0);
+    final baseline = data.cumulativeHeights;
+    final hasBaseline = baseline.length == blocks.length;
+    // 以现有估算数组为底：分批精测期间尚未测到的尾部必须保留估算高度
+    // （并按已测段累计差平移），否则 cumulative.last 在收敛前恒为 0，
+    // 窗口高度塌陷会造成滚动进度与视口位置跳变（图片章节尤为明显）。
+    final heights =
+        hasBaseline
+            ? List<double>.of(baseline)
+            : List<double>.filled(blocks.length, 0);
     var cumulative = 0.0;
     try {
       for (var i = 0; i < blocks.length; i++) {
@@ -820,6 +855,12 @@ class ReaderContentLoader {
         );
         heights[i] = cumulative;
         if ((i + 1) % _metricsBatchBlocks == 0 || i == blocks.length - 1) {
+          if (hasBaseline && i < blocks.length - 1) {
+            final delta = cumulative - baseline[i];
+            for (var j = i + 1; j < blocks.length; j++) {
+              heights[j] = baseline[j] + delta;
+            }
+          }
           data.updateCumulativeHeights(heights);
           _notifyLayoutInvalidated();
           await Future<void>.delayed(Duration.zero);
@@ -1234,7 +1275,14 @@ class ReaderContentLoader {
     }
     var accumulated = 0;
     for (var i = 0; i < data.blocks.length; i++) {
-      final blockChars = _blockCharCount(data.blocks[i]);
+      final block = data.blocks[i];
+      final blockChars = _blockCharCount(block);
+      // 图片等零字符块：charOffset 落在块边界时优先映射到图片起点，
+      // 避免恢复时直接跳到下一段正文、把整图甩出视口。
+      if (blockChars == 0 && block is ImageBlock && charOffset == accumulated) {
+        final blockStart = i > 0 ? data.cumulativeHeights[i - 1] : 0.0;
+        return blockStart;
+      }
       if (accumulated + blockChars > charOffset) {
         // charOffset 落在这个 block 内
         final blockStart = i > 0 ? data.cumulativeHeights[i - 1] : 0.0;

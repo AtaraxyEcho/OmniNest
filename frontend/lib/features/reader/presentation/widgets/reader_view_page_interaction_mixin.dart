@@ -207,9 +207,23 @@ mixin ReaderViewPageInteractionMixin
       cachedContent = content;
       lastLoadedChapterId = chapterId;
     }
+    // 滚动回调可能来自 layout 阶段，禁止同步 setState。
     if (mounted) {
-      setState(() {});
+      _scheduleContinuousAdoptRebuild();
     }
+  }
+
+  bool _continuousAdoptRebuildScheduled = false;
+
+  void _scheduleContinuousAdoptRebuild() {
+    if (_continuousAdoptRebuildScheduled) return;
+    _continuousAdoptRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _continuousAdoptRebuildScheduled = false;
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   /// 连续滚动窗口扩挂：以窗口边缘章为基准预取并重建。

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/widgets.dart' show Size;
+import 'package:flutter/widgets.dart' show Size, WidgetsBinding;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
@@ -79,11 +79,14 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
       final bookmarks = await ref
           .read(readerDataManagerProvider)
           .loadBookmarks(itemId);
-      if (mounted) {
+      if (!mounted) return;
+      // 查询返回时可能仍处于 layout/build 回调，统一延后到帧末。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         setState(() {
           isBookmarked = bookmarks.isNotEmpty;
         });
-      }
+      });
     } on Exception catch (e) {
       if (kDebugMode) {
         readerDebugLog('ReaderView: bookmark state query failed: $e');

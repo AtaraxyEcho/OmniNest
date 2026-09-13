@@ -16,6 +16,7 @@ class PageSlice {
     this.endLine = -1,
     this.startCharOffset = 0,
     this.endCharOffset = 0,
+    this.cursorEnd = -1,
   });
 
   final int startIndex;
@@ -28,6 +29,17 @@ class PageSlice {
 
   /// 本页结束字符在章节全文中的偏移（不含）。
   final int endCharOffset;
+
+  /// 链接下一页的游标偏移；负值表示与 [endCharOffset] 相同。
+  ///
+  /// 图片等零字符块在字符轴上宽度为 0，无法用真实字符偏移区分「图片页」
+  /// 与「图片之后的页」。图片页的 [startCharOffset]/[endCharOffset] 保持
+  /// 真实偏移（供进度保存与恢复），翻页游标则由 [cursorEnd] 指向图片之后，
+  /// 保证页链能够继续推进且不吞掉后一段正文的首字符。
+  final int cursorEnd;
+
+  /// 下一页的计算起点。
+  int get nextCursor => cursorEnd >= 0 ? cursorEnd : endCharOffset;
 
   int get length => endIndex - startIndex;
 }

@@ -722,11 +722,19 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     ScrollPhysics? scrollPhysics,
     String? chapterTitle,
   }) {
-    final blocks = BlockClipper.clipBlocksByCharRange(
-      data.blocks,
-      slice.startCharOffset,
-      slice.endCharOffset,
-    );
+    // 图片独占页的真实字符区间为零宽，只能按块区间取内容。
+    final blocks =
+        slice.endCharOffset > slice.startCharOffset
+            ? BlockClipper.clipBlocksByCharRange(
+              data.blocks,
+              slice.startCharOffset,
+              slice.endCharOffset,
+            )
+            : BlockClipper.clipBlocksByIndexRange(
+              data.blocks,
+              slice.startIndex,
+              slice.endIndex,
+            );
 
     bool isFirstBlockContinuation = false;
     if (blocks.isNotEmpty && slice.startCharOffset > 0) {

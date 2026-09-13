@@ -457,10 +457,24 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       cachedContent = content;
       lastLoadedChapterId = chapterId;
     }
-    checkBookmarkState();
+    unawaited(checkBookmarkState());
+    // 翻页 onPageChanged 可能来自 jumpToPage 的 layout 回调，禁止同步 setState。
     if (mounted) {
-      setState(() {});
+      _scheduleAdoptRebuild();
     }
+  }
+
+  bool _adoptRebuildScheduled = false;
+
+  void _scheduleAdoptRebuild() {
+    if (_adoptRebuildScheduled) return;
+    _adoptRebuildScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _adoptRebuildScheduled = false;
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   void _applyChapterNavigationIntent(

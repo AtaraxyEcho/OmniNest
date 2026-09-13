@@ -66,8 +66,10 @@ abstract final class _ReaderPaginationMetrics {
   }
 
   static double imageHeight(double effectiveWidth, String? caption) {
-    // 与 ReaderContentImage 一致：Padding 24*2 + 固定槽位 + 可选题注。
-    var height = imageSlotHeight(effectiveWidth) + 48;
+    // 与 ReaderContentImage 一致：Padding 24*2 + 容器边框 1*2 + 固定槽位 + 可选题注。
+    // 边框计入是必须的：Container 会把 BoxDecoration.padding（边框宽度）加进自身
+    // 尺寸，漏算会让每个图片位置比真实布局少 2px，多图章节累积成明显位置漂移。
+    var height = imageSlotHeight(effectiveWidth) + 48 + 2;
     final captionText = caption?.trim() ?? '';
     if (captionText.isNotEmpty) {
       // 题注：top 10 + TextPainter（与渲染 Text 同字号/字形）。

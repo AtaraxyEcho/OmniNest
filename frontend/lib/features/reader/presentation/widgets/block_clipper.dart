@@ -40,6 +40,21 @@ class BlockClipper {
     return lo;
   }
 
+  /// 按块索引范围裁剪：保留 `[startIndex, endIndex)` 内的块。
+  ///
+  /// 供零字符块（图片独占页）使用：这类页面的真实字符区间为零宽，
+  /// 无法用字符范围表达，只能按块区间取。
+  static List<ContentBlock> clipBlocksByIndexRange(
+    List<ContentBlock> blocks,
+    int startIndex,
+    int endIndex,
+  ) {
+    final start = startIndex.clamp(0, blocks.length);
+    final end = endIndex.clamp(start, blocks.length);
+    if (start >= end) return [];
+    return blocks.sublist(start, end);
+  }
+
   /// 按字符范围裁剪 blocks 列表。
   ///
   /// 只保留 [startCharOffset, endCharOffset) 范围内的内容。
@@ -54,7 +69,12 @@ class BlockClipper {
 
     final offsets = _prefixFor(blocks);
     // 二分定位第一个 blockEnd > startCharOffset 的块
-    final firstIdx = _lowerBound(offsets, startCharOffset);
+    var firstIdx = _lowerBound(offsets, startCharOffset);
+    // 零字符块（图片/分隔线）宽度为 0，二分会把起点正好落在其上的这类块跳过，
+    // 导致图片页取不到图片本体；向前回退把它纳入。
+    while (firstIdx > 0 && offsets[firstIdx] == startCharOffset) {
+      firstIdx--;
+    }
     if (firstIdx >= blocks.length) return [];
 
     final result = <ContentBlock>[];

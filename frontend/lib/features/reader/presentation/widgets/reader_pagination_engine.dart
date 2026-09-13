@@ -588,6 +588,23 @@ class ReaderPaginationEngine {
       if (!ref.isTextual) {
         // 非文本块：固定高度
         final h = fixedHeights[i];
+        final isImage = blocks[ref.blockIndex] is ImageBlock;
+        // 主流阅读器约定：大图独占一页，避免图文混排导致半截图。
+        if (isImage) {
+          if (i > pageStartIdx) {
+            _closePage(slices, lineRefs, pageStartIdx, i);
+            pageStartIdx = i;
+            usedHeight = 0;
+          }
+          usedHeight += math.min(h, pageHeight);
+          i++;
+          if (i < lineRefs.length) {
+            _closePage(slices, lineRefs, pageStartIdx, i);
+            pageStartIdx = i;
+            usedHeight = 0;
+          }
+          continue;
+        }
         if (usedHeight + h > pageHeight && i > pageStartIdx) {
           _closePage(slices, lineRefs, pageStartIdx, i);
           pageStartIdx = i;
@@ -787,11 +804,23 @@ class ReaderPageLayout {
         endCharOffset: 0,
       );
     }
-    if (startCharOffset >= _totalChars) return null;
+
+    // 图片页寻址：零字符图片块在字符轴上宽度为 0，普通二分定位会跳过它，
+    // 导致放不下整页的图片被静默丢弃。游标落在图片块起点时单独产出一页。
+    final imagePage = _imagePageAt(startCharOffset);
+    if (imagePage != null) {
+      return imagePage;
+    }
+
+    // 游标紧跟在图片页之后时，真实起点需回退到图片后一段正文的块首，
+    // 否则该页会裁掉正文的第一个字符（图片页游标 +1 与首字符偏移重合）。
+    final effectiveStart = _snapAfterZeroWidthRun(startCharOffset);
+
+    if (effectiveStart >= _totalChars) return null;
 
     final budget = pageHeight - 1;
     var usedHeight = 0.0;
-    var blockIndex = _findStartBlockIndex(startCharOffset);
+    var blockIndex = _findStartBlockIndex(effectiveStart);
     if (blockIndex >= blocks.length) return null;
     final startBlockIndex = blockIndex;
 
@@ -799,7 +828,7 @@ class ReaderPageLayout {
       final block = blocks[blockIndex];
       if (_isAtomicBlock(block)) {
         if (_ReaderPaginationTextLayout.blockCharCount(block) > 0 &&
-            _charOffsets[blockIndex] < startCharOffset) {
+            _charOffsets[blockIndex] < effectiveStart) {
           blockIndex++;
           continue;
         }
@@ -813,11 +842,32 @@ class ReaderPageLayout {
             textScale: textScale,
           ),
         );
+        // 图片独占一页：当前页已有正文时先收尾，图片由下一页单独渲染。
+        final imageGroupStart = _imageGroupStart(blockIndex);
+        if (imageGroupStart != null) {
+          if (imageGroupStart > startBlockIndex) {
+            return PageSlice(
+              startIndex: startBlockIndex,
+              endIndex: imageGroupStart,
+              startCharOffset: effectiveStart,
+              endCharOffset: _charOffsets[imageGroupStart],
+            );
+          }
+          // 当前页即图片组本身（正常情况下由 _imagePageAt 处理）：
+          // 整组产出一页，靠块区间渲染。
+          return PageSlice(
+            startIndex: imageGroupStart,
+            endIndex: _imageGroupEnd(blockIndex),
+            startCharOffset: effectiveStart,
+            endCharOffset: effectiveStart,
+            cursorEnd: effectiveStart + 1,
+          );
+        }
         if (usedHeight + height > budget && blockIndex > startBlockIndex) {
           return PageSlice(
             startIndex: startBlockIndex,
             endIndex: blockIndex,
-            startCharOffset: startCharOffset,
+            startCharOffset: effectiveStart,
             endCharOffset: _charOffsets[blockIndex],
           );
         }
@@ -830,7 +880,7 @@ class ReaderPageLayout {
           return PageSlice(
             startIndex: startBlockIndex,
             endIndex: blockIndex + 1,
-            startCharOffset: startCharOffset,
+            startCharOffset: effectiveStart,
             endCharOffset: endOffset,
           );
         }
@@ -839,7 +889,7 @@ class ReaderPageLayout {
         continue;
       }
 
-      final isContinuation = _charOffsets[blockIndex] < startCharOffset;
+      final isContinuation = _charOffsets[blockIndex] < effectiveStart;
       final visualLines = _visualLinesFor(
         blockIndex,
         isContinuation: isContinuation,
@@ -849,7 +899,7 @@ class ReaderPageLayout {
         continue;
       }
 
-      var visualLineIndex = _findVisualLineIndex(visualLines, startCharOffset);
+      var visualLineIndex = _findVisualLineIndex(visualLines, effectiveStart);
       var isFirstLineOfPage = usedHeight <= 0;
       while (visualLineIndex < visualLines.length) {
         final visualLine = visualLines[visualLineIndex];
@@ -859,10 +909,10 @@ class ReaderPageLayout {
           return PageSlice(
             startIndex: startBlockIndex,
             endIndex: blockIndex + 1,
-            startCharOffset: startCharOffset,
+            startCharOffset: effectiveStart,
             endCharOffset: _safeEndOffset(
               visualLine.globalStart,
-              startCharOffset,
+              effectiveStart,
             ),
           );
         }
@@ -875,10 +925,10 @@ class ReaderPageLayout {
           return PageSlice(
             startIndex: startBlockIndex,
             endIndex: blockIndex + 1,
-            startCharOffset: startCharOffset,
+            startCharOffset: effectiveStart,
             endCharOffset: _safeEndOffset(
               visualLines[visualLineIndex].globalStart,
-              startCharOffset,
+              effectiveStart,
             ),
           );
         }
@@ -896,9 +946,104 @@ class ReaderPageLayout {
     return PageSlice(
       startIndex: startBlockIndex,
       endIndex: blocks.length,
-      startCharOffset: startCharOffset,
+      startCharOffset: effectiveStart,
       endCharOffset: _totalChars,
     );
+  }
+
+  /// 游标落在零字符块（图片/分隔线）起点时产出的独占页。
+  ///
+  /// 图片页的真实字符区间为零宽（[startCharOffset] == [endCharOffset]），
+  /// 通过 [PageSlice.cursorEnd] 指向图片之后，保证页链继续推进。
+  PageSlice? _imagePageAt(int cursor) {
+    final runs = _imageRuns ??= _buildImageRuns();
+    final run = runs[cursor];
+    if (run == null) {
+      return null;
+    }
+    return PageSlice(
+      startIndex: run.$1,
+      endIndex: run.$2,
+      startCharOffset: cursor,
+      endCharOffset: cursor,
+      cursorEnd: cursor + 1,
+    );
+  }
+
+  Map<int, (int, int)>? _imageRuns;
+  Map<int, int>? _imageGroupStartByIndex;
+  Map<int, int>? _imageGroupEndByIndex;
+
+  /// 包含图片的零字符块组的起始块索引；非图片组返回 null。
+  int? _imageGroupStart(int blockIndex) {
+    _imageRuns ??= _buildImageRuns();
+    return _imageGroupStartByIndex?[blockIndex];
+  }
+
+  /// 包含图片的零字符块组的结束块索引（不含）。
+  int _imageGroupEnd(int blockIndex) {
+    _imageRuns ??= _buildImageRuns();
+    return _imageGroupEndByIndex?[blockIndex] ?? blockIndex + 1;
+  }
+
+  /// 图片独占页索引：键为零字符块组的字符起点偏移，值为 [起始块索引, 结束块索引)。
+  ///
+  /// 连续零字符块（图片、分隔线）宽度都是 0，必须划入同一页，避免出现无法
+  /// 推进的零宽页面；组内不含图片时按普通原子块处理，不在此登记。
+  Map<int, (int, int)> _buildImageRuns() {
+    final runs = <int, (int, int)>{};
+    final startByIndex = <int, int>{};
+    final endByIndex = <int, int>{};
+    var i = 0;
+    while (i < blocks.length) {
+      if (_ReaderPaginationTextLayout.blockCharCount(blocks[i]) != 0) {
+        i++;
+        continue;
+      }
+      var end = i;
+      var hasImage = false;
+      while (end < blocks.length &&
+          _ReaderPaginationTextLayout.blockCharCount(blocks[end]) == 0) {
+        if (blocks[end] is ImageBlock) {
+          hasImage = true;
+        }
+        end++;
+      }
+      if (hasImage) {
+        final start = _charOffsets[i];
+        runs[start] = (i, end);
+        for (var index = i; index < end; index++) {
+          startByIndex[index] = i;
+          endByIndex[index] = end;
+        }
+      }
+      i = end;
+    }
+    _imageGroupStartByIndex = startByIndex;
+    _imageGroupEndByIndex = endByIndex;
+    return runs;
+  }
+
+  /// 游标紧跟零字符块之后时，回退到后一段正文的真实块首。
+  ///
+  /// 仅当游标恰为该块首 +1 且紧邻零字符块时生效，不会影响段落内的正常分页。
+  int _snapAfterZeroWidthRun(int cursor) {
+    if (cursor <= 0) {
+      return cursor;
+    }
+    final index = _findStartBlockIndex(cursor);
+    if (index >= blocks.length) {
+      return cursor;
+    }
+    if (_charOffsets[index] != cursor - 1) {
+      return cursor;
+    }
+    final previous = index - 1;
+    if (previous < 0 ||
+        _ReaderPaginationTextLayout.blockCharCount(blocks[previous]) != 0) {
+      return cursor;
+    }
+    return _charOffsets[index];
   }
 
   bool _isAtomicBlock(ContentBlock block) =>

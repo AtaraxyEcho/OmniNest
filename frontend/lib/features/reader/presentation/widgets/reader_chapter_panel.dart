@@ -168,11 +168,8 @@ class ChapterPanelState extends State<ChapterPanel>
           color: Colors.transparent,
           child: InkWell(
             onTap: () {
-              if (isParent) {
-                _toggle(chapter.id);
-              } else {
-                widget.onChapterTap(chapter.id);
-              }
+              // 父章节也可直接跳转（部标题可能自带正文）；展开交给尾部 chevron。
+              widget.onChapterTap(chapter.id);
             },
             child: Padding(
               padding: EdgeInsets.only(left: 16 + indent, right: 8),
@@ -239,13 +236,21 @@ class ChapterPanelState extends State<ChapterPanel>
                       ),
                     ),
                     if (isParent)
-                      AnimatedRotation(
-                        turns: isExpanded ? 0.25 : 0,
-                        duration: const Duration(milliseconds: 200),
-                        child: Icon(
-                          Icons.chevron_right_rounded,
-                          size: 20,
-                          color: widget.settings.onSurfaceVariantColor,
+                      IconButton(
+                        onPressed: () => _toggle(chapter.id),
+                        tooltip:
+                            isExpanded
+                                ? AppLocalizations.of(context).readerCollapse
+                                : AppLocalizations.of(context).readerExpand,
+                        visualDensity: VisualDensity.compact,
+                        icon: AnimatedRotation(
+                          turns: isExpanded ? 0.25 : 0,
+                          duration: const Duration(milliseconds: 200),
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            size: 20,
+                            color: widget.settings.onSurfaceVariantColor,
+                          ),
                         ),
                       ),
                   ],
