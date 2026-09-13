@@ -870,6 +870,18 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       final prevFirstHeight = _windowFirstChapterHeight;
       final prevLastHeight = _windowLastChapterHeight;
       final prevEntries = continuousScrollController.entries;
+      // 布局变化前捕获视觉锚点：变化后按同一锚点保持视口（P0-17），
+      // 而非机械保持 offset 数值。
+      final anchorBefore =
+          scrollController.hasClients
+              ? continuousScrollController.visualAnchorAt(
+                scrollController.offset + viewportAnchorY,
+              )
+              : null;
+      final oldAnchorEntry =
+          anchorBefore == null
+              ? null
+              : continuousScrollController.entryFor(anchorBefore.chapterId);
 
       loader.ensureScrollLayoutForNeighbors(
         currentChapterId,
@@ -960,7 +972,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       );
       // 滑窗已按首尾高度补偿，勿再按锚点 prefix 二次修正。
       if (!windowSlid) {
-        _compensateScrollForPrefixDelta(previousPrefix);
+        _compensateScrollForPrefixDelta(
+          previousPrefix,
+          anchorBefore: anchorBefore,
+          oldAnchorEntry: oldAnchorEntry,
+        );
       }
     } finally {
       _continuousWindowRebuilding = false;
@@ -1089,11 +1105,19 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     });
   }
 
-  /// 前缀章高度变化时补偿滚动偏移，避免测高收敛导致视口跳动。
+  /// 前缀章高度变化或章内块重测高时补偿滚动偏移，避免测高收敛导致视口跳动。
   ///
   /// 主流阅读器约定：用户正在滚动时绝不 jumpTo。图片解码/测高收敛
   /// 只改映射表，不抢视口；仅在静止或窗口滑动时补偿。
-  void _compensateScrollForPrefixDelta(double? previousPrefix) {
+  ///
+  /// 补偿以布局变化前捕获的视觉锚点为中心（anchor preservation）：变化后
+  /// 重解析同一锚点的窗口坐标（块内按比例保持），保持"用户看到的内容"
+  /// 不变；锚点不可解析时回退前缀高度差补偿。
+  void _compensateScrollForPrefixDelta(
+    double? previousPrefix, {
+    VisualAnchor? anchorBefore,
+    ContinuousChapterEntry? oldAnchorEntry,
+  }) {
     if (previousPrefix == null ||
         isRestoringProgress ||
         restore.shouldSuppressWrites ||
@@ -1114,10 +1138,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       currentChapterId,
     );
     final delta = nextPrefix - previousPrefix;
-    if (delta.abs() < 0.5 || !scrollController.hasClients) {
+    if (delta.abs() < 0.5 && anchorBefore == null) {
       return;
     }
-    final captured = delta;
+    if (!scrollController.hasClients) {
+      return;
+    }
+    final capturedDelta = delta;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !scrollController.hasClients) {
         return;
@@ -1129,7 +1156,27 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         return;
       }
       final max = scrollController.position.maxScrollExtent;
-      final target = (scrollController.offset + captured).clamp(0.0, max);
+      // 锚点保持优先：同一视觉锚点在新布局中的窗口坐标。
+      final remapped =
+          anchorBefore == null
+              ? null
+              : continuousScrollController.remapVisualAnchor(
+                anchorBefore,
+                oldEntry: oldAnchorEntry,
+              );
+      final anchorY =
+          remapped == null
+              ? null
+              : continuousScrollController.contentYForVisualAnchor(remapped);
+      final double target;
+      if (anchorY != null) {
+        target = (anchorY - viewportAnchorY).clamp(0.0, max);
+      } else {
+        target = (scrollController.offset + capturedDelta).clamp(0.0, max);
+      }
+      if ((target - scrollController.offset).abs() < 0.5) {
+        return;
+      }
       scrollController.jumpTo(target);
     });
   }
