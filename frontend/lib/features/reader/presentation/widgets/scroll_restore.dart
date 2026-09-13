@@ -5,24 +5,18 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// 滚动位置恢复器。
 ///
-/// 封装 [addPersistentFrameCallback] 的生命周期管理，解决回调累积问题。
-/// 通过代际计数器自动失效旧回调，确保同一时间只有一个恢复流程在运行。
+/// ## 策略
 ///
-/// ## 恢复策略
-///
-/// 由于 ListView 懒加载 + 图片异步加载，[ScrollPosition.maxScrollExtent]
-/// 在布局过程中持续变化。恢复分两个阶段：
-///
-/// 1. **主动恢复**：检测 max 变化时重新跳转，直到位置稳定
-/// 2. **监控期**：settle 后继续监控 max 变化，如果 max 再次显著变化
-///   （说明有新内容加载导致布局偏移），重新激活恢复
-///
-/// 监控期结束后（默认 5 秒），恢复流程彻底结束，`isActive` 变为 false。
+/// 1. **主动恢复期**：maxScrollExtent 变化时重算目标并 jumpTo，直到位置稳定。
+/// 2. **监控期**：settle 后**不再 jumpTo**。图片渐进加载只会撑高列表，
+///    视口内容相对偏移基本保持；若监控期再 jumpTo，会与用户慢速滚动
+///    对抗，表现为「遇见图片突然跳进度」。
+/// 3. 监控期只做两件事：检测用户明显滚离（结束监控）、检测越界钳制。
 class ScrollRestore {
   ScrollRestore({
     int stableFramesThreshold = 10,
     double driftThreshold = 10.0,
-    double maxChangeThreshold = 1.0,
+    double maxChangeThreshold = 8.0,
     Duration monitorDuration = const Duration(seconds: 5),
   }) : _stableFramesThreshold = stableFramesThreshold,
        _driftThreshold = driftThreshold,
@@ -38,34 +32,14 @@ class ScrollRestore {
   bool _active = false;
   bool _monitoring = false;
 
-  /// 当前是否正在主动恢复中（不包括监控期）。
   bool get isActive => _active && !_monitoring;
-
-  /// 是否应抑制外部进度保存（包括主动恢复期和监控期）。
-  /// 监控期内 maxScrollExtent 仍在变化，保存会写入错误位置。
   bool get shouldSuppressWrites => _active;
 
-  /// 取消当前恢复流程（不触发 [onSettled] 回调）。
   void cancel() {
     _active = false;
     _monitoring = false;
-    // generation 在 start() 中递增，此处不递增避免累积
   }
 
-  /// 启动恢复流程。
-  ///
-  /// 使用 [addPostFrameCallback] 自循环，每帧检查偏移量与目标的偏差。
-  /// 恢复完成或取消后自动停止调度，不会积累永久回调。
-  ///
-  /// [onSettled] 在恢复流程结束时触发（无论是否到达目标）：参数为
-  /// true 表示已稳定到达目标位置；false 表示被 [isUserScrolling] 的
-  /// 用户主动滚动中断或超过 [totalTimeout]，此时调用方不得把恢复
-  /// 目标写入位置追踪，只能结束恢复态。[cancel] 不触发回调，由调用
-  /// 方自行清理。
-  ///
-  /// 恢复完成后进入监控期（[_monitorDuration]），期间如果 maxScrollExtent
-  /// 再次显著变化会重新激活恢复；maxScrollExtent 因图片渐进加载而持续
-  /// 变化时，用户活动探针与总超时保证循环必然终止。
   void start({
     required ScrollController scrollController,
     required double Function() targetOffsetBuilder,
@@ -82,38 +56,51 @@ class ScrollRestore {
     int stableFrames = 0;
     int pendingFrames = 0;
     double lastMax = 0;
+    double settledOffset = 0;
+    double lastObservedOffset = -1;
     bool settled = false;
     DateTime? settledAt;
+    bool selfJump = false;
 
-    // 布局等待阶段最大帧数（约 3 秒 @60fps），超时后放弃恢复
     const maxPendingFrames = 180;
 
+    void finish({required bool completed}) {
+      _active = false;
+      _monitoring = false;
+      onSettled(completed);
+    }
+
+    double maxScrollExtentSafe() {
+      if (!scrollController.hasClients) return 0;
+      final m = scrollController.position.maxScrollExtent;
+      return m < 0 ? 0 : m;
+    }
+
+    void safeJump(double value) {
+      selfJump = true;
+      scrollController.jumpTo(value.clamp(0.0, maxScrollExtentSafe()));
+      lastObservedOffset =
+          scrollController.hasClients ? scrollController.offset : value;
+      selfJump = false;
+    }
+
     void tick() {
-      // 检查是否应继续
       if (!_active || myGeneration != _generation) return;
-      // 用户主动滚动（滚轮/拖动/点击）立即让位，绝不与用户争抢滚动位置
       if (isUserScrolling != null && isUserScrolling()) {
-        _active = false;
-        _monitoring = false;
-        onSettled(false);
+        finish(completed: false);
         return;
       }
-      // 总时长硬上限：图片渐进加载等导致 maxScrollExtent 持续变化时，
-      // 重新激活分支会无限 jumpTo 拉回用户位置，必须整体兜底
       if (DateTime.now().difference(startedAt) > totalTimeout) {
-        _active = false;
-        _monitoring = false;
-        onSettled(false);
+        finish(completed: false);
         return;
       }
       if (!scrollController.hasClients) {
         pendingFrames++;
         if (pendingFrames >= maxPendingFrames) {
-          _active = false;
           if (kDebugMode) {
             readerDebugLog('ScrollRestore: timed out waiting for layout');
           }
-          onSettled(false);
+          finish(completed: false);
           return;
         }
         SchedulerBinding.instance.addPostFrameCallback((_) => tick());
@@ -123,49 +110,50 @@ class ScrollRestore {
       final max = scrollController.position.maxScrollExtent;
       if (max <= 0) {
         pendingFrames++;
-        // 空内容/尚未布局：若已等待较久则直接结束，避免长时间卡在恢复态。
         if (pendingFrames >= maxPendingFrames) {
-          _active = false;
           if (kDebugMode) {
             readerDebugLog('ScrollRestore: timed out, maxScrollExtent <= 0');
           }
-          onSettled(false);
+          finish(completed: false);
           return;
         }
         SchedulerBinding.instance.addPostFrameCallback((_) => tick());
         return;
       }
 
-      final target = targetOffsetBuilder().clamp(0.0, max);
       final currentOffset = scrollController.offset;
+      // 非自身 jump 且 offset 变化：视为用户滚轮/拖动。
+      if (!selfJump &&
+          lastObservedOffset >= 0 &&
+          (currentOffset - lastObservedOffset).abs() > 2.0) {
+        if (kDebugMode) {
+          readerDebugLog(
+            'ScrollRestore: offset changed without jump, yielding to user',
+          );
+        }
+        finish(completed: false);
+        return;
+      }
+      lastObservedOffset = currentOffset;
+
+      final target = targetOffsetBuilder().clamp(0.0, max);
       final drift = (currentOffset - target).abs();
       final maxChanged = (max - lastMax).abs() > _maxChangeThreshold;
       final overflowed = currentOffset > max + 1.0;
 
-      if (maxChanged || overflowed) {
-        lastMax = max;
-        if (settled) {
-          settled = false;
-          settledAt = null;
-          _monitoring = false;
+      if (!settled) {
+        if (maxChanged || overflowed || drift > _driftThreshold) {
+          lastMax = max;
           stableFrames = 0;
-          if (kDebugMode) {
-            readerDebugLog(
-              'ScrollRestore: max changed during monitor, re-activating '
-              '(drift=${drift.toStringAsFixed(1)}, max=${max.toStringAsFixed(1)})',
-            );
-          }
+          safeJump(target);
         } else {
-          stableFrames = 0;
-        }
-        scrollController.jumpTo(target);
-      } else if (!settled) {
-        if (drift <= _driftThreshold) {
           stableFrames++;
           if (stableFrames >= _stableFramesThreshold) {
             settled = true;
             settledAt = DateTime.now();
+            settledOffset = currentOffset;
             _monitoring = true;
+            lastMax = max;
             onSettled(true);
             if (kDebugMode) {
               readerDebugLog(
@@ -174,39 +162,38 @@ class ScrollRestore {
               );
             }
           }
-        } else {
-          stableFrames = 0;
-          scrollController.jumpTo(target);
         }
       } else {
-        // 监控期
+        // 监控期：绝不 jumpTo 对齐目标，避免图片加载把用户拉回。
+        if (overflowed) {
+          safeJump(max);
+          settledOffset = max;
+        }
+        final leftSettled = (currentOffset - settledOffset).abs();
+        if (leftSettled > _driftThreshold * 4) {
+          if (kDebugMode) {
+            readerDebugLog(
+              'ScrollRestore: user scroll detected during monitor, stopping',
+            );
+          }
+          finish(completed: true);
+          return;
+        }
         if (DateTime.now().difference(settledAt!) > _monitorDuration) {
           _active = false;
           _monitoring = false;
           if (kDebugMode) {
             readerDebugLog('ScrollRestore: monitor period ended, stopping');
           }
-          return; // 停止调度
-        }
-        if (drift > _driftThreshold * 3) {
-          _active = false;
-          _monitoring = false;
-          if (kDebugMode) {
-            readerDebugLog(
-              'ScrollRestore: user scroll detected during monitor, stopping',
-            );
-          }
-          return; // 停止调度
+          return;
         }
       }
 
-      // 调度下一帧（自循环）
       if (_active && myGeneration == _generation) {
         SchedulerBinding.instance.addPostFrameCallback((_) => tick());
       }
     }
 
-    // 启动第一帧
     SchedulerBinding.instance.addPostFrameCallback((_) => tick());
 
     if (kDebugMode) {
