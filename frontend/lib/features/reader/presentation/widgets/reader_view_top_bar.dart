@@ -213,31 +213,17 @@ class ReaderViewTopBar extends StatelessWidget {
   }
 
   Widget _buildTitle() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          bookTitle,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(
-            color: settings.onSurfaceColor,
-            fontSize: AppTypography.titleMedium,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        if (chapterTitle.isNotEmpty)
-          Text(
-            chapterTitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: settings.onSurfaceVariantColor,
-              fontSize: AppTypography.bodySmall,
-            ),
-          ),
-      ],
+    // 固定栏只显示本章章节名；书名为空时再退回书名。
+    final primary = chapterTitle.isNotEmpty ? chapterTitle : bookTitle;
+    return Text(
+      primary,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: TextStyle(
+        color: settings.onSurfaceColor,
+        fontSize: AppTypography.titleMedium,
+        fontWeight: FontWeight.w700,
+      ),
     );
   }
 }

@@ -192,14 +192,12 @@ class _ReaderContinuousScrollViewState
     final slivers = <Widget>[];
     for (final entry in controller.entries) {
       final title = entry.title;
+      // 章标题随内容滚动，不 pinned：避免多短章 sticky 叠成多条固定栏。
+      // 固定栏只保留顶栏的「当前章」标题。
       slivers.add(
-        SliverPersistentHeader(
+        SliverToBoxAdapter(
           key: ValueKey('ch-header-${entry.chapterId}'),
-          pinned: true,
-          delegate: _ChapterHeaderDelegate(
-            title: title,
-            settings: widget.settings,
-          ),
+          child: _ChapterHeaderLabel(title: title, settings: widget.settings),
         ),
       );
       if (!entry.isReady) {
@@ -461,27 +459,22 @@ class _ProjectedChapterCache {
   final List<ContentBlock> projected;
 }
 
-class _ChapterHeaderDelegate extends SliverPersistentHeaderDelegate {
-  _ChapterHeaderDelegate({required this.title, required this.settings});
+class _ChapterHeaderLabel extends StatelessWidget {
+  const _ChapterHeaderLabel({required this.title, required this.settings});
 
   final String title;
   final ReaderViewSettings settings;
 
   @override
-  double get minExtent => ReaderContinuousScrollController.chapterHeaderExtent;
-
-  @override
-  double get maxExtent => ReaderContinuousScrollController.chapterHeaderExtent;
-
-  @override
-  Widget build(
-    BuildContext context,
-    double shrinkOffset,
-    bool overlapsContent,
-  ) {
+  Widget build(BuildContext context) {
+    if (title.isEmpty) {
+      return const SizedBox(
+        height: ReaderContinuousScrollController.chapterHeaderExtent,
+      );
+    }
     final labelColor = settings.onSurfaceColor.withValues(alpha: 0.42);
-    return ColoredBox(
-      color: settings.surfaceColor,
+    return SizedBox(
+      height: ReaderContinuousScrollController.chapterHeaderExtent,
       child: Align(
         alignment: Alignment.centerLeft,
         child: Text(
@@ -498,10 +491,5 @@ class _ChapterHeaderDelegate extends SliverPersistentHeaderDelegate {
         ),
       ),
     );
-  }
-
-  @override
-  bool shouldRebuild(covariant _ChapterHeaderDelegate oldDelegate) {
-    return oldDelegate.title != title || oldDelegate.settings != settings;
   }
 }

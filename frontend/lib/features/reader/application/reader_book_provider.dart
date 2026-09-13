@@ -477,7 +477,20 @@ String? readerChapterCacheKey(ParsedChapter chapter) {
   return 'txt/$start-$end.xhtml';
 }
 
-/// 获取指定章节内容（带 SQLite 缓存 + 预处理）
+/// 进程内章节正文 LRU：避免每次 build/预取都打 SQLite。
+/// key = itemId|cacheKey，value = 预处理后的 ReaderChapterContent。
+final _chapterContentMemoryCache = <String, ReaderChapterContent>{};
+const _chapterContentMemoryCacheLimit = 12;
+
+void _rememberChapterContent(String key, ReaderChapterContent content) {
+  _chapterContentMemoryCache.remove(key);
+  _chapterContentMemoryCache[key] = content;
+  while (_chapterContentMemoryCache.length > _chapterContentMemoryCacheLimit) {
+    _chapterContentMemoryCache.remove(_chapterContentMemoryCache.keys.first);
+  }
+}
+
+/// 获取指定章节内容（内存 LRU + SQLite 缓存 + 预处理）
 Future<ReaderChapterContent?> getChapterContent(
   WidgetRef ref,
   String itemId,
@@ -496,6 +509,11 @@ Future<ReaderChapterContent?> getChapterContent(
 
   final cacheKey = readerChapterCacheKey(matched);
   if (cacheKey == null) return null;
+  final memoryKey = '$itemId|$cacheKey';
+  final memoryHit = _chapterContentMemoryCache[memoryKey];
+  if (memoryHit != null) {
+    return memoryHit;
+  }
 
   // ── Layer 1: SQLite 章节缓存命中 ──
   final localStorage = ref.read(readerLocalStorageProvider);
@@ -504,11 +522,15 @@ Future<ReaderChapterContent?> getChapterContent(
     contentPath: cacheKey,
   );
   if (cachedHtml != null && cachedHtml.isNotEmpty) {
-    // 缓存有效性检查：正文长度与解析字符数占比过低说明缓存损坏
-    //（截断、乱码、错章），精准删除该章后重新加载，不清空整本书。
+    // 注意：cachedHtml 是预处理后的 HTML（含占位符/标签），
+    // matched.charCount 是解析出的纯文本字数，两者单位不同。
+    // 不能用 charCount 严格校验 HTML 长度，否则会把正常章节
+    // （剥离脚本/样式/空白后变短）误判为损坏并反复清空。
+    // 仅在内容为空或相对解析规模极端短时视为损坏。
     final expectedChars = matched.charCount;
     final isCorrupted =
-        expectedChars > 500 && cachedHtml.length < expectedChars * 0.5;
+        cachedHtml.trim().isEmpty ||
+        (expectedChars > 2000 && cachedHtml.length < 200);
     if (isCorrupted) {
       if (kDebugMode) {
         readerDebugLog(
@@ -525,11 +547,13 @@ Future<ReaderChapterContent?> getChapterContent(
         );
       }
       // 不再转为 data URI — 保持 __IMG_xxx__ 占位符，渲染时直接从 SQLite 加载
-      return ReaderChapterContent(
+      final content = ReaderChapterContent(
         title: matched.title,
         content: cachedHtml,
-        wordCount: matched.charCount,
+        wordCount: expectedChars > 0 ? expectedChars : cachedHtml.length,
       );
+      _rememberChapterContent(memoryKey, content);
+      return content;
     }
   }
 
@@ -558,11 +582,13 @@ Future<ReaderChapterContent?> getChapterContent(
       charCount: matched.charCount,
       processedHtml: storageHtml,
     );
-    return ReaderChapterContent(
+    final content = ReaderChapterContent(
       title: matched.title,
       content: storageHtml,
-      wordCount: matched.charCount,
+      wordCount: matched.charCount > 0 ? matched.charCount : storageHtml.length,
     );
+    _rememberChapterContent(memoryKey, content);
+    return content;
   }
 
   // 优先使用 EpubParserService 已解压的 Archive（避免重复解压）
@@ -603,11 +629,13 @@ Future<ReaderChapterContent?> getChapterContent(
     readerDebugLog('BookProvider: ready — storage=${storageHtml.length} chars');
   }
 
-  return ReaderChapterContent(
+  final ready = ReaderChapterContent(
     title: matched.title,
     content: storageHtml,
-    wordCount: matched.charCount,
+    wordCount: matched.charCount > 0 ? matched.charCount : storageHtml.length,
   );
+  _rememberChapterContent(memoryKey, ready);
+  return ready;
 }
 
 /// 清除指定书籍的解析缓存（内存 + SQLite + 图片磁盘缓存）
@@ -617,6 +645,9 @@ Future<void> invalidateBookCache(WidgetRef ref, String itemId) async {
   final localBookCache = ref.read(localBookCacheProvider);
   final parserService = ref.read(epubParserServiceProvider(itemId));
 
+  _chapterContentMemoryCache.removeWhere(
+    (key, _) => key.startsWith('$itemId|'),
+  );
   parsedBookCache.remove(itemId);
   parserService.releaseArchive();
   ref.invalidate(cachedBookHandleProvider(itemId));

@@ -132,10 +132,16 @@ mixin ReaderViewPageInteractionMixin
 
     if (scrollController.hasClients) {
       final max = scrollController.position.maxScrollExtent;
-      // 提前到过半即预取：邻章解析 + phase-one 测高需要数百毫秒，
-      // 20% 余量在快速滚动下来不及就绪。
-      if (max - scrollController.offset < max * 0.5) {
+      final offset = scrollController.offset;
+      // 过半预取邻章；接近末尾时提前扩窗，避免只能靠侧点硬切。
+      if (max > 0 && max - offset < max * 0.5) {
         preloadAdjacent();
+      }
+      if (max > 0 && max - offset < max * 0.35) {
+        onContinuousWindowExpand(forward: true);
+      }
+      if (offset < 240) {
+        onContinuousWindowExpand(forward: false);
       }
     }
   }
@@ -248,13 +254,19 @@ mixin ReaderViewPageInteractionMixin
     final didScroll = await scrollBy(viewportDelta);
     if (!mounted) return;
     if (!didScroll) {
-      // 连续滚动窗口：先扩挂邻章再尝试；仍无法滚动时才按目录跳章。
+      // 连续滚动窗口：先扩挂邻章再尝试；大章测高需更长等待。
       onContinuousWindowExpand(forward: forward);
-      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await Future<void>.delayed(const Duration(milliseconds: 160));
       if (!mounted) return;
       final again = await scrollBy(viewportDelta);
       if (!again && mounted) {
-        tryNavigateChapter(forward ? 1 : -1);
+        onContinuousWindowExpand(forward: forward);
+        await Future<void>.delayed(const Duration(milliseconds: 200));
+        if (!mounted) return;
+        final retry = await scrollBy(viewportDelta);
+        if (!retry && mounted) {
+          tryNavigateChapter(forward ? 1 : -1);
+        }
       }
     }
   }
