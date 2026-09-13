@@ -31,6 +31,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,6 +60,7 @@ public class ReaderImportService {
     private static final String FILE_TYPE_TXT = "TXT";
     private static final String FILE_TYPE_CBZ = "CBZ";
     private static final String FILE_TYPE_ZIP = "ZIP";
+    private static final String FILE_TYPE_PDF = "PDF";
     private static final Set<String> SUPPORTED_CONTENT_KINDS = Set.of(CONTENT_KIND_TEXT, CONTENT_KIND_COMIC);
 
     private final ReaderItemRepository itemRepository;
@@ -72,6 +74,8 @@ public class ReaderImportService {
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
     private final ReaderTextParseSubmissionService textParseSubmissionService;
+    private final ReaderPdfMetadataService pdfMetadataService;
+    private final ReaderCoverExtractionService coverExtractionService;
     private final MediaSyncEventService syncEventService;
 
     /**
@@ -95,6 +99,12 @@ public class ReaderImportService {
             UUID fileNodeId,
             boolean forceImport,
             String contentKindOverride) {
+        FileDescriptor fileNode = loadReadableFileNode(ownerUserId, fileNodeId);
+        String fileType = fileDetector.detectType(fileNode.name());
+        if (fileType == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的阅读文件类型");
+        }
+
         Optional<ReaderItem> existingByFile = itemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, fileNodeId);
         if (existingByFile.isPresent()) {
             ReaderItem existing = applyExplicitComicOverride(
@@ -102,16 +112,14 @@ public class ReaderImportService {
                     fileNodeId,
                     existingByFile.get(),
                     contentKindOverride);
+            if (FILE_TYPE_PDF.equals(fileType)) {
+                // 内容替换后重新提取页数与封面，避免派生元数据陈旧。
+                enrichPdfMetadata(existing, fileNode, true);
+            }
             ensureOnBookshelf(ownerUserId, existing.getId());
             recordReaderItem(ownerUserId, existing, SyncAction.UPDATED);
             log.info("文件已导入，加入书架: userId={}, fileNodeId={}", ownerUserId, fileNodeId);
             return existing;
-        }
-
-        FileDescriptor fileNode = loadReadableFileNode(ownerUserId, fileNodeId);
-        String fileType = fileDetector.detectType(fileNode.name());
-        if (fileType == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的阅读文件类型");
         }
 
         String contentHash = computeSha256Stream(fileNode);
@@ -166,6 +174,12 @@ public class ReaderImportService {
                         contentHash,
                         false);
             }
+        } else if (FILE_TYPE_PDF.equals(fileType)) {
+            // PDF 由客户端渲染，服务端提取页数与首页封面后即可阅读。
+            saved.setImportStatus("READY");
+            saved.setParsedAt(Instant.now());
+            saved = itemRepository.save(saved);
+            enrichPdfMetadata(saved, fileNode);
         } else {
             textParseSubmissionService.submit(saved, false);
         }
@@ -426,6 +440,12 @@ public class ReaderImportService {
      * 校验内容形态与文件格式是否匹配。
      */
     private void validateContentKindOverride(String fileType, String contentKindOverride) {
+        if (FILE_TYPE_PDF.equals(fileType)) {
+            if (CONTENT_KIND_TEXT.equals(contentKindOverride)) {
+                return;
+            }
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "PDF 仅支持文本阅读形态");
+        }
         if (FILE_TYPE_EPUB.equals(fileType)) {
             return;
         }
@@ -555,6 +575,43 @@ public class ReaderImportService {
     /**
      * 以流式方式计算文件 SHA-256，避免将完整文件读入内存。
      */
+
+    private void enrichPdfMetadata(ReaderItem item, FileDescriptor fileNode) {
+        enrichPdfMetadata(item, fileNode, false);
+    }
+
+    private void enrichPdfMetadata(ReaderItem item, FileDescriptor fileNode, boolean overwriteCover) {
+        ReaderPdfMetadataService.PdfMetadata metadata = pdfMetadataService.extract(fileNode);
+        if (metadata == null) {
+            return;
+        }
+        var cover = metadata.toCoverDraft();
+        if (cover != null) {
+            coverExtractionService.store(item.getId(), cover, overwriteCover);
+        }
+        boolean existing = sourceRepository
+                .findByReaderItemIdAndFileNodeId(item.getId(), fileNode.id())
+                .isPresent();
+        if (existing) {
+            sourceRepository
+                    .findByReaderItemIdAndFileNodeId(item.getId(), fileNode.id())
+                    .ifPresent(source -> {
+                        source.setPageCount(Math.max(0, metadata.pageCount()));
+                        sourceRepository.save(source);
+                    });
+        } else {
+            ReaderItemSource source = new ReaderItemSource();
+            source.setReaderItemId(item.getId());
+            source.setFileNodeId(fileNode.id());
+            source.setContentHash(item.getContentHash() != null ? item.getContentHash() : "");
+            source.setFileFormat("PDF");
+            source.setSourceName(fileNode.name());
+            source.setStatus(ReaderSourceStatus.READY);
+            source.setPageCount(Math.max(0, metadata.pageCount()));
+            sourceRepository.save(source);
+        }
+    }
+
     private String computeSha256Stream(FileDescriptor fileNode) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

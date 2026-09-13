@@ -1076,11 +1076,29 @@ abstract class AppLocalizations {
   /// **'Security & devices'**
   String get profileSectionSecurity;
 
+  /// No description provided for @profileSectionBackup.
+  ///
+  /// In en, this message translates to:
+  /// **'Backup'**
+  String get profileSectionBackup;
+
   /// No description provided for @profileSectionAbout.
   ///
   /// In en, this message translates to:
   /// **'About'**
   String get profileSectionAbout;
+
+  /// No description provided for @photoBackupBackgroundTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Photo background backup'**
+  String get photoBackupBackgroundTitle;
+
+  /// No description provided for @photoBackupBackgroundSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Back up newly added photos in the background (Android only)'**
+  String get photoBackupBackgroundSubtitle;
 
   /// No description provided for @profileManageBackdrop.
   ///
@@ -17811,8 +17829,224 @@ abstract class AppLocalizations {
   /// No description provided for @filesHomeMoreHint.
   ///
   /// In en, this message translates to:
-  /// **'Upload queue, offline downloads and shares'**
+  /// **'Upload queue, offline downloads and share management'**
   String get filesHomeMoreHint;
+
+  /// No description provided for @errorInvalidResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid response from server'**
+  String get errorInvalidResponse;
+
+  /// No description provided for @errorEmptyResponse.
+  ///
+  /// In en, this message translates to:
+  /// **'Server returned no result'**
+  String get errorEmptyResponse;
+
+  /// No description provided for @errorOperationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Operation failed'**
+  String get errorOperationFailed;
+
+  /// No description provided for @errorNetworkTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Request timed out. Check your network and try again'**
+  String get errorNetworkTimeout;
+
+  /// No description provided for @errorNetworkError.
+  ///
+  /// In en, this message translates to:
+  /// **'Network error. Please try again later'**
+  String get errorNetworkError;
+
+  /// No description provided for @errorUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown error'**
+  String get errorUnknown;
+
+  /// No description provided for @errorNeedPassword.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter share password'**
+  String get errorNeedPassword;
+
+  /// No description provided for @errorShareSessionInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid share session'**
+  String get errorShareSessionInvalid;
+
+  /// No description provided for @errorUnnamedFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Unnamed'**
+  String get errorUnnamedFile;
+
+  /// No description provided for @errorUnnamedResource.
+  ///
+  /// In en, this message translates to:
+  /// **'Unnamed resource'**
+  String get errorUnnamedResource;
+
+  /// No description provided for @errorUploadUrlMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Invalid upload URL'**
+  String get errorUploadUrlMissing;
+
+  /// No description provided for @errorOtherCategory.
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get errorOtherCategory;
+
+  /// No description provided for @musicBatchFailedTitles.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed: {titles}'**
+  String musicBatchFailedTitles(Object titles);
+
+  /// No description provided for @readerPdfTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'PDF Reader'**
+  String get readerPdfTitle;
+
+  /// No description provided for @readerPdfLoadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load PDF'**
+  String get readerPdfLoadFailed;
+
+  /// No description provided for @readerPdfPageIndicator.
+  ///
+  /// In en, this message translates to:
+  /// **'Page {page} of {total}'**
+  String readerPdfPageIndicator(Object page, Object total);
+
+  /// No description provided for @errorServiceUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'Service temporarily unavailable. Please try again later; files remain safely isolated'**
+  String get errorServiceUnavailable;
+
+  /// No description provided for @errorCannotConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Cannot reach the backend. Check that the service is running or your network'**
+  String get errorCannotConnect;
+
+  /// No description provided for @errorRequestCancelled.
+  ///
+  /// In en, this message translates to:
+  /// **'Request cancelled'**
+  String get errorRequestCancelled;
+
+  /// No description provided for @errorBadCertificate.
+  ///
+  /// In en, this message translates to:
+  /// **'Backend certificate validation failed. Check service configuration'**
+  String get errorBadCertificate;
+
+  /// No description provided for @errorServerCode.
+  ///
+  /// In en, this message translates to:
+  /// **'Server returned error {code}'**
+  String errorServerCode(Object code);
+
+  /// No description provided for @errorRequestFailedRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Request failed. Please try again later'**
+  String get errorRequestFailedRetry;
+
+  /// No description provided for @errorWebPdfTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Web reader supports PDF files up to 128 MiB'**
+  String get errorWebPdfTooLarge;
+
+  /// No description provided for @errorWebBookTooLarge.
+  ///
+  /// In en, this message translates to:
+  /// **'Web reader supports EPUB or TXT files up to 32 MiB'**
+  String get errorWebBookTooLarge;
+
+  /// No description provided for @errorFileNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'File not found'**
+  String get errorFileNotFound;
+
+  /// No description provided for @errorConflict.
+  ///
+  /// In en, this message translates to:
+  /// **'Conflict. Please refresh and try again'**
+  String get errorConflict;
+
+  /// No description provided for @errorUnauthorized.
+  ///
+  /// In en, this message translates to:
+  /// **'Not signed in or session expired'**
+  String get errorUnauthorized;
+
+  /// No description provided for @errorForbidden.
+  ///
+  /// In en, this message translates to:
+  /// **'Not allowed to perform this action'**
+  String get errorForbidden;
+
+  /// No description provided for @filesOpListVersions.
+  ///
+  /// In en, this message translates to:
+  /// **'View versions'**
+  String get filesOpListVersions;
+
+  /// No description provided for @filesOpRestoreVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore version'**
+  String get filesOpRestoreVersion;
+
+  /// No description provided for @filesOpSaveVersion.
+  ///
+  /// In en, this message translates to:
+  /// **'Save as new version'**
+  String get filesOpSaveVersion;
+
+  /// No description provided for @filesVersionsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'File versions'**
+  String get filesVersionsTitle;
+
+  /// No description provided for @filesVersionsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No history versions yet'**
+  String get filesVersionsEmpty;
+
+  /// No description provided for @filesVersionsRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get filesVersionsRestore;
+
+  /// No description provided for @filesVersionsCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get filesVersionsCurrent;
+
+  /// No description provided for @filesVersionsRestored.
+  ///
+  /// In en, this message translates to:
+  /// **'Version restored'**
+  String get filesVersionsRestored;
 }
 
 class _AppLocalizationsDelegate

@@ -5,7 +5,10 @@ package com.omninest.modules.reader.domain;
  */
 public enum ReaderItemType {
     EPUB("EPUB"),
-    TXT("TXT");
+    TXT("TXT"),
+    CBZ("CBZ"),
+    ZIP("ZIP"),
+    PDF("PDF");
 
     private final String value;
 

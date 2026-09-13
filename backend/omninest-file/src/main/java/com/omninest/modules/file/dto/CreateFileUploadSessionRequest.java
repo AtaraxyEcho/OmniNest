@@ -14,6 +14,7 @@ public record CreateFileUploadSessionRequest(
         @Schema(description = "MIME 类型", example = "application/pdf") @Size(max = 160, message = "MIME 类型长度不能超过 160 个字符") String mimeType,
         @Schema(description = "文件 SHA-256 哈希值") @Size(min = 64, max = 64, message = "SHA-256 必须为 64 位十六进制字符串") String sha256,
         @Schema(description = "分片大小（字节）", example = "5242880") @Min(value = 1, message = "分片大小必须大于 0") Integer partSizeBytes,
-        @Schema(description = "目标空间类型：PERSONAL / SHARED，默认 PERSONAL") String spaceType
+        @Schema(description = "目标空间类型：PERSONAL / SHARED，默认 PERSONAL") String spaceType,
+        @Schema(description = "作为目标文件的新版本上传（跳过同名冲突检查）") UUID asVersionOfFileId
 ) {
 }

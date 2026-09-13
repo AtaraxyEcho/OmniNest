@@ -23,6 +23,7 @@ public class ReaderFileDetector {
     private static final String TXT = "TXT";
     private static final String CBZ = "CBZ";
     private static final String ZIP = "ZIP";
+    private static final String PDF = "PDF";
     private static final String CONTENT_KIND_COMIC = "COMIC";
     private static final String CONTENT_KIND_TEXT = "TEXT";
     private static final int DEFAULT_TEXT_CHARS_THRESHOLD = 100;
@@ -31,7 +32,7 @@ public class ReaderFileDetector {
 
     /**
      * 判断文件是否为阅读器支持的类型。
-     * 支持 EPUB、TXT、CBZ 和 ZIP。
+     * 支持 EPUB、TXT、CBZ、ZIP 和 PDF。
      *
      * @param fileName 文件名
      * @return 是否为阅读器文件
@@ -42,14 +43,15 @@ public class ReaderFileDetector {
         }
         String lower = fileName.toLowerCase(Locale.ROOT);
         return lower.endsWith(".epub") || lower.endsWith(".txt")
-                || lower.endsWith(".cbz") || lower.endsWith(".zip");
+                || lower.endsWith(".cbz") || lower.endsWith(".zip")
+                || lower.endsWith(".pdf");
     }
 
     /**
      * 检测文件类型。
      *
      * @param fileName 文件名
-     * @return 文件类型（EPUB / TXT / CBZ / ZIP），不支持时返回 null
+     * @return 文件类型（EPUB / TXT / CBZ / ZIP / PDF），不支持时返回 null
      */
     public String detectType(String fileName) {
         if (fileName == null || fileName.isBlank()) {
@@ -68,13 +70,16 @@ public class ReaderFileDetector {
         if (lower.endsWith(".zip")) {
             return ZIP;
         }
+        if (lower.endsWith(".pdf")) {
+            return PDF;
+        }
         return null;
     }
 
     /**
      * 根据文件类型推断 contentKind。
      *
-     * @param fileType 文件类型（EPUB / TXT / CBZ / ZIP）
+     * @param fileType 文件类型（EPUB / TXT / CBZ / ZIP / PDF）
      * @return 内容类型（TEXT 或 COMIC）
      */
     public String detectContentKind(String fileType) {

@@ -9,6 +9,7 @@ enum ProfileSection {
   appearance('appearance'),
   notifications('notifications'),
   security('security'),
+  backup('backup'),
   about('about');
 
   const ProfileSection(this.value);
@@ -241,6 +242,12 @@ class _ProfileNavigation extends StatelessWidget {
           label: l10n.profileSectionSecurity,
           selected: selectedSection == ProfileSection.security,
           onTap: () => onSectionSelected(ProfileSection.security),
+        ),
+        _NavigationItem(
+          icon: Icons.cloud_sync_outlined,
+          label: l10n.profileSectionBackup,
+          selected: selectedSection == ProfileSection.backup,
+          onTap: () => onSectionSelected(ProfileSection.backup),
         ),
         _NavigationItem(
           icon: Icons.info_outline_rounded,

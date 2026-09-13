@@ -68,6 +68,19 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<List<FileVersion>> listFileVersions(String fileId) {
+    return fileApi.listFileVersions(fileId);
+  }
+
+  @override
+  Future<FileNode> restoreFileVersion({
+    required String fileId,
+    required String versionId,
+  }) {
+    return fileApi.restoreFileVersion(fileId: fileId, versionId: versionId);
+  }
+
+  @override
   Future<String> downloadUrl(String fileId) {
     return fileApi.downloadUrl(fileId);
   }
@@ -213,6 +226,7 @@ class FileRepositoryImpl implements FileRepository {
     String? sha256,
     int? partSizeBytes,
     String? spaceType,
+    String? asVersionOfFileId,
   }) {
     return fileApi.createUploadSession(
       parentId: parentId,
@@ -222,6 +236,7 @@ class FileRepositoryImpl implements FileRepository {
       sha256: sha256,
       partSizeBytes: partSizeBytes,
       spaceType: spaceType,
+      asVersionOfFileId: asVersionOfFileId,
     );
   }
 
@@ -259,8 +274,13 @@ class FileRepositoryImpl implements FileRepository {
   Future<FileNode> completeUploadSession({
     required String sessionId,
     String? sha256,
+    String? asVersionOfFileId,
   }) {
-    return fileApi.completeUploadSession(sessionId: sessionId, sha256: sha256);
+    return fileApi.completeUploadSession(
+      sessionId: sessionId,
+      sha256: sha256,
+      asVersionOfFileId: asVersionOfFileId,
+    );
   }
 
   @override

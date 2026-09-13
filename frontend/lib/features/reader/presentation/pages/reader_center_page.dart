@@ -310,7 +310,7 @@ class _LibraryImportButton extends ConsumerWidget {
       height: 40,
       child: MediaImportButton(
         subsystemDirectory: 'Reader',
-        acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip'],
+        acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
         reuseExistingFiles: true,
         onImportComplete: () {
           ref.read(readerCenterControllerProvider.notifier).refresh();

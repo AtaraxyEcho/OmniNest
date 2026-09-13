@@ -54,6 +54,20 @@ class RedisWeatherCacheStoreTest {
     }
 
     @Test
+    void locationCacheWritesThirdSegmentWhenNamePresent() {
+        ResolvedWeatherLocation location =
+                new ResolvedWeatherLocation("101260501", LAT_LON, "贵阳");
+
+        store.saveLocation(CITY_NAME, location);
+
+        verify(redisUtil).set(
+                "weather:geo:" + CITY_NAME,
+                "101260501|" + LAT_LON + "|贵阳",
+                Duration.ofHours(24)
+        );
+    }
+
+    @Test
     void locationCacheReadsExistingPayloadAndMissSentinel() {
         when(redisUtil.get("weather:geo:" + CITY_NAME)).thenReturn("101260501|" + LAT_LON);
         when(redisUtil.get("weather:geo:miss:" + CITY_NAME)).thenReturn("__MISS__");

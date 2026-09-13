@@ -140,8 +140,9 @@ void main() {
     notifier.enterSelectionMode('track-1');
     notifier.toggle('track-2');
 
-    final success = await notifier.enqueueSelected(_tracks);
-    expect(success, 2);
+    final results = notifier.enqueueSelected(_tracks);
+    expect(results, hasLength(2));
+    expect(results.every((item) => item.success), isTrue);
     final center = container.read(musicCenterControllerProvider).asData!.value;
     expect(center.playbackItems, hasLength(2));
   });

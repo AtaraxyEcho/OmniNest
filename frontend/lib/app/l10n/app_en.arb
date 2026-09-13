@@ -204,7 +204,10 @@
   "profileSectionAppearance": "Appearance & language",
   "profileSectionNotifications": "Notifications",
   "profileSectionSecurity": "Security & devices",
+  "profileSectionBackup": "Backup",
   "profileSectionAbout": "About",
+  "photoBackupBackgroundTitle": "Photo background backup",
+  "photoBackupBackgroundSubtitle": "Back up newly added photos in the background (Android only)",
   "profileManageBackdrop": "Manage background",
   "profileUsername": "Username",
   "profileEmail": "Email",
@@ -4359,5 +4362,57 @@
   "filesHomeRecentHint": "Recently added or changed",
   "filesHomeFavoritesHint": "Starred files",
   "filesHomeTrashHint": "Deleted items",
-  "filesHomeMoreHint": "Upload queue, offline downloads and shares"
+  "filesHomeMoreHint": "Upload queue, offline downloads and share management",
+  "errorInvalidResponse": "Invalid response from server",
+  "errorEmptyResponse": "Server returned no result",
+  "errorOperationFailed": "Operation failed",
+  "errorNetworkTimeout": "Request timed out. Check your network and try again",
+  "errorNetworkError": "Network error. Please try again later",
+  "errorUnknown": "Unknown error",
+  "errorNeedPassword": "Enter share password",
+  "errorShareSessionInvalid": "Invalid share session",
+  "errorUnnamedFile": "Unnamed",
+  "errorUnnamedResource": "Unnamed resource",
+  "errorUploadUrlMissing": "Invalid upload URL",
+  "errorOtherCategory": "Other",
+  "musicBatchFailedTitles": "Failed: {titles}",
+  "@musicBatchFailedTitles": {
+    "placeholders": {
+      "titles": {}
+    }
+  },
+  "readerPdfTitle": "PDF Reader",
+  "readerPdfLoadFailed": "Failed to load PDF",
+  "readerPdfPageIndicator": "Page {page} of {total}",
+  "@readerPdfPageIndicator": {
+    "placeholders": {
+      "page": {},
+      "total": {}
+    }
+  },
+  "errorServiceUnavailable": "Service temporarily unavailable. Please try again later; files remain safely isolated",
+  "errorCannotConnect": "Cannot reach the backend. Check that the service is running or your network",
+  "errorRequestCancelled": "Request cancelled",
+  "errorBadCertificate": "Backend certificate validation failed. Check service configuration",
+  "errorServerCode": "Server returned error {code}",
+  "@errorServerCode": {
+    "placeholders": {
+      "code": {}
+    }
+  },
+  "errorRequestFailedRetry": "Request failed. Please try again later",
+  "errorWebPdfTooLarge": "Web reader supports PDF files up to 128 MiB",
+  "errorWebBookTooLarge": "Web reader supports EPUB or TXT files up to 32 MiB",
+  "errorFileNotFound": "File not found",
+  "errorConflict": "Conflict. Please refresh and try again",
+  "errorUnauthorized": "Not signed in or session expired",
+  "errorForbidden": "Not allowed to perform this action",
+  "filesOpListVersions": "View versions",
+  "filesOpRestoreVersion": "Restore version",
+  "filesOpSaveVersion": "Save as new version",
+  "filesVersionsTitle": "File versions",
+  "filesVersionsEmpty": "No history versions yet",
+  "filesVersionsRestore": "Restore",
+  "filesVersionsCurrent": "Current",
+  "filesVersionsRestored": "Version restored"
 }

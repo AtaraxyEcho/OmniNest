@@ -1,7 +1,11 @@
 import 'package:dio/dio.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 
 /// 分享链接专用 API 客户端，不依赖认证系统。
+///
+/// 本地兜底文案使用稳定错误码，由 presentation 层映射 l10n；
+/// 服务端 message 非空时优先透传。
 class ShareApi implements PublicShareRepository {
   ShareApi(String baseUrl)
     : _dio = Dio(
@@ -27,7 +31,7 @@ class ShareApi implements PublicShareRepository {
     try {
       final sessionToken = await _ensureSession(token, password);
       if (sessionToken == null) {
-        return SharePreviewResult.needPassword('请输入分享密码');
+        return SharePreviewResult.needPassword(AppErrorCodes.needPassword);
       }
       final response = await _dio.get<Map<String, dynamic>>(
         '/s/$token/preview',
@@ -35,14 +39,16 @@ class ShareApi implements PublicShareRepository {
       );
       final body = response.data;
       if (body == null || body['code'] != 200) {
-        return SharePreviewResult.error(body?['message']?.toString() ?? '请求失败');
+        return SharePreviewResult.error(
+          body?['message']?.toString() ?? AppErrorCodes.operationFailed,
+        );
       }
       final data = body['data'] as Map<String, dynamic>?;
       if (data == null) {
-        return SharePreviewResult.error('响应数据为空');
+        return SharePreviewResult.error(AppErrorCodes.emptyResponse);
       }
       return SharePreviewResult.success(
-        fileName: data['fileName']?.toString() ?? '未命名',
+        fileName: data['fileName']?.toString() ?? AppErrorCodes.unnamedFile,
         mimeType: data['mimeType']?.toString(),
         sizeBytes: (data['sizeBytes'] as num?)?.toInt() ?? 0,
         resourceType: data['resourceType']?.toString() ?? 'FILE',
@@ -52,15 +58,20 @@ class ShareApi implements PublicShareRepository {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
         final code = body['code'];
-        final msg = body['message']?.toString() ?? '请求失败';
-        if (code == 401 || (code == 400 && msg.contains('密码'))) {
-          return SharePreviewResult.needPassword(msg);
+        final msg =
+            body['message']?.toString() ?? AppErrorCodes.operationFailed;
+        if (code == 401 || (code == 400 && msg == AppErrorCodes.needPassword)) {
+          return SharePreviewResult.needPassword(
+            msg == AppErrorCodes.operationFailed
+                ? AppErrorCodes.needPassword
+                : msg,
+          );
         }
         return SharePreviewResult.error(msg);
       }
-      return SharePreviewResult.error(_networkError(e));
-    } catch (e) {
-      return SharePreviewResult.error('未知错误: $e');
+      return SharePreviewResult.error(_networkErrorCode(e));
+    } on Object catch (e) {
+      return SharePreviewResult.error('${AppErrorCodes.unknown}: $e');
     }
   }
 
@@ -84,22 +95,25 @@ class ShareApi implements PublicShareRepository {
       );
       final body = response.data;
       if (body == null || body['code'] != 200) {
-        return ShareAcceptResult.error(body?['message']?.toString() ?? '保存失败');
+        return ShareAcceptResult.error(
+          body?['message']?.toString() ?? AppErrorCodes.operationFailed,
+        );
       }
       return ShareAcceptResult.success();
     } on DioException catch (e) {
       final body = e.response?.data;
       if (body is Map<String, dynamic>) {
         final code = body['code'];
-        final msg = body['message']?.toString() ?? '保存失败';
+        final msg =
+            body['message']?.toString() ?? AppErrorCodes.operationFailed;
         if (code == 409) {
           return ShareAcceptResult.duplicate(msg);
         }
         return ShareAcceptResult.error(msg);
       }
-      return ShareAcceptResult.error(_networkError(e));
-    } catch (e) {
-      return ShareAcceptResult.error('未知错误: $e');
+      return ShareAcceptResult.error(_networkErrorCode(e));
+    } on Object catch (e) {
+      return ShareAcceptResult.error('${AppErrorCodes.unknown}: $e');
     }
   }
 
@@ -114,8 +128,10 @@ class ShareApi implements PublicShareRepository {
     );
     final body = response.data;
     if (body == null || body['code'] != 200) {
-      final message = body?['message']?.toString() ?? '请求失败';
-      if (message.contains('密码')) {
+      final code = body?['code'];
+      final message =
+          body?['message']?.toString() ?? AppErrorCodes.operationFailed;
+      if (code == 401 || message == AppErrorCodes.needPassword) {
         return null;
       }
       throw StateError(message);
@@ -123,18 +139,18 @@ class ShareApi implements PublicShareRepository {
     final data = body['data'] as Map<String, dynamic>?;
     final session = data?['sessionToken']?.toString();
     if (session == null || session.isEmpty) {
-      throw StateError('分享会话响应无效');
+      throw StateError(AppErrorCodes.shareSessionInvalid);
     }
     _sessionTokens[token] = session;
     return session;
   }
 
-  String _networkError(DioException exception) {
+  String _networkErrorCode(DioException exception) {
     return switch (exception.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout => '请求超时，请检查网络后重试',
-      _ => '网络错误: ${exception.message}',
+      DioExceptionType.receiveTimeout => AppErrorCodes.networkTimeout,
+      _ => AppErrorCodes.networkError,
     };
   }
 }

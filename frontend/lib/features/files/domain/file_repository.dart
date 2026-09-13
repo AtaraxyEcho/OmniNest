@@ -27,6 +27,15 @@ abstract interface class FileRepository {
   /// 复制文件节点到目标目录（null 表示根目录）。
   Future<FileNode> copyFile({required String fileId, String? targetParentId});
 
+  /// 查询文件版本历史。
+  Future<List<FileVersion>> listFileVersions(String fileId);
+
+  /// 恢复历史版本为当前内容。
+  Future<FileNode> restoreFileVersion({
+    required String fileId,
+    required String versionId,
+  });
+
   Future<String> downloadUrl(String fileId);
 
   Future<String> loadTextPreview(String fileId);
@@ -92,6 +101,7 @@ abstract interface class FileRepository {
     String? sha256,
     int? partSizeBytes,
     String? spaceType,
+    String? asVersionOfFileId,
   });
 
   Future<void> completeUploadPart({
@@ -111,6 +121,7 @@ abstract interface class FileRepository {
   Future<FileNode> completeUploadSession({
     required String sessionId,
     String? sha256,
+    String? asVersionOfFileId,
   });
 
   Future<void> cancelUploadSession(String uploadId);

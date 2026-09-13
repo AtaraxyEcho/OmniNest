@@ -401,6 +401,7 @@ IconData candidateFileTypeIcon(String itemType) {
   return switch (itemType.toUpperCase()) {
     'TXT' => Icons.description_outlined,
     'CBZ' || 'ZIP' => Icons.archive_outlined,
+    'PDF' => Icons.picture_as_pdf_outlined,
     _ => Icons.import_contacts_outlined,
   };
 }

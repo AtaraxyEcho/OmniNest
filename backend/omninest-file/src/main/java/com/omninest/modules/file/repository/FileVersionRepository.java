@@ -16,6 +16,13 @@ import org.springframework.data.repository.query.Param;
 public interface FileVersionRepository extends JpaRepository<FileVersion, UUID> {
     List<FileVersion> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
 
+    List<FileVersion> findByFileNodeIdOrderByVersionNoDesc(UUID fileNodeId);
+
+    long countByFileNodeId(UUID fileNodeId);
+
+    @Query("select coalesce(max(v.versionNo), 0) from FileVersion v where v.fileNodeId = :fileNodeId")
+    int findMaxVersionNo(@Param("fileNodeId") UUID fileNodeId);
+
     long countByObjectIdAndFileNodeIdNotIn(UUID objectId, Collection<UUID> excludedFileNodeIds);
 
     /**

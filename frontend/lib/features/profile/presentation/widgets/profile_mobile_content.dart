@@ -11,6 +11,8 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
+import 'package:omninest/features/photos/application/photo_backup_preferences.dart';
+import 'package:omninest/features/photos/presentation/widgets/battery_optimization_card.dart';
 import 'package:omninest/features/profile/presentation/widgets/change_password_dialog.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
 
@@ -159,6 +161,41 @@ class ProfileMobileContent extends ConsumerWidget {
                 title: l10n.profileSessionManagement,
                 subtitle: l10n.profileSessionManagementSubtitle,
                 onTap: () => _showSessions(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: MobileLayoutTokens.sectionGap),
+          MobileSettingsGroup(
+            title: l10n.profileSectionBackup,
+            children: [
+              MobileSettingsTile(
+                icon: Icons.cloud_sync_outlined,
+                title: l10n.photoBackupBackgroundTitle,
+                subtitle: l10n.photoBackupBackgroundSubtitle,
+                trailing: Consumer(
+                  builder: (context, tileRef, _) {
+                    final enabled =
+                        tileRef
+                            .watch(photoBackupPreferencesControllerProvider)
+                            .asData
+                            ?.value ??
+                        false;
+                    return Switch(
+                      value: enabled,
+                      onChanged: (value) {
+                        tileRef
+                            .read(
+                              photoBackupPreferencesControllerProvider.notifier,
+                            )
+                            .setEnabled(value);
+                      },
+                    );
+                  },
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
+                child: BatteryOptimizationCard(),
               ),
             ],
           ),

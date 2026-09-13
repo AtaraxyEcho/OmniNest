@@ -24,6 +24,7 @@ class FileGrid extends StatelessWidget {
     this.onShare,
     this.onPreview,
     this.onToggleFavorite,
+    this.onShowVersions,
     this.selectedFileIds = const {},
     this.onToggleSelection,
     this.selectionActive = false,
@@ -47,6 +48,7 @@ class FileGrid extends StatelessWidget {
   final ValueChanged<FileNode>? onShare;
   final ValueChanged<FileNode>? onPreview;
   final ValueChanged<FileNode>? onToggleFavorite;
+  final ValueChanged<FileNode>? onShowVersions;
   final Set<String> selectedFileIds;
   final ValueChanged<String>? onToggleSelection;
 
@@ -120,6 +122,7 @@ class FileGrid extends StatelessWidget {
                 onRestore: onRestore,
                 onOpen: onOpen,
                 onCopy: onCopy,
+                onShowVersions: onShowVersions,
                 onMove: onMove,
                 onMoveToSharedSpace: onMoveToSharedSpace,
                 onMoveToPersonalSpace: onMoveToPersonalSpace,
@@ -159,6 +162,7 @@ class _FileTile extends StatefulWidget {
     this.onShare,
     this.onPreview,
     this.onToggleFavorite,
+    this.onShowVersions,
     this.showingFavorites = false,
     this.selected = false,
     this.selectionMode = false,
@@ -181,6 +185,7 @@ class _FileTile extends StatefulWidget {
   final ValueChanged<FileNode>? onShare;
   final ValueChanged<FileNode>? onPreview;
   final ValueChanged<FileNode>? onToggleFavorite;
+  final ValueChanged<FileNode>? onShowVersions;
   final bool selected;
   final bool selectionMode;
   final VoidCallback? onToggleSelection;
@@ -312,6 +317,7 @@ class _FileTileState extends State<_FileTile> {
                           onShare: widget.onShare,
                           onPreview: widget.onPreview,
                           onToggleFavorite: widget.onToggleFavorite,
+                          onShowVersions: widget.onShowVersions,
                           showingFavorites: widget.showingFavorites,
                         ),
                       ],
@@ -365,6 +371,7 @@ class _FileTileMenu extends StatelessWidget {
     this.onShare,
     this.onPreview,
     this.onToggleFavorite,
+    this.onShowVersions,
     this.showingFavorites = false,
   });
 
@@ -384,6 +391,7 @@ class _FileTileMenu extends StatelessWidget {
   final ValueChanged<FileNode>? onShare;
   final ValueChanged<FileNode>? onPreview;
   final ValueChanged<FileNode>? onToggleFavorite;
+  final ValueChanged<FileNode>? onShowVersions;
 
   /// 当前是否处于收藏分区（决定收藏菜单项的文案与图标）。
   final bool showingFavorites;
@@ -422,6 +430,8 @@ class _FileTileMenu extends StatelessWidget {
             onPurge(file);
           case _FileAction.restore:
             onRestore(file);
+          case _FileAction.versions:
+            onShowVersions?.call(file);
         }
       },
       itemBuilder:
@@ -441,6 +451,17 @@ class _FileTileMenu extends StatelessWidget {
                 value: _FileAction.rename,
                 child: Text(AppLocalizations.of(context).filesRename),
               ),
+              if (onCopy != null && !file.isFolder)
+                PopupMenuItem(
+                  value: _FileAction.versions,
+                  child: ListTile(
+                    leading: const Icon(Icons.history_outlined),
+                    title: Text(
+                      AppLocalizations.of(context).filesVersionsTitle,
+                    ),
+                    dense: true,
+                  ),
+                ),
               if (onCopy != null && !file.isFolder)
                 PopupMenuItem(
                   value: _FileAction.copy,
@@ -507,6 +528,7 @@ class _FileTileMenu extends StatelessWidget {
 }
 
 enum _FileAction {
+  versions,
   open,
   favorite,
   copy,

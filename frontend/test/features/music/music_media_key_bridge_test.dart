@@ -15,6 +15,7 @@ void main() {
         onNext: () async => nextCalls++,
         onPrevious: () async => previousCalls++,
         onPlayPauseToggle: () async => toggleCalls++,
+        onSeek: (_) async {},
       ),
     );
 

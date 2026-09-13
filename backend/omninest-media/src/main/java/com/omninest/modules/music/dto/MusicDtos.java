@@ -36,6 +36,7 @@ public final class MusicDtos {
             Integer sampleRate,
             Long fileSize,
             String lyricsRaw,
+            String lyricsTranslation,
             String genre,
             String coverUrl,
             boolean favorite,

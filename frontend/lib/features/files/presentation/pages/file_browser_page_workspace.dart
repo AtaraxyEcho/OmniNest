@@ -338,6 +338,14 @@ class _FileNodeWorkspace extends ConsumerWidget {
                     controller: controller,
                     file: file,
                   ),
+          onShowVersions:
+              recycle || isShared
+                  ? null
+                  : (file) => _showVersionsDialog(
+                    context: context,
+                    controller: controller,
+                    file: file,
+                  ),
           onMove:
               recycle
                   ? null

@@ -415,10 +415,14 @@ class MusicApi {
   }
 
   /// 应用歌词文本到指定曲目并返回更新后的曲目。
-  Future<MusicTrack> applyLyrics(String trackId, String lyrics) async {
+  Future<MusicTrack> applyLyrics(
+    String trackId,
+    String lyrics, {
+    String? lyricsTranslation,
+  }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/admin/music/tracks/$trackId/lyrics/apply',
-      data: {'lyrics': lyrics},
+      data: {'lyrics': lyrics, 'lyricsTranslation': lyricsTranslation},
     );
     return MusicTrack.fromJson(parseData(response.data));
   }

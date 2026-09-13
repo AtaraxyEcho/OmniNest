@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/platform/android/pip_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
@@ -112,6 +113,10 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
   // 音频缓存提示：仅显示一次（跨刷新持久化）
   bool _audioNoticeChecked = false;
 
+  // Android PiP：播放页活跃时退后台进画中画；PiP 态仅保留画面与进度。
+  VoidCallback? _pipListenerDisposer;
+  bool _isInPipMode = false;
+
   static const _hideDelay = Duration(milliseconds: 2800);
   static const _speedOptions = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
 
@@ -136,6 +141,16 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
         );
       });
     }
+
+    unawaited(PipService.instance().setVideoPlaybackActive(active: true));
+    _pipListenerDisposer = PipService.instance().addListener((inPipMode) {
+      if (!mounted) return;
+      setState(() {
+        _isInPipMode = inPipMode;
+        // PiP 态固定显示精简界面（画面 + 进度），隐藏交互控制层。
+        _showControls = !inPipMode;
+      });
+    });
   }
 
   @override
@@ -154,6 +169,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
     _activeCueIndex.dispose();
     _polledPosition.dispose();
     unawaited(_syncCurrentProgress());
+    unawaited(PipService.instance().setVideoPlaybackActive(active: false));
+    _pipListenerDisposer?.call();
     _player.dispose();
     _windowChromeLease?.release();
     super.dispose();
@@ -316,7 +333,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
               SubtitleOverlay(
                 cues: _subtitleCues,
                 activeCueIndex: _activeCueIndex,
-                controlsVisible: _showControls,
+                controlsVisible: _showControls && !_isInPipMode,
                 isMobile: isMobilePlatform,
               ),
             // Web 端转码模式提示
@@ -329,7 +346,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
               ),
             Positioned.fill(
               child: IgnorePointer(
-                ignoring: !_showControls,
+                ignoring: !_showControls || _isInPipMode,
                 child: AnimatedOpacity(
                   opacity: _showControls ? 1 : 0,
                   duration:

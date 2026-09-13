@@ -16,7 +16,7 @@ Future<void> bootstrapDesktopShell() async {
   if (!Platform.isWindows && !Platform.isLinux && !Platform.isMacOS) {
     return;
   }
-  await ensureSingleDesktopInstance();
+  await ensureSingleDesktopInstance(arguments: Platform.executableArguments);
   // B5：托盘初始化由平台能力驱动，而非散落的平台判断。
   if (!PlatformCapabilities.current().supportsSystemTray) {
     return;

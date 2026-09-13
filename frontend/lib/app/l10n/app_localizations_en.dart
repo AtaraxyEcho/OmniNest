@@ -534,7 +534,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileSectionSecurity => 'Security & devices';
 
   @override
+  String get profileSectionBackup => 'Backup';
+
+  @override
   String get profileSectionAbout => 'About';
+
+  @override
+  String get photoBackupBackgroundTitle => 'Photo background backup';
+
+  @override
+  String get photoBackupBackgroundSubtitle =>
+      'Back up newly added photos in the background (Android only)';
 
   @override
   String get profileManageBackdrop => 'Manage background';
@@ -9744,5 +9754,127 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesHomeTrashHint => 'Deleted items';
 
   @override
-  String get filesHomeMoreHint => 'Upload queue, offline downloads and shares';
+  String get filesHomeMoreHint =>
+      'Upload queue, offline downloads and share management';
+
+  @override
+  String get errorInvalidResponse => 'Invalid response from server';
+
+  @override
+  String get errorEmptyResponse => 'Server returned no result';
+
+  @override
+  String get errorOperationFailed => 'Operation failed';
+
+  @override
+  String get errorNetworkTimeout =>
+      'Request timed out. Check your network and try again';
+
+  @override
+  String get errorNetworkError => 'Network error. Please try again later';
+
+  @override
+  String get errorUnknown => 'Unknown error';
+
+  @override
+  String get errorNeedPassword => 'Enter share password';
+
+  @override
+  String get errorShareSessionInvalid => 'Invalid share session';
+
+  @override
+  String get errorUnnamedFile => 'Unnamed';
+
+  @override
+  String get errorUnnamedResource => 'Unnamed resource';
+
+  @override
+  String get errorUploadUrlMissing => 'Invalid upload URL';
+
+  @override
+  String get errorOtherCategory => 'Other';
+
+  @override
+  String musicBatchFailedTitles(Object titles) {
+    return 'Failed: $titles';
+  }
+
+  @override
+  String get readerPdfTitle => 'PDF Reader';
+
+  @override
+  String get readerPdfLoadFailed => 'Failed to load PDF';
+
+  @override
+  String readerPdfPageIndicator(Object page, Object total) {
+    return 'Page $page of $total';
+  }
+
+  @override
+  String get errorServiceUnavailable =>
+      'Service temporarily unavailable. Please try again later; files remain safely isolated';
+
+  @override
+  String get errorCannotConnect =>
+      'Cannot reach the backend. Check that the service is running or your network';
+
+  @override
+  String get errorRequestCancelled => 'Request cancelled';
+
+  @override
+  String get errorBadCertificate =>
+      'Backend certificate validation failed. Check service configuration';
+
+  @override
+  String errorServerCode(Object code) {
+    return 'Server returned error $code';
+  }
+
+  @override
+  String get errorRequestFailedRetry =>
+      'Request failed. Please try again later';
+
+  @override
+  String get errorWebPdfTooLarge =>
+      'Web reader supports PDF files up to 128 MiB';
+
+  @override
+  String get errorWebBookTooLarge =>
+      'Web reader supports EPUB or TXT files up to 32 MiB';
+
+  @override
+  String get errorFileNotFound => 'File not found';
+
+  @override
+  String get errorConflict => 'Conflict. Please refresh and try again';
+
+  @override
+  String get errorUnauthorized => 'Not signed in or session expired';
+
+  @override
+  String get errorForbidden => 'Not allowed to perform this action';
+
+  @override
+  String get filesOpListVersions => 'View versions';
+
+  @override
+  String get filesOpRestoreVersion => 'Restore version';
+
+  @override
+  String get filesOpSaveVersion => 'Save as new version';
+
+  @override
+  String get filesVersionsTitle => 'File versions';
+
+  @override
+  String get filesVersionsEmpty => 'No history versions yet';
+
+  @override
+  String get filesVersionsRestore => 'Restore';
+
+  @override
+  String get filesVersionsCurrent => 'Current';
+
+  @override
+  String get filesVersionsRestored => 'Version restored';
 }

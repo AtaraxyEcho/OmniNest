@@ -41,7 +41,7 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     await _playItemInQueue(current, uniqueItems, safeIndex);
   }
 
-  /// 将可播放对象加入当前队列，已存在时不重复添加。
+  /// 将可播放对象插入当前曲目之后（下一首播放），已存在时不重复添加。
   void enqueue(MusicPlayableItem item) {
     final current = _currentState;
     if (current == null ||
@@ -50,9 +50,10 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
         )) {
       return;
     }
-    final next = current.copyWith(
-      playbackItems: [...current.playbackItems, item],
-    );
+    final items = [...current.playbackItems];
+    final insertAt = (current.playbackIndex + 1).clamp(0, items.length);
+    items.insert(insertAt, item);
+    final next = current.copyWith(playbackItems: items);
     _replaceState(next);
     _queuePersistence.schedule(next);
   }

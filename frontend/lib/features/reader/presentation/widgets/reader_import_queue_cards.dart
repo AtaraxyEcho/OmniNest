@@ -25,7 +25,7 @@ class _ImportFromDeviceButtonState
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
-        allowedExtensions: ['epub', 'txt', 'cbz', 'zip'],
+        allowedExtensions: ['epub', 'txt', 'cbz', 'zip', 'pdf'],
         withData: kIsWeb,
         allowMultiple: true,
       );

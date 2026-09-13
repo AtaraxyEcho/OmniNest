@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/files/data/file_api.dart';
 import 'package:omninest/features/files/data/share_api.dart';
@@ -507,7 +508,7 @@ void main() {
 
       expect(result, isA<SharePreviewError>());
       final error = result as SharePreviewError;
-      expect(error.message, '响应数据为空');
+      expect(error.message, AppErrorCodes.emptyResponse);
     });
 
     test('preview returns error on network failure', () async {
@@ -525,7 +526,7 @@ void main() {
 
       expect(result, isA<SharePreviewError>());
       final error = result as SharePreviewError;
-      expect(error.message, '请求超时，请检查网络后重试');
+      expect(error.message, AppErrorCodes.networkTimeout);
     });
   });
 }

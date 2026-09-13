@@ -1109,34 +1109,39 @@ class _MusicBatchActionBar extends ConsumerWidget {
       return;
     }
     final notifier = ref.read(musicSelectionControllerProvider.notifier);
-    final (success, failed) = await notifier.addSelectedToPlaylist(
+    final results = await notifier.addSelectedToPlaylist(
       playlist,
       center.tracks,
     );
     if (!context.mounted) {
       return;
     }
+    final success = results.where((item) => item.success).length;
+    final failedTitles =
+        results
+            .where((item) => !item.success)
+            .map((item) => item.title)
+            .toList();
+    final failed = failedTitles.length;
+    final text =
+        failed == 0
+            ? l10n.musicBatchAddedToPlaylist(success, playlist.name)
+            : '${l10n.musicBatchPartial(success, failed)}'
+                ' · ${l10n.musicBatchFailedTitles(failedTitles.join(', '))}';
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(
-            failed == 0
-                ? l10n.musicBatchAddedToPlaylist(success, playlist.name)
-                : l10n.musicBatchPartial(success, failed),
-          ),
-        ),
-      );
+      ..showSnackBar(SnackBar(content: Text(text)));
   }
 
   Future<void> _enqueue(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context);
     final notifier = ref.read(musicSelectionControllerProvider.notifier);
-    final success = await notifier.enqueueSelected(center.tracks);
+    final results = notifier.enqueueSelected(center.tracks);
     notifier.exitSelectionMode();
     if (!context.mounted) {
       return;
     }
+    final success = results.where((item) => item.success).length;
     ScaffoldMessenger.of(context)
       ..hideCurrentSnackBar()
       ..showSnackBar(SnackBar(content: Text(l10n.musicBatchEnqueued(success))));

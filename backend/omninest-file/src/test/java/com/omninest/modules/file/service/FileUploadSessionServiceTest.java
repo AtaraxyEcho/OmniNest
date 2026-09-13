@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -100,6 +101,9 @@ class FileUploadSessionServiceTest {
         FileIngressLifecycleService ingressLifecycleService = mock(FileIngressLifecycleService.class);
         configValueProvider = mock(ConfigValueProvider.class);
         RuntimeConfigCache runtimeConfigCache = mock(RuntimeConfigCache.class);
+        FileManagerService fileManagerService = mock(FileManagerService.class);
+        FileContentChangePublisher fileContentChangePublisher =
+                new FileContentChangePublisher(postProcessingTaskService);
         when(runtimeConfigCache.get(anyString())).thenReturn(Optional.empty());
         when(ingressLifecycleService.open(any())).thenReturn(UUID.randomUUID());
         when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
@@ -126,7 +130,9 @@ class FileUploadSessionServiceTest {
                 ingressSafetyService,
                 ingressLifecycleService,
                 configValueProvider,
-                runtimeConfigCache
+                runtimeConfigCache,
+                fileManagerService,
+                fileContentChangePublisher
         );
     }
 
@@ -158,6 +164,7 @@ class FileUploadSessionServiceTest {
                 "photo.jpg",
                 2048L,
                 "image/jpeg",
+                null,
                 null,
                 null,
                 null
@@ -201,7 +208,7 @@ class FileUploadSessionServiceTest {
         when(objectStorageClient.initiateMultipartUpload(any(), eq("video/mp4"))).thenReturn("upload-123");
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(uploadPartRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(objectStorageClient.createMultipartUploadPartUrl(any(), eq("upload-123"), any(Integer.class), any()))
+        when(objectStorageClient.createMultipartUploadPartUrl(any(), eq("upload-123"), anyInt(), any()))
                 .thenReturn(URI.create("http://minio/part"));
 
         var response = service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
@@ -211,6 +218,7 @@ class FileUploadSessionServiceTest {
                 "video/mp4",
                 null,
                 10 * 1024 * 1024,
+                null,
                 null
         ));
 
@@ -219,6 +227,37 @@ class FileUploadSessionServiceTest {
         assertThat(response.totalParts()).isEqualTo(2);
         assertThat(response.parts()).hasSize(2);
         assertThat(response.parts()).extracting("partNumber").containsExactly(1, 2);
+    }
+
+    @Test
+    void createSession_skipsNameConflictWhenAsVersionOfFile() {
+        UUID asVersionOfFileId = UUID.randomUUID();
+        FileNode target = new FileNode();
+        target.setId(asVersionOfFileId);
+        target.setOwnerUserId(OWNER_ID);
+        target.setName("video.mp4");
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(asVersionOfFileId, OWNER_ID))
+                .thenReturn(Optional.of(target));
+        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "video.mp4"))
+                .thenReturn(true);
+        when(objectStorageClient.initiateMultipartUpload(any(), eq("video.mp4"))).thenReturn("upload-123");
+        when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(uploadPartRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectStorageClient.createMultipartUploadPartUrl(any(), eq("upload-123"), anyInt(), any()))
+                .thenReturn(URI.create("http://minio/part"));
+
+        var response = service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
+                null,
+                "video.mp4",
+                20L * 1024 * 1024,
+                "video.mp4",
+                null,
+                10 * 1024 * 1024,
+                null,
+                asVersionOfFileId
+        ));
+
+        assertThat(response.uploadId()).isEqualTo("upload-123");
     }
 
     @Test
@@ -237,6 +276,7 @@ class FileUploadSessionServiceTest {
                 "demo.pdf",
                 50,
                 "application/pdf",
+                null,
                 null,
                 null,
                 null
@@ -292,7 +332,7 @@ class FileUploadSessionServiceTest {
         });
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
 
-        var file = service.completeSession(OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of()));
+        var file = service.completeSession(OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of(), null));
 
         assertThat(file.id()).isEqualTo(FILE_NODE_ID);
         assertThat(file.name()).isEqualTo("demo.pdf");
@@ -322,7 +362,7 @@ class FileUploadSessionServiceTest {
         when(objectStorageClient.initiateMultipartUpload(any(), eq("video/mp4"))).thenReturn("upload-456");
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
         when(uploadPartRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
-        when(objectStorageClient.createMultipartUploadPartUrl(any(), eq("upload-456"), any(Integer.class), any()))
+        when(objectStorageClient.createMultipartUploadPartUrl(any(), eq("upload-456"), anyInt(), any()))
                 .thenReturn(URI.create("http://minio/part"));
 
         var response = service.createSession(OWNER_ID, new CreateFileUploadSessionRequest(
@@ -332,6 +372,7 @@ class FileUploadSessionServiceTest {
                 "video/mp4",
                 null,
                 10 * 1024 * 1024,
+                null,
                 null
         ));
 
@@ -373,6 +414,7 @@ class FileUploadSessionServiceTest {
                 "application/octet-stream",
                 null,
                 null,
+                null,
                 null
         ))).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("存储配额不足");
@@ -398,7 +440,7 @@ class FileUploadSessionServiceTest {
                 .thenReturn(List.of(completedPart, pendingPart));
 
         assertThatThrownBy(() -> service.completeSession(OWNER_ID, "upload-123",
-                new CompleteFileUploadRequest(null, List.of())))
+                new CompleteFileUploadRequest(null, List.of(), null)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("存在未完成的上传分片");
 
@@ -437,7 +479,7 @@ class FileUploadSessionServiceTest {
         var result = service.completeSession(
                 OWNER_ID,
                 "upload-123",
-                new CompleteFileUploadRequest(null, List.of())
+                new CompleteFileUploadRequest(null, List.of(), null)
         );
 
         assertThat(result.id()).isEqualTo(FILE_NODE_ID);

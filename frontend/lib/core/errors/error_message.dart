@@ -1,5 +1,8 @@
 import 'package:dio/dio.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_code_l10n.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 
 class UserFacingError {
   const UserFacingError({
@@ -16,94 +19,137 @@ class UserFacingError {
       code == null || code!.isEmpty ? message : '$message（$code）';
 }
 
-UserFacingError describeUserFacingError(Object error) {
+/// 将异常映射为用户可见错误。
+///
+/// 提供 [l10n] 时优先使用本地化文案；未提供时返回稳定错误码，
+/// 展示层用 [UserFacingErrorL10n.localizeUserFacing] 再映射。
+UserFacingError describeUserFacingError(
+  Object error, {
+  AppLocalizations? l10n,
+}) {
   if (error is AppException) {
-    return UserFacingError(
-      title: '操作失败',
-      message: error.message,
-      code: error.code,
-    );
+    return _describeAppException(error, l10n);
   }
   if (error is DioException) {
-    return _describeDioException(error);
+    return _describeDioException(error, l10n);
   }
+  final raw = error.toString();
   return UserFacingError(
-    title: '操作失败',
-    message: error.toString().isEmpty ? '请求失败，请稍后重试' : error.toString(),
+    title: l10n?.errorOperationFailed ?? AppErrorCodes.operationFailed,
+    message:
+        raw.isEmpty
+            ? (l10n?.errorRequestFailedRetry ?? AppErrorCodes.unknown)
+            : raw,
   );
 }
 
-UserFacingError _describeDioException(DioException error) {
-  final backend = _backendError(error.response?.data);
+UserFacingError _describeAppException(
+  AppException error,
+  AppLocalizations? l10n,
+) {
+  final message =
+      l10n != null
+          ? l10n.messageForErrorCode(error.code, fallback: error.message)
+          : error.code;
+  return UserFacingError(
+    title: l10n?.errorOperationFailed ?? AppErrorCodes.operationFailed,
+    message: message,
+    code: error.code,
+  );
+}
+
+UserFacingError _describeDioException(
+  DioException error,
+  AppLocalizations? l10n,
+) {
+  final backend = _backendError(error.response?.data, l10n);
   if (backend != null) {
     return backend;
   }
   final code = error.response?.statusCode?.toString();
+  final title = l10n?.errorOperationFailed ?? AppErrorCodes.operationFailed;
   if (error.response?.statusCode == 503) {
-    return const UserFacingError(
-      title: '操作失败',
-      message: '服务暂时不可用，请稍后重试；文件仍处于安全隔离状态',
+    return UserFacingError(
+      title: title,
+      message: l10n?.errorServiceUnavailable ?? 'SERVICE_UNAVAILABLE',
       code: 'SERVICE_UNAVAILABLE',
     );
   }
   return switch (error.type) {
-    DioExceptionType.connectionError => const UserFacingError(
-      title: '操作失败',
-      message: '无法连接后端服务，请确认服务已启动或网络可用',
+    DioExceptionType.connectionError => UserFacingError(
+      title: title,
+      message: l10n?.errorCannotConnect ?? AppErrorCodes.networkError,
       code: 'NETWORK_ERROR',
     ),
     DioExceptionType.connectionTimeout ||
     DioExceptionType.sendTimeout ||
-    DioExceptionType.receiveTimeout => const UserFacingError(
-      title: '操作失败',
-      message: '请求超时，请稍后重试',
+    DioExceptionType.receiveTimeout => UserFacingError(
+      title: title,
+      message: l10n?.errorNetworkTimeout ?? AppErrorCodes.networkTimeout,
       code: 'REQUEST_TIMEOUT',
     ),
-    DioExceptionType.cancel => const UserFacingError(
-      title: '操作失败',
-      message: '请求已取消',
+    DioExceptionType.cancel => UserFacingError(
+      title: title,
+      message: l10n?.errorRequestCancelled ?? 'REQUEST_CANCELLED',
       code: 'REQUEST_CANCELLED',
     ),
-    DioExceptionType.badCertificate => const UserFacingError(
-      title: '操作失败',
-      message: '后端证书校验失败，请检查服务配置',
+    DioExceptionType.badCertificate => UserFacingError(
+      title: title,
+      message: l10n?.errorBadCertificate ?? 'BAD_CERTIFICATE',
       code: 'BAD_CERTIFICATE',
     ),
     DioExceptionType.badResponse => UserFacingError(
-      title: '操作失败',
-      message: code == null ? '服务端返回错误，请稍后重试' : '服务端返回 $code 错误',
+      title: title,
+      message:
+          code == null
+              ? (l10n?.errorRequestFailedRetry ?? 'BAD_RESPONSE')
+              : (l10n?.errorServerCode(code) ?? code),
       code: code,
     ),
     DioExceptionType.unknown => UserFacingError(
-      title: '操作失败',
+      title: title,
       message:
-          error.message?.isNotEmpty == true ? error.message! : '请求失败，请稍后重试',
+          error.message?.isNotEmpty == true
+              ? error.message!
+              : (l10n?.errorRequestFailedRetry ??
+                  AppErrorCodes.operationFailed),
       code: code,
     ),
   };
 }
 
-UserFacingError? _backendError(Object? data) {
+UserFacingError? _backendError(Object? data, AppLocalizations? l10n) {
+  final title = l10n?.errorOperationFailed ?? AppErrorCodes.operationFailed;
   if (data is Map<String, dynamic>) {
     final message = data['message']?.toString();
+    final errorName = data['errorName']?.toString();
     if (message == null || message.isEmpty) {
       return null;
     }
+    final resolved =
+        (l10n != null && errorName != null && errorName.isNotEmpty)
+            ? l10n.messageForErrorCode(errorName, fallback: message)
+            : message;
     return UserFacingError(
-      title: '操作失败',
-      message: message,
-      code: data['code']?.toString(),
+      title: title,
+      message: resolved,
+      code: errorName ?? data['code']?.toString(),
     );
   }
   if (data is Map) {
     final message = data['message']?.toString();
+    final errorName = data['errorName']?.toString();
     if (message == null || message.isEmpty) {
       return null;
     }
+    final resolved =
+        (l10n != null && errorName != null && errorName.isNotEmpty)
+            ? l10n.messageForErrorCode(errorName, fallback: message)
+            : message;
     return UserFacingError(
-      title: '操作失败',
-      message: message,
-      code: data['code']?.toString(),
+      title: title,
+      message: resolved,
+      code: errorName ?? data['code']?.toString(),
     );
   }
   return null;

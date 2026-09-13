@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_history_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
@@ -24,7 +25,9 @@ class MusicHistoryPage extends ConsumerWidget {
         error: (error, stackTrace) => _HistoryFailure(message: '$error'),
         data: (state) {
           if (state.errorMessage != null) {
-            return _HistoryFailure(message: state.errorMessage!);
+            return _HistoryFailure(
+              message: l10n.localizeStoredError(state.errorMessage!),
+            );
           }
           return Column(
             children: [

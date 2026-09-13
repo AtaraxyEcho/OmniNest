@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
@@ -197,7 +198,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
       },
       error:
           (error, stackTrace) => AppErrorView(
-            message: describeUserFacingError(error).displayMessage,
+            message: AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)),
             onRetry: () => ref.invalidate(photoCenterControllerProvider),
           ),
       loading: () => const AppLoading.grid(),
@@ -272,7 +273,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
       },
       error:
           (error, stackTrace) => AppErrorView(
-            message: describeUserFacingError(error).displayMessage,
+            message: AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)),
             onRetry: () => ref.invalidate(photoCenterControllerProvider),
           ),
       loading:
@@ -307,7 +308,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     } on Exception catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(describeUserFacingError(error).displayMessage)),
+        SnackBar(content: Text(AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)))),
       );
     }
   }
@@ -325,7 +326,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     } on Exception catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(describeUserFacingError(error).displayMessage)),
+        SnackBar(content: Text(AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)))),
       );
     }
   }
@@ -341,7 +342,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     } on Exception catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(describeUserFacingError(error).displayMessage)),
+        SnackBar(content: Text(AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)))),
       );
     }
   }
@@ -355,7 +356,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     } on Exception catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(describeUserFacingError(error).displayMessage)),
+        SnackBar(content: Text(AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)))),
       );
     }
   }

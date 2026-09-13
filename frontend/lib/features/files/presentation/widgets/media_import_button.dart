@@ -1,8 +1,10 @@
 import 'dart:async';
 
 import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -37,6 +39,7 @@ class MediaImportButton extends ConsumerStatefulWidget {
     this.acceptedExtensions = const <String>[],
     this.unsupportedExtensions = const <String>[],
     this.reuseExistingFiles = false,
+    this.enableCamera = false,
     super.key,
   });
 
@@ -70,6 +73,9 @@ class MediaImportButton extends ConsumerStatefulWidget {
   /// 是否允许复用目标目录或回收站中的同名同大小文件。
   final bool reuseExistingFiles;
 
+  /// 移动端是否提供「拍摄上传」入口。
+  final bool enableCamera;
+
   @override
   ConsumerState<MediaImportButton> createState() => _MediaImportButtonState();
 }
@@ -102,18 +108,7 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
     final l10n = AppLocalizations.of(context);
     final messenger = ScaffoldMessenger.of(context);
     try {
-      final acceptedTypeGroups =
-          widget.acceptedExtensions.isEmpty
-              ? const <XTypeGroup>[]
-              : <XTypeGroup>[
-                XTypeGroup(
-                  label: widget.subsystemDirectory,
-                  extensions: widget.acceptedExtensions,
-                ),
-              ];
-      final files = await ref.read(mediaImportFilePickerProvider)(
-        acceptedTypeGroups,
-      );
+      final files = await _pickImportFiles(l10n);
       if (files.isEmpty || !mounted) return;
 
       final unsupportedFiles = _unsupportedFiles(files);
@@ -174,6 +169,65 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       }
     }
   }
+
+  Future<List<XFile>> _pickImportFiles(AppLocalizations l10n) async {
+    if (widget.enableCamera && _cameraSupported) {
+      final source = await showModalBottomSheet<String>(
+        context: context,
+        builder: (sheetContext) {
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_library_outlined),
+                  title: Text(l10n.importFiles),
+                  onTap: () => Navigator.of(sheetContext).pop('files'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_outlined),
+                  title: Text(l10n.filesCameraTakePhoto),
+                  onTap: () => Navigator.of(sheetContext).pop('camera'),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+      if (!mounted) {
+        return const <XFile>[];
+      }
+      if (source == 'camera') {
+        try {
+          final shot = await ImagePicker().pickImage(
+            source: ImageSource.camera,
+            maxWidth: 4096,
+          );
+          return shot == null ? const <XFile>[] : <XFile>[shot];
+        } on Exception {
+          return const <XFile>[];
+        }
+      }
+      if (source != 'files') {
+        return const <XFile>[];
+      }
+    }
+    final acceptedTypeGroups =
+        widget.acceptedExtensions.isEmpty
+            ? const <XTypeGroup>[]
+            : <XTypeGroup>[
+              XTypeGroup(
+                label: widget.subsystemDirectory,
+                extensions: widget.acceptedExtensions,
+              ),
+            ];
+    return ref.read(mediaImportFilePickerProvider)(acceptedTypeGroups);
+  }
+
+  bool get _cameraSupported =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   Future<void> _showProgressSheet(
     BuildContext context, {

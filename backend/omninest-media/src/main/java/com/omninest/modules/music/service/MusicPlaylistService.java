@@ -141,7 +141,7 @@ public class MusicPlaylistService {
     @Transactional(rollbackFor = Exception.class)
     public MusicPlaylistDto addItems(UUID ownerUserId, UUID playlistId, PlaylistItemsRequest request) {
         log.info("添加曲目到播放列表: playlistId={}, count={}", playlistId, request.trackIds().size());
-        requirePlaylist(ownerUserId, playlistId);
+        requireCustomPlaylist(ownerUserId, playlistId);
         List<UUID> trackIds = request.trackIds();
         Set<UUID> existingTrackIds = trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds)
                 .stream()

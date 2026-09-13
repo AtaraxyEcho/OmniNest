@@ -4,6 +4,8 @@ import 'dart:math' as math;
 import 'package:dio/dio.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/files/application/file_browser_models.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
@@ -35,6 +37,9 @@ enum _UploadFileResult { completed, conflict, failed, paused, cancelled }
 
 class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   FileRepository get _repository => ref.read(fileRepositoryProvider);
+
+  /// 文件仓储（展示层版本历史对话框直接读取）。
+  FileRepository get repository => _repository;
   FileBrowserState? get _currentState => state.asData?.value;
 
   void _emitState(FileBrowserState nextState) {
@@ -769,10 +774,17 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 }
 
 class _UploadRuntime {
-  _UploadRuntime({required this.file, required this.session});
+  _UploadRuntime({
+    required this.file,
+    required this.session,
+    this.asVersionOfFileId,
+  });
 
   final XFile file;
   final FileUploadSession session;
+
+  /// 非空时完成上传后保存为目标文件的新版本，不新建文件节点。
+  final String? asVersionOfFileId;
   final Set<int> completedPartNumbers = <int>{};
   bool pauseRequested = false;
   bool removed = false;

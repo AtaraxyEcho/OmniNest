@@ -28,6 +28,7 @@ import com.omninest.modules.file.repository.FileAccessRecordRepository;
 import com.omninest.modules.file.repository.FileFavoriteRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
+import com.omninest.modules.file.repository.FileVersionRepository;
 import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
@@ -76,6 +77,8 @@ class FileManagerServiceTest {
             Mockito.mock(StorageExternalAccountRepository.class);
     private final UserAccountQuery userAccountQuery = Mockito.mock(UserAccountQuery.class);
     private final FileObjectRepository fileObjectRepository = Mockito.mock(FileObjectRepository.class);
+    private final FileVersionRepository fileVersionRepository = Mockito.mock(FileVersionRepository.class);
+    private final FileContentChangePublisher fileContentChangePublisher = Mockito.mock(FileContentChangePublisher.class);
     private final ObjectStorageClient objectStorageClient = Mockito.mock(ObjectStorageClient.class);
     private final PasswordEncoder passwordEncoder = Mockito.mock(PasswordEncoder.class);
     private final FileQueryService fileQueryService = Mockito.mock(FileQueryService.class);
@@ -106,6 +109,8 @@ class FileManagerServiceTest {
             externalAccountRepository,
             userAccountQuery,
             fileObjectRepository,
+            fileVersionRepository,
+            fileContentChangePublisher,
             objectStorageClient,
             passwordEncoder,
             fileQueryService,
@@ -442,6 +447,143 @@ class FileManagerServiceTest {
     }
 
     @Test
+    void copyNode_preservesCurrentObjectId() {
+        FileNode source = node("report.pdf", "application/pdf", 2048);
+        source.setCurrentObjectId(OBJECT_ID);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(source));
+        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, "report.pdf")).thenReturn(false);
+        when(fileNodeRepository.save(any(FileNode.class)))
+                .thenAnswer(invocation -> {
+                    FileNode saved = invocation.getArgument(0);
+                    if (saved.getId() == null) {
+                        saved.setId(UUID.randomUUID());
+                    }
+                    return saved;
+                });
+
+        var result = fileManagerService.copyNode(OWNER_ID, FILE_ID, null);
+
+        assertThat(result.name()).isEqualTo("report.pdf");
+        verify(fileNodeRepository).save(any(FileNode.class));
+    }
+
+    @Test
+    void copyNode_rejectsSameNameInTargetParent() {
+        FileNode source = node("report.pdf", "application/pdf", 2048);
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(source));
+        when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(
+                OWNER_ID, "report.pdf")).thenReturn(true);
+
+        assertThatThrownBy(() -> fileManagerService.copyNode(OWNER_ID, FILE_ID, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("同名");
+    }
+
+    @Test
+    void saveNewVersion_publishesContentChangeAndUpdatesMime() {
+        FileNode node = node("report.pdf", "application/pdf", 100);
+        node.setCurrentObjectId(OBJECT_ID);
+        UUID newObjectId = UUID.fromString("50000000-0000-0000-0000-000000000002");
+        FileObject newObject = new FileObject();
+        newObject.setId(newObjectId);
+        newObject.setObjectKey("uploads/" + OWNER_ID + "/session-1/report.pdf");
+        newObject.setSizeBytes(200L);
+        newObject.setMimeType("text/plain");
+
+        when(fileNodeRepository.findOwnedForUpdate(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(node));
+        when(fileObjectRepository.findById(newObjectId))
+                .thenReturn(Optional.of(newObject));
+        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, newObjectId))
+                .thenReturn(Optional.empty());
+        when(uploadSessionRepository.findFirstByOwnerUserIdAndResultObjectId(OWNER_ID, newObjectId))
+                .thenReturn(Optional.of(new com.omninest.modules.file.domain.FileUploadSession()));
+        when(fileVersionRepository.findMaxVersionNo(FILE_ID)).thenReturn(0);
+        when(fileNodeRepository.save(any(FileNode.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = fileManagerService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, "replace");
+
+        assertThat(result.sizeBytes()).isEqualTo(200L);
+        assertThat(result.mimeType()).isEqualTo("text/plain");
+        verify(fileContentChangePublisher).publish(any(FileNode.class), any(FileObject.class), any(UUID.class));
+    }
+
+    @Test
+    void saveNewVersion_rejectsObjectOwnedByOtherUser() {
+        FileNode node = node("report.pdf", "application/pdf", 100);
+        node.setCurrentObjectId(OBJECT_ID);
+        UUID foreignObjectId = UUID.fromString("50000000-0000-0000-0000-000000000099");
+        FileObject foreignObject = new FileObject();
+        foreignObject.setId(foreignObjectId);
+        foreignObject.setObjectKey("uploads/other-user/session-1/a.pdf");
+        foreignObject.setSizeBytes(100L);
+
+        when(fileNodeRepository.findOwnedForUpdate(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(node));
+        when(fileObjectRepository.findById(foreignObjectId))
+                .thenReturn(Optional.of(foreignObject));
+
+        assertThatThrownBy(() ->
+                fileManagerService.saveNewVersion(OWNER_ID, FILE_ID, foreignObjectId, 100L, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不属于");
+    }
+
+    @Test
+    void saveNewVersion_rejectsObjectAliasedToOtherNode() {
+        FileNode node = node("report.pdf", "application/pdf", 100);
+        node.setCurrentObjectId(OBJECT_ID);
+        UUID objectId = UUID.fromString("50000000-0000-0000-0000-000000000003");
+        FileObject object = new FileObject();
+        object.setId(objectId);
+        object.setObjectKey("uploads/" + OWNER_ID + "/session-2/a.pdf");
+        object.setSizeBytes(100L);
+        FileNode other = node("other.pdf", "application/pdf", 100);
+        other.setId(UUID.fromString("70000000-0000-0000-0000-000000000009"));
+
+        when(fileNodeRepository.findOwnedForUpdate(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(node));
+        when(fileObjectRepository.findById(objectId))
+                .thenReturn(Optional.of(object));
+        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, objectId))
+                .thenReturn(Optional.of(other));
+
+        assertThatThrownBy(() ->
+                fileManagerService.saveNewVersion(OWNER_ID, FILE_ID, objectId, 100L, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("已被其他文件");
+    }
+
+    @Test
+    void saveNewVersion_rejectsObjectWithoutUploadSession() {
+        FileNode node = node("report.pdf", "application/pdf", 100);
+        node.setCurrentObjectId(OBJECT_ID);
+        UUID objectId = UUID.fromString("50000000-0000-0000-0000-000000000004");
+        FileObject object = new FileObject();
+        object.setId(objectId);
+        object.setObjectKey("uploads/" + OWNER_ID + "/session-3/a.pdf");
+        object.setSizeBytes(100L);
+
+        when(fileNodeRepository.findOwnedForUpdate(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(node));
+        when(fileObjectRepository.findById(objectId))
+                .thenReturn(Optional.of(object));
+        when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(OWNER_ID, objectId))
+                .thenReturn(Optional.empty());
+        when(uploadSessionRepository.findFirstByOwnerUserIdAndResultObjectId(OWNER_ID, objectId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                fileManagerService.saveNewVersion(OWNER_ID, FILE_ID, objectId, 100L, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("上传会话");
+    }
+
+    @Test
     void copyNode_copiesToRootWhenTargetParentIsNull() {
         FileNode source = node("notes.txt", "text/plain", 512);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
@@ -579,7 +721,9 @@ class FileManagerServiceTest {
         FileManagerService realService = new FileManagerService(
                 fileNodeRepository, accessRecordRepository, favoriteRepository,
                 shareLinkRepository, shareRecipientRepository, uploadSessionRepository,
-                externalAccountRepository, userAccountQuery, fileObjectRepository, objectStorageClient,
+                externalAccountRepository, userAccountQuery, fileObjectRepository, fileVersionRepository,
+                fileContentChangePublisher,
+                objectStorageClient,
                 realEncoder, fileQueryService, filePermissionService,
                 rateLimitService, notificationService,
                 externalStorageService, readThroughCache, syncEventRecorder,
@@ -672,7 +816,9 @@ class FileManagerServiceTest {
         FileManagerService realService = new FileManagerService(
                 fileNodeRepository, accessRecordRepository, favoriteRepository,
                 shareLinkRepository, shareRecipientRepository, uploadSessionRepository,
-                externalAccountRepository, userAccountQuery, fileObjectRepository, objectStorageClient,
+                externalAccountRepository, userAccountQuery, fileObjectRepository, fileVersionRepository,
+                fileContentChangePublisher,
+                objectStorageClient,
                 realEncoder, fileQueryService, filePermissionService,
                 rateLimitService, notificationService,
                 externalStorageService, readThroughCache, syncEventRecorder,

@@ -201,6 +201,7 @@ class FrameImportAction extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     return MediaImportButton(
       subsystemDirectory: 'Photos',
+      enableCamera: true,
       acceptedExtensions: const <String>[
         'jpg',
         'jpeg',

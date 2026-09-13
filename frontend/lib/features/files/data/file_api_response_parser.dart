@@ -1,4 +1,5 @@
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/features/files/data/dtos/file_node_dto.dart';
 import 'package:omninest/features/files/data/dtos/file_upload_session_dto.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
@@ -13,7 +14,10 @@ class FileApiResponseParser {
     final data = parseData(body);
     final items = data['items'];
     if (items is! List) {
-      throw const AppException(code: 'INVALID_RESPONSE', message: '文件列表格式不正确');
+      throw const AppException(
+        code: AppErrorCodes.invalidResponse,
+        message: AppErrorCodes.invalidResponse,
+      );
     }
     return FileNodePage(
       items:
@@ -135,20 +139,26 @@ class FileApiResponseParser {
     final envelope = parseEnvelope(body);
     final data = envelope['data'];
     if (data is! Map<String, dynamic>) {
-      throw const AppException(code: 'INVALID_RESPONSE', message: '文件响应格式不正确');
+      throw const AppException(
+        code: AppErrorCodes.invalidResponse,
+        message: AppErrorCodes.invalidResponse,
+      );
     }
     return data;
   }
 
   Map<String, dynamic> parseEnvelope(Map<String, dynamic>? body) {
     if (body == null) {
-      throw const AppException(code: 'EMPTY_RESPONSE', message: '服务端没有返回文件结果');
+      throw const AppException(
+        code: AppErrorCodes.emptyResponse,
+        message: AppErrorCodes.emptyResponse,
+      );
     }
     final code = body['code'];
     if (code != 200) {
       throw AppException(
         code: code?.toString() ?? 'FILE_ERROR',
-        message: body['message']?.toString() ?? '文件操作失败',
+        message: body['message']?.toString() ?? AppErrorCodes.operationFailed,
         details: _parseErrorDetails(body['details']),
       );
     }
@@ -166,7 +176,10 @@ class FileApiResponseParser {
     final data = parseData(body);
     final items = data['items'];
     if (items is! List) {
-      throw const AppException(code: 'INVALID_RESPONSE', message: '分页数据格式不正确');
+      throw const AppException(
+        code: AppErrorCodes.invalidResponse,
+        message: AppErrorCodes.invalidResponse,
+      );
     }
     return items.whereType<Map<String, dynamic>>().toList();
   }
@@ -231,7 +244,8 @@ class FileApiResponseParser {
                   .whereType<Map<String, dynamic>>()
                   .map(
                     (item) => FileTypeStats(
-                      category: item['category']?.toString() ?? '其他',
+                      category:
+                          item['category']?.toString() ?? AppErrorCodes.other,
                       count: asInt(item['count']),
                       sizeBytes: asInt(item['sizeBytes']),
                     ),
@@ -246,7 +260,8 @@ class FileApiResponseParser {
       id: json['id'].toString(),
       resourceType: json['resourceType']?.toString() ?? 'FILE',
       resourceId: json['resourceId']?.toString() ?? '',
-      resourceName: json['resourceName']?.toString() ?? '未命名资源',
+      resourceName:
+          json['resourceName']?.toString() ?? AppErrorCodes.unnamedResource,
       shareCode: json['shareCode']?.toString() ?? '',
       status: json['status']?.toString() ?? 'ACTIVE',
       maxAccessCount:
@@ -265,7 +280,10 @@ class FileApiResponseParser {
   SharedFileItem _parseSharedItem(Map<String, dynamic> json) {
     final file = json['file'];
     if (file is! Map<String, dynamic>) {
-      throw const AppException(code: 'INVALID_RESPONSE', message: '共享文件格式不正确');
+      throw const AppException(
+        code: AppErrorCodes.invalidResponse,
+        message: AppErrorCodes.invalidResponse,
+      );
     }
     return SharedFileItem(
       shareId: json['shareId'].toString(),

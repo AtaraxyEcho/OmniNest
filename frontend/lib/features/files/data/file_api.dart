@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/files/data/file_api_response_parser.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
@@ -111,6 +112,51 @@ class FileApi {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/files/$fileId/copy',
       data: {'targetParentId': targetParentId},
+    );
+    return parseFileNodeResponse(response.data);
+  }
+
+  /// 查询文件版本历史。
+  Future<List<FileVersion>> listFileVersions(String fileId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/files/$fileId/versions',
+    );
+    final envelope = _responseParser.parseEnvelope(response.data);
+    final data = envelope['data'];
+    if (data is! List) {
+      return const [];
+    }
+    return data
+        .whereType<Map<String, dynamic>>()
+        .map(FileVersion.fromJson)
+        .toList();
+  }
+
+  /// 将当前内容保存为历史版本，并切换到已上传对象。
+  Future<FileNode> saveFileVersion({
+    required String fileId,
+    required String objectId,
+    required int sizeBytes,
+    String? remark,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/files/$fileId/versions',
+      data: {
+        'objectId': objectId,
+        'sizeBytes': sizeBytes,
+        if (remark != null && remark.isNotEmpty) 'remark': remark,
+      },
+    );
+    return parseFileNodeResponse(response.data);
+  }
+
+  /// 恢复指定历史版本为当前内容。
+  Future<FileNode> restoreFileVersion({
+    required String fileId,
+    required String versionId,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/files/$fileId/versions/$versionId/restore',
     );
     return parseFileNodeResponse(response.data);
   }
@@ -335,7 +381,7 @@ class FileApi {
     final data = parseData(response.data);
     return FileSharePreview(
       shareId: data['shareId']?.toString() ?? '',
-      fileName: data['fileName']?.toString() ?? '未命名',
+      fileName: data['fileName']?.toString() ?? AppErrorCodes.unnamedFile,
       mimeType: data['mimeType']?.toString(),
       sizeBytes: _responseParser.asInt(data['sizeBytes']),
       resourceType: data['resourceType']?.toString() ?? 'FILE',
@@ -374,7 +420,7 @@ class FileApi {
     );
     final issued = parseData(authorization.data)['sessionToken']?.toString();
     if (issued == null || issued.isEmpty) {
-      throw StateError('分享会话响应无效');
+      throw StateError(AppErrorCodes.shareSessionInvalid);
     }
     _shareSessionTokens[token] = issued;
     return issued;
@@ -409,6 +455,7 @@ class FileApi {
     String? sha256,
     int? partSizeBytes,
     String? spaceType,
+    String? asVersionOfFileId,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/uploads/sessions',
@@ -420,6 +467,8 @@ class FileApi {
         if (sha256 != null && sha256.isNotEmpty) 'sha256': sha256,
         if (partSizeBytes != null) 'partSizeBytes': partSizeBytes,
         if (spaceType != null) 'spaceType': spaceType,
+        if (asVersionOfFileId != null && asVersionOfFileId.isNotEmpty)
+          'asVersionOfFileId': asVersionOfFileId,
       },
     );
     return parseUploadSessionResponse(response.data);
@@ -477,10 +526,15 @@ class FileApi {
   Future<FileNode> completeUploadSession({
     required String sessionId,
     String? sha256,
+    String? asVersionOfFileId,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/uploads/$sessionId/complete',
-      data: {if (sha256 != null && sha256.isNotEmpty) 'sha256': sha256},
+      data: {
+        if (sha256 != null && sha256.isNotEmpty) 'sha256': sha256,
+        if (asVersionOfFileId != null && asVersionOfFileId.isNotEmpty)
+          'asVersionOfFileId': asVersionOfFileId,
+      },
     );
     return parseFileNodeResponse(response.data);
   }

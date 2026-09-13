@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
@@ -120,9 +121,10 @@ class _MusicCenterPageState extends ConsumerState<MusicCenterPage> {
     if (!mounted) {
       return;
     }
+    final localized = AppLocalizations.of(context).localizeStoredError(message);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message),
+        content: Text(localized),
         action: SnackBarAction(
           label: AppLocalizations.of(context).musicGotIt,
           onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),

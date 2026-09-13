@@ -13,6 +13,7 @@ class MusicMediaCommandCallbacks {
     required this.onNext,
     required this.onPrevious,
     required this.onPlayPauseToggle,
+    required this.onSeek,
   });
 
   final Future<void> Function() onPlay;
@@ -22,6 +23,8 @@ class MusicMediaCommandCallbacks {
 
   /// 播放/暂停媒体键触发的状态切换，实现方按当前播放状态选择播放或暂停。
   final Future<void> Function() onPlayPauseToggle;
+
+  final Future<void> Function(Duration position) onSeek;
 }
 
 /// 音乐系统媒体会话处理：Android/iOS 通知栏媒体卡片与系统媒体键的统一出口。
@@ -97,16 +100,55 @@ class MusicMediaSessionHandler extends BaseAudioHandler with SeekHandler {
   Future<void> skipToPrevious() async {
     await _callbacks.onPrevious();
   }
+
+  @override
+  Future<void> seek(Duration position) async {
+    await _callbacks.onSeek(position);
+  }
 }
 
 /// 全局会话实例，由初始化流程创建，播放会话层与系统命令共享。
 MusicMediaSessionHandler? _activeHandler;
+
+StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
+StreamSubscription<void>? _becomingNoisySub;
+bool _resumeAfterInterruption = false;
 
 /// 是否在本平台启用 audio_service 媒体会话（仅 Android/iOS）。
 bool get musicMediaSessionSupported =>
     !kIsWeb &&
     (defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS);
+
+Future<void> _bindAudioFocus(
+  AudioSession session,
+  MusicMediaCommandCallbacks callbacks,
+) async {
+  await session.setActive(true);
+  await _interruptionSub?.cancel();
+  await _becomingNoisySub?.cancel();
+  _interruptionSub = session.interruptionEventStream.listen((event) async {
+    if (event.begin) {
+      switch (event.type) {
+        case AudioInterruptionType.pause:
+        case AudioInterruptionType.unknown:
+          _resumeAfterInterruption = true;
+          await callbacks.onPause();
+        case AudioInterruptionType.duck:
+          break;
+      }
+      return;
+    }
+    if (_resumeAfterInterruption) {
+      _resumeAfterInterruption = false;
+      await callbacks.onPlay();
+    }
+  });
+  _becomingNoisySub = session.becomingNoisyEventStream.listen((_) {
+    _resumeAfterInterruption = false;
+    unawaited(callbacks.onPause());
+  });
+}
 
 /// 初始化系统媒体会话：音频焦点（audio_session）+ 通知栏媒体卡片（audio_service）。
 ///
@@ -122,8 +164,8 @@ Future<MusicMediaSessionHandler?> ensureMusicMediaSession(
     return existing;
   }
   final session = await AudioSession.instance;
-  // 音乐类别：被电话/导航抢占时暂停，结束后恢复；混音场景自动闪避降音量。
   await session.configure(const AudioSessionConfiguration.music());
+  await _bindAudioFocus(session, callbacks);
   final handler = MusicMediaSessionHandler(callbacks: callbacks);
   await AudioService.init(
     builder: () => handler,

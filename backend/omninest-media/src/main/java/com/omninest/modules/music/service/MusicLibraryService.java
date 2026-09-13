@@ -10,6 +10,7 @@ import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.music.config.MusicLibraryProperties;
 import com.omninest.modules.music.domain.MusicAlbum;
 import com.omninest.modules.music.domain.MusicArtist;
 import com.omninest.modules.music.domain.MusicFavorite;
@@ -60,8 +61,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MusicLibraryService {
-    private static final Duration PLAY_HISTORY_RETENTION = Duration.ofDays(7);
-
     /** 曲库三端点允许的动态排序字段白名单。 */
     private static final Set<String> TRACK_SORT_FIELDS = Set.of("title", "artistName", "updatedAt");
     private static final Set<String> ALBUM_SORT_FIELDS = Set.of("updatedAt", "name");
@@ -76,6 +75,12 @@ public class MusicLibraryService {
     private final FileQueryService fileQueryService;
     private final ReadThroughCache readThroughCache;
     private final MediaSyncEventService syncEventService;
+    private final MusicLibraryProperties musicLibraryProperties;
+
+    private Duration playHistoryRetention() {
+        int days = musicLibraryProperties.getHistoryRetentionDays();
+        return Duration.ofDays(Math.max(1, days));
+    }
 
     @Transactional(readOnly = true)
     public MusicDashboardDto dashboard(UUID ownerUserId) {
@@ -182,7 +187,7 @@ public class MusicLibraryService {
         List<UUID> trackIds = playHistoryRepository
                 .findTop50ByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
                         ownerUserId,
-                        Instant.now().minus(PLAY_HISTORY_RETENTION)
+                        Instant.now().minus(playHistoryRetention())
                 )
                 .stream()
                 .map(MusicPlayHistory::getTrackId)
@@ -207,7 +212,7 @@ public class MusicLibraryService {
         for (MusicPlayHistory history : playHistoryRepository
                 .findTop50ByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
                         ownerUserId,
-                        Instant.now().minus(PLAY_HISTORY_RETENTION)
+                        Instant.now().minus(playHistoryRetention())
                 )) {
             latestByKey.putIfAbsent(history.getPlayableKey(), history);
         }
@@ -349,7 +354,7 @@ public class MusicLibraryService {
      */
     @Transactional(readOnly = true)
     public Page<MusicPlayHistoryDto> playHistory(UUID ownerUserId, int page, int size) {
-        Instant cutoff = Instant.now().minus(PLAY_HISTORY_RETENTION);
+        Instant cutoff = Instant.now().minus(playHistoryRetention());
         var result = playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
                 ownerUserId,
                 cutoff,
@@ -448,7 +453,7 @@ public class MusicLibraryService {
         );
         int deleted = playHistoryRepository.deleteExpiredHistory(
                 ownerUserId,
-                history.getPlayedAt().minus(PLAY_HISTORY_RETENTION)
+                history.getPlayedAt().minus(playHistoryRetention())
         );
         if (deleted > 0) {
             log.debug("已清理过期音乐播放历史: userId={}, count={}", ownerUserId, deleted);
@@ -527,6 +532,7 @@ public class MusicLibraryService {
                 track.getSampleRate(),
                 track.getFileSize(),
                 track.getLyricsRaw(),
+                track.getLyricsTranslation(),
                 track.getGenre(),
                 firstText(
                         resolveCoverUrl(track.getOwnerUserId(), track.getCoverFileId()),

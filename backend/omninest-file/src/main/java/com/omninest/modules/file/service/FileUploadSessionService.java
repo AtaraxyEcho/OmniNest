@@ -93,6 +93,8 @@ public class FileUploadSessionService {
     private final FileIngressLifecycleService ingressLifecycleService;
     private final ConfigValueProvider configValueProvider;
     private final RuntimeConfigCache runtimeConfigCache;
+    private final FileManagerService fileManagerService;
+    private final FileContentChangePublisher fileContentChangePublisher;
 
     public FileUploadPolicyDto uploadPolicy() {
         return new FileUploadPolicyDto(
@@ -121,8 +123,15 @@ public class FileUploadSessionService {
 
         String fileName = normalizeFileName(request.fileName());
         FileNode parent = resolveParent(ownerUserId, request.parentId());
-        checkActiveNameConflict(ownerUserId, request.parentId(), fileName);
-        checkSoftDeletedConflict(ownerUserId, request.parentId(), fileName);
+        UUID asVersionOfFileId = request.asVersionOfFileId();
+        if (asVersionOfFileId != null) {
+            fileNodeRepository
+                    .findByIdAndOwnerUserIdAndDeletedFalse(asVersionOfFileId, ownerUserId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件不存在"));
+        } else {
+            checkActiveNameConflict(ownerUserId, request.parentId(), fileName);
+            checkSoftDeletedConflict(ownerUserId, request.parentId(), fileName);
+        }
 
         String mimeType = normalizeMimeType(request.mimeType(), fileName);
         UUID sessionId = UUID.randomUUID();
@@ -276,21 +285,42 @@ public class FileUploadSessionService {
         ensureAllPartsCompleted(session, parts);
 
         FileNode parent = resolveParent(ownerUserId, session.getTargetParentId());
-        if (sameNameExists(ownerUserId, session.getTargetParentId(), session.getFileName())) {
+        UUID asVersionOfFileIdForCheck = request == null ? null : request.asVersionOfFileId();
+        if (asVersionOfFileIdForCheck == null
+                && sameNameExists(ownerUserId, session.getTargetParentId(), session.getFileName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
         ObjectStorageKey key = new ObjectStorageKey(session.getTargetBucket(), session.getTargetObjectKey());
-session.setStatus(UploadStatus.FINALIZING.getValue());
+        session.setStatus(UploadStatus.FINALIZING.getValue());
         fileUploadSessionRepository.save(session);
         objectStorageClient.completeMultipartUpload(key, session.getUploadId(), toCompletedParts(parts));
 
         PublishedObject publishedObject = publishSafeObject(session, key);
 
         FileObject savedObject = fileObjectRepository.save(toFileObject(session, publishedObject));
+        UUID asVersionOfFileId = request == null ? null : request.asVersionOfFileId();
+        if (asVersionOfFileId != null) {
+            session.setIngressItemId(publishedObject.ingressId());
+            session.setResultFileNodeId(asVersionOfFileId);
+            session.setResultObjectId(savedObject.getId());
+            registerObjectFinalization(publishedObject, asVersionOfFileId);
+            settleUploadQuota(session);
+            session.setUploadedParts(session.getTotalParts());
+            session.setStatus(UploadStatus.COMPLETED.getValue());
+            fileUploadSessionRepository.save(session);
+            FileNodeDto versioned = fileManagerService.saveNewVersion(
+                    ownerUserId,
+                    asVersionOfFileId,
+                    savedObject.getId(),
+                    savedObject.getSizeBytes(),
+                    null);
+            return versioned;
+        }
         FileNode savedFile = fileNodeRepository.save(toFileNode(ownerUserId, parent, session, savedObject));
         session.setIngressItemId(publishedObject.ingressId());
         session.setResultFileNodeId(savedFile.getId());
+        session.setResultObjectId(savedObject.getId());
         registerObjectFinalization(publishedObject, savedFile.getId());
         settleUploadQuota(session);
 
@@ -432,7 +462,9 @@ session.setStatus(UploadStatus.FINALIZING.getValue());
         }
 
         FileNode parent = resolveParent(ownerUserId, session.getTargetParentId());
-        if (sameNameExists(ownerUserId, session.getTargetParentId(), session.getFileName())) {
+        UUID asVersionOfFileIdForCheck = request == null ? null : request.asVersionOfFileId();
+        if (asVersionOfFileIdForCheck == null
+                && sameNameExists(ownerUserId, session.getTargetParentId(), session.getFileName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
 
@@ -446,9 +478,27 @@ session.setStatus(UploadStatus.FINALIZING.getValue());
         PublishedObject publishedObject = publishSafeObject(session, key);
 
         FileObject savedObject = fileObjectRepository.save(toFileObject(session, publishedObject));
+        UUID asVersionOfFileId = request == null ? null : request.asVersionOfFileId();
+        if (asVersionOfFileId != null) {
+            session.setIngressItemId(publishedObject.ingressId());
+            session.setResultFileNodeId(asVersionOfFileId);
+            session.setResultObjectId(savedObject.getId());
+            registerObjectFinalization(publishedObject, asVersionOfFileId);
+            settleUploadQuota(session);
+            session.setUploadedParts(1);
+            session.setStatus(UploadStatus.COMPLETED.getValue());
+            fileUploadSessionRepository.save(session);
+            return fileManagerService.saveNewVersion(
+                    ownerUserId,
+                    asVersionOfFileId,
+                    savedObject.getId(),
+                    savedObject.getSizeBytes(),
+                    null);
+        }
         FileNode savedFile = fileNodeRepository.save(toFileNode(ownerUserId, parent, session, savedObject));
         session.setIngressItemId(publishedObject.ingressId());
         session.setResultFileNodeId(savedFile.getId());
+        session.setResultObjectId(savedObject.getId());
         registerObjectFinalization(publishedObject, savedFile.getId());
 
         settleUploadQuota(session);
@@ -467,20 +517,7 @@ session.setStatus(UploadStatus.FINALIZING.getValue());
      * 避免请求线程在事务提交后直发 RabbitMQ（防止 MQ 故障阻塞请求、防进程崩溃丢任务）。
      */
     private UUID publishFileUploadedAfterCommit(FileNode savedFile, FileObject savedObject, UUID ownerUserId) {
-        FileUploadedEvent event = new FileUploadedEvent(
-                savedFile.getId(),
-                savedObject.getId(),
-                ownerUserId,
-                savedObject.getBucketName(),
-                savedObject.getObjectKey(),
-                savedFile.getName(),
-                savedFile.getMimeType(),
-                savedFile.getSizeBytes(),
-                Instant.now()
-        );
-        UUID mediaAutoImportTaskId = postProcessingTaskService.enqueueMediaAutoImport(event);
-        postProcessingTaskService.enqueuePostProcess(event, savedFile.getMimeType());
-        return mediaAutoImportTaskId;
+        return fileContentChangePublisher.publish(savedFile, savedObject, ownerUserId);
     }
 
 

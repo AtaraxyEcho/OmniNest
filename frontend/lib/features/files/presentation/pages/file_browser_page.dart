@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,7 @@ import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -306,7 +308,10 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
       error:
           (error, stackTrace) => Scaffold(
             body: AppErrorView(
-              message: describeUserFacingError(error).displayMessage,
+              message:
+                  AppLocalizations.of(
+                    context,
+                  ).localizeUserFacing(describeUserFacingError(error)),
               onRetry: () => ref.invalidate(fileBrowserControllerProvider),
             ),
           ),

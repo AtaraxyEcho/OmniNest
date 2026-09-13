@@ -78,6 +78,9 @@ public class MusicTrack {
     @Column(name = "lyrics_raw", columnDefinition = "text")
     private String lyricsRaw;
 
+    @Column(name = "lyrics_translation", columnDefinition = "text")
+    private String lyricsTranslation;
+
     @Column(name = "cover_file_id")
     private UUID coverFileId;
 

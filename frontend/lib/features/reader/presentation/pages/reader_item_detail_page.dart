@@ -55,6 +55,24 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
       header: _DetailBackBar(onTap: _handleBack),
       child: detailAsync.when(
         data: (detail) {
+          final isPdf =
+              detail.item.itemType.toUpperCase() == 'PDF' &&
+              !detail.item.isComic;
+          if (isPdf) {
+            return _PdfDetailContent(
+              item: detail.item,
+              progress: detail.progress,
+              bookshelfBusy: _bookshelfBusy,
+              onToggleBookshelf: _toggleBookshelf,
+              onRead: () {
+                context.push('/reader/pdfs/${detail.item.id}/read');
+              },
+              onEditMetadata:
+                  () =>
+                      context.push('/reader/items/${detail.item.id}/metadata'),
+              onDelete: _deleteItem,
+            );
+          }
           final isComic = detail.item.isComic;
           if (isComic) {
             return _ComicDetailWrapper(
@@ -924,6 +942,73 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
     final hh = time.hour.toString().padLeft(2, '0');
     final mm = time.minute.toString().padLeft(2, '0');
     return '$y-$m-$d $hh:$mm';
+  }
+}
+
+/// PDF 详情：无服务端章节清单，直接进入客户端渲染阅读器。
+class _PdfDetailContent extends StatelessWidget {
+  const _PdfDetailContent({
+    required this.item,
+    required this.progress,
+    required this.bookshelfBusy,
+    required this.onToggleBookshelf,
+    required this.onRead,
+    required this.onEditMetadata,
+    required this.onDelete,
+  });
+
+  final ReaderItem item;
+  final ReaderProgress? progress;
+  final bool bookshelfBusy;
+  final VoidCallback onToggleBookshelf;
+  final VoidCallback onRead;
+  final VoidCallback onEditMetadata;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final percent =
+        ((progress?.progressPercent ?? 0) * 100).clamp(0, 100).toDouble();
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text(item.title, style: theme.textTheme.headlineSmall),
+        const SizedBox(height: 8),
+        Text(
+          '${readerTypeLabel(l10n, item.itemType)}'
+          '${item.authorName == null ? '' : ' · ${item.authorName}'}',
+          style: theme.textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 16),
+        LinearProgressIndicator(value: percent / 100),
+        const SizedBox(height: 8),
+        Text(readerProgressLabelText(l10n, percent)),
+        const SizedBox(height: 24),
+        FilledButton.icon(
+          onPressed: onRead,
+          icon: const Icon(Icons.menu_book_outlined),
+          label: Text(l10n.readerPdfTitle),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton(
+          onPressed: bookshelfBusy ? null : onToggleBookshelf,
+          child: Text(
+            item.addedToBookshelf
+                ? l10n.readerAddedToBookshelf
+                : l10n.readerAddToBookshelf,
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton(
+          onPressed: onEditMetadata,
+          child: Text(l10n.readerEditMetadata),
+        ),
+        const SizedBox(height: 8),
+        TextButton(onPressed: onDelete, child: Text(l10n.readerDeleteBook)),
+      ],
+    );
   }
 }
 

@@ -33,10 +33,10 @@ class PhotoBackupPreferencesController extends AsyncNotifier<bool> {
 }
 
 /// 启动期按已保存偏好恢复备份调度；Web/桌面端为空实现。
+///
+/// true/false 都调用 sync，保证关闭偏好时也会取消残留 WorkManager 任务。
 Future<void> restorePhotoBackupSchedulingFromPreferences() async {
   final prefs = await SharedPreferences.getInstance();
   final enabled = prefs.getBool(photoBackupBackgroundEnabledKey) ?? false;
-  if (enabled) {
-    await syncPhotoBackupScheduling(true);
-  }
+  await syncPhotoBackupScheduling(enabled);
 }

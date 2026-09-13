@@ -261,13 +261,19 @@ public class MusicAdminService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public MusicTrackDto applyLyrics(UUID ownerUserId, UUID trackId, String lyrics) {
+    public MusicTrackDto applyLyrics(UUID ownerUserId, UUID trackId, String lyrics, String lyricsTranslation) {
         log.info("应用歌词: trackId={}", trackId);
         MusicTrack track = musicLibraryService.requireTrack(ownerUserId, trackId);
         track.setLyricsRaw(lyrics);
+        track.setLyricsTranslation(lyricsTranslation);
         trackRepository.save(track);
         recordTrackUpdated(ownerUserId, track);
-        log.info("歌词已应用: trackId={}, length={}", trackId, lyrics != null ? lyrics.length() : 0);
+        log.info(
+                "歌词已应用: trackId={}, length={}, hasTranslation={}",
+                trackId,
+                lyrics != null ? lyrics.length() : 0,
+                lyricsTranslation != null && !lyricsTranslation.isBlank()
+        );
         return musicLibraryService.toTrackDto(track, false);
     }
 

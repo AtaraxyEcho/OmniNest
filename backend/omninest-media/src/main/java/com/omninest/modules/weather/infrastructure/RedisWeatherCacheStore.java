@@ -103,7 +103,9 @@ public class RedisWeatherCacheStore implements WeatherCacheStore {
     @Override
     public void saveLocation(String cityName, ResolvedWeatherLocation location) {
         String name = location.locationName() == null ? "" : location.locationName();
-        String value = location.weatherLocation() + "|" + location.latLon() + "|" + name;
+        String value = name.isBlank()
+                ? location.weatherLocation() + "|" + location.latLon()
+                : location.weatherLocation() + "|" + location.latLon() + "|" + name;
         write(GEO_KEY_PREFIX + cityName, value, GEO_TTL, "保存天气位置缓存失败");
         delete(GEO_MISS_KEY_PREFIX + cityName, "清除天气位置负命中缓存失败");
     }

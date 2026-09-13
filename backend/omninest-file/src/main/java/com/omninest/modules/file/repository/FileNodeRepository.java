@@ -505,4 +505,5 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
      * 查询指定空间类型的所有未删除文件（不限 owner，用于共享空间文件发现）。
      */
     List<FileNode> findBySpaceTypeAndDeletedFalse(SpaceType spaceType);
+
 }

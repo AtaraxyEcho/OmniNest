@@ -95,9 +95,7 @@ void main() {
     final container = ProviderContainer.test(
       overrides: [
         musicApiProvider.overrideWithValue(api),
-        musicPlaybackQueueOwnerIdProvider.overrideWith(
-          (ref) async => 'user-a',
-        ),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
         musicPlaybackQueueStoreProvider.overrideWithValue(
           _MemoryMusicPlaybackQueueStore(),
         ),
@@ -222,7 +220,11 @@ class _StubMusicApi implements MusicApi {
       );
 
   @override
-  Future<MusicTrack> applyLyrics(String trackId, String lyrics) async {
+  Future<MusicTrack> applyLyrics(
+    String trackId,
+    String lyrics, {
+    String? lyricsTranslation,
+  }) async {
     appliedLyricsTrackIds.add(trackId);
     appliedLyricsTexts.add(lyrics);
     return _appliedTrack;

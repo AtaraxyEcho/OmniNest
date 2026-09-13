@@ -69,4 +69,7 @@ enum FileOperation {
   importMedia,
   toggleFavorite,
   deleteFile,
+  listVersions,
+  restoreVersion,
+  saveVersion,
 }

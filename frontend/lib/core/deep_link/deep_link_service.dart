@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/router.dart';
+import 'package:omninest/platform/desktop/desktop_deep_link_bridge.dart';
 
 /// OmniNest 自定义协议深链白名单前缀。
 ///
@@ -57,6 +58,7 @@ class DeepLinkService {
       return;
     }
     _started = true;
+    desktopDeepLinkHandler = _handle;
     try {
       final initial = await _links.getInitialLink();
       if (initial != null) {
@@ -75,6 +77,11 @@ class DeepLinkService {
     );
   }
 
+  /// 处理外部深链（含桌面第二实例转发）。
+  void handleExternal(Uri uri) {
+    _handle(uri);
+  }
+
   void _handle(Uri uri) {
     final route = resolveDeepLinkPath(uri);
     if (route == null) {
@@ -87,6 +94,7 @@ class DeepLinkService {
   }
 
   void dispose() {
+    desktopDeepLinkHandler = null;
     unawaited(_subscription?.cancel());
     _subscription = null;
     _started = false;

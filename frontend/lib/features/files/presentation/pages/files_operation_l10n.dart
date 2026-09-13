@@ -69,5 +69,8 @@ String filesOperationLabel(AppLocalizations l10n, FileOperation operation) {
     FileOperation.importMedia => l10n.filesOpImportMedia,
     FileOperation.toggleFavorite => l10n.filesOpAddFavorite,
     FileOperation.deleteFile => l10n.filesOpDeleteFile,
+    FileOperation.listVersions => l10n.filesOpListVersions,
+    FileOperation.restoreVersion => l10n.filesOpRestoreVersion,
+    FileOperation.saveVersion => l10n.filesOpSaveVersion,
   };
 }

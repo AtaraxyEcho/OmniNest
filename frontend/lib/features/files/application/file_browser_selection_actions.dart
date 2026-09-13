@@ -106,6 +106,17 @@ extension FileBrowserSelectionActions on FileBrowserController {
     });
   }
 
+  /// 恢复历史版本为当前内容。
+  Future<void> restoreFileVersion(FileNode file, String versionId) async {
+    await _runAction(FileOperation.restoreVersion, () async {
+      await _repository.restoreFileVersion(
+        fileId: file.id,
+        versionId: versionId,
+      );
+      await refreshFileNodesForCurrentSection();
+    });
+  }
+
   Future<void> moveFile(FileNode file, String targetParentId) async {
     await _runAction(FileOperation.move, () async {
       await _repository.moveFile(fileId: file.id, parentId: targetParentId);

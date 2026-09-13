@@ -771,6 +771,7 @@ CREATE TABLE "omni"."file_upload_sessions" (
   "target_object_key" text NOT NULL,
   "ingress_item_id" uuid,
   "result_file_node_id" uuid,
+  "result_object_id" uuid,
   "completion_task_id" uuid,
   "quota_reservation_id" uuid,
   "expires_at" timestamptz(6) NOT NULL,
@@ -796,6 +797,7 @@ COMMENT ON COLUMN "omni"."file_upload_sessions"."target_bucket" IS '目标对象
 COMMENT ON COLUMN "omni"."file_upload_sessions"."target_object_key" IS '目标对象存储键';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."ingress_item_id" IS '文件安全入库记录ID';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."result_file_node_id" IS '完成后生成的文件节点ID';
+COMMENT ON COLUMN "omni"."file_upload_sessions"."result_object_id" IS '完成后生成的文件对象ID';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."completion_task_id" IS '异步完成任务ID，未启用异步完成时为空';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."quota_reservation_id" IS '上传会话占用的存储配额预留ID';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."expires_at" IS '过期时间';
@@ -812,11 +814,13 @@ CREATE TABLE "omni"."file_versions" (
   "version_no" int4 NOT NULL,
   "minio_version_id" varchar(255),
   "change_type" varchar(32) NOT NULL,
+  "remark" varchar(500),
   "created_by" uuid,
   "created_at" timestamptz(6) NOT NULL DEFAULT now()
 )
 ;
 COMMENT ON COLUMN "omni"."file_versions"."id" IS '版本唯一标识，主键';
+COMMENT ON COLUMN "omni"."file_versions"."remark" IS '版本备注';
 COMMENT ON COLUMN "omni"."file_versions"."file_node_id" IS '文件节点ID，关联file_nodes';
 COMMENT ON COLUMN "omni"."file_versions"."object_id" IS '文件对象ID，关联file_objects';
 COMMENT ON COLUMN "omni"."file_versions"."version_no" IS '文件版本序号';
@@ -1635,7 +1639,8 @@ CREATE TABLE "omni"."music_playlists" (
   "cover_file_id" uuid,
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "version" int8 NOT NULL DEFAULT 0
+  "version" int8 NOT NULL DEFAULT 0,
+  CONSTRAINT "chk_music_playlists_type" CHECK (playlist_type::text = 'CUSTOM'::text)
 )
 ;
 COMMENT ON COLUMN "omni"."music_playlists"."id" IS '播放列表唯一标识，主键';
@@ -1693,6 +1698,7 @@ CREATE TABLE "omni"."music_tracks" (
   "sample_rate" int4,
   "file_size" int8,
   "lyrics_raw" text,
+  "lyrics_translation" text,
   "cover_file_id" uuid,
   "metadata_status" varchar(32) NOT NULL DEFAULT 'PENDING'::character varying,
   "external_ids" jsonb NOT NULL DEFAULT '{}'::jsonb,
@@ -1720,6 +1726,7 @@ COMMENT ON COLUMN "omni"."music_tracks"."bitrate" IS '码率';
 COMMENT ON COLUMN "omni"."music_tracks"."sample_rate" IS '采样率';
 COMMENT ON COLUMN "omni"."music_tracks"."file_size" IS '文件大小';
 COMMENT ON COLUMN "omni"."music_tracks"."lyrics_raw" IS '歌词原文（LRC或纯文本）';
+COMMENT ON COLUMN "omni"."music_tracks"."lyrics_translation" IS '歌词译文（与原文时间轴对齐的LRC或纯文本）';
 COMMENT ON COLUMN "omni"."music_tracks"."cover_file_id" IS '歌曲封面文件ID，关联file_nodes';
 COMMENT ON COLUMN "omni"."music_tracks"."metadata_status" IS '元数据状态：PENDING / MATCHED / MANUAL / FAILED';
 COMMENT ON COLUMN "omni"."music_tracks"."external_ids" IS '外部平台ID集合，JSONB格式';
@@ -2131,7 +2138,7 @@ CREATE TABLE "omni"."reader_items" (
 )
 ;
 COMMENT ON COLUMN "omni"."reader_items"."file_node_id" IS '原始文件节点ID，关联 file_nodes（MinIO 存储）';
-COMMENT ON COLUMN "omni"."reader_items"."item_type" IS '条目类型：EPUB / TXT / CBZ / ZIP';
+COMMENT ON COLUMN "omni"."reader_items"."item_type" IS '条目类型：EPUB / TXT / CBZ / ZIP / PDF';
 COMMENT ON COLUMN "omni"."reader_items"."cover_file_id" IS '封面文件ID，导入时从 EPUB 提取存入 MinIO';
 COMMENT ON COLUMN "omni"."reader_items"."external_ids" IS '外部平台ID，JSONB（预留刮削扩展）';
 COMMENT ON TABLE "omni"."reader_items" IS '阅读条目表，存储书籍元数据和文件引用';
@@ -3535,7 +3542,7 @@ ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "uniq_reader_items_owner_file" 
 ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "ck_reader_items_genres_json_size" CHECK (octet_length(genres::text) <= 65536);
 ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "ck_reader_items_external_ids_json_size" CHECK (octet_length(external_ids::text) <= 65536);
 ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "reader_items_content_kind_check" CHECK (content_kind::text = ANY (ARRAY['TEXT'::character varying, 'COMIC'::character varying]::text[]));
-ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "reader_items_item_type_check" CHECK (item_type::text = ANY (ARRAY['EPUB'::character varying::text, 'TXT'::character varying::text, 'CBZ'::character varying::text, 'ZIP'::character varying::text]));
+ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "reader_items_item_type_check" CHECK (item_type::text = ANY (ARRAY['EPUB'::character varying::text, 'TXT'::character varying::text, 'CBZ'::character varying::text, 'ZIP'::character varying::text, 'PDF'::character varying::text]));
 ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "chk_reader_items_rating" CHECK (rating IS NULL OR rating >= 0::numeric AND rating <= 10::numeric);
 
 ALTER TABLE "omni"."reader_items" ADD CONSTRAINT "reader_items_pkey" PRIMARY KEY ("id");

@@ -69,13 +69,21 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
   }
 
   /// 应用在线歌词并刷新曲目元数据。
-  Future<MusicTrack> applyLyrics(MusicTrack track, String lyrics) async {
+  Future<MusicTrack> applyLyrics(
+    MusicTrack track,
+    String lyrics, {
+    String? lyricsTranslation,
+  }) async {
     final current = _currentState;
     if (current == null) {
       return track;
     }
     try {
-      final updated = await _api.applyLyrics(track.id, lyrics);
+      final updated = await _api.applyLyrics(
+        track.id,
+        lyrics,
+        lyricsTranslation: lyricsTranslation,
+      );
       final nextTracks =
           current.tracks
               .map((item) => item.id == updated.id ? updated : item)

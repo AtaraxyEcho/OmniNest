@@ -43,6 +43,9 @@ public class FileVersion {
     @Column(name = "created_by")
     private UUID createdBy;
 
+    @Column(name = "remark", length = 500)
+    private String remark;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 

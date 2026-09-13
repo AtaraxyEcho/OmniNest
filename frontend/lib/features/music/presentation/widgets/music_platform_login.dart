@@ -144,8 +144,18 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
         return;
       }
       ref.invalidate(musicPlatformLibraryProvider);
-    } catch (_) {
-      if (mounted) setState(() => _loadingQr = false);
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() => _loadingQr = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context).musicSaveFailed(error.toString()),
+          ),
+        ),
+      );
     }
   }
 

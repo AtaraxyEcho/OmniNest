@@ -214,7 +214,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
   String? _contentKind(String fileName) {
     final lower = fileName.toLowerCase();
     if (lower.endsWith('.cbz') || lower.endsWith('.zip')) return 'COMIC';
-    if (lower.endsWith('.txt')) return 'TEXT';
+    if (lower.endsWith('.txt') || lower.endsWith('.pdf')) return 'TEXT';
     return null;
   }
 

@@ -446,7 +446,10 @@ public class MusicController {
             @RequestBody ApplyLyricsRequest request
     ) {
         return ApiResponse.success(musicAdminService.applyLyrics(
-                currentUserContext.requireCurrentUserId(), trackId, request.lyrics()));
+                currentUserContext.requireCurrentUserId(),
+                trackId,
+                request.lyrics(),
+                request.lyricsTranslation()));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
@@ -630,7 +633,7 @@ public class MusicController {
         ));
     }
 
-    public record ApplyLyricsRequest(String lyrics) {
+    public record ApplyLyricsRequest(String lyrics, String lyricsTranslation) {
     }
 }
 

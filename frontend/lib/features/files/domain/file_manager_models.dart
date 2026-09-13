@@ -468,6 +468,48 @@ class SharedSpaceUsage {
   }
 }
 
+/// 文件历史版本条目。
+class FileVersion {
+  const FileVersion({
+    required this.id,
+    required this.versionNo,
+    required this.objectId,
+    required this.changeType,
+    required this.sizeBytes,
+    required this.createdAt,
+    required this.isCurrent,
+    this.createdBy,
+    this.remark,
+  });
+
+  factory FileVersion.fromJson(Map<String, dynamic> json) {
+    return FileVersion(
+      id: json['id']?.toString() ?? '',
+      versionNo:
+          json['versionNo'] is num ? (json['versionNo'] as num).toInt() : 0,
+      objectId: json['objectId']?.toString() ?? '',
+      changeType: json['changeType']?.toString() ?? '',
+      sizeBytes:
+          json['sizeBytes'] is num ? (json['sizeBytes'] as num).toInt() : 0,
+      createdBy: json['createdBy']?.toString(),
+      createdAt:
+          DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal(),
+      isCurrent: json['isCurrent'] == true,
+      remark: json['remark']?.toString(),
+    );
+  }
+
+  final String id;
+  final int versionNo;
+  final String objectId;
+  final String changeType;
+  final int sizeBytes;
+  final String? createdBy;
+  final DateTime? createdAt;
+  final bool isCurrent;
+  final String? remark;
+}
+
 int _asInt(Object? value) {
   return switch (value) {
     final int number => number,

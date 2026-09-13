@@ -8,6 +8,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/media/web_media_session.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
+import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_media_session.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -91,6 +92,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     ref.listen(musicCenterControllerProvider, (previous, next) {
       _syncSystemMediaState(force: true);
     });
+    unawaited(_restorePlaybackSpeed());
     ref.onDispose(() {
       _lifecycleListener?.dispose();
       _lifecycleListener = null;
@@ -101,6 +103,21 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       unawaited(_positionSub?.cancel());
     });
     return MusicPlaybackSession(player: _player, lastError: null);
+  }
+
+  Future<void> _restorePlaybackSpeed() async {
+    try {
+      final speed =
+          await ref
+              .read(musicLocalPreferencesControllerProvider.notifier)
+              .loadPlaybackSpeed();
+      if (!ref.mounted) {
+        return;
+      }
+      _player.setRelativePlaySpeed(speed);
+    } on Object {
+      return;
+    }
   }
 
   /// 注册系统媒体会话：Android/iOS 通知栏与音频焦点、Web 媒体控件。
@@ -136,6 +153,10 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
                     .read(musicCenterControllerProvider.notifier)
                     .togglePlayback(),
           ),
+      onSeek:
+          (position) => _runMediaCommand(() async {
+            await _player.seek(position);
+          }),
     );
     if (kIsWeb) {
       _webMediaBinder = WebMediaSessionBinder.register(

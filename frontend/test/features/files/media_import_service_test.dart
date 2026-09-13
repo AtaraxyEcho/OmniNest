@@ -265,6 +265,7 @@ class _ConflictFileApi extends FileApi {
     String? sha256,
     int? partSizeBytes,
     String? spaceType,
+    String? asVersionOfFileId,
   }) async {
     throw error;
   }
@@ -330,6 +331,7 @@ class _CancellableFileApi extends FileApi {
     String? sha256,
     int? partSizeBytes,
     String? spaceType,
+    String? asVersionOfFileId,
   }) async {
     return FileUploadSession(
       id: 'session-1',
@@ -408,6 +410,7 @@ class _PostUploadCancellationFileApi extends FileApi {
     String? sha256,
     int? partSizeBytes,
     String? spaceType,
+    String? asVersionOfFileId,
   }) async {
     afterCreate?.call();
     return FileUploadSession(
@@ -444,6 +447,7 @@ class _PostUploadCancellationFileApi extends FileApi {
   Future<FileNode> completeUploadSession({
     required String sessionId,
     String? sha256,
+    String? asVersionOfFileId,
   }) async {
     completeCalled = true;
     duringComplete?.call();
@@ -473,6 +477,7 @@ class _RetryingCompleteFileApi extends _PostUploadCancellationFileApi {
   Future<FileNode> completeUploadSession({
     required String sessionId,
     String? sha256,
+    String? asVersionOfFileId,
   }) async {
     completeAttempts++;
     if (completeAttempts < 3) {

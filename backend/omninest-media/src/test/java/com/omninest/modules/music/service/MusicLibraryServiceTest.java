@@ -14,6 +14,7 @@ import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
+import com.omninest.modules.music.config.MusicLibraryProperties;
 import com.omninest.modules.music.domain.MusicPlayHistory;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.dto.MusicDtos.RecordMusicPlayHistoryRequest;
@@ -54,6 +55,7 @@ class MusicLibraryServiceTest {
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
     private final ReadThroughCache readThroughCache = mock(ReadThroughCache.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
+    private final MusicLibraryProperties musicLibraryProperties = new MusicLibraryProperties();
     private final MusicLibraryService libraryService = new MusicLibraryService(
             trackRepository,
             albumRepository,
@@ -63,7 +65,8 @@ class MusicLibraryServiceTest {
             fileDeletionService,
             fileQueryService,
             readThroughCache,
-            syncEventService
+            syncEventService,
+            musicLibraryProperties
     );
 
     @Test

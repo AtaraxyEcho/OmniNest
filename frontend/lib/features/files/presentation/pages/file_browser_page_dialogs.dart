@@ -145,23 +145,28 @@ Future<void> _runFileAction(
   await _runFileActionWithMessenger(messenger, action);
 }
 
-Future<void> _runFileActionWithMessenger(
+Future<bool> _runFileActionWithMessenger(
   ScaffoldMessengerState messenger,
   Future<void> Function() action,
 ) async {
   try {
     await action();
+    return true;
   } catch (error) {
-    final resolved = describeUserFacingError(error);
     if (!messenger.mounted) {
-      return;
+      return false;
     }
+    final resolved = describeUserFacingError(
+      error,
+      l10n: AppLocalizations.of(messenger.context),
+    );
     messenger.showSnackBar(
       SnackBar(
         content: Text('${resolved.title}：${resolved.displayMessage}'),
         behavior: SnackBarBehavior.floating,
       ),
     );
+    return false;
   }
 }
 
@@ -260,6 +265,131 @@ Future<void> _showMoveDialog({
       ),
     );
   });
+}
+
+/// 文件版本历史对话框：列表 + 恢复。
+Future<void> _showVersionsDialog({
+  required BuildContext context,
+  required FileBrowserController controller,
+  required FileNode file,
+}) async {
+  final l10n = AppLocalizations.of(context);
+  final repository = controller.repository;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) {
+      return AlertDialog(
+        title: Text(l10n.filesVersionsTitle),
+        content: SizedBox(
+          width: 420,
+          height: 360,
+          child: FutureBuilder<List<FileVersion>>(
+            future: repository.listFileVersions(file.id),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final versions = snapshot.data ?? const <FileVersion>[];
+              if (versions.isEmpty) {
+                return Center(child: Text(l10n.filesVersionsEmpty));
+              }
+              return ListView.builder(
+                itemCount: versions.length,
+                itemBuilder: (context, index) {
+                  final version = versions[index];
+                  final subtitle = [
+                    if (version.createdAt != null)
+                      version.createdAt!.toIso8601String().substring(0, 19),
+                    if (version.remark != null && version.remark!.isNotEmpty)
+                      version.remark!,
+                  ].join(' · ');
+                  return ListTile(
+                    title: Text(
+                      version.isCurrent
+                          ? '#${version.versionNo} · ${l10n.filesVersionsCurrent}'
+                          : '#${version.versionNo} · ${version.changeType}',
+                    ),
+                    subtitle: Text(subtitle),
+                    trailing:
+                        version.isCurrent || version.id.isEmpty
+                            ? null
+                            : TextButton(
+                              onPressed: () async {
+                                final navigator = Navigator.of(ctx);
+                                final messenger = ScaffoldMessenger.of(context);
+                                final ok = await _runFileActionWithMessenger(
+                                  messenger,
+                                  () async {
+                                    await controller.restoreFileVersion(
+                                      file,
+                                      version.id,
+                                    );
+                                  },
+                                );
+                                if (!ok) {
+                                  return;
+                                }
+                                if (messenger.mounted) {
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: Text(l10n.filesVersionsRestored),
+                                      behavior: SnackBarBehavior.floating,
+                                    ),
+                                  );
+                                }
+                                if (navigator.canPop()) {
+                                  navigator.pop();
+                                }
+                              },
+                              child: Text(l10n.filesVersionsRestore),
+                            ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              final messenger = ScaffoldMessenger.of(context);
+              final navigator = Navigator.of(ctx);
+              final picked = await FilePicker.platform.pickFiles(
+                type: FileType.any,
+                allowMultiple: false,
+              );
+              final path = picked?.files.single.path;
+              if (path == null || path.isEmpty) {
+                return;
+              }
+              final ok = await _runFileActionWithMessenger(messenger, () async {
+                await controller.replaceFileWithNewVersion(file, XFile(path));
+              });
+              if (!ok) {
+                return;
+              }
+              if (messenger.mounted) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(l10n.filesOpSaveVersion),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+              if (navigator.canPop()) {
+                navigator.pop();
+              }
+            },
+            child: Text(l10n.filesOpSaveVersion),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text(MaterialLocalizations.of(ctx).okButtonLabel),
+          ),
+        ],
+      );
+    },
+  );
 }
 
 Future<void> _showBatchMoveDialog({

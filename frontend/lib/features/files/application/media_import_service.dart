@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/features/files/data/file_api.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -383,7 +384,10 @@ class MediaImportService {
   ) async {
     final uploadUrl = session.uploadUrl;
     if (uploadUrl == null || uploadUrl.isEmpty) {
-      throw StateError('上传地址为空');
+      throw const AppException(
+        code: AppErrorCodes.uploadUrlMissing,
+        message: AppErrorCodes.uploadUrlMissing,
+      );
     }
     onProgress?.call(file.name, 0, sizeBytes);
     await _fileApi.putUploadUrl(
@@ -416,7 +420,10 @@ class MediaImportService {
       final end = math.min(start + part.sizeBytes, sizeBytes);
       final uploadUrl = part.uploadUrl;
       if (uploadUrl == null || uploadUrl.isEmpty) {
-        throw StateError('分片 ${part.partNumber} 上传地址为空');
+        throw AppException(
+          code: AppErrorCodes.uploadUrlMissing,
+          message: '${AppErrorCodes.uploadUrlMissing}:${part.partNumber}',
+        );
       }
       final eTag = await _fileApi.putUploadUrl(
         uploadUrl: uploadUrl,

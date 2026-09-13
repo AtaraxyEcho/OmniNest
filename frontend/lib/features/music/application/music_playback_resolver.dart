@@ -12,9 +12,17 @@ class MusicPlaybackResolver {
   final Map<String, _CachedPlaybackPlan> _cache = {};
   final Map<String, Future<MusicPlaybackPlan>> _pending = {};
 
+  String _cacheKey(MusicPlayableItem item) {
+    final quality = switch (item.ref) {
+      OnlineMusicRef() => _preferredOnlineQuality?.call() ?? 'exhigh',
+      LocalMusicRef() => '',
+    };
+    return '${item.playableKey}|$quality';
+  }
+
   /// 根据类型安全的来源引用请求对应播放计划。
   Future<MusicPlaybackPlan> resolve(MusicPlayableItem item) async {
-    final key = item.playableKey;
+    final key = _cacheKey(item);
     final cached = _cache[key];
     if (cached != null && cached.isUsable) {
       return cached.plan;

@@ -24,12 +24,15 @@ public class ApiResponse<T> {
     private T data;
     @Schema(description = "错误详情")
     private Object details;
+    @Schema(description = "稳定错误名（ErrorCode 枚举名），供客户端本地化")
+    private String errorName;
 
     public ApiResponse(Integer code, String message, T data) {
         this.code = code;
         this.message = message;
         this.data = data;
         this.details = null;
+        this.errorName = null;
     }
 
     public static <T> ApiResponse<T> success() {
@@ -49,16 +52,21 @@ public class ApiResponse<T> {
     }
 
     public static <T> ApiResponse<T> error(ErrorCode errorCode) {
-        return new ApiResponse<>(errorCode.getCode(), errorCode.getMessage(), null);
+        ApiResponse<T> response = new ApiResponse<>(errorCode.getCode(), errorCode.getMessage(), null);
+        response.setErrorName(errorCode.name());
+        return response;
     }
 
     public static <T> ApiResponse<T> error(ErrorCode errorCode, String customMessage) {
-        return new ApiResponse<>(errorCode.getCode(), customMessage, null);
+        ApiResponse<T> response = new ApiResponse<>(errorCode.getCode(), customMessage, null);
+        response.setErrorName(errorCode.name());
+        return response;
     }
 
     public static <T> ApiResponse<T> error(ErrorCode errorCode, String customMessage, Object details) {
         ApiResponse<T> response = new ApiResponse<>(errorCode.getCode(), customMessage, null);
         response.setDetails(details);
+        response.setErrorName(errorCode.name());
         return response;
     }
 }

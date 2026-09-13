@@ -518,7 +518,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileSectionSecurity => '安全与设备';
 
   @override
+  String get profileSectionBackup => '备份';
+
+  @override
   String get profileSectionAbout => '关于';
+
+  @override
+  String get photoBackupBackgroundTitle => '照片后台备份';
+
+  @override
+  String get photoBackupBackgroundSubtitle => '按计划在后台备份相册新增照片（仅 Android）';
 
   @override
   String get profileManageBackdrop => '管理背景';
@@ -9453,4 +9462,118 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesHomeMoreHint => '上传队列、离线下载与分享管理';
+
+  @override
+  String get errorInvalidResponse => '服务端返回的数据格式不正确';
+
+  @override
+  String get errorEmptyResponse => '服务端没有返回结果';
+
+  @override
+  String get errorOperationFailed => '操作失败';
+
+  @override
+  String get errorNetworkTimeout => '请求超时，请检查网络后重试';
+
+  @override
+  String get errorNetworkError => '网络错误，请稍后重试';
+
+  @override
+  String get errorUnknown => '未知错误';
+
+  @override
+  String get errorNeedPassword => '请输入分享密码';
+
+  @override
+  String get errorShareSessionInvalid => '分享会话无效';
+
+  @override
+  String get errorUnnamedFile => '未命名';
+
+  @override
+  String get errorUnnamedResource => '未命名资源';
+
+  @override
+  String get errorUploadUrlMissing => '上传地址无效';
+
+  @override
+  String get errorOtherCategory => '其他';
+
+  @override
+  String musicBatchFailedTitles(Object titles) {
+    return '失败：$titles';
+  }
+
+  @override
+  String get readerPdfTitle => 'PDF 阅读';
+
+  @override
+  String get readerPdfLoadFailed => 'PDF 加载失败';
+
+  @override
+  String readerPdfPageIndicator(Object page, Object total) {
+    return '第 $page / $total 页';
+  }
+
+  @override
+  String get errorServiceUnavailable => '服务暂时不可用，请稍后重试；文件仍处于安全隔离状态';
+
+  @override
+  String get errorCannotConnect => '无法连接后端服务，请确认服务已启动或网络可用';
+
+  @override
+  String get errorRequestCancelled => '请求已取消';
+
+  @override
+  String get errorBadCertificate => '后端证书校验失败，请检查服务配置';
+
+  @override
+  String errorServerCode(Object code) {
+    return '服务端返回 $code 错误';
+  }
+
+  @override
+  String get errorRequestFailedRetry => '请求失败，请稍后重试';
+
+  @override
+  String get errorWebPdfTooLarge => 'Web 阅读仅支持 128 MiB 以内的 PDF 文件';
+
+  @override
+  String get errorWebBookTooLarge => 'Web 阅读仅支持 32 MiB 以内的 EPUB 或 TXT 文件';
+
+  @override
+  String get errorFileNotFound => '文件不存在';
+
+  @override
+  String get errorConflict => '数据冲突，请刷新后重试';
+
+  @override
+  String get errorUnauthorized => '未登录或登录已过期';
+
+  @override
+  String get errorForbidden => '没有权限执行该操作';
+
+  @override
+  String get filesOpListVersions => '查看版本';
+
+  @override
+  String get filesOpRestoreVersion => '恢复版本';
+
+  @override
+  String get filesOpSaveVersion => '保存新版本';
+
+  @override
+  String get filesVersionsTitle => '文件版本';
+
+  @override
+  String get filesVersionsEmpty => '暂无历史版本';
+
+  @override
+  String get filesVersionsRestore => '恢复';
+
+  @override
+  String get filesVersionsCurrent => '当前';
+
+  @override
+  String get filesVersionsRestored => '已恢复版本';
 }

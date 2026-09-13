@@ -3,6 +3,21 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 
+/// 批量操作单曲结果。
+class MusicBatchItemResult {
+  const MusicBatchItemResult({
+    required this.trackId,
+    required this.title,
+    required this.success,
+    this.errorMessage,
+  });
+
+  final String trackId;
+  final String title;
+  final bool success;
+  final String? errorMessage;
+}
+
 /// 曲库多选状态：选中曲目 id 集合与多选开关。
 class MusicSelectionState {
   const MusicSelectionState({
@@ -61,36 +76,53 @@ class MusicSelectionController extends Notifier<MusicSelectionState> {
     );
   }
 
-  /// 批量加入歌单：逐项执行并返回 (成功数, 失败数)。
-  Future<(int, int)> addSelectedToPlaylist(
+  /// 批量加入歌单：逐项执行并返回逐项结果。
+  Future<List<MusicBatchItemResult>> addSelectedToPlaylist(
     MusicPlaylist playlist,
     List<MusicTrack> tracks,
   ) async {
     final selected = _selectedTracks(tracks);
-    var success = 0;
-    var failed = 0;
     final notifier = ref.read(musicCenterControllerProvider.notifier);
+    final results = <MusicBatchItemResult>[];
     for (final track in selected) {
       try {
         await notifier.addTrackToPlaylist(playlist, track);
-        success++;
-      } on Exception {
-        failed++;
+        results.add(
+          MusicBatchItemResult(
+            trackId: track.id,
+            title: track.title,
+            success: true,
+          ),
+        );
+      } on Exception catch (error) {
+        results.add(
+          MusicBatchItemResult(
+            trackId: track.id,
+            title: track.title,
+            success: false,
+            errorMessage: error.toString(),
+          ),
+        );
       }
     }
-    return (success, failed);
+    return results;
   }
 
-  /// 批量下一首播放：逐项入队并返回成功数。
-  Future<int> enqueueSelected(List<MusicTrack> tracks) async {
+  /// 批量下一首播放：逐项入队并返回逐项结果。
+  List<MusicBatchItemResult> enqueueSelected(List<MusicTrack> tracks) {
     final selected = _selectedTracks(tracks);
     final notifier = ref.read(musicCenterControllerProvider.notifier);
-    var success = 0;
-    for (final track in selected) {
-      notifier.enqueue(MusicPlayableItem.local(track));
-      success++;
-    }
-    return success;
+    return [
+      for (final track in selected)
+        () {
+          notifier.enqueue(MusicPlayableItem.local(track));
+          return MusicBatchItemResult(
+            trackId: track.id,
+            title: track.title,
+            success: true,
+          );
+        }(),
+    ];
   }
 
   List<MusicTrack> _selectedTracks(List<MusicTrack> tracks) {

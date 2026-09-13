@@ -45,6 +45,9 @@ import com.omninest.modules.file.repository.FileAccessRecordRepository;
 import com.omninest.modules.file.repository.FileFavoriteRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
+import com.omninest.modules.file.repository.FileVersionRepository;
+import com.omninest.modules.file.dto.FileVersionDto;
+import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.repository.FileShareRecipientRepository;
 import com.omninest.modules.file.repository.FileUploadSessionRepository;
 import com.omninest.modules.file.repository.ShareLinkRepository;
@@ -93,6 +96,8 @@ public class FileManagerService {
     private final StorageExternalAccountRepository externalAccountRepository;
     private final UserAccountQuery userAccountQuery;
     private final FileObjectRepository fileObjectRepository;
+    private final FileVersionRepository fileVersionRepository;
+    private final FileContentChangePublisher fileContentChangePublisher;
     private final ObjectStorageClient objectStorageClient;
     private final PasswordEncoder passwordEncoder;
     private final FileQueryService fileQueryService;
@@ -505,21 +510,26 @@ public class FileManagerService {
         FileNode source = findActiveNode(userId, sourceId);
         requireShareable(source);
         FileNode targetParent = resolveCopyTargetParent(userId, targetParentId);
+        UUID resolvedParentId = targetParent != null ? targetParent.getId() : null;
 
         // 校验源文件和目标在同一空间
         if (targetParent != null && source.getSpaceType() != targetParent.getSpaceType()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "不能在不同空间之间复制文件");
         }
+        if (sameNameExists(userId, resolvedParentId, source.getName())) {
+            throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件");
+        }
 
         FileNode copy = new FileNode();
         copy.setOwnerUserId(userId);
-        copy.setParentId(targetParent != null ? targetParent.getId() : null);
+        copy.setParentId(resolvedParentId);
         copy.setNodeType(source.getNodeType());
         copy.setName(source.getName());
         copy.setNormalizedPath(resolveChildPath(targetParent, source.getName()));
         copy.setMimeType(source.getMimeType());
         copy.setSizeBytes(source.getSizeBytes());
-        copy.setSpaceType(source.getSpaceType());  // 复制到同一空间
+        copy.setCurrentObjectId(source.getCurrentObjectId());
+        copy.setSpaceType(source.getSpaceType());
         if (source.getSpaceType() == SpaceType.SHARED) {
             copy.setUploadedBy(userId);
         }
@@ -527,6 +537,186 @@ public class FileManagerService {
         FileNode saved = fileNodeRepository.save(copy);
         log.info("文件复制完成: sourceId={}, copyId={}, ownerUserId={}", sourceId, saved.getId(), userId);
         return toNodeDto(saved);
+    }
+
+
+
+    /**
+     * 将文件当前对象保存为历史版本，并把已上传的新对象设为当前对象。
+     *
+     * @param ownerUserId 文件所有者
+     * @param fileNodeId 文件节点 ID
+     * @param newObjectId 新对象 ID（已持久化）
+     * @param newObjectSizeBytes 新对象大小（字节）
+     * @param remark 版本备注，可空
+     * @return 文件节点最新状态
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FileNodeDto saveNewVersion(
+            UUID ownerUserId,
+            UUID fileNodeId,
+            UUID newObjectId,
+            long newObjectSizeBytes,
+            String remark
+    ) {
+        FileNode node = fileNodeRepository
+                .findOwnedForUpdate(fileNodeId, ownerUserId)
+                .filter(existing -> !existing.isDeleted())
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        if (node.getCurrentObjectId() == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "该文件没有可版本化的当前内容");
+        }
+        FileObject newObject = fileObjectRepository.findById(newObjectId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "文件对象不存在"));
+        if (!isObjectOwnedByUser(newObject, ownerUserId)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象不属于当前用户");
+        }
+        rejectObjectAliasedToOtherNode(ownerUserId, fileNodeId, newObject.getId());
+        if (uploadSessionRepository
+                .findFirstByOwnerUserIdAndResultObjectId(ownerUserId, newObjectId)
+                .isEmpty()) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象必须来自本次上传会话");
+        }
+        if (newObjectSizeBytes > 0 && newObjectSizeBytes != newObject.getSizeBytes()) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "文件对象大小与声明不一致");
+        }
+        int nextVersionNo = fileVersionRepository.findMaxVersionNo(fileNodeId) + 1;
+        FileVersion version = new FileVersion();
+        version.setFileNodeId(fileNodeId);
+        version.setObjectId(node.getCurrentObjectId());
+        version.setVersionNo(nextVersionNo);
+        version.setChangeType("EDIT");
+        version.setCreatedBy(ownerUserId);
+        version.setRemark(remark);
+        fileVersionRepository.save(version);
+
+        node.setCurrentObjectId(newObject.getId());
+        node.setSizeBytes(newObject.getSizeBytes());
+        if (newObject.getMimeType() != null && !newObject.getMimeType().isBlank()) {
+            node.setMimeType(newObject.getMimeType());
+        }
+        node.setUpdatedAt(Instant.now());
+        FileNode saved = fileNodeRepository.save(node);
+        fileContentChangePublisher.publish(saved, newObject, ownerUserId);
+        recordFileEvent(ownerUserId, fileNodeId, Map.of("version", nextVersionNo));
+        return toNodeDto(saved);
+    }
+
+    private void rejectObjectAliasedToOtherNode(UUID ownerUserId, UUID fileNodeId, UUID objectId) {
+        fileNodeRepository.findActiveByOwnerUserIdAndObjectId(ownerUserId, objectId)
+                .filter(existing -> !existing.getId().equals(fileNodeId))
+                .ifPresent(existing -> {
+                    throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象已被其他文件使用");
+                });
+    }
+
+    /**
+     * 查询文件版本历史（新版本在前），当前对象补充为一条 CURRENT 条目。
+     *
+     * @param ownerUserId 文件所有者
+     * @param fileNodeId 文件节点 ID
+     * @return 版本条目列表
+     */
+    @Transactional(readOnly = true)
+    public List<FileVersionDto> listVersions(UUID ownerUserId, UUID fileNodeId) {
+        FileNode node = findActiveNode(ownerUserId, fileNodeId);
+        List<FileVersion> versions = fileVersionRepository.findByFileNodeIdOrderByVersionNoDesc(fileNodeId);
+        List<FileVersionDto> items = new ArrayList<>();
+        for (FileVersion version : versions) {
+            FileObject object = fileObjectRepository.findById(version.getObjectId()).orElse(null);
+            items.add(new FileVersionDto(
+                    version.getId(),
+                    version.getVersionNo(),
+                    version.getObjectId(),
+                    version.getChangeType(),
+                    object == null ? 0L : object.getSizeBytes(),
+                    version.getCreatedBy(),
+                    version.getCreatedAt(),
+                    version.getObjectId().equals(node.getCurrentObjectId()),
+                    version.getRemark()
+            ));
+        }
+        if (node.getCurrentObjectId() != null
+                && versions.stream().noneMatch(v -> v.getObjectId().equals(node.getCurrentObjectId()))) {
+            FileObject current = fileObjectRepository.findById(node.getCurrentObjectId()).orElse(null);
+            if (current != null) {
+                items.add(0, new FileVersionDto(
+                        null,
+                        versions.isEmpty() ? 1 : versions.get(0).getVersionNo() + 1,
+                        current.getId(),
+                        "CURRENT",
+                        current.getSizeBytes(),
+                        node.getOwnerUserId(),
+                        current.getCreatedAt(),
+                        true,
+                        null
+                ));
+            }
+        }
+        return List.copyOf(items);
+    }
+
+    /**
+     * 恢复历史版本：把恢复前的当前对象存为 RESTORE 版本行，再把历史版本对象设为当前对象。
+     *
+     * @param ownerUserId 文件所有者
+     * @param fileNodeId 文件节点 ID
+     * @param versionId 版本行 ID
+     * @return 文件节点最新状态
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public FileNodeDto restoreVersion(UUID ownerUserId, UUID fileNodeId, UUID versionId) {
+        FileNode node = fileNodeRepository
+                .findOwnedForUpdate(fileNodeId, ownerUserId)
+                .filter(existing -> !existing.isDeleted())
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        FileVersion version = fileVersionRepository.findById(versionId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "版本不存在"));
+        if (!version.getFileNodeId().equals(fileNodeId)) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "版本与文件不匹配");
+        }
+        if (version.getObjectId().equals(node.getCurrentObjectId())) {
+            return toNodeDto(node);
+        }
+        if (node.getCurrentObjectId() == null) {
+            throw new BusinessException(ErrorCode.VALIDATION_FAILED, "当前文件没有可备份的内容，无法恢复历史版本");
+        }
+        int nextVersionNo = fileVersionRepository.findMaxVersionNo(fileNodeId) + 1;
+        FileVersion history = new FileVersion();
+        history.setFileNodeId(fileNodeId);
+        history.setObjectId(node.getCurrentObjectId());
+        history.setVersionNo(nextVersionNo);
+        history.setChangeType("RESTORE");
+        history.setCreatedBy(ownerUserId);
+        fileVersionRepository.save(history);
+
+        FileObject restoredObject = fileObjectRepository.findById(version.getObjectId())
+                .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "版本对象不存在"));
+        node.setCurrentObjectId(restoredObject.getId());
+        node.setSizeBytes(restoredObject.getSizeBytes());
+        if (restoredObject.getMimeType() != null && !restoredObject.getMimeType().isBlank()) {
+            node.setMimeType(restoredObject.getMimeType());
+        }
+        node.setUpdatedAt(Instant.now());
+        FileNode saved = fileNodeRepository.save(node);
+        fileContentChangePublisher.publish(saved, restoredObject, ownerUserId);
+        recordFileEvent(ownerUserId, fileNodeId, Map.of("restoredTo", version.getVersionNo()));
+        return toNodeDto(saved);
+    }
+
+    private boolean sameNameExists(UUID ownerUserId, UUID parentId, String name) {
+        if (parentId == null) {
+            return fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(ownerUserId, name);
+        }
+        return fileNodeRepository.existsByOwnerUserIdAndParentIdAndNameAndDeletedFalse(ownerUserId, parentId, name);
+    }
+
+    private boolean isObjectOwnedByUser(FileObject object, UUID ownerUserId) {
+        String objectKey = object.getObjectKey();
+        if (objectKey == null || objectKey.isBlank()) {
+            return false;
+        }
+        return objectKey.startsWith("uploads/" + ownerUserId + "/");
     }
 
     /**
@@ -1046,7 +1236,7 @@ public class FileManagerService {
 
     private void requireShareable(FileNode node) {
         if (SourceType.LOCAL_FILESYSTEM.getValue().equals(node.getSourceType())) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "本地只读影视库文件不支持文件分享");
+            throw new BusinessException(ErrorCode.FORBIDDEN, "本地只读影视库文件不支持该文件操作");
         }
     }
 

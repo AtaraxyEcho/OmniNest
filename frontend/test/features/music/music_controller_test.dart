@@ -329,7 +329,7 @@ void main() {
 
       expect(state.currentItem?.playableKey, 'online:qq:temporary-song');
       expect(state.playbackPlan, isNull);
-      expect(state.errorMessage, contains('请求超时'));
+      expect(state.errorMessage, contains('REQUEST_TIMEOUT'));
       expect(api.playbackPlanTrackIds, isEmpty);
     },
   );
@@ -510,7 +510,14 @@ void main() {
           ),
         ),
       );
-      controller.reorderQueue(2, 0);
+      // enqueue 插入当前曲之后（下一首播放），再移到队首验证顺序可控。
+      final afterEnqueue = container.read(musicCenterControllerProvider).value!;
+      expect(afterEnqueue.playbackItems.map((item) => item.playableKey), [
+        'local:track-1',
+        'online:netease:song-1',
+        'local:track-2',
+      ]);
+      controller.reorderQueue(1, 0);
 
       final state = container.read(musicCenterControllerProvider).value!;
       expect(state.playbackItems.map((item) => item.playableKey), [
@@ -1227,7 +1234,11 @@ class _FakeMusicApi implements MusicApi {
       );
 
   @override
-  Future<MusicTrack> applyLyrics(String trackId, String lyrics) async {
+  Future<MusicTrack> applyLyrics(
+    String trackId,
+    String lyrics, {
+    String? lyricsTranslation,
+  }) async {
     appliedLyricsTrackIds.add(trackId);
     appliedLyricsTexts.add(lyrics);
     return libraryTracks.firstWhere((track) => track.id == trackId);

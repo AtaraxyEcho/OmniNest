@@ -43,7 +43,8 @@ class ReaderApi {
   const ReaderApi(this.apiClient);
 
   static const _coverMaxBytes = 12 * 1024 * 1024;
-  static const _webFileMaxBytes = 32 * 1024 * 1024;
+  static const _webBookMaxBytes = 32 * 1024 * 1024;
+  static const _webPdfMaxBytes = 128 * 1024 * 1024;
 
   final ApiClient apiClient;
 
@@ -169,7 +170,9 @@ class ReaderApi {
   }
 
   /// Web 兼容路径：从签名地址读取原始文件字节。
-  Future<Uint8List> downloadFileBytes(String itemId) async {
+  ///
+  /// PDF 上限 128MiB；EPUB/TXT 维持 32MiB。
+  Future<Uint8List> downloadFileBytes(String itemId, {String? itemType}) async {
     final ticket = await getFileTicket(itemId);
     if (ticket.downloadUrl.isEmpty || ticket.sizeBytes <= 0) {
       throw const AppException(
@@ -177,10 +180,12 @@ class ReaderApi {
         message: '阅读文件下载票据无效',
       );
     }
-    if (ticket.sizeBytes > _webFileMaxBytes) {
-      throw const AppException(
-        code: 'READER_WEB_FILE_TOO_LARGE',
-        message: 'Web 阅读仅支持 32 MiB 以内的 EPUB 或 TXT 文件',
+    final isPdf = itemType?.toUpperCase() == 'PDF';
+    final maxBytes = isPdf ? _webPdfMaxBytes : _webBookMaxBytes;
+    if (ticket.sizeBytes > maxBytes) {
+      throw AppException(
+        code: isPdf ? 'READER_WEB_PDF_TOO_LARGE' : 'READER_WEB_FILE_TOO_LARGE',
+        message: isPdf ? 'errorWebPdfTooLarge' : 'errorWebBookTooLarge',
       );
     }
     final response = await apiClient.dio.get<List<int>>(

@@ -28,6 +28,7 @@ import com.omninest.modules.file.dto.FilePurgeTaskDto;
 import com.omninest.modules.file.dto.FileShareAccessDto;
 import com.omninest.modules.file.dto.FileShareLinkDto;
 import com.omninest.modules.file.dto.FileSharePreviewDto;
+import com.omninest.modules.file.dto.FileVersionDto;
 import com.omninest.modules.file.dto.FileSharedItemDto;
 import com.omninest.modules.file.dto.FileStorageStatsDto;
 import com.omninest.modules.file.dto.FileUploadPartDto;
@@ -36,6 +37,7 @@ import com.omninest.modules.file.dto.FileUploadPolicyDto;
 import com.omninest.modules.file.dto.FileUploadQueueItemDto;
 import com.omninest.modules.file.dto.FileUploadSessionDto;
 import com.omninest.modules.file.dto.MoveFileNodeRequest;
+import com.omninest.modules.file.dto.SaveFileVersionRequest;
 import com.omninest.modules.file.dto.OfflineDownloadTaskDto;
 import com.omninest.modules.file.dto.PermissionRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
@@ -178,6 +180,46 @@ public class FileController {
                 fileId,
                 body != null ? body.targetParentId() : null
         ));
+    }
+
+
+    @Operation(summary = "查询文件版本历史", description = "返回历史版本与当前内容条目")
+    @GetMapping("/api/v1/files/{fileId}/versions")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<List<FileVersionDto>> listFileVersions(@PathVariable UUID fileId) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(fileManagerService.listVersions(ownerUserId, fileId));
+    }
+
+    @Operation(
+            summary = "保存新版本",
+            description = "把当前内容存为历史版本，并将已上传对象设为当前内容"
+    )
+    @PostMapping("/api/v1/files/{fileId}/versions")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    ApiResponse<FileNodeDto> saveFileVersion(
+            @PathVariable UUID fileId,
+            @Valid @RequestBody SaveFileVersionRequest body
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(fileManagerService.saveNewVersion(
+                ownerUserId,
+                fileId,
+                body.objectId(),
+                body.sizeBytes(),
+                body.remark()
+        ));
+    }
+
+    @Operation(summary = "恢复文件版本", description = "将历史版本对象设为当前内容，恢复前内容存为 RESTORE 版本")
+    @PostMapping("/api/v1/files/{fileId}/versions/{versionId}/restore")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    ApiResponse<FileNodeDto> restoreFileVersion(
+            @PathVariable UUID fileId,
+            @PathVariable UUID versionId
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(fileManagerService.restoreVersion(ownerUserId, fileId, versionId));
     }
 
     @Operation(summary = "删除文件", description = "将文件移入回收站（软删除）")

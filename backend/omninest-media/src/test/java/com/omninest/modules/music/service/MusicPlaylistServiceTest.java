@@ -84,6 +84,24 @@ class MusicPlaylistServiceTest {
     }
 
     @Test
+    void addItemsRejectsNonCustomPlaylist() {
+        MusicPlaylist playlist = new MusicPlaylist();
+        playlist.setId(PLAYLIST_ID);
+        playlist.setOwnerUserId(OWNER_ID);
+        playlist.setName("Daily Mix");
+        playlist.setPlaylistType("LEGACY");
+        when(playlistRepository.findByIdAndOwnerUserId(PLAYLIST_ID, OWNER_ID))
+                .thenReturn(Optional.of(playlist));
+
+        assertThatThrownBy(() -> playlistService.addItems(
+                OWNER_ID,
+                PLAYLIST_ID,
+                new PlaylistItemsRequest(List.of(FIRST_TRACK_ID))
+        )).isInstanceOf(BusinessException.class)
+                .hasMessageContaining("自建歌单");
+    }
+
+    @Test
     void playlistTracksPreservesPlaylistItemOrder() {
         MusicPlaylist playlist = new MusicPlaylist();
         playlist.setId(PLAYLIST_ID);
@@ -199,6 +217,8 @@ class MusicPlaylistServiceTest {
                 "Unknown Album",
                 null,
                 "flac",
+                null,
+                null,
                 null,
                 null,
                 null,

@@ -37,7 +37,6 @@ dependencies:
   audio_session: ^0.2.2
   app_links: ^6.4.0
   image_picker: ^1.2.0
-  image_picker: ^1.2.0
   fl_chart: ^0.70.2
   flutter_local_notifications: ^18.0.1
   workmanager: ^0.6.0
@@ -64,6 +63,8 @@ dependencies:
   intl: ^0.20.2
   pro_image_editor: 13.3.1
   qr_flutter: ^4.1.0
+  flutter_launcher_icons_plus: ^0.15.0
+  pdfrx: ^1.2.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -128,22 +129,27 @@ flutter_launcher_icons_plus:
   # 全局默认图标
   image_path: "assets/icon/icon.png"   # 请替换为您的图标文件路径（推荐1024x1024 PNG）  # Android 单独使用专用图标
   android: "launcher_icon"
-  image_path_android: "assets/icon/mobile_icon.png"
+  image_path_android: "assets/icon/icon.png"
   adaptive_icon_background: "#ffffff"
-  adaptive_icon_foreground: "assets/icon/mobile_icon.png"
+  adaptive_icon_foreground: "assets/icon/icon.png"
   ios: true
 #  image_path_ios: "assets/icon/mobile_icon.png"
+  image_path_ios: "assets/icon/icon.png"
   web:
     generate: true
 #    image_path: "assets/icon/web_icon.png"
+    image_path: "assets/icon/icon.png"
     background_color: "#ffffff"
   windows:
     generate: true
     icon_size: 256   # 可填 48~256，建议保持 48 或 256
 #    image_path: "assets/icon/desktop_icon.png"
+    image_path: "assets/icon/icon.png"
   macos:
     generate: true
 #    image_path: "assets/icon/desktop_icon.png"
+    image_path: "assets/icon/icon.png"
   linux:
     generate: true
 #    image_path: "assets/icon/desktop_icon.png"
+    image_path: "assets/icon/icon.png"

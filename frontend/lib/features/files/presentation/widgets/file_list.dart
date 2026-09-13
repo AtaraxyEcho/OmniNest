@@ -19,6 +19,7 @@ enum _FileListAction {
   delete,
   restore,
   purge,
+  versions,
 }
 
 class FileList extends StatefulWidget {
@@ -39,6 +40,7 @@ class FileList extends StatefulWidget {
     this.onShare,
     this.onPreview,
     this.onToggleFavorite,
+    this.onShowVersions,
     this.selectedFileIds = const {},
     this.onToggleSelection,
     this.selectionActive = false,
@@ -55,6 +57,7 @@ class FileList extends StatefulWidget {
   final ValueChanged<FileNode> onRestore;
   final ValueChanged<FileNode> onOpen;
   final ValueChanged<FileNode>? onCopy;
+  final ValueChanged<FileNode>? onShowVersions;
   final ValueChanged<FileNode>? onMove;
   final ValueChanged<FileNode>? onMoveToSharedSpace;
   final ValueChanged<FileNode>? onMoveToPersonalSpace;
@@ -181,6 +184,7 @@ class _FileListState extends State<FileList>
               onRestore: widget.onRestore,
               onOpen: widget.onOpen,
               onCopy: widget.onCopy,
+              onShowVersions: widget.onShowVersions,
               onMove: widget.onMove,
               onMoveToSharedSpace: widget.onMoveToSharedSpace,
               onMoveToPersonalSpace: widget.onMoveToPersonalSpace,
@@ -256,6 +260,7 @@ class _FileRow extends StatefulWidget {
     required this.onRestore,
     required this.onOpen,
     this.onCopy,
+    this.onShowVersions,
     this.onMove,
     this.onMoveToSharedSpace,
     this.onMoveToPersonalSpace,
@@ -279,6 +284,7 @@ class _FileRow extends StatefulWidget {
   final ValueChanged<FileNode> onRestore;
   final ValueChanged<FileNode> onOpen;
   final ValueChanged<FileNode>? onCopy;
+  final ValueChanged<FileNode>? onShowVersions;
   final ValueChanged<FileNode>? onMove;
   final ValueChanged<FileNode>? onMoveToSharedSpace;
   final ValueChanged<FileNode>? onMoveToPersonalSpace;
@@ -486,6 +492,22 @@ class _FileRowState extends State<_FileRow> {
                                       dense: true,
                                     ),
                                   ),
+                                  if (widget.onShowVersions != null &&
+                                      !file.isFolder)
+                                    PopupMenuItem(
+                                      value: _FileListAction.versions,
+                                      child: ListTile(
+                                        leading: const Icon(
+                                          Icons.history_outlined,
+                                        ),
+                                        title: Text(
+                                          AppLocalizations.of(
+                                            context,
+                                          ).filesVersionsTitle,
+                                        ),
+                                        dense: true,
+                                      ),
+                                    ),
                                   if (widget.onCopy != null && !file.isFolder)
                                     PopupMenuItem(
                                       value: _FileListAction.copy,
@@ -616,6 +638,8 @@ class _FileRowState extends State<_FileRow> {
                       switch (action) {
                         case _FileListAction.rename:
                           widget.onRename(file);
+                        case _FileListAction.versions:
+                          widget.onShowVersions?.call(file);
                         case _FileListAction.copy:
                           widget.onCopy?.call(file);
                         case _FileListAction.move:

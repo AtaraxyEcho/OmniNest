@@ -38,6 +38,17 @@ public interface FileUploadSessionRepository extends JpaRepository<FileUploadSes
 
     List<FileUploadSession> findByStatusAndUpdatedAtBefore(String status, Instant updatedAt);
 
+    Optional<FileUploadSession> findFirstByOwnerUserIdAndResultObjectId(
+            UUID ownerUserId,
+            UUID resultObjectId
+    );
+
+    Optional<FileUploadSession> findFirstByOwnerUserIdAndResultObjectIdAndStatus(
+            UUID ownerUserId,
+            UUID resultObjectId,
+            String status
+    );
+
     List<FileUploadSession> findByStatusInAndUpdatedAtBefore(List<String> statuses, Instant updatedAt);
 
 }

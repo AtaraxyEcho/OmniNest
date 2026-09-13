@@ -71,6 +71,9 @@ public class FileUploadSession {
     @Column(name = "result_file_node_id")
     private UUID resultFileNodeId;
 
+    @Column(name = "result_object_id")
+    private UUID resultObjectId;
+
     @Column(name = "completion_task_id")
     private UUID completionTaskId;
 

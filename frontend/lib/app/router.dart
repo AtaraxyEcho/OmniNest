@@ -39,6 +39,7 @@ import 'package:omninest/features/reader/presentation/pages/reader_item_detail_p
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_metadata_edit_page.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_reader_page.dart';
+import 'package:omninest/features/reader/presentation/pages/pdf_reader_page.dart';
 import 'package:omninest/features/reader/presentation/pages/comic_import_confirm_page.dart';
 import 'package:omninest/features/search/presentation/pages/search_page.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
@@ -294,6 +295,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           itemId: state.pathParameters['itemId']!,
           initialCatalogNodeId: state.uri.queryParameters['catalogNodeId'],
         ),
+      ),
+      _animatedRoute(
+        '/reader/pdfs/:itemId/read',
+        (state) => PdfReaderPage(itemId: state.pathParameters['itemId']!),
       ),
       GoRoute(
         path: '/admin',

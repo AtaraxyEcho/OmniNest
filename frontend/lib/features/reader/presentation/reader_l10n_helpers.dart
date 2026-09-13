@@ -12,6 +12,7 @@ String readerTypeLabel(AppLocalizations l10n, String itemType) {
     'TXT' => 'TXT',
     'CBZ' => 'CBZ',
     'ZIP' => 'ZIP',
+    'PDF' => 'PDF',
     _ => itemType.toUpperCase(),
   };
 }

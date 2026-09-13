@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/files/application/public_share_service.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
@@ -116,7 +117,11 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
           builder:
               (ctx) => AlertDialog(
                 title: Text(AppLocalizations.of(context).filesFileExists),
-                content: Text(message),
+                content: Text(
+                  AppLocalizations.of(
+                    context,
+                  ).messageForErrorCode(message, fallback: message),
+                ),
                 actions: [
                   TextButton(
                     onPressed: () => Navigator.of(ctx).pop(),
@@ -129,7 +134,11 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              AppLocalizations.of(context).filesSaveFailed(message),
+              AppLocalizations.of(context).filesSaveFailed(
+                AppLocalizations.of(
+                  context,
+                ).messageForErrorCode(message, fallback: message),
+              ),
             ),
           ),
         );
@@ -148,7 +157,11 @@ class _FileSharePreviewPageState extends ConsumerState<FileSharePreviewPage> {
     if (_loading) return const AppLoading.detail();
 
     if (_error != null) {
-      return _buildErrorView(_error!);
+      return _buildErrorView(
+        AppLocalizations.of(
+          context,
+        ).messageForErrorCode(_error!, fallback: _error),
+      );
     }
 
     if (_needPassword) {

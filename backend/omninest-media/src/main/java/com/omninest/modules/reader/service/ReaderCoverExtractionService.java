@@ -43,6 +43,19 @@ public class ReaderCoverExtractionService {
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public boolean storeIfAbsent(UUID itemId, ReaderCoverDraft cover) {
+        return store(itemId, cover, false);
+    }
+
+    /**
+     * 保存封面；内容变更后可强制覆盖旧封面。
+     *
+     * @param itemId 阅读条目 ID
+     * @param cover 封面草稿
+     * @param overwrite 已有封面时是否替换
+     * @return 成功保存封面时返回 true
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
+    public boolean store(UUID itemId, ReaderCoverDraft cover, boolean overwrite) {
         if (cover == null || cover.content() == null || cover.content().length == 0) {
             return false;
         }
@@ -52,7 +65,7 @@ public class ReaderCoverExtractionService {
 
         ReaderItem item = itemRepository.findById(itemId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在"));
-        if (item.getCoverFileId() != null) {
+        if (item.getCoverFileId() != null && !overwrite) {
             return false;
         }
 
@@ -72,7 +85,7 @@ public class ReaderCoverExtractionService {
             item.setCoverFileId(coverFileId);
             itemRepository.saveAndFlush(item);
             syncEventService.invalidate(item.getOwnerUserId(), SyncScope.READER, "READER_LIBRARY", Map.of());
-            log.info("自动提取阅读封面完成: itemId={}", itemId);
+            log.info("自动提取阅读封面完成: itemId={}, overwrite={}", itemId, overwrite);
             return true;
         } catch (RuntimeException exception) {
             if (coverFileId != null) {

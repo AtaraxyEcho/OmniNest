@@ -3,28 +3,17 @@ import 'dart:io';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:omninest/app/l10n/app_localizations_en.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/platform/android/android_photo_backup.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 
 /// 后台备份任务名称
 const String _backupTaskName = 'omninest.photo.backup';
-
-/// Android 照片备份服务 Provider
-final androidPhotoBackupServiceProvider = Provider<AndroidPhotoBackupService>((
-  ref,
-) {
-  final photoApi = ref.watch(photoApiProvider);
-  final fileRepository = ref.watch(fileRepositoryProvider);
-  return AndroidPhotoBackupService(
-    photoApi: photoApi,
-    onUpload: (filePath) => _uploadFile(fileRepository, filePath),
-    l10n: AppLocalizationsEn(),
-  );
-});
 
 /// 上传文件到服务器
 Future<void> _uploadFile(FileRepository repository, String filePath) async {
@@ -74,32 +63,39 @@ Future<void> _uploadFile(FileRepository repository, String filePath) async {
   await repository.completeUploadSession(sessionId: session.uploadId);
 }
 
+/// 后台任务按设备偏好语言加载文案。
+Future<AppLocalizations> _loadAppLocalizations() async {
+  final prefs = await SharedPreferences.getInstance();
+  final code = prefs.getString(localeDeviceLanguageKey) ?? 'zh';
+  final locale = Locale(code);
+  return AppLocalizations.delegate.load(locale);
+}
+
 /// WorkManager 回调入口（必须为顶层函数）
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     if (task != _backupTaskName) return true;
 
+    ProviderContainer? container;
     try {
-      // 初始化 Flutter 绑定
       WidgetsFlutterBinding.ensureInitialized();
-
-      // 初始化 Riverpod 容器
-      final container = ProviderContainer();
-
-      // 获取设备 ID
+      container = ProviderContainer();
+      final l10n = await _loadAppLocalizations();
       final deviceId = await AndroidBackgroundSync.getDeviceId();
-
-      // 执行照片备份
-      final backupService = container.read(androidPhotoBackupServiceProvider);
+      final photoApi = container.read(photoApiProvider);
+      final fileRepository = container.read(fileRepositoryProvider);
+      final backupService = AndroidPhotoBackupService(
+        photoApi: photoApi,
+        onUpload: (filePath) => _uploadFile(fileRepository, filePath),
+        l10n: l10n,
+      );
       final result = await backupService.runBackup(deviceId: deviceId);
-
-      // 清理资源
-      container.dispose();
-
       return result.status != BackupStatus.failure;
     } catch (e) {
       return false;
+    } finally {
+      container?.dispose();
     }
   });
 }

@@ -7,6 +7,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     String? mimeType,
     String? sha256,
     int? partSizeBytes,
+    String? asVersionOfFileId,
   }) async {
     return _runAction(FileOperation.createUploadSession, () async {
       final current = _currentState;
@@ -20,6 +21,7 @@ extension FileBrowserUploadActions on FileBrowserController {
         sha256: sha256,
         partSizeBytes: partSizeBytes,
         spaceType: isShared ? 'SHARED' : null,
+        asVersionOfFileId: asVersionOfFileId,
       );
       _emitState(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
@@ -45,6 +47,18 @@ extension FileBrowserUploadActions on FileBrowserController {
       } else {
         await refreshFileNodesForCurrentSection();
       }
+    });
+  }
+
+  /// 用本地文件替换现有文件内容，并将旧内容保存为历史版本。
+  Future<void> replaceFileWithNewVersion(FileNode file, XFile source) async {
+    await _runAction(FileOperation.saveVersion, () async {
+      await _uploadSingleFile(
+        source,
+        fileName: file.name,
+        asVersionOfFileId: file.id,
+      );
+      await refreshFileNodesForCurrentSection();
     });
   }
 
@@ -249,6 +263,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     String? fileName,
     int? sizeBytes,
     String? mimeType,
+    String? asVersionOfFileId,
   }) async {
     sizeBytes ??= await file.length();
     fileName ??= _uploadFileName(file);
@@ -279,6 +294,7 @@ extension FileBrowserUploadActions on FileBrowserController {
         sizeBytes: sizeBytes,
         mimeType: mimeType ?? file.mimeType ?? 'application/octet-stream',
         partSizeBytes: partSizeBytes,
+        asVersionOfFileId: asVersionOfFileId,
       );
       _upsertLocalUploadTask(
         task.copyWith(
@@ -290,7 +306,11 @@ extension FileBrowserUploadActions on FileBrowserController {
           uploadId: session.uploadId,
         ),
       );
-      uploadRuntime = _UploadRuntime(file: file, session: session);
+      uploadRuntime = _UploadRuntime(
+        file: file,
+        session: session,
+        asVersionOfFileId: asVersionOfFileId,
+      );
       _uploadRuntimes[task.id] = uploadRuntime;
       await _runUploadRuntime(task.id);
       final finalTask = _findLocalUploadTask(task.id);
@@ -376,7 +396,10 @@ extension FileBrowserUploadActions on FileBrowserController {
     }
     final uploadUrl = runtime.session.uploadUrl;
     if (uploadUrl == null || uploadUrl.isEmpty) {
-      throw StateError('上传地址为空');
+      throw const AppException(
+        code: AppErrorCodes.uploadUrlMissing,
+        message: AppErrorCodes.uploadUrlMissing,
+      );
     }
     final cancellation = FileUploadCancellationToken();
     runtime.activeCancellation = cancellation;
@@ -407,6 +430,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     }
     await _repository.completeUploadSession(
       sessionId: runtime.session.uploadId,
+      asVersionOfFileId: runtime.asVersionOfFileId,
     );
     runtime.completed = true;
     _uploadRuntimes.remove(taskId);
@@ -436,7 +460,10 @@ extension FileBrowserUploadActions on FileBrowserController {
       }
       final uploadUrl = part.uploadUrl;
       if (uploadUrl == null || uploadUrl.isEmpty) {
-        throw StateError('分片 ${part.partNumber} 上传地址为空');
+        throw AppException(
+          code: AppErrorCodes.uploadUrlMissing,
+          message: '${AppErrorCodes.uploadUrlMissing}:${part.partNumber}',
+        );
       }
       final start = (part.partNumber - 1) * runtime.session.partSizeBytes;
       final end = math.min(start + part.sizeBytes, runtime.session.sizeBytes);
@@ -487,6 +514,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     }
     await _repository.completeUploadSession(
       sessionId: runtime.session.uploadId,
+      asVersionOfFileId: runtime.asVersionOfFileId,
     );
     runtime.completed = true;
     _uploadRuntimes.remove(taskId);

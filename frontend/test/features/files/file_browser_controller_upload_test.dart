@@ -194,7 +194,10 @@ void main() {
 
     final failedState = container.read(fileBrowserControllerProvider).value!;
     expect(failedState.isBusy, isFalse);
-    expect(failedState.lastActionError?.operation, FileOperation.moveToRecycleBin);
+    expect(
+      failedState.lastActionError?.operation,
+      FileOperation.moveToRecycleBin,
+    );
     expect(failedState.lastActionError?.message, '存储配额不足');
     expect(failedState.lastActionError?.code, 'FILE_QUOTA_EXCEEDED');
   });
@@ -582,6 +585,7 @@ class _FakeFileRepository implements FileRepository {
     String? sha256,
     int? partSizeBytes,
     String? spaceType,
+    String? asVersionOfFileId,
   }) async {
     return const FileUploadSession(
       id: 'session-id',
@@ -644,6 +648,7 @@ class _FakeFileRepository implements FileRepository {
   Future<FileNode> completeUploadSession({
     required String sessionId,
     String? sha256,
+    String? asVersionOfFileId,
   }) async {
     completedSessions.add(sessionId);
     return _fileNode('file-id', 'large.bin');
@@ -729,9 +734,17 @@ class _FakeFileRepository implements FileRepository {
   }) => throw UnimplementedError();
 
   @override
-  Future<FileNode> copyFile({
+  Future<FileNode> copyFile({required String fileId, String? targetParentId}) =>
+      throw UnimplementedError();
+
+  @override
+  Future<List<FileVersion>> listFileVersions(String fileId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<FileNode> restoreFileVersion({
     required String fileId,
-    String? targetParentId,
+    required String versionId,
   }) => throw UnimplementedError();
 
   @override
@@ -830,6 +843,7 @@ class _FakeFileRepository implements FileRepository {
     required String sourceKind,
     String? targetParentId,
     String? spaceType,
+    String? asVersionOfFileId,
   }) => throw UnimplementedError();
 
   @override
@@ -968,6 +982,7 @@ class _BatchFileRepository extends _FakeFileRepository {
     String? sha256,
     int? partSizeBytes,
     String? spaceType,
+    String? asVersionOfFileId,
   }) async {
     return FileUploadSession(
       id: 'session-$fileName',
