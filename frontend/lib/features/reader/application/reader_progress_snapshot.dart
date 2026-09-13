@@ -101,11 +101,22 @@ class ReaderProgressSnapshot {
     };
   }
 
-  /// 从两个快照中选取更新时间较新的一方
+  /// 从两个快照中选取更新时间较新的一方。
+  ///
+  /// 零进度快照（无 charOffset 且无 progress）不得作为“最新”，
+  /// 否则开书时写入的 chapter_0(0,0) 会把用户从正文章拉回封面。
   static ReaderProgressSnapshot? latest(
     ReaderProgressSnapshot? a,
     ReaderProgressSnapshot? b,
   ) {
+    final readableA = a?.hasReadableProgress ?? false;
+    final readableB = b?.hasReadableProgress ?? false;
+    if (readableA && !readableB) {
+      return a;
+    }
+    if (readableB && !readableA) {
+      return b;
+    }
     if (a == null) return b;
     if (b == null) return a;
     final aTime = a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);

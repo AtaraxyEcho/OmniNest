@@ -482,6 +482,9 @@ String? readerChapterCacheKey(ParsedChapter chapter) {
 final _chapterContentMemoryCache = <String, ReaderChapterContent>{};
 const _chapterContentMemoryCacheLimit = 12;
 
+/// 在途加载去重：同一章并发请求共用一次 Future，避免重复解压/预处理。
+final _chapterContentInflight = <String, Future<ReaderChapterContent?>>{};
+
 void _rememberChapterContent(String key, ReaderChapterContent content) {
   _chapterContentMemoryCache.remove(key);
   _chapterContentMemoryCache[key] = content;
@@ -490,7 +493,7 @@ void _rememberChapterContent(String key, ReaderChapterContent content) {
   }
 }
 
-/// 获取指定章节内容（内存 LRU + SQLite 缓存 + 预处理）
+/// 获取指定章节内容（内存 LRU + 在途去重 + SQLite 缓存 + 预处理）
 Future<ReaderChapterContent?> getChapterContent(
   WidgetRef ref,
   String itemId,
@@ -514,7 +517,32 @@ Future<ReaderChapterContent?> getChapterContent(
   if (memoryHit != null) {
     return memoryHit;
   }
+  final inflight = _chapterContentInflight[memoryKey];
+  if (inflight != null) {
+    return inflight;
+  }
+  final future = _loadChapterContentFromStorage(
+    ref,
+    itemId: itemId,
+    matched: matched,
+    cacheKey: cacheKey,
+    memoryKey: memoryKey,
+  );
+  _chapterContentInflight[memoryKey] = future;
+  try {
+    return await future;
+  } finally {
+    _chapterContentInflight.remove(memoryKey);
+  }
+}
 
+Future<ReaderChapterContent?> _loadChapterContentFromStorage(
+  WidgetRef ref, {
+  required String itemId,
+  required ParsedChapter matched,
+  required String cacheKey,
+  required String memoryKey,
+}) async {
   // ── Layer 1: SQLite 章节缓存命中 ──
   final localStorage = ref.read(readerLocalStorageProvider);
   final cachedHtml = await localStorage.loadChapterContent(

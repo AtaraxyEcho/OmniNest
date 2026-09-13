@@ -697,6 +697,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       serverSnapshot,
     );
     if (globalLatest != null &&
+        globalLatest.hasReadableProgress &&
         globalLatest.chapterId.isNotEmpty &&
         globalLatest.chapterId != chapterId) {
       if (kDebugMode) {
@@ -1061,6 +1062,10 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     required int charOffset,
     required String mode,
   }) {
+    // 零进度不落盘：封面跳过/开书瞬间的 (0,0) 会污染“全局最新进度”。
+    if (charOffset <= 0 && chapterProgress <= 0 && bookProgress <= 0) {
+      return;
+    }
     final snapshot = ReaderProgressSnapshot(
       chapterId: currentChapterId,
       charOffset: charOffset,
@@ -1168,7 +1173,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       isAnimating = false;
     }
 
-    if (currentSnapshot != null) {
+    if (currentSnapshot != null && currentSnapshot.hasReadableProgress) {
       final syncGeneration = ++syncProgressGeneration;
       unawaited(
         syncProgressAsync(
