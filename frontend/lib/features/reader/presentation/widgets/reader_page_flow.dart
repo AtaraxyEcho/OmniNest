@@ -114,6 +114,40 @@ class ReaderPageFlow {
     return null;
   }
 
+  /// 页流重建后的当前页索引归属解析。
+  ///
+  /// 优先级：待映射章内页 > 显式导航锚定 > 旧页身份重映射 > 越界钳制。
+  /// [explicitNavigation] 为 true（切章锁定帧）时禁止旧页身份重映射：
+  /// 旧流的页引用可能属于窗口前缀章，重映射会把显式跳章拉回旧章。
+  /// [pendingLocalIndex] 在锚点章尚无页（数据未就绪）时不生效，由调用方
+  /// 保留待映射索引下帧重试。
+  int resolveRebuiltPageIndex({
+    required String anchorChapterId,
+    required int currentPage,
+    BookPageRef? previousRef,
+    int? pendingLocalIndex,
+    bool explicitNavigation = false,
+  }) {
+    if (pendingLocalIndex != null || explicitNavigation) {
+      final start = startIndexOf(anchorChapterId);
+      if (start != null) {
+        return start + (pendingLocalIndex ?? 0);
+      }
+      return currentPage;
+    }
+    final remapped = previousRef == null ? null : indexOf(previousRef);
+    if (remapped != null) {
+      return remapped;
+    }
+    // 身份丢失（窗口滑出/排版重排）：钳制到锚点章起始，避免越界。
+    final start = startIndexOf(anchorChapterId) ?? 0;
+    final maxIndex = readablePageCount - 1;
+    if (currentPage < start || (maxIndex >= 0 && currentPage > maxIndex)) {
+      return start.clamp(0, maxIndex < 0 ? 0 : maxIndex);
+    }
+    return currentPage;
+  }
+
   /// 从 loader + 排版参数构建窗口页流。
   ///
   /// [windowSide]：锚点章两侧各保留的章节数（默认 1）。

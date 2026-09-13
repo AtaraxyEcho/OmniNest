@@ -510,8 +510,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     pendingChapterProgress = null;
     if (charOffset <= 0) {
       pendingRestoreCharOffset = null;
-      pageModePage = 0;
       if (isPageMode) {
+        // 章首 = 跨章流内锚点章起始全局索引；0 可能是前缀章页面，禁止直写。
+        anchorPageModeToChapterStart(chapterId);
         isRestoringProgress = false;
         scrollProgress = 0;
       } else {
@@ -599,6 +600,10 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 清空跨章收养待映射页（由 builders 实现）。
   void clearPendingPageLocalIndex();
+
+  /// 翻页流锚定目标章起始（由 builders 实现）：写入待映射章内页 0 并
+  /// 在流内直接换算全局索引。
+  void anchorPageModeToChapterStart(String chapterId);
 
   /// 预加载指定章节内容。
   Future<void> prefetchChapter(String chapterId) async {
@@ -1345,9 +1350,13 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     lastLoadedChapterId = prefetchedContent == null ? null : chapterId;
     pendingChapterProgress = null;
     pendingRestoreCharOffset = null;
-    // 硬切后 pageModePage 为局部 0；builders 的页流会映射到全局锚点起点。
-    pageModePage = 0;
-    clearPendingPageLocalIndex();
+    if (isPageMode) {
+      // 显式跳章：以待映射章内页 0 锚定目标章起始全局索引，禁止旧流
+      // 身份重映射（邻章场景重映射会把跳转拉回旧章）。
+      anchorPageModeToChapterStart(chapterId);
+    } else {
+      clearPendingPageLocalIndex();
+    }
     contentLoader?.setActive(chapterId);
     restore.cancel();
     isRestoringProgress = false;

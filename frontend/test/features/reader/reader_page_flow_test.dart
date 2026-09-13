@@ -100,4 +100,85 @@ void main() {
     final remapped = after.indexOf(ref!);
     expect(remapped, after.startIndexOf('c1')! + 2);
   });
+
+  group('resolveRebuiltPageIndex 页索引归属解析', () {
+    test('显式导航禁止旧页身份重映射（邻章硬切不得回滚到旧章页）', () {
+      // 复刻邻章硬切：旧流锚点 c0，当前页 0 = c0#0；切到 c1 后窗口不变，
+      // 旧身份 c0#0 仍能被 indexOf 命中，但显式导航必须锚定 c1 起始。
+      final oldFlow = build(anchor: 'c0');
+      final previousRef = oldFlow.keyAt(0); // c0#0
+      final newFlow = build(anchor: 'c1');
+      final resolved = newFlow.resolveRebuiltPageIndex(
+        anchorChapterId: 'c1',
+        currentPage: 0,
+        previousRef: previousRef,
+        explicitNavigation: true,
+      );
+      expect(resolved, newFlow.startIndexOf('c1'));
+      expect(resolved, isNot(newFlow.indexOf(previousRef!)));
+    });
+
+    test('非显式导航允许旧页身份重映射保持视觉位置', () {
+      final oldFlow = build(anchor: 'c1');
+      final previousRef = oldFlow.keyAt(3); // c1#1
+      final newFlow = build(anchor: 'c1');
+      final resolved = newFlow.resolveRebuiltPageIndex(
+        anchorChapterId: 'c1',
+        currentPage: 3,
+        previousRef: previousRef,
+      );
+      expect(resolved, 3);
+    });
+
+    test('身份丢失时钳制到锚点章起始', () {
+      final oldFlow = build(
+        chapters: const ['c0', 'c1'],
+        counts: const {'c0': 2, 'c1': 3},
+        done: const {'c0': true, 'c1': true},
+        anchor: 'c0',
+      );
+      final previousRef = oldFlow.keyAt(0); // c0#0，已滑出新窗口
+      final newFlow = build(
+        chapters: const ['c1', 'c2'],
+        counts: const {'c1': 3, 'c2': 1},
+        done: const {'c1': true, 'c2': true},
+        anchor: 'c2',
+      );
+      final resolved = newFlow.resolveRebuiltPageIndex(
+        anchorChapterId: 'c2',
+        currentPage: 0,
+        previousRef: previousRef,
+      );
+      expect(resolved, newFlow.startIndexOf('c2'));
+    });
+
+    test('待映射章内页优先锚定到锚点章起始加局部页', () {
+      final flow = build(anchor: 'c1');
+      final resolved = flow.resolveRebuiltPageIndex(
+        anchorChapterId: 'c1',
+        currentPage: 0,
+        pendingLocalIndex: 2,
+        explicitNavigation: true,
+      );
+      expect(resolved, flow.startIndexOf('c1')! + 2);
+    });
+
+    test('锚点章尚无页时保持当前索引等待重试', () {
+      final flow = build(
+        counts: const {'c0': 2, 'c1': 0, 'c2': 1},
+        done: const {'c0': true, 'c1': false, 'c2': true},
+        anchor: 'c1',
+      );
+      expect(flow.startIndexOf('c1'), isNull);
+      expect(
+        flow.resolveRebuiltPageIndex(
+          anchorChapterId: 'c1',
+          currentPage: 1,
+          pendingLocalIndex: 0,
+          explicitNavigation: true,
+        ),
+        1,
+      );
+    });
+  });
 }

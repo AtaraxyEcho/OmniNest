@@ -629,13 +629,21 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
       return _scrollProgressNotifier.value.clamp(0.0, 1.0);
     }
+    // 章节身份无法解析时不静默按第一章累计：把错误章节折算成第一章
+    // 进度会伪造全书位置（含落库与同步），维持当前显示进度并交由调用方处理。
+    final allChapters = _contentLoader?.allChapters;
+    final currentChapterIdx =
+        allChapters?.indexWhere((c) => c.id == chapterId) ?? -1;
+    if (allChapters == null ||
+        currentChapterIdx < 0 ||
+        currentChapterIdx >= parsedBook.chapters.length) {
+      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
+    }
     final chapterCharCounts =
         parsedBook.chapters.map((c) => c.charCount).toList();
     // 当前章节使用实际解析的 totalChars（与 parsedBook.charCount 可能因 HTML 标签不同）
     final chapterData = _contentLoader?.getByChapterId(chapterId);
-    final currentChapterIdx =
-        _contentLoader?.allChapters.indexWhere((c) => c.id == chapterId) ?? 0;
-    if (chapterData != null && currentChapterIdx < chapterCharCounts.length) {
+    if (chapterData != null) {
       chapterCharCounts[currentChapterIdx] = chapterData.totalChars;
     }
     final totalBookChars = chapterCharCounts.fold<int>(0, (s, c) => s + c);

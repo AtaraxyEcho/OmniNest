@@ -212,8 +212,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (loader == null) {
       return 0;
     }
-    // 重建前捕获当前页身份，避免前缀章懒分页完成后全局索引整体平移。
-    final previousRef = _pageFlow?.keyAt(pageModePage);
+    final pendingLocal = _pendingPageLocalIndex;
+    // 显式导航帧（切章锁定中）禁止旧页身份参与重映射：旧流 keyAt 可能
+    // 解析出前缀章页面，把显式跳章拉回旧章（章节跳转错位的根因入口）。
+    final explicitNavigation = isSwitchingChapter;
+    final previousRef =
+        pendingLocal == null && !explicitNavigation
+            ? _pageFlow?.keyAt(pageModePage)
+            : null;
     _pageFlow = ReaderPageFlow.fromLoader(
       loader: loader,
       anchorChapterId: currentChapterId,
@@ -223,28 +229,30 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       textScale: textScale,
       windowSide: 2,
     );
-
-    final pendingLocal = _pendingPageLocalIndex;
-    if (pendingLocal != null) {
-      final start = _pageFlow!.startIndexOf(currentChapterId) ?? 0;
-      pageModePage = start + pendingLocal;
+    pageModePage = _pageFlow!.resolveRebuiltPageIndex(
+      anchorChapterId: currentChapterId,
+      currentPage: pageModePage,
+      previousRef: previousRef,
+      pendingLocalIndex: pendingLocal,
+      explicitNavigation: explicitNavigation,
+    );
+    // 目标章尚无页（数据未就绪）时保留待映射索引，待下帧重试锚定。
+    if (pendingLocal != null &&
+        _pageFlow!.startIndexOf(currentChapterId) != null) {
       _pendingPageLocalIndex = null;
-      return start;
-    }
-
-    final remapped =
-        previousRef == null ? null : _pageFlow!.indexOf(previousRef);
-    if (remapped != null) {
-      pageModePage = remapped;
-    } else {
-      // 身份丢失（窗口滑出/排版重排）：钳制到锚点章起始，避免越界。
-      final start = _pageFlow!.startIndexOf(currentChapterId) ?? 0;
-      final maxIndex = _pageFlow!.readablePageCount - 1;
-      if (pageModePage < start || (maxIndex >= 0 && pageModePage > maxIndex)) {
-        pageModePage = start.clamp(0, maxIndex < 0 ? 0 : maxIndex);
-      }
     }
     return _pageFlow!.startIndexOf(currentChapterId) ?? 0;
+  }
+
+  /// 将翻页流锚定到目标章起始：写入待映射章内页 0，流已就绪时直接换算
+  /// 全局索引。显式跳章禁止用 pageModePage=0 表达章首（跨章流中 0 可能
+  /// 是窗口前缀章的页面）。
+  void anchorPageModeToChapterStart(String chapterId) {
+    _pendingPageLocalIndex = 0;
+    final start = _pageFlow?.startIndexOf(chapterId);
+    if (start != null) {
+      pageModePage = start;
+    }
   }
 
   /// 将流内全局页索引解析为章 + 章内页，并在跨章时软收养。
