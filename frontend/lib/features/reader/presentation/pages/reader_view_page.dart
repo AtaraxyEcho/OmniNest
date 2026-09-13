@@ -74,20 +74,6 @@ class ReaderViewPage extends ConsumerStatefulWidget {
   ConsumerState<ReaderViewPage> createState() => _ReaderViewPageState();
 }
 
-class _FlatPageEntry {
-  const _FlatPageEntry({
-    required this.chapterId,
-    required this.localPageIndex,
-    required this.chapterTitle,
-    required this.chapterIndex,
-  });
-
-  final String chapterId;
-  final int localPageIndex;
-  final String chapterTitle;
-  final int chapterIndex;
-}
-
 class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     with
         ReaderViewPageBuilders,
@@ -126,7 +112,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   final ScrollController _scrollController = ScrollController();
   final ReaderContinuousScrollController _continuousScrollController =
       ReaderContinuousScrollController(sideChapterCount: 2);
-  List<_FlatPageEntry> _flatPages = [];
   int _currentPageIndex = 0;
   int _pageModePage = 0;
 
@@ -260,10 +245,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set cachedContent(ReaderChapterContent? v) => _cachedContent = v;
   @override
   ReaderAnnotationHandler? get annotationHandler => _annotationHandler;
-  @override
-  dynamic get flatPages => _flatPages;
-  @override
-  set flatPages(dynamic v) => _flatPages = v;
   @override
   int get currentPageIndex => _currentPageIndex;
   @override
@@ -542,8 +523,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Size? get pageViewportSize => _pageViewportSize;
   @override
   set pageViewportSize(Size? value) => _pageViewportSize = value;
-  @override
-  dynamic buildFlatPages() => _buildFlatPages();
 
   @override
   void onReaderSelectionActive(bool active) {
@@ -566,26 +545,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (mounted) {
       setState(update);
     }
-  }
-
-  List<_FlatPageEntry> _buildFlatPages() {
-    final result = <_FlatPageEntry>[];
-    final chapters = contentLoader!.allChapters;
-    for (var ci = 0; ci < chapters.length; ci++) {
-      final data = contentLoader!.get(chapters[ci].id, settings);
-      if (data == null || data.slices.isEmpty) continue;
-      for (var i = 0; i < data.slices.length; i++) {
-        result.add(
-          _FlatPageEntry(
-            chapterId: chapters[ci].id,
-            localPageIndex: i,
-            chapterTitle: data.content.title,
-            chapterIndex: ci,
-          ),
-        );
-      }
-    }
-    return result;
   }
 
   /// 当前章节标题，用于顶栏与加载遮罩显示。

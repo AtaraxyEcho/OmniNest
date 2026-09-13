@@ -15,6 +15,7 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_annotation_handler.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
@@ -49,8 +50,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   // ── 渲染状态 ──
 
-  dynamic /* List<_FlatPageEntry> */ get flatPages;
-  set flatPages(dynamic value);
   int get currentPageIndex;
   set currentPageIndex(int value);
   int get pageModePage;
@@ -210,8 +209,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   // ── 由 State 实现的抽象方法 ──
 
-  /// 构建扁平化页面列表（依赖私有类型 _FlatPageEntry）。
-  dynamic /* List<_FlatPageEntry> */ buildFlatPages();
+  /// 由 State 实现的抽象方法。
   void clearReaderSelection();
 
   // ── 常量 ──
@@ -307,13 +305,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       }
 
       preloadAdjacent();
-      flatPages = buildFlatPages();
-      if (kDebugMode) {
-        readerDebugLog(
-          'ReaderView: flatPages.length=${(flatPages as List).length}',
-        );
-      }
-      currentPageIndex = globalPageIndexFor(requestedChapterId, 0);
+      // 页模式全局索引由 ReaderPageFlow 维护；滚动模式进度走 continuous 位置。
+      currentPageIndex = 0;
 
       final snapshot = await progressFuture;
       if (!_isCurrentChapterRequest(requestedChapterId, generation)) return;
@@ -406,7 +399,10 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
     final totalChars = chapterData.totalChars;
-    final isCoverLike = totalChars <= 80;
+    final isCoverLike = isCoverLikeChapter(
+      totalChars: totalChars,
+      blocks: chapterData.blocks,
+    );
     if (!isCoverLike) {
       return;
     }
@@ -479,19 +475,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     if (intent.offerReturn && returnToProgressSnapshot != null) {
       showReturnToProgressSnackBar();
     }
-  }
-
-  /// 根据 chapterId 和 localPageIndex 查找全局页面索引。
-  int globalPageIndexFor(String chapterId, int localPageIndex) {
-    final pages = flatPages as List;
-    for (var i = 0; i < pages.length; i++) {
-      final entry = pages[i];
-      if (entry.chapterId == chapterId &&
-          entry.localPageIndex == localPageIndex) {
-        return i;
-      }
-    }
-    return 0;
   }
 
   /// 预加载相邻章节。
@@ -1084,27 +1067,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
 
-    // 滚动模式：使用 flatPages
-    final pages = flatPages as List;
-    if (pages.isEmpty) return;
-    final entry = pages[currentPageIndex.clamp(0, pages.length - 1)];
-    final data = contentLoader?.get(entry.chapterId, settings);
-    if (data == null) return;
-    final chapterTotal = data.slices.length;
-    scrollProgress =
-        chapterTotal > 1
-            ? (entry.localPageIndex / (chapterTotal - 1)).clamp(0.0, 1.0)
-            : computeProgress();
-    final slice =
-        data.slices.isNotEmpty ? data.slices[entry.localPageIndex] : null;
-    positionTracker.updateFromPage(
-      localPageIndex: entry.localPageIndex,
-      totalPages: chapterTotal,
-      charOffset: slice?.startCharOffset ?? 0,
-      chapterId: entry.chapterId,
-      totalChapters: contentLoader?.allChapters.length ?? 0,
-      currentChapterIndex: entry.chapterIndex,
-    );
+    // 滚动模式进度由 continuous 位置回调维护；此处不依赖 flatPages。
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

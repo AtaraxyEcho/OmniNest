@@ -16,6 +16,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_control_lay
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_flow.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
@@ -229,7 +230,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       pageWidth: pageWidth,
       pageHeight: pageHeight,
       textScale: textScale,
-      windowSide: 1,
+      windowSide: 2,
     );
     if (needsRebuild) {
       _pageFlowLayoutVersion = layoutVersion;
@@ -500,6 +501,22 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                 textScale: textScale,
               );
               if (slice == null) return null;
+              // 封面/书讯型短章使用独立 title page 布局。
+              if (localIndex == 0 &&
+                  isCoverLikeChapter(
+                    totalChars: pageData.totalChars,
+                    blocks: pageData.blocks,
+                  )) {
+                return ReaderCoverPage(
+                  title:
+                      pageData.content.title.isNotEmpty
+                          ? pageData.content.title
+                          : chapterTitle,
+                  settings: settings,
+                  blocks: pageData.blocks,
+                  itemId: itemId,
+                );
+              }
               final pageChapter =
                   contentLoader?.allChapters
                       .where((c) => c.id == chapterId)
