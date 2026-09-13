@@ -212,8 +212,9 @@ class ChapterData {
 }
 
 /// 滚动模式测高分批参数：头部精确测量块数与每批测量块数。
+/// 批大小越大，测高收敛期间 UI 重建次数越少（大章丝滑关键）。
 const _metricsPhaseOneBlocks = 12;
-const _metricsBatchBlocks = 40;
+const _metricsBatchBlocks = 80;
 
 /// 翻页模式的懒分页导航器。
 ///

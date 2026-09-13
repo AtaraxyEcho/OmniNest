@@ -708,6 +708,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     }
     _windowChromeLease?.release();
     if (kIsWeb) BrowserContextMenu.enableContextMenu();
+    disposeScrollThrottles();
+    disposeLayoutInvalidationTimer();
     _scrollProgressNotifier.dispose();
     _bookProgressNotifier.dispose();
     _bookProgressRecomputeTimer?.cancel();

@@ -119,10 +119,13 @@ mixin ReaderViewPageInteractionMixin
       chapterId: position.chapterId,
       charOffset: charOffset,
     );
-    if ((newProgress - scrollProgress).abs() > 0.001 ||
-        position.chapterId == currentChapterId) {
-      // 热路径：只更新通知器（UI 消费者局部重建），不再 setState 整页。
+    if ((newProgress - scrollProgress).abs() > 0.004 ||
+        (position.chapterId == currentChapterId &&
+            (charOffset - (_lastSavedScrollCharOffset ?? -1)).abs() >= 48)) {
+      // 热路径：只更新通知器；写盘经 coordinator 合并。
+      // 阈值避免滚动每帧都 schedule，降低写入与 noteOwnProgressSave 开销。
       scrollProgress = newProgress;
+      _lastSavedScrollCharOffset = charOffset;
       scheduleLocalProgressSave(
         chapterProgress: newProgress,
         mode: 'scroll',
@@ -133,17 +136,56 @@ mixin ReaderViewPageInteractionMixin
     if (scrollController.hasClients) {
       final max = scrollController.position.maxScrollExtent;
       final offset = scrollController.offset;
-      // 过半预取邻章；接近末尾时提前扩窗，避免只能靠侧点硬切。
       if (max > 0 && max - offset < max * 0.5) {
-        preloadAdjacent();
+        _throttledPreloadAdjacent();
       }
       if (max > 0 && max - offset < max * 0.35) {
-        onContinuousWindowExpand(forward: true);
+        _throttledExpandForward();
       }
       if (offset < 240) {
-        onContinuousWindowExpand(forward: false);
+        _throttledExpandBackward();
       }
     }
+  }
+
+  int? _lastSavedScrollCharOffset;
+  Timer? _preloadDebounce;
+  Timer? _expandForwardDebounce;
+  Timer? _expandBackwardDebounce;
+  bool _expandForwardInFlight = false;
+
+  void _throttledPreloadAdjacent() {
+    if (_preloadDebounce?.isActive ?? false) {
+      return;
+    }
+    preloadAdjacent();
+    _preloadDebounce = Timer(const Duration(milliseconds: 400), () {});
+  }
+
+  void _throttledExpandForward() {
+    if (_expandForwardInFlight || (_expandForwardDebounce?.isActive ?? false)) {
+      return;
+    }
+    _expandForwardInFlight = true;
+    onContinuousWindowExpand(forward: true);
+    _expandForwardDebounce = Timer(const Duration(milliseconds: 600), () {
+      _expandForwardInFlight = false;
+    });
+  }
+
+  void _throttledExpandBackward() {
+    if (_expandBackwardDebounce?.isActive ?? false) {
+      return;
+    }
+    onContinuousWindowExpand(forward: false);
+    _expandBackwardDebounce = Timer(const Duration(milliseconds: 600), () {});
+  }
+
+  /// 释放滚动节流 Timer（由 State.dispose 调用）。
+  void disposeScrollThrottles() {
+    _preloadDebounce?.cancel();
+    _expandForwardDebounce?.cancel();
+    _expandBackwardDebounce?.cancel();
   }
 
   /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。

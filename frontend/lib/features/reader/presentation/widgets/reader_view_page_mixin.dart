@@ -227,17 +227,17 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   }
 
   bool _layoutInvalidationScheduled = false;
+  Timer? _layoutInvalidationTimer;
 
   /// 测高收敛后刷新连续滚动窗口 fingerprint，避免热路径跳过更新。
   ///
-  /// 必须异步调度：ensureScrollLayout 在 rebuild 内同步 notify 时，
-  /// 同步再入 rebuildContinuousWindow 会形成无限递归直至栈溢出。
+  /// 合并到约 100ms 一拍，降低大章分批测高时的整页 setState 频率。
   void _onContinuousLayoutInvalidated() {
     if (!mounted || isPageMode || _layoutInvalidationScheduled) {
       return;
     }
     _layoutInvalidationScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    _layoutInvalidationTimer = Timer(const Duration(milliseconds: 100), () {
       _layoutInvalidationScheduled = false;
       if (!mounted || isPageMode) {
         return;
@@ -246,6 +246,12 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       rebuildContinuousWindow();
       setState(() {});
     });
+  }
+
+  /// 释放布局失效合并 Timer。
+  void disposeLayoutInvalidationTimer() {
+    _layoutInvalidationTimer?.cancel();
+    _layoutInvalidationTimer = null;
   }
 
   /// 加载当前章节内容并恢复阅读进度。
