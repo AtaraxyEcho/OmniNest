@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
+import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 
@@ -88,12 +89,12 @@ class FileBrowserStats {
 /// 文件操作失败后供界面展示的稳定错误信息。
 class FileBrowserActionError {
   const FileBrowserActionError({
-    required this.operationLabel,
+    required this.operation,
     required this.message,
     this.code,
   });
 
-  final String operationLabel;
+  final FileOperation operation;
   final String message;
   final String? code;
 
@@ -159,7 +160,7 @@ class FileBrowserState {
     this.fileTotalPages = 0,
     this.isLoadingMoreFiles = false,
     this.activeActionCount = 0,
-    this.activeOperationLabel,
+    this.activeOperation,
     this.lastActionError,
   });
 
@@ -201,7 +202,7 @@ class FileBrowserState {
   final int fileTotalPages;
   final bool isLoadingMoreFiles;
   final int activeActionCount;
-  final String? activeOperationLabel;
+  final FileOperation? activeOperation;
   final FileBrowserActionError? lastActionError;
 
   static const Set<String> _terminalUploadStatuses = {
@@ -330,7 +331,7 @@ class FileBrowserState {
     int? fileTotalPages,
     bool? isLoadingMoreFiles,
     int? activeActionCount,
-    String? activeOperationLabel,
+    FileOperation? activeOperation,
     bool clearActiveOperationLabel = false,
     FileBrowserActionError? lastActionError,
     bool clearLastActionError = false,
@@ -392,10 +393,10 @@ class FileBrowserState {
       fileTotalPages: fileTotalPages ?? this.fileTotalPages,
       isLoadingMoreFiles: isLoadingMoreFiles ?? this.isLoadingMoreFiles,
       activeActionCount: activeActionCount ?? this.activeActionCount,
-      activeOperationLabel:
+      activeOperation:
           clearActiveOperationLabel
               ? null
-              : activeOperationLabel ?? this.activeOperationLabel,
+              : activeOperation ?? this.activeOperation,
       lastActionError:
           clearLastActionError ? null : lastActionError ?? this.lastActionError,
     );

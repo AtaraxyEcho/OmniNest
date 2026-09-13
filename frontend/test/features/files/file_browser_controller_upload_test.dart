@@ -9,6 +9,7 @@ import 'package:omninest/features/files/application/file_browser_controller.dart
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
+import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 
 void main() {
@@ -159,7 +160,7 @@ void main() {
 
       final busyState = container.read(fileBrowserControllerProvider).value!;
       expect(busyState.isBusy, isTrue);
-      expect(busyState.activeOperationLabel, '移入回收站');
+      expect(busyState.activeOperation, FileOperation.moveToRecycleBin);
       expect(busyState.lastActionError, isNull);
 
       deleteCompleter.complete();
@@ -167,7 +168,7 @@ void main() {
 
       final settledState = container.read(fileBrowserControllerProvider).value!;
       expect(settledState.isBusy, isFalse);
-      expect(settledState.activeOperationLabel, isNull);
+      expect(settledState.activeOperation, isNull);
       expect(repository.deletedFileIds, ['file-id']);
     },
   );
@@ -193,7 +194,7 @@ void main() {
 
     final failedState = container.read(fileBrowserControllerProvider).value!;
     expect(failedState.isBusy, isFalse);
-    expect(failedState.lastActionError?.operationLabel, '移入回收站');
+    expect(failedState.lastActionError?.operation, FileOperation.moveToRecycleBin);
     expect(failedState.lastActionError?.message, '存储配额不足');
     expect(failedState.lastActionError?.code, 'FILE_QUOTA_EXCEEDED');
   });

@@ -14981,6 +14981,372 @@ abstract class AppLocalizations {
   /// **'Open download page'**
   String get settingsOpenDownloadPage;
 
+  /// No description provided for @filesOpRefresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh file list'**
+  String get filesOpRefresh;
+
+  /// No description provided for @filesOpSwitchSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Switch space'**
+  String get filesOpSwitchSpace;
+
+  /// No description provided for @filesOpLoadRecent.
+  ///
+  /// In en, this message translates to:
+  /// **'Load recent files'**
+  String get filesOpLoadRecent;
+
+  /// No description provided for @filesOpLoadFavorites.
+  ///
+  /// In en, this message translates to:
+  /// **'Load favorite files'**
+  String get filesOpLoadFavorites;
+
+  /// No description provided for @filesOpLoadRecycleBin.
+  ///
+  /// In en, this message translates to:
+  /// **'Load recycle bin'**
+  String get filesOpLoadRecycleBin;
+
+  /// No description provided for @filesOpLoadShared.
+  ///
+  /// In en, this message translates to:
+  /// **'Load shared files'**
+  String get filesOpLoadShared;
+
+  /// No description provided for @filesOpLoadSharedSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Load shared space'**
+  String get filesOpLoadSharedSpace;
+
+  /// No description provided for @filesOpOpenSharedFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Open shared folder'**
+  String get filesOpOpenSharedFolder;
+
+  /// No description provided for @filesOpNavigateSharedUp.
+  ///
+  /// In en, this message translates to:
+  /// **'Navigate up in shared space'**
+  String get filesOpNavigateSharedUp;
+
+  /// No description provided for @filesOpMoveToSharedSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to shared space'**
+  String get filesOpMoveToSharedSpace;
+
+  /// No description provided for @filesOpMoveToPersonalSpace.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to personal space'**
+  String get filesOpMoveToPersonalSpace;
+
+  /// No description provided for @filesOpCreateSharedFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Create shared folder'**
+  String get filesOpCreateSharedFolder;
+
+  /// No description provided for @filesOpDeleteSharedFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete shared file'**
+  String get filesOpDeleteSharedFile;
+
+  /// No description provided for @filesOpLoadMyShares.
+  ///
+  /// In en, this message translates to:
+  /// **'Load my shares'**
+  String get filesOpLoadMyShares;
+
+  /// No description provided for @filesOpLoadShareLinks.
+  ///
+  /// In en, this message translates to:
+  /// **'Load share links'**
+  String get filesOpLoadShareLinks;
+
+  /// No description provided for @filesOpLoadStorageStats.
+  ///
+  /// In en, this message translates to:
+  /// **'Load storage stats'**
+  String get filesOpLoadStorageStats;
+
+  /// No description provided for @filesOpLoadUploadQueue.
+  ///
+  /// In en, this message translates to:
+  /// **'Load upload queue'**
+  String get filesOpLoadUploadQueue;
+
+  /// No description provided for @filesOpLoadOfflineDownloads.
+  ///
+  /// In en, this message translates to:
+  /// **'Load offline downloads'**
+  String get filesOpLoadOfflineDownloads;
+
+  /// No description provided for @filesOpLoadExternalStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Load external storage'**
+  String get filesOpLoadExternalStorage;
+
+  /// No description provided for @filesOpOpenFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Open folder'**
+  String get filesOpOpenFolder;
+
+  /// No description provided for @filesOpNavigateToRoot.
+  ///
+  /// In en, this message translates to:
+  /// **'Navigate to root'**
+  String get filesOpNavigateToRoot;
+
+  /// No description provided for @filesOpChangeDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Change directory'**
+  String get filesOpChangeDirectory;
+
+  /// No description provided for @filesOpFilterFileType.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter file type'**
+  String get filesOpFilterFileType;
+
+  /// No description provided for @filesOpLoadMore.
+  ///
+  /// In en, this message translates to:
+  /// **'Load more files'**
+  String get filesOpLoadMore;
+
+  /// No description provided for @filesOpCreateFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Create folder'**
+  String get filesOpCreateFolder;
+
+  /// No description provided for @filesOpRename.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename file'**
+  String get filesOpRename;
+
+  /// No description provided for @filesOpCopy.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy file'**
+  String get filesOpCopy;
+
+  /// No description provided for @filesOpMove.
+  ///
+  /// In en, this message translates to:
+  /// **'Move file'**
+  String get filesOpMove;
+
+  /// No description provided for @filesOpMoveToRecycleBin.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to recycle bin'**
+  String get filesOpMoveToRecycleBin;
+
+  /// No description provided for @filesOpRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore file'**
+  String get filesOpRestore;
+
+  /// No description provided for @filesOpPurge.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete permanently'**
+  String get filesOpPurge;
+
+  /// No description provided for @filesOpAddFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Add favorite'**
+  String get filesOpAddFavorite;
+
+  /// No description provided for @filesOpRemoveFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove favorite'**
+  String get filesOpRemoveFavorite;
+
+  /// No description provided for @filesOpBatchMoveToRecycleBin.
+  ///
+  /// In en, this message translates to:
+  /// **'Move selection to recycle bin'**
+  String get filesOpBatchMoveToRecycleBin;
+
+  /// No description provided for @filesOpBatchRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore selection'**
+  String get filesOpBatchRestore;
+
+  /// No description provided for @filesOpBatchPurge.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete selection permanently'**
+  String get filesOpBatchPurge;
+
+  /// No description provided for @filesOpBatchMove.
+  ///
+  /// In en, this message translates to:
+  /// **'Move selection'**
+  String get filesOpBatchMove;
+
+  /// No description provided for @filesOpBatchAddFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Add selection to favorites'**
+  String get filesOpBatchAddFavorite;
+
+  /// No description provided for @filesOpBatchRemoveFavorite.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove selection from favorites'**
+  String get filesOpBatchRemoveFavorite;
+
+  /// No description provided for @filesOpCreateShareLink.
+  ///
+  /// In en, this message translates to:
+  /// **'Create share link'**
+  String get filesOpCreateShareLink;
+
+  /// No description provided for @filesOpRevokeShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoke share'**
+  String get filesOpRevokeShare;
+
+  /// No description provided for @filesOpUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload files'**
+  String get filesOpUpload;
+
+  /// No description provided for @filesOpResumeUpload.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume upload'**
+  String get filesOpResumeUpload;
+
+  /// No description provided for @filesOpDeleteUploadTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete upload task'**
+  String get filesOpDeleteUploadTask;
+
+  /// No description provided for @filesOpCreateOfflineDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Create offline download'**
+  String get filesOpCreateOfflineDownload;
+
+  /// No description provided for @filesOpCancelOfflineDownload.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel offline download'**
+  String get filesOpCancelOfflineDownload;
+
+  /// No description provided for @filesOpAddExternalStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add external storage'**
+  String get filesOpAddExternalStorage;
+
+  /// No description provided for @filesOpDisableExternalStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable external storage'**
+  String get filesOpDisableExternalStorage;
+
+  /// No description provided for @filesOpDeleteMount.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete mount'**
+  String get filesOpDeleteMount;
+
+  /// No description provided for @filesOpUpdateExternalStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Update external storage'**
+  String get filesOpUpdateExternalStorage;
+
+  /// No description provided for @filesOpBrowseRemoteDirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Browse remote directory'**
+  String get filesOpBrowseRemoteDirectory;
+
+  /// No description provided for @filesOpOpenRemoteSubdirectory.
+  ///
+  /// In en, this message translates to:
+  /// **'Open remote subdirectory'**
+  String get filesOpOpenRemoteSubdirectory;
+
+  /// No description provided for @filesOpMkdirExternalStorage.
+  ///
+  /// In en, this message translates to:
+  /// **'Create remote folder'**
+  String get filesOpMkdirExternalStorage;
+
+  /// No description provided for @filesOpDeleteExternalFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete remote file'**
+  String get filesOpDeleteExternalFile;
+
+  /// No description provided for @filesOpRenameExternalFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename remote file'**
+  String get filesOpRenameExternalFile;
+
+  /// No description provided for @filesOpCreateImportTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Create import task'**
+  String get filesOpCreateImportTask;
+
+  /// No description provided for @filesOpLoadImportTasks.
+  ///
+  /// In en, this message translates to:
+  /// **'Load import tasks'**
+  String get filesOpLoadImportTasks;
+
+  /// No description provided for @filesOpCancelImportTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel import task'**
+  String get filesOpCancelImportTask;
+
+  /// No description provided for @filesOpDeleteImportTask.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete import task'**
+  String get filesOpDeleteImportTask;
+
+  /// No description provided for @filesOpImportMedia.
+  ///
+  /// In en, this message translates to:
+  /// **'Import media'**
+  String get filesOpImportMedia;
+
+  /// No description provided for @filesOpDeleteFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete file'**
+  String get filesOpDeleteFile;
+
   /// No description provided for @musicQueueTitle.
   ///
   /// In en, this message translates to:

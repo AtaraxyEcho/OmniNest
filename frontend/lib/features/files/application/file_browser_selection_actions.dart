@@ -68,7 +68,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> createFolder(String name) async {
-    await _runAction('新建文件夹', () async {
+    await _runAction(FileOperation.createFolder, () async {
       final current = _currentState;
       if (current?.spaceType == 'SHARED') {
         await _repository.createSharedFolder(
@@ -83,7 +83,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> renameFile(FileNode file, String name) async {
-    await _runAction('重命名文件', () async {
+    await _runAction(FileOperation.rename, () async {
       final current = _currentState;
       if (current?.spaceType == 'SHARED') {
         await _repository.renameSharedFile(fileId: file.id, name: name);
@@ -96,7 +96,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
 
   /// 复制文件到目标目录（null 表示根目录）。
   Future<void> copyFile(FileNode file, String? targetParentId) async {
-    await _runAction('复制文件', () async {
+    await _runAction(FileOperation.copy, () async {
       await _repository.copyFile(
         fileId: file.id,
         targetParentId: targetParentId,
@@ -107,7 +107,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> moveFile(FileNode file, String targetParentId) async {
-    await _runAction('移动文件', () async {
+    await _runAction(FileOperation.move, () async {
       await _repository.moveFile(fileId: file.id, parentId: targetParentId);
       _clearSelection();
       await refreshFileNodesForCurrentSection();
@@ -119,7 +119,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> deleteFile(FileNode file) async {
-    await _runAction('移入回收站', () async {
+    await _runAction(FileOperation.moveToRecycleBin, () async {
       final current = _currentState;
       if (current?.spaceType == 'SHARED') {
         await _repository.deleteSharedFile(file.id);
@@ -132,28 +132,28 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> restoreFile(FileNode file) async {
-    await _runAction('恢复文件', () async {
+    await _runAction(FileOperation.restore, () async {
       await _repository.restoreFile(file.id);
       await showRecycleBin();
     });
   }
 
   Future<void> purgeFile(FileNode file) async {
-    await _runAction('彻底删除', () async {
+    await _runAction(FileOperation.purge, () async {
       await _repository.purgeFile(file.id);
       await showRecycleBin();
     });
   }
 
   Future<void> addFavorite(FileNode file) async {
-    await _runAction('添加收藏', () async {
+    await _runAction(FileOperation.addFavorite, () async {
       await _repository.addFavorite(file.id);
       await _refreshFavoritesData();
     });
   }
 
   Future<void> removeFavorite(FileNode file) async {
-    await _runAction('取消收藏', () async {
+    await _runAction(FileOperation.removeFavorite, () async {
       await _repository.removeFavorite(file.id);
       await _refreshFavoritesData();
     });
@@ -178,7 +178,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     if (ids == null || ids.isEmpty) {
       return;
     }
-    await _runAction('批量移入回收站', () async {
+    await _runAction(FileOperation.batchMoveToRecycleBin, () async {
       await _repository.batchDeleteFiles(ids.toList());
       _clearSelection();
       await refreshFileNodesForCurrentSection();
@@ -190,7 +190,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     if (ids == null || ids.isEmpty) {
       return;
     }
-    await _runAction('批量恢复', () async {
+    await _runAction(FileOperation.batchRestore, () async {
       await _repository.batchRestoreFiles(ids.toList());
       _clearSelection();
       await showRecycleBin();
@@ -202,7 +202,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     if (ids == null || ids.isEmpty) {
       return;
     }
-    await _runAction('批量彻底删除', () async {
+    await _runAction(FileOperation.batchPurge, () async {
       await _repository.batchPurgeFiles(ids.toList());
       _clearSelection();
       await showRecycleBin();
@@ -214,7 +214,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     if (ids == null || ids.isEmpty) {
       return;
     }
-    await _runAction('批量移动', () async {
+    await _runAction(FileOperation.batchMove, () async {
       await _repository.batchMoveFiles(ids.toList(), targetParentId);
       _clearSelection();
       await refreshFileNodesForCurrentSection();
@@ -226,7 +226,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     if (ids == null || ids.isEmpty) {
       return;
     }
-    await _runAction('批量添加收藏', () async {
+    await _runAction(FileOperation.batchAddFavorite, () async {
       await _repository.batchAddFavorites(ids.toList());
       _clearSelection();
       await _refreshFavoritesData();
@@ -238,7 +238,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
     if (ids == null || ids.isEmpty) {
       return;
     }
-    await _runAction('批量取消收藏', () async {
+    await _runAction(FileOperation.batchRemoveFavorite, () async {
       await _repository.batchRemoveFavorites(ids.toList());
       _clearSelection();
       await _refreshFavoritesData();
@@ -246,7 +246,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<FileShareLink> createShareLink(FileNode file) async {
-    return _runAction('创建分享链接', () async {
+    return _runAction(FileOperation.createShareLink, () async {
       final share = await _repository.createShareLink(
         resourceId: file.id,
         resourceType: file.isFolder ? 'FOLDER' : 'FILE',
@@ -261,7 +261,7 @@ extension FileBrowserSelectionActions on FileBrowserController {
   }
 
   Future<void> revokeShare(FileShareLink share) async {
-    await _runAction('撤销分享', () async {
+    await _runAction(FileOperation.revokeShare, () async {
       await _repository.revokeShare(share.id);
       if (_currentState?.section == FileManagerSection.shareManagement) {
         await showShareLinks();

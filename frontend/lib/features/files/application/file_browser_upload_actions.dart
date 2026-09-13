@@ -8,7 +8,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     String? sha256,
     int? partSizeBytes,
   }) async {
-    return _runAction('创建上传会话', () async {
+    return _runAction(FileOperation.createUploadSession, () async {
       final current = _currentState;
       // 根据当前空间决定上传目标
       final isShared = current?.spaceType == 'SHARED';
@@ -34,7 +34,7 @@ extension FileBrowserUploadActions on FileBrowserController {
     FileUploadSession session, {
     String? sha256,
   }) async {
-    await _runAction('完成上传会话', () async {
+    await _runAction(FileOperation.completeUploadSession, () async {
       await _repository.completeUploadSession(
         sessionId: session.uploadId,
         sha256: sha256,
@@ -67,7 +67,7 @@ extension FileBrowserUploadActions on FileBrowserController {
   }
 
   Future<void> resumeLocalUploadTask(String taskId) async {
-    await _runAction('继续上传', () async {
+    await _runAction(FileOperation.resumeUpload, () async {
       final runtime = _uploadRuntimes[taskId];
       final task = _findLocalUploadTask(taskId);
       if (runtime == null || task == null || runtime.removed) {
@@ -88,7 +88,7 @@ extension FileBrowserUploadActions on FileBrowserController {
   }
 
   Future<void> removeLocalUploadTask(String taskId) async {
-    await _runAction('删除上传任务', () async {
+    await _runAction(FileOperation.deleteUploadTask, () async {
       final runtime = _uploadRuntimes.remove(taskId);
       runtime?.removed = true;
       runtime?.activeCancellation?.cancel();
@@ -109,7 +109,7 @@ extension FileBrowserUploadActions on FileBrowserController {
   }
 
   Future<void> deleteServerUploadSession(FileUploadQueueItem item) async {
-    await _runAction('删除服务器会话', () async {
+    await _runAction(FileOperation.deleteServerSession, () async {
       await _repository.cancelUploadSession(item.uploadId);
       final current = _currentState;
       if (current == null) {
@@ -204,7 +204,7 @@ extension FileBrowserUploadActions on FileBrowserController {
           }
         } catch (error) {
           failed += 1;
-          _recordActionError('上传文件', error);
+          _recordActionError(FileOperation.upload, error);
         }
       }
       final currentSection = _currentState?.section;
@@ -221,7 +221,7 @@ extension FileBrowserUploadActions on FileBrowserController {
         paused: paused,
       );
     } catch (error) {
-      _recordActionError('上传文件', error);
+      _recordActionError(FileOperation.upload, error);
       rethrow;
     }
   }

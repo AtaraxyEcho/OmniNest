@@ -111,7 +111,7 @@ class _FileActionStatusBar extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  error.operationLabel,
+                  filesOperationLabel(l10n, error.operation),
                   style: Theme.of(
                     context,
                   ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),

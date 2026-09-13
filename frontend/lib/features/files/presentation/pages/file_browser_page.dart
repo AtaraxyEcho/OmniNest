@@ -30,6 +30,7 @@ import 'package:omninest/features/files/application/file_browser_controller.dart
 import 'package:omninest/features/files/application/share_link_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:omninest/features/files/presentation/widgets/file_grid.dart';
 import 'package:omninest/features/files/presentation/widgets/file_list.dart';
@@ -40,6 +41,7 @@ import 'package:omninest/features/files/presentation/widgets/share_link_sheet.da
 import 'package:omninest/features/files/presentation/widgets/upload_panel.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 
+part 'files_operation_l10n.dart';
 part 'file_browser_page_navigation.dart';
 part 'file_browser_page_workspace.dart';
 part 'file_browser_page_upload.dart';

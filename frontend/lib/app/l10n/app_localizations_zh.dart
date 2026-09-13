@@ -7935,6 +7935,189 @@ class AppLocalizationsZh extends AppLocalizations {
   String get settingsOpenDownloadPage => '打开下载页';
 
   @override
+  String get filesOpRefresh => '刷新文件列表';
+
+  @override
+  String get filesOpSwitchSpace => '切换空间';
+
+  @override
+  String get filesOpLoadRecent => '加载最近文件';
+
+  @override
+  String get filesOpLoadFavorites => '加载收藏文件';
+
+  @override
+  String get filesOpLoadRecycleBin => '加载回收站';
+
+  @override
+  String get filesOpLoadShared => '加载共享文件';
+
+  @override
+  String get filesOpLoadSharedSpace => '加载共享空间';
+
+  @override
+  String get filesOpOpenSharedFolder => '打开共享空间文件夹';
+
+  @override
+  String get filesOpNavigateSharedUp => '返回共享空间上级';
+
+  @override
+  String get filesOpMoveToSharedSpace => '移到共享空间';
+
+  @override
+  String get filesOpMoveToPersonalSpace => '移到个人空间';
+
+  @override
+  String get filesOpCreateSharedFolder => '创建共享空间文件夹';
+
+  @override
+  String get filesOpDeleteSharedFile => '删除共享空间文件';
+
+  @override
+  String get filesOpLoadMyShares => '加载我的分享';
+
+  @override
+  String get filesOpLoadShareLinks => '加载分享链接';
+
+  @override
+  String get filesOpLoadStorageStats => '加载存储统计';
+
+  @override
+  String get filesOpLoadUploadQueue => '加载上传队列';
+
+  @override
+  String get filesOpLoadOfflineDownloads => '加载离线下载';
+
+  @override
+  String get filesOpLoadExternalStorage => '加载外部存储';
+
+  @override
+  String get filesOpOpenFolder => '打开文件夹';
+
+  @override
+  String get filesOpNavigateToRoot => '返回根目录';
+
+  @override
+  String get filesOpChangeDirectory => '切换目录';
+
+  @override
+  String get filesOpFilterFileType => '筛选文件类型';
+
+  @override
+  String get filesOpLoadMore => '加载更多文件';
+
+  @override
+  String get filesOpCreateFolder => '新建文件夹';
+
+  @override
+  String get filesOpRename => '重命名文件';
+
+  @override
+  String get filesOpCopy => '复制文件';
+
+  @override
+  String get filesOpMove => '移动文件';
+
+  @override
+  String get filesOpMoveToRecycleBin => '移入回收站';
+
+  @override
+  String get filesOpRestore => '恢复文件';
+
+  @override
+  String get filesOpPurge => '彻底删除';
+
+  @override
+  String get filesOpAddFavorite => '添加收藏';
+
+  @override
+  String get filesOpRemoveFavorite => '取消收藏';
+
+  @override
+  String get filesOpBatchMoveToRecycleBin => '批量移入回收站';
+
+  @override
+  String get filesOpBatchRestore => '批量恢复';
+
+  @override
+  String get filesOpBatchPurge => '批量彻底删除';
+
+  @override
+  String get filesOpBatchMove => '批量移动';
+
+  @override
+  String get filesOpBatchAddFavorite => '批量添加收藏';
+
+  @override
+  String get filesOpBatchRemoveFavorite => '批量取消收藏';
+
+  @override
+  String get filesOpCreateShareLink => '创建分享链接';
+
+  @override
+  String get filesOpRevokeShare => '撤销分享';
+
+  @override
+  String get filesOpUpload => '上传文件';
+
+  @override
+  String get filesOpResumeUpload => '继续上传';
+
+  @override
+  String get filesOpDeleteUploadTask => '删除上传任务';
+
+  @override
+  String get filesOpCreateOfflineDownload => '新建离线下载';
+
+  @override
+  String get filesOpCancelOfflineDownload => '取消离线下载';
+
+  @override
+  String get filesOpAddExternalStorage => '添加外部存储';
+
+  @override
+  String get filesOpDisableExternalStorage => '禁用外部存储';
+
+  @override
+  String get filesOpDeleteMount => '删除挂载';
+
+  @override
+  String get filesOpUpdateExternalStorage => '更新外部存储';
+
+  @override
+  String get filesOpBrowseRemoteDirectory => '浏览远程目录';
+
+  @override
+  String get filesOpOpenRemoteSubdirectory => '打开远程子目录';
+
+  @override
+  String get filesOpMkdirExternalStorage => '创建远程目录';
+
+  @override
+  String get filesOpDeleteExternalFile => '删除远程文件';
+
+  @override
+  String get filesOpRenameExternalFile => '重命名远程文件';
+
+  @override
+  String get filesOpCreateImportTask => '创建导入任务';
+
+  @override
+  String get filesOpLoadImportTasks => '加载导入任务';
+
+  @override
+  String get filesOpCancelImportTask => '取消导入任务';
+
+  @override
+  String get filesOpDeleteImportTask => '删除导入任务';
+
+  @override
+  String get filesOpImportMedia => '导入媒体';
+
+  @override
+  String get filesOpDeleteFile => '删除文件';
+
+  @override
   String get musicQueueTitle => '播放队列';
 
   @override

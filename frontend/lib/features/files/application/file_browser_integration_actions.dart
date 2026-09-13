@@ -12,7 +12,7 @@ typedef _ExternalBrowseContext =
 
 extension FileBrowserIntegrationActions on FileBrowserController {
   Future<void> createOfflineDownload(String sourceUri) async {
-    await _runAction('新建离线下载', () async {
+    await _runAction(FileOperation.createOfflineDownload, () async {
       await _repository.createOfflineDownload(
         sourceUri: sourceUri,
         targetParentId: _currentState?.parentId,
@@ -25,7 +25,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     if (!task.canCancel) {
       return;
     }
-    await _runAction('取消离线下载', () async {
+    await _runAction(FileOperation.cancelOfflineDownload, () async {
       final current = _currentState;
       if (current != null) {
         _emitState(
@@ -52,7 +52,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     required String displayName,
     required String encryptedCredentials,
   }) async {
-    await _runAction('添加外部存储', () async {
+    await _runAction(FileOperation.addExternalStorage, () async {
       await _repository.createExternalStorage(
         provider: provider,
         displayName: displayName,
@@ -63,14 +63,14 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   }
 
   Future<void> disableExternalStorage(ExternalStorageAccount account) async {
-    await _runAction('禁用外部存储', () async {
+    await _runAction(FileOperation.disableExternalStorage, () async {
       await _repository.disableExternalStorage(account.id);
       await showExternalStorage();
     });
   }
 
   Future<void> deleteExternalStorage(ExternalStorageAccount account) async {
-    await _runAction('删除挂载', () async {
+    await _runAction(FileOperation.deleteMount, () async {
       await _repository.deleteExternalStorage(account.id);
       await showExternalStorage();
     });
@@ -81,7 +81,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     required String displayName,
     required String encryptedCredentials,
   }) async {
-    await _runAction('更新外部存储', () async {
+    await _runAction(FileOperation.updateExternalStorage, () async {
       await _repository.updateExternalStorage(
         accountId: accountId,
         displayName: displayName,
@@ -98,13 +98,17 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     await _loadExternalDirectory(
       accountId,
       path,
-      operationLabel: '浏览远程目录',
+      operationLabel: FileOperation.browseRemoteDirectory,
       loadSpace: true,
     );
   }
 
   Future<void> browseExternalSubdirectory(String accountId, String path) async {
-    await _loadExternalDirectory(accountId, path, operationLabel: '打开远程子目录');
+    await _loadExternalDirectory(
+      accountId,
+      path,
+      operationLabel: FileOperation.openRemoteSubdirectory,
+    );
   }
 
   void closeExternalBrowse() {
@@ -128,7 +132,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   Future<void> _loadExternalDirectory(
     String accountId,
     String path, {
-    required String operationLabel,
+    required FileOperation operationLabel,
     bool loadSpace = false,
   }) async {
     final current = _currentState;
@@ -212,7 +216,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   /// 创建远程目录
   Future<void> mkdirExternalStorage(String accountId, String remotePath) async {
     await _runExternalMutation(
-      operationLabel: '创建远程目录',
+      operationLabel: FileOperation.mkdirExternalStorage,
       accountId: accountId,
       mutation: () => _repository.mkdirExternalStorage(accountId, remotePath),
     );
@@ -221,7 +225,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   /// 删除远程文件
   Future<void> deleteExternalFile(String accountId, String remotePath) async {
     await _runExternalMutation(
-      operationLabel: '删除远程文件',
+      operationLabel: FileOperation.deleteExternalFile,
       accountId: accountId,
       mutation: () => _repository.deleteExternalFile(accountId, remotePath),
       loadSpace: true,
@@ -235,7 +239,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     required String newName,
   }) async {
     await _runExternalMutation(
-      operationLabel: '重命名远程文件',
+      operationLabel: FileOperation.renameExternalFile,
       accountId: accountId,
       mutation:
           () => _repository.renameExternalFile(
@@ -247,7 +251,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   }
 
   Future<void> _runExternalMutation({
-    required String operationLabel,
+    required FileOperation operationLabel,
     required String accountId,
     required Future<void> Function() mutation,
     bool loadSpace = false,
@@ -295,7 +299,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
 
   Future<void> _refreshExternalBrowseAfterMutation(
     _ExternalBrowseContext previousContext, {
-    required String operationLabel,
+    required FileOperation operationLabel,
     required bool loadSpace,
   }) async {
     final refreshContext = (
@@ -323,7 +327,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
       _emitState(latest.copyWith(externalFiles: files, externalSpace: space));
     } on Object catch (error) {
       if (_isExternalBrowseContextCurrent(refreshContext)) {
-        _recordActionError('$operationLabel后刷新', error);
+        _recordActionError(operationLabel, error);
       }
     }
   }
@@ -334,7 +338,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     required String sourceKind,
     String? spaceType,
   }) async {
-    await _runAction('创建导入任务', () async {
+    await _runAction(FileOperation.createImportTask, () async {
       final current = _currentState;
       final isShared = spaceType == 'SHARED';
       final task = await _repository.createImportTask(
@@ -360,7 +364,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   }
 
   Future<void> showImportTasks() async {
-    await _runAction('加载导入任务', () async {
+    await _runAction(FileOperation.loadImportTasks, () async {
       final current = _currentState;
       final tasks = await _repository.listImportTasks();
       _emitState(
@@ -469,7 +473,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     if (!task.canCancel) {
       return;
     }
-    await _runAction('取消导入任务', () async {
+    await _runAction(FileOperation.cancelImportTask, () async {
       final current = _currentState;
       if (current != null) {
         _emitState(
@@ -492,7 +496,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
   }
 
   Future<void> deleteImportTask(ImportTask task) async {
-    await _runAction('删除导入任务', () async {
+    await _runAction(FileOperation.deleteImportTask, () async {
       await _repository.cancelImportTask(task.id);
       await showImportTasks();
     });

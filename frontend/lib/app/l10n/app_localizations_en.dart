@@ -8177,6 +8177,189 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsOpenDownloadPage => 'Open download page';
 
   @override
+  String get filesOpRefresh => 'Refresh file list';
+
+  @override
+  String get filesOpSwitchSpace => 'Switch space';
+
+  @override
+  String get filesOpLoadRecent => 'Load recent files';
+
+  @override
+  String get filesOpLoadFavorites => 'Load favorite files';
+
+  @override
+  String get filesOpLoadRecycleBin => 'Load recycle bin';
+
+  @override
+  String get filesOpLoadShared => 'Load shared files';
+
+  @override
+  String get filesOpLoadSharedSpace => 'Load shared space';
+
+  @override
+  String get filesOpOpenSharedFolder => 'Open shared folder';
+
+  @override
+  String get filesOpNavigateSharedUp => 'Navigate up in shared space';
+
+  @override
+  String get filesOpMoveToSharedSpace => 'Move to shared space';
+
+  @override
+  String get filesOpMoveToPersonalSpace => 'Move to personal space';
+
+  @override
+  String get filesOpCreateSharedFolder => 'Create shared folder';
+
+  @override
+  String get filesOpDeleteSharedFile => 'Delete shared file';
+
+  @override
+  String get filesOpLoadMyShares => 'Load my shares';
+
+  @override
+  String get filesOpLoadShareLinks => 'Load share links';
+
+  @override
+  String get filesOpLoadStorageStats => 'Load storage stats';
+
+  @override
+  String get filesOpLoadUploadQueue => 'Load upload queue';
+
+  @override
+  String get filesOpLoadOfflineDownloads => 'Load offline downloads';
+
+  @override
+  String get filesOpLoadExternalStorage => 'Load external storage';
+
+  @override
+  String get filesOpOpenFolder => 'Open folder';
+
+  @override
+  String get filesOpNavigateToRoot => 'Navigate to root';
+
+  @override
+  String get filesOpChangeDirectory => 'Change directory';
+
+  @override
+  String get filesOpFilterFileType => 'Filter file type';
+
+  @override
+  String get filesOpLoadMore => 'Load more files';
+
+  @override
+  String get filesOpCreateFolder => 'Create folder';
+
+  @override
+  String get filesOpRename => 'Rename file';
+
+  @override
+  String get filesOpCopy => 'Copy file';
+
+  @override
+  String get filesOpMove => 'Move file';
+
+  @override
+  String get filesOpMoveToRecycleBin => 'Move to recycle bin';
+
+  @override
+  String get filesOpRestore => 'Restore file';
+
+  @override
+  String get filesOpPurge => 'Delete permanently';
+
+  @override
+  String get filesOpAddFavorite => 'Add favorite';
+
+  @override
+  String get filesOpRemoveFavorite => 'Remove favorite';
+
+  @override
+  String get filesOpBatchMoveToRecycleBin => 'Move selection to recycle bin';
+
+  @override
+  String get filesOpBatchRestore => 'Restore selection';
+
+  @override
+  String get filesOpBatchPurge => 'Delete selection permanently';
+
+  @override
+  String get filesOpBatchMove => 'Move selection';
+
+  @override
+  String get filesOpBatchAddFavorite => 'Add selection to favorites';
+
+  @override
+  String get filesOpBatchRemoveFavorite => 'Remove selection from favorites';
+
+  @override
+  String get filesOpCreateShareLink => 'Create share link';
+
+  @override
+  String get filesOpRevokeShare => 'Revoke share';
+
+  @override
+  String get filesOpUpload => 'Upload files';
+
+  @override
+  String get filesOpResumeUpload => 'Resume upload';
+
+  @override
+  String get filesOpDeleteUploadTask => 'Delete upload task';
+
+  @override
+  String get filesOpCreateOfflineDownload => 'Create offline download';
+
+  @override
+  String get filesOpCancelOfflineDownload => 'Cancel offline download';
+
+  @override
+  String get filesOpAddExternalStorage => 'Add external storage';
+
+  @override
+  String get filesOpDisableExternalStorage => 'Disable external storage';
+
+  @override
+  String get filesOpDeleteMount => 'Delete mount';
+
+  @override
+  String get filesOpUpdateExternalStorage => 'Update external storage';
+
+  @override
+  String get filesOpBrowseRemoteDirectory => 'Browse remote directory';
+
+  @override
+  String get filesOpOpenRemoteSubdirectory => 'Open remote subdirectory';
+
+  @override
+  String get filesOpMkdirExternalStorage => 'Create remote folder';
+
+  @override
+  String get filesOpDeleteExternalFile => 'Delete remote file';
+
+  @override
+  String get filesOpRenameExternalFile => 'Rename remote file';
+
+  @override
+  String get filesOpCreateImportTask => 'Create import task';
+
+  @override
+  String get filesOpLoadImportTasks => 'Load import tasks';
+
+  @override
+  String get filesOpCancelImportTask => 'Cancel import task';
+
+  @override
+  String get filesOpDeleteImportTask => 'Delete import task';
+
+  @override
+  String get filesOpImportMedia => 'Import media';
+
+  @override
+  String get filesOpDeleteFile => 'Delete file';
+
+  @override
   String get musicQueueTitle => 'Play Queue';
 
   @override

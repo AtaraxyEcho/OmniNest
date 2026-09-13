@@ -8,6 +8,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/files/application/file_browser_models.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
+import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
@@ -93,22 +94,22 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<T> _runAction<T>(
-    String operationLabel,
+    FileOperation operation,
     Future<T> Function() action,
   ) async {
-    _setBusy(operationLabel);
+    _setBusy(operation);
     try {
       final result = await action();
       _clearBusy();
       return result;
     } catch (error) {
-      _recordActionError(operationLabel, error);
+      _recordActionError(operation, error);
       _clearBusy();
       rethrow;
     }
   }
 
-  void _setBusy(String operationLabel) {
+  void _setBusy(FileOperation operation) {
     final current = state.asData?.value;
     if (current == null) {
       return;
@@ -116,7 +117,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     state = AsyncData(
       current.copyWith(
         activeActionCount: current.activeActionCount + 1,
-        activeOperationLabel: operationLabel,
+        activeOperation: operation,
         clearLastActionError: true,
       ),
     );
@@ -137,7 +138,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     );
   }
 
-  void _recordActionError(String operationLabel, Object error) {
+  void _recordActionError(FileOperation operation, Object error) {
     final current = state.asData?.value;
     if (current == null) {
       return;
@@ -146,7 +147,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     state = AsyncData(
       current.copyWith(
         lastActionError: FileBrowserActionError(
-          operationLabel: operationLabel,
+          operation: operation,
           message: described.message,
           code: described.code,
         ),
@@ -156,7 +157,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   /// 刷新文件列表数据，保留当前分区、目录、筛选条件与已加载分页窗口。
   Future<void> refreshFiles() async {
-    await _runAction('刷新文件列表', () async {
+    await _runAction(FileOperation.refresh, () async {
       final current = state.asData?.value;
       final parentId = current?.parentId;
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
@@ -267,7 +268,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   /// 切换个人空间/共享空间。
   Future<void> switchSpace(String newSpaceType) async {
     _clearSelection();
-    await _runAction('切换空间', () async {
+    await _runAction(FileOperation.switchSpace, () async {
       final current = state.asData?.value;
       if (current == null) return;
 
@@ -332,7 +333,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> showRecentFiles() async {
     _clearSelection();
-    await _runAction('加载最近文件', () async {
+    await _runAction(FileOperation.loadRecent, () async {
       final current = state.asData?.value;
       final recentFiles = await _repository.listRecentFiles();
       state = AsyncData(
@@ -347,7 +348,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> showFavoriteFiles() async {
     _clearSelection();
-    await _runAction('加载收藏文件', () async {
+    await _runAction(FileOperation.loadFavorites, () async {
       final current = state.asData?.value;
       final favoriteFiles = await _repository.listFavoriteFiles();
       state = AsyncData(
@@ -362,7 +363,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> showRecycleBin() async {
     _clearSelection();
-    await _runAction('加载回收站', () async {
+    await _runAction(FileOperation.loadRecycleBin, () async {
       final current = state.asData?.value;
       final spaceType = current?.spaceType ?? 'PERSONAL';
       final recycleBin = await _repository.listRecycleBin(spaceType: spaceType);
@@ -377,7 +378,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showSharedWithMe() async {
-    await _runAction('加载共享文件', () async {
+    await _runAction(FileOperation.loadShared, () async {
       final current = state.asData?.value;
       final sharedWithMe = await _repository.listSharedWithMe();
       state = AsyncData(
@@ -391,7 +392,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> showSharedSpace() async {
     _clearSelection();
-    await _runAction('加载共享空间', () async {
+    await _runAction(FileOperation.loadSharedSpace, () async {
       final current = state.asData?.value;
       final files = await _repository.listSharedSpaceFiles();
       final usage = await _repository.getSharedSpaceUsage();
@@ -409,7 +410,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> openSharedSpaceFolder(FileNode folder) async {
     _clearSelection();
-    await _runAction('打开共享空间文件夹', () async {
+    await _runAction(FileOperation.openSharedFolder, () async {
       final current = state.asData?.value;
       final files = await _repository.listSharedSpaceFiles(parentId: folder.id);
       final currentBreadcrumbs = current?.sharedSpaceBreadcrumbs ?? [];
@@ -430,7 +431,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
     final targetBreadcrumbs = breadcrumbs.sublist(0, index);
     final parentId =
         targetBreadcrumbs.isEmpty ? null : targetBreadcrumbs.last.id;
-    await _runAction('返回共享空间上级', () async {
+    await _runAction(FileOperation.navigateSharedUp, () async {
       final files = await _repository.listSharedSpaceFiles(parentId: parentId);
       state = AsyncData(
         (current ?? const FileBrowserState(files: [], recycleBin: [])).copyWith(
@@ -442,21 +443,21 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> moveToSharedSpace(FileNode file) async {
-    await _runAction('移到共享空间', () async {
+    await _runAction(FileOperation.moveToSharedSpace, () async {
       await _repository.moveToSharedSpace(file.id);
       await refreshFileNodesForCurrentSection();
     });
   }
 
   Future<void> moveToPersonalSpace(FileNode file) async {
-    await _runAction('移到个人空间', () async {
+    await _runAction(FileOperation.moveToPersonalSpace, () async {
       await _repository.moveToPersonalSpace(file.id);
       await refreshFileNodesForCurrentSection();
     });
   }
 
   Future<void> createSharedFolder(String name) async {
-    await _runAction('创建共享空间文件夹', () async {
+    await _runAction(FileOperation.createSharedFolder, () async {
       final current = state.asData?.value;
       final parentId =
           current?.sharedSpaceBreadcrumbs.isEmpty ?? true
@@ -473,7 +474,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> deleteSharedFile(FileNode file) async {
-    await _runAction('删除共享空间文件', () async {
+    await _runAction(FileOperation.deleteSharedFile, () async {
       await _repository.deleteSharedFile(file.id);
       final current = state.asData?.value;
       final parentId =
@@ -492,7 +493,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showMyShares() async {
-    await _runAction('加载我的分享', () async {
+    await _runAction(FileOperation.loadMyShares, () async {
       final current = state.asData?.value;
       final myShares = await _repository.listMyShares();
       state = AsyncData(
@@ -505,7 +506,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showShareLinks() async {
-    await _runAction('加载分享链接', () async {
+    await _runAction(FileOperation.loadShareLinks, () async {
       final current = state.asData?.value;
       final shareLinks = await _repository.listShareLinks();
       state = AsyncData(
@@ -518,7 +519,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showStorageStats() async {
-    await _runAction('加载存储统计', () async {
+    await _runAction(FileOperation.loadStorageStats, () async {
       final current = state.asData?.value;
       final stats = await _repository.storageStats();
       state = AsyncData(
@@ -531,7 +532,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showUploadQueue() async {
-    await _runAction('加载上传队列', () async {
+    await _runAction(FileOperation.loadUploadQueue, () async {
       final current = state.asData?.value;
       final uploadQueue = await _repository.listUploadQueue();
       state = AsyncData(
@@ -544,7 +545,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showOfflineDownloads() async {
-    await _runAction('加载离线下载', () async {
+    await _runAction(FileOperation.loadOfflineDownloads, () async {
       final current = state.asData?.value;
       final offlineTasks = await _repository.listOfflineDownloads();
       state = AsyncData(
@@ -557,7 +558,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   }
 
   Future<void> showExternalStorage() async {
-    await _runAction('加载外部存储', () async {
+    await _runAction(FileOperation.loadExternalStorage, () async {
       final current = state.asData?.value;
       final externalAccounts = await _repository.listExternalStorages();
       state = AsyncData(
@@ -574,7 +575,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       return;
     }
     _clearSelection();
-    await _runAction('打开文件夹', () async {
+    await _runAction(FileOperation.openFolder, () async {
       final current = state.asData?.value;
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
       final filesPage = await _listFilePageForSpace(
@@ -601,7 +602,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> goToRoot() async {
     _clearSelection();
-    await _runAction('返回根目录', () async {
+    await _runAction(FileOperation.navigateToRoot, () async {
       final current = state.asData?.value;
       final category = current?.fileCategory ?? FileBrowserFileCategory.all;
       final filesPage = await _listFilePageForSpace(
@@ -643,7 +644,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       return;
     }
     _clearSelection();
-    await _runAction('切换目录', () async {
+    await _runAction(FileOperation.changeDirectory, () async {
       final currentState = state.asData?.value;
       if (currentState == null ||
           index < 0 ||
@@ -674,7 +675,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
 
   Future<void> setFileCategory(FileBrowserFileCategory category) async {
     _clearSelection();
-    await _runAction('筛选文件类型', () async {
+    await _runAction(FileOperation.filterFileType, () async {
       final current = state.asData?.value;
       final categoryForRequest = category;
       final filesPage = await _listFilePageForSpace(
@@ -761,7 +762,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       if (latest != null) {
         state = AsyncData(latest.copyWith(isLoadingMoreFiles: false));
       }
-      _recordActionError('加载更多文件', error);
+      _recordActionError(FileOperation.loadMore, error);
       rethrow;
     }
   }
