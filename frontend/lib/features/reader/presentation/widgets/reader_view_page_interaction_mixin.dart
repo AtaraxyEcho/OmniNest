@@ -209,6 +209,7 @@ mixin ReaderViewPageInteractionMixin
           textScale: MediaQuery.textScalerOf(context).scale(1.0),
         );
       }
+      invalidateContinuousWindowFingerprint();
       rebuildContinuousWindow();
       return;
     }
@@ -221,7 +222,11 @@ mixin ReaderViewPageInteractionMixin
         settings: settings,
         textScale: MediaQuery.textScalerOf(context).scale(1.0),
       );
+      invalidateContinuousWindowFingerprint();
       rebuildContinuousWindow();
+      if (mounted) {
+        setState(() {});
+      }
     }());
   }
 

@@ -115,10 +115,9 @@ class _ReaderContinuousScrollViewState
     if (onExpand == null) {
       return;
     }
-    if (widget.controller.shouldExpandForward(
-      position.pixels,
-      position.viewportDimension,
-    )) {
+    // 以实际 maxScrollExtent 为准：窗口 totalHeight 含估算，与真实布局可能不一致。
+    final max = position.maxScrollExtent;
+    if (max > 0 && position.pixels + position.viewportDimension * 1.5 >= max) {
       onExpand(forward: true);
     } else if (widget.controller.shouldExpandBackward(position.pixels)) {
       onExpand(forward: false);
@@ -201,11 +200,14 @@ class _ReaderContinuousScrollViewState
         ),
       );
       if (!entry.isReady) {
+        // 未就绪章占用估算高度，保证 maxScrollExtent 与窗口 totalHeight 一致，
+        // 用户可继续滚入并触发扩挂，而不是卡在小 spinner 上。
+        final estimated = entry.totalHeight.clamp(120.0, 4000.0);
         slivers.add(
           SliverToBoxAdapter(
             key: ValueKey('ch-loading-${entry.chapterId}'),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 48),
+            child: SizedBox(
+              height: estimated,
               child: Center(
                 child: SizedBox(
                   width: 22,

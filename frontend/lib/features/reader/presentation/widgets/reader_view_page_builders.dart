@@ -1071,6 +1071,16 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (timeSincePointerDown < 800) {
       return;
     }
+    // 滚轮/触控板滚动：offset 持续变化时也不补偿，避免与用户抢位置。
+    final nowOffset =
+        scrollController.hasClients ? scrollController.offset : -1.0;
+    if (nowOffset >= 0 &&
+        _lastCompensationObservedOffset >= 0 &&
+        (nowOffset - _lastCompensationObservedOffset).abs() > 1.0) {
+      _lastCompensationObservedOffset = nowOffset;
+      return;
+    }
+    _lastCompensationObservedOffset = nowOffset;
     final nextPrefix = continuousScrollController.prefixHeightOf(
       currentChapterId,
     );
@@ -1086,8 +1096,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       final max = scrollController.position.maxScrollExtent;
       final target = (scrollController.offset + captured).clamp(0.0, max);
       scrollController.jumpTo(target);
+      _lastCompensationObservedOffset = target;
     });
   }
+
+  double _lastCompensationObservedOffset = -1;
 
   Map<String, List<ReaderAnnotation>> _continuousAnnotationsByChapter() {
     final loader = contentLoader;
