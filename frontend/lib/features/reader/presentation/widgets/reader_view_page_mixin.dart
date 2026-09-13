@@ -87,6 +87,10 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   set restoreSilenceUntil(DateTime value);
   DateTime get lastPointerDownTime;
 
+  /// 最近一次滚动活动时间（滚轮/触控板），供补偿与进度守卫共用。
+  DateTime? get lastScrollActivityAt;
+  set lastScrollActivityAt(DateTime? value);
+
   /// 指针是否按住未松开（State 维护，Listener 的 Up/Cancel 复位）。
   bool get pointerDownActive;
   set pointerDownActive(bool value);

@@ -66,10 +66,24 @@ abstract final class _ReaderPaginationMetrics {
   }
 
   static double imageHeight(double effectiveWidth, String? caption) {
-    // 槽位高度 + 上下 24 内边距；caption 增加一行。
+    // 与 ReaderContentImage 一致：Padding 24*2 + 固定槽位 + 可选题注。
     var height = imageSlotHeight(effectiveWidth) + 48;
-    if (caption != null && caption.isNotEmpty) {
-      height += 26;
+    final captionText = caption?.trim() ?? '';
+    if (captionText.isNotEmpty) {
+      // 题注：top 10 + TextPainter（与渲染 Text 同字号/字形）。
+      final painter = TextPainter(
+        text: TextSpan(
+          text: captionText,
+          style: const TextStyle(
+            fontSize: AppTypography.bodyMedium,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+        maxLines: null,
+      )..layout(maxWidth: effectiveWidth);
+      height += 10 + painter.height;
     }
     return height;
   }

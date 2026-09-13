@@ -25,7 +25,7 @@ mixin ReaderViewPageInteractionMixin
     if (!scrollController.hasClients) return;
     if (isLoadingChapter) return;
     dismissReturnSnackBar();
-    _lastScrollActivityAt = DateTime.now();
+    lastScrollActivityAt = DateTime.now();
     final max = scrollController.position.maxScrollExtent;
     if (max <= 0) return;
 
@@ -37,11 +37,6 @@ mixin ReaderViewPageInteractionMixin
 
     if (DateTime.now().isBefore(restoreSilenceUntil)) return;
 
-    // 桌面滚轮无 pointerDown：用滚动活动时间戳，不再只认 pointer 2s 守卫。
-    final timeSinceScrollActivity =
-        DateTime.now().difference(_lastScrollActivityAt!).inMilliseconds;
-    if (timeSinceScrollActivity > 2000) return;
-
     if (modeSwitchInProgress) {
       modeSwitchInProgress = false;
       modeSwitchAnchor = null;
@@ -49,13 +44,10 @@ mixin ReaderViewPageInteractionMixin
     }
 
     // 连续滚动：进度由 ReaderContinuousScrollView 的 onScrollPosition 驱动。
-    // 此处仅保留近端预取，不再在章末硬切章；阈值与 onContinuousScrollPosition 一致。
     if (max - scrollController.offset < max * 0.5) {
       preloadAdjacent();
     }
   }
-
-  DateTime? _lastScrollActivityAt;
 
   /// 连续滚动位置回调：更新锚点章、进度与邻章窗口。
   void onContinuousScrollPosition(ContinuousScrollPosition position) {
@@ -66,7 +58,7 @@ mixin ReaderViewPageInteractionMixin
       return;
     }
     if (DateTime.now().isBefore(restoreSilenceUntil)) return;
-    _lastScrollActivityAt = DateTime.now();
+    lastScrollActivityAt = DateTime.now();
 
     if (modeSwitchInProgress) {
       modeSwitchInProgress = false;

@@ -137,6 +137,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   DateTime _lastPointerDownTime = DateTime.fromMillisecondsSinceEpoch(
     0,
   ); // 最后一次真实触摸
+  DateTime? _lastScrollActivityAt; // 最近滚动活动（滚轮/触控板）
   // 滚动位置恢复器：max 阈值放宽到 24px，避免图片解码等细碎布局漂移
   // 反复重激活监控期与用户滚动对抗。
   final _restore = ScrollRestore(maxChangeThreshold: 24);
@@ -364,6 +365,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   DateTime get lastPointerDownTime => _lastPointerDownTime;
   @override
   set lastPointerDownTime(DateTime v) => _lastPointerDownTime = v;
+  @override
+  DateTime? get lastScrollActivityAt => _lastScrollActivityAt;
+  @override
+  set lastScrollActivityAt(DateTime? v) => _lastScrollActivityAt = v;
   @override
   ReaderProgressSnapshot? get returnToProgressSnapshot =>
       _returnToProgressSnapshot;

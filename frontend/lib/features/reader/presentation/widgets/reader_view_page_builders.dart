@@ -84,6 +84,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   int? get pendingRestoreCharOffset;
   set pendingRestoreCharOffset(int? value);
   DateTime get lastPointerDownTime;
+  DateTime? get lastScrollActivityAt;
   set lastPointerDownTime(DateTime value);
   Size? get pageViewportSize;
   set pageViewportSize(Size? value);
@@ -1066,8 +1067,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   /// 前缀章高度变化时补偿滚动偏移，避免测高收敛导致视口跳动。
   ///
-  /// 滚轮连续滚动时 offset 每帧都在变：不能因此丢弃补偿，改为
-  /// 相对前缀 delta 立即 jumpTo，并同步观测 offset，避免二次误判。
+  /// 主流阅读器约定：用户正在滚动时绝不 jumpTo。图片解码/测高收敛
+  /// 只改映射表，不抢视口；仅在静止或窗口滑动时补偿。
   void _compensateScrollForPrefixDelta(double? previousPrefix) {
     if (previousPrefix == null ||
         isRestoringProgress ||
@@ -1076,8 +1077,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         isSwitchingChapter) {
       return;
     }
-    // 手指按住时延迟到抬手后由下一次布局补偿，避免与拖动抢位置。
     if (pointerDownActive) {
+      return;
+    }
+    // 滚轮/触控板：400ms 内有滚动活动则跳过补偿，避免「遇见图片就跳」。
+    final lastActivity = lastScrollActivityAt;
+    if (lastActivity != null &&
+        DateTime.now().difference(lastActivity).inMilliseconds < 400) {
       return;
     }
     final nextPrefix = continuousScrollController.prefixHeightOf(
@@ -1090,6 +1096,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     final captured = delta;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !scrollController.hasClients) {
+        return;
+      }
+      // 回调帧内若用户又开始滚动，放弃补偿。
+      final activity = lastScrollActivityAt;
+      if (activity != null &&
+          DateTime.now().difference(activity).inMilliseconds < 200) {
         return;
       }
       final max = scrollController.position.maxScrollExtent;
