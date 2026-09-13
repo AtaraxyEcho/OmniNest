@@ -44,6 +44,8 @@ class ReaderPageFlow {
   final String anchorChapterId;
 
   List<BookPageRef>? _pagesCache;
+  Map<BookPageRef, int>? _indexByRefCache;
+  Map<String, int>? _startIndexByChapterCache;
 
   /// 展开后的已确认页序列。
   List<BookPageRef> get pages {
@@ -52,6 +54,23 @@ class ReaderPageFlow {
         for (var i = 0; i < (readableCounts[chapterId] ?? 0); i++)
           BookPageRef(chapterId: chapterId, localPageIndex: i),
     ];
+  }
+
+  /// 页身份 → 全局索引（随 [pages] 惰性建表）。
+  Map<BookPageRef, int> get _indexByRef =>
+      _indexByRefCache ??= {for (var i = 0; i < pages.length; i++) pages[i]: i};
+
+  /// 章节 → 章内第一页全局索引（首次出现；随 [pages] 惰性建表）。
+  Map<String, int> get _startIndexByChapter {
+    final cached = _startIndexByChapterCache;
+    if (cached != null) {
+      return cached;
+    }
+    final map = <String, int>{};
+    for (var i = 0; i < pages.length; i++) {
+      map.putIfAbsent(pages[i].chapterId, () => i);
+    }
+    return _startIndexByChapterCache = map;
   }
 
   int get readablePageCount => pages.length;
@@ -92,27 +111,13 @@ class ReaderPageFlow {
   }
 
   /// 反向查找：某章某页在流内的全局索引；不存在返回 null。
-  int? indexOf(BookPageRef ref) {
-    for (var i = 0; i < pages.length; i++) {
-      if (pages[i] == ref) {
-        return i;
-      }
-    }
-    return null;
-  }
+  int? indexOf(BookPageRef ref) => _indexByRef[ref];
 
   /// 全局索引 → 所属章节 id。
   String? chapterIdAt(int globalIndex) => keyAt(globalIndex)?.chapterId;
 
   /// 章内第一页的全局索引。
-  int? startIndexOf(String chapterId) {
-    for (var i = 0; i < pages.length; i++) {
-      if (pages[i].chapterId == chapterId) {
-        return i;
-      }
-    }
-    return null;
-  }
+  int? startIndexOf(String chapterId) => _startIndexByChapter[chapterId];
 
   /// 页流重建后的当前页索引归属解析。
   ///

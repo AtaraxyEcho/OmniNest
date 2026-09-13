@@ -17,6 +17,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_continuous_
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_flow.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
@@ -107,6 +108,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   dynamic get annotationHandler;
   String get itemId;
   ReaderPageTurnController get pageTurnController;
+  ReaderNavigationTokenHolder get navigationTokens;
 
   // ── 跨 mixin 方法（由 State 实现） ──
   void dismissReturnSnackBar();
@@ -1482,6 +1484,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     int restoreCharOffset,
   ) async {
     final requestedChapterId = currentChapterId;
+    // 捕获当前导航令牌：await 定位期间若发生新的显式导航（含同章重复
+    // 跳转），本次恢复结果已过时，必须整体丢弃（旧任务 ≠ 当前任务）。
+    final navigationTokenAtStart = navigationTokens.current;
     try {
       final targetPage = await findPageByCharOffset(
         chapterData,
@@ -1490,7 +1495,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (!mounted) {
         return;
       }
-      if (targetPage == null || requestedChapterId != currentChapterId) {
+      if (targetPage == null ||
+          requestedChapterId != currentChapterId ||
+          !navigationTokens.isUnchangedSince(navigationTokenAtStart)) {
         // 定位被取消或章节已切换：当前章节请求结束时必须退出恢复态，避免遮罩滞留
         if (requestedChapterId == currentChapterId) {
           setState(() {

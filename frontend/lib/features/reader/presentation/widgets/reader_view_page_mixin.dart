@@ -20,6 +20,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_block_text.
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_helper.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -440,6 +441,46 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     unawaited(switchToChapter(chapters[idx + 1].id));
   }
 
+  /// 按导航意图推断显式导航来源。
+  ReaderNavigationSource _navigationSourceOf(
+    ReaderChapterNavigationIntent intent,
+  ) {
+    return switch (intent.entryPoint) {
+      ReaderChapterEntryPoint.start ||
+      ReaderChapterEntryPoint.end => ReaderNavigationSource.chapterStep,
+      ReaderChapterEntryPoint.offset => ReaderNavigationSource.progressSeek,
+      ReaderChapterEntryPoint.anchor => ReaderNavigationSource.anchorJump,
+      ReaderChapterEntryPoint.resume => ReaderNavigationSource.returnToProgress,
+    };
+  }
+
+  /// 章节身份提交的唯一入口（位置状态收口）。
+  ///
+  /// 收养解析出的新章在此一次性提交：改写章节身份、释放在途加载、
+  /// 预取邻章并同步缓存。调用方负责先完成就绪判定，拒绝收养时不得
+  /// 调用本方法。显式跳章的完整提交流程仍由 switchToChapter 状态机执行。
+  void commitChapterAdoption(String chapterId) {
+    currentChapterId = chapterId;
+    // 收养改写章节身份后，在途的旧章内容加载即使完成也不再被消费；
+    // 立即释放协调器，避免 isLoading 残留把翻页输入闸门锁死。
+    chapterLoadCoordinator.cancel();
+    final needFetch = contentLoader?.setActive(chapterId) ?? const [];
+    for (final id in needFetch) {
+      unawaited(prefetchChapter(id));
+    }
+    // blocks 与 HTML 均就绪时同步加载标记：避免 build 后
+    // loadChapterContentIfNeeded 对锚点章冗余重取正文。
+    final content = contentLoader?.contentFor(chapterId);
+    if (contentLoader?.getByChapterId(chapterId) != null && content != null) {
+      cachedContent = content;
+      lastLoadedChapterId = chapterId;
+    }
+    // 收养可能来自滚动回调或 jumpToPage 的 layout 回调，禁止同步 setState。
+    if (mounted) {
+      _scheduleAdoptRebuild();
+    }
+  }
+
   /// 翻页模式：跨章页流中软收养章节。
   ///
   /// 不走 switchToChapter 硬切、不展示全屏遮罩；正文已就绪时首帧即可续读。
@@ -454,25 +495,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         return;
       }
     }
-    currentChapterId = chapterId;
-    // 收养改写章节身份后，在途的旧章内容加载即使完成也不再被消费；
-    // 立即释放协调器，避免 isLoading 残留把翻页输入闸门锁死。
-    chapterLoadCoordinator.cancel();
-    annotationHandler?.updateChapter(chapterId);
-    final needFetch = contentLoader?.setActive(chapterId) ?? const [];
-    for (final id in needFetch) {
-      unawaited(prefetchChapter(id));
-    }
-    final content = contentLoader?.contentFor(chapterId);
-    if (contentLoader?.getByChapterId(chapterId) != null && content != null) {
-      cachedContent = content;
-      lastLoadedChapterId = chapterId;
-    }
+    commitChapterAdoption(chapterId);
     unawaited(checkBookmarkState());
-    // 翻页 onPageChanged 可能来自 jumpToPage 的 layout 回调，禁止同步 setState。
-    if (mounted) {
-      _scheduleAdoptRebuild();
-    }
   }
 
   bool _adoptRebuildScheduled = false;
@@ -604,6 +628,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 翻页流锚定目标章起始（由 builders 实现）：写入待映射章内页 0 并
   /// 在流内直接换算全局索引。
   void anchorPageModeToChapterStart(String chapterId);
+
+  /// 显式导航令牌持有者（由 State 实现）：新导航使旧令牌失效。
+  ReaderNavigationTokenHolder get navigationTokens;
 
   /// 预加载指定章节内容。
   Future<void> prefetchChapter(String chapterId) async {
@@ -1299,6 +1326,12 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       }
       return;
     }
+
+    // 显式导航开始：创建新令牌并使旧令牌失效；收养与预取不创建令牌。
+    navigationTokens.begin(
+      source: _navigationSourceOf(intent),
+      targetChapterId: chapterId,
+    );
 
     final currentSnapshot = buildDepartureSnapshot();
     if (intent.offerReturn && currentSnapshot != null) {

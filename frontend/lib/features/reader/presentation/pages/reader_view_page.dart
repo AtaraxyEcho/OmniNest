@@ -33,6 +33,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_bottom
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_indicator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_adaptive_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
@@ -145,6 +146,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   // ── 章节导航与返回原进度 ──
   ReaderChapterNavigationIntent _chapterNavigationIntent =
       const ReaderChapterNavigationIntent.resume();
+  // 显式导航令牌：新导航使旧令牌失效，异步结果回写前校验。
+  final ReaderNavigationTokenHolder _navigationTokens =
+      ReaderNavigationTokenHolder();
   ReaderProgressSnapshot? _returnToProgressSnapshot;
   bool _showReturnControl = false; // 是否显示"返回原进度"控件
   Timer? _returnControlTimer; // 自动隐藏计时器
@@ -239,6 +243,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _currentChapterId = v;
     _annotationHandler?.updateChapter(v);
   }
+
+  @override
+  ReaderNavigationTokenHolder get navigationTokens => _navigationTokens;
 
   @override
   ReaderChapterContent? get cachedContent => _cachedContent;

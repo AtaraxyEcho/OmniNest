@@ -3,6 +3,7 @@ import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/material.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_interaction_gate.dart';
 
 /// 翻页动画模式。
 enum PageTurnMode {
@@ -204,8 +205,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
 
   void _onExternalPageCommand() {
     // 底栏/快捷键是显式翻页意图，不能被上一次手势残留的滚动状态吞掉；
-    // 重复触发仍由 _tapTurnBlocked 内的动画与边界请求标志挡住。
-    if (_tapTurnBlocked) return;
+    // 重复触发仍由闸门内的动画与边界请求原因挡住。
+    if (ReaderInteractionGate.blocksTapTurn(_blockReason)) return;
     final direction = widget.controller?.direction ?? 0;
     if (direction > 0) {
       _goNextPage(tapTurn: true);
@@ -278,24 +279,23 @@ class _ReaderPageViewState extends State<ReaderPageView>
   // 统一翻页命令
   // ══════════════════════════════════════════
 
-  bool get _inputBlocked =>
-      widget.state.isPaginating ||
-      _isAnimating ||
-      _transitionInFlight ||
-      _boundaryRequestInFlight;
-
-  /// 点击热区触发的翻页只受程序化动画与边界请求约束。
-  ///
-  /// 指针按下时 PageView 的拖拽识别器会先赢得手势竞技场并派发 ScrollStart，
-  /// 而原始 Listener 的 onPointerUp 早于该手势的结束处理执行：此刻
-  /// [_slideScrolling]/[_transitionInFlight] 仍为 true。若沿用 [_inputBlocked]，
-  /// 点击翻页会被自身按下动作产生的状态吞掉（点击右侧无效的根因）。
-  bool get _tapTurnBlocked =>
-      widget.state.isPaginating || _isAnimating || _boundaryRequestInFlight;
+  /// 当前输入闸门原因：加载 > 边界 > 动画 > 过渡 > 放行。
+  ReaderInteractionBlockReason get _blockReason =>
+      ReaderInteractionGate.resolve(
+        isPaginating: widget.state.isPaginating,
+        boundaryRequestInFlight: _boundaryRequestInFlight,
+        pageAnimationActive: _isAnimating,
+        pageTransitionInFlight: _transitionInFlight,
+      );
 
   /// 统一：下一页。
   void _goNextPage({bool tapTurn = false}) {
-    if (tapTurn ? _tapTurnBlocked : _inputBlocked) return;
+    final reason = _blockReason;
+    if (tapTurn
+        ? ReaderInteractionGate.blocksTapTurn(reason)
+        : ReaderInteractionGate.blocksInput(reason)) {
+      return;
+    }
 
     final nextIndex = widget.state.pageIndex + 1;
     final atBoundary = nextIndex >= _localPageCount && !widget.state.hasMore;
@@ -332,7 +332,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
     _slideRetryScheduled = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _slideRetryScheduled = false;
-      if (!mounted || _tapTurnBlocked) return;
+      if (!mounted || ReaderInteractionGate.blocksTapTurn(_blockReason)) {
+        return;
+      }
       final ctrl = _pageController;
       if (ctrl != null && ctrl.hasClients) {
         final nextIndex = widget.state.pageIndex + 1;
@@ -347,7 +349,12 @@ class _ReaderPageViewState extends State<ReaderPageView>
 
   /// 统一：上一页。
   void _goPreviousPage({bool tapTurn = false}) {
-    if (tapTurn ? _tapTurnBlocked : _inputBlocked) return;
+    final reason = _blockReason;
+    if (tapTurn
+        ? ReaderInteractionGate.blocksTapTurn(reason)
+        : ReaderInteractionGate.blocksInput(reason)) {
+      return;
+    }
 
     final atBoundary = widget.state.pageIndex == 0;
 
@@ -456,7 +463,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
             controller: _pageController,
             itemCount: effectiveCount,
             physics:
-                state.isPaginating || _boundaryRequestInFlight
+                ReaderInteractionGate.locksScroll(_blockReason)
                     ? const NeverScrollableScrollPhysics()
                     : const PageScrollPhysics(),
             onPageChanged: _onSlidePageChanged,
@@ -496,7 +503,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   }
 
   void _onSlidePageChanged(int index) {
-    if (widget.state.isPaginating || _boundaryRequestInFlight) return;
+    if (ReaderInteractionGate.locksScroll(_blockReason)) return;
     _transitionInFlight = true;
 
     if (index >= _localPageCount && widget.state.hasMore) {
@@ -654,14 +661,16 @@ class _ReaderPageViewState extends State<ReaderPageView>
   }
 
   void _onDragStart(DragStartDetails details) {
-    if (_inputBlocked) return;
+    if (ReaderInteractionGate.blocksInput(_blockReason)) return;
     _isDragging = true;
     _totalDeltaX = 0;
     _isForward = true;
   }
 
   void _onDragUpdate(DragUpdateDetails details) {
-    if (!_isDragging || _inputBlocked) return;
+    if (!_isDragging || ReaderInteractionGate.blocksInput(_blockReason)) {
+      return;
+    }
     _totalDeltaX += details.delta.dx;
 
     final w = context.size?.width ?? 1;
@@ -698,7 +707,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
   }
 
   void _onDragEnd(DragEndDetails details) {
-    if (!_isDragging || _inputBlocked) return;
+    if (!_isDragging || ReaderInteractionGate.blocksInput(_blockReason)) {
+      return;
+    }
     _isDragging = false;
 
     final velocity = details.velocity.pixelsPerSecond.dx;

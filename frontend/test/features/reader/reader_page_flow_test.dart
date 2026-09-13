@@ -81,6 +81,32 @@ void main() {
     expect(flow.anchorStartIndex, 9);
   });
 
+  test('扩窗后索引查表反映新页序列', () {
+    final flow = build(
+      chapters: const ['c0', 'c1'],
+      counts: const {'c0': 1, 'c1': 2},
+      done: const {'c0': true, 'c1': true},
+      anchor: 'c1',
+      hasNextAfter: true,
+    ).expandForward(const ['c0', 'c1', 'c2']);
+    // 扩窗并入的新章 readableCount=0，尚无已确认页。
+    expect(flow.startIndexOf('c2'), isNull);
+    expect(flow.startIndexOf('c1'), 1);
+    expect(
+      flow.indexOf(const BookPageRef(chapterId: 'c0', localPageIndex: 0)),
+      0,
+    );
+    expect(
+      flow.indexOf(const BookPageRef(chapterId: 'c1', localPageIndex: 1)),
+      2,
+    );
+    // 窗口外页身份仍返回 null。
+    expect(
+      flow.indexOf(const BookPageRef(chapterId: 'c9', localPageIndex: 0)),
+      isNull,
+    );
+  });
+
   test('indexOf 反向查找页身份，前缀页数变化后仍可定位', () {
     final before = build(
       chapters: const ['c0', 'c1'],

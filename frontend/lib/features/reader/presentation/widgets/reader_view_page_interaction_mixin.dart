@@ -218,39 +218,8 @@ mixin ReaderViewPageInteractionMixin
         return;
       }
     }
-    currentChapterId = chapterId;
-    // 收养改写章节身份后，在途的旧章内容加载即使完成也不再被消费；
-    // 立即释放协调器，避免 isLoading 残留把翻页输入闸门锁死。
-    chapterLoadCoordinator.cancel();
-    annotationHandler?.updateChapter(chapterId);
-    final needFetch = contentLoader?.setActive(chapterId) ?? const [];
-    for (final id in needFetch) {
-      unawaited(prefetchChapter(id));
-    }
-    // blocks 与 HTML 均就绪时同步加载标记：避免 build 后
-    // loadChapterContentIfNeeded 对锚点章冗余重取正文。
-    final content = contentLoader?.contentFor(chapterId);
-    if (contentLoader?.getByChapterId(chapterId) != null && content != null) {
-      cachedContent = content;
-      lastLoadedChapterId = chapterId;
-    }
-    // 滚动回调可能来自 layout 阶段，禁止同步 setState。
-    if (mounted) {
-      _scheduleContinuousAdoptRebuild();
-    }
-  }
-
-  bool _continuousAdoptRebuildScheduled = false;
-
-  void _scheduleContinuousAdoptRebuild() {
-    if (_continuousAdoptRebuildScheduled) return;
-    _continuousAdoptRebuildScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _continuousAdoptRebuildScheduled = false;
-      if (mounted) {
-        setState(() {});
-      }
-    });
+    // 就绪判定通过后经统一提交入口收养：收养不得绕过位置状态收口。
+    commitChapterAdoption(chapterId);
   }
 
   /// 连续滚动窗口扩挂：以窗口边缘章为基准预取并重建。
