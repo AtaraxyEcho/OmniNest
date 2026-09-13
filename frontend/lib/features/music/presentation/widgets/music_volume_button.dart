@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 
 /// Music 音量按钮的呈现风格，与所在播放条的按钮语言对齐。
@@ -43,7 +42,6 @@ class MusicVolumeButton extends StatefulWidget {
 
 class _MusicVolumeButtonState extends State<MusicVolumeButton> {
   final OverlayPortalController _portal = OverlayPortalController();
-  final Object _tapGroupId = Object();
   StreamSubscription<double>? _volumeSub;
   Timer? _hideTimer;
   double _volume = 100;
@@ -170,6 +168,10 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
         Colors.white;
   }
 
+  static const double _panelWidth = 40;
+  static const double _panelHeight = 168;
+  static const double _panelGap = 10;
+
   @override
   Widget build(BuildContext context) {
     final iconColor = _resolveIconColor(context);
@@ -180,33 +182,54 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
           info.childPaintTransform,
           Offset(info.childSize.width / 2, 0),
         );
-        return TapRegion(
-          groupId: _tapGroupId,
-          child: CustomSingleChildLayout(
-            delegate: _VolumePanelLayoutDelegate(anchor: anchor),
-            child: MouseRegion(
-              onEnter: (_) => _setPanelHovered(true),
-              onExit: (_) => _setPanelHovered(false),
-              child: _MusicVolumeColumn(
-                volume: _volume,
-                accentColor:
-                    widget.activeColor ?? iconColor.withValues(alpha: 0.92),
-                background: widget.panelBackground,
-                textColor:
-                    widget.panelTextColor ?? (widget.iconColor ?? Colors.white),
-                iconColor: iconColor,
-                onChanged: _setVolume,
-                onToggleMute: _toggleMute,
+        final overlaySize = MediaQuery.sizeOf(overlayContext);
+        // 显式定位 + 固定尺寸：避免 Overlay 无界约束把面板撑满屏幕。
+        final left = (anchor.dx - _panelWidth / 2).clamp(
+          8.0,
+          overlaySize.width - _panelWidth - 8.0,
+        );
+        var top = anchor.dy - _panelHeight - _panelGap;
+        if (top < 8) {
+          // 上方空间不足时改到按钮下方。
+          top = anchor.dy + widget.buttonSize + _panelGap;
+        }
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: _hidePanel,
               ),
             ),
-          ),
+            Positioned(
+              left: left,
+              top: top.clamp(8.0, overlaySize.height - _panelHeight - 8),
+              width: _panelWidth,
+              height: _panelHeight,
+              child: MouseRegion(
+                onEnter: (_) => _setPanelHovered(true),
+                onExit: (_) => _setPanelHovered(false),
+                child: Material(
+                  color: Colors.transparent,
+                  child: _MusicVolumeColumn(
+                    volume: _volume,
+                    accentColor:
+                        widget.activeColor ?? iconColor.withValues(alpha: 0.92),
+                    background: widget.panelBackground,
+                    textColor:
+                        widget.panelTextColor ??
+                        (widget.iconColor ?? Colors.white),
+                    iconColor: iconColor,
+                    onChanged: _setVolume,
+                    onToggleMute: _toggleMute,
+                  ),
+                ),
+              ),
+            ),
+          ],
         );
       },
-      child: TapRegion(
-        groupId: _tapGroupId,
-        onTapOutside: (_) => _hidePanel(),
-        child: _buildButton(context, iconColor: iconColor),
-      ),
+      child: _buildButton(context, iconColor: iconColor),
     );
   }
 
@@ -265,32 +288,9 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
   }
 }
 
-/// 将音量面板定位到按钮正上方：水平居中于按钮锚点，底边距按钮顶边留出间隙。
-///
-/// 通过 OverlayPortal.overlayChildLayoutBuilder 提供的布局期变换定位，
-/// 不使用 CompositedTransformFollower，避免面板内 Tooltip 在布局期
-/// 计算 paint transform 时触发 RenderFollowerLayer 断言。
-class _VolumePanelLayoutDelegate extends SingleChildLayoutDelegate {
-  const _VolumePanelLayoutDelegate({required this.anchor});
-
-  /// 按钮顶边中点在目标 Overlay 坐标系中的位置。
-  final Offset anchor;
-
-  @override
-  Offset getPositionForChild(Size size, Size childSize) {
-    return Offset(
-      anchor.dx - childSize.width / 2,
-      anchor.dy - childSize.height - 10,
-    );
-  }
-
-  @override
-  bool shouldRelayout(_VolumePanelLayoutDelegate oldDelegate) {
-    return anchor != oldDelegate.anchor;
-  }
-}
-
 /// 竖向音量柱：底部为当前音量填充，顶部留白；底部附静音与百分比。
+///
+/// 必须在有界约束下布局（由 Overlay Positioned 固定 40×168）。
 class _MusicVolumeColumn extends StatelessWidget {
   const _MusicVolumeColumn({
     required this.volume,
@@ -310,90 +310,77 @@ class _MusicVolumeColumn extends StatelessWidget {
   final ValueChanged<double> onChanged;
   final VoidCallback onToggleMute;
 
-  static const double _width = 40;
-  static const double _trackHeight = 120;
-  static const double _footerHeight = 36;
   static const double _trackWidth = 6;
 
   @override
   Widget build(BuildContext context) {
     final muted = volume <= 0;
     final normalized = (volume / 100).clamp(0.0, 1.0);
-    return Material(
-      color: Colors.transparent,
-      child: Container(
-        width: _width,
-        height: _trackHeight + _footerHeight + 12,
-        padding: const EdgeInsets.only(top: 10, bottom: 6),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.36),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
+    return Container(
+      width: 40,
+      height: 168,
+      padding: const EdgeInsets.only(top: 10, bottom: 6),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.36),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Expanded(
+            child: Center(
+              child: _VerticalVolumeTrack(
+                value: normalized,
+                trackWidth: _trackWidth,
+                accentColor: accentColor,
+                trackColor: Colors.white.withValues(alpha: 0.16),
+                thumbColor: textColor,
+                onChanged: (next) => onChanged(next * 100),
+              ),
             ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Expanded(
-              child: Center(
-                child: _VerticalVolumeTrack(
-                  value: normalized,
-                  trackWidth: _trackWidth,
-                  accentColor: accentColor,
-                  trackColor: Colors.white.withValues(alpha: 0.16),
-                  thumbColor: textColor,
-                  onChanged: (next) => onChanged(next * 100),
+          ),
+          SizedBox(
+            height: 36,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                InkWell(
+                  borderRadius: BorderRadius.circular(999),
+                  onTap: onToggleMute,
+                  child: SizedBox.square(
+                    dimension: 22,
+                    child: Icon(
+                      muted
+                          ? Icons.volume_off_rounded
+                          : Icons.volume_up_rounded,
+                      size: 14,
+                      color:
+                          muted ? iconColor.withValues(alpha: 0.7) : iconColor,
+                    ),
+                  ),
                 ),
-              ),
-            ),
-            SizedBox(
-              height: _footerHeight,
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Tooltip(
-                    message:
-                        AppLocalizations.of(
-                          context,
-                        ).portalMusicVisualizerVolume,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: onToggleMute,
-                      child: SizedBox.square(
-                        dimension: 22,
-                        child: Icon(
-                          muted
-                              ? Icons.volume_off_rounded
-                              : Icons.volume_up_rounded,
-                          size: 14,
-                          color:
-                              muted
-                                  ? iconColor.withValues(alpha: 0.7)
-                                  : iconColor,
-                        ),
-                      ),
-                    ),
+                Text(
+                  volume.round().toString(),
+                  style: TextStyle(
+                    color: textColor.withValues(alpha: 0.80),
+                    fontSize: 10,
+                    height: 1.1,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: const [FontFeature.tabularFigures()],
                   ),
-                  Text(
-                    volume.round().toString(),
-                    style: TextStyle(
-                      color: textColor.withValues(alpha: 0.80),
-                      fontSize: 10,
-                      height: 1.1,
-                      fontWeight: FontWeight.w700,
-                      fontFeatures: const [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
