@@ -4811,6 +4811,11 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String readerBookChapterPosition(int current, int total, int percent) {
+    return '第 $current/$total 章 · $percent%';
+  }
+
+  @override
   String get readerResetTypography => '恢复默认排版';
 
   @override

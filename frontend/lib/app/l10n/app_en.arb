@@ -2091,6 +2091,20 @@
       }
     }
   },
+  "readerBookChapterPosition": "Ch. {current}/{total} · {percent}%",
+  "@readerBookChapterPosition": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "readerResetTypography": "Reset typography",
   "readerComicModePage": "Page mode",
   "readerComicModeScroll": "Scroll mode",

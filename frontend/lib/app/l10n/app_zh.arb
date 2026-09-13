@@ -1965,6 +1965,20 @@
       }
     }
   },
+  "readerBookChapterPosition": "第 {current}/{total} 章 · {percent}%",
+  "@readerBookChapterPosition": {
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
   "readerResetTypography": "恢复默认排版",
   "readerComicModePage": "翻页模式",
   "readerComicModeScroll": "卷轴模式",

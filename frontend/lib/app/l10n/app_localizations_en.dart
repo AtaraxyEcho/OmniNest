@@ -4970,6 +4970,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String readerBookChapterPosition(int current, int total, int percent) {
+    return 'Ch. $current/$total · $percent%';
+  }
+
+  @override
   String get readerResetTypography => 'Reset typography';
 
   @override

@@ -17,6 +17,8 @@ class ReaderViewBottomBar extends StatelessWidget {
     required this.onShowSettings,
     required this.onToggleImmersive,
     this.onProgressSeek,
+    this.chapterIndex,
+    this.chapterCount,
     super.key,
   });
 
@@ -29,6 +31,10 @@ class ReaderViewBottomBar extends StatelessWidget {
   final VoidCallback onShowSettings;
   final VoidCallback onToggleImmersive;
   final ValueChanged<double>? onProgressSeek;
+
+  /// 当前章序号（1-based）；与 [chapterCount] 同时提供时展示章节位置。
+  final int? chapterIndex;
+  final int? chapterCount;
 
   @override
   Widget build(BuildContext context) {
@@ -195,8 +201,19 @@ class ReaderViewBottomBar extends StatelessWidget {
 
   Widget _progressLabel(BuildContext context) {
     final percent = (progress.clamp(0.0, 1.0) * 100).round();
+    final l10n = AppLocalizations.of(context);
+    final current = chapterIndex;
+    final total = chapterCount;
+    final text =
+        (current != null &&
+                total != null &&
+                total > 0 &&
+                current >= 1 &&
+                current <= total)
+            ? l10n.readerBookChapterPosition(current, total, percent)
+            : l10n.readerReadingProgress(percent);
     return Text(
-      AppLocalizations.of(context).readerReadingProgress(percent),
+      text,
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
       style: TextStyle(

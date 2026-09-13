@@ -9191,6 +9191,12 @@ abstract class AppLocalizations {
   /// **'Reading progress {percent}%'**
   String readerReadingProgress(int percent);
 
+  /// No description provided for @readerBookChapterPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'Ch. {current}/{total} · {percent}%'**
+  String readerBookChapterPosition(int current, int total, int percent);
+
   /// No description provided for @readerResetTypography.
   ///
   /// In en, this message translates to:

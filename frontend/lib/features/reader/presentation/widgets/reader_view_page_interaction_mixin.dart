@@ -368,6 +368,20 @@ mixin ReaderViewPageInteractionMixin
       }
 
       if (isPageMode) {
+        // 翻页跨章窗口内多章同步失效，避免邻章仍用旧排版分页。
+        final windowIds =
+            contentLoader?.chapterIds
+                .where((id) {
+                  final all = contentLoader?.chapterIds ?? const [];
+                  final idx = all.indexOf(currentChapterId);
+                  final i = all.indexOf(id);
+                  return idx >= 0 && (i - idx).abs() <= 1;
+                })
+                .toList(growable: false) ??
+            [currentChapterId];
+        for (final id in windowIds) {
+          contentLoader?.getByChapterId(id)?.invalidatePageNavigator();
+        }
         contentLoader?.rekeyAndRecomputeHeights(
           currentChapterId,
           computePageWidth(),
@@ -404,6 +418,15 @@ mixin ReaderViewPageInteractionMixin
 
     if (isPageMode) {
       chapterData.invalidatePageNavigator();
+      // 邻章分页器一并失效，页流窗口内页数与切片保持一致。
+      final all = contentLoader?.chapterIds ?? const <String>[];
+      final idx = all.indexOf(currentChapterId);
+      if (idx >= 0) {
+        for (var i = idx - 1; i <= idx + 1; i++) {
+          if (i < 0 || i >= all.length) continue;
+          contentLoader?.getByChapterId(all[i])?.invalidatePageNavigator();
+        }
+      }
       pageLocator.cancel();
       isRestoringProgress = true;
       pendingRestoreCharOffset = restoreCharOffset;

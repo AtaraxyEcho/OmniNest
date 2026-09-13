@@ -604,6 +604,16 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     return '';
   }
 
+  /// 当前章 1-based 序号，用于底栏「第 X/共 N 章」。
+  int? get _currentChapterDisplayIndex {
+    final chapters = _contentLoader?.allChapters;
+    if (chapters == null || chapters.isEmpty) {
+      return null;
+    }
+    final idx = chapters.indexWhere((c) => c.id == _currentChapterId);
+    return idx < 0 ? null : idx + 1;
+  }
+
   /// 全书进度百分比（0.0-1.0），用于显示和同步。
   double get _bookProgress {
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
@@ -1217,6 +1227,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
                     settings: _settings,
                     progress: bookProgress,
                     isPageMode: _isPageMode,
+                    chapterIndex: _currentChapterDisplayIndex,
+                    chapterCount: _contentLoader?.allChapters.length,
                     onPrevious: () => _navigateReader(detail, forward: false),
                     onNext: () => _navigateReader(detail, forward: true),
                     onShowContents:
