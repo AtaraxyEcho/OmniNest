@@ -378,15 +378,19 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         chapterId == currentChapterId;
   }
 
-  /// 封面/书讯章通常只有极少正文：首次进入或顺序切到此类短章时自动前进，
-  /// 避免用户卡在单页信息章上只能靠侧点二次加载。
+  /// 封面/书讯章开书跳过。
   ///
-  /// 仅在「无历史进度的开书」场景启用；有进度恢复时不跳过。
+  /// 仅在「resume 且无任何进度快照」的首次开书时启用；
+  /// 目录/显式导航进入封面章时必须允许停留。
   void _maybeSkipCoverChapter(ChapterData chapterData) {
     if (!mounted || isLoadingChapter || isSwitchingChapter) {
       return;
     }
     if (isRestoringProgress || pendingRestoreCharOffset != null) {
+      return;
+    }
+    // 显式导航（start/end/anchor）不跳过。
+    if (chapterNavigationIntent.entryPoint != ReaderChapterEntryPoint.resume) {
       return;
     }
     final chapters = contentLoader?.allChapters ?? const <ReaderChapter>[];
@@ -395,7 +399,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     }
     final idx = chapters.indexWhere((c) => c.id == currentChapterId);
     if (idx != 0) {
-      // 仅跳过开书第一章（封面/书讯）；阅读中顺序进入的短章不强制跳过。
       return;
     }
     final totalChars = chapterData.totalChars;
@@ -404,6 +407,10 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       blocks: chapterData.blocks,
     );
     if (!isCoverLike) {
+      return;
+    }
+    // 有本地/服务端进度时不跳过（会走恢复路径）。
+    if (positionTracker.charOffset > 0 || scrollProgress > 0) {
       return;
     }
     unawaited(switchToChapter(chapters[idx + 1].id));
@@ -538,7 +545,16 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         textScale: textScale,
       );
     }
+    if (mounted && isPageMode) {
+      requestReaderRebuild();
+    }
   }
+
+  /// 调度阅读器重建（由 builders 实现）。
+  void requestReaderRebuild();
+
+  /// 清空跨章收养待映射页（由 builders 实现）。
+  void clearPendingPageLocalIndex();
 
   /// 预加载指定章节内容。
   Future<void> prefetchChapter(String chapterId) async {
@@ -1153,6 +1169,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     pendingRestoreCharOffset = null;
     // 硬切后 pageModePage 为局部 0；builders 的页流会映射到全局锚点起点。
     pageModePage = 0;
+    clearPendingPageLocalIndex();
     contentLoader?.setActive(chapterId);
     restore.cancel();
     isRestoringProgress = false;

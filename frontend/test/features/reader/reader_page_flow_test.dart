@@ -80,4 +80,24 @@ void main() {
     );
     expect(flow.anchorStartIndex, 9);
   });
+
+  test('indexOf 反向查找页身份，前缀页数变化后仍可定位', () {
+    final before = build(
+      chapters: const ['c0', 'c1'],
+      counts: const {'c0': 2, 'c1': 3},
+      done: const {'c0': true, 'c1': true},
+      anchor: 'c1',
+    );
+    final ref = before.keyAt(4); // c1#2
+    expect(ref, const BookPageRef(chapterId: 'c1', localPageIndex: 2));
+
+    final after = build(
+      chapters: const ['c0', 'c1'],
+      counts: const {'c0': 5, 'c1': 3},
+      done: const {'c0': true, 'c1': true},
+      anchor: 'c1',
+    );
+    final remapped = after.indexOf(ref!);
+    expect(remapped, after.startIndexOf('c1')! + 2);
+  });
 }

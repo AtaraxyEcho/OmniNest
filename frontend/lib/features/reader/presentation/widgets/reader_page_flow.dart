@@ -91,6 +91,16 @@ class ReaderPageFlow {
     return pages[globalIndex];
   }
 
+  /// 反向查找：某章某页在流内的全局索引；不存在返回 null。
+  int? indexOf(BookPageRef ref) {
+    for (var i = 0; i < pages.length; i++) {
+      if (pages[i] == ref) {
+        return i;
+      }
+    }
+    return null;
+  }
+
   /// 全局索引 → 所属章节 id。
   String? chapterIdAt(int globalIndex) => keyAt(globalIndex)?.chapterId;
 

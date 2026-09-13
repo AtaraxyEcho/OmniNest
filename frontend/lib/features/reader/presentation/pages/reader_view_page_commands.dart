@@ -233,11 +233,9 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
           start || data == null ? 0 : math.max(0, data.totalChars - 1);
       _pendingRestoreCharOffset = targetOffset;
       _isRestoringProgress = true;
-      _updateState(() {
-        if (start) {
-          _pageModePage = 0;
-        }
-      });
+      // 不在此写 pageModePage=0：跨章流中 0 可能是窗口更前一章。
+      // 由 pendingRestore → findPageByCharOffset → startIndexOf 换算。
+      _updateState(() {});
       return;
     }
     if (!_scrollController.hasClients) {

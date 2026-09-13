@@ -51,9 +51,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   String? _windowLastChapterId;
   double _windowFirstChapterHeight = 0;
 
-  /// 翻页跨章页流（当前章 ±1）。pageModePage 表示流内全局页索引。
+  /// 翻页跨章页流（当前章 ±2）。pageModePage 表示流内全局页索引。
   ReaderPageFlow? _pageFlow;
-  int _pageFlowLayoutVersion = -1;
 
   /// 跨章收养后待映射的章内页；下一帧流重建时换算为全局索引。
   int? _pendingPageLocalIndex;
@@ -209,20 +208,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (loader == null) {
       return 0;
     }
-    final layoutVersion = Object.hash(
-      currentChapterId,
-      pageWidth,
-      pageHeight,
-      settings.fontSize,
-      settings.lineHeight,
-      settings.fontFamily,
-      textScale,
-    );
-    final needsRebuild =
-        _pageFlow == null ||
-        _pageFlowLayoutVersion != layoutVersion ||
-        !(_pageFlow!.chapterIds.contains(currentChapterId));
-    // 每帧按最新懒分页结果重建（页数可能增长），但布局版本变化时重置锚点映射。
+    // 重建前捕获当前页身份，避免前缀章懒分页完成后全局索引整体平移。
+    final previousRef = _pageFlow?.keyAt(pageModePage);
     _pageFlow = ReaderPageFlow.fromLoader(
       loader: loader,
       anchorChapterId: currentChapterId,
@@ -232,14 +219,26 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       textScale: textScale,
       windowSide: 2,
     );
-    if (needsRebuild) {
-      _pageFlowLayoutVersion = layoutVersion;
-    }
+
     final pendingLocal = _pendingPageLocalIndex;
     if (pendingLocal != null) {
       final start = _pageFlow!.startIndexOf(currentChapterId) ?? 0;
       pageModePage = start + pendingLocal;
       _pendingPageLocalIndex = null;
+      return start;
+    }
+
+    final remapped =
+        previousRef == null ? null : _pageFlow!.indexOf(previousRef);
+    if (remapped != null) {
+      pageModePage = remapped;
+    } else {
+      // 身份丢失（窗口滑出/排版重排）：钳制到锚点章起始，避免越界。
+      final start = _pageFlow!.startIndexOf(currentChapterId) ?? 0;
+      final maxIndex = _pageFlow!.readablePageCount - 1;
+      if (pageModePage < start || (maxIndex >= 0 && pageModePage > maxIndex)) {
+        pageModePage = start.clamp(0, maxIndex < 0 ? 0 : maxIndex);
+      }
     }
     return _pageFlow!.startIndexOf(currentChapterId) ?? 0;
   }
@@ -255,9 +254,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       return;
     }
     if (ref.chapterId != currentChapterId) {
-      // 记下章内页，流重建后映射到新窗口的全局索引，避免窗口滑动导致错页。
+      final before = currentChapterId;
       _pendingPageLocalIndex = ref.localPageIndex;
       adoptPageModeChapter(ref.chapterId);
+      if (currentChapterId == before) {
+        // 收养被拒绝（加载中且正文未就绪）：清空 pending，避免按旧章错映射。
+        _pendingPageLocalIndex = null;
+      }
     }
     pageModePage = globalIndex;
   }
@@ -285,6 +288,10 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       }
     });
   }
+
+  void requestReaderRebuild() => _requestReaderRebuild();
+
+  void clearPendingPageLocalIndex() => _pendingPageLocalIndex = null;
 
   void scheduleProgressSnapshotApply(ReaderProgressSnapshot snapshot) {
     final updatedAt = snapshot.updatedAt;
@@ -403,19 +410,15 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             viewportSize.height - chromeLayout.chapterHeaderReserve - 1;
         final pageHeight = availablePageHeight > 1 ? availablePageHeight : 1.0;
 
-        final anchorStart = _ensurePageFlow(
+        _ensurePageFlow(
           pageWidth: pageWidth,
           pageHeight: pageHeight,
           textScale: textScale,
         );
         final flow = _pageFlow;
-        // pageModePage 语义：跨章流内全局页索引。
-        // 切章后若仍落在旧局部页，映射到新锚点起始。
-        if (pageModePage < anchorStart ||
-            (flow != null &&
-                pageModePage >= flow.readablePageCount &&
-                flow.readablePageCount > 0)) {
-          pageModePage = anchorStart;
+        // 空流兜底。
+        if (flow != null && flow.readablePageCount == 0 && pageModePage != 0) {
+          pageModePage = 0;
         }
 
         final data = contentLoader?.get(currentChapterId, settings);
@@ -473,66 +476,72 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             selectionActive: selectionActive,
             pageBuilder: (index) {
               final pageRef = flow?.keyAt(index);
-              if (pageRef == null) {
-                // 真正的探测失败：返回 null，由 onNextChapterFn 软扩窗。
-                return null;
-              }
-              final chapterId = pageRef.chapterId;
-              final localIndex = pageRef.localPageIndex;
-              final pageData = contentLoader?.get(chapterId, settings);
-              if (pageData == null) {
-                return const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: SizedBox(
-                      width: 22,
-                      height: 22,
-                      child: CircularProgressIndicator(strokeWidth: 2),
+              if (pageRef != null) {
+                final chapterId = pageRef.chapterId;
+                final localIndex = pageRef.localPageIndex;
+                final pageData = contentLoader?.get(chapterId, settings);
+                if (pageData == null) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                     ),
-                  ),
+                  );
+                }
+                final slice = contentLoader?.computePage(
+                  chapterId: chapterId,
+                  settings: settings,
+                  pageWidth: pageWidth,
+                  pageHeight: pageHeight,
+                  pageIndex: localIndex,
+                  textScale: textScale,
+                );
+                if (slice == null) return null;
+                if (localIndex == 0 &&
+                    isCoverLikeChapter(
+                      totalChars: pageData.totalChars,
+                      blocks: pageData.blocks,
+                    )) {
+                  return ReaderCoverPage(
+                    title:
+                        pageData.content.title.isNotEmpty
+                            ? pageData.content.title
+                            : chapterTitle,
+                    settings: settings,
+                    blocks: pageData.blocks,
+                    itemId: itemId,
+                  );
+                }
+                final pageChapter =
+                    contentLoader?.allChapters
+                        .where((c) => c.id == chapterId)
+                        .firstOrNull;
+                final pageChapterTitle =
+                    pageChapter?.title.isNotEmpty == true
+                        ? pageChapter!.title
+                        : chapterTitle;
+                final showHeader = localIndex == 0;
+                return buildPageContent(
+                  pageData,
+                  slice,
+                  scrollPhysics: const NeverScrollableScrollPhysics(),
+                  chapterTitle: showHeader ? pageChapterTitle : null,
                 );
               }
-              final slice = contentLoader?.computePage(
-                chapterId: chapterId,
-                settings: settings,
+
+              // 探测页：优先续排本章下一页；否则尝试下一章首页。
+              final probe = _buildProbePage(
+                flow: flow,
                 pageWidth: pageWidth,
                 pageHeight: pageHeight,
-                pageIndex: localIndex,
                 textScale: textScale,
+                fallbackTitle: chapterTitle,
               );
-              if (slice == null) return null;
-              // 封面/书讯型短章使用独立 title page 布局。
-              if (localIndex == 0 &&
-                  isCoverLikeChapter(
-                    totalChars: pageData.totalChars,
-                    blocks: pageData.blocks,
-                  )) {
-                return ReaderCoverPage(
-                  title:
-                      pageData.content.title.isNotEmpty
-                          ? pageData.content.title
-                          : chapterTitle,
-                  settings: settings,
-                  blocks: pageData.blocks,
-                  itemId: itemId,
-                );
-              }
-              final pageChapter =
-                  contentLoader?.allChapters
-                      .where((c) => c.id == chapterId)
-                      .firstOrNull;
-              final pageChapterTitle =
-                  pageChapter?.title.isNotEmpty == true
-                      ? pageChapter!.title
-                      : chapterTitle;
-              // 仅该章第一页显示章头，后续页不重复上一章标题。
-              final showHeader = localIndex == 0;
-              return buildPageContent(
-                pageData,
-                slice,
-                scrollPhysics: const NeverScrollableScrollPhysics(),
-                chapterTitle: showHeader ? pageChapterTitle : null,
-              );
+              return probe;
             },
             callbacks: PageTurnCallbacksImpl(
               onPageChangedFn: (index) {
@@ -582,8 +591,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
               },
               onNextChapterFn: () {
                 final flowNow = _pageFlow;
-                final maxIndex = (flowNow?.itemCount ?? 1) - 1;
-                if (pageModePage < maxIndex) {
+                final readable = flowNow?.readablePageCount ?? 0;
+                // 仅在已确认页内前进；到达末页后走扩窗，避免探测死循环。
+                if (readable > 0 && pageModePage < readable - 1) {
                   pageTurnController.next();
                   return;
                 }
@@ -594,7 +604,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                         : currentChapterId;
                 final idx = chapters.indexWhere((c) => c.id == lastId);
                 if (idx >= 0 && idx + 1 < chapters.length) {
-                  // 软扩窗：预热下一章并重建页流，避免 switchToChapter 硬切。
                   unawaited(_expandPageFlowForward(chapters[idx + 1].id));
                   return;
                 }
@@ -608,6 +617,91 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         );
       },
     );
+  }
+
+  /// 探测页内容：本章未分页完时续排下一页，否则尝试下一章首页。
+  Widget? _buildProbePage({
+    required ReaderPageFlow? flow,
+    required double pageWidth,
+    required double pageHeight,
+    required double textScale,
+    required String fallbackTitle,
+  }) {
+    final loader = contentLoader;
+    if (loader == null) {
+      return null;
+    }
+    Widget? renderChapterPage(
+      String chapterId,
+      int localIndex, {
+      required String title,
+    }) {
+      final pageData = loader.get(chapterId, settings);
+      if (pageData == null) {
+        return null;
+      }
+      final slice = loader.computePage(
+        chapterId: chapterId,
+        settings: settings,
+        pageWidth: pageWidth,
+        pageHeight: pageHeight,
+        pageIndex: localIndex,
+        textScale: textScale,
+      );
+      if (slice == null) {
+        return null;
+      }
+      if (localIndex == 0 &&
+          isCoverLikeChapter(
+            totalChars: pageData.totalChars,
+            blocks: pageData.blocks,
+          )) {
+        return ReaderCoverPage(
+          title:
+              pageData.content.title.isNotEmpty
+                  ? pageData.content.title
+                  : title,
+          settings: settings,
+          blocks: pageData.blocks,
+          itemId: itemId,
+        );
+      }
+      return buildPageContent(
+        pageData,
+        slice,
+        scrollPhysics: const NeverScrollableScrollPhysics(),
+        chapterTitle: localIndex == 0 ? title : null,
+      );
+    }
+
+    final windowLast =
+        flow?.chapterIds.isNotEmpty == true ? flow!.chapterIds.last : null;
+    if (windowLast != null && !(flow?.fullyPaginated[windowLast] ?? true)) {
+      final nextLocal = flow?.readableCounts[windowLast] ?? 0;
+      final rendered = renderChapterPage(
+        windowLast,
+        nextLocal,
+        title: fallbackTitle,
+      );
+      if (rendered != null) {
+        return rendered;
+      }
+    }
+
+    final chapters = loader.chapterIds;
+    final edge = windowLast ?? currentChapterId;
+    final edgeIdx = chapters.indexOf(edge);
+    if (edgeIdx >= 0 && edgeIdx + 1 < chapters.length) {
+      final nextId = chapters[edgeIdx + 1];
+      final rendered = renderChapterPage(nextId, 0, title: fallbackTitle);
+      if (rendered != null) {
+        // 探测成功：预热并准备下一帧把该章并入页流。
+        unawaited(_expandPageFlowForward(nextId));
+        return rendered;
+      }
+      unawaited(warmChapterPages(nextId, pageCount: 3));
+    }
+    return null;
   }
 
   /// 跨章页流前向扩窗：预热下一章正文与首页，重建后可直接续读。

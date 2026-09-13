@@ -393,7 +393,9 @@ class PageNavigator {
       if (cachedPage != null) {
         return cachedPage;
       }
-      pageIndex = _maxComputedPage + 1;
+      // 缓存空洞（淘汰后）时从 0 顺序重算，而不是只从 max+1 向前搜。
+      final hasHole = _hasCacheHole();
+      pageIndex = hasHole ? 0 : _maxComputedPage + 1;
     }
 
     final batchSize = pagesPerBatch.clamp(1, 32);
@@ -436,6 +438,15 @@ class PageNavigator {
       }
     }
     return null;
+  }
+
+  bool _hasCacheHole() {
+    for (var i = 0; i <= _maxComputedPage; i++) {
+      if (!_cache.containsKey(i)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /// 清除缓存和分页状态（设置变更或窗口变化时调用）。
@@ -882,29 +893,33 @@ class ReaderContentLoader {
   }
 
   /// 切换活动章节，驱逐远章，返回需预加载的 chapterId 列表。
+  ///
+  /// 缓存半径与翻页页流 windowSide（2）对齐，避免 ±2 章恒为空。
   List<String> setActive(String chapterId) {
     _activeChapterId = chapterId;
     final activeIdx = _chapterIndex(chapterId);
+    const cacheRadius = 2;
 
     _cache.removeWhere((key, _) {
       final idx = _chapterIndex(key.chapterId);
-      return (idx - activeIdx).abs() > 1;
+      return (idx - activeIdx).abs() > cacheRadius;
     });
     _contentCache.removeWhere((chapterId, _) {
       final idx = _chapterIndex(chapterId);
-      return (idx - activeIdx).abs() > 1;
+      return (idx - activeIdx).abs() > cacheRadius;
     });
     // 邻章 blocks 就绪后丢 HTML，避免在 build 热路径反复处理。
     dropHtmlForNeighbors(chapterId);
 
     final needFetch = <String>[];
-    final prevId = _neighborId(activeIdx - 1);
-    final nextId = _neighborId(activeIdx + 1);
-    if (prevId != null && getByChapterId(prevId) == null) {
-      needFetch.add(prevId);
-    }
-    if (nextId != null && getByChapterId(nextId) == null) {
-      needFetch.add(nextId);
+    for (var delta = -cacheRadius; delta <= cacheRadius; delta++) {
+      if (delta == 0) {
+        continue;
+      }
+      final id = _neighborId(activeIdx + delta);
+      if (id != null && getByChapterId(id) == null) {
+        needFetch.add(id);
+      }
     }
     return needFetch;
   }
