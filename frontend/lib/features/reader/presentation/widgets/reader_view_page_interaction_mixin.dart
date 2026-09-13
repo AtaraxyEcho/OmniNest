@@ -195,6 +195,9 @@ mixin ReaderViewPageInteractionMixin
       }
     }
     currentChapterId = chapterId;
+    // 收养改写章节身份后，在途的旧章内容加载即使完成也不再被消费；
+    // 立即释放协调器，避免 isLoading 残留把翻页输入闸门锁死。
+    chapterLoadCoordinator.cancel();
     annotationHandler?.updateChapter(chapterId);
     final needFetch = contentLoader?.setActive(chapterId) ?? const [];
     for (final id in needFetch) {

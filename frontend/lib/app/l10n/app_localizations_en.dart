@@ -5061,6 +5061,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerAlreadyFirstChapter => 'Already at the first chapter';
 
   @override
+  String get readerChapterSwitching => 'Switching chapter, please wait…';
+
+  @override
   String get readerAlreadyLastChapter => 'Already at the last chapter';
 
   @override

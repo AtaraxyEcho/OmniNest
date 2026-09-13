@@ -189,6 +189,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   double get bookProgress;
 
+  /// 按 [chapterId] + [charOffset] 计算全书加权进度（由 State 实现）。
+  double bookProgressFor(String chapterId, int charOffset);
+
   Size? get pageViewportSize;
   set pageViewportSize(Size? value);
 
@@ -322,9 +325,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       if (!_isCurrentChapterRequest(requestedChapterId, generation)) return;
 
       // 跨设备：最新进度在其他章节（resume 语义下），转整章切换而非丢弃。
+      // 仅开书首次加载允许（见 loadLocalProgress 的 defer 收紧）。
       if (snapshot != null &&
           snapshot.chapterId.isNotEmpty &&
           snapshot.chapterId != requestedChapterId) {
+        _hasCompletedInitialChapterLoad = true;
         chapterNavigationIntent = const ReaderChapterNavigationIntent.resume();
         chapterLoadingTimer?.cancel();
         showChapterLoadingOverlay = false;
@@ -342,7 +347,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       }
 
       if (navigationIntent.entryPoint == ReaderChapterEntryPoint.resume &&
-          snapshot != null) {
+          snapshot != null &&
+          (snapshot.chapterId.isEmpty ||
+              snapshot.chapterId == requestedChapterId)) {
         applyProgressSnapshot(snapshot);
       } else {
         _applyChapterNavigationIntent(
@@ -352,6 +359,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         );
       }
 
+      _hasCompletedInitialChapterLoad = true;
       chapterNavigationIntent = const ReaderChapterNavigationIntent.resume();
       chapterLoadingTimer?.cancel();
       showChapterLoadingOverlay = false;
@@ -447,6 +455,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       }
     }
     currentChapterId = chapterId;
+    // 收养改写章节身份后，在途的旧章内容加载即使完成也不再被消费；
+    // 立即释放协调器，避免 isLoading 残留把翻页输入闸门锁死。
+    chapterLoadCoordinator.cancel();
     annotationHandler?.updateChapter(chapterId);
     final needFetch = contentLoader?.setActive(chapterId) ?? const [];
     for (final id in needFetch) {
@@ -465,6 +476,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   }
 
   bool _adoptRebuildScheduled = false;
+
+  /// 开书首次章节加载是否已完成；跨设备跨章 defer 仅允许发生在该加载上。
+  bool _hasCompletedInitialChapterLoad = false;
 
   void _scheduleAdoptRebuild() {
     if (_adoptRebuildScheduled) return;
@@ -675,20 +689,34 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         isSwitchingChapter = false;
         isRestoringProgress = false;
         setState(() {});
+      } else if (mounted) {
+        // 章节已被切走或收养改写：结果不再被消费，必须释放协调器，
+        // 否则 _loadingChapterId 残留把 PagedState.isPaginating 永久锁真，
+        // 翻页点击热区/底栏/拖动全部无响应。
+        chapterLoadCoordinator.releaseIfCurrent(
+          requestGeneration,
+          requestedChapterId,
+        );
       }
     } catch (e) {
       if (kDebugMode) {
         readerDebugLog('ReaderView: chapter content load failed: $e');
       }
-      if (mounted &&
-          chapterLoadCoordinator.isCurrent(
+      if (mounted) {
+        if (chapterLoadCoordinator.isCurrent(
+              requestGeneration,
+              requestedChapterId,
+            ) &&
+            requestedChapterId == currentChapterId) {
+          chapterLoadCoordinator.fail(requestGeneration, requestedChapterId);
+          isSwitchingChapter = false;
+          isRestoringProgress = false;
+        } else {
+          chapterLoadCoordinator.releaseIfCurrent(
             requestGeneration,
             requestedChapterId,
-          ) &&
-          requestedChapterId == currentChapterId) {
-        chapterLoadCoordinator.fail(requestGeneration, requestedChapterId);
-        isSwitchingChapter = false;
-        isRestoringProgress = false;
+          );
+        }
         setState(() {});
       }
     }
@@ -724,13 +752,25 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         globalLatest.hasReadableProgress &&
         globalLatest.chapterId.isNotEmpty &&
         globalLatest.chapterId != chapterId) {
-      if (kDebugMode) {
-        readerDebugLog(
-          'ProgressLoad: global latest on other chapter '
-          '(${globalLatest.chapterId}), deferring to chapter switch',
-        );
+      // 跨章 defer 仅限开书首次加载：显式跳章/收养后的 resume 加载不得被
+      // 「全局最新在别章」劫持——该最新值可能是切换期产生的脏快照，会把
+      // 用户拽离刚到达的目标章（目录高亮与阅读位置错位的根因）。
+      if (_hasCompletedInitialChapterLoad) {
+        if (kDebugMode) {
+          readerDebugLog(
+            'ProgressLoad: global latest on other chapter '
+            '(${globalLatest.chapterId}) suppressed after initial load',
+          );
+        }
+      } else {
+        if (kDebugMode) {
+          readerDebugLog(
+            'ProgressLoad: global latest on other chapter '
+            '(${globalLatest.chapterId}), deferring to chapter switch',
+          );
+        }
+        return globalLatest;
       }
-      return globalLatest;
     }
 
     final result = latestProgressForCurrentChapter([
@@ -896,7 +936,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     String? chapterId,
     int? charOffset,
   }) {
-    final snapshotChapterId = chapterId ?? currentChapterId;
+    var snapshotChapterId = chapterId ?? currentChapterId;
     final snapshotChapterTitle = cachedContent?.title ?? '';
 
     int effectiveCharOffset;
@@ -911,14 +951,31 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         chapterId == null &&
         scrollController.hasClients &&
         scrollController.position.maxScrollExtent > 0) {
-      // 连续滚动：滚动 offset 是窗口绝对坐标，必须走统一换算扣前缀。
-      effectiveCharOffset =
-          contentLoader == null
-              ? positionTracker.charOffset
-              : windowContentYToCharOffset(
-                snapshotChapterId,
-                scrollController.offset + viewportAnchorY,
-              );
+      final data = contentLoader?.getByChapterId(snapshotChapterId);
+      final windowUsable =
+          data != null &&
+          data.cumulativeHeights.isNotEmpty &&
+          continuousScrollController.entryFor(snapshotChapterId) != null;
+      if (windowUsable) {
+        // 连续滚动：滚动 offset 是窗口绝对坐标，必须走统一换算扣前缀。
+        effectiveCharOffset =
+            contentLoader == null
+                ? positionTracker.charOffset
+                : windowContentYToCharOffset(
+                  snapshotChapterId,
+                  scrollController.offset + viewportAnchorY,
+                );
+      } else {
+        // 章节数据未就绪或不在当前窗口（跳章未落定/收养竞态）：窗口坐标
+        // 对该章不可解释。退回 tracker 的自洽位置并同步修正章节身份，
+        // 避免把旧章偏移算进新章（totalChars=0 时还会把 chapterProgress
+        // 退化成 scrollProgress 兜底值落库，产生脏进度）。
+        final trackedChapterId = positionTracker.chapterId;
+        if (trackedChapterId.isNotEmpty) {
+          snapshotChapterId = trackedChapterId;
+        }
+        effectiveCharOffset = positionTracker.charOffset;
+      }
     } else {
       effectiveCharOffset = positionTracker.charOffset;
     }
@@ -1160,15 +1217,66 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     unawaited(switchToChapter(chapters[idx].id, intent: intent));
   }
 
+  /// 离场快照：滚动模式以 tracker 为事实源。
+  ///
+  /// currentChapterId 可能已被上一次跳章改写而窗口/滚动位置尚未跟上
+  /// （滑窗补偿在切换期被抑制），此时按窗口坐标换算会把旧 offset 解释成
+  /// 新章的虚假进度并 force 落库；tracker 的章节身份与偏移成对更新，
+  /// 以其章节身份为准。翻页模式页流自带章节归属，仍走 buildProgressSnapshot。
+  ReaderProgressSnapshot? buildDepartureSnapshot() {
+    if (isPageMode) {
+      return buildProgressSnapshot();
+    }
+    final trackedChapterId = positionTracker.chapterId;
+    final chapterId =
+        trackedChapterId.isEmpty ? currentChapterId : trackedChapterId;
+    final charOffset = positionTracker.charOffset;
+    final totalChars =
+        contentLoader?.getByChapterId(chapterId)?.totalChars ?? 0;
+    final chapterProgress =
+        totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
+    final progress = bookProgressFor(chapterId, charOffset);
+    if (kDebugMode) {
+      readerDebugLog(
+        'ProgressSnapshot DEPARTURE: chapter=$chapterId, '
+        'charOffset=$charOffset, chapterProgress=$chapterProgress',
+      );
+    }
+    if (charOffset <= 0 && chapterProgress <= 0 && progress <= 0) {
+      return null;
+    }
+    return ReaderProgressSnapshot(
+      chapterId: chapterId,
+      charOffset: charOffset,
+      progress: progress,
+      chapterProgress: chapterProgress,
+      chapterTitle:
+          contentLoader?.getByChapterId(chapterId)?.content.title ??
+          cachedContent?.title ??
+          '',
+      mode: 'scroll',
+      updatedAt: DateTime.now(),
+    );
+  }
+
   /// 使用明确的进入位置切换章节。
   Future<void> switchToChapter(
     String chapterId, {
     ReaderChapterNavigationIntent intent =
         const ReaderChapterNavigationIntent.start(),
   }) async {
-    if (isSwitchingChapter) return;
+    if (isSwitchingChapter) {
+      // 切换未完成时再次触发（目录/上一章下一章连点）：给出反馈而非静默吞掉。
+      if (chapterId != currentChapterId && mounted) {
+        showReaderSnackBar(
+          context,
+          AppLocalizations.of(context).readerChapterSwitching,
+        );
+      }
+      return;
+    }
 
-    final currentSnapshot = buildProgressSnapshot();
+    final currentSnapshot = buildDepartureSnapshot();
     if (intent.offerReturn && currentSnapshot != null) {
       returnToProgressSnapshot = currentSnapshot;
     }

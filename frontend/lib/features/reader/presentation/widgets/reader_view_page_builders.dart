@@ -712,6 +712,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       return;
     }
     _requestReaderRebuild();
+    // 探测页翻转发生时页流尚未扩窗，keyAt 返回 null 会跳过跨章收养，
+    // 目录高亮/进度章节滞后一页；扩窗完成后对当前页补一次归属解析。
+    _handlePageFlowIndexChanged(pageModePage);
   }
 
   // ── 单页内容 ──

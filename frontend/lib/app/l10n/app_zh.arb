@@ -2017,6 +2017,7 @@
   "readerTtsPause": "暂停",
   "readerTtsStop": "停止",
   "readerAlreadyFirstChapter": "已经是第一章了",
+  "readerChapterSwitching": "正在切换章节，请稍候",
   "readerAlreadyLastChapter": "已经是最后一章了",
   "readerRestoringProgress": "正在恢复阅读位置…",
   "readerReturnToProgress": "回到上次阅读位置",

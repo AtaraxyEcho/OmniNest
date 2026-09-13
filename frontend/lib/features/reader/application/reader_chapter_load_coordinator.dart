@@ -57,4 +57,16 @@ class ReaderChapterLoadCoordinator {
     _generation++;
     _loadingChapterId = null;
   }
+
+  /// 请求结果不再被消费（章节已被切走或收养改写）时释放占用。
+  ///
+  /// 仅当代次与章节仍匹配时生效，避免误清后续请求的占用状态。
+  /// 残留的 _loadingChapterId 会让 isLoading 恒真，进而把依赖该状态的
+  /// 输入闸门（如翻页 PagedState.isPaginating）永久锁死。
+  void releaseIfCurrent(int generation, String chapterId) {
+    if (!isCurrent(generation, chapterId)) {
+      return;
+    }
+    cancel();
+  }
 }

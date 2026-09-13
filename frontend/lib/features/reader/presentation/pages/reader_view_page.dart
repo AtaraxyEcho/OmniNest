@@ -579,7 +579,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   }
 
   /// 全书进度百分比（0.0-1.0），用于显示和同步。
-  double get _bookProgress {
+  double get _bookProgress =>
+      bookProgressFor(_currentChapterId, _positionTracker.charOffset);
+
+  /// 按 [chapterId] + [charOffset] 计算全书加权进度。
+  ///
+  /// 离场快照在切换期会用 tracker 的章节身份取值，此时 chapterId 可能
+  /// 与 _currentChapterId 不同，因此身份与偏移必须成对传入。
+  @override
+  double bookProgressFor(String chapterId, int charOffset) {
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
       return _scrollProgressNotifier.value.clamp(0.0, 1.0);
@@ -587,12 +595,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     final chapterCharCounts =
         parsedBook.chapters.map((c) => c.charCount).toList();
     // 当前章节使用实际解析的 totalChars（与 parsedBook.charCount 可能因 HTML 标签不同）
-    final chapterData = _contentLoader?.getByChapterId(_currentChapterId);
+    final chapterData = _contentLoader?.getByChapterId(chapterId);
     final currentChapterIdx =
-        _contentLoader?.allChapters.indexWhere(
-          (c) => c.id == _currentChapterId,
-        ) ??
-        0;
+        _contentLoader?.allChapters.indexWhere((c) => c.id == chapterId) ?? 0;
     if (chapterData != null && currentChapterIdx < chapterCharCounts.length) {
       chapterCharCounts[currentChapterIdx] = chapterData.totalChars;
     }
@@ -610,12 +615,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     ) {
       previousChars += chapterCharCounts[i];
     }
-    // 当前章节内的字符数：直接用 tracker 的 charOffset，不依赖 _scrollProgress
+    // 当前章节内的字符数：直接用传入的 charOffset，不依赖 _scrollProgress
     final chapterChars = chapterData?.totalChars ?? 0;
-    final currentChapterChars = _positionTracker.charOffset.clamp(
-      0,
-      chapterChars,
-    );
+    final currentChapterChars = charOffset.clamp(0, chapterChars);
 
     return ((previousChars + currentChapterChars) / totalBookChars).clamp(
       0.0,

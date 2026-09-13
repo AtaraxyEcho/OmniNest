@@ -2143,6 +2143,7 @@
   "readerTtsPause": "Pause",
   "readerTtsStop": "Stop",
   "readerAlreadyFirstChapter": "Already at the first chapter",
+  "readerChapterSwitching": "Switching chapter, please wait…",
   "readerAlreadyLastChapter": "Already at the last chapter",
   "readerRestoringProgress": "Restoring reading position…",
   "readerReturnToProgress": "Return to last position",

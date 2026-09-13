@@ -9341,6 +9341,12 @@ abstract class AppLocalizations {
   /// **'Already at the first chapter'**
   String get readerAlreadyFirstChapter;
 
+  /// No description provided for @readerChapterSwitching.
+  ///
+  /// In en, this message translates to:
+  /// **'Switching chapter, please wait…'**
+  String get readerChapterSwitching;
+
   /// No description provided for @readerAlreadyLastChapter.
   ///
   /// In en, this message translates to:
