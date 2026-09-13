@@ -3,8 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/version/app_version_api.dart';
 import 'dart:async' show unawaited;
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:web/web.dart' as web_window;
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 
@@ -144,9 +144,9 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
   }
 
   Future<void> _openDownloadPage(String url) async {
-    // Web 直接新开下载页；桌面/移动无 url_launcher 依赖，回退展示地址。
+    // Web 经条件导入新开下载页；桌面/移动展示地址。
     if (kIsWeb) {
-      web_window.window.open(url);
+      openDownloadUrl(url);
       return;
     }
     if (mounted) {
