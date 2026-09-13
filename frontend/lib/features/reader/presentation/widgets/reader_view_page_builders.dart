@@ -129,6 +129,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void onContinuousWindowExpand({required bool forward});
   void prefetchNextChapterAtBoundary(int pageIndex);
   void adoptPageModeChapter(String chapterId, {int localPageIndex = 0});
+  Future<void> warmChapterPages(String chapterId, {int pageCount = 5});
   int windowContentYToCharOffset(String chapterId, double windowContentY);
   double chapterStartScrollOffset(String chapterId);
   void restoreToChapterStart(String chapterId);
@@ -471,8 +472,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             selectionActive: selectionActive,
             pageBuilder: (index) {
               final pageRef = flow?.keyAt(index);
-              final chapterId = pageRef?.chapterId ?? currentChapterId;
-              final localIndex = pageRef?.localPageIndex ?? index;
+              if (pageRef == null) {
+                // 真正的探测失败：返回 null，由 onNextChapterFn 软扩窗。
+                return null;
+              }
+              final chapterId = pageRef.chapterId;
+              final localIndex = pageRef.localPageIndex;
               final pageData = contentLoader?.get(chapterId, settings);
               if (pageData == null) {
                 return const Center(
@@ -565,6 +570,17 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                   pageTurnController.next();
                   return;
                 }
+                final chapters = contentLoader?.allChapters ?? const [];
+                final lastId =
+                    flowNow != null && flowNow.chapterIds.isNotEmpty
+                        ? flowNow.chapterIds.last
+                        : currentChapterId;
+                final idx = chapters.indexWhere((c) => c.id == lastId);
+                if (idx >= 0 && idx + 1 < chapters.length) {
+                  // 软扩窗：预热下一章并重建页流，避免 switchToChapter 硬切。
+                  unawaited(_expandPageFlowForward(chapters[idx + 1].id));
+                  return;
+                }
                 tryNavigateChapter(1);
               },
               onToggleControlsFn: toggleControls,
@@ -575,6 +591,15 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         );
       },
     );
+  }
+
+  /// 跨章页流前向扩窗：预热下一章正文与首页，重建后可直接续读。
+  Future<void> _expandPageFlowForward(String chapterId) async {
+    await warmChapterPages(chapterId, pageCount: 5);
+    if (!mounted) {
+      return;
+    }
+    _requestReaderRebuild();
   }
 
   // ── 单页内容 ──

@@ -505,8 +505,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 翻页模式接近章末时预取下章前几页。
   ///
-  /// 章末切换走 switchToChapter，下章冷启动需逐页 TextPainter 测量；
-  /// 提前把下章前 3 页算入 PageNavigator，切换后首帧即可渲染。
+  /// 跨章页流下章冷启动需逐页 TextPainter 测量；
+  /// 提前把下章前 5 页算入 PageNavigator，翻到边界时首帧即可渲染。
   void prefetchNextChapterAtBoundary(int pageIndex) {
     final loader = contentLoader;
     if (!isPageMode || loader == null || !mounted) return;
@@ -521,31 +521,40 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       settings,
       textScale: textScale,
     );
-    // 未分页完成时总数未知，宁早勿晚；完成后限末 3 页触发。
+    // 未分页完成时总数未知，宁早勿晚；完成后限末 5 页触发。
     if (navigator.isFullyPaginated &&
-        pageIndex < navigator.readablePageCount - 3) {
+        pageIndex < navigator.readablePageCount - 5) {
       return;
     }
     final chapters = loader.allChapters;
     final idx = chapters.indexWhere((c) => c.id == currentChapterId);
     if (idx < 0 || idx + 1 >= chapters.length) return;
     final nextId = chapters[idx + 1].id;
-    unawaited(() async {
-      if (contentLoader?.get(nextId, settings) == null) {
-        await prefetchChapter(nextId);
-        if (!mounted || contentLoader == null) return;
-      }
-      for (var page = 0; page < 3; page++) {
-        contentLoader!.computePage(
-          chapterId: nextId,
-          settings: settings,
-          pageWidth: pageWidth,
-          pageHeight: pageHeight,
-          pageIndex: page,
-          textScale: textScale,
-        );
-      }
-    }());
+    unawaited(warmChapterPages(nextId, pageCount: 5));
+  }
+
+  /// 预取章节正文并预热前 N 页分页，供跨章页流立即渲染。
+  Future<void> warmChapterPages(String chapterId, {int pageCount = 5}) async {
+    final loader = contentLoader;
+    if (!mounted || loader == null) return;
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final pageWidth = computePageWidth();
+    final pageHeight = computePageHeight();
+    if (loader.get(chapterId, settings) == null) {
+      await prefetchChapter(chapterId);
+      if (!mounted || contentLoader == null) return;
+    }
+    for (var page = 0; page < pageCount; page++) {
+      if (!mounted || contentLoader == null) return;
+      contentLoader!.computePage(
+        chapterId: chapterId,
+        settings: settings,
+        pageWidth: pageWidth,
+        pageHeight: pageHeight,
+        pageIndex: page,
+        textScale: textScale,
+      );
+    }
   }
 
   /// 预加载指定章节内容。
