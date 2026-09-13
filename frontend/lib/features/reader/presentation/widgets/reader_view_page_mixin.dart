@@ -386,6 +386,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     if (!mounted || isLoadingChapter || isSwitchingChapter) {
       return;
     }
+    // 有真实恢复位置时不跳过；零进度恢复已提前返回，不会挡到这里。
     if (isRestoringProgress || pendingRestoreCharOffset != null) {
       return;
     }
@@ -398,20 +399,25 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
     final idx = chapters.indexWhere((c) => c.id == currentChapterId);
-    if (idx != 0) {
+    if (idx < 0 || idx >= chapters.length - 1) {
       return;
     }
     final totalChars = chapterData.totalChars;
-    final isCoverLike = isCoverLikeChapter(
-      totalChars: totalChars,
-      blocks: chapterData.blocks,
-    );
+    // 空章或封面型短章：顺序开书时自动前进到下一章。
+    final isCoverLike =
+        totalChars <= 0 ||
+        isCoverLikeChapter(totalChars: totalChars, blocks: chapterData.blocks);
     if (!isCoverLike) {
       return;
     }
-    // 有本地/服务端进度时不跳过（会走恢复路径）。
     if (positionTracker.charOffset > 0 || scrollProgress > 0) {
       return;
+    }
+    if (kDebugMode) {
+      readerDebugLog(
+        'ReaderView: skip cover/empty chapter $currentChapterId '
+        '(totalChars=$totalChars) → ${chapters[idx + 1].id}',
+      );
     }
     unawaited(switchToChapter(chapters[idx + 1].id));
   }
@@ -732,6 +738,20 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       if (kDebugMode) {
         readerDebugLog('ProgressRestore SKIP: chapterData is null');
       }
+      return;
+    }
+
+    // 零进度快照无需恢复：避免 isRestoringProgress 挡住封面/空章跳过，
+    // 也避免 ScrollRestore 在 maxScrollExtent 尚未就绪时超时。
+    final isZeroProgress =
+        snapshot.charOffset <= 0 &&
+        snapshot.chapterProgress <= 0 &&
+        snapshot.progress <= 0;
+    if (isZeroProgress) {
+      if (kDebugMode) {
+        readerDebugLog('ProgressRestore SKIP: zero progress snapshot');
+      }
+      lastAppliedProgressAt = snapshot.updatedAt ?? DateTime.now();
       return;
     }
 

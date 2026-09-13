@@ -123,6 +123,7 @@ class ScrollRestore {
       final max = scrollController.position.maxScrollExtent;
       if (max <= 0) {
         pendingFrames++;
+        // 空内容/尚未布局：若已等待较久则直接结束，避免长时间卡在恢复态。
         if (pendingFrames >= maxPendingFrames) {
           _active = false;
           if (kDebugMode) {

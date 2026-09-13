@@ -774,6 +774,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       }
 
       if (content != null) {
+        // 内容已就绪时同步初始化 loader，减少一帧骨架闪烁。
         if (_contentLoader == null) {
           initContentLoader(chapters);
           stateChanged = true;
