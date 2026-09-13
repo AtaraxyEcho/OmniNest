@@ -9347,6 +9347,12 @@ abstract class AppLocalizations {
   /// **'Switching chapter, please wait…'**
   String get readerChapterSwitching;
 
+  /// No description provided for @readerSyncRemoteProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Progress updated on another device — tap to sync'**
+  String get readerSyncRemoteProgress;
+
   /// No description provided for @readerAlreadyLastChapter.
   ///
   /// In en, this message translates to:

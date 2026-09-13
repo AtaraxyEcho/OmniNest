@@ -697,6 +697,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
           requestGeneration,
           requestedChapterId,
         );
+        // 正文已在手：按预取语义解析进 loader，不浪费这次 IO——
+        // 目标章仍在缓存半径内时，blocks 随后即会被用到。
+        if (content != null && _isWithinCacheRadius(requestedChapterId)) {
+          unawaited(prefetchChapter(requestedChapterId));
+        }
       }
     } catch (e) {
       if (kDebugMode) {
@@ -720,6 +725,20 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         setState(() {});
       }
     }
+  }
+
+  /// 章节是否仍在当前活动章的缓存半径内（与 loader 驱逐策略一致）。
+  bool _isWithinCacheRadius(String chapterId) {
+    final loader = contentLoader;
+    if (loader == null) {
+      return false;
+    }
+    final all = loader.allChapters;
+    final activeIdx = all.indexWhere((c) => c.id == currentChapterId);
+    final idx = all.indexWhere((c) => c.id == chapterId);
+    return activeIdx >= 0 &&
+        idx >= 0 &&
+        (idx - activeIdx).abs() <= kContinuousCacheRadius;
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

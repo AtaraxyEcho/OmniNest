@@ -4903,6 +4903,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerChapterSwitching => '正在切换章节，请稍候';
 
   @override
+  String get readerSyncRemoteProgress => '其他设备已更新进度，点击同步';
+
+  @override
   String get readerAlreadyLastChapter => '已经是最后一章了';
 
   @override

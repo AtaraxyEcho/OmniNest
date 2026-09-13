@@ -5064,6 +5064,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerChapterSwitching => 'Switching chapter, please wait…';
 
   @override
+  String get readerSyncRemoteProgress =>
+      'Progress updated on another device — tap to sync';
+
+  @override
   String get readerAlreadyLastChapter => 'Already at the last chapter';
 
   @override

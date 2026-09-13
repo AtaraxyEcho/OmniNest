@@ -90,6 +90,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   set pageViewportSize(Size? value);
   bool get showReturnControl;
   bool get showControls;
+
+  /// 当前"返回原进度"浮层是否为远端进度同步入口（决定文案）。
+  bool get returnControlIsRemoteOffer;
   bool get modeSwitchInProgress;
   set modeSwitchInProgress(bool value);
   int? get modeSwitchAnchor;
@@ -1589,7 +1592,10 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         duration: const Duration(milliseconds: 300),
         child: ReaderReturnToProgressControl(
           settings: settings,
-          label: l10n.readerReturnToProgress,
+          label:
+              returnControlIsRemoteOffer
+                  ? l10n.readerSyncRemoteProgress
+                  : l10n.readerReturnToProgress,
           onPressed: returnToOriginalProgress,
         ),
       ),

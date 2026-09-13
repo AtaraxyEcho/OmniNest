@@ -102,28 +102,50 @@ mixin ReaderViewPageInteractionMixin
     final charOffset = position.charOffset;
     final newProgress = (charOffset / totalChars).clamp(0.0, 1.0);
 
-    positionTracker.updateFromScroll(
-      offset: scrollController.hasClients ? scrollController.offset : 0,
-      maxExtent:
-          scrollController.hasClients
-              ? scrollController.position.maxScrollExtent
-              : 0,
-      totalChars: totalChars,
-      chapterId: position.chapterId,
-      charOffset: charOffset,
-    );
-    if ((newProgress - scrollProgress).abs() > 0.004 ||
-        (position.chapterId == currentChapterId &&
-            (charOffset - (_lastSavedScrollCharOffset ?? -1)).abs() >= 48)) {
-      // 热路径：只更新通知器；写盘经 coordinator 合并。
-      // 阈值避免滚动每帧都 schedule，降低写入与 noteOwnProgressSave 开销。
-      scrollProgress = newProgress;
-      _lastSavedScrollCharOffset = charOffset;
-      scheduleLocalProgressSave(
-        chapterProgress: newProgress,
-        mode: 'scroll',
+    // 测高收敛期间（估算→精测分批替换），同一滚动位置的字符映射会来回
+    // 漂移；前向滚动中的映射回退不是真实回滚（真实回滚 offset 必减小），
+    // 抑制本次回写，避免进度显示与落库值在收敛期反复横跳。章节切换帧
+    // （此前显示值属于旧章）与本章精测已完成时不抑制。
+    final offsetNow =
+        scrollController.hasClients ? scrollController.offset : 0.0;
+    final forwardScroll =
+        _lastResolvedOffset == null || offsetNow >= _lastResolvedOffset! - 0.5;
+    final wasSameChapter = _lastResolvedProgressChapterId == position.chapterId;
+    final converging = !(chapterData?.hasPreciseHeights ?? true);
+    _lastResolvedOffset = offsetNow;
+    var applyPosition = true;
+    if (converging &&
+        forwardScroll &&
+        wasSameChapter &&
+        newProgress < scrollProgress - 0.0005) {
+      applyPosition = false;
+    }
+
+    if (applyPosition) {
+      _lastResolvedProgressChapterId = position.chapterId;
+      positionTracker.updateFromScroll(
+        offset: scrollController.hasClients ? scrollController.offset : 0,
+        maxExtent:
+            scrollController.hasClients
+                ? scrollController.position.maxScrollExtent
+                : 0,
+        totalChars: totalChars,
+        chapterId: position.chapterId,
         charOffset: charOffset,
       );
+      if ((newProgress - scrollProgress).abs() > 0.004 ||
+          (position.chapterId == currentChapterId &&
+              (charOffset - (_lastSavedScrollCharOffset ?? -1)).abs() >= 48)) {
+        // 热路径：只更新通知器；写盘经 coordinator 合并。
+        // 阈值避免滚动每帧都 schedule，降低写入与 noteOwnProgressSave 开销。
+        scrollProgress = newProgress;
+        _lastSavedScrollCharOffset = charOffset;
+        scheduleLocalProgressSave(
+          chapterProgress: newProgress,
+          mode: 'scroll',
+          charOffset: charOffset,
+        );
+      }
     }
 
     if (scrollController.hasClients) {
@@ -142,6 +164,8 @@ mixin ReaderViewPageInteractionMixin
   }
 
   int? _lastSavedScrollCharOffset;
+  double? _lastResolvedOffset;
+  String? _lastResolvedProgressChapterId;
   Timer? _preloadDebounce;
   Timer? _expandForwardDebounce;
   Timer? _expandBackwardDebounce;

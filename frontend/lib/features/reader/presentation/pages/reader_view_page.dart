@@ -327,6 +327,43 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     );
   }
 
+  /// 远端进度浮层Offer的快照与去重时间戳；用 identical 判定当前浮层
+  /// 是否由远端 Offer 产生（切换离场路径覆写 returnToProgressSnapshot
+  /// 后自动失效，无需额外复位标志）。
+  ReaderProgressSnapshot? _remoteOfferSnapshot;
+  DateTime? _lastRemoteOfferAt;
+
+  /// 当前"返回原进度"浮层是否为远端进度同步入口。
+  @override
+  bool get returnControlIsRemoteOffer =>
+      returnToProgressSnapshot != null &&
+      identical(returnToProgressSnapshot, _remoteOfferSnapshot);
+
+  /// 阅读中途收到其他章节更新的服务端进度：不自动拽跳，浮层提供同步入口。
+  ///
+  /// 自动拽离当前阅读位置会在活跃阅读中反复发生（对端按节流持续上报）；
+  /// 打开书时落到全局最新已由首载 defer 覆盖，中途只提示不打扰。
+  void offerRemoteProgressJump(ReaderProgressSnapshot snapshot) {
+    final updatedAt = snapshot.updatedAt;
+    if (!mounted ||
+        updatedAt == null ||
+        isSwitchingChapter ||
+        isLoadingChapter ||
+        isRestoringProgress ||
+        restore.shouldSuppressWrites ||
+        showReturnControl) {
+      return;
+    }
+    final lastOfferAt = _lastRemoteOfferAt;
+    if (lastOfferAt != null && !updatedAt.isAfter(lastOfferAt)) {
+      return;
+    }
+    _lastRemoteOfferAt = updatedAt;
+    _remoteOfferSnapshot = snapshot;
+    returnToProgressSnapshot = snapshot;
+    showReturnToProgressSnackBar();
+  }
+
   @override
   double? get pendingChapterProgress => _pendingChapterProgress;
   @override
@@ -906,14 +943,23 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
                 detailAsync.asData?.value.progress,
               );
               final latestTime = latestSnapshot.updatedAt;
-              final shouldApply =
-                  latestSnapshot.chapterId == _currentChapterId &&
+              final isNewer =
                   latestTime != null &&
                   (_lastAppliedProgressAt == null ||
-                      latestTime.isAfter(_lastAppliedProgressAt!)) &&
+                      latestTime.isAfter(_lastAppliedProgressAt!));
+              final notEcho =
+                  latestTime != null &&
                   !_isOwnProgressEcho(latestSnapshot, latestTime);
-              if (shouldApply) {
-                scheduleProgressSnapshotApply(latestSnapshot);
+              if (latestSnapshot.chapterId == _currentChapterId) {
+                if (isNewer && notEcho) {
+                  scheduleProgressSnapshotApply(latestSnapshot);
+                }
+              } else if (latestSnapshot.chapterId.isNotEmpty &&
+                  latestSnapshot.hasReadableProgress &&
+                  isNewer &&
+                  notEcho) {
+                // 他章更新不自动拽跳（活跃阅读中被拽离是干扰），浮层提供入口。
+                offerRemoteProgressJump(latestSnapshot);
               }
             }
 
