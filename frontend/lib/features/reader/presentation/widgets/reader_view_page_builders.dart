@@ -470,8 +470,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                   isSwitchingChapter ||
                   isLoadingChapter ||
                   chapterLoadCoordinator.isLoading ||
-                  pageLocator.isLocating ||
-                  isRestoringProgress,
+                  pageLocator.isLocating,
+              // isRestoringProgress 不算分页中：否则恢复定位期间会锁手势。
             ),
             selectionActive: selectionActive,
             pageBuilder: (index) {

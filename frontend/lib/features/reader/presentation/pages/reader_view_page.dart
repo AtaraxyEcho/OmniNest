@@ -839,7 +839,29 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
                 },
               );
             }
-            final content = loadedContent ?? _cachedContent;
+            var content = loadedContent ?? _cachedContent;
+            final chapterDataForBlocks = _contentLoader?.getByChapterId(
+              _currentChapterId,
+            );
+            // HTML 已 drop 但 blocks 仍在时：不闪骨架，用占位 content 直接渲染。
+            if (content == null &&
+                _contentLoader != null &&
+                chapterDataForBlocks != null &&
+                chapterDataForBlocks.blocks.isNotEmpty) {
+              final titleFromList =
+                  chapters
+                      .where((c) => c.id == _currentChapterId)
+                      .map((c) => c.title)
+                      .firstOrNull;
+              content = ReaderChapterContent(
+                title:
+                    chapterDataForBlocks.content.title.isNotEmpty
+                        ? chapterDataForBlocks.content.title
+                        : (titleFromList ?? ''),
+                content: '',
+                wordCount: chapterDataForBlocks.totalChars,
+              );
+            }
 
             if (kDebugMode) {
               readerDebugLog(

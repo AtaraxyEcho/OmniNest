@@ -1193,6 +1193,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     }
 
     final prefetchedContent = contentLoader?.contentFor(chapterId);
+    final hasBlocks =
+        contentLoader?.getByChapterId(chapterId)?.blocks.isNotEmpty ?? false;
     currentChapterId = chapterId;
     cachedContent = prefetchedContent;
     lastLoadedChapterId = prefetchedContent == null ? null : chapterId;
@@ -1206,7 +1208,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     isRestoringProgress = false;
     chapterLoadingTimer?.cancel();
     showChapterLoadingOverlay = false;
-    if (prefetchedContent == null) {
+    // 已有 blocks 时不要全屏遮罩：连续滚动可直接用块渲染。
+    if (prefetchedContent == null && !hasBlocks) {
       chapterLoadingTimer = Timer(const Duration(milliseconds: 180), () {
         if (!mounted || !isSwitchingChapter) return;
         setState(() => showChapterLoadingOverlay = true);

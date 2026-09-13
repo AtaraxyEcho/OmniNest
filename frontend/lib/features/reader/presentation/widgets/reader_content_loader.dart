@@ -500,7 +500,42 @@ class ReaderContentLoader {
   final Map<_CacheKey, ChapterData> _cache = {};
   final Map<_CacheKey, Future<ChapterData>> _inflight = {};
   final Map<String, ReaderChapterContent> _contentCache = {};
+
+  /// chapterId → ChapterData 主索引，避免 getByChapterId 线性扫 cache。
+  final Map<String, ChapterData> _byChapterId = {};
   String? _activeChapterId;
+
+  void _putChapterData(_CacheKey key, ChapterData data) {
+    _cache[key] = data;
+    _byChapterId[key.chapterId] = data;
+  }
+
+  void _removeChapterKey(_CacheKey key) {
+    final removed = _cache.remove(key);
+    if (removed == null) {
+      return;
+    }
+    if (!identical(_byChapterId[key.chapterId], removed)) {
+      return;
+    }
+    ChapterData? replacement;
+    for (final entry in _cache.entries) {
+      if (entry.key.chapterId == key.chapterId) {
+        replacement = entry.value;
+        break;
+      }
+    }
+    if (replacement != null) {
+      _byChapterId[key.chapterId] = replacement;
+    } else {
+      _byChapterId.remove(key.chapterId);
+    }
+  }
+
+  void _clearChapterCache() {
+    _cache.clear();
+    _byChapterId.clear();
+  }
 
   /// 测高布局失效回调（连续滚动窗口 fingerprint 刷新）。
   void Function()? onLayoutInvalidated;
@@ -564,7 +599,7 @@ class ReaderContentLoader {
     try {
       final data = await loadFuture;
       if (_shouldRetainChapter(chapterId)) {
-        _cache[key] = data;
+        _putChapterData(key, data);
       }
       _prepareScrollMetricsIfNeeded(
         data,
@@ -845,12 +880,7 @@ class ReaderContentLoader {
   }
 
   /// 获取章节数据（仅用 chapterId 查找，匹配任意设置版本）。
-  ChapterData? getByChapterId(String chapterId) {
-    for (final entry in _cache.entries) {
-      if (entry.key.chapterId == chapterId) return entry.value;
-    }
-    return null;
-  }
+  ChapterData? getByChapterId(String chapterId) => _byChapterId[chapterId];
 
   /// 返回预加载阶段保留的章节原始内容。
   ReaderChapterContent? contentFor(String chapterId) =>
@@ -910,6 +940,10 @@ class ReaderContentLoader {
       final idx = _chapterIndex(key.chapterId);
       return (idx - activeIdx).abs() > cacheRadius;
     });
+    _byChapterId.removeWhere((chapterId, _) {
+      final idx = _chapterIndex(chapterId);
+      return (idx - activeIdx).abs() > cacheRadius;
+    });
     _contentCache.removeWhere((chapterId, _) {
       final idx = _chapterIndex(chapterId);
       return (idx - activeIdx).abs() > cacheRadius;
@@ -940,7 +974,7 @@ class ReaderContentLoader {
 
   /// 清除所有缓存（分页 + 累积高度）。
   void invalidateAll() {
-    _cache.clear();
+    _clearChapterCache();
     _inflight.clear();
     _contentCache.clear();
     _activeChapterId = null;
@@ -991,8 +1025,8 @@ class ReaderContentLoader {
     // 重新映射 key（旧 key → 新 key）
     final newKey = _key(chapterId, newSettings);
     if (oldKey != newKey) {
-      _cache.remove(oldKey);
-      _cache[newKey] = data;
+      _removeChapterKey(oldKey);
+      _putChapterData(newKey, data);
     }
   }
 
