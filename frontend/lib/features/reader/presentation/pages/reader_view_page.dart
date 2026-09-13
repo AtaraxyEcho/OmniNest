@@ -125,7 +125,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   // ── 渲染状态 ──
   final ScrollController _scrollController = ScrollController();
   final ReaderContinuousScrollController _continuousScrollController =
-      ReaderContinuousScrollController();
+      ReaderContinuousScrollController(sideChapterCount: 2);
   List<_FlatPageEntry> _flatPages = [];
   int _currentPageIndex = 0;
   int _pageModePage = 0;

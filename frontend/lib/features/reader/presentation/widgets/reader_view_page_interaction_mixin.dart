@@ -171,13 +171,21 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
-  /// 连续滚动窗口扩挂：预取前后章并重建窗口。
+  /// 连续滚动窗口扩挂：以窗口边缘章为基准预取并重建。
   void onContinuousWindowExpand({required bool forward}) {
     if (!mounted || isPageMode) return;
     final loader = contentLoader;
     if (loader == null) return;
     final chapterIds = loader.chapterIds;
-    final idx = chapterIds.indexOf(currentChapterId);
+    // 以窗口边缘而非 currentChapterId 为基准：锚点收养滞后时避免重复扩同一章。
+    final windowIds = continuousScrollController.entries
+        .map((e) => e.chapterId)
+        .toList(growable: false);
+    final edgeId =
+        windowIds.isNotEmpty
+            ? (forward ? windowIds.last : windowIds.first)
+            : currentChapterId;
+    final idx = chapterIds.indexOf(edgeId);
     if (idx < 0) return;
     final targetIndex = forward ? idx + 1 : idx - 1;
     if (targetIndex < 0 || targetIndex >= chapterIds.length) {
@@ -189,7 +197,7 @@ mixin ReaderViewPageInteractionMixin
       // blocks 已就绪：只补滚动测高（未就绪时），不重取正文 HTML。
       if (!loader.isScrollLayoutReady(targetId)) {
         loader.ensureScrollLayoutForNeighbors(
-          currentChapterId,
+          edgeId,
           pageWidth: computePageWidth(),
           settings: settings,
           textScale: MediaQuery.textScalerOf(context).scale(1.0),
@@ -202,7 +210,7 @@ mixin ReaderViewPageInteractionMixin
       await prefetchChapter(targetId);
       if (!mounted) return;
       loader.ensureScrollLayoutForNeighbors(
-        currentChapterId,
+        edgeId,
         pageWidth: computePageWidth(),
         settings: settings,
         textScale: MediaQuery.textScalerOf(context).scale(1.0),

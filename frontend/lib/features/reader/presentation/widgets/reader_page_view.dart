@@ -164,10 +164,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _initForMode();
     }
 
-    if (oldWidget.state.chapterId != widget.state.chapterId) {
-      _disposeControllers();
-      _initForMode();
-    }
+    // 跨章页流软切换：chapterId 变化不重挂载控制器，保持翻页手势连续。
+    // 仅 turnMode 变化才重建。
 
     if (oldWidget.state.chapterId != widget.state.chapterId ||
         oldWidget.state.pageIndex != widget.state.pageIndex) {
@@ -177,8 +175,14 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _boundaryRequestInFlight = false;
     }
 
-    if (widget.state.pageCount > _localPageCount) {
+    // 允许窗口滑动导致页数增减；缩小时钳制当前页。
+    if (widget.state.pageCount != _localPageCount) {
       _localPageCount = widget.state.pageCount;
+      if (_localPageCount > 0 &&
+          widget.state.pageIndex >=
+              _localPageCount + (widget.state.hasMore ? 1 : 0)) {
+        // 交给父级 onPageChanged / _syncPageView 纠正。
+      }
     }
 
     if (widget.turnMode == PageTurnMode.slide &&

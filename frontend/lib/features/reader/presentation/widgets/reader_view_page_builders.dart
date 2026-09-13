@@ -16,6 +16,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_control_lay
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_page_flow.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
@@ -48,6 +49,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   String? _windowFirstChapterId;
   String? _windowLastChapterId;
   double _windowFirstChapterHeight = 0;
+
+  /// 翻页跨章页流（当前章 ±1）。pageModePage 表示流内全局页索引。
+  ReaderPageFlow? _pageFlow;
+  int _pageFlowLayoutVersion = -1;
+
+  /// 跨章收养后待映射的章内页；下一帧流重建时换算为全局索引。
+  int? _pendingPageLocalIndex;
   double _windowLastChapterHeight = 0;
 
   void invalidateContinuousWindowFingerprint() {
@@ -120,6 +128,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void onContinuousScrollPosition(ContinuousScrollPosition position);
   void onContinuousWindowExpand({required bool forward});
   void prefetchNextChapterAtBoundary(int pageIndex);
+  void adoptPageModeChapter(String chapterId, {int localPageIndex = 0});
   int windowContentYToCharOffset(String chapterId, double windowContentY);
   double chapterStartScrollOffset(String chapterId);
   void restoreToChapterStart(String chapterId);
@@ -173,15 +182,82 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   }
 
   int computePageCharOffset(int pageIndex) {
+    final flow = _pageFlow;
+    final ref = flow?.keyAt(pageIndex);
+    final chapterId = ref?.chapterId ?? currentChapterId;
+    final localIndex = ref?.localPageIndex ?? pageIndex;
     final slice = contentLoader?.computePage(
-      chapterId: currentChapterId,
+      chapterId: chapterId,
       settings: settings,
       pageWidth: computePageWidth(),
       pageHeight: computePageHeight(),
-      pageIndex: pageIndex,
+      pageIndex: localIndex,
       textScale: MediaQuery.textScalerOf(context).scale(1.0),
     );
     return slice?.startCharOffset ?? 0;
+  }
+
+  /// 构建/刷新翻页跨章页流。返回流内锚点章起始全局索引。
+  int _ensurePageFlow({
+    required double pageWidth,
+    required double pageHeight,
+    required double textScale,
+  }) {
+    final loader = contentLoader;
+    if (loader == null) {
+      return 0;
+    }
+    final layoutVersion = Object.hash(
+      currentChapterId,
+      pageWidth,
+      pageHeight,
+      settings.fontSize,
+      settings.lineHeight,
+      settings.fontFamily,
+      textScale,
+    );
+    final needsRebuild =
+        _pageFlow == null ||
+        _pageFlowLayoutVersion != layoutVersion ||
+        !(_pageFlow!.chapterIds.contains(currentChapterId));
+    // 每帧按最新懒分页结果重建（页数可能增长），但布局版本变化时重置锚点映射。
+    _pageFlow = ReaderPageFlow.fromLoader(
+      loader: loader,
+      anchorChapterId: currentChapterId,
+      settings: settings,
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
+      textScale: textScale,
+      windowSide: 1,
+    );
+    if (needsRebuild) {
+      _pageFlowLayoutVersion = layoutVersion;
+    }
+    final pendingLocal = _pendingPageLocalIndex;
+    if (pendingLocal != null) {
+      final start = _pageFlow!.startIndexOf(currentChapterId) ?? 0;
+      pageModePage = start + pendingLocal;
+      _pendingPageLocalIndex = null;
+    }
+    return _pageFlow!.startIndexOf(currentChapterId) ?? 0;
+  }
+
+  /// 将流内全局页索引解析为章 + 章内页，并在跨章时软收养。
+  void _handlePageFlowIndexChanged(int globalIndex) {
+    final flow = _pageFlow;
+    if (flow == null) {
+      return;
+    }
+    final ref = flow.keyAt(globalIndex);
+    if (ref == null) {
+      return;
+    }
+    if (ref.chapterId != currentChapterId) {
+      // 记下章内页，流重建后映射到新窗口的全局索引，避免窗口滑动导致错页。
+      _pendingPageLocalIndex = ref.localPageIndex;
+      adoptPageModeChapter(ref.chapterId);
+    }
+    pageModePage = globalIndex;
   }
 
   PageTurnMode parsePageTurnMode(String mode) {
@@ -324,6 +400,22 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         final availablePageHeight =
             viewportSize.height - chromeLayout.chapterHeaderReserve - 1;
         final pageHeight = availablePageHeight > 1 ? availablePageHeight : 1.0;
+
+        final anchorStart = _ensurePageFlow(
+          pageWidth: pageWidth,
+          pageHeight: pageHeight,
+          textScale: textScale,
+        );
+        final flow = _pageFlow;
+        // pageModePage 语义：跨章流内全局页索引。
+        // 切章后若仍落在旧局部页，映射到新锚点起始。
+        if (pageModePage < anchorStart ||
+            (flow != null &&
+                pageModePage >= flow.readablePageCount &&
+                flow.readablePageCount > 0)) {
+          pageModePage = anchorStart;
+        }
+
         final data = contentLoader?.get(currentChapterId, settings);
         final navigator = data?.getOrCreatePageNavigator(
           pageWidth,
@@ -331,15 +423,18 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           settings,
           textScale: textScale,
         );
-        final pageCount = navigator?.readablePageCount ?? 0;
-        final hasMore = !(navigator?.isFullyPaginated ?? false);
         if (navigator != null && data != null) {
-          _schedulePageNavigatorWarmup(navigator, pageModePage, data.chapterId);
+          final localPage =
+              flow?.keyAt(pageModePage)?.localPageIndex ?? pageModePage;
+          _schedulePageNavigatorWarmup(navigator, localPage, data.chapterId);
         }
 
         if (pendingRestoreCharOffset != null && data != null) {
           _schedulePendingPageCharOffsetRestore(data);
         }
+
+        final pageCount = flow?.readablePageCount ?? 0;
+        final hasMore = flow?.needsProbe ?? true;
 
         return Listener(
           behavior: HitTestBehavior.translucent,
@@ -356,10 +451,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             pointerDownActive = false;
           },
           child: ReaderPageView(
-            key: ValueKey(
-              'reader-page-$currentChapterId-'
-              '${settings.pageTurnMode}',
-            ),
+            // 固定 key：跨章软切换时不重挂载 PageView，翻页动画与手势连续。
+            key: ValueKey('reader-page-flow-${settings.pageTurnMode}'),
             controller: pageTurnController,
             state: PagedState(
               chapterId: currentChapterId,
@@ -377,22 +470,46 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             ),
             selectionActive: selectionActive,
             pageBuilder: (index) {
+              final pageRef = flow?.keyAt(index);
+              final chapterId = pageRef?.chapterId ?? currentChapterId;
+              final localIndex = pageRef?.localPageIndex ?? index;
+              final pageData = contentLoader?.get(chapterId, settings);
+              if (pageData == null) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  ),
+                );
+              }
               final slice = contentLoader?.computePage(
-                chapterId: currentChapterId,
+                chapterId: chapterId,
                 settings: settings,
                 pageWidth: pageWidth,
                 pageHeight: pageHeight,
-                pageIndex: index,
+                pageIndex: localIndex,
                 textScale: textScale,
               );
               if (slice == null) return null;
-              final pageData = contentLoader?.get(currentChapterId, settings);
-              if (pageData == null) return null;
+              final pageChapter =
+                  contentLoader?.allChapters
+                      .where((c) => c.id == chapterId)
+                      .firstOrNull;
+              final pageChapterTitle =
+                  pageChapter?.title.isNotEmpty == true
+                      ? pageChapter!.title
+                      : chapterTitle;
+              // 仅该章第一页显示章头，后续页不重复上一章标题。
+              final showHeader = localIndex == 0;
               return buildPageContent(
                 pageData,
                 slice,
                 scrollPhysics: const NeverScrollableScrollPhysics(),
-                chapterTitle: chapterTitle,
+                chapterTitle: showHeader ? pageChapterTitle : null,
               );
             },
             callbacks: PageTurnCallbacksImpl(
@@ -400,6 +517,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                 dismissReturnSnackBar();
                 if (pageModePage != index) {
                   pageModePage = index;
+                  _handlePageFlowIndexChanged(index);
                   _requestReaderRebuild();
                 }
                 if (modeSwitchInProgress) {
@@ -411,13 +529,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                 // 模式切换期间（modeSwitchAnchor 未被用户交互消耗）：
                 // 只更新展示进度，不写 tracker 和 SQLite。
                 if (modeSwitchAnchor != null) {
-                  final data = contentLoader?.get(currentChapterId, settings);
-                  if (data != null && data.totalChars > 0) {
+                  final chapterId =
+                      flow?.chapterIdAt(index) ?? currentChapterId;
+                  final chapterData = contentLoader?.get(chapterId, settings);
+                  if (chapterData != null && chapterData.totalChars > 0) {
                     final charOffset = computePageCharOffset(index);
-                    scrollProgress = (charOffset / data.totalChars).clamp(
-                      0.0,
-                      1.0,
-                    );
+                    scrollProgress = (charOffset / chapterData.totalChars)
+                        .clamp(0.0, 1.0);
                   }
                   return;
                 }
@@ -429,10 +547,26 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                   charOffset: charOffset,
                 );
                 onAnimationComplete();
-                prefetchNextChapterAtBoundary(index);
+                final localIndex = flow?.keyAt(index)?.localPageIndex ?? index;
+                prefetchNextChapterAtBoundary(localIndex);
               },
-              onPreviousChapterFn: () => tryNavigateChapter(-1),
-              onNextChapterFn: () => tryNavigateChapter(1),
+              onPreviousChapterFn: () {
+                // 流内还有前页时优先在流内后退；确在流首再硬切上一章。
+                if (pageModePage > 0) {
+                  pageTurnController.previous();
+                  return;
+                }
+                tryNavigateChapter(-1);
+              },
+              onNextChapterFn: () {
+                final flowNow = _pageFlow;
+                final maxIndex = (flowNow?.itemCount ?? 1) - 1;
+                if (pageModePage < maxIndex) {
+                  pageTurnController.next();
+                  return;
+                }
+                tryNavigateChapter(1);
+              },
               onToggleControlsFn: toggleControls,
             ),
             surfaceColor: settings.surfaceColor,
@@ -1194,8 +1328,10 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
               : (restoreCharOffset / totalChars).clamp(0.0, 1.0).toDouble();
       scrollProgress = capturedProgress;
       positionTracker.setCharOffset(restoreCharOffset, currentChapterId);
+      // targetPage 为章内页；换算到跨章流全局索引。
+      final anchorStart = _pageFlow?.startIndexOf(currentChapterId) ?? 0;
       setState(() {
-        pageModePage = targetPage;
+        pageModePage = anchorStart + targetPage;
         modeSwitchInProgress = false;
         isRestoringProgress = false;
       });

@@ -387,8 +387,13 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 封面/书讯章通常只有极少正文：首次进入或顺序切到此类短章时自动前进，
   /// 避免用户卡在单页信息章上只能靠侧点二次加载。
+  ///
+  /// 仅在「无历史进度的开书」场景启用；有进度恢复时不跳过。
   void _maybeSkipCoverChapter(ChapterData chapterData) {
     if (!mounted || isLoadingChapter || isSwitchingChapter) {
+      return;
+    }
+    if (isRestoringProgress || pendingRestoreCharOffset != null) {
       return;
     }
     final chapters = contentLoader?.allChapters ?? const <ReaderChapter>[];
@@ -396,7 +401,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
     final idx = chapters.indexWhere((c) => c.id == currentChapterId);
-    if (idx < 0 || idx >= chapters.length - 1) {
+    if (idx != 0) {
+      // 仅跳过开书第一章（封面/书讯）；阅读中顺序进入的短章不强制跳过。
       return;
     }
     final totalChars = chapterData.totalChars;
@@ -405,6 +411,37 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
     unawaited(switchToChapter(chapters[idx + 1].id));
+  }
+
+  /// 翻页模式：跨章页流中软收养章节。
+  ///
+  /// 不走 switchToChapter 硬切、不展示全屏遮罩；正文已就绪时首帧即可续读。
+  /// [localPageIndex] 仅用于预热；全局页索引由 builders 在流内换算。
+  void adoptPageModeChapter(String chapterId, {int localPageIndex = 0}) {
+    if (chapterId == currentChapterId) {
+      return;
+    }
+    if (isLoadingChapter || isSwitchingChapter) {
+      final ready = contentLoader?.getByChapterId(chapterId) != null;
+      if (!ready) {
+        return;
+      }
+    }
+    currentChapterId = chapterId;
+    annotationHandler?.updateChapter(chapterId);
+    final needFetch = contentLoader?.setActive(chapterId) ?? const [];
+    for (final id in needFetch) {
+      unawaited(prefetchChapter(id));
+    }
+    final content = contentLoader?.contentFor(chapterId);
+    if (contentLoader?.getByChapterId(chapterId) != null && content != null) {
+      cachedContent = content;
+      lastLoadedChapterId = chapterId;
+    }
+    checkBookmarkState();
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   void _applyChapterNavigationIntent(
@@ -1012,17 +1049,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 从当前页面更新阅读进度。
   void updateProgressFromPage() {
     if (isPageMode) {
-      final data = contentLoader?.get(currentChapterId, settings);
+      final chapterId = currentChapterId;
+      final data = contentLoader?.get(chapterId, settings);
       if (data == null) return;
-      final slice = contentLoader?.computePage(
-        chapterId: currentChapterId,
-        settings: settings,
-        pageWidth: computePageWidth(),
-        pageHeight: computePageHeight(),
-        pageIndex: pageModePage,
-        textScale: MediaQuery.textScalerOf(context).scale(1.0),
-      );
-      final charOffset = slice?.startCharOffset ?? 0;
+      // pageModePage 为跨章流全局索引，computePageCharOffset 内部已解析。
+      final charOffset = computePageCharOffset(pageModePage);
       scrollProgress =
           data.totalChars > 0
               ? (charOffset / data.totalChars).clamp(0.0, 1.0)
@@ -1030,15 +1061,13 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       // 模式切换期间不覆盖 tracker — 保留冻结的精确锚点
       if (modeSwitchAnchor == null) {
         final chapterIdx =
-            contentLoader?.allChapters.indexWhere(
-              (c) => c.id == currentChapterId,
-            ) ??
+            contentLoader?.allChapters.indexWhere((c) => c.id == chapterId) ??
             0;
         positionTracker.updateFromPage(
-          localPageIndex: pageModePage,
+          localPageIndex: 0,
           totalPages: 10000,
           charOffset: charOffset,
-          chapterId: currentChapterId,
+          chapterId: chapterId,
           totalChapters: contentLoader?.allChapters.length ?? 0,
           currentChapterIndex: chapterIdx,
         );
@@ -1150,6 +1179,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     lastLoadedChapterId = prefetchedContent == null ? null : chapterId;
     pendingChapterProgress = null;
     pendingRestoreCharOffset = null;
+    // 硬切后 pageModePage 为局部 0；builders 的页流会映射到全局锚点起点。
     pageModePage = 0;
     contentLoader?.setActive(chapterId);
     restore.cancel();
