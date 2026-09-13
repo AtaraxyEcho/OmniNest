@@ -1,8 +1,15 @@
-#include <flutter/dart_project.h>
-#include <flutter/flutter_view_controller.h>
-#include <windows.h>
+// Single-instance runner for OmniNest on Windows.
+// Winsock2 must be included before windows.h to avoid winsock.h conflicts.
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <windows.h>
+
+#include <flutter/dart_project.h>
+#include <flutter/flutter_view_controller.h>
 
 #include <string>
 #include <vector>
@@ -42,7 +49,7 @@ bool ForwardToRunningInstance(const std::vector<std::string>& args) {
 
   sockaddr_in addr{};
   addr.sin_family = AF_INET;
-  addr.sin_port = htons(kActivatePort);
+  addr.sin_port = htons(static_cast<u_short>(kActivatePort));
   addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
 
   bool sent = false;
@@ -75,7 +82,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // plugins.
   ::CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
 
-  // B4：原生互斥，防止引擎层双开；已存在时转发激活/深链后退出。
+  // Native mutex prevents engine-level double start; forward activation
+  // (and optional deep link) to the running instance, then exit.
   HANDLE single_instance_mutex =
       ::CreateMutexW(nullptr, TRUE, kSingleInstanceMutexName);
   const DWORD mutex_error = ::GetLastError();
