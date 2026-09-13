@@ -2149,9 +2149,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalExitImmersivePlayback => '退出沉浸播放';
 
   @override
-  String get portalMusicVisualizerOpenSystem => '进入音乐';
-
-  @override
   String get portalMusicVisualizerSeek => '播放进度';
 
   @override

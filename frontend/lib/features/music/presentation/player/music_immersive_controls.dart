@@ -76,22 +76,6 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                         icon: Icons.skip_next_rounded,
                         onTap: onNext,
                       ),
-                      const SizedBox(width: 6),
-                      // 常用次级操作聚拢，窄面板同样保留队列与设置。
-                      _GlassIconButton(
-                        palette: palette,
-                        tooltip: l10n.musicQueueTitle,
-                        icon: Icons.queue_music_rounded,
-                        onTap: () => showMusicDeckQueue(context),
-                      ),
-                      const SizedBox(width: 6),
-                      _GlassIconButton(
-                        palette: palette,
-                        tooltip: l10n.musicPlaybackSettings,
-                        icon: Icons.equalizer_rounded,
-                        onTap:
-                            () => showMusicPlaybackSettingsDialog(context, ref),
-                      ),
                       if (settings.progressEnabled) ...[
                         SizedBox(width: compact ? 10 : 16),
                         Expanded(
@@ -118,15 +102,22 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                           iconSize: 19,
                         ),
                       ],
-                      if (!compact) ...[
-                        SizedBox(width: 8 * scale),
-                        _GlassIconButton(
-                          palette: palette,
-                          tooltip: l10n.portalMusicVisualizerOpenSystem,
-                          icon: Icons.open_in_new_rounded,
-                          onTap: () => context.go('/music'),
-                        ),
-                      ],
+                      // 播放设置与播放队列聚拢在音量之后，窄面板同样保留。
+                      const SizedBox(width: 6),
+                      _GlassIconButton(
+                        palette: palette,
+                        tooltip: l10n.musicPlaybackSettings,
+                        icon: Icons.equalizer_rounded,
+                        onTap:
+                            () => showMusicPlaybackSettingsDialog(context, ref),
+                      ),
+                      const SizedBox(width: 6),
+                      _GlassIconButton(
+                        palette: palette,
+                        tooltip: l10n.musicQueueTitle,
+                        icon: Icons.queue_music_rounded,
+                        onTap: () => showMusicDeckQueue(context),
+                      ),
                     ],
                   ),
                 ),

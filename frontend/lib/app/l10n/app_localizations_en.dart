@@ -2216,9 +2216,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalExitImmersivePlayback => 'Exit immersive playback';
 
   @override
-  String get portalMusicVisualizerOpenSystem => 'Open Music';
-
-  @override
   String get portalMusicVisualizerSeek => 'Playback progress';
 
   @override

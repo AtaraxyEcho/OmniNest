@@ -4117,12 +4117,6 @@ abstract class AppLocalizations {
   /// **'Exit immersive playback'**
   String get portalExitImmersivePlayback;
 
-  /// No description provided for @portalMusicVisualizerOpenSystem.
-  ///
-  /// In en, this message translates to:
-  /// **'Open Music'**
-  String get portalMusicVisualizerOpenSystem;
-
   /// No description provided for @portalMusicVisualizerSeek.
   ///
   /// In en, this message translates to:
