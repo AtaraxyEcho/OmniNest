@@ -286,8 +286,10 @@ class _MobilePressableState extends State<MobilePressable> {
   }
 }
 
-/// 与最终内容尺寸一致的移动端骨架块。
-class MobileSkeletonBlock extends StatefulWidget {
+/// 移动端加载占位：保留请求尺寸的空盒 + 居中指示器。
+///
+/// 主流方案用指示器替代骨架块，避免占位与最终内容形状错位。
+class MobileSkeletonBlock extends StatelessWidget {
   const MobileSkeletonBlock({
     required this.height,
     this.width = double.infinity,
@@ -298,47 +300,14 @@ class MobileSkeletonBlock extends StatefulWidget {
   final double width;
 
   @override
-  State<MobileSkeletonBlock> createState() => _MobileSkeletonBlockState();
-}
-
-class _MobileSkeletonBlockState extends State<MobileSkeletonBlock>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (MediaQuery.disableAnimationsOf(context)) {
-      return _block(0.54);
-    }
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) => _block(0.42 + _controller.value * 0.18),
-    );
-  }
-
-  Widget _block(double opacity) {
     return SizedBox(
-      width: widget.width,
-      height: widget.height,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: context.mobileColors.surfaceRaised.withValues(alpha: opacity),
-          borderRadius: BorderRadius.circular(MobileLayoutTokens.radius),
+      width: width,
+      height: height,
+      child: const Center(
+        child: SizedBox.square(
+          dimension: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
     );

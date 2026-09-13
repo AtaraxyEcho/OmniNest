@@ -57,14 +57,14 @@ dependencies:
   flutter_tts: ^4.0.0
   html: ^0.15.0
   xml: ^6.6.1
-  archive: ^3.6.1
+  archive: ^4.2.0
   gbk_codec: ^0.4.0
   data_table_2: ^2.7.2
   intl: ^0.20.2
   pro_image_editor: 13.3.1
   qr_flutter: ^4.1.0
   flutter_launcher_icons_plus: ^0.15.0
-  pdfrx: ^1.2.0
+  pdfrx: ^2.6.1
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -707,36 +707,15 @@ class _MediaLibraryLoadingSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    Widget bar(double width, double height) {
-      return Container(
-        width: width,
-        height: height,
-        decoration: BoxDecoration(
-          color: context.videoColors.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(8),
-        ),
-      );
-    }
-
     return Semantics(
       label: l10n.videoLibraryLoading,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: context.videoColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            bar(180, 18),
-            const SizedBox(height: 12),
-            bar(double.infinity, 52),
-            const SizedBox(height: 8),
-            bar(double.infinity, 52),
-            const SizedBox(height: 8),
-            bar(double.infinity, 52),
-          ],
+      child: const Center(
+        child: Padding(
+          padding: EdgeInsets.all(32),
+          child: SizedBox.square(
+            dimension: 28,
+            child: CircularProgressIndicator(strokeWidth: 2.5),
+          ),
         ),
       ),
     );

@@ -26,16 +26,22 @@ class PhotoEditorPage extends ConsumerWidget {
       data:
           (photo) =>
               photo.hasCover || photo.sourceUrl != null
-                  ? ProImageEditor.network(
-                    photo.sourceUrl ?? photo.coverUrl!,
-                    configs: buildPhotoEditorConfigs(
-                      AppLocalizations.of(context),
-                    ),
-                    callbacks: ProImageEditorCallbacks(
-                      onImageEditingComplete: (bytes) async {
-                        await _saveEditedImage(context, ref, bytes);
-                      },
-                      onCloseEditor: (_) => context.popOrGo('/photos/$photoId'),
+                  // 编辑器内部 SafeArea 会把手势导航区让出；外层铺满纯黑，
+                  // 避免路由透明背景把 Portal 背景从底栏空隙露出来。
+                  ? Scaffold(
+                    backgroundColor: Colors.black,
+                    body: ProImageEditor.network(
+                      photo.sourceUrl ?? photo.coverUrl!,
+                      configs: buildPhotoEditorConfigs(
+                        AppLocalizations.of(context),
+                      ),
+                      callbacks: ProImageEditorCallbacks(
+                        onImageEditingComplete: (bytes) async {
+                          await _saveEditedImage(context, ref, bytes);
+                        },
+                        onCloseEditor:
+                            (_) => context.popOrGo('/photos/$photoId'),
+                      ),
                     ),
                   )
                   : Scaffold(

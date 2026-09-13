@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:pro_image_editor/pro_image_editor.dart';
 
@@ -6,6 +7,17 @@ import 'package:pro_image_editor/pro_image_editor.dart';
 /// 滤镜名为专有名词，保留英文原名；其余用户可见文案统一来自 ARB。
 ProImageEditorConfigs buildPhotoEditorConfigs(AppLocalizations l10n) {
   return ProImageEditorConfigs(
+    theme: ThemeData(brightness: Brightness.dark, useMaterial3: true),
+    mainEditor: MainEditorConfigs(
+      // 底栏铺满含手势导航区：外层纯黑 Scaffold 兜底，SafeArea 只避让内容，
+      // 避免系统手势区出现 Portal 背景空隙。
+      safeArea: const EditorSafeArea(
+        top: true,
+        bottom: true,
+        left: false,
+        right: false,
+      ),
+    ),
     i18n: I18n(
       cancel: l10n.photosEditorCancel,
       undo: l10n.photosEditorUndo,

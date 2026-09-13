@@ -4,7 +4,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_ske
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 void main() {
-  testWidgets('正文骨架在窄屏与短横屏中保持内容列布局', (tester) async {
+  testWidgets('章节加载指示器在窄屏与短横屏中稳定渲染', (tester) async {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);

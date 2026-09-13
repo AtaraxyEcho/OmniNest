@@ -336,11 +336,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     setState(() => _awaitingTarget = true);
 
     try {
-      final image = await _imageCache.obtain(
-        _photos[target],
-        ImageQuality.preview,
-        context,
-      );
+      // 列表种子（如首页最近照片）常只有 coverUrl、没有 sourceUrl：
+      // preview 档会静默失败导致无法切换，必须回退到 thumbnail 档。
+      final targetPhoto = _photos[target];
+      final hasSource = targetPhoto.sourceUrl?.isNotEmpty == true;
+      var quality = hasSource ? ImageQuality.preview : ImageQuality.thumbnail;
+      var image = await _imageCache.obtain(targetPhoto, quality, context);
+      if (!mounted) return;
+      if (image == null && hasSource && _hasImage(targetPhoto)) {
+        quality = ImageQuality.thumbnail;
+        image = await _imageCache.obtain(targetPhoto, quality, context);
+      }
 
       if (!mounted) return;
 
@@ -359,7 +365,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
       // TRANSITIONING：位图已就绪，动画只做合成，不触碰图片来源。
       _imageCache.retain(
-        SlideshowImageCache.keyFor(_photos[target].id, ImageQuality.preview),
+        SlideshowImageCache.keyFor(targetPhoto.id, quality),
         image,
       );
       setState(() {
@@ -392,6 +398,19 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   void _goNext() => unawaited(_goTo(_current + 1));
 
   void _goPrev() => unawaited(_goTo(_current - 1));
+
+  /// 横向滑动切换：负速度为左滑（下一张），正速度为右滑（上一张）。
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    _resetIdle();
+    if (_photos.length < 2) return;
+    final velocity = details.primaryVelocity ?? 0;
+    if (velocity.abs() < 280) return;
+    if (velocity < 0) {
+      _goNext();
+    } else {
+      _goPrev();
+    }
+  }
 
   void _togglePlay() {
     setState(() {
@@ -532,6 +551,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
             onTap: _resetIdle,
+            onHorizontalDragEnd: _onHorizontalDragEnd,
             child: Stack(
               fit: StackFit.expand,
               children: [

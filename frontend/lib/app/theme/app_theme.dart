@@ -413,6 +413,10 @@ class OmniNestTheme {
         contentTextStyle: TextStyle(
           color: isDark ? colors.onSurface : colors.surface,
         ),
+        // 反相表面上的操作按钮：浅色主题 SnackBar 是深底，primary 在深底上
+        // 对比不足；统一用高亮青绿，深浅主题都保持可读。
+        actionTextColor: isDark ? colors.primary : const Color(0xFF79D6C8),
+        elevation: 4,
         shape: roundedShape,
       ),
       scrollbarTheme: ScrollbarThemeData(

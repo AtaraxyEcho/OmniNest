@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
-import 'package:omninest/core/widgets/skeleton_shimmer.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart';
@@ -318,19 +317,13 @@ class _DailyRecommendationSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SkeletonShimmer(
-      child: SizedBox(
-        width: 142,
-        height: 196,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: SkeletonBox(borderRadius: 12)),
-            SizedBox(height: 9),
-            SkeletonBox(width: 116, height: 13, borderRadius: 5),
-            SizedBox(height: 6),
-            SkeletonBox(width: 88, height: 10, borderRadius: 5),
-          ],
+    return const SizedBox(
+      width: 142,
+      height: 196,
+      child: Center(
+        child: SizedBox.square(
+          dimension: 24,
+          child: CircularProgressIndicator(strokeWidth: 2),
         ),
       ),
     );
