@@ -42,8 +42,8 @@ class MusicVolumeButton extends StatefulWidget {
 }
 
 class _MusicVolumeButtonState extends State<MusicVolumeButton> {
-  final LayerLink _link = LayerLink();
   final OverlayPortalController _portal = OverlayPortalController();
+  final Object _tapGroupId = Object();
   StreamSubscription<double>? _volumeSub;
   Timer? _hideTimer;
   double _volume = 100;
@@ -173,44 +173,38 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
   @override
   Widget build(BuildContext context) {
     final iconColor = _resolveIconColor(context);
-    return OverlayPortal(
+    return OverlayPortal.overlayChildLayoutBuilder(
       controller: _portal,
-      overlayChildBuilder: (overlayContext) {
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _hidePanel,
+      overlayChildBuilder: (overlayContext, info) {
+        final anchor = MatrixUtils.transformPoint(
+          info.childPaintTransform,
+          Offset(info.childSize.width / 2, 0),
+        );
+        return TapRegion(
+          groupId: _tapGroupId,
+          child: CustomSingleChildLayout(
+            delegate: _VolumePanelLayoutDelegate(anchor: anchor),
+            child: MouseRegion(
+              onEnter: (_) => _setPanelHovered(true),
+              onExit: (_) => _setPanelHovered(false),
+              child: _MusicVolumeColumn(
+                volume: _volume,
+                accentColor:
+                    widget.activeColor ?? iconColor.withValues(alpha: 0.92),
+                background: widget.panelBackground,
+                textColor:
+                    widget.panelTextColor ?? (widget.iconColor ?? Colors.white),
+                iconColor: iconColor,
+                onChanged: _setVolume,
+                onToggleMute: _toggleMute,
               ),
             ),
-            CompositedTransformFollower(
-              link: _link,
-              targetAnchor: Alignment.topCenter,
-              followerAnchor: Alignment.bottomCenter,
-              offset: const Offset(0, -10),
-              child: MouseRegion(
-                onEnter: (_) => _setPanelHovered(true),
-                onExit: (_) => _setPanelHovered(false),
-                child: _MusicVolumeColumn(
-                  volume: _volume,
-                  accentColor:
-                      widget.activeColor ?? iconColor.withValues(alpha: 0.92),
-                  background: widget.panelBackground,
-                  textColor:
-                      widget.panelTextColor ??
-                      (widget.iconColor ?? Colors.white),
-                  iconColor: iconColor,
-                  onChanged: _setVolume,
-                  onToggleMute: _toggleMute,
-                ),
-              ),
-            ),
-          ],
+          ),
         );
       },
-      child: CompositedTransformTarget(
-        link: _link,
+      child: TapRegion(
+        groupId: _tapGroupId,
+        onTapOutside: (_) => _hidePanel(),
         child: _buildButton(context, iconColor: iconColor),
       ),
     );
@@ -268,6 +262,31 @@ class _MusicVolumeButtonState extends State<MusicVolumeButton> {
           ),
         );
     }
+  }
+}
+
+/// 将音量面板定位到按钮正上方：水平居中于按钮锚点，底边距按钮顶边留出间隙。
+///
+/// 通过 OverlayPortal.overlayChildLayoutBuilder 提供的布局期变换定位，
+/// 不使用 CompositedTransformFollower，避免面板内 Tooltip 在布局期
+/// 计算 paint transform 时触发 RenderFollowerLayer 断言。
+class _VolumePanelLayoutDelegate extends SingleChildLayoutDelegate {
+  const _VolumePanelLayoutDelegate({required this.anchor});
+
+  /// 按钮顶边中点在目标 Overlay 坐标系中的位置。
+  final Offset anchor;
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    return Offset(
+      anchor.dx - childSize.width / 2,
+      anchor.dy - childSize.height - 10,
+    );
+  }
+
+  @override
+  bool shouldRelayout(_VolumePanelLayoutDelegate oldDelegate) {
+    return anchor != oldDelegate.anchor;
   }
 }
 
