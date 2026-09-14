@@ -1,7 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_event_log.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
+import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_commit.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_scheduler.dart';
@@ -94,6 +99,178 @@ class ReaderReadingRuntime {
   /// 事件日志（方案 §103/§126）：环形缓冲 + 实机验收格式。
   final ReaderRuntimeEventLog eventLog = ReaderRuntimeEventLog();
 
+  // ── 滚动编排器（新方案 §5/§7/§8/§62：信号进，决策内化）──
+
+  _RuntimeScrollPhase _scrollPhase = _RuntimeScrollPhase.idle;
+  Timer? _settleTimer;
+
+  /// 布局快照供给（页面适配器注入：几何/视口/窗口版本采样）。
+  ReaderLayoutSnapshot Function()? layoutProvider;
+
+  /// 章节收养请求（页面执行收养提交，§64）。
+  void Function(String chapterId)? onAdoptChapterRequested;
+
+  /// 窗口扩挂请求（§42）。
+  void Function({required bool forward})? onExpandWindowRequested;
+
+  /// 窗口指标提交请求（settling 一次收敛；B4 内化为 WindowBuilder）。
+  void Function()? onMetricsCommitRequested;
+
+  /// 用户输入取消在途恢复的请求（页面清除恢复态）。
+  void Function()? onRestoreCancelRequested;
+
+  /// 是否处于用户手势中（拖动/惯性）；几何提交在此期间必须挂起。
+  bool get isInActiveGesture =>
+      _scrollPhase == _RuntimeScrollPhase.dragging ||
+      _scrollPhase == _RuntimeScrollPhase.ballistic;
+
+  /// 滚动是否非空闲（含 settling）。
+  bool get isScrollBusy => _scrollPhase != _RuntimeScrollPhase.idle;
+
+  /// 指针拖动越过阈值（新方案 §5）：Runtime 决定事务创建。
+  void onPointerDragStarted() {
+    if (_scrollPhase == _RuntimeScrollPhase.dragging) {
+      return;
+    }
+    _beginTransaction(ReaderTransactionKind.userDrag);
+    _scrollPhase = _RuntimeScrollPhase.dragging;
+  }
+
+  /// 指针释放：惯性阶段沿用同一事务（§11）。
+  void onPointerReleased() {
+    if (_scrollPhase == _RuntimeScrollPhase.dragging) {
+      _scrollPhase = _RuntimeScrollPhase.ballistic;
+    }
+  }
+
+  /// ScrollEnd（新方案 §7）：由 Runtime 判断 burst/相位后决定是否 settle。
+  void onPhysicalScrollEnd() {
+    if (_isWheelBurstOngoing) {
+      return;
+    }
+    _settle();
+  }
+
+  /// 滚轮/触控板信号（新方案 §8/§29-§31）。
+  void onWheelSignal() {
+    final tx = transactions.current;
+    if (tx != null &&
+        tx.kind == ReaderTransactionKind.userDrag &&
+        isInActiveGesture) {
+      return;
+    }
+    onRestoreCancelRequested?.call();
+    if (tx == null ||
+        (tx.kind != ReaderTransactionKind.wheel &&
+            tx.kind != ReaderTransactionKind.touchpad)) {
+      _beginTransaction(ReaderTransactionKind.wheel);
+    }
+    wheelBurst.onSignal(onTimeout: onWheelBurstTimeout);
+  }
+
+  /// 滚轮 burst 空闲超时（新方案 §8）：只是信号，settle 决策在 Runtime。
+  void onWheelBurstTimeout() {
+    if (_scrollPhase == _RuntimeScrollPhase.idle) {
+      _settle();
+    }
+  }
+
+  bool get _isWheelBurstOngoing {
+    final tx = transactions.current;
+    if (tx == null ||
+        (tx.kind != ReaderTransactionKind.wheel &&
+            tx.kind != ReaderTransactionKind.touchpad)) {
+      return false;
+    }
+    return wheelBurst.isBurstOngoing;
+  }
+
+  void _beginTransaction(ReaderTransactionKind kind) {
+    final layout = layoutProvider?.call();
+    if (layout == null) {
+      return;
+    }
+    restore.cancel();
+    final tx = transactions.beginOrReplace(
+      kind: kind,
+      layout: layout,
+      initialOffset:
+          scrollEffect?.hasClients == true ? scrollEffect!.offset : 0.0,
+      initialVisualProgress: publisher.notifier.value,
+    );
+    emitEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.transactionStarted,
+        at: clock.now,
+        transactionId: tx.id,
+        kind: tx.kind.name,
+        layoutRevision: '${layout.geometry.revision}/${layout.windowRevision}',
+        offset: tx.lastScrollOffset,
+      ),
+    );
+  }
+
+  void _settle() {
+    final settlingTx = transactions.current;
+    emitEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.settlingStarted,
+        at: clock.now,
+        transactionId: settlingTx?.id ?? 0,
+        kind: settlingTx?.kind.name,
+      ),
+    );
+    if (settlingTx != null) {
+      final pendingChapter = settlingTx.pendingChapterId;
+      if (pendingChapter != null) {
+        onAdoptChapterRequested?.call(pendingChapter);
+      }
+      if (settlingTx.pendingExpandForward) {
+        onExpandWindowRequested?.call(forward: true);
+      }
+      if (settlingTx.pendingExpandBackward) {
+        onExpandWindowRequested?.call(forward: false);
+      }
+    }
+    onMetricsCommitRequested?.call();
+    window.clearPending();
+    window.pendingMetricUpdate = false;
+    geometryScheduler.consumePendingCommit();
+    positionState.commitTransient();
+    if (settlingTx != null) {
+      transactions.finish(settlingTx.id);
+      emitEvent(
+        ReaderRuntimeEvent(
+          type: ReaderRuntimeEventType.transactionCompleted,
+          at: clock.now,
+          transactionId: settlingTx.id,
+          kind: settlingTx.kind.name,
+        ),
+      );
+    }
+    _scrollPhase = _RuntimeScrollPhase.settling;
+    _settleTimer?.cancel();
+    _settleTimer = clock.schedule(const Duration(milliseconds: 150), () {
+      if (_scrollPhase == _RuntimeScrollPhase.settling) {
+        _scrollPhase = _RuntimeScrollPhase.idle;
+      }
+    });
+  }
+
+  /// 事件发射（方案 §103/§126）：debug 构建同步输出验收日志。
+  void emitEvent(ReaderRuntimeEvent event) {
+    eventLog.emit(event);
+    if (kDebugMode) {
+      readerDebugLog(eventLog.format(event));
+    }
+  }
+
+  /// 页面离场释放内部计时资源。
+  void dispose() {
+    _settleTimer?.cancel();
+    wheelBurst.cancel();
+  }
+
   /// Runtime 操作令牌（新方案 §35/§43）：在途异步操作的生命周期凭证。
   final ReaderOperationToken operationToken;
 
@@ -138,3 +315,6 @@ class ReaderReadingRuntime {
     notifier.dispose();
   }
 }
+
+/// Runtime 内部滚动相位（新方案 §5：Runtime 自持，Page 不可见）。
+enum _RuntimeScrollPhase { idle, dragging, ballistic, settling }

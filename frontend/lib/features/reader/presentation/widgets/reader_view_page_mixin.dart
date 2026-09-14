@@ -22,7 +22,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
@@ -245,7 +244,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 合并到约 100ms 一拍，降低大章分批测高时的整页 setState 频率。
   void _onContinuousLayoutInvalidated() {
     // ACTIVE_SCROLL 期间只标记 dirty，窗口重建推迟到 ScrollEnd（方案 §12）。
-    if (isScrollPhaseActive) {
+    if (runtime.isInActiveGesture) {
       runtime.window.pendingMetricUpdate = true;
       return;
     }
@@ -656,15 +655,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 恢复入口统一登记 ReaderPositionTarget，回调方经 isCallbackValid
   /// 做 generation + item/mode 三层身份校验（§57）。
   ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target);
-
-  /// 当前连续滚动相位（由 interaction mixin 实现）。
-  ReaderScrollPhase get scrollPhase;
-
-  /// 是否处于 ACTIVE_SCROLL（用户正在滚动，禁止视口变更）。
-  bool get isScrollPhaseActive;
-
-  /// 滚动相位转移入口（由 interaction mixin 实现）。
-  void onScrollPhaseChanged(ReaderScrollPhase phase);
 
   /// 当前用户滚动会话（由 interaction mixin 实现）。
 

@@ -20,7 +20,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -384,73 +383,13 @@ mixin ReaderViewPageInteractionMixin
     completeModeSwitchGeneration(generation);
   }
 
-  // ── 滚动相位与事务会话（方案 §4-7/§21-§26）──
-
-  ReaderScrollPhase _scrollPhase = ReaderScrollPhase.idle;
-  Timer? _settleToIdleTimer;
+  // ── 滚动事务的 Page 侧残留（仅服务程序化滚动，B2 迁移后删除）──
 
   /// 最后一次发布的视觉进度（无事务的非 idle 帧保持该值，§25）。
   double _lastPublishedVisualProgress = 0;
 
   @override
   int get modeSwitchGeneration => _modeSwitchGeneration;
-
-  @override
-  ReaderScrollPhase get scrollPhase => _scrollPhase;
-
-  @override
-  bool get isScrollPhaseActive =>
-      _scrollPhase == ReaderScrollPhase.userDragging ||
-      _scrollPhase == ReaderScrollPhase.ballistic;
-
-  /// 相位转移入口：指针拖动超阈值 → active，ScrollEnd → settling。
-  /// ScrollNotification 不创建会话（程序化滚动同样产生通知，方案 §35）。
-  @override
-  void onScrollPhaseChanged(ReaderScrollPhase phase) {
-    if (_scrollPhase == phase) {
-      return;
-    }
-    _scrollPhase = phase;
-    if (phase == ReaderScrollPhase.userDragging) {
-      _beginScrollTransaction(ReaderTransactionKind.userDrag);
-      return;
-    }
-    if (phase == ReaderScrollPhase.settling) {
-      // 滚轮/触控板 burst 存续期间（§30）ScrollEnd 逐 tick 到达，
-      // 不在此提交，统一由 burst 空闲超时一次提交。
-      if (_isWheelBurstOngoing) {
-        return;
-      }
-      // ScrollEnd：挂起收养/扩窗 + 一次 metrics 提交 + 最多一次修正
-      // （方案 §25/§31-36）。
-      final settlingTx = runtime.transactions.current;
-      _emitRuntimeEvent(
-        ReaderRuntimeEvent(
-          type: ReaderRuntimeEventType.settlingStarted,
-          at: runtime.clock.now,
-          transactionId: settlingTx?.id ?? 0,
-          kind: settlingTx?.kind.name,
-        ),
-      );
-      _commitScrollTransaction();
-      _settleToIdleTimer?.cancel();
-      _settleToIdleTimer = Timer(const Duration(milliseconds: 150), () {
-        if (_scrollPhase == ReaderScrollPhase.settling) {
-          _scrollPhase = ReaderScrollPhase.idle;
-        }
-      });
-    }
-  }
-
-  bool get _isWheelBurstOngoing {
-    final tx = runtime.transactions.current;
-    if (tx == null ||
-        (tx.kind != ReaderTransactionKind.wheel &&
-            tx.kind != ReaderTransactionKind.touchpad)) {
-      return false;
-    }
-    return runtime.wheelBurst.isBurstOngoing;
-  }
 
   /// 当前冻结视口快照（方案 §8：完整布局上下文一次冻结）。
   @override
@@ -573,38 +512,17 @@ mixin ReaderViewPageInteractionMixin
       case ReaderScrollInputSource.touchpad:
         onPointerScrollInput();
       case ReaderScrollInputSource.pointerDrag:
-        // 拖动阈值由视图驱动相位转移；事务在 userDragging 中原子创建，
-        // 重复通知被相位守卫吸收。
-        onScrollPhaseChanged(ReaderScrollPhase.userDragging);
+        // 拖动阈值信号：事务与相位决策在 Runtime（新方案 §5）。
+        runtime.onPointerDragStarted();
       case ReaderScrollInputSource.keyboard:
         // 键盘无独立手势事件：事务由 scrollBy(kind: keyboard) 直接创建。
         break;
     }
   }
 
-  /// 滚轮/触控板输入（方案 §29-§31）：Pointer Event 只声明输入来源，
-  /// 不推算位置；burst 内复用同一事务，200ms 无事件进入 SETTLING。
+  /// 滚轮/触控板输入（新方案 §8）：只声明信号，burst 与事务决策在 Runtime。
   void onPointerScrollInput() {
-    final tx = runtime.transactions.current;
-    // 用户拖动拥有当前坐标系，滚轮信号不抢占（§23 单一 active 事务）。
-    if (tx != null &&
-        tx.kind == ReaderTransactionKind.userDrag &&
-        isScrollPhaseActive) {
-      return;
-    }
-    _cancelOngoingRestoreForUserScroll();
-    if (tx == null ||
-        (tx.kind != ReaderTransactionKind.wheel &&
-            tx.kind != ReaderTransactionKind.touchpad)) {
-      _beginScrollTransaction(ReaderTransactionKind.wheel);
-    }
-    runtime.wheelBurst.onSignal(
-      onTimeout: () {
-        if (_scrollPhase == ReaderScrollPhase.idle) {
-          _commitScrollTransaction();
-        }
-      },
-    );
+    runtime.onWheelSignal();
   }
 
   /// 滚动期间的视觉进度：物理 Y 直接查冻结映射（方案 §22-24），
@@ -646,7 +564,7 @@ mixin ReaderViewPageInteractionMixin
   /// ballistic/settling）同一单调规则，最后一道防线不污染持久化。
   double _applyDirectionalProgressClamp(double nextProgress) {
     final tx = runtime.transactions.current;
-    if (tx == null || _scrollPhase == ReaderScrollPhase.idle) {
+    if (tx == null || !runtime.isScrollBusy) {
       return nextProgress;
     }
     return tx.forward
@@ -744,7 +662,7 @@ mixin ReaderViewPageInteractionMixin
   }) {
     readerDebugLog(
       'ReaderContinuousPosition: $event '
-      'phase=${_scrollPhase.name} '
+      'phase=${runtime.isInActiveGesture ? 'active' : (runtime.isScrollBusy ? 'settling' : 'idle')} '
       'chapter=${position.chapterId} charOffset=${position.charOffset} '
       'chapterProgress=${(chapterData != null && chapterData.totalChars > 0 ? position.charOffset / chapterData.totalChars : 0.0).toStringAsFixed(4)} '
       'visualBlock=${position.blockIndex} '
@@ -811,8 +729,7 @@ mixin ReaderViewPageInteractionMixin
     _preloadDebounce?.cancel();
     _expandForwardDebounce?.cancel();
     _expandBackwardDebounce?.cancel();
-    _settleToIdleTimer?.cancel();
-    runtime.wheelBurst.cancel();
+    runtime.dispose();
   }
 
   /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。
@@ -890,7 +807,7 @@ mixin ReaderViewPageInteractionMixin
   /// ScrollRestore 在恢复期与监控期都会 jumpTo 锚点，会与本次滚动对抗，
   /// 导致滚动位移归零被误判为章末并触发跳章；同时清掉恢复遮罩，
   /// 并使 Runtime 层的 Restore 事务失效（方案 §59）。
-  void _cancelOngoingRestoreForUserScroll() {
+  void cancelOngoingRestoreForUserScroll() {
     if (runtime.restore.current != null) {
       _emitRuntimeEvent(
         ReaderRuntimeEvent(
@@ -919,7 +836,7 @@ mixin ReaderViewPageInteractionMixin
     required bool forward,
   }) async {
     if (isSwitchingChapter || isLoadingChapter) return;
-    _cancelOngoingRestoreForUserScroll();
+    cancelOngoingRestoreForUserScroll();
     final viewportDelta =
         (forward ? 1 : -1) * MediaQuery.sizeOf(context).height * 0.8;
     final didScroll = await scrollBy(viewportDelta);
@@ -953,8 +870,8 @@ mixin ReaderViewPageInteractionMixin
     }
     final max = scrollController.position.maxScrollExtent;
     final target = targetOffset.clamp(0.0, max);
-    if (!isScrollPhaseActive) {
-      _cancelOngoingRestoreForUserScroll();
+    if (!runtime.isInActiveGesture) {
+      cancelOngoingRestoreForUserScroll();
       _beginScrollTransaction(kind);
     }
     await scrollController.animateTo(
@@ -975,8 +892,8 @@ mixin ReaderViewPageInteractionMixin
     }
     final max = scrollController.position.maxScrollExtent;
     final target = targetOffset.clamp(0.0, max);
-    if (!isScrollPhaseActive) {
-      _cancelOngoingRestoreForUserScroll();
+    if (!runtime.isInActiveGesture) {
+      cancelOngoingRestoreForUserScroll();
       _beginScrollTransaction(kind);
     }
     scrollController.jumpTo(target);
@@ -989,7 +906,7 @@ mixin ReaderViewPageInteractionMixin
     if (snapshot != null) {
       handleResolvedPosition(snapshot);
     }
-    if (!isScrollPhaseActive) {
+    if (!runtime.isInActiveGesture) {
       _commitScrollTransaction();
     }
   }
@@ -1009,8 +926,8 @@ mixin ReaderViewPageInteractionMixin
     if ((target - currentOffset).abs() < 1.0) return false;
     // 程序化滚动开启显式事务并终止在途恢复（§59）；用户手势进行中
     // 不抢占其会话（§23 单一 active 事务）。
-    if (!isScrollPhaseActive) {
-      _cancelOngoingRestoreForUserScroll();
+    if (!runtime.isInActiveGesture) {
+      cancelOngoingRestoreForUserScroll();
       _beginScrollTransaction(kind);
     }
     await scrollController.animateTo(

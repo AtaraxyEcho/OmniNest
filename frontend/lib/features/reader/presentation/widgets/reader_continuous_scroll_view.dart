@@ -13,23 +13,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_continuous_
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_range.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
-/// 连续滚动相位（方案 §10-11）：USER_DRAGGING/BALLISTIC 由指针事件
-/// 驱动（ScrollStart 不再等价于会话开始——restore/程序化滚动也会产生
-/// 通知），SETTLING 由 ScrollEnd 驱动，IDLE 由 State 的 settle 窗口处理。
-enum ReaderScrollPhase {
-  /// 无滚动手势：允许 Live 几何更新与窗口重建。
-  idle,
-
-  /// 用户手指拖动中：坐标系/视口/进度映射全部冻结。
-  userDragging,
-
-  /// 手指已离开但存在惯性：沿用同一会话。
-  ballistic,
-
-  /// 滚动结束：一次 metrics 提交 + 最多一次视口修正。
-  settling,
-}
-
 /// 多章连续滚动视图。
 ///
 /// 将窗口内章节拼成一条滚动轴：粘性章头 + 按块虚拟化的正文，
@@ -43,7 +26,9 @@ class ReaderContinuousScrollView extends StatefulWidget {
     required this.itemId,
     required this.annotationsByChapter,
     this.onScrollOffsetChanged,
-    this.onScrollPhaseChanged,
+    this.onPointerDragStarted,
+    this.onPointerReleased,
+    this.onPhysicalScrollEnd,
     this.onTap,
     this.onHighlight,
     this.onAnnotate,
@@ -62,10 +47,14 @@ class ReaderContinuousScrollView extends StatefulWidget {
   /// 实际滚动 offset 上抛（方案 §84/§87）：不携带任何位置解释。
   final ValueChanged<double>? onScrollOffsetChanged;
 
-  /// 滚动相位回调（方案 §10-14）：userDragging 由指针事件触发，
-  /// ballistic 由 pointer up 触发，settling 由 ScrollEnd 触发；
-  /// ScrollStart/Update 不再创建会话（程序化滚动同样产生通知）。
-  final void Function(ReaderScrollPhase phase)? onScrollPhaseChanged;
+  /// 指针拖动越过阈值（新方案 §5）：只声明信号，事务决策在 Runtime。
+  final VoidCallback? onPointerDragStarted;
+
+  /// 指针释放（拖动后）：惯性归属由 Runtime 决定。
+  final VoidCallback? onPointerReleased;
+
+  /// ScrollEnd（新方案 §7）：只声明信号，settle 决策在 Runtime。
+  final VoidCallback? onPhysicalScrollEnd;
 
   final VoidCallback? onTap;
   final void Function(String text, int start, int end, String chapterId)?
@@ -128,12 +117,12 @@ class _ReaderContinuousScrollViewState
     }
   }
 
-  bool _handleScrollPhaseNotification(ScrollNotification notification) {
-    // ScrollNotification 只负责滚动结束（方案 §12/§14）：它无法表达
-    // "是谁启动了滚动"——restore/程序化滚动同样产生通知，不得据此
-    // 创建用户会话。userDragging/ballistic 由指针事件驱动。
+  bool _handleScrollEndNotification(ScrollNotification notification) {
+    // ScrollNotification 只负责滚动结束信号（新方案 §7）：它无法表达
+    // "是谁启动了滚动"——restore/程序化滚动同样产生通知，settle 决策
+    // 全部在 Runtime。
     if (notification is ScrollEndNotification) {
-      widget.onScrollPhaseChanged?.call(ReaderScrollPhase.settling);
+      widget.onPhysicalScrollEnd?.call();
     }
     return false;
   }
@@ -179,7 +168,7 @@ class _ReaderContinuousScrollViewState
                   context,
                 ).copyWith(scrollbars: false),
                 child: NotificationListener<ScrollNotification>(
-                  onNotification: _handleScrollPhaseNotification,
+                  onNotification: _handleScrollEndNotification,
                   child: CustomScrollView(
                     controller: widget.scrollController,
                     physics: const AlwaysScrollableScrollPhysics(
@@ -421,18 +410,18 @@ class _ReaderContinuousScrollViewState
     }
     if ((event.position - down).distance > 12) {
       if (!_pointerMoved) {
-        // 用户真正开始拖动（pointer down + 移动超阈值）才进入
-        // USER_DRAGGING（方案 §13）：ScrollStart 不能等价于会话开始。
+        // 用户真正开始拖动（pointer down + 移动超阈值）：只声明信号，
+        // 事务与相位决策在 Runtime（新方案 §5）。
         _pointerMoved = true;
-        widget.onScrollPhaseChanged?.call(ReaderScrollPhase.userDragging);
+        widget.onPointerDragStarted?.call();
       }
     }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
     if (_pointerMoved && _pointerDownPosition != null) {
-      // 手指离开：惯性阶段沿用同一会话（方案 §11 BALLISTIC）。
-      widget.onScrollPhaseChanged?.call(ReaderScrollPhase.ballistic);
+      // 手指离开：只声明信号，惯性归属由 Runtime 决定（新方案 §5）。
+      widget.onPointerReleased?.call();
     }
     final down = _pointerDownPosition;
     final downAt = _pointerDownAt;

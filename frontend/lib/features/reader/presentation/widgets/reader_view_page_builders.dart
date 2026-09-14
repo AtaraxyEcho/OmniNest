@@ -160,8 +160,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool get pointerDownActive;
   set pointerDownActive(bool value);
   bool isUserScrollActive({required DateTime since});
-  void onScrollPhaseChanged(ReaderScrollPhase phase);
-  bool get isScrollPhaseActive;
   int get modeSwitchGeneration;
   void completeModeSwitchGeneration(int generation);
   void abortModeSwitchGeneration(int generation);
@@ -952,7 +950,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (!mounted || isPageMode) {
         return;
       }
-      if (isScrollPhaseActive) {
+      if (runtime.isInActiveGesture) {
         // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12）。
         runtime.window.pendingMetricUpdate = true;
         return;
@@ -977,7 +975,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (_continuousWindowRebuilding) {
       return;
     }
-    if (isScrollPhaseActive) {
+    if (runtime.isInActiveGesture) {
       // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12），
       // 坐标系变化不得发生在用户滚动手势期间。
       runtime.window.pendingMetricUpdate = true;
@@ -1227,7 +1225,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (!scrollController.hasClients) {
       return;
     }
-    if (isScrollPhaseActive) {
+    if (runtime.isInActiveGesture) {
       runtime.window.pendingMetricUpdate = true;
       return;
     }
@@ -1235,7 +1233,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (!mounted || !scrollController.hasClients) {
         return;
       }
-      if (isScrollPhaseActive) {
+      if (runtime.isInActiveGesture) {
         runtime.window.pendingMetricUpdate = true;
         return;
       }
@@ -1475,7 +1473,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             onSelectionActive: onReaderSelectionActive,
             onTap: toggleControls,
             onScrollOffsetChanged: onActualScrollOffsetChanged,
-            onScrollPhaseChanged: onScrollPhaseChanged,
+            onPointerDragStarted: () => runtime.onPointerDragStarted(),
+            onPointerReleased: () => runtime.onPointerReleased(),
+            onPhysicalScrollEnd: () => runtime.onPhysicalScrollEnd(),
             onHighlight: (text, start, end, chapterId) {
               if (!mounted) return;
               annotationHandler?.updateChapter(chapterId);
