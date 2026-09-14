@@ -114,8 +114,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   set modeSwitchInProgress(bool value);
   int? get modeSwitchAnchor;
   set modeSwitchAnchor(int? value);
-  int get restoreTargetCharOffset;
-  set restoreTargetCharOffset(int value);
   bool get isSwitchingChapter;
   bool get isLoadingChapter;
   bool get selectionActive;

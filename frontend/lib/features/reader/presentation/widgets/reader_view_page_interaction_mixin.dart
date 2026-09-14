@@ -64,9 +64,10 @@ mixin ReaderViewPageInteractionMixin
       return;
     }
 
-    if (DateTime.now().isBefore(restoreSilenceUntil)) return;
+    if (runtime.restore.isSilenced(runtime.clock.now)) return;
 
-    // 连续滚动：进度由 ReaderContinuousScrollView 的 onScrollPosition 驱动。
+    // 连续滚动：进度由 ReaderContinuousScrollView 的 onScrollOffsetChanged
+    // 上抛后经 Runtime 解析驱动。
     if (max - scrollController.offset < max * 0.5) {
       preloadAdjacent();
     }
@@ -109,7 +110,7 @@ mixin ReaderViewPageInteractionMixin
       return;
     }
     final now = runtime.clock.now;
-    if (now.isBefore(restoreSilenceUntil)) return;
+    if (runtime.restore.isSilenced(now)) return;
     lastScrollActivityAt = now;
     dismissReturnSnackBar();
 
@@ -345,7 +346,6 @@ mixin ReaderViewPageInteractionMixin
     modeSwitchInProgress = false;
     modeSwitchAnchor = null;
     isRestoringProgress = false;
-    restoreTargetCharOffset = 0;
     if (kDebugMode) {
       readerDebugLog('ReaderModeTxn: commit generation=$generation');
     }
@@ -1381,7 +1381,6 @@ mixin ReaderViewPageInteractionMixin
   void restoreScrollPositionFromOffset(int charOffset) {
     if (charOffset <= 0) return;
     isRestoringProgress = true;
-    restoreTargetCharOffset = charOffset;
     restoreSilenceUntil = DateTime.now().add(
       const Duration(milliseconds: restoreSilenceMs),
     );

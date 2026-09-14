@@ -56,4 +56,23 @@ class ReaderRestoreManager {
     _generation++;
     _current = null;
   }
+
+  // ── Restore 请求与守卫状态（方案 §96/§140：所有权自页面 State 迁入）──
+
+  /// 恢复静默窗截止时刻（§60 过渡期兼容语义）：期间位置回调不回写
+  /// 进度，防止恢复 jumpTo 与进度守卫互相污染。
+  DateTime silenceUntil = DateTime.fromMillisecondsSinceEpoch(0);
+
+  /// 待恢复章内 charOffset（build 期登记，postFrame 消费）。
+  int? pendingCharOffset;
+
+  /// 待恢复章内进度比例（charOffset 未就绪时的降级恢复目标）。
+  double? pendingChapterProgress;
+
+  /// 恢复进行中：恢复遮罩显示与进度写入守卫共用（§82 守卫语义，
+  /// 遮罩渲染仍属 UI 层）。
+  bool isRestoring = false;
+
+  /// [now] 是否仍处于恢复静默窗内。
+  bool isSilenced(DateTime now) => now.isBefore(silenceUntil);
 }

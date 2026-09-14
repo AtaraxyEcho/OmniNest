@@ -88,8 +88,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 模式切换时冻结的 charOffset，跨多次 onPageChanged 保留原始锚点。
   int? get modeSwitchAnchor;
   set modeSwitchAnchor(int? value);
-  int get restoreTargetCharOffset;
-  set restoreTargetCharOffset(int value);
   DateTime get restoreSilenceUntil;
   set restoreSilenceUntil(DateTime value);
   DateTime get lastPointerDownTime;
@@ -959,7 +957,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         );
       }
       isRestoringProgress = true;
-      restoreTargetCharOffset = snapshot.charOffset;
       restoreSilenceUntil = DateTime.now().add(
         const Duration(milliseconds: restoreSilenceMs),
       );

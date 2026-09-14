@@ -129,15 +129,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Timer? _bookProgressRecomputeTimer;
   double _lastBookProgressInput = -1;
   DateTime? _lastAppliedProgressAt;
-  double? _pendingChapterProgress; // 恢复时的章节进度比例（0-1）
-  int? _pendingRestoreCharOffset; // 模式切换时待恢复的字符偏移（用于精确像素定位）
-  bool _isRestoringProgress = false; // 正在恢复阅读位置，显示加载遮罩
   bool _modeSwitchInProgress = false; // 模式切换中，首次翻页/滚动后清除
   int? _modeSwitchAnchor; // 模式切换时冻结的 charOffset，跨多次 onPageChanged 保留
-  int _restoreTargetCharOffset = 0; // 当前恢复目标 charOffset，用于防回退
-  DateTime _restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(
-    0,
-  ); // 恢复后静默窗口
   DateTime _lastPointerDownTime = DateTime.fromMillisecondsSinceEpoch(
     0,
   ); // 最后一次真实触摸
@@ -399,13 +392,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   }
 
   @override
-  double? get pendingChapterProgress => _pendingChapterProgress;
+  double? get pendingChapterProgress => _runtime.restore.pendingChapterProgress;
   @override
-  set pendingChapterProgress(double? v) => _pendingChapterProgress = v;
+  set pendingChapterProgress(double? v) =>
+      _runtime.restore.pendingChapterProgress = v;
   @override
-  int? get pendingRestoreCharOffset => _pendingRestoreCharOffset;
+  int? get pendingRestoreCharOffset => _runtime.restore.pendingCharOffset;
   @override
-  set pendingRestoreCharOffset(int? v) => _pendingRestoreCharOffset = v;
+  set pendingRestoreCharOffset(int? v) =>
+      _runtime.restore.pendingCharOffset = v;
   @override
   ReaderChapterNavigationIntent get chapterNavigationIntent =>
       _chapterNavigationIntent;
@@ -413,9 +408,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set chapterNavigationIntent(ReaderChapterNavigationIntent v) =>
       _chapterNavigationIntent = v;
   @override
-  bool get isRestoringProgress => _isRestoringProgress;
+  bool get isRestoringProgress => _runtime.restore.isRestoring;
   @override
-  set isRestoringProgress(bool v) => _isRestoringProgress = v;
+  set isRestoringProgress(bool v) => _runtime.restore.isRestoring = v;
   @override
   bool get modeSwitchInProgress => _modeSwitchInProgress;
   @override
@@ -425,13 +420,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   set modeSwitchAnchor(int? v) => _modeSwitchAnchor = v;
   @override
-  int get restoreTargetCharOffset => _restoreTargetCharOffset;
+  DateTime get restoreSilenceUntil => _runtime.restore.silenceUntil;
   @override
-  set restoreTargetCharOffset(int v) => _restoreTargetCharOffset = v;
-  @override
-  DateTime get restoreSilenceUntil => _restoreSilenceUntil;
-  @override
-  set restoreSilenceUntil(DateTime v) => _restoreSilenceUntil = v;
+  set restoreSilenceUntil(DateTime v) => _runtime.restore.silenceUntil = v;
   @override
   DateTime get lastPointerDownTime => _lastPointerDownTime;
   @override
@@ -1081,7 +1072,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         ),
         // 进度恢复加载遮罩：定位完成后自动消失
         // 内容未加载时 skeleton 已有加载指示器，不重复显示
-        if (_isRestoringProgress && _cachedContent != null)
+        if (isRestoringProgress && _cachedContent != null)
           Positioned.fill(
             child: ReaderDeferredRestoreOverlay(settings: _settings),
           ),

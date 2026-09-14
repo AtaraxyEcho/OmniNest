@@ -233,8 +233,8 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       final data = _contentLoader?.get(_currentChapterId, _settings);
       final targetOffset =
           start || data == null ? 0 : math.max(0, data.totalChars - 1);
-      _pendingRestoreCharOffset = targetOffset;
-      _isRestoringProgress = true;
+      pendingRestoreCharOffset = targetOffset;
+      isRestoringProgress = true;
       // 不在此写 pageModePage=0：跨章流中 0 可能是窗口更前一章。
       // 由 pendingRestore → findPageByCharOffset → startIndexOf 换算。
       _updateState(() {});
@@ -360,9 +360,8 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       return;
     }
     final clamped = charOffset.clamp(0, data.totalChars);
-    _isRestoringProgress = true;
-    _restoreTargetCharOffset = clamped;
-    _restoreSilenceUntil = DateTime.now().add(
+    isRestoringProgress = true;
+    restoreSilenceUntil = DateTime.now().add(
       const Duration(milliseconds: ReaderViewPageMixin.restoreSilenceMs),
     );
     if (chapterId != _currentChapterId) {
@@ -401,7 +400,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
           kind: ReaderTransactionKind.visualSeek,
         );
       }
-      _isRestoringProgress = false;
+      isRestoringProgress = false;
       scheduleLocalProgressSave(
         chapterProgress: progress,
         mode: 'scroll',
@@ -413,8 +412,8 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
 
   void _openReaderSearchResult(int offset) {
     _closeReaderPanel();
-    _pendingRestoreCharOffset = offset;
-    _isRestoringProgress = true;
+    pendingRestoreCharOffset = offset;
+    isRestoringProgress = true;
     if (_isPageMode) {
       repaginateCurrentChapter(restoreCharOffset: offset);
     } else {
