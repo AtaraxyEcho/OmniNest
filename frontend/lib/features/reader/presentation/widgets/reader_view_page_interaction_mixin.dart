@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -93,13 +95,29 @@ mixin ReaderViewPageInteractionMixin
 
     // 视觉进度实时更新（不受逻辑写入阈值约束）：图片内部滚动连续变化，
     // 零字符章同样适用；收敛期抑制仅约束逻辑进度，不限制视觉进度。
+    assert(
+      _scrollPhase != ReaderScrollPhase.active ||
+          _activeGeometry == null ||
+          position.geometryRevision == _activeGeometry!.revision,
+      'ACTIVE_SCROLL_GEOMETRY_VIOLATION: position resolved with '
+      'revision=${position.geometryRevision} but activeGeometry='
+      '${_activeGeometry?.revision}',
+    );
     lastChapterVisualCursor = position.chapterVisualCursor;
     lastVisualProgressChapterId = position.chapterId;
     if (!isPageMode) {
-      bookProgressNotifier.value = visualProgressDuringScroll(
+      final offsetNowForDirection =
+          scrollController.hasClients ? scrollController.offset : 0.0;
+      if (_lastResolvedOffset != null) {
+        _scrollDirectionForward = offsetNowForDirection >= _lastResolvedOffset!;
+      }
+      final nextProgress = visualProgressDuringScroll(
         position.chapterId,
         position.chapterVisualCursor,
       );
+      final displayed = _applyDirectionalProgressClamp(nextProgress);
+      _displayedVisualProgress = displayed;
+      bookProgressNotifier.value = displayed;
     }
 
     // 图片主导的封面等章节 totalChars 为 0：不要用 charOffset=0 覆盖进度。
@@ -244,11 +262,13 @@ mixin ReaderViewPageInteractionMixin
   ReaderScrollPhase _scrollPhase = ReaderScrollPhase.idle;
   Timer? _settleToIdleTimer;
 
-  /// ACTIVE_SCROLL 开始时冻结的视觉进度表：一次滚动手势期间分母固定，
-  /// 后台精测/窗口变化不得改变当前手势的视觉进度基准。
-  List<String>? _sessionChapterIds;
-  List<double> _sessionChapterStarts = const [];
-  double _sessionVisualTotal = 0;
+  /// ACTIVE_SCROLL 的唯一可信坐标系（方案 §4/§10）：ScrollStart 时从
+  /// Live 几何构建，手势期间不可变；Progress 与 Position 同源（§16）。
+  ReaderScrollGeometrySnapshot? _activeGeometry;
+
+  /// 手势滚动方向（forward = contentY 递增），用于单调进度防线。
+  bool _scrollDirectionForward = true;
+  double _displayedVisualProgress = 0;
 
   @override
   int get modeSwitchGeneration => _modeSwitchGeneration;
@@ -258,6 +278,9 @@ mixin ReaderViewPageInteractionMixin
 
   @override
   bool get isScrollPhaseActive => _scrollPhase == ReaderScrollPhase.active;
+
+  @override
+  ReaderScrollGeometrySnapshot? get activeGeometry => _activeGeometry;
 
   /// 相位转移入口：ScrollStart/Update → active，ScrollEnd → settling。
   @override
@@ -284,42 +307,46 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
-  /// 冻结当前视觉进度表为会话分母。
+  /// 冻结当前 Live 几何为本次手势的 Active 快照（方案 §10），
+  /// 进度分母与位置解析同源（§16），不得出现双标准。
   void _startScrollVisualSession() {
     _ensureBookVisualExtentTable();
-    _sessionChapterIds = List.of(_visualExtentChapterIds);
-    _sessionChapterStarts = List.of(_visualExtentStarts);
-    _sessionVisualTotal = _visualExtentTotal;
+    _activeGeometry = continuousScrollController.buildGeometrySnapshot();
   }
 
   void _clearScrollVisualSession() {
-    _sessionChapterIds = null;
-    _sessionChapterStarts = const [];
-    _sessionVisualTotal = 0;
+    _activeGeometry = null;
   }
 
-  /// 滚动期间的视觉进度：固定分母 + 动态 cursor（方案 §7）。
+  /// 滚动期间的视觉进度：快照分母 + 动态 cursor（方案 §7/§15 同源）。
   double visualProgressDuringScroll(
     String chapterId,
     double chapterVisualCursor,
   ) {
-    final ids = _sessionChapterIds;
-    if (ids == null || _sessionVisualTotal <= 0) {
+    final snapshot = _activeGeometry;
+    if (snapshot == null || snapshot.totalBodyExtent <= 0) {
       return bookVisualProgressFor(chapterId, chapterVisualCursor);
     }
-    final idx = ids.indexOf(chapterId);
-    if (idx < 0) {
+    final chapter = snapshot.chapterOf(chapterId);
+    if (chapter == null) {
       return bookVisualProgressFor(chapterId, chapterVisualCursor);
     }
-    final start = _sessionChapterStarts[idx];
-    final end =
-        idx + 1 < _sessionChapterStarts.length
-            ? _sessionChapterStarts[idx + 1]
-            : _sessionVisualTotal;
-    final extent = end - start;
+    final start = snapshot.bodyStartOf(chapterId);
+    final extent = chapter.totalHeight;
     return ((start + chapterVisualCursor.clamp(0.0, extent)) /
-            _sessionVisualTotal)
+            snapshot.totalBodyExtent)
         .clamp(0.0, 1.0);
+  }
+
+  /// 方向性单调钳制（方案 §17）：仅作用于 UI 显示进度的最后一道防线，
+  /// 不污染 tracker 与持久化的逻辑进度（§18）。
+  double _applyDirectionalProgressClamp(double nextProgress) {
+    if (_scrollPhase != ReaderScrollPhase.active) {
+      return nextProgress;
+    }
+    return _scrollDirectionForward
+        ? math.max(_displayedVisualProgress, nextProgress)
+        : math.min(_displayedVisualProgress, nextProgress);
   }
 
   // ── 全书视觉进度表（D4：VisualProgress 与 LogicalProgress 语义独立） ──
@@ -466,12 +493,16 @@ mixin ReaderViewPageInteractionMixin
   }) {
     readerDebugLog(
       'ReaderContinuousPosition: $event '
+      'phase=${_scrollPhase.name} '
       'chapter=${position.chapterId} charOffset=${position.charOffset} '
       'chapterProgress=${position.chapterProgress.toStringAsFixed(4)} '
       'visualBlock=${position.visual.blockIndex} '
       'visualRatio=${position.visual.blockRatio.toStringAsFixed(3)} '
       'visualProgress=${position.chapterVisualProgress.toStringAsFixed(4)} '
+      'displayedProgress=${bookProgressNotifier.value.toStringAsFixed(4)} '
       'contentY=${position.contentY.toStringAsFixed(1)} '
+      'geometryRevision=${position.geometryRevision} '
+      'activeGeometryRevision=${_activeGeometry?.revision} '
       'layoutVersion=${chapterData?.layoutVersion} '
       'precise=${chapterData?.hasPreciseHeights} '
       'windowStart=${continuousScrollController.prefixHeightOf(position.chapterId).toStringAsFixed(1)} '

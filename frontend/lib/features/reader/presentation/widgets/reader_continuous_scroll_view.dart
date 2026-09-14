@@ -10,6 +10,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_blo
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_range.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -38,6 +39,7 @@ class ReaderContinuousScrollView extends StatefulWidget {
     required this.annotationsByChapter,
     this.onScrollPosition,
     this.onScrollPhaseChanged,
+    this.activeGeometryProvider,
     this.onTap,
     this.onHighlight,
     this.onAnnotate,
@@ -57,6 +59,10 @@ class ReaderContinuousScrollView extends StatefulWidget {
   /// 滚动相位回调（方案 §4）：ScrollStart/Update → active，
   /// ScrollEnd → settling；settling → idle 由 State 的 settle 窗口处理。
   final void Function(ReaderScrollPhase phase)? onScrollPhaseChanged;
+
+  /// ACTIVE_SCROLL 期间位置解析的几何来源（方案 §13）：
+  /// 返回 ScrollStart 冻结的快照；null 表示非滚动手势（走 Live）。
+  final ReaderScrollGeometrySnapshot? Function()? activeGeometryProvider;
   final VoidCallback? onTap;
   final void Function(String text, int start, int end, String chapterId)?
   onHighlight;
@@ -138,7 +144,14 @@ class _ReaderContinuousScrollViewState
     }
     final position = widget.scrollController.position;
     final contentY = position.pixels + _viewportAnchorY();
-    final resolved = widget.controller.positionAtContentY(contentY);
+    final activeGeometry = widget.activeGeometryProvider?.call();
+    final resolved = widget.controller.positionAtContentY(
+      contentY,
+      source:
+          activeGeometry == null
+              ? const LiveScrollGeometrySource()
+              : SnapshotScrollGeometrySource(activeGeometry),
+    );
     if (resolved != null) {
       widget.onScrollPosition?.call(resolved);
     }

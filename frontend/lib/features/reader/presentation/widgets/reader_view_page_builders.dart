@@ -15,6 +15,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_chapter_nav
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
@@ -153,6 +154,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void onScrollPhaseChanged(ReaderScrollPhase phase);
   bool get isScrollPhaseActive;
   abstract bool continuousMetricsDirty;
+  ReaderScrollGeometrySnapshot? get activeGeometry;
   int get modeSwitchGeneration;
   void completeModeSwitchGeneration(int generation);
   void abortModeSwitchGeneration(int generation);
@@ -1397,6 +1399,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             onTap: toggleControls,
             onScrollPosition: onContinuousScrollPosition,
             onScrollPhaseChanged: onScrollPhaseChanged,
+            activeGeometryProvider: () => activeGeometry,
             onHighlight: (text, start, end, chapterId) {
               if (!mounted) return;
               annotationHandler?.updateChapter(chapterId);
