@@ -8,6 +8,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_restore_manager.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
@@ -1695,7 +1696,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           return (windowY - capturedAnchorY).clamp(0.0, max);
         },
         isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
+        onTimedOut: () => runtime.restore.markTimedOut(),
+        onMonitorEnd: () => runtime.restore.markCompleted(),
         onSettled: (completed) {
+          runtime.restore.markStabilizing();
+          if (!completed &&
+              runtime.restore.phase == ReaderRestorePhase.applying) {
+            runtime.restore.cancel();
+          }
           if (completed) {
             // 三层身份校验（方案 §57）：item/mode 已变的恢复不得回写 tracker。
             if (runtime.restore.isCallbackValid(
@@ -1865,7 +1873,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           return target.clamp(0.0, max);
         },
         isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
+        onTimedOut: () => runtime.restore.markTimedOut(),
+        onMonitorEnd: () => runtime.restore.markCompleted(),
         onSettled: (completed) {
+          runtime.restore.markStabilizing();
+          if (!completed &&
+              runtime.restore.phase == ReaderRestorePhase.applying) {
+            runtime.restore.cancel();
+          }
           if (completed && scrollController.hasClients) {
             final max = scrollController.position.maxScrollExtent;
             final data = contentLoader?.get(currentChapterId, settings);

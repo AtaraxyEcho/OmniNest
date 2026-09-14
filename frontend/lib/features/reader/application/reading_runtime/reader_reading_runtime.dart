@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_rest
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_clock.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction_manager.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_wheel_burst_tracker.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_visual_extent_table.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_window_manager.dart';
 
@@ -41,7 +42,10 @@ class ReaderReadingRuntime {
        restore = restore ?? ReaderRestoreManager(),
        clock = clock ?? const SystemReaderRuntimeClock(),
        diagnostics = diagnostics ?? ReaderRuntimeDiagnostics(),
-       geometryCommit = geometryCommit ?? const ReaderGeometryCommit();
+       geometryCommit = geometryCommit ?? const ReaderGeometryCommit(),
+       wheelBurst = ReaderWheelBurstTracker(
+         clock: clock ?? const SystemReaderRuntimeClock(),
+       );
 
   final ReaderTransactionManager transactions;
 
@@ -64,6 +68,9 @@ class ReaderReadingRuntime {
 
   /// 结束性 Geometry Commit 与锚点保持修正（方案 §38/§94）。
   final ReaderGeometryCommit geometryCommit;
+
+  /// 滚轮/触控板 burst 跟踪（方案 §30/§31，时钟经 §109 注入）。
+  final ReaderWheelBurstTracker wheelBurst;
 
   ReaderPositionSnapshot? currentPosition;
 

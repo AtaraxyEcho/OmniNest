@@ -46,6 +46,8 @@ class ScrollRestore {
     required ValueChanged<bool> onSettled,
     bool Function()? isUserScrolling,
     Duration totalTimeout = const Duration(seconds: 10),
+    void Function()? onTimedOut,
+    void Function()? onMonitorEnd,
   }) {
     _generation++;
     final myGeneration = _generation;
@@ -91,6 +93,7 @@ class ScrollRestore {
         return;
       }
       if (DateTime.now().difference(startedAt) > totalTimeout) {
+        onTimedOut?.call();
         finish(completed: false);
         return;
       }
@@ -182,6 +185,7 @@ class ScrollRestore {
         if (DateTime.now().difference(settledAt!) > _monitorDuration) {
           _active = false;
           _monitoring = false;
+          onMonitorEnd?.call();
           if (kDebugMode) {
             readerDebugLog('ScrollRestore: monitor period ended, stopping');
           }

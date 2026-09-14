@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_restore_manager.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 
@@ -87,7 +88,14 @@ mixin ReaderViewPageCoordinateMixin on ReaderViewPageMixin {
           return chapterStartScrollOffset(chapterId).clamp(0.0, max);
         },
         isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
+        onTimedOut: () => runtime.restore.markTimedOut(),
+        onMonitorEnd: () => runtime.restore.markCompleted(),
         onSettled: (completed) {
+          runtime.restore.markStabilizing();
+          if (!completed &&
+              runtime.restore.phase == ReaderRestorePhase.applying) {
+            runtime.restore.cancel();
+          }
           if (!completed) {
             // 被用户滚动中断：当前真实位置即事实，立即恢复进度写入。
             restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(0);

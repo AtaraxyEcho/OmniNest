@@ -363,7 +363,6 @@ mixin ReaderViewPageInteractionMixin
 
   ReaderScrollPhase _scrollPhase = ReaderScrollPhase.idle;
   Timer? _settleToIdleTimer;
-  Timer? _wheelIdleTimer;
 
   /// 最后一次发布的视觉进度（无事务的非 idle 帧保持该值，§25）。
   double _lastPublishedVisualProgress = 0;
@@ -416,7 +415,7 @@ mixin ReaderViewPageInteractionMixin
             tx.kind != ReaderTransactionKind.touchpad)) {
       return false;
     }
-    return _wheelIdleTimer?.isActive ?? false;
+    return runtime.wheelBurst.isBurstOngoing;
   }
 
   /// 当前冻结视口快照（方案 §8：完整布局上下文一次冻结）。
@@ -546,12 +545,13 @@ mixin ReaderViewPageInteractionMixin
             tx.kind != ReaderTransactionKind.touchpad)) {
       _beginScrollTransaction(ReaderTransactionKind.wheel);
     }
-    _wheelIdleTimer?.cancel();
-    _wheelIdleTimer = Timer(const Duration(milliseconds: 200), () {
-      if (_scrollPhase == ReaderScrollPhase.idle) {
-        _commitScrollTransaction();
-      }
-    });
+    runtime.wheelBurst.onSignal(
+      onTimeout: () {
+        if (_scrollPhase == ReaderScrollPhase.idle) {
+          _commitScrollTransaction();
+        }
+      },
+    );
   }
 
   /// 滚动期间的视觉进度：物理 Y 直接查冻结映射（方案 §22-24），
@@ -734,7 +734,7 @@ mixin ReaderViewPageInteractionMixin
     _expandForwardDebounce?.cancel();
     _expandBackwardDebounce?.cancel();
     _settleToIdleTimer?.cancel();
-    _wheelIdleTimer?.cancel();
+    runtime.wheelBurst.cancel();
   }
 
   /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。

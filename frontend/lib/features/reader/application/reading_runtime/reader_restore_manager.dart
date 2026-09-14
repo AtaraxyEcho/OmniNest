@@ -2,6 +2,31 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_layo
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 
+/// Restore 相位（方案 §97）：超时/被打断后当前物理位置即事实，
+/// 不得继续修改用户位置。
+enum ReaderRestorePhase {
+  /// 无恢复事务。
+  idle,
+
+  /// 目标 layout 未收敛，多帧重试中。
+  applying,
+
+  /// 位置已稳定，监控期（图片渐进加载等漂移）。
+  stabilizing,
+
+  /// 正常完成。
+  completed,
+
+  /// 被用户输入或新恢复取消。
+  cancelled,
+
+  /// 超时退出。
+  timedOut,
+
+  /// 定位异常退出。
+  failed,
+}
+
 /// Restore 生命周期唯一权威（方案 §55 / §96）。
 ///
 /// 所有恢复入口（restoreToChapterStart / 进度快照恢复 / 模式切换恢复 /
@@ -13,9 +38,13 @@ class ReaderRestoreManager {
 
   ReaderRestoreTransaction? _current;
 
+  ReaderRestorePhase _phase = ReaderRestorePhase.idle;
+
   ReaderRestoreTransaction? get current => _current;
 
   int get generation => _generation;
+
+  ReaderRestorePhase get phase => _phase;
 
   ReaderRestoreTransaction begin({
     required ReaderPositionTarget target,
@@ -32,6 +61,7 @@ class ReaderRestoreManager {
       layout: layout,
     );
     _current = tx;
+    _phase = ReaderRestorePhase.applying;
     return tx;
   }
 
@@ -54,7 +84,35 @@ class ReaderRestoreManager {
   /// 取消当前恢复：generation 前进，在途回调全部失效（方案 §59）。
   void cancel() {
     _generation++;
+    if (_current != null) {
+      _phase = ReaderRestorePhase.cancelled;
+    }
     _current = null;
+  }
+
+  /// 位置稳定进入监控期（引擎 settle(true) 后调用，方案 §97）。
+  void markStabilizing() {
+    if (_phase == ReaderRestorePhase.applying) {
+      _phase = ReaderRestorePhase.stabilizing;
+    }
+  }
+
+  /// 监控期正常结束。
+  void markCompleted() {
+    if (_phase == ReaderRestorePhase.stabilizing ||
+        _phase == ReaderRestorePhase.applying) {
+      _phase = ReaderRestorePhase.completed;
+    }
+  }
+
+  /// 总超时退出（方案 §97：超时后当前物理位置成为事实）。
+  void markTimedOut() {
+    _phase = ReaderRestorePhase.timedOut;
+  }
+
+  /// 定位异常退出。
+  void markFailed() {
+    _phase = ReaderRestorePhase.failed;
   }
 
   // ── Restore 请求与守卫状态（方案 §96/§140：所有权自页面 State 迁入）──
