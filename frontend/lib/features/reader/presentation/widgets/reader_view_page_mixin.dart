@@ -214,8 +214,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   void persistSettings(ReaderViewSettings settings);
   Future<void> checkBookmarkState();
   void startHideTimer();
-  void rebuildContinuousWindow();
-  void invalidateContinuousWindowFingerprint();
+  // 连续滚动窗口重建与指纹失效已内化 Runtime WindowBuilder（B4 §48），
+  // 页面经 runtime.requestWindowCommit 发起。
 
   // ── 由 State 实现的抽象方法 ──
 
@@ -257,8 +257,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       if (!mounted || isPageMode) {
         return;
       }
-      invalidateContinuousWindowFingerprint();
-      rebuildContinuousWindow();
+      // 指纹失效 + 构建合并为一次强制窗口提交（B4 §48）。
+      runtime.requestWindowCommit(force: true);
       setState(() {});
     });
   }
@@ -657,9 +657,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target);
 
   /// 当前用户滚动会话（由 interaction mixin 实现）。
-
-  /// ScrollEnd 一次收敛提交（由 builders 实现：重建窗口 + 单次修正）。
-  void commitPendingContinuousMetrics();
 
   /// 当前模式切换事务代次（由 interaction mixin 实现）。
   int get modeSwitchGeneration;

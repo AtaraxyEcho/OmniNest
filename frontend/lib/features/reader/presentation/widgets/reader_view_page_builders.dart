@@ -8,6 +8,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_window_builder.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_manager.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
@@ -42,7 +43,9 @@ import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dar
 /// reader_view_page.dart 的构建方法 mixin。
 ///
 /// 通过 getter/setter 访问 State 字段，避免私有成员访问限制。
-mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
+/// Window 构建页面供给（B4）：implements ReaderWindowBuildDelegate。
+mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
+    implements ReaderWindowBuildDelegate {
   bool _readerRebuildScheduled = false;
   bool _viewportUpdateScheduled = false;
   Size? _pendingViewportSize;
@@ -51,15 +54,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool _pageRestoreScheduled = false;
   ReaderProgressSnapshot? _pendingProgressSnapshot;
   bool _progressSnapshotApplyScheduled = false;
-
-  /// 连续滚动窗口 fingerprint；未变化时跳过 rebuild，避免滚动热路径重建。
-  int? _lastWindowFingerprint;
-  bool _continuousWindowRebuilding = false;
-
-  /// 窗口首尾章节及高度，用于滑窗时换算滚动偏移。
-  String? _windowFirstChapterId;
-  String? _windowLastChapterId;
-  double _windowFirstChapterHeight = 0;
 
   /// 翻页跨章页流（当前章 ±2）。pageModePage 表示流内全局页索引。
   ReaderPageFlow? _pageFlow;
@@ -74,11 +68,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   /// 跨章收养后待映射的章内页；下一帧流重建时换算为全局索引。
   int? _pendingPageLocalIndex;
-  double _windowLastChapterHeight = 0;
-
-  void invalidateContinuousWindowFingerprint() {
-    _lastWindowFingerprint = null;
-  }
 
   // ── State 字段访问器（由 State 实现） ──
   ReaderContentLoader? get contentLoader;
@@ -88,6 +77,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   ScrollRestore get restore;
   ReaderViewSettings get settings;
   String get currentChapterId;
+  @override
   bool get isPageMode;
   int get pageModePage;
   set pageModePage(int value);
@@ -210,6 +200,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     return contentHeight > 1 ? contentHeight : 1;
   }
 
+  @override
   double get viewportAnchorY {
     final size = MediaQuery.sizeOf(context);
     final topInset =
@@ -951,7 +942,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       }
       final geometryBefore = continuousScrollController.geometryRevision;
       final windowBefore = continuousScrollController.windowRevision;
-      rebuildContinuousWindow();
+      // 窗口构建编排已内化 Runtime（B4 §48）：requestWindowCommit 指纹门控。
+      runtime.requestWindowCommit();
       final changed =
           continuousScrollController.geometryRevision != geometryBefore ||
           continuousScrollController.windowRevision != windowBefore;
@@ -961,213 +953,220 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     });
   }
 
-  /// 用 contentLoader 数据重建连续滚动窗口。
-  ///
-  /// build 热路径调用：fingerprint 未变化时整段跳过（含测高启动与 notify）。
-  /// dropHtmlForNeighbors 由 setActive/loadChapter 负责，不在此处理。
-  void rebuildContinuousWindow() {
-    if (_continuousWindowRebuilding) {
-      return;
-    }
-    if (runtime.isInActiveGesture) {
-      // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12），
-      // 坐标系变化不得发生在用户滚动手势期间。
-      runtime.window.pendingMetricUpdate = true;
-      return;
-    }
+  // ── ReaderWindowBuildDelegate（B4 §48）：窗口构建的页面供给 ──
+  // 指纹判定、锚点捕获、重建编排与 Live 几何装载已内化 WindowBuilder。
+
+  @override
+  bool get hasBuildData => contentLoader != null;
+
+  @override
+  String get anchorChapterId => currentChapterId;
+
+  @override
+  List<String> get chapterIds => contentLoader?.chapterIds ?? const [];
+
+  @override
+  List<String> neighborIdsOf(String anchorChapterId) =>
+      contentLoader?.neighborChapterIds(
+        anchorChapterId,
+        radius: kContinuousCacheRadius,
+      ) ??
+      const [];
+
+  @override
+  int? charCountOf(String chapterId) {
     final loader = contentLoader;
     if (loader == null) {
-      return;
+      return null;
     }
-    _continuousWindowRebuilding = true;
-    try {
-      final pageWidth = computePageWidth();
-      final textScale = MediaQuery.textScalerOf(context).scale(1.0);
-      final fingerprint = _computeWindowFingerprint(
-        loader,
-        pageWidth: pageWidth,
-        textScale: textScale,
-      );
-      if (_lastWindowFingerprint == fingerprint &&
-          !continuousScrollController.isEmpty) {
-        return;
-      }
-      _lastWindowFingerprint = fingerprint;
-
-      // 记录滑窗前首尾章，rebuild 后用高度差保持视口稳定。
-      final prevFirstId = _windowFirstChapterId;
-      final prevLastId = _windowLastChapterId;
-      final prevFirstHeight = _windowFirstChapterHeight;
-      final prevLastHeight = _windowLastChapterHeight;
-      final prevEntries = continuousScrollController.entries;
-      // 布局变化前捕获视觉锚点：变化后按同一锚点保持视口（P0-17），
-      // 而非机械保持 offset 数值。
-      final anchorBefore =
-          scrollController.hasClients
-              ? continuousScrollController.visualAnchorAt(
-                scrollController.offset + viewportAnchorY,
-              )
-              : null;
-      // 旧几何快照：Geometry Commit 的 old 侧输入（方案 §38/§70）。
-      final geometryBefore = continuousScrollController.buildGeometrySnapshot();
-      // 锚点在旧布局中的窗口内容坐标：应用期按"新布局位置 - 旧布局
-      // 位置"的位移修正当前 offset，与用户滚动自然叠加，不再回拉。
-      final anchorContentY =
-          anchorBefore == null
-              ? 0.0
-              : scrollController.offset + viewportAnchorY;
-
-      loader.ensureScrollLayoutForNeighbors(
-        currentChapterId,
-        pageWidth: pageWidth,
-        settings: settings,
-        textScale: textScale,
-      );
-      final fontSize = settings.fontSize;
-      final lineHeight = settings.lineHeight;
-      final previousPrefix =
-          continuousScrollController.isEmpty
-              ? null
-              : continuousScrollController.prefixHeightOf(currentChapterId);
-      continuousScrollController.rebuild(
-        anchorChapterId: currentChapterId,
-        allChapterIds: loader.chapterIds,
-        estimateHeight: (chapterId) {
-          // 优先用解析期 charCount 折算行数；无元数据时退回固定行数占位。
-          final lineHeightPx = fontSize * lineHeight;
-          final chars = _charCountForChapter(loader, chapterId);
-          if (chars == null || chars <= 0) {
-            return lineHeightPx * 20;
-          }
-          final fontSizeEff = math.max(12.0, fontSize);
-          final charsPerLine = math.max(
-            16,
-            (pageWidth / (fontSizeEff * 0.95)).floor(),
-          );
-          final lines = (chars / charsPerLine).ceil();
-          return lineHeightPx * math.max(8, lines) + 36;
-        },
-        resolve: (chapterId) {
-          final data = loader.get(chapterId, settings);
-          if (data == null) {
-            return null;
-          }
-          final heights = data.cumulativeHeights;
-          final isReady =
-              heights.isNotEmpty && heights.length == data.blocks.length;
-          var title = data.content.title;
-          if (title.isEmpty) {
-            for (final chapter in loader.allChapters) {
-              if (chapter.id == chapterId) {
-                title = chapter.title;
-                break;
-              }
-            }
-          }
-          return ContinuousChapterEntry(
-            chapterId: chapterId,
-            title: title,
-            blockCount: data.blocks.length,
-            cumulativeHeights: heights,
-            totalHeight:
-                isReady
-                    ? heights.last
-                    : (data.blocks.isEmpty
-                        ? ReaderContinuousScrollController
-                            .fallbackPlaceholderHeight
-                        : data.blocks.length * fontSize * lineHeight),
-            totalChars: data.totalChars,
-            isReady: isReady,
-            blocks: data.blocks,
-            blockCharPrefixes: data.blockCharPrefixes,
-          );
-        },
-      );
-
-      final nextEntries = continuousScrollController.entries;
-      if (nextEntries.isNotEmpty) {
-        _windowFirstChapterId = nextEntries.first.chapterId;
-        _windowLastChapterId = nextEntries.last.chapterId;
-        _windowFirstChapterHeight = nextEntries.first.totalHeight;
-        _windowLastChapterHeight = nextEntries.last.totalHeight;
-      }
-
-      final windowSlid =
-          prevFirstId != null &&
-          (nextEntries.isEmpty ||
-              nextEntries.first.chapterId != prevFirstId ||
-              (prevLastId != null && nextEntries.last.chapterId != prevLastId));
-      _compensateScrollForWindowSlide(
-        prevEntries: prevEntries,
-        prevFirstId: prevFirstId,
-        prevLastId: prevLastId,
-        prevFirstHeight: prevFirstHeight,
-        prevLastHeight: prevLastHeight,
-        anchorBefore: anchorBefore,
-        geometryBefore: geometryBefore,
-        anchorContentY: anchorContentY,
-      );
-      // GeometryStore 接入（方案 §13/§42/§94）：builder 输出即 Candidate，
-      // 本方法只在 commit 边界（已有 ACTIVE 守卫）被调用，此处提交为 Live。
-      runtime.geometry.publishCandidate(
-        continuousScrollController.buildGeometrySnapshot(),
-      );
-      runtime.geometry.commitCandidate();
-
-      // 滑窗已按首尾高度补偿，勿再按锚点 prefix 二次修正。
-      if (!windowSlid) {
-        _compensateScrollForPrefixDelta(
-          previousPrefix,
-          anchorBefore: anchorBefore,
-          geometryBefore: geometryBefore,
-          anchorContentY: anchorContentY,
-        );
-      }
-    } finally {
-      _continuousWindowRebuilding = false;
-    }
+    return _charCountForChapter(loader, chapterId);
   }
 
-  /// 窗口状态指纹：锚点 + 排版 + 视口宽度 + 窗口章 layoutVersion/高度末值。
-  int _computeWindowFingerprint(
-    ReaderContentLoader loader, {
+  @override
+  ReaderWindowChapterSample? sampleChapter(String chapterId) {
+    final data = contentLoader?.getByChapterId(chapterId);
+    if (data == null) {
+      return null;
+    }
+    final heights = data.cumulativeHeights;
+    return ReaderWindowChapterSample(
+      chapterId: chapterId,
+      blockCount: data.blocks.length,
+      totalChars: data.totalChars,
+      hasPreciseHeights: data.hasPreciseHeights,
+      lastCumulativeHeight: heights.isEmpty ? null : heights.last,
+    );
+  }
+
+  @override
+  double get pageWidth => computePageWidth();
+
+  @override
+  double get textScale => MediaQuery.textScalerOf(context).scale(1.0);
+
+  @override
+  double get fontSize => settings.fontSize;
+
+  @override
+  double get lineHeight => settings.lineHeight;
+
+  @override
+  String get fontFamily => settings.fontFamily;
+
+  @override
+  bool get immersiveMode => settings.immersiveMode;
+
+  @override
+  bool get scrollAttached => scrollController.hasClients;
+
+  @override
+  double get currentScrollOffset =>
+      scrollController.hasClients ? scrollController.offset : 0.0;
+
+  @override
+  bool get windowEmpty => continuousScrollController.isEmpty;
+
+  @override
+  List<ContinuousChapterEntry> get entries =>
+      continuousScrollController.entries;
+
+  @override
+  double prefixHeightOf(String chapterId) =>
+      continuousScrollController.prefixHeightOf(chapterId);
+
+  @override
+  VisualAnchor? visualAnchorAt(double windowContentY) =>
+      continuousScrollController.visualAnchorAt(windowContentY);
+
+  @override
+  ReaderGeometrySnapshot buildGeometrySnapshot() =>
+      continuousScrollController.buildGeometrySnapshot();
+
+  @override
+  void rebuildWindow({
+    required String anchorChapterId,
+    required List<String> chapterIds,
+    required double pageWidth,
+  }) {
+    continuousScrollController.rebuild(
+      anchorChapterId: anchorChapterId,
+      allChapterIds: chapterIds,
+      estimateHeight:
+          (chapterId) => estimateHeightOf(chapterId, pageWidth: pageWidth),
+      resolve: resolveEntry,
+    );
+  }
+
+  /// 估算章高：优先用解析期 charCount 折算行数；无元数据时退回固定行数占位。
+  double estimateHeightOf(String chapterId, {required double pageWidth}) {
+    final loader = contentLoader;
+    if (loader == null) {
+      return 0;
+    }
+    final lineHeightPx = settings.fontSize * settings.lineHeight;
+    final chars = _charCountForChapter(loader, chapterId);
+    if (chars == null || chars <= 0) {
+      return lineHeightPx * 20;
+    }
+    final fontSizeEff = math.max(12.0, settings.fontSize);
+    final charsPerLine = math.max(
+      16,
+      (pageWidth / (fontSizeEff * 0.95)).floor(),
+    );
+    final lines = (chars / charsPerLine).ceil();
+    return lineHeightPx * math.max(8, lines) + 36;
+  }
+
+  ContinuousChapterEntry? resolveEntry(String chapterId) {
+    final loader = contentLoader;
+    if (loader == null) {
+      return null;
+    }
+    final data = loader.get(chapterId, settings);
+    if (data == null) {
+      return null;
+    }
+    final heights = data.cumulativeHeights;
+    final isReady = heights.isNotEmpty && heights.length == data.blocks.length;
+    var title = data.content.title;
+    if (title.isEmpty) {
+      for (final chapter in loader.allChapters) {
+        if (chapter.id == chapterId) {
+          title = chapter.title;
+          break;
+        }
+      }
+    }
+    return ContinuousChapterEntry(
+      chapterId: chapterId,
+      title: title,
+      blockCount: data.blocks.length,
+      cumulativeHeights: heights,
+      totalHeight:
+          isReady
+              ? heights.last
+              : (data.blocks.isEmpty
+                  ? ReaderContinuousScrollController.fallbackPlaceholderHeight
+                  : data.blocks.length *
+                      settings.fontSize *
+                      settings.lineHeight),
+      totalChars: data.totalChars,
+      isReady: isReady,
+      blocks: data.blocks,
+      blockCharPrefixes: data.blockCharPrefixes,
+    );
+  }
+
+  @override
+  void ensureScrollLayoutForNeighbors(
+    String anchorChapterId, {
     required double pageWidth,
     required double textScale,
   }) {
-    var hash = Object.hash(
-      currentChapterId,
-      settings.fontSize,
-      settings.lineHeight,
-      settings.fontFamily,
-      settings.immersiveMode,
-      pageWidth,
-      textScale,
+    contentLoader?.ensureScrollLayoutForNeighbors(
+      anchorChapterId,
+      pageWidth: pageWidth,
+      settings: settings,
+      textScale: textScale,
     );
-    final ids = [
-      currentChapterId,
-      ...loader.neighborChapterIds(
-        currentChapterId,
-        radius: kContinuousCacheRadius,
-      ),
-    ];
-    for (final id in ids) {
-      final data = loader.getByChapterId(id);
-      final heights = data?.cumulativeHeights;
-      // 不用 layoutVersion：精测分批会频繁 bump，导致每批整页 rebuild。
-      final heightBucket =
-          heights == null || heights.isEmpty
-              ? -1.0
-              : (heights.last / 64).roundToDouble() * 64;
-      hash = Object.hash(
-        hash,
-        id,
-        data?.blocks.length ?? 0,
-        data?.totalChars ?? 0,
-        data?.hasPreciseHeights ?? false,
-        heightBucket,
-      );
-    }
-    return hash;
+  }
+
+  @override
+  void compensateWindowSlide({
+    required List<ContinuousChapterEntry> prevEntries,
+    required String? prevFirstId,
+    required String? prevLastId,
+    required double prevFirstHeight,
+    required double prevLastHeight,
+    required VisualAnchor? anchorBefore,
+    required ReaderGeometrySnapshot geometryBefore,
+    required double anchorContentY,
+  }) {
+    _compensateScrollForWindowSlide(
+      prevEntries: prevEntries,
+      prevFirstId: prevFirstId,
+      prevLastId: prevLastId,
+      prevFirstHeight: prevFirstHeight,
+      prevLastHeight: prevLastHeight,
+      anchorBefore: anchorBefore,
+      geometryBefore: geometryBefore,
+      anchorContentY: anchorContentY,
+    );
+  }
+
+  @override
+  void compensatePrefixDelta({
+    required double? previousPrefix,
+    required VisualAnchor? anchorBefore,
+    required ReaderGeometrySnapshot geometryBefore,
+    required double anchorContentY,
+  }) {
+    _compensateScrollForPrefixDelta(
+      previousPrefix,
+      anchorBefore: anchorBefore,
+      geometryBefore: geometryBefore,
+      anchorContentY: anchorContentY,
+    );
   }
 
   /// 从解析元数据取章节字数；chapterIds 与 parsed.chapters 按序对齐。
@@ -1209,7 +1208,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   /// 布局变化后的视口保持：锚点保持优先，锚点不可解析时回退高度差。
   ///
   /// ACTIVE_SCROLL 期间一律不改视口（方案 §8-10，含滑窗）：布局变化
-  /// 标记 dirty，ScrollEnd 后由 commitPendingContinuousMetrics 一次收敛。
+  /// 标记 dirty，ScrollEnd 后由 WindowBuilder 终端构建一次收敛（B4 §48）。
   void _preserveVisualAnchorAfterLayoutChange({
     required VisualAnchor? anchorBefore,
     required ReaderGeometrySnapshot geometryBefore,
@@ -1240,12 +1239,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     });
   }
 
-  void commitPendingContinuousMetrics() {
-    // ScrollEnd 一次收敛：清除挂起标记并重建窗口；窗口内部的锚点
-    // 补偿（settling 相位允许）负责唯一一次视口修正。
-    runtime.window.pendingMetricUpdate = false;
-    rebuildContinuousWindow();
-  }
+  // ScrollEnd 一次收敛已内化 WindowBuilder（B4 §48）：settle 终端构建
+  // 附带清除挂起标记与窗口重建，页面不再自持提交入口。
 
   void _applyVisualCorrectionNow({
     required VisualAnchor? anchorBefore,

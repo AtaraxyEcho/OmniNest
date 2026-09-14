@@ -10,6 +10,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_even
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_window_builder.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_commit.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_scheduler.dart';
@@ -116,8 +117,8 @@ class ReaderReadingRuntime {
   /// 窗口扩挂请求（§42）。
   void Function({required bool forward})? onExpandWindowRequested;
 
-  /// 窗口指标提交请求（settling 一次收敛；B4 内化为 WindowBuilder）。
-  void Function()? onMetricsCommitRequested;
+  /// 窗口指标提交已内化 WindowBuilder（B4）：settle 直接构建，
+  /// 页面回调退役。
 
   /// 用户输入取消在途恢复的请求（页面清除恢复态）。
   void Function()? onRestoreCancelRequested;
@@ -237,7 +238,8 @@ class ReaderReadingRuntime {
         onExpandWindowRequested?.call(forward: false);
       }
     }
-    onMetricsCommitRequested?.call();
+    // 指标提交内化（B4 §48）：settle 终端构建旁路手势守卫。
+    windowBuilder.build(deferIfGestureActive: false);
     window.clearPending();
     window.pendingMetricUpdate = false;
     geometryScheduler.consumePendingCommit();
@@ -690,6 +692,20 @@ class ReaderReadingRuntime {
   void disposeOwnNotifier() {
     final notifier = publisher.notifier;
     notifier.dispose();
+  }
+
+  // ── Window 构建（B4 §48：指纹/重建/锚点捕获编排 + Live 装载）──
+
+  /// Window 构建器：delegate 由页面 initState 注入。
+  late final ReaderWindowBuilder windowBuilder = ReaderWindowBuilder(this);
+
+  /// 窗口提交请求唯一入口（B4）：页面不再自持 rebuild；
+  /// [force] 使本次构建跳过指纹短路（扩窗/布局失效场景）。
+  void requestWindowCommit({bool force = false}) {
+    if (force) {
+      windowBuilder.invalidateFingerprint();
+    }
+    windowBuilder.build();
   }
 }
 

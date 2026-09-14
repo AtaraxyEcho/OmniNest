@@ -738,11 +738,12 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     // 消费管线页面供给（B3 §6.3）与锚点章初始同步。
     _runtime.consumeDelegate = this;
     _runtime.anchorChapterId = _currentChapterId;
-    // 事务布局供给与收养/扩窗/指标提交回调（B1 §64 单向依赖接线）。
+    // 窗口构建页面供给（B4 §48）：指纹/重建/补偿编排内化 WindowBuilder。
+    _runtime.windowBuilder.delegate = this;
+    // 事务布局供给与收养/扩窗回调（B1 §64 单向依赖接线）。
     _runtime.layoutProvider = currentLiveLayout;
     _runtime.onAdoptChapterRequested = adoptContinuousAnchorChapter;
     _runtime.onExpandWindowRequested = onContinuousWindowExpand;
-    _runtime.onMetricsCommitRequested = commitPendingContinuousMetrics;
     loadSettings();
     checkBookmarkState();
     scrollController.addListener(onScroll);

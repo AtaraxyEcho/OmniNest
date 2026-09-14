@@ -15,7 +15,6 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_tran
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
@@ -91,17 +90,13 @@ mixin ReaderViewPageInteractionMixin
         _cachedLiveLayoutWindowRevision == windowRevision) {
       return cached;
     }
-    // 优先取 GeometryStore 的 Live 快照（方案 §13）；未就绪时现建并
-    // 经 Store 提交，保证 idle 解析与产线提交同一几何来源。
+    // 优先取 GeometryStore 的 Live 快照（方案 §13）；Live 只能由
+    // WindowBuilder 构建时装入（B4 只读化），此处不再补写 Store。
     final storeLive = runtime.geometry.live;
-    final ReaderGeometrySnapshot geometry;
-    if (storeLive != null && storeLive.revision == geometryRevision) {
-      geometry = storeLive;
-    } else {
-      geometry = continuousScrollController.buildGeometrySnapshot();
-      runtime.geometry.publishCandidate(geometry);
-      runtime.geometry.commitCandidate();
-    }
+    final geometry =
+        storeLive != null && storeLive.revision == geometryRevision
+            ? storeLive
+            : continuousScrollController.buildGeometrySnapshot();
     final layout = ReaderLayoutSnapshot(
       geometry: geometry,
       viewport: currentRuntimeViewport(),
@@ -517,8 +512,7 @@ mixin ReaderViewPageInteractionMixin
           textScale: MediaQuery.textScalerOf(context).scale(1.0),
         );
       }
-      invalidateContinuousWindowFingerprint();
-      rebuildContinuousWindow();
+      runtime.requestWindowCommit(force: true);
       return;
     }
     unawaited(() async {
@@ -530,8 +524,7 @@ mixin ReaderViewPageInteractionMixin
         settings: settings,
         textScale: MediaQuery.textScalerOf(context).scale(1.0),
       );
-      invalidateContinuousWindowFingerprint();
-      rebuildContinuousWindow();
+      runtime.requestWindowCommit(force: true);
       if (mounted) {
         setState(() {});
       }
@@ -742,7 +735,7 @@ mixin ReaderViewPageInteractionMixin
           settings: settings,
           textScale: MediaQuery.textScalerOf(context).scale(1.0),
         );
-        rebuildContinuousWindow();
+        runtime.requestWindowCommit();
         if (runtimeAnchor != null) {
           restoreRuntimeAnchor(runtimeAnchor);
         } else {
@@ -876,7 +869,7 @@ mixin ReaderViewPageInteractionMixin
       }
       if (!widthChanged) {
         // 高度变化不改变换行；仅刷新窗口启发与布局。
-        rebuildContinuousWindow();
+        runtime.requestWindowCommit();
         return;
       }
       _repaginateContinuousForViewportWidth();
@@ -929,7 +922,7 @@ mixin ReaderViewPageInteractionMixin
       textScale: textScale,
     );
     positionTracker.setCharOffset(anchorCharOffset, currentChapterId);
-    rebuildContinuousWindow();
+    runtime.requestWindowCommit();
     restoreScrollPositionFromOffset(anchorCharOffset);
     if (mounted) {
       setState(() {});

@@ -73,7 +73,6 @@ class _HarnessState extends State<_Harness> {
       resolve: (id) => _chapter(id: id),
     );
     runtime.layoutProvider = _buildLiveLayout;
-    runtime.onMetricsCommitRequested = () {};
   }
 
   @override
