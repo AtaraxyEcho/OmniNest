@@ -656,6 +656,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 连续窗口布局是否有未提交变化（ACTIVE_SCROLL 期间置位）。
   bool continuousMetricsDirty = false;
 
+  /// 当前模式切换事务代次（由 interaction mixin 实现）。
+  int get modeSwitchGeneration;
+
   /// 章节字数（由 builders 经解析元数据提供；未解析返回 null）。
   int? charCountForChapter(String chapterId);
 

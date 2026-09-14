@@ -14,6 +14,21 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_page_m
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
+/// 模式切换事务相位（方案 §19）。
+enum ReaderModeSwitchPhase {
+  /// 无切换事务。
+  idle,
+
+  /// 已捕获旧模式锚点，目标模式构建中。
+  buildingTarget,
+
+  /// 目标模式就绪，锚点恢复中。
+  restoring,
+
+  /// 切换失败，已统一退出。
+  failed,
+}
+
 /// 阅读页面的滚动交互、设置应用与重新分页逻辑。
 mixin ReaderViewPageInteractionMixin
     on ConsumerState<ReaderViewPage>, ReaderViewPageMixin {
@@ -40,12 +55,6 @@ mixin ReaderViewPageInteractionMixin
 
     if (DateTime.now().isBefore(restoreSilenceUntil)) return;
 
-    if (modeSwitchInProgress) {
-      modeSwitchInProgress = false;
-      modeSwitchAnchor = null;
-      restoreTargetCharOffset = 0;
-    }
-
     // 连续滚动：进度由 ReaderContinuousScrollView 的 onScrollPosition 驱动。
     if (max - scrollController.offset < max * 0.5) {
       preloadAdjacent();
@@ -62,12 +71,6 @@ mixin ReaderViewPageInteractionMixin
     }
     if (DateTime.now().isBefore(restoreSilenceUntil)) return;
     lastScrollActivityAt = DateTime.now();
-
-    if (modeSwitchInProgress) {
-      modeSwitchInProgress = false;
-      modeSwitchAnchor = null;
-      restoreTargetCharOffset = 0;
-    }
 
     handleResolvedPosition(position);
   }
@@ -200,6 +203,42 @@ mixin ReaderViewPageInteractionMixin
   Timer? _expandBackwardDebounce;
   bool _expandForwardInFlight = false;
 
+  // ── 模式切换事务（方案 §17-29）──
+
+  /// 同一时刻只有一个模式切换事务有效；旧回调按代次丢弃。
+  int _modeSwitchGeneration = 0;
+  ReaderModeSwitchPhase _modeSwitchPhase = ReaderModeSwitchPhase.idle;
+
+  /// 模式切换统一提交入口：清除全部切换期状态，进入 idle。
+  void completeModeSwitchGeneration(int generation) {
+    if (generation != _modeSwitchGeneration) {
+      return;
+    }
+    if (_modeSwitchPhase == ReaderModeSwitchPhase.idle) {
+      return;
+    }
+    _modeSwitchPhase = ReaderModeSwitchPhase.idle;
+    modeSwitchInProgress = false;
+    modeSwitchAnchor = null;
+    isRestoringProgress = false;
+    restoreTargetCharOffset = 0;
+    if (kDebugMode) {
+      readerDebugLog('ReaderModeTxn: commit generation=$generation');
+    }
+  }
+
+  /// 模式切换统一失败退出：不能只清 isRestoringProgress（方案 §28），
+  /// 否则可能遗留 modeSwitchAnchor / modeSwitchInProgress / pendingRestore。
+  void abortModeSwitchGeneration(int generation) {
+    if (generation != _modeSwitchGeneration) {
+      return;
+    }
+    if (kDebugMode) {
+      readerDebugLog('ReaderModeTxn: abort generation=$generation');
+    }
+    completeModeSwitchGeneration(generation);
+  }
+
   // ── 滚动相位与视觉会话（方案 §4-7）──
 
   ReaderScrollPhase _scrollPhase = ReaderScrollPhase.idle;
@@ -210,6 +249,9 @@ mixin ReaderViewPageInteractionMixin
   List<String>? _sessionChapterIds;
   List<double> _sessionChapterStarts = const [];
   double _sessionVisualTotal = 0;
+
+  @override
+  int get modeSwitchGeneration => _modeSwitchGeneration;
 
   @override
   ReaderScrollPhase get scrollPhase => _scrollPhase;
@@ -652,6 +694,19 @@ mixin ReaderViewPageInteractionMixin
         newSettings.immersiveMode != settings.immersiveMode;
     final layoutChanged = fontChanged || modeChanged || immersiveChanged;
 
+    // 模式切换事务开始（方案 §19-20）：任何状态变更前先捕获旧模式锚点。
+    if (modeChanged) {
+      _modeSwitchGeneration++;
+      _modeSwitchPhase = ReaderModeSwitchPhase.buildingTarget;
+      if (kDebugMode) {
+        readerDebugLog(
+          'ReaderModeTxn: start generation=$_modeSwitchGeneration '
+          '${settings.readingMode}→${newSettings.readingMode}',
+        );
+      }
+    }
+    final modeSwitchGeneration = _modeSwitchGeneration;
+
     // 冻结当前阅读锚点：优先从滚动位置计算（比 tracker 更精确），
     // 因为翻页模式的 onPageChanged 可能已将 tracker 更新为页首。
     int savedCharOffset = 0;
@@ -698,6 +753,9 @@ mixin ReaderViewPageInteractionMixin
       }
 
       if (isPageMode) {
+        _modeSwitchPhase = ReaderModeSwitchPhase.restoring;
+        // 主动预热目标章分页（方案 §29）：不等用户交互触发。
+        unawaited(warmChapterPages(currentChapterId, pageCount: 3));
         // 翻页跨章窗口内多章同步失效，避免邻章仍用旧排版分页。
         final windowIds =
             contentLoader?.chapterIds
@@ -743,6 +801,9 @@ mixin ReaderViewPageInteractionMixin
         } else {
           restoreScrollPositionFromOffset(savedCharOffset);
         }
+        // 滚动模式恢复期由 isRestoringProgress 守卫，切换事务即此提交。
+        _modeSwitchPhase = ReaderModeSwitchPhase.restoring;
+        completeModeSwitchGeneration(modeSwitchGeneration);
       }
     }
 

@@ -145,6 +145,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void onScrollPhaseChanged(ReaderScrollPhase phase);
   bool get isScrollPhaseActive;
   abstract bool continuousMetricsDirty;
+  int get modeSwitchGeneration;
+  void completeModeSwitchGeneration(int generation);
+  void abortModeSwitchGeneration(int generation);
 
   // ── 页面尺寸 ──
 
@@ -1614,6 +1617,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     int restoreCharOffset,
   ) async {
     final requestedChapterId = currentChapterId;
+    // 模式切换/恢复事务代次：完成或失败都必须统一退出（方案 §27-28）。
+    final txnGeneration = modeSwitchGeneration;
     // 捕获当前导航令牌：await 定位期间若发生新的显式导航（含同章重复
     // 跳转），本次恢复结果已过时，必须整体丢弃（旧任务 ≠ 当前任务）。
     final navigationTokenAtStart = navigationTokens.current;
@@ -1634,6 +1639,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             isRestoringProgress = false;
             modeSwitchInProgress = false;
           });
+          completeModeSwitchGeneration(txnGeneration);
         }
         return;
       }
@@ -1651,12 +1657,15 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         modeSwitchInProgress = false;
         isRestoringProgress = false;
       });
+      completeModeSwitchGeneration(txnGeneration);
     } catch (e) {
       if (mounted && requestedChapterId == currentChapterId) {
         setState(() {
           isRestoringProgress = false;
           modeSwitchInProgress = false;
         });
+        // 定位异常同样是统一失败退出（方案 §28）。
+        abortModeSwitchGeneration(txnGeneration);
       }
     }
   }
