@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 
 /// 连续滚动窗口内的一章。
 @immutable
@@ -82,7 +83,7 @@ class ContinuousScrollItem {
 
 enum ContinuousScrollItemKind { chapterHeader, block, chapterTrailing }
 
-/// 连续滚动阅读位置。
+/// 连续滚动阅读位置：同时携带视觉坐标与逻辑坐标（双坐标模型）。
 @immutable
 class ContinuousScrollPosition {
   const ContinuousScrollPosition({
@@ -90,6 +91,9 @@ class ContinuousScrollPosition {
     required this.charOffset,
     required this.chapterProgress,
     required this.contentY,
+    required this.visual,
+    required this.chapterVisualProgress,
+    required this.chapterVisualCursor,
   });
 
   final String chapterId;
@@ -98,6 +102,15 @@ class ContinuousScrollPosition {
 
   /// 窗口内容坐标（含前缀章节高度）。
   final double contentY;
+
+  /// 视觉坐标（块索引 + 块内偏移 + 块内比例）。
+  final VisualPosition visual;
+
+  /// 视觉章节进度：图片内部连续变化，与逻辑进度语义独立。
+  final double chapterVisualProgress;
+
+  /// 章体视觉游标（前面块高度 + 当前块内偏移）。
+  final double chapterVisualCursor;
 }
 
 /// 连续滚动的视觉锚点：视口顶所在块及块内偏移。
@@ -306,116 +319,52 @@ class ReaderContinuousScrollController extends ChangeNotifier {
     return items;
   }
 
-  /// 根据窗口内容 Y 解析阅读位置。
-  ///
-  /// 就绪章优先按「块索引 + 块级字符前缀」映射；文本块再按块内高度比例插值，
-  /// 非文本块（图/表/分隔线）落到块起止字符，避免全章线性插值拉偏进度。
+  /// 唯一位置解析器：所有 contentY ↔ Visual ↔ Logical 换算经此完成，
+  /// 控制器只保留窗口几何（章条目、前缀高度、chrome 常量）的所有权。
+  late final ReaderContinuousPositionResolver resolver =
+      ReaderContinuousPositionResolver(this);
+
+  /// 根据窗口内容 Y 解析阅读位置（双坐标：视觉 + 逻辑）。
   ContinuousScrollPosition? positionAtContentY(double contentY) {
-    if (_entries.isEmpty || _anchorChapterId == null) {
+    final resolved = resolver.resolveContentY(contentY);
+    if (resolved == null) {
       return null;
     }
-    final y = contentY < 0 ? 0.0 : contentY;
-    for (final entry in _entries) {
-      final start = prefixHeightOf(entry.chapterId);
-      final end = start + effectiveExtentOf(entry);
-      if (y < end || identical(entry, _entries.last)) {
-        // 章体位于章头之后：章头区域映射章首，章尾留白映射章尾。
-        final localY = (y - start - chapterHeaderExtent).clamp(
-          0.0,
-          entry.totalHeight,
-        );
-        final resolved = _charOffsetInEntry(entry, localY);
-        final progress =
-            entry.totalChars > 0
-                ? (resolved / entry.totalChars).clamp(0.0, 1.0)
-                : 0.0;
-        return ContinuousScrollPosition(
-          chapterId: entry.chapterId,
-          charOffset: resolved,
-          chapterProgress: progress,
-          contentY: y,
-        );
-      }
-    }
-    return null;
+    return ContinuousScrollPosition(
+      chapterId: resolved.chapterId,
+      charOffset: resolved.logical.charOffset,
+      chapterProgress: resolved.chapterProgress,
+      contentY: resolved.contentY,
+      visual: resolved.visual,
+      chapterVisualProgress: resolved.chapterVisualProgress,
+      chapterVisualCursor: resolved.chapterVisualCursor,
+    );
   }
 
-  /// 块区间按 [start, end) 归属：块顶属当前块，块底（cumulativeHeights[i]）
-  /// 归下一块，避免边界 Y 随机归属。块级高度缺失时返回 0。
-  int _blockIndexAt(ContinuousChapterEntry entry, double localY) {
-    final heights = entry.cumulativeHeights;
-    if (entry.blockCount <= 0 || heights.length != entry.blockCount) {
-      return 0;
-    }
-    var lo = 0;
-    var hi = entry.blockCount - 1;
-    while (lo < hi) {
-      final mid = (lo + hi) >> 1;
-      if (heights[mid] <= localY) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    return lo >= entry.blockCount ? entry.blockCount - 1 : lo;
-  }
-
-  /// 解析窗口 contentY 处的视觉锚点（视觉坐标优先）。
-  ///
-  /// 章头区域映射首块顶部，章尾留白映射末块底部；未就绪章（无块级
-  /// 高度）锚点落在 blockIndex=0、offsetInBlock 为章体内局部 Y。
+  /// 解析窗口 contentY 处的视觉锚点（运行时布局保持用）。
   VisualAnchor? visualAnchorAt(double contentY) {
-    if (_entries.isEmpty || _anchorChapterId == null) {
+    final visual = resolver.visualAtContentY(contentY);
+    if (visual == null) {
       return null;
     }
-    final y = contentY < 0 ? 0.0 : contentY;
-    for (final entry in _entries) {
-      final start = prefixHeightOf(entry.chapterId);
-      final end = start + effectiveExtentOf(entry);
-      if (y < end || identical(entry, _entries.last)) {
-        final localY = (y - start - chapterHeaderExtent).clamp(
-          0.0,
-          entry.totalHeight,
-        );
-        final blockIndex = _blockIndexAt(entry, localY);
-        final heights = entry.cumulativeHeights;
-        final blockStartY =
-            blockIndex > 0 && heights.length == entry.blockCount
-                ? heights[blockIndex - 1]
-                : 0.0;
-        return VisualAnchor(
-          chapterId: entry.chapterId,
-          blockIndex: blockIndex,
-          offsetInBlock: localY - blockStartY,
-        );
-      }
-    }
-    return null;
+    return VisualAnchor(
+      chapterId: visual.chapterId,
+      blockIndex: visual.blockIndex,
+      offsetInBlock: visual.offsetInBlock,
+    );
   }
 
   /// 视觉锚点对应的窗口 contentY；锚点章不在窗口或块级高度缺失时
   /// 返回 null，调用方应回退高度差补偿。
   double? contentYForVisualAnchor(VisualAnchor anchor) {
-    final entry = _entryById[anchor.chapterId];
-    if (entry == null) {
-      return null;
-    }
-    final heights = entry.cumulativeHeights;
-    if (entry.blockCount <= 0 ||
-        heights.length != entry.blockCount ||
-        anchor.blockIndex < 0 ||
-        anchor.blockIndex >= entry.blockCount) {
-      return null;
-    }
-    final blockStartY =
-        anchor.blockIndex > 0 ? heights[anchor.blockIndex - 1] : 0.0;
-    final blockHeight = heights[anchor.blockIndex] - blockStartY;
-    final offset =
-        blockHeight > 0 ? anchor.offsetInBlock.clamp(0.0, blockHeight) : 0.0;
-    return prefixHeightOf(anchor.chapterId) +
-        chapterHeaderExtent +
-        blockStartY +
-        offset;
+    return resolver.contentYForVisualPosition(
+      VisualPosition(
+        chapterId: anchor.chapterId,
+        blockIndex: anchor.blockIndex,
+        offsetInBlock: anchor.offsetInBlock,
+        blockRatio: 0,
+      ),
+    );
   }
 
   /// 块重测高后重映射视觉锚点：块高变化时按块内比例保持相对位置。
@@ -426,89 +375,22 @@ class ReaderContinuousScrollController extends ChangeNotifier {
     VisualAnchor anchor, {
     ContinuousChapterEntry? oldEntry,
   }) {
-    final newEntry = _entryById[anchor.chapterId];
-    if (newEntry == null) {
-      return null;
-    }
-    final oldHeights = oldEntry?.cumulativeHeights;
-    final newHeights = newEntry.cumulativeHeights;
-    final hasOld =
-        oldEntry != null &&
-        oldHeights != null &&
-        oldEntry.blockCount > 0 &&
-        oldHeights.length == oldEntry.blockCount &&
-        anchor.blockIndex >= 0 &&
-        anchor.blockIndex < oldEntry.blockCount;
-    final hasNew =
-        newEntry.blockCount > 0 &&
-        newHeights.length == newEntry.blockCount &&
-        anchor.blockIndex >= 0 &&
-        anchor.blockIndex < newEntry.blockCount;
-    if (!hasOld || !hasNew) {
-      return anchor;
-    }
-    final oldStart =
-        anchor.blockIndex > 0 ? oldHeights[anchor.blockIndex - 1] : 0.0;
-    final oldBlockHeight = oldHeights[anchor.blockIndex] - oldStart;
-    final newStart =
-        anchor.blockIndex > 0 ? newHeights[anchor.blockIndex - 1] : 0.0;
-    final newBlockHeight = newHeights[anchor.blockIndex] - newStart;
-    if (oldBlockHeight <= 0 || newBlockHeight <= 0) {
-      return VisualAnchor(
+    final remapped = resolver.remapVisualPosition(
+      VisualPosition(
         chapterId: anchor.chapterId,
         blockIndex: anchor.blockIndex,
-        offsetInBlock: 0,
-      );
+        offsetInBlock: anchor.offsetInBlock,
+        blockRatio: 0,
+      ),
+      oldEntry: oldEntry,
+    );
+    if (remapped == null) {
+      return null;
     }
     return VisualAnchor(
-      chapterId: anchor.chapterId,
-      blockIndex: anchor.blockIndex,
-      offsetInBlock: anchor.offsetInBlock / oldBlockHeight * newBlockHeight,
-    );
-  }
-
-  int _charOffsetInEntry(ContinuousChapterEntry entry, double localY) {
-    if (entry.totalChars <= 0) {
-      return 0;
-    }
-    final prefixes = entry.blockCharPrefixes;
-    final hasPrefixes =
-        entry.isReady &&
-        prefixes.length == entry.blockCount + 1 &&
-        entry.cumulativeHeights.length == entry.blockCount &&
-        entry.blockCount > 0;
-    if (!hasPrefixes) {
-      final ratio = entry.totalHeight > 0 ? (localY / entry.totalHeight) : 0.0;
-      return (ratio * entry.totalChars).round().clamp(0, entry.totalChars);
-    }
-
-    final lo = _blockIndexAt(entry, localY);
-    final blockStart = lo > 0 ? entry.cumulativeHeights[lo - 1] : 0.0;
-    final blockEnd = entry.cumulativeHeights[lo];
-    final blockHeight = blockEnd - blockStart;
-    final ratioInBlock =
-        blockHeight > 0
-            ? ((localY - blockStart) / blockHeight).clamp(0.0, 1.0)
-            : 0.0;
-    final blockCharStart = prefixes[lo];
-    final blockCharEnd = prefixes[lo + 1];
-    final blockChars = blockCharEnd - blockCharStart;
-    if (blockChars <= 0) {
-      // 非文本块（图/分隔线等）：落在块起点；越过半高则落到块后。
-      return ratioInBlock >= 0.5 ? blockCharEnd : blockCharStart;
-    }
-    final isTextBlock =
-        lo >= entry.blocks.length ||
-        entry.blocks[lo] is ParagraphBlock ||
-        entry.blocks[lo] is BlockquoteBlock ||
-        entry.blocks[lo] is ListBlock ||
-        entry.blocks[lo] is HeadingBlock;
-    if (!isTextBlock) {
-      return ratioInBlock >= 0.5 ? blockCharEnd : blockCharStart;
-    }
-    return (blockCharStart + (ratioInBlock * blockChars).round()).clamp(
-      blockCharStart,
-      blockCharEnd,
+      chapterId: remapped.chapterId,
+      blockIndex: remapped.blockIndex,
+      offsetInBlock: remapped.offsetInBlock,
     );
   }
 
