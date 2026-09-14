@@ -30,7 +30,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_page_flow.d
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_return_to_progress_control.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
@@ -68,7 +67,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   // ── State 字段访问器（由 State 实现） ──
   ReaderContentLoader? get contentLoader;
   ReaderContinuousScrollController get continuousScrollController;
-  ReaderPositionTracker get positionTracker;
   ScrollController get scrollController;
   ReaderViewSettings get settings;
   String get currentChapterId;
@@ -130,6 +128,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   int windowContentYToCharOffset(String chapterId, double windowContentY);
   double chapterStartScrollOffset(String chapterId);
   void restoreToChapterStart(String chapterId);
+  void refreshBookProgressNow();
   bool get pointerDownActive;
   set pointerDownActive(bool value);
   bool isUserScrollActive({required DateTime since});
@@ -336,6 +335,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       return;
     }
     updateProgressFromPage();
+    // B8：scrollProgress 不再触发防抖重算，页模式进度提交后显式发布。
+    refreshBookProgressNow();
     final charOffset = computePageCharOffset(index);
     scheduleLocalProgressSave(
       chapterProgress: scrollProgress,
@@ -1632,13 +1633,17 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
               ? 0.0
               : (restoreCharOffset / totalChars).clamp(0.0, 1.0).toDouble();
       scrollProgress = capturedProgress;
-      positionTracker.setCharOffset(restoreCharOffset, currentChapterId);
+      runtime.acceptLogicalPosition(
+        chapterId: currentChapterId,
+        charOffset: restoreCharOffset,
+      );
       // targetPage 为章内页；换算到跨章流全局索引。
       final anchorStart = _pageFlow?.startIndexOf(currentChapterId) ?? 0;
       runtime.restore.markCompleted();
       if (runtime.modeSwitch.request == switchRequestAtStart) {
         runtime.completeModeSwitch();
       }
+      refreshBookProgressNow();
       setState(() {
         pageModePage = anchorStart + targetPage;
       });

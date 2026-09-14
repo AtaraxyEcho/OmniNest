@@ -371,7 +371,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (chapterId != _currentChapterId) {
       adoptContinuousAnchorChapter(chapterId);
     }
-    _positionTracker.setCharOffset(clamped, chapterId);
+    _runtime.acceptLogicalPosition(chapterId: chapterId, charOffset: clamped);
     final totalChars = data.totalChars;
     if (totalChars > 0) {
       scrollProgress = (clamped / totalChars).clamp(0.0, 1.0);

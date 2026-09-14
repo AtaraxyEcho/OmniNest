@@ -21,7 +21,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_helper.dart';
@@ -37,7 +36,6 @@ import 'package:omninest/features/reader/reader_debug_log.dart';
 mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   // ── 由 State 提供的抽象成员（字段访问） ──
 
-  ReaderPositionTracker get positionTracker;
   ReaderContentLoader? get contentLoader;
   set contentLoader(ReaderContentLoader? value);
   ScrollController get scrollController;
@@ -417,7 +415,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     if (!isCoverLike) {
       return;
     }
-    if (positionTracker.charOffset > 0 || scrollProgress > 0) {
+    if (runtime.logicalPosition.charOffset > 0 || scrollProgress > 0) {
       return;
     }
     if (kDebugMode) {
@@ -918,13 +916,19 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
           charOffset: snapshot.charOffset,
         ),
       );
-      positionTracker.setCharOffset(snapshot.charOffset, snapshot.chapterId);
+      runtime.acceptLogicalPosition(
+        chapterId: snapshot.chapterId,
+        charOffset: snapshot.charOffset,
+      );
       if (mounted) setState(() {});
       return;
     }
 
     {
-      positionTracker.setCharOffset(snapshot.charOffset, snapshot.chapterId);
+      runtime.acceptLogicalPosition(
+        chapterId: snapshot.chapterId,
+        charOffset: snapshot.charOffset,
+      );
       if (kDebugMode) {
         readerDebugLog(
           'ProgressRestore DEBUG: charOffset=${snapshot.charOffset}, '
@@ -1033,7 +1037,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         // 连续滚动：滚动 offset 是窗口绝对坐标，必须走统一换算扣前缀。
         effectiveCharOffset =
             contentLoader == null
-                ? positionTracker.charOffset
+                ? runtime.logicalPosition.charOffset
                 : windowContentYToCharOffset(
                   snapshotChapterId,
                   scrollController.offset + viewportAnchorY,
@@ -1043,14 +1047,14 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         // 对该章不可解释。退回 tracker 的自洽位置并同步修正章节身份，
         // 避免把旧章偏移算进新章（totalChars=0 时还会把 chapterProgress
         // 退化成 scrollProgress 兜底值落库，产生脏进度）。
-        final trackedChapterId = positionTracker.chapterId;
+        final trackedChapterId = runtime.logicalPosition.chapterId;
         if (trackedChapterId.isNotEmpty) {
           snapshotChapterId = trackedChapterId;
         }
-        effectiveCharOffset = positionTracker.charOffset;
+        effectiveCharOffset = runtime.logicalPosition.charOffset;
       }
     } else {
-      effectiveCharOffset = positionTracker.charOffset;
+      effectiveCharOffset = runtime.logicalPosition.charOffset;
     }
 
     final snapshotTotalChars =
@@ -1245,18 +1249,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
           data.totalChars > 0
               ? (charOffset / data.totalChars).clamp(0.0, 1.0)
               : 0.0;
-      // 模式切换期间不覆盖 tracker — 保留请求冻结的精确锚点
+      // 模式切换期间不覆盖记账 — 保留请求冻结的精确锚点
       if (runtime.modeSwitchAnchor == null) {
-        final chapterIdx =
-            contentLoader?.allChapters.indexWhere((c) => c.id == chapterId) ??
-            0;
-        positionTracker.updateFromPage(
-          localPageIndex: 0,
-          totalPages: 10000,
-          charOffset: charOffset,
+        runtime.acceptLogicalPosition(
           chapterId: chapterId,
-          totalChapters: contentLoader?.allChapters.length ?? 0,
-          currentChapterIndex: chapterIdx,
+          charOffset: charOffset,
         );
       }
       return;
@@ -1300,10 +1297,10 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     if (isPageMode) {
       return buildProgressSnapshot();
     }
-    final trackedChapterId = positionTracker.chapterId;
+    final trackedChapterId = runtime.logicalPosition.chapterId;
     final chapterId =
         trackedChapterId.isEmpty ? currentChapterId : trackedChapterId;
-    final charOffset = positionTracker.charOffset;
+    final charOffset = runtime.logicalPosition.charOffset;
     final totalChars =
         contentLoader?.getByChapterId(chapterId)?.totalChars ?? 0;
     final chapterProgress =

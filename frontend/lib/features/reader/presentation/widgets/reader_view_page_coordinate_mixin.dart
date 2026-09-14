@@ -65,7 +65,7 @@ mixin ReaderViewPageCoordinateMixin on ReaderViewPageMixin {
   @override
   void restoreToChapterStart(String chapterId) {
     scrollProgress = 0;
-    positionTracker.setCharOffset(0, chapterId);
+    runtime.acceptLogicalPosition(chapterId: chapterId, charOffset: 0);
     runtime.startRestore(
       ReaderPositionTarget(chapterId: chapterId, charOffset: 0),
     );

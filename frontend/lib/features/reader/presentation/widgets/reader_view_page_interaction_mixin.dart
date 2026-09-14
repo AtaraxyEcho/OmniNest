@@ -151,16 +151,13 @@ mixin ReaderViewPageInteractionMixin
     required ReaderPositionSnapshot snapshot,
     required int totalChars,
   }) {
-    positionTracker.updateFromScroll(
-      offset: scrollController.hasClients ? scrollController.offset : 0,
-      maxExtent:
-          scrollController.hasClients
-              ? scrollController.position.maxScrollExtent
-              : 0,
-      totalChars: totalChars,
-      chapterId: snapshot.chapterId,
-      charOffset: snapshot.charOffset,
-    );
+    // 封面/空章不记账（原 updateFromScroll 的 totalChars 守卫语义）。
+    if (totalChars > 0) {
+      runtime.acceptLogicalPosition(
+        chapterId: snapshot.chapterId,
+        charOffset: snapshot.charOffset,
+      );
+    }
     _debugContinuousPosition(
       snapshot,
       contentLoader?.getByChapterId(snapshot.chapterId),
@@ -264,7 +261,11 @@ mixin ReaderViewPageInteractionMixin
   /// 统一到全部恢复站点；零进度由 scheduleLocalProgressSave 拦截）。
   @override
   void onRestoreSettled(ReaderPositionTarget target) {
-    positionTracker.setCharOffset(target.charOffset, target.chapterId);
+    runtime.acceptLogicalPosition(
+      chapterId: target.chapterId,
+      charOffset: target.charOffset,
+    );
+    refreshBookProgressNow();
     final totalChars =
         contentLoader?.getByChapterId(target.chapterId)?.totalChars ?? 0;
     if (totalChars > 0) {
@@ -626,10 +627,10 @@ mixin ReaderViewPageInteractionMixin
           scrollController.offset + viewportAnchorY,
         );
         if (savedCharOffset <= 0) {
-          savedCharOffset = positionTracker.charOffset;
+          savedCharOffset = runtime.logicalPosition.charOffset;
         }
       } else {
-        savedCharOffset = positionTracker.charOffset;
+        savedCharOffset = runtime.logicalPosition.charOffset;
       }
     }
     // 模式切换事务开始（B7 请求化）：锚点一次冻结进请求，新切换使旧
@@ -749,7 +750,7 @@ mixin ReaderViewPageInteractionMixin
       visual: visual,
       logical: LogicalPosition(
         chapterId: currentChapterId,
-        charOffset: positionTracker.charOffset,
+        charOffset: runtime.logicalPosition.charOffset,
       ),
       oldEntry: entry,
     );
@@ -821,7 +822,7 @@ mixin ReaderViewPageInteractionMixin
 
   /// 恢复滚动位置（累积高度已由调用方重算）。
   void restoreScrollPosition() {
-    restoreScrollPositionFromOffset(positionTracker.charOffset);
+    restoreScrollPositionFromOffset(runtime.logicalPosition.charOffset);
   }
 
   /// 视口变化时保持当前阅读锚点并重新分页/重测。
@@ -839,7 +840,7 @@ mixin ReaderViewPageInteractionMixin
       if (!mounted) return;
       if (isPageMode) {
         final trackedAnchor =
-            runtime.modeSwitchAnchor ?? positionTracker.charOffset;
+            runtime.modeSwitchAnchor ?? runtime.logicalPosition.charOffset;
         final anchor =
             trackedAnchor > 0
                 ? trackedAnchor
@@ -861,7 +862,7 @@ mixin ReaderViewPageInteractionMixin
     final loader = contentLoader;
     if (loader == null) return;
     // 先冻结当前锚点（优先真实滚动位置，避免 tracker 滞后）。
-    var anchorCharOffset = positionTracker.charOffset;
+    var anchorCharOffset = runtime.logicalPosition.charOffset;
     if (scrollController.hasClients &&
         scrollController.position.maxScrollExtent > 0) {
       // 锚点冻结统一经 Runtime PositionResolver（方案 §18/§134）。
@@ -901,7 +902,10 @@ mixin ReaderViewPageInteractionMixin
       settings: settings,
       textScale: textScale,
     );
-    positionTracker.setCharOffset(anchorCharOffset, currentChapterId);
+    runtime.acceptLogicalPosition(
+      chapterId: currentChapterId,
+      charOffset: anchorCharOffset,
+    );
     runtime.requestWindowCommit();
     restoreScrollPositionFromOffset(anchorCharOffset);
     if (mounted) {
@@ -922,6 +926,8 @@ mixin ReaderViewPageInteractionMixin
   /// 重新分页所有章节。
   void repaginateAll() {
     contentLoader?.invalidateAll();
-    repaginateCurrentChapter(restoreCharOffset: positionTracker.charOffset);
+    repaginateCurrentChapter(
+      restoreCharOffset: runtime.logicalPosition.charOffset,
+    );
   }
 }

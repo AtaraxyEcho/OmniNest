@@ -32,7 +32,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_content_skeleton.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_deferred_restore_overlay.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_backup.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_tts_controls.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_bottom_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_indicator.dart';
@@ -90,7 +89,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         ReaderViewPageCoordinateMixin,
         ReaderViewPageInteractionMixin {
   // ── 核心组件 ──
-  final _positionTracker = ReaderPositionTracker();
   ReaderContentLoader? _contentLoader;
   final ReaderPageTurnController _pageTurnController =
       ReaderPageTurnController();
@@ -122,14 +120,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   int _pageModePage = 0;
 
   // ── 进度 ──
-  // 章节内进度通知器：滚动/翻页热路径只更新此值，UI 消费者局部重建。
-  final ValueNotifier<double> _scrollProgressNotifier = ValueNotifier<double>(
-    0,
-  );
-  // 全书进度通知器：_bookProgress 计算是 O(章节)，用防抖避免逐帧重算。
+  // 章内显示进度：纯展示值，不驱动全书进度（B8 起全书进度由 Runtime
+  // progressPublished 与页面显式 refreshBookProgressNow 发布）。
+  double _scrollProgress = 0;
+  // 全书进度通知器（底栏/指示器消费）。
   final ValueNotifier<double> _bookProgressNotifier = ValueNotifier<double>(0);
-  Timer? _bookProgressRecomputeTimer;
-  double _lastBookProgressInput = -1;
   DateTime? _lastAppliedProgressAt;
   DateTime _lastPointerDownTime = DateTime.fromMillisecondsSinceEpoch(
     0,
@@ -215,7 +210,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   // ── 抽象成员实现（ReaderViewPageMixin + ReaderViewPageBuilders 共用） ──
   @override
-  ReaderPositionTracker get positionTracker => _positionTracker;
   @override
   ReaderPageTurnController get pageTurnController => _pageTurnController;
   @override
@@ -267,37 +261,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   set pageModePage(int v) => _pageModePage = v;
   @override
-  double get scrollProgress => _scrollProgressNotifier.value;
+  double get scrollProgress => _scrollProgress;
 
   @override
-  set scrollProgress(double v) {
-    _scrollProgressNotifier.value = v;
-    _scheduleBookProgressRecompute();
-  }
-
-  /// 防抖重算全书进度（O 章节），滚动期间最多每 200ms 一次。
-  void _scheduleBookProgressRecompute() {
-    if (_bookProgressRecomputeTimer != null) {
-      return;
-    }
-    final input = _scrollProgressNotifier.value;
-    if ((input - _lastBookProgressInput).abs() < 0.0005) {
-      return;
-    }
-    _bookProgressRecomputeTimer = Timer(const Duration(milliseconds: 200), () {
-      _bookProgressRecomputeTimer = null;
-      if (!mounted) {
-        return;
-      }
-      // 切章/加载期间 tracker 仍是旧章偏移，此时重算会得到错误中间值；
-      // 挂起重算，待加载完成后由 refreshBookProgressNow 一次到位。
-      if (_isSwitchingChapter || _isLoadingChapter) {
-        return;
-      }
-      _lastBookProgressInput = _scrollProgressNotifier.value;
-      _runtime.publisher.publish(_displayBookProgress);
-    });
-  }
+  set scrollProgress(double v) => _scrollProgress = v;
 
   /// 底栏/指示器显示进度：翻页模式为逻辑全书进度；连续模式为视觉全书
   /// 进度（图片内部连续变化，不受逻辑进度冻结影响）。
@@ -316,9 +283,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (!mounted) {
       return;
     }
-    _bookProgressRecomputeTimer?.cancel();
-    _bookProgressRecomputeTimer = null;
-    _lastBookProgressInput = _scrollProgressNotifier.value;
     _runtime.publisher.publish(_displayBookProgress);
   }
 
@@ -612,7 +576,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   /// 全书进度百分比（0.0-1.0），用于显示和同步。
   double get _bookProgress =>
-      bookProgressFor(_currentChapterId, _positionTracker.charOffset);
+      bookProgressFor(_currentChapterId, _runtime.logicalPosition.charOffset);
 
   /// 按 [chapterId] + [charOffset] 计算全书加权进度。
   ///
@@ -622,7 +586,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   double bookProgressFor(String chapterId, int charOffset) {
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
-      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
+      return _scrollProgress.clamp(0.0, 1.0);
     }
     // 章节身份无法解析时不静默按第一章累计：把错误章节折算成第一章
     // 进度会伪造全书位置（含落库与同步），维持当前显示进度并交由调用方处理。
@@ -632,7 +596,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (allChapters == null ||
         currentChapterIdx < 0 ||
         currentChapterIdx >= parsedBook.chapters.length) {
-      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
+      return _scrollProgress.clamp(0.0, 1.0);
     }
     final chapterCharCounts =
         parsedBook.chapters.map((c) => c.charCount).toList();
@@ -643,7 +607,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     }
     final totalBookChars = chapterCharCounts.fold<int>(0, (s, c) => s + c);
     if (totalBookChars <= 0) {
-      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
+      return _scrollProgress.clamp(0.0, 1.0);
     }
 
     // 当前章节之前的字符数之和
@@ -747,21 +711,21 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       itemId: widget.itemId,
       sessionStart: _sessionStart,
     );
-    // 退出兜底：位置取 positionTracker（滚动/翻页两种模式均由正确路径
+    // 退出兜底：位置取逻辑位置记账（滚动/翻页两种模式均由正确路径
     // 维护），全书进度取通知器缓存值（dispose 中 ref/BuildContext 不可
     // 用），阅读模式取实际值；翻页模式同样补报（旧实现依赖滚动视图
     // hasClients 而整块跳过）。
     if (!_runtime.restore.isBusy &&
         (_cachedContent != null ||
             _contentLoader?.getByChapterId(_currentChapterId) != null)) {
-      final charOffset = _positionTracker.charOffset;
+      final charOffset = _runtime.logicalPosition.charOffset;
       final chapterId = _currentChapterId;
       final totalChars =
           _contentLoader?.getByChapterId(chapterId)?.totalChars ?? 0;
       final chapterProgress =
           totalChars > 0
               ? (charOffset / totalChars).clamp(0.0, 1.0)
-              : _scrollProgressNotifier.value.clamp(0.0, 1.0);
+              : _scrollProgress.clamp(0.0, 1.0);
       ReaderProgressBackupWeb.save(
         itemId: widget.itemId,
         chapterId: chapterId,
@@ -784,9 +748,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (kIsWeb) BrowserContextMenu.enableContextMenu();
     disposeScrollThrottles();
     disposeLayoutInvalidationTimer();
-    _scrollProgressNotifier.dispose();
     _bookProgressNotifier.dispose();
-    _bookProgressRecomputeTimer?.cancel();
     _hideTimer?.cancel();
     _persistTimer?.cancel();
     _repaginateTimer?.cancel();

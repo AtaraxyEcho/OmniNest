@@ -8,6 +8,7 @@ import 'package:omninest/features/reader/application/reader_progress_snapshot.da
 import 'package:omninest/features/reader/application/reading_runtime/reader_consume_delegate.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_event_log.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_logical_position.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_window_builder.dart';
@@ -542,6 +543,22 @@ class ReaderReadingRuntime {
         visualProgress: value,
       ),
     );
+  }
+
+  // ── 逻辑位置记账（B8：页模式/恢复/程序化路径的位置权威）──
+
+  /// 逻辑位置状态：章身份+charOffset 成对记账，与 positionState
+  /// （滚动物理位置）语义独立；页面不再直接持有 tracker。
+  final ReaderLogicalPositionState logicalPosition =
+      ReaderLogicalPositionState();
+
+  /// 逻辑位置记账唯一入口（B8）：页模式页进度、恢复登记、章首记账、
+  /// 视觉 seek 落点等统一经此写入。
+  void acceptLogicalPosition({
+    required String chapterId,
+    required int charOffset,
+  }) {
+    logicalPosition.accept(chapterId: chapterId, charOffset: charOffset);
   }
 
   // ── Mode Switch 编排（B7：请求化 + Runtime 唯一权威）──
