@@ -31,6 +31,7 @@ class ReaderTransactionManager {
     final tx = ReaderTransaction(id: ++_sequence, kind: kind, layout: layout);
     tx.lastScrollOffset = initialOffset;
     tx.lastVisualProgress = initialVisualProgress;
+    tx.displayedProgress = initialVisualProgress;
     _current = tx;
     return tx;
   }
@@ -51,6 +52,7 @@ class ReaderTransactionManager {
     final tx = ReaderTransaction(id: ++_sequence, kind: kind, layout: layout);
     tx.lastScrollOffset = initialOffset;
     tx.lastVisualProgress = initialVisualProgress;
+    tx.displayedProgress = initialVisualProgress;
     _current = tx;
     return tx;
   }

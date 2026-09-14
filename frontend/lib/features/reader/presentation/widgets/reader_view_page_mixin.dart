@@ -23,7 +23,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.
 import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_scroll_session.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
@@ -668,7 +667,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   void onScrollPhaseChanged(ReaderScrollPhase phase);
 
   /// 当前用户滚动会话（由 interaction mixin 实现）。
-  ReaderScrollSession? get scrollSession;
 
   /// ScrollEnd 一次收敛提交（由 builders 实现：重建窗口 + 单次修正）。
   void commitPendingContinuousMetrics();

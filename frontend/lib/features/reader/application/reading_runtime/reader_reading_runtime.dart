@@ -10,6 +10,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_rest
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_clock.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction_manager.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_visual_extent_table.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_window_manager.dart';
 
 /// Reader Reading Runtime Facade（方案 §83）：页面只经此访问运行时。
@@ -59,6 +60,14 @@ class ReaderReadingRuntime {
   final ReaderRuntimeDiagnostics diagnostics;
 
   ReaderPositionSnapshot? currentPosition;
+
+  /// 全书视觉进度表（方案 §81 自 Widget 迁入；idle 显示与视觉 seek 用）。
+  final ReaderVisualExtentTable visualExtent = ReaderVisualExtentTable();
+
+  /// 收敛期守卫缓存（方案 §81）：上次解析的物理 offset 与章节身份。
+  double? lastResolvedOffset;
+
+  String? lastResolvedProgressChapterId;
 
   /// 几何失效回调（方案 §72）：页面在 initState 注入实际调度器；
   /// build / 事件只经 [requestGeometryUpdate] 声明失效，不同步提交。

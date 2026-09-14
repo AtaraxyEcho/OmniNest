@@ -1,11 +1,14 @@
 import 'dart:ui' show Size;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_transaction_manager.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_scroll_session.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 
 ContinuousChapterEntry _entry({
   required String id,
@@ -57,6 +60,14 @@ ReaderViewportSnapshot _testViewport() {
   );
 }
 
+ReaderLayoutSnapshot _layout(ReaderGeometrySnapshot geometry) {
+  return ReaderLayoutSnapshot(
+    geometry: geometry,
+    viewport: _testViewport(),
+    windowRevision: 0,
+  );
+}
+
 void main() {
   group('ReaderVisualProgressMap（方案 §22-24）', () {
     test('物理 Y → 进度在章体内线性且单调', () {
@@ -100,8 +111,8 @@ void main() {
     });
   });
 
-  group('ReaderScrollSession 会话隔离（方案 §74-75）', () {
-    test('同一物理位置在会话冻结几何下不随后台精测漂移', () {
+  group('ReaderTransaction 滚动状态（方案 §22/§41/§136）', () {
+    test('事务冻结布局的视觉映射不随后台精测漂移', () {
       final heights = [100.0, 200.0, 300.0];
       final entries = {'c1': _entry(id: 'c1', heights: heights)};
       final controller = ReaderContinuousScrollController();
@@ -111,12 +122,12 @@ void main() {
         resolve: (id) => entries[id],
       );
       final geometryV0 = controller.buildGeometrySnapshot();
-      final session = ReaderScrollSession(
-        id: 1,
-        geometry: geometryV0,
-        viewport: _testViewport(),
-        visualMap: ReaderVisualProgressMap.fromGeometry(geometryV0),
-        initialScrollOffset: 150,
+
+      final manager = ReaderTransactionManager();
+      final tx = manager.begin(
+        kind: ReaderTransactionKind.userDrag,
+        layout: _layout(geometryV0),
+        initialOffset: 150,
         initialVisualProgress: 0.5,
       );
 
@@ -129,15 +140,15 @@ void main() {
         resolve: (id) => remeasured,
       );
 
-      // 会话的映射仍基于 v0 几何：同一 contentY 进度不变。
+      // 事务的映射仍基于 v0 几何：同一 contentY 进度不变。
       const contentY = 36.0 + 150;
-      final before = session.visualMap.progressAt(contentY)!;
-      final after = session.visualMap.progressAt(contentY)!;
+      final before = tx.visualMap.progressAt(contentY)!;
+      final after = tx.visualMap.progressAt(contentY)!;
       expect(after, before);
-      expect(session.geometry.revision, geometryV0.revision);
+      expect(tx.layout.geometry.revision, geometryV0.revision);
     });
 
-    test('会话携带独立的方向与显示进度状态（§40-41 不再使用全局字段）', () {
+    test('方向与显示进度按事务独立（§40-41 不再使用全局字段）', () {
       final heights = [100.0, 200.0, 300.0];
       final entries = {'c1': _entry(id: 'c1', heights: heights)};
       final controller = ReaderContinuousScrollController();
@@ -146,28 +157,27 @@ void main() {
         allChapterIds: const ['c1'],
         resolve: (id) => entries[id],
       );
-      final geometry = controller.buildGeometrySnapshot();
-      final sessionA = ReaderScrollSession(
-        id: 1,
-        geometry: geometry,
-        viewport: _testViewport(),
-        visualMap: ReaderVisualProgressMap.fromGeometry(geometry),
-        initialScrollOffset: 0,
+      final layout = _layout(controller.buildGeometrySnapshot());
+
+      final manager = ReaderTransactionManager();
+      final txA = manager.begin(
+        kind: ReaderTransactionKind.userDrag,
+        layout: layout,
+        initialOffset: 0,
         initialVisualProgress: 0.4,
       );
-      final sessionB = ReaderScrollSession(
-        id: 2,
-        geometry: geometry,
-        viewport: _testViewport(),
-        visualMap: ReaderVisualProgressMap.fromGeometry(geometry),
-        initialScrollOffset: 0,
+      // 原子切换（§25）产生新事务后，旧事务的显示进度保持冻结。
+      txA.displayedProgress = 0.42;
+      final txB = manager.beginOrReplace(
+        kind: ReaderTransactionKind.wheel,
+        layout: layout,
+        initialOffset: 0,
         initialVisualProgress: 0.9,
       );
-      // 两个会话的显示进度互不可见（§40：跨会话方向/进度不再污染）。
-      sessionA.displayedProgress = 0.42;
-      expect(sessionB.displayedProgress, 0.9);
-      expect(sessionB.geometry.revision, sessionA.geometry.revision);
-      expect(sessionB.id, isNot(sessionA.id));
+      expect(txB.displayedProgress, 0.9);
+      expect(txA.phase, ReaderTransactionPhase.cancelled);
+      expect(txB.id, isNot(txA.id));
+      expect(txB.visualMap, isNot(same(txA.visualMap)));
     });
   });
 }

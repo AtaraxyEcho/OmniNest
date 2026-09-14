@@ -1,4 +1,5 @@
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
 
 /// 事务种类（方案 §21）：一个 Reader 的每种滚动来源都有显式事务身份。
 enum ReaderTransactionKind {
@@ -53,7 +54,7 @@ class ReaderTransaction {
     required this.id,
     required this.kind,
     required this.layout,
-  });
+  }) : visualMap = ReaderVisualProgressMap.fromGeometry(layout.geometry);
 
   /// 事务 ID：旧回调按 id 丢弃（方案 §45-46，生产模式同样丢弃）。
   final int id;
@@ -68,6 +69,16 @@ class ReaderTransaction {
   double lastScrollOffset = 0.0;
 
   double lastVisualProgress = 0.0;
+
+  /// 冻结几何下的物理 Y → 全书视觉进度映射（方案 §22-24）：
+  /// 图片内部滚动连续变化，不经过 charOffset。
+  final ReaderVisualProgressMap visualMap;
+
+  /// 滚动方向（以事务起始物理 offset 为基准，方案 §41）。
+  bool forward = true;
+
+  /// 最近一次发布的显示进度（§25 无事务帧保持最后合法值）。
+  double displayedProgress = 0;
 
   /// 会话期间挂起的章节收养（方案 §64）：SETTLING 一次提交。
   String? pendingChapterId;

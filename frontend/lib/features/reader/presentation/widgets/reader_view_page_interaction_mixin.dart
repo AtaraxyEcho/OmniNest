@@ -9,7 +9,6 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_layo
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
@@ -20,7 +19,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_control_lay
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_scroll_session.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -118,20 +116,10 @@ mixin ReaderViewPageInteractionMixin
     if (tx != null && tx.phase == ReaderTransactionPhase.cancelled) {
       return;
     }
-    final session = _scrollSession;
-    final ReaderLayoutSnapshot layout;
-    final int transactionId;
-    if (session != null && tx != null && tx.id == session.id) {
-      layout = tx.layout;
-      transactionId = tx.id;
-    } else {
-      layout = currentLiveLayout();
-      transactionId = 0;
-    }
     final snapshot = runtime.position.resolve(
       scrollOffset: offset,
-      layout: layout,
-      transactionId: transactionId,
+      layout: tx?.layout ?? currentLiveLayout(),
+      transactionId: tx?.id ?? 0,
     );
     if (snapshot == null) {
       return;
@@ -149,21 +137,20 @@ mixin ReaderViewPageInteractionMixin
     final loader = contentLoader;
     if (loader == null) return;
 
-    // 会话同源校验（方案 §45-46/§85）：生产模式下旧会话/旧几何的回调
-    // 直接丢弃，不再重新解释（DEBUG 断言之外也有运行时防线）。
-    final session = _scrollSession;
-    if (session != null) {
-      if (!runtime.transactions.isCurrent(session.id)) {
+    // 事务同源校验（方案 §45-46/§85-§86）：旧事务/旧几何的回调直接
+    // 丢弃，不再重新解释（DEBUG 断言之外也有运行时防线）。
+    final tx = runtime.transactions.current;
+    if (tx != null) {
+      if (position.transactionId != tx.id) {
         runtime.diagnostics.stalePositionDropCount++;
         return;
       }
-      // 方案 §26/§86：位置快照的布局版本必须与事务布局一致。
       if (position.layoutRevision.geometryRevision !=
-          session.geometry.revision) {
+          tx.layout.geometry.revision) {
         runtime.diagnostics.stalePositionDropCount++;
         if (kDebugMode) {
           readerDebugLog(
-            'ReaderScroll: discard stale position session=${session.id} '
+            'ReaderScroll: discard stale position tx=${tx.id} '
             'positionRevision=${position.layoutRevision.geometryRevision}',
           );
         }
@@ -171,12 +158,11 @@ mixin ReaderViewPageInteractionMixin
       }
     }
 
-    // 顺序滚动进入邻章：会话期间只记录挂起收养（方案 §31），
+    // 顺序滚动进入邻章：事务期间只记录挂起收养（方案 §31/§64），
     // SETTLING 一次提交——不得在用户滚动手势中途改写窗口几何。
     if (position.chapterId != currentChapterId) {
-      if (session != null) {
-        // 会话/事务期间只记录挂起收养（方案 §31/§64），SETTLING 一次提交。
-        runtime.transactions.current?.pendingChapterId = position.chapterId;
+      if (tx != null) {
+        tx.pendingChapterId = position.chapterId;
       } else {
         adoptContinuousAnchorChapter(position.chapterId);
       }
@@ -189,28 +175,31 @@ mixin ReaderViewPageInteractionMixin
     if (!isPageMode) {
       final offsetNowForDirection =
           scrollController.hasClients ? scrollController.offset : 0.0;
-      if (session != null) {
-        session.forward = offsetNowForDirection >= session.lastScrollOffset;
-        session.lastScrollOffset = offsetNowForDirection;
+      if (tx != null) {
+        tx.forward = offsetNowForDirection >= tx.lastScrollOffset;
+        tx.lastScrollOffset = offsetNowForDirection;
       }
-      final nextProgress =
-          session == null
-              ? bookVisualProgressFor(
-                position.chapterId,
-                position.chapterVisualCursor,
-              )
-              : session.visualMap.progressAt(
-                    (offsetNowForDirection + session.viewport.anchorY).clamp(
-                      0.0,
-                      double.infinity,
-                    ),
-                  ) ??
-                  session.displayedProgress;
+      final double nextProgress;
+      if (tx == null) {
+        nextProgress = bookVisualProgressFor(
+          position.chapterId,
+          position.chapterVisualCursor,
+        );
+      } else {
+        nextProgress =
+            tx.visualMap.progressAt(
+              (offsetNowForDirection + tx.layout.viewport.anchorY).clamp(
+                0.0,
+                double.infinity,
+              ),
+            ) ??
+            tx.displayedProgress;
+      }
       final displayed = _applyDirectionalProgressClamp(nextProgress);
-      if (session != null) {
-        session.lastVisualProgress = displayed;
+      if (tx != null) {
+        tx.lastVisualProgress = displayed;
       }
-      publishVisualProgress(session, displayed);
+      publishVisualProgress(tx, displayed);
     }
 
     // 图片主导的封面等章节 totalChars 为 0：不要用 charOffset=0 覆盖进度。
@@ -237,10 +226,12 @@ mixin ReaderViewPageInteractionMixin
     final offsetNow =
         scrollController.hasClients ? scrollController.offset : 0.0;
     final forwardScroll =
-        _lastResolvedOffset == null || offsetNow >= _lastResolvedOffset! - 0.5;
-    final wasSameChapter = _lastResolvedProgressChapterId == position.chapterId;
+        runtime.lastResolvedOffset == null ||
+        offsetNow >= runtime.lastResolvedOffset! - 0.5;
+    final wasSameChapter =
+        runtime.lastResolvedProgressChapterId == position.chapterId;
     final converging = !(chapterData?.hasPreciseHeights ?? true);
-    _lastResolvedOffset = offsetNow;
+    runtime.lastResolvedOffset = offsetNow;
     var applyPosition = true;
     if (converging &&
         forwardScroll &&
@@ -254,12 +245,12 @@ mixin ReaderViewPageInteractionMixin
         event: 'convergingDriftSuppressed',
         detail:
             'displayed=$scrollProgress newProgress=$newProgress '
-            'offsetNow=$offsetNow lastOffset=$_lastResolvedOffset',
+            'offsetNow=$offsetNow lastOffset=${runtime.lastResolvedOffset}',
       );
     }
 
     if (applyPosition) {
-      _lastResolvedProgressChapterId = position.chapterId;
+      runtime.lastResolvedProgressChapterId = position.chapterId;
       positionTracker.updateFromScroll(
         offset: scrollController.hasClients ? scrollController.offset : 0,
         maxExtent:
@@ -298,16 +289,16 @@ mixin ReaderViewPageInteractionMixin
         _throttledPreloadAdjacent();
       }
       if (max > 0 && max - offset < max * 0.35) {
-        if (_scrollSession != null) {
+        if (tx != null) {
           // 事务期间只记录挂起扩窗（方案 §32/§67），SETTLING 一次提交。
-          runtime.transactions.current?.pendingExpandForward = true;
+          tx.pendingExpandForward = true;
         } else {
           _throttledExpandForward();
         }
       }
       if (offset < 240) {
-        if (_scrollSession != null) {
-          runtime.transactions.current?.pendingExpandBackward = true;
+        if (tx != null) {
+          tx.pendingExpandBackward = true;
         } else {
           _throttledExpandBackward();
         }
@@ -315,14 +306,7 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
-  /// 会话期间物理 offset 相对上次汇报是否发生了可判方向的变化。
-  bool offsetNowForDirectionDelta(ReaderScrollSession session) {
-    return true;
-  }
-
   int? _lastSavedScrollCharOffset;
-  double? _lastResolvedOffset;
-  String? _lastResolvedProgressChapterId;
   Timer? _preloadDebounce;
   Timer? _expandForwardDebounce;
   Timer? _expandBackwardDebounce;
@@ -369,11 +353,7 @@ mixin ReaderViewPageInteractionMixin
   Timer? _settleToIdleTimer;
   Timer? _wheelIdleTimer;
 
-  /// 当前滚动会话（方案 §9/§20/§136）：会话是事务的冻结快照视图，
-  /// 生命周期与 ReaderTransactionManager 中的事务一一对应；null = idle。
-  ReaderScrollSession? _scrollSession;
-
-  /// 最后一次发布的视觉进度（无会话的非 idle 帧保持该值，§25）。
+  /// 最后一次发布的视觉进度（无事务的非 idle 帧保持该值，§25）。
   double _lastPublishedVisualProgress = 0;
 
   @override
@@ -386,9 +366,6 @@ mixin ReaderViewPageInteractionMixin
   bool get isScrollPhaseActive =>
       _scrollPhase == ReaderScrollPhase.userDragging ||
       _scrollPhase == ReaderScrollPhase.ballistic;
-
-  @override
-  ReaderScrollSession? get scrollSession => _scrollSession;
 
   /// 相位转移入口：指针拖动超阈值 → active，ScrollEnd → settling。
   /// ScrollNotification 不创建会话（程序化滚动同样产生通知，方案 §35）。
@@ -410,7 +387,7 @@ mixin ReaderViewPageInteractionMixin
       }
       // ScrollEnd：挂起收养/扩窗 + 一次 metrics 提交 + 最多一次修正
       // （方案 §25/§31-36）。
-      _commitScrollSession();
+      _commitScrollTransaction();
       _settleToIdleTimer?.cancel();
       _settleToIdleTimer = Timer(const Duration(milliseconds: 150), () {
         if (_scrollPhase == ReaderScrollPhase.settling) {
@@ -466,9 +443,10 @@ mixin ReaderViewPageInteractionMixin
     );
   }
 
-  /// 事务会话唯一创建入口（方案 §25 原子切换）：取消旧事务（含在途
-  /// Restore）并冻结新事务的几何/视口/进度映射。
-  ReaderScrollSession _beginScrollTransaction(ReaderTransactionKind kind) {
+  /// 事务唯一创建入口（方案 §25 原子切换）：取消旧事务（含在途
+  /// Restore）并冻结新事务的几何/视口/进度映射；滚动状态（方向、
+  /// 显示进度、视觉映射、挂起操作）全部由事务对象承载（§136 终态）。
+  ReaderTransaction _beginScrollTransaction(ReaderTransactionKind kind) {
     _ensureBookVisualExtentTable();
     runtime.restore.cancel();
     final geometry = continuousScrollController.buildGeometrySnapshot();
@@ -484,14 +462,6 @@ mixin ReaderViewPageInteractionMixin
           scrollController.hasClients ? scrollController.offset : 0.0,
       initialVisualProgress: bookProgressNotifier.value,
     );
-    final session = ReaderScrollSession(
-      id: tx.id,
-      geometry: geometry,
-      viewport: viewport,
-      visualMap: ReaderVisualProgressMap.fromGeometry(geometry),
-      initialScrollOffset: tx.lastScrollOffset,
-      initialVisualProgress: tx.lastVisualProgress,
-    );
     if (kDebugMode) {
       readerDebugLog(
         'ReaderTx: tx=${tx.id} started kind=${tx.kind.name} '
@@ -499,15 +469,14 @@ mixin ReaderViewPageInteractionMixin
         'anchorY=${viewport.anchorY.toStringAsFixed(1)}',
       );
     }
-    return session;
+    return tx;
   }
 
   /// SETTLING 提交（方案 §31-36/§37）：挂起的章节收养与窗口扩容一次完成，
   /// 随后重建窗口并应用单次锚点修正；事务在提交完成后才结束。
-  void _commitScrollSession() {
-    final session = _scrollSession;
+  void _commitScrollTransaction() {
     final tx = runtime.transactions.current;
-    if (session != null && tx != null) {
+    if (tx != null) {
       final pendingChapter = tx.pendingChapterId;
       if (pendingChapter != null && pendingChapter != currentChapterId) {
         adoptContinuousAnchorChapter(pendingChapter);
@@ -520,7 +489,6 @@ mixin ReaderViewPageInteractionMixin
       }
     }
     commitPendingContinuousMetrics();
-    _scrollSession = null;
     if (tx != null) {
       runtime.transactions.finish(tx.id);
       if (kDebugMode) {
@@ -561,17 +529,15 @@ mixin ReaderViewPageInteractionMixin
       return;
     }
     _cancelOngoingRestoreForUserScroll();
-    final session = _scrollSession;
-    if (session == null ||
-        tx == null ||
+    if (tx == null ||
         (tx.kind != ReaderTransactionKind.wheel &&
             tx.kind != ReaderTransactionKind.touchpad)) {
-      _scrollSession = _beginScrollTransaction(ReaderTransactionKind.wheel);
+      _beginScrollTransaction(ReaderTransactionKind.wheel);
     }
     _wheelIdleTimer?.cancel();
     _wheelIdleTimer = Timer(const Duration(milliseconds: 200), () {
       if (_scrollPhase == ReaderScrollPhase.idle) {
-        _commitScrollSession();
+        _commitScrollTransaction();
       }
     });
   }
@@ -579,25 +545,25 @@ mixin ReaderViewPageInteractionMixin
   /// 滚动期间的视觉进度：物理 Y 直接查冻结映射（方案 §22-24），
   /// 不经过 charOffset；无 Live fallback（§25-26）。
   double visualProgressDuringScroll(double contentY) {
-    final session = _scrollSession;
-    if (session == null) {
-      // 非 idle 且无会话（程序化滚动窗口期）：保持最后合法进度，
-      // 绝不回退 Live Geometry 重新解释（方案 §25）。
+    final tx = runtime.transactions.current;
+    if (tx == null) {
+      // 无事务（程序化滚动窗口期）：保持最后合法进度，绝不回退
+      // Live Geometry 重新解释（方案 §25）。
       return _lastPublishedVisualProgress;
     }
-    return session.visualMap.progressAt(contentY.clamp(0.0, double.infinity)) ??
-        session.displayedProgress;
+    return tx.visualMap.progressAt(contentY.clamp(0.0, double.infinity)) ??
+        tx.displayedProgress;
   }
 
   /// 唯一视觉进度发布入口（方案 §44/§50）：整个模块只允许经
   /// ReaderVisualProgressPublisher 写 bookProgressNotifier；旧会话的
   /// 回调按 id 丢弃（§45-46）。
-  void publishVisualProgress(ReaderScrollSession? session, double value) {
-    if (session != null && _scrollSession?.id != session.id) {
+  void publishVisualProgress(ReaderTransaction? tx, double value) {
+    if (tx != null && runtime.transactions.current?.id != tx.id) {
       return;
     }
-    if (session != null) {
-      session.displayedProgress = value;
+    if (tx != null) {
+      tx.displayedProgress = value;
     }
     _lastPublishedVisualProgress = value;
     runtime.publisher.publish(value);
@@ -606,13 +572,13 @@ mixin ReaderViewPageInteractionMixin
   /// 方向性单调钳制（方案 §42-43）：会话活跃期间（userDragging/
   /// ballistic/settling）同一单调规则，最后一道防线不污染持久化。
   double _applyDirectionalProgressClamp(double nextProgress) {
-    final session = _scrollSession;
-    if (session == null || _scrollPhase == ReaderScrollPhase.idle) {
+    final tx = runtime.transactions.current;
+    if (tx == null || _scrollPhase == ReaderScrollPhase.idle) {
       return nextProgress;
     }
-    return session.forward
-        ? math.max(session.lastVisualProgress, nextProgress)
-        : math.min(session.lastVisualProgress, nextProgress);
+    return tx.forward
+        ? math.max(tx.lastVisualProgress, nextProgress)
+        : math.min(tx.lastVisualProgress, nextProgress);
   }
 
   // ── 全书视觉进度表（D4：VisualProgress 与 LogicalProgress 语义独立） ──
@@ -620,33 +586,12 @@ mixin ReaderViewPageInteractionMixin
   /// 末次解析的章体视觉游标与所属章（视觉进度显示的事实源）。
   double lastChapterVisualCursor = 0;
   String? lastVisualProgressChapterId;
-  List<ContinuousChapterEntry>? _visualExtentCacheSource;
-  List<String> _visualExtentChapterIds = const [];
-  List<double> _visualExtentStarts = const [];
-  double _visualExtentTotal = 0;
 
   /// 全书视觉进度：章前缀视觉高度 + 当前章视觉游标，除以全书视觉总高。
-  ///
-  /// 视觉进度基于窗口几何而非 maxScrollExtent（动态窗口下后者不可用）；
-  /// 图片内部滚动时连续变化，逻辑进度可以保持不变。
   double bookVisualProgressFor(String chapterId, double chapterVisualCursor) {
     _ensureBookVisualExtentTable();
-    if (_visualExtentTotal <= 0 || _visualExtentChapterIds.isEmpty) {
-      return 0;
-    }
-    final idx = _visualExtentChapterIds.indexOf(chapterId);
-    if (idx < 0) {
-      return 0;
-    }
-    final start = _visualExtentStarts[idx];
-    final end =
-        idx + 1 < _visualExtentStarts.length
-            ? _visualExtentStarts[idx + 1]
-            : _visualExtentTotal;
-    final extent = end - start;
-    return ((start + chapterVisualCursor.clamp(0.0, extent)) /
-            _visualExtentTotal)
-        .clamp(0.0, 1.0);
+    return runtime.visualExtent.progressFor(chapterId, chapterVisualCursor) ??
+        0;
   }
 
   /// 视觉进度条拖动 →（目标章，目标 charOffset）。
@@ -656,27 +601,15 @@ mixin ReaderViewPageInteractionMixin
   (String, int)? resolveVisualSeekTarget(double ratio) {
     _ensureBookVisualExtentTable();
     final loader = contentLoader;
-    if (loader == null ||
-        _visualExtentTotal <= 0 ||
-        _visualExtentChapterIds.isEmpty) {
+    if (loader == null) {
       return null;
     }
-    final target = ratio.clamp(0.0, 1.0) * _visualExtentTotal;
-    var idx = 0;
-    while (idx < _visualExtentChapterIds.length - 1 &&
-        target >= _visualExtentStarts[idx + 1]) {
-      idx++;
+    final located = runtime.visualExtent.locate(ratio);
+    if (located == null) {
+      return null;
     }
-    final chapterId = _visualExtentChapterIds[idx];
-    final chapterStart = _visualExtentStarts[idx];
-    final chapterEnd =
-        idx + 1 < _visualExtentStarts.length
-            ? _visualExtentStarts[idx + 1]
-            : _visualExtentTotal;
-    final cursor = (target - chapterStart).clamp(
-      0.0,
-      chapterEnd - chapterStart,
-    );
+    final chapterId = located.$1;
+    final cursor = located.$2;
 
     final windowEntry = continuousScrollController.entryFor(chapterId);
     if (windowEntry != null) {
@@ -687,65 +620,44 @@ mixin ReaderViewPageInteractionMixin
       }
     }
     final data = loader.getByChapterId(chapterId);
-    if (data != null && data.totalChars > 0 && chapterEnd > chapterStart) {
-      final offset = (cursor / (chapterEnd - chapterStart) * data.totalChars)
-          .round()
-          .clamp(0, data.totalChars);
+    final extent = runtime.visualExtent.extentFor(chapterId) ?? 0;
+    if (data != null && data.totalChars > 0 && extent > 0) {
+      final offset = (cursor / extent * data.totalChars).round().clamp(
+        0,
+        data.totalChars,
+      );
       return (chapterId, offset);
     }
     return null;
   }
 
-  /// 构建/复用全书视觉进度表：窗口章用实测高度，缓存章用已测高度，
-  /// 其余按已测「高度/字符」比率折算；窗口条目身份变化时重建。
+  /// 构建全书视觉进度表：窗口章用实测高度，缓存章用已测高度，其余按
+  /// 已测「高度/字符」比率折算；窗口条目身份变化时重建。
   void _ensureBookVisualExtentTable() {
     final loader = contentLoader;
     final entries = continuousScrollController.entries;
     if (loader == null || entries.isEmpty) {
       return;
     }
-    if (identical(_visualExtentCacheSource, entries)) {
-      return;
-    }
-    _visualExtentCacheSource = entries;
-    double measuredExtent = 0;
-    var measuredChars = 0;
-    for (final entry in entries) {
-      if (entry.totalChars > 0 && entry.isReady && entry.totalHeight > 0) {
-        measuredExtent += entry.totalHeight;
-        measuredChars += entry.totalChars;
-      }
-    }
-    final heightPerChar =
-        measuredChars > 0 ? measuredExtent / measuredChars : 0.0;
-    final ids = <String>[];
-    final starts = <double>[];
-    var running = 0.0;
-    for (final id in loader.chapterIds) {
-      ids.add(id);
-      starts.add(running);
-      running += _chapterVisualExtentOf(id, heightPerChar);
-    }
-    _visualExtentChapterIds = ids;
-    _visualExtentStarts = starts;
-    _visualExtentTotal = running;
-  }
-
-  double _chapterVisualExtentOf(String chapterId, double heightPerChar) {
-    final entry = continuousScrollController.entryFor(chapterId);
-    if (entry != null && entry.totalHeight > 0) {
-      return entry.totalHeight;
-    }
-    final data = contentLoader?.getByChapterId(chapterId);
-    final heights = data?.cumulativeHeights;
-    if (heights != null && heights.isNotEmpty && heights.last > 0) {
-      return heights.last;
-    }
-    final chars = charCountForChapter(chapterId);
-    if (chars != null && chars > 0 && heightPerChar > 0) {
-      return chars * heightPerChar;
-    }
-    return ReaderContinuousScrollController.fallbackPlaceholderHeight;
+    runtime.visualExtent.rebuildIfStale(
+      cacheSource: entries,
+      windowEntries: entries,
+      chapterIds: loader.chapterIds,
+      measuredHeightOf: (chapterId) {
+        final entry = continuousScrollController.entryFor(chapterId);
+        if (entry != null && entry.totalHeight > 0) {
+          return entry.totalHeight;
+        }
+        final heights = loader.getByChapterId(chapterId)?.cumulativeHeights;
+        if (heights != null && heights.isNotEmpty && heights.last > 0) {
+          return heights.last;
+        }
+        return null;
+      },
+      charCountOf: charCountForChapter,
+      fallbackExtent:
+          ReaderContinuousScrollController.fallbackPlaceholderHeight,
+    );
   }
 
   /// 章节字数由 ReaderViewPageMixin 抽象提供（builders 实现）。
@@ -768,7 +680,7 @@ mixin ReaderViewPageInteractionMixin
       'displayedProgress=${bookProgressNotifier.value.toStringAsFixed(4)} '
       'contentY=${position.contentY.toStringAsFixed(1)} '
       'geometryRevision=${position.layoutRevision.geometryRevision} '
-      'sessionGeometryRevision=${_scrollSession?.geometry.revision} '
+      'txGeometryRevision=${runtime.transactions.current?.layout.geometry.revision} '
       'layoutVersion=${chapterData?.layoutVersion} '
       'precise=${chapterData?.hasPreciseHeights} '
       'windowStart=${continuousScrollController.prefixHeightOf(position.chapterId).toStringAsFixed(1)} '
@@ -944,7 +856,7 @@ mixin ReaderViewPageInteractionMixin
     final target = targetOffset.clamp(0.0, max);
     if (!isScrollPhaseActive) {
       _cancelOngoingRestoreForUserScroll();
-      _scrollSession = _beginScrollTransaction(kind);
+      _beginScrollTransaction(kind);
     }
     await scrollController.animateTo(
       target,
@@ -966,30 +878,20 @@ mixin ReaderViewPageInteractionMixin
     final target = targetOffset.clamp(0.0, max);
     if (!isScrollPhaseActive) {
       _cancelOngoingRestoreForUserScroll();
-      _scrollSession = _beginScrollTransaction(kind);
+      _beginScrollTransaction(kind);
     }
     scrollController.jumpTo(target);
-    final session = _scrollSession;
     final tx = runtime.transactions.current;
-    final ReaderLayoutSnapshot layout;
-    final int transactionId;
-    if (session != null && tx != null && tx.id == session.id) {
-      layout = tx.layout;
-      transactionId = tx.id;
-    } else {
-      layout = currentLiveLayout();
-      transactionId = 0;
-    }
     final snapshot = runtime.position.resolve(
       scrollOffset: scrollController.offset,
-      layout: layout,
-      transactionId: transactionId,
+      layout: tx?.layout ?? currentLiveLayout(),
+      transactionId: tx?.id ?? 0,
     );
     if (snapshot != null) {
       handleResolvedPosition(snapshot);
     }
     if (!isScrollPhaseActive) {
-      _commitScrollSession();
+      _commitScrollTransaction();
     }
   }
 
@@ -1010,7 +912,7 @@ mixin ReaderViewPageInteractionMixin
     // 不抢占其会话（§23 单一 active 事务）。
     if (!isScrollPhaseActive) {
       _cancelOngoingRestoreForUserScroll();
-      _scrollSession = _beginScrollTransaction(kind);
+      _beginScrollTransaction(kind);
     }
     await scrollController.animateTo(
       target,
@@ -1020,21 +922,11 @@ mixin ReaderViewPageInteractionMixin
     if (!mounted || !scrollController.hasClients) return true;
     // 键盘/侧点滚动不产生指针事件：主动按窗口控制器解析结果汇报位置，
     // 绕过"距上次指针事件 >2s"守卫的停更。
-    final scrollSession = _scrollSession;
     final tx = runtime.transactions.current;
-    final ReaderLayoutSnapshot layout;
-    final int transactionId;
-    if (scrollSession != null && tx != null && tx.id == scrollSession.id) {
-      layout = tx.layout;
-      transactionId = tx.id;
-    } else {
-      layout = currentLiveLayout();
-      transactionId = 0;
-    }
     final snapshot = runtime.position.resolve(
       scrollOffset: scrollController.offset,
-      layout: layout,
-      transactionId: transactionId,
+      layout: tx?.layout ?? currentLiveLayout(),
+      transactionId: tx?.id ?? 0,
     );
     if (snapshot != null) {
       handleResolvedPosition(snapshot);
