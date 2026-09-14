@@ -232,6 +232,37 @@ mixin ReaderViewPageInteractionMixin
       return null;
     }
     if (target.charOffset <= 0) {
+      // 章首落点依赖窗口内各章高度：未精测的短章估算高度严重失真
+      // （348 字符仅估 84px），落点后精测修订会把内容顶走，视口主体
+      // 变成下一章。此处等待窗口高度收敛并主动触发精测，收敛前
+      // 返回 null 由引擎多帧重试（总超时兜底）。
+      final entries = continuousScrollController.entries;
+      // 窗口内已有估算高度但未精测的章：逐个触发精测（幂等，内部
+      // 批处理去重）；无高度数据的章（空块）不阻塞，避免死等。
+      final pendingPrecise = <String>[];
+      for (final e in entries) {
+        final data = contentLoader?.getByChapterId(e.chapterId);
+        if (data != null &&
+            data.cumulativeHeights.isNotEmpty &&
+            !data.hasPreciseHeights) {
+          pendingPrecise.add(e.chapterId);
+          contentLoader?.ensurePreciseHeights(
+            e.chapterId,
+            pageWidth: computePageWidth(),
+            settings: settings,
+            textScale: MediaQuery.textScalerOf(context).scale(1.0),
+          );
+        }
+      }
+      if (pendingPrecise.isNotEmpty) {
+        if (kDebugMode) {
+          readerDebugLog(
+            'ReaderRestore: waiting precise heights '
+            '(${pendingPrecise.join(',')})',
+          );
+        }
+        return null;
+      }
       return chapterStartScrollOffset(target.chapterId);
     }
     final data = contentLoader?.getByChapterId(target.chapterId);
