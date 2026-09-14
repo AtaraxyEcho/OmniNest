@@ -29,6 +29,9 @@ enum ReaderTransactionKind {
 
   /// 布局修正（滑窗补偿、锚点保持）。
   layoutCorrection,
+
+  /// 模式切换锚点恢复（scroll↔page 的定位 jump，B7）。
+  modeSwitch,
 }
 
 /// 事务阶段（方案 §21）：SETTLING 期间事务必须仍然存在（方案 §37），

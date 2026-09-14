@@ -9,6 +9,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_layo
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_mode_switch.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_delegate.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
@@ -22,21 +23,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_continuous_
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
-
-/// 模式切换事务相位（方案 §19）。
-enum ReaderModeSwitchPhase {
-  /// 无切换事务。
-  idle,
-
-  /// 已捕获旧模式锚点，目标模式构建中。
-  buildingTarget,
-
-  /// 目标模式就绪，锚点恢复中。
-  restoring,
-
-  /// 切换失败，已统一退出。
-  failed,
-}
 
 /// 阅读页面的滚动交互、设置应用与重新分页逻辑。
 ///
@@ -212,43 +198,6 @@ mixin ReaderViewPageInteractionMixin
   bool _expandForwardInFlight = false;
 
   // ── 模式切换事务（方案 §17-29）──
-
-  /// 同一时刻只有一个模式切换事务有效；旧回调按代次丢弃。
-  int _modeSwitchGeneration = 0;
-  ReaderModeSwitchPhase _modeSwitchPhase = ReaderModeSwitchPhase.idle;
-
-  /// 模式切换统一提交入口：清除全部切换期状态，进入 idle。
-  void completeModeSwitchGeneration(int generation) {
-    if (generation != _modeSwitchGeneration) {
-      return;
-    }
-    if (_modeSwitchPhase == ReaderModeSwitchPhase.idle) {
-      return;
-    }
-    _modeSwitchPhase = ReaderModeSwitchPhase.idle;
-    modeSwitchInProgress = false;
-    modeSwitchAnchor = null;
-    if (kDebugMode) {
-      readerDebugLog('ReaderModeTxn: commit generation=$generation');
-    }
-  }
-
-  /// 模式切换统一失败退出：不能只清相位（方案 §28），
-  /// 否则可能遗留 modeSwitchAnchor / modeSwitchInProgress。
-  void abortModeSwitchGeneration(int generation) {
-    if (generation != _modeSwitchGeneration) {
-      return;
-    }
-    if (kDebugMode) {
-      readerDebugLog('ReaderModeTxn: abort generation=$generation');
-    }
-    completeModeSwitchGeneration(generation);
-  }
-
-  // ── 滚动事务的 Page 侧残留（仅服务程序化滚动，B2 迁移后删除）──
-
-  @override
-  int get modeSwitchGeneration => _modeSwitchGeneration;
 
   /// 当前冻结视口快照（方案 §8：完整布局上下文一次冻结）。
   @override
@@ -664,19 +613,6 @@ mixin ReaderViewPageInteractionMixin
         newSettings.immersiveMode != settings.immersiveMode;
     final layoutChanged = fontChanged || modeChanged || immersiveChanged;
 
-    // 模式切换事务开始（方案 §19-20）：任何状态变更前先捕获旧模式锚点。
-    if (modeChanged) {
-      _modeSwitchGeneration++;
-      _modeSwitchPhase = ReaderModeSwitchPhase.buildingTarget;
-      if (kDebugMode) {
-        readerDebugLog(
-          'ReaderModeTxn: start generation=$_modeSwitchGeneration '
-          '${settings.readingMode}→${newSettings.readingMode}',
-        );
-      }
-    }
-    final modeSwitchGeneration = _modeSwitchGeneration;
-
     // 冻结当前阅读锚点：优先从滚动位置计算（比 tracker 更精确），
     // 因为翻页模式的 onPageChanged 可能已将 tracker 更新为页首。
     int savedCharOffset = 0;
@@ -696,6 +632,24 @@ mixin ReaderViewPageInteractionMixin
         savedCharOffset = positionTracker.charOffset;
       }
     }
+    // 模式切换事务开始（B7 请求化）：锚点一次冻结进请求，新切换使旧
+    // 切换的在途定位回调整体失效。
+    if (modeChanged) {
+      runtime.changeMode(
+        ReaderModeSwitchRequest(
+          fromMode: settings.readingMode,
+          toMode: newSettings.readingMode,
+          chapterId: currentChapterId,
+          anchorCharOffset: savedCharOffset,
+        ),
+      );
+      if (kDebugMode) {
+        readerDebugLog(
+          'ReaderModeTxn: start ${settings.readingMode}→${newSettings.readingMode} '
+          'anchor=$savedCharOffset',
+        );
+      }
+    }
 
     if (immersiveChanged) {
       applyImmersiveMode(newSettings.immersiveMode);
@@ -708,12 +662,6 @@ mixin ReaderViewPageInteractionMixin
     persistSettings(newSettings);
 
     if (layoutChanged) {
-      if (modeChanged) {
-        modeSwitchInProgress = true;
-        // 冻结锚点，防止 onPageChanged 用页首覆盖
-        modeSwitchAnchor = savedCharOffset;
-      }
-
       if (kDebugMode) {
         readerDebugLog(
           'ApplySettings: modeChanged=$modeChanged, fontChanged=$fontChanged, '
@@ -723,7 +671,6 @@ mixin ReaderViewPageInteractionMixin
       }
 
       if (isPageMode) {
-        _modeSwitchPhase = ReaderModeSwitchPhase.restoring;
         // 主动预热目标章分页（方案 §29）：不等用户交互触发。
         unawaited(warmChapterPages(currentChapterId, pageCount: 3));
         // 翻页跨章窗口内多章同步失效，避免邻章仍用旧排版分页。
@@ -771,9 +718,8 @@ mixin ReaderViewPageInteractionMixin
         } else {
           restoreScrollPositionFromOffset(savedCharOffset);
         }
-        // 滚动模式恢复期由 runtime.restore.isBusy 守卫，切换事务即此提交。
-        _modeSwitchPhase = ReaderModeSwitchPhase.restoring;
-        completeModeSwitchGeneration(modeSwitchGeneration);
+        // 滚动模式恢复期由 runtime.restore.isBusy 守卫，切换请求即此终结。
+        runtime.completeModeSwitch();
       }
     }
 
@@ -830,10 +776,7 @@ mixin ReaderViewPageInteractionMixin
       }
       final max = scrollController.position.maxScrollExtent;
       final target = (anchorY - viewportAnchorY).clamp(0.0, max);
-      runtime.jumpToOffset(
-        target,
-        kind: ReaderTransactionKind.layoutCorrection,
-      );
+      runtime.jumpToOffset(target, kind: ReaderTransactionKind.modeSwitch);
     });
   }
 
@@ -895,7 +838,8 @@ mixin ReaderViewPageInteractionMixin
     repaginateTimer = Timer(const Duration(milliseconds: 80), () {
       if (!mounted) return;
       if (isPageMode) {
-        final trackedAnchor = modeSwitchAnchor ?? positionTracker.charOffset;
+        final trackedAnchor =
+            runtime.modeSwitchAnchor ?? positionTracker.charOffset;
         final anchor =
             trackedAnchor > 0
                 ? trackedAnchor

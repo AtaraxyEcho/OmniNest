@@ -71,12 +71,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   void refreshBookProgressNow();
   ReaderChapterNavigationIntent get chapterNavigationIntent;
   set chapterNavigationIntent(ReaderChapterNavigationIntent value);
-  bool get modeSwitchInProgress;
-  set modeSwitchInProgress(bool value);
-
-  /// 模式切换时冻结的 charOffset，跨多次 onPageChanged 保留原始锚点。
-  int? get modeSwitchAnchor;
-  set modeSwitchAnchor(int? value);
   DateTime get lastPointerDownTime;
 
   /// 最近一次滚动活动时间（滚轮/触控板），供补偿与进度守卫共用。
@@ -530,6 +524,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         // 章首 = 跨章流内锚点章起始全局索引；0 可能是前缀章页面，禁止直写。
         anchorPageModeToChapterStart(chapterId);
         runtime.restore.cancel();
+        // 显式导航使进行中的切换请求作废，防切换守卫滞留吞进度提交。
+        runtime.completeModeSwitch();
         scrollProgress = 0;
       } else {
         // 连续滚动：章首是窗口坐标（前有前缀章），必须走稳定重试恢复，
@@ -650,7 +646,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 当前用户滚动会话（由 interaction mixin 实现）。
 
   /// 当前模式切换事务代次（由 interaction mixin 实现）。
-  int get modeSwitchGeneration;
 
   /// 章节字数（由 builders 经解析元数据提供；未解析返回 null）。
   int? charCountForChapter(String chapterId);
@@ -1020,9 +1015,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     int effectiveCharOffset;
     if (charOffset != null) {
       effectiveCharOffset = charOffset;
-    } else if (modeSwitchAnchor != null) {
-      // 模式切换期间：使用冻结的精确锚点，不用页首
-      effectiveCharOffset = modeSwitchAnchor!;
+    } else if (runtime.modeSwitchAnchor != null) {
+      // 模式切换期间：使用请求冻结的精确锚点，不用页首
+      effectiveCharOffset = runtime.modeSwitchAnchor!;
     } else if (isPageMode) {
       effectiveCharOffset = computePageCharOffset(pageModePage);
     } else if (!runtime.restore.isBusy &&
@@ -1250,8 +1245,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
           data.totalChars > 0
               ? (charOffset / data.totalChars).clamp(0.0, 1.0)
               : 0.0;
-      // 模式切换期间不覆盖 tracker — 保留冻结的精确锚点
-      if (modeSwitchAnchor == null) {
+      // 模式切换期间不覆盖 tracker — 保留请求冻结的精确锚点
+      if (runtime.modeSwitchAnchor == null) {
         final chapterIdx =
             contentLoader?.allChapters.indexWhere((c) => c.id == chapterId) ??
             0;
@@ -1417,6 +1412,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     }
     contentLoader?.setActive(chapterId);
     runtime.restore.cancel();
+    // 显式切章使进行中的切换请求作废（其定位锚点已不适用于新章）。
+    runtime.completeModeSwitch();
     chapterLoadingTimer?.cancel();
     showChapterLoadingOverlay = false;
     // 已有 blocks 时不要全屏遮罩：连续滚动可直接用块渲染。

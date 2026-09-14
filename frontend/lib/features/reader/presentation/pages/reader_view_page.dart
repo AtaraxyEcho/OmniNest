@@ -131,8 +131,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Timer? _bookProgressRecomputeTimer;
   double _lastBookProgressInput = -1;
   DateTime? _lastAppliedProgressAt;
-  bool _modeSwitchInProgress = false; // 模式切换中，首次翻页/滚动后清除
-  int? _modeSwitchAnchor; // 模式切换时冻结的 charOffset，跨多次 onPageChanged 保留
   DateTime _lastPointerDownTime = DateTime.fromMillisecondsSinceEpoch(
     0,
   ); // 最后一次真实触摸
@@ -395,14 +393,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   set chapterNavigationIntent(ReaderChapterNavigationIntent v) =>
       _chapterNavigationIntent = v;
-  @override
-  bool get modeSwitchInProgress => _modeSwitchInProgress;
-  @override
-  set modeSwitchInProgress(bool v) => _modeSwitchInProgress = v;
-  @override
-  int? get modeSwitchAnchor => _modeSwitchAnchor;
-  @override
-  set modeSwitchAnchor(int? v) => _modeSwitchAnchor = v;
   @override
   DateTime get lastPointerDownTime => _lastPointerDownTime;
   @override

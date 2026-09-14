@@ -88,10 +88,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
 
   /// 当前"返回原进度"浮层是否为远端进度同步入口（决定文案）。
   bool get returnControlIsRemoteOffer;
-  bool get modeSwitchInProgress;
-  set modeSwitchInProgress(bool value);
-  int? get modeSwitchAnchor;
-  set modeSwitchAnchor(int? value);
   bool get isSwitchingChapter;
   bool get isLoadingChapter;
   bool get selectionActive;
@@ -137,9 +133,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   bool get pointerDownActive;
   set pointerDownActive(bool value);
   bool isUserScrollActive({required DateTime since});
-  int get modeSwitchGeneration;
-  void completeModeSwitchGeneration(int generation);
-  void abortModeSwitchGeneration(int generation);
 
   /// 当前冻结视口快照（由 interaction mixin 经 State 组合提供）。
   ReaderViewportSnapshot currentRuntimeViewport();
@@ -321,10 +314,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
         _requestReaderRebuild();
       }
     }
-    if (modeSwitchInProgress) {
-      modeSwitchInProgress = false;
-      return;
-    }
     // 加载/恢复/切章期间：页索引已提交（上方），进度写入推迟，
     // 避免加载窗口内 jumpToPage 触发的提交写脏进度。
     if (runtime.restore.isBusy ||
@@ -334,9 +323,10 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       return;
     }
     final flow = _pageFlow;
-    // 模式切换期间（modeSwitchAnchor 未被用户交互消耗）：
-    // 只更新展示进度，不写 tracker 和 SQLite。
-    if (modeSwitchAnchor != null) {
+    // 模式切换活跃期：切换定位引发的 onPageChanged 只随页更新展示进度，
+    // 不写 tracker 和 SQLite；终结由定位完成（completeModeSwitch）或
+    // 用户触摸消费锚点。
+    if (runtime.isModeSwitchActive) {
       final chapterId = flow?.chapterIdAt(index) ?? currentChapterId;
       final chapterData = contentLoader?.get(chapterId, settings);
       if (chapterData != null && chapterData.totalChars > 0) {
@@ -538,8 +528,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
           onPointerDown: (_) {
             lastPointerDownTime = DateTime.now();
             pointerDownActive = true;
-            // 用户真实触摸：消耗模式切换冻结锚点
-            if (modeSwitchAnchor != null) modeSwitchAnchor = null;
+            // 用户真实触摸：消耗模式切换请求（锚点消费）
+            if (runtime.isModeSwitchActive) runtime.completeModeSwitch();
           },
           onPointerUp: (_) {
             pointerDownActive = false;
@@ -1398,8 +1388,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
           onPointerDown: (_) {
             lastPointerDownTime = DateTime.now();
             pointerDownActive = true;
-            // 用户真实触摸：消耗模式切换冻结锚点
-            if (modeSwitchAnchor != null) modeSwitchAnchor = null;
+            // 用户真实触摸：消耗模式切换请求（锚点消费）
+            if (runtime.isModeSwitchActive) runtime.completeModeSwitch();
           },
           onPointerUp: (_) {
             pointerDownActive = false;
@@ -1597,7 +1587,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       }
       final target = runtime.restore.target;
       if (target == null) {
-        modeSwitchInProgress = false;
+        // 恢复目标已终结（用户消费/切章清理）：切换请求一并终结，
+        // 防止切换守卫滞留吞掉后续 onPageChanged。
+        runtime.completeModeSwitch();
         return;
       }
       unawaited(_restorePageCharOffset(chapterData, target.charOffset));
@@ -1609,8 +1601,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     int restoreCharOffset,
   ) async {
     final requestedChapterId = currentChapterId;
-    // 模式切换/恢复事务代次：完成或失败都必须统一退出（方案 §27-28）。
-    final txnGeneration = modeSwitchGeneration;
+    // 捕获发起时的切换请求：定位完成时值比对，请求已被新切换取代则
+    // 丢弃终结权（异步回调竞态防线，方案 §27-28）。
+    final switchRequestAtStart = runtime.modeSwitch.request;
     // 捕获当前导航令牌：await 定位期间若发生新的显式导航（含同章重复
     // 跳转），本次恢复结果已过时，必须整体丢弃（旧任务 ≠ 当前任务）。
     final navigationTokenAtStart = navigationTokens.current;
@@ -1628,10 +1621,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
         // 定位被取消或章节已切换：当前章节请求结束时必须退出恢复态，避免遮罩滞留
         if (requestedChapterId == currentChapterId) {
           runtime.restore.cancel();
-          setState(() {
-            modeSwitchInProgress = false;
-          });
-          completeModeSwitchGeneration(txnGeneration);
+          runtime.completeModeSwitch();
+          setState(() {});
         }
         return;
       }
@@ -1645,19 +1636,18 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       // targetPage 为章内页；换算到跨章流全局索引。
       final anchorStart = _pageFlow?.startIndexOf(currentChapterId) ?? 0;
       runtime.restore.markCompleted();
+      if (runtime.modeSwitch.request == switchRequestAtStart) {
+        runtime.completeModeSwitch();
+      }
       setState(() {
         pageModePage = anchorStart + targetPage;
-        modeSwitchInProgress = false;
       });
-      completeModeSwitchGeneration(txnGeneration);
     } catch (e) {
       if (mounted && requestedChapterId == currentChapterId) {
         runtime.restore.markFailed();
-        setState(() {
-          modeSwitchInProgress = false;
-        });
+        runtime.completeModeSwitch();
         // 定位异常同样是统一失败退出（方案 §28）。
-        abortModeSwitchGeneration(txnGeneration);
+        setState(() {});
       }
     }
   }

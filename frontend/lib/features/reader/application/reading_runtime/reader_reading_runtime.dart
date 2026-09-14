@@ -15,6 +15,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_geom
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_scheduler.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_store.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_mode_switch.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_operation_token.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_persistence_queue.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_resolver.dart';
@@ -541,6 +542,31 @@ class ReaderReadingRuntime {
         visualProgress: value,
       ),
     );
+  }
+
+  // ── Mode Switch 编排（B7：请求化 + Runtime 唯一权威）──
+
+  /// 模式切换状态机：request 非 null 即切换活跃，锚点/守卫/快照读此。
+  final ReaderModeSwitchManager modeSwitch = ReaderModeSwitchManager();
+
+  /// 模式切换是否活跃（原 modeSwitchInProgress 的唯一替代读口）。
+  bool get isModeSwitchActive => modeSwitch.isActive;
+
+  /// 切换期冻结锚点（原 modeSwitchAnchor 的唯一替代读口）；未活跃为 null。
+  int? get modeSwitchAnchor => modeSwitch.request?.anchorCharOffset;
+
+  /// 模式切换唯一入口：失效在途续作（含旧切换的异步定位回调）→ 登记
+  /// 请求。物理动作（预热分页/重排/定位）由页面按目标模式执行；终结
+  /// 经 [completeModeSwitch]（定位完成或用户触摸消费锚点）。
+  void changeMode(ReaderModeSwitchRequest request) {
+    // 新切换使全部在途续作失效（场景 C 同构：旧切换定位回调作废）。
+    operationToken.invalidate();
+    modeSwitch.begin(request);
+  }
+
+  /// 终结当前模式切换（目标模式定位完成或用户锚点消费）。
+  void completeModeSwitch() {
+    modeSwitch.complete();
   }
 
   // ── Restore 编排（B6 §7.3：ScrollRestore 引擎机械动作吸收）──
