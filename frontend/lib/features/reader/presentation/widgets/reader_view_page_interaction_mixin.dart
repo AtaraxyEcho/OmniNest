@@ -119,7 +119,8 @@ mixin ReaderViewPageInteractionMixin
     // SETTLING 一次提交——不得在用户滚动手势中途改写窗口几何。
     if (position.chapterId != currentChapterId) {
       if (session != null) {
-        session.pendingAnchorChapter = position.chapterId;
+        // 会话/事务期间只记录挂起收养（方案 §31/§64），SETTLING 一次提交。
+        runtime.transactions.current?.pendingChapterId = position.chapterId;
       } else {
         adoptContinuousAnchorChapter(position.chapterId);
       }
@@ -242,15 +243,15 @@ mixin ReaderViewPageInteractionMixin
       }
       if (max > 0 && max - offset < max * 0.35) {
         if (_scrollSession != null) {
-          // 会话期间只记录挂起扩窗（方案 §32/§67），SETTLING 一次提交。
-          _scrollSession!.pendingExpandForward = true;
+          // 事务期间只记录挂起扩窗（方案 §32/§67），SETTLING 一次提交。
+          runtime.transactions.current?.pendingExpandForward = true;
         } else {
           _throttledExpandForward();
         }
       }
       if (offset < 240) {
         if (_scrollSession != null) {
-          _scrollSession!.pendingExpandBackward = true;
+          runtime.transactions.current?.pendingExpandBackward = true;
         } else {
           _throttledExpandBackward();
         }
@@ -450,21 +451,21 @@ mixin ReaderViewPageInteractionMixin
   /// 随后重建窗口并应用单次锚点修正；事务在提交完成后才结束。
   void _commitScrollSession() {
     final session = _scrollSession;
-    if (session != null) {
-      final pendingChapter = session.pendingAnchorChapter;
+    final tx = runtime.transactions.current;
+    if (session != null && tx != null) {
+      final pendingChapter = tx.pendingChapterId;
       if (pendingChapter != null && pendingChapter != currentChapterId) {
         adoptContinuousAnchorChapter(pendingChapter);
       }
-      if (session.pendingExpandForward) {
+      if (tx.pendingExpandForward) {
         onContinuousWindowExpand(forward: true);
       }
-      if (session.pendingExpandBackward) {
+      if (tx.pendingExpandBackward) {
         onContinuousWindowExpand(forward: false);
       }
     }
     commitPendingContinuousMetrics();
     _scrollSession = null;
-    final tx = runtime.transactions.current;
     if (tx != null) {
       runtime.transactions.finish(tx.id);
       if (kDebugMode) {

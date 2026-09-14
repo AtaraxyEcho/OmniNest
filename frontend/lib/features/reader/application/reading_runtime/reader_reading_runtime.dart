@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_store.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_resolver.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
@@ -10,7 +11,6 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_runt
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction_manager.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_window_manager.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 
 /// Reader Reading Runtime Facade（方案 §83）：页面只经此访问运行时。
 ///
@@ -28,7 +28,6 @@ class ReaderReadingRuntime {
     ReaderRestoreManager? restore,
     ReaderRuntimeClock? clock,
     ReaderRuntimeDiagnostics? diagnostics,
-    ReaderPositionTracker? tracker,
   }) : transactions = transactions ?? ReaderTransactionManager(),
        geometry = geometry ?? ReaderGeometryStore(),
        position = position ?? const ReaderPositionResolver(),
@@ -38,8 +37,7 @@ class ReaderReadingRuntime {
        window = window ?? ReaderWindowManager(),
        restore = restore ?? ReaderRestoreManager(),
        clock = clock ?? const SystemReaderRuntimeClock(),
-       diagnostics = diagnostics ?? ReaderRuntimeDiagnostics(),
-       tracker = tracker ?? ReaderPositionTracker();
+       diagnostics = diagnostics ?? ReaderRuntimeDiagnostics();
 
   final ReaderTransactionManager transactions;
 
@@ -60,10 +58,16 @@ class ReaderReadingRuntime {
 
   final ReaderRuntimeDiagnostics diagnostics;
 
-  /// 逻辑位置追踪器（charOffset 事实源，模式切换与离场快照共用）。
-  final ReaderPositionTracker tracker;
-
   ReaderPositionSnapshot? currentPosition;
+
+  /// 几何失效回调（方案 §72）：页面在 initState 注入实际调度器；
+  /// build / 事件只经 [requestGeometryUpdate] 声明失效，不同步提交。
+  void Function(ReaderGeometryInvalidation reason)? onGeometryInvalidated;
+
+  /// 几何失效请求唯一入口（方案 §72/§73）：请求与提交必须分离。
+  void requestGeometryUpdate({required ReaderGeometryInvalidation reason}) {
+    onGeometryInvalidated?.call(reason);
+  }
 
   /// 释放 Facade 自建的通知器；页面自持通知器时通过自建 publisher 注入，
   /// 由页面负责其 dispose。

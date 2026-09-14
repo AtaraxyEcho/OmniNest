@@ -734,6 +734,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       },
     );
     if (kIsWeb) BrowserContextMenu.disableContextMenu();
+    // 几何失效请求统一进入收敛调度器（方案 §72）：build/事件只请求。
+    _runtime.onGeometryInvalidated =
+        (reason) => requestContinuousWindowRebuild();
     loadSettings();
     checkBookmarkState();
     scrollController.addListener(onScroll);

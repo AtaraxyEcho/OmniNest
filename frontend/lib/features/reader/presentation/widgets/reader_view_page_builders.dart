@@ -5,6 +5,7 @@ import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
@@ -158,7 +159,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool isUserScrollActive({required DateTime since});
   void onScrollPhaseChanged(ReaderScrollPhase phase);
   bool get isScrollPhaseActive;
-  abstract bool continuousMetricsDirty;
   ReaderScrollSession? get scrollSession;
   int get modeSwitchGeneration;
   void completeModeSwitchGeneration(int generation);
@@ -935,6 +935,38 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   // ── 滚动模式 ──
 
+  /// Build 期几何更新收敛调度（方案 §72）：同一帧多次请求合并为一次，
+  /// 帧末在 build 之外执行重建；窗口实际变化时补一次页面重建同步
+  /// 批注映射，无变化则静默终止，避免空转循环。
+  bool _geometryRebuildRequested = false;
+
+  void requestContinuousWindowRebuild() {
+    if (_geometryRebuildRequested) {
+      return;
+    }
+    _geometryRebuildRequested = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _geometryRebuildRequested = false;
+      if (!mounted || isPageMode) {
+        return;
+      }
+      if (isScrollPhaseActive) {
+        // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12）。
+        runtime.window.pendingMetricUpdate = true;
+        return;
+      }
+      final geometryBefore = continuousScrollController.geometryRevision;
+      final windowBefore = continuousScrollController.windowRevision;
+      rebuildContinuousWindow();
+      final changed =
+          continuousScrollController.geometryRevision != geometryBefore ||
+          continuousScrollController.windowRevision != windowBefore;
+      if (changed && mounted) {
+        setState(() {});
+      }
+    });
+  }
+
   /// 用 contentLoader 数据重建连续滚动窗口。
   ///
   /// build 热路径调用：fingerprint 未变化时整段跳过（含测高启动与 notify）。
@@ -946,7 +978,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (isScrollPhaseActive) {
       // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12），
       // 坐标系变化不得发生在用户滚动手势期间。
-      continuousMetricsDirty = true;
+      runtime.window.pendingMetricUpdate = true;
       return;
     }
     final loader = contentLoader;
@@ -1189,7 +1221,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       return;
     }
     if (isScrollPhaseActive) {
-      continuousMetricsDirty = true;
+      runtime.window.pendingMetricUpdate = true;
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1197,7 +1229,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         return;
       }
       if (isScrollPhaseActive) {
-        continuousMetricsDirty = true;
+        runtime.window.pendingMetricUpdate = true;
         return;
       }
       _applyVisualCorrectionNow(
@@ -1212,7 +1244,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void commitPendingContinuousMetrics() {
     // ScrollEnd 一次收敛：清除挂起标记并重建窗口；窗口内部的锚点
     // 补偿（settling 相位允许）负责唯一一次视口修正。
-    continuousMetricsDirty = false;
+    runtime.window.pendingMetricUpdate = false;
     rebuildContinuousWindow();
   }
 
@@ -1369,8 +1401,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     ReaderChapterContent content,
     ReaderItemDetail detail,
   ) {
+    // Build Purity（方案 §71/§72）：build 只请求几何更新，实际重建在
+    // 帧末收敛；先注册重建请求，使同帧后续 restore 读取新窗口。
+    runtime.requestGeometryUpdate(
+      reason: ReaderGeometryInvalidation.contentLoaded,
+    );
     _schedulePendingScrollRestore();
-    rebuildContinuousWindow();
 
     return LayoutBuilder(
       builder: (context, constraints) {

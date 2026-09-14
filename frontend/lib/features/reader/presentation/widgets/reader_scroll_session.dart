@@ -40,10 +40,4 @@ class ReaderScrollSession {
   double lastScrollOffset;
   double lastVisualProgress;
   double displayedProgress;
-
-  /// 会话期间挂起的窗口操作（方案 §31-32）：USER_DRAGGING/BALLISTIC
-  /// 只记录，SETTLING 一次提交。
-  String? pendingAnchorChapter;
-  bool pendingExpandForward = false;
-  bool pendingExpandBackward = false;
 }

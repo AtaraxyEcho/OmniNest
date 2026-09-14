@@ -249,7 +249,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   void _onContinuousLayoutInvalidated() {
     // ACTIVE_SCROLL 期间只标记 dirty，窗口重建推迟到 ScrollEnd（方案 §12）。
     if (isScrollPhaseActive) {
-      continuousMetricsDirty = true;
+      runtime.window.pendingMetricUpdate = true;
       return;
     }
     if (!mounted || isPageMode || _layoutInvalidationScheduled) {
@@ -674,9 +674,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// ScrollEnd 一次收敛提交（由 builders 实现：重建窗口 + 单次修正）。
   void commitPendingContinuousMetrics();
-
-  /// 连续窗口布局是否有未提交变化（ACTIVE_SCROLL 期间置位）。
-  bool continuousMetricsDirty = false;
 
   /// 当前模式切换事务代次（由 interaction mixin 实现）。
   int get modeSwitchGeneration;
