@@ -292,7 +292,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       modeSwitchInProgress = false;
       return;
     }
-    if (isRestoringProgress || isSwitchingChapter) return;
+    // 加载/恢复/切章期间：页索引已提交（上方），进度写入推迟，
+    // 避免加载窗口内 jumpToPage 触发的提交写脏进度。
+    if (isRestoringProgress ||
+        isSwitchingChapter ||
+        isLoadingChapter ||
+        chapterLoadCoordinator.isLoading) {
+      return;
+    }
     if (DateTime.now().isBefore(restoreSilenceUntil)) return;
     final flow = _pageFlow;
     // 模式切换期间（modeSwitchAnchor 未被用户交互消耗）：
@@ -886,6 +893,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           anchorBefore == null
               ? null
               : continuousScrollController.entryFor(anchorBefore.chapterId);
+      // 锚点在旧布局中的窗口内容坐标：应用期按"新布局位置 - 旧布局
+      // 位置"的位移修正当前 offset，与用户滚动自然叠加，不再回拉。
+      final anchorContentY =
+          anchorBefore == null
+              ? 0.0
+              : scrollController.offset + viewportAnchorY;
 
       loader.ensureScrollLayoutForNeighbors(
         currentChapterId,
@@ -975,6 +988,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         prevLastHeight: prevLastHeight,
         anchorBefore: anchorBefore,
         oldAnchorEntry: oldAnchorEntry,
+        anchorContentY: anchorContentY,
       );
       // 滑窗已按首尾高度补偿，勿再按锚点 prefix 二次修正。
       if (!windowSlid) {
@@ -982,6 +996,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           previousPrefix,
           anchorBefore: anchorBefore,
           oldAnchorEntry: oldAnchorEntry,
+          anchorContentY: anchorContentY,
         );
       }
     } finally {
@@ -1070,6 +1085,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   /// ACTIVE_SCROLL 期间挂起的视觉校正（最后一次锚点生效）。
   VisualAnchor? _pendingCorrectionAnchor;
   ContinuousChapterEntry? _pendingCorrectionOldEntry;
+
+  /// 挂起锚点在捕获时（旧布局）的窗口内容坐标，应用期计算位移。
+  double _pendingCorrectionAnchorContentY = 0;
   bool _correctionApplyScheduled = false;
 
   /// 布局变化后的视口保持：锚点保持优先，锚点不可解析时回退高度差。
@@ -1080,6 +1098,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     required VisualAnchor? anchorBefore,
     required ContinuousChapterEntry? oldAnchorEntry,
     required double fallbackDelta,
+    required double anchorContentY,
     required bool deferWhileScrolling,
   }) {
     if (!scrollController.hasClients) {
@@ -1089,6 +1108,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (anchorBefore != null) {
         _pendingCorrectionAnchor = anchorBefore;
         _pendingCorrectionOldEntry = oldAnchorEntry;
+        _pendingCorrectionAnchorContentY = anchorContentY;
         _schedulePendingCorrectionApply();
       }
       return;
@@ -1102,6 +1122,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         if (anchorBefore != null) {
           _pendingCorrectionAnchor = anchorBefore;
           _pendingCorrectionOldEntry = oldAnchorEntry;
+          _pendingCorrectionAnchorContentY = anchorContentY;
           _schedulePendingCorrectionApply();
         }
         return;
@@ -1110,6 +1131,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         anchorBefore: anchorBefore,
         oldAnchorEntry: oldAnchorEntry,
         fallbackDelta: fallbackDelta,
+        anchorContentY: anchorContentY,
       );
     });
   }
@@ -1137,11 +1159,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       }
       _pendingCorrectionAnchor = null;
       final oldEntry = _pendingCorrectionOldEntry;
+      final pendingAnchorContentY = _pendingCorrectionAnchorContentY;
       _pendingCorrectionOldEntry = null;
       _applyVisualCorrectionNow(
         anchorBefore: anchor,
         oldAnchorEntry: oldEntry,
         fallbackDelta: 0,
+        anchorContentY: pendingAnchorContentY,
       );
     });
   }
@@ -1159,6 +1183,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     required VisualAnchor? anchorBefore,
     required ContinuousChapterEntry? oldAnchorEntry,
     required double fallbackDelta,
+    required double anchorContentY,
   }) {
     if (!scrollController.hasClients) {
       return;
@@ -1177,7 +1202,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             : continuousScrollController.contentYForVisualAnchor(remapped);
     final double target;
     if (anchorY != null) {
-      target = (anchorY - viewportAnchorY).clamp(0.0, max);
+      // 位移合成：锚点内容坐标在新旧布局间的位移量叠加到当前 offset。
+      // 用户在捕获与应用之间的滚动已在当前 offset 中，若按绝对目标跳转
+      // 会撤销用户滚动（慢滚回拉根因）；位移合成则两者自然叠加。
+      final shift = anchorY - anchorContentY;
+      target = (scrollController.offset + shift).clamp(0.0, max);
     } else {
       target = (scrollController.offset + fallbackDelta).clamp(0.0, max);
     }
@@ -1197,6 +1226,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     required double prevLastHeight,
     VisualAnchor? anchorBefore,
     ContinuousChapterEntry? oldAnchorEntry,
+    required double anchorContentY,
   }) {
     if (prevEntries.isEmpty || !scrollController.hasClients) {
       return;
@@ -1239,6 +1269,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       anchorBefore: anchorBefore,
       oldAnchorEntry: oldAnchorEntry,
       fallbackDelta: delta,
+      anchorContentY: anchorContentY,
       deferWhileScrolling: false,
     );
   }
@@ -1253,6 +1284,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     double? previousPrefix, {
     VisualAnchor? anchorBefore,
     ContinuousChapterEntry? oldAnchorEntry,
+    required double anchorContentY,
   }) {
     if (previousPrefix == null ||
         isRestoringProgress ||
@@ -1275,6 +1307,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       anchorBefore: anchorBefore,
       oldAnchorEntry: oldAnchorEntry,
       fallbackDelta: delta,
+      anchorContentY: anchorContentY,
       deferWhileScrolling: true,
     );
   }

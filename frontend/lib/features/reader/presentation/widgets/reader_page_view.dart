@@ -325,7 +325,14 @@ class _ReaderPageViewState extends State<ReaderPageView>
       return;
     }
 
-    final nextIndex = widget.state.pageIndex + 1;
+    // 目标基于控制器实际物理页：state 与物理页脱节时（历史 onPageChanged
+    // 被吞等）按物理页前进，点击不再空转（方案 §8 最新状态重算）。
+    final ctrl = _pageController;
+    final basePage =
+        ctrl != null && ctrl.hasClients
+            ? (ctrl.page?.round() ?? widget.state.pageIndex)
+            : widget.state.pageIndex;
+    final nextIndex = basePage + 1;
     final atBoundary = nextIndex >= _localPageCount && !widget.state.hasMore;
 
     if (atBoundary) {
@@ -342,9 +349,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
     }
 
     if (widget.turnMode == PageTurnMode.slide) {
-      final ctrl = _pageController;
       if (ctrl != null && ctrl.hasClients) {
-        _debugPageTurn('nextStart', detail: 'target=$nextIndex');
+        _debugPageTurn('nextStart', detail: 'target=$nextIndex base=$basePage');
         _transitionInFlight = true;
         unawaited(_animateSlideTo(ctrl, nextIndex));
       } else {
@@ -426,7 +432,12 @@ class _ReaderPageViewState extends State<ReaderPageView>
       return;
     }
 
-    final atBoundary = widget.state.pageIndex == 0;
+    final ctrl = _pageController;
+    final basePage =
+        ctrl != null && ctrl.hasClients
+            ? (ctrl.page?.round() ?? widget.state.pageIndex)
+            : widget.state.pageIndex;
+    final atBoundary = basePage <= 0;
 
     if (atBoundary) {
       _debugPageTurn('previousBoundaryRequest');
@@ -438,14 +449,10 @@ class _ReaderPageViewState extends State<ReaderPageView>
     }
 
     if (widget.turnMode == PageTurnMode.slide) {
-      final ctrl = _pageController;
       if (ctrl != null && ctrl.hasClients) {
-        _debugPageTurn(
-          'previousStart',
-          detail: 'target=${widget.state.pageIndex - 1}',
-        );
+        _debugPageTurn('previousStart', detail: 'target=${basePage - 1}');
         _transitionInFlight = true;
-        unawaited(_animateSlideTo(ctrl, widget.state.pageIndex - 1));
+        unawaited(_animateSlideTo(ctrl, basePage - 1));
       } else {
         _debugPageTurn(
           'previousRetryScheduled',
@@ -588,10 +595,6 @@ class _ReaderPageViewState extends State<ReaderPageView>
   }
 
   void _onSlidePageChanged(int index) {
-    if (ReaderInteractionGate.locksScroll(_blockReason)) {
-      _debugPageTurn('pageChangedSuppressed', detail: 'index=$index');
-      return;
-    }
     _transitionInFlight = true;
 
     if (index >= _localPageCount && widget.state.hasMore) {
@@ -600,6 +603,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
       return;
     }
 
+    // 页索引提交不因闸门阻塞（实机实证）：物理页变化必须让父级知情，
+    // 否则 state 与物理页脱节后 animateToPage 空转（右击失效根因）。
+    // 加载期的进度写入由 _commitPageIndex 内部守卫负责。
     _debugPageTurn('pageCommitted', detail: 'index=$index');
     widget.callbacks.onPageChanged(index);
     // 翻页可能由 jumpToPage 触发（无 ScrollEnd 复位机会），统一补一次解锁。
