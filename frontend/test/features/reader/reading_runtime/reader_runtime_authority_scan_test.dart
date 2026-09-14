@@ -79,6 +79,13 @@ void main() {
     'restoreToChapterStart',
     'ReaderGeometryCommitResult',
     'ReaderTransactionKind.visualSeek',
+    'ReaderTransactionKind.restore',
+    'ReaderPersistenceQueue',
+    'persistenceQueue',
+    'ReaderTargetResolver',
+    'pendingChapterId',
+    'requestChapter',
+    'disposeOwnNotifier',
   ];
 
   test('§55 归零清单：退役符号全域零残留', () {

@@ -1,23 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_scheduler.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_revision.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_operation_token.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_persistence_queue.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_state.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_identity.dart';
-
-ReaderProgressSnapshot _progressSnapshot(String chapterId, int charOffset) {
-  return ReaderProgressSnapshot(
-    chapterId: chapterId,
-    charOffset: charOffset,
-    progress: 0.5,
-    chapterProgress: 0.5,
-    mode: 'scroll',
-    updatedAt: DateTime(2026),
-  );
-}
 
 ReaderPositionSnapshot _positionSnapshot(int charOffset) {
   return ReaderPositionSnapshot(
@@ -94,23 +81,6 @@ void main() {
       expect(scheduler.consumePendingCommit(), isFalse);
       // 空闲边界直接放行。
       expect(scheduler.authorizeInstall(inActiveGesture: false), isTrue);
-    });
-  });
-
-  group('ReaderPersistenceQueue（新方案 §28/§30）', () {
-    test('相邻同位置去重，变化即入队', () {
-      final enqueued = <ReaderProgressSnapshot>[];
-      final queue = ReaderPersistenceQueue(onEnqueue: enqueued.add);
-
-      queue.enqueue(_progressSnapshot('c1', 10));
-      queue.enqueue(_progressSnapshot('c1', 10));
-      expect(enqueued.length, 1);
-
-      queue.enqueue(_progressSnapshot('c1', 80));
-      queue.enqueue(_progressSnapshot('c2', 5));
-      expect(enqueued.length, 3);
-      expect(enqueued.map((s) => s.charOffset), [10, 80, 5]);
-      expect(queue.last!.chapterId, 'c2');
     });
   });
 

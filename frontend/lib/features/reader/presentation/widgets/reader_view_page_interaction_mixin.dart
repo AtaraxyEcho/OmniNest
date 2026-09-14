@@ -8,7 +8,6 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_cons
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_mode_switch.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_delegate.dart';
@@ -521,18 +520,10 @@ mixin ReaderViewPageInteractionMixin
   /// 导致滚动位移归零被误判为章末并触发跳章（方案 §59）。页面态清理
   /// 已随四态退役消失；_beginTransaction 内已调 manager.cancel。
   void cancelOngoingRestoreForUserScroll() {
-    final target = runtime.restorePhaseTarget;
-    if (target == null) {
+    // 失效事件由 cancelRestorePhase 内化发射（§103）。
+    if (runtime.restorePhaseTarget == null) {
       return;
     }
-    runtime.emitEvent(
-      ReaderRuntimeEvent(
-        type: ReaderRuntimeEventType.restoreInvalidated,
-        at: runtime.clock.now,
-        chapterId: target.chapterId,
-        charOffset: target.charOffset,
-      ),
-    );
     runtime.cancelRestorePhase();
     if (mounted) {
       setState(() {});

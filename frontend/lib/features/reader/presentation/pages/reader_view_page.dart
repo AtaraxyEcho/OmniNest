@@ -584,6 +584,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   /// 与 _currentChapterId 不同，因此身份与偏移必须成对传入。
   @override
   double bookProgressFor(String chapterId, int charOffset) {
+    // dispose 后的快照回退路径（buildSimpleSnapshot/syncProgressAsync）
+    // 仍会走到这里：ref 已失效，退化为章内显示进度兜底。
+    if (!mounted) {
+      return _scrollProgress.clamp(0.0, 1.0);
+    }
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
       return _scrollProgress.clamp(0.0, 1.0);
@@ -686,6 +691,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           itemId: widget.itemId,
           readingMode: _settings.readingMode,
         );
+    // 装配完整性断言（debug）：11 个注入点缺一即在此暴露。
+    _runtime.validateBindings();
     loadSettings();
     checkBookmarkState();
     scrollController.addListener(onScroll);
@@ -952,8 +959,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
                   latestSnapshot.hasReadableProgress &&
                   isNewer &&
                   notEcho) {
-                // 他章更新不自动拽跳（活跃阅读中被拽离是干扰），浮层提供入口。
-                offerRemoteProgressJump(latestSnapshot);
+                // 他章更新不自动拽跳（活跃阅读中被拽离是干扰），浮层提供入口；
+                // 浮层内部含 setState/Timer，build 期只声明、帧末执行。
+                final offerSnapshot = latestSnapshot;
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (!mounted) {
+                    return;
+                  }
+                  offerRemoteProgressJump(offerSnapshot);
+                });
               }
             }
 

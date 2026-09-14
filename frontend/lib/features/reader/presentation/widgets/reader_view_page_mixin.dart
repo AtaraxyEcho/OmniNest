@@ -1093,7 +1093,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     );
   }
 
-  /// dispose 后构建简单快照（不依赖 ref）。
+  /// dispose 后构建简单快照（bookProgress 已含 mounted 守卫，ref 不可用
+  /// 时退化为章内显示进度兜底）。
   ReaderProgressSnapshot? buildSimpleSnapshot(double? progressOverride) {
     final chapterProg = (progressOverride ?? scrollProgress).clamp(0.0, 1.0);
     return ReaderProgressSnapshot(

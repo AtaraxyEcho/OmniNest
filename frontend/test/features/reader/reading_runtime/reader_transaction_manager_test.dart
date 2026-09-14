@@ -39,7 +39,7 @@ void main() {
         ]),
       );
       final first = manager.begin(
-        kind: ReaderTransactionKind.restore,
+        kind: ReaderTransactionKind.navigation,
         layout: layout,
         initialOffset: 10,
         initialVisualProgress: 0,

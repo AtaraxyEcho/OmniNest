@@ -11,7 +11,7 @@ abstract interface class ReaderRestoreDelegate {
   /// 对抗时让位。
   bool isUserScrollingSince(DateTime since);
 
-  /// 稳定回写（稳定 10 帧后调用）：tracker 回写由页面实现，B8 前仍
-  /// 在页面侧。
+  /// 稳定回写（稳定 10 帧后调用）：页面记账至 Runtime 逻辑位置并触发
+  /// 进度持久化与全书进度发布。
   void onRestoreSettled(ReaderPositionTarget target);
 }

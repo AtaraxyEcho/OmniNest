@@ -12,9 +12,6 @@ enum ReaderTransactionKind {
   /// 触控板（高频小 delta）。
   touchpad,
 
-  /// 进度恢复（程序化）。
-  restore,
-
   /// 键盘滚动。
   keyboard,
 

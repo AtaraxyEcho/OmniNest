@@ -211,7 +211,6 @@ void main() {
     pipeline.effect.offsetValue = 3900;
     pipeline.feed();
     expect(tx.pendingChapterId, 'c1');
-    expect(runtime.window.pendingChapterId, 'c1');
     expect(tx.pendingExpandForward, isTrue);
     expect(pipeline.delegate.adopted, isEmpty);
     expect(pipeline.delegate.expandForward, 0);

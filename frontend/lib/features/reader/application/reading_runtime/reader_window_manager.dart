@@ -8,9 +8,6 @@ class ReaderWindowManager {
   bool pendingForward = false;
   bool pendingBackward = false;
 
-  /// 会话期间挂起的锚点章收养请求（方案 §64）。
-  String? pendingChapterId;
-
   void requestForward() {
     pendingForward = true;
   }
@@ -19,13 +16,8 @@ class ReaderWindowManager {
     pendingBackward = true;
   }
 
-  void requestChapter(String chapterId) {
-    pendingChapterId = chapterId;
-  }
-
   void clearPending() {
     pendingForward = false;
     pendingBackward = false;
-    pendingChapterId = null;
   }
 }

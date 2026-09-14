@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/animation.dart' show Curves;
 
-import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_consume_delegate.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_event_log.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
@@ -18,7 +17,6 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_geom
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_store.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_mode_switch.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_operation_token.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_persistence_queue.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_resolver.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_state.dart';
@@ -62,7 +60,6 @@ class ReaderReadingRuntime {
     ReaderPositionState? positionState,
     ReaderGeometryScheduler? geometryScheduler,
     ReaderScrollEffect? scrollEffect,
-    void Function(ReaderProgressSnapshot snapshot)? onPersistEnqueue,
   }) : transactions = transactions ?? ReaderTransactionManager(),
        geometry = geometry ?? ReaderGeometryStore(),
        position = position ?? const ReaderPositionResolver(),
@@ -77,9 +74,6 @@ class ReaderReadingRuntime {
        operationToken = operationToken ?? ReaderOperationToken(),
        positionState = positionState ?? ReaderPositionState(),
        geometryScheduler = geometryScheduler ?? ReaderGeometryScheduler(),
-       persistenceQueue = ReaderPersistenceQueue(
-         onEnqueue: onPersistEnqueue ?? (_) {},
-       ),
        wheelBurst = ReaderWheelBurstTracker(
          clock: clock ?? const SystemReaderRuntimeClock(),
        );
@@ -206,6 +200,17 @@ class ReaderReadingRuntime {
       return;
     }
     restore.cancel();
+    final replacedTx = transactions.current;
+    if (replacedTx != null) {
+      emitEvent(
+        ReaderRuntimeEvent(
+          type: ReaderRuntimeEventType.transactionCancelled,
+          at: clock.now,
+          transactionId: replacedTx.id,
+          kind: replacedTx.kind.name,
+        ),
+      );
+    }
     final tx = transactions.beginOrReplace(
       kind: kind,
       layout: layout,
@@ -251,7 +256,22 @@ class ReaderReadingRuntime {
     windowBuilder.build(deferIfGestureActive: false);
     window.clearPending();
     geometryScheduler.consumePendingCommit();
-    positionState.commitTransient();
+    final committed = positionState.commitTransient();
+    if (committed != null) {
+      emitEvent(
+        ReaderRuntimeEvent(
+          type: ReaderRuntimeEventType.positionFinalized,
+          at: clock.now,
+          transactionId: committed.transactionId,
+          layoutRevision:
+              '${committed.layoutRevision.geometryRevision}/'
+              '${committed.layoutRevision.windowRevision}',
+          offset: committed.scrollOffset,
+          chapterId: committed.chapterId,
+          charOffset: committed.charOffset,
+        ),
+      );
+    }
     if (settlingTx != null) {
       transactions.finish(settlingTx.id);
       emitEvent(
@@ -349,8 +369,9 @@ class ReaderReadingRuntime {
   ) {
     lastChapterVisualCursor = snapshot.chapterVisualCursor;
     lastVisualProgressChapterId = snapshot.chapterId;
-    final hasClients = scrollEffect?.hasClients ?? false;
-    final offsetNow = hasClients ? scrollEffect!.offset : 0.0;
+    // 坐标基准唯一：一次解析的 snapshot.scrollOffset 贯穿全部下游
+    // 判定，不再各自重采样物理 offset（B10 审查修正）。
+    final offsetNow = snapshot.scrollOffset;
     if (tx != null) {
       tx.forward = offsetNow >= tx.lastScrollOffset;
       tx.lastScrollOffset = offsetNow;
@@ -391,18 +412,19 @@ class ReaderReadingRuntime {
     // 顺序滚动进入邻章：不得在用户滚动手势中途改写窗口几何。
     if (snapshot.chapterId != anchorChapterId) {
       if (tx != null) {
+        // 收养意图唯一载体是事务挂起（settle 一次提交），Window 侧
+        // 不再维护第二份只写状态。
         tx.pendingChapterId = snapshot.chapterId;
-        window.requestChapter(snapshot.chapterId);
       } else {
         consumeDelegate?.adoptChapter(snapshot.chapterId);
       }
     }
-    final hasClients = scrollEffect?.hasClients ?? false;
-    if (!hasClients) {
+    final effect = scrollEffect;
+    if (effect == null || !effect.hasClients) {
       return;
     }
-    final max = scrollEffect!.maxScrollExtent;
-    final offset = scrollEffect!.offset;
+    final max = effect.maxScrollExtent;
+    final offset = snapshot.scrollOffset;
     if (max > 0 && max - offset < max * 0.35) {
       if (tx != null) {
         // 事务期间只记录挂起扩窗（方案 §32/§67），SETTLING 一次提交；
@@ -475,8 +497,7 @@ class ReaderReadingRuntime {
     // 漂移；前向滚动中的映射回退不是真实回滚（真实回滚 offset 必减小），
     // 抑制本次回写，避免进度显示与落库值在收敛期反复横跳。章节切换帧
     // （此前显示值属于旧章）与本章精测已完成时不抑制。
-    final hasClients = scrollEffect?.hasClients ?? false;
-    final offsetNow = hasClients ? scrollEffect!.offset : 0.0;
+    final offsetNow = snapshot.scrollOffset;
     final forwardScroll =
         lastResolvedOffset == null || offsetNow >= lastResolvedOffset! - 0.5;
     final wasSameChapter = lastResolvedProgressChapterId == snapshot.chapterId;
@@ -575,8 +596,14 @@ class ReaderReadingRuntime {
 
   /// 页模式定位相位登记：不走滚动恢复编排，遮罩与守卫经
   /// [isRestoreBusy] 投影生效。
+  ///
+  /// 失效全部在途续作（与 [startRestore] 同语义）：滚动恢复 tick 若在
+  /// 途，下一帧经 token/isBusy 双检中止，不得驱动 jumpTo 追逐本相位
+  /// 的新目标（B10 审查修正的编排互斥）。
   void beginRestorePhase(ReaderPositionTarget target) {
+    operationToken.invalidate();
     restore.begin(target, identity: identityProvider?.call());
+    _restoreTickToken = null;
   }
 
   /// 页模式定位完成。
@@ -586,7 +613,56 @@ class ReaderReadingRuntime {
   void failRestorePhase() => restore.markFailed();
 
   /// 取消当前恢复相位（显式导航/离场/用户滚动）。
-  void cancelRestorePhase() => restore.cancel();
+  ///
+  /// 与编排侧失效路径对称：实际取消时清 tick 凭证并发射
+  /// restoreInvalidated；无活跃相位时为 no-op。
+  void cancelRestorePhase() {
+    final target = restore.target;
+    if (target == null) {
+      return;
+    }
+    restore.cancel();
+    _restoreTickToken = null;
+    emitEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.restoreInvalidated,
+        at: clock.now,
+        chapterId: target.chapterId,
+        charOffset: target.charOffset,
+      ),
+    );
+  }
+
+  /// 注入点装配完整性断言（debug 期）：任一缺失都会静默降级
+  /// （frameScheduler 缺失甚至导致恢复相位永久卡死），initState 末尾
+  /// 统一调用一次即可在装配面暴露遗漏。
+  void validateBindings() {
+    assert(layoutProvider != null, 'layoutProvider 未注入：事务无法创建');
+    assert(consumeDelegate != null, 'consumeDelegate 未注入：消费管线静默');
+    assert(restoreDelegate != null, 'restoreDelegate 未注入：恢复编排不启动');
+    assert(scrollEffect != null, 'scrollEffect 未注入：程序化滚动失效');
+    assert(frameScheduler != null, 'frameScheduler 未注入：恢复相位永久卡死');
+    assert(
+      onAdoptChapterRequested != null,
+      'onAdoptChapterRequested 未注入：收养意图静默丢弃',
+    );
+    assert(
+      onExpandWindowRequested != null,
+      'onExpandWindowRequested 未注入：扩窗意图静默丢弃',
+    );
+    assert(
+      onGeometryInvalidated != null,
+      'onGeometryInvalidated 未注入：几何失效 no-op',
+    );
+    assert(
+      onRestoreCancelRequested != null,
+      'onRestoreCancelRequested 未注入：用户输入无法取消恢复',
+    );
+    assert(
+      windowBuilder.delegate != null,
+      'windowBuilder.delegate 未注入：窗口构建 no-op',
+    );
+  }
 
   /// 全书进度显示发布（页面唯一 Progress 写口，内部经 publisher）。
   void publishBookProgress(double value) => publisher.publish(value);
@@ -828,18 +904,9 @@ class ReaderReadingRuntime {
     _restoreSelfJump = false;
   }
 
-  /// 恢复被外力打断：相位取消、目标清除并发射失效事件（§103）。
+  /// 恢复被外力打断：经统一取消入口（对称清理 + §103 失效事件）。
   void _invalidateRestore(ReaderPositionTarget target, String reason) {
-    restore.cancel();
-    _restoreTickToken = null;
-    emitEvent(
-      ReaderRuntimeEvent(
-        type: ReaderRuntimeEventType.restoreInvalidated,
-        at: clock.now,
-        chapterId: target.chapterId,
-        charOffset: target.charOffset,
-      ),
-    );
+    cancelRestorePhase();
     if (kDebugMode) {
       readerDebugLog('ReaderRestore: invalidated ($reason)');
     }
@@ -958,9 +1025,6 @@ class ReaderReadingRuntime {
   /// Geometry 提交调度（新方案 §25/§42）：手势期间挂起、终端提交。
   final ReaderGeometryScheduler geometryScheduler;
 
-  /// 持久化队列（新方案 §28/§30）：committedPosition 投影的唯一出口。
-  final ReaderPersistenceQueue persistenceQueue;
-
   /// 物理滚动适配器（新方案 §43/§63）：页面注入，Runtime 不持有 Controller。
   ReaderScrollEffect? scrollEffect;
 
@@ -1004,13 +1068,6 @@ class ReaderReadingRuntime {
   /// 几何失效请求唯一入口（方案 §72/§73）：请求与提交必须分离。
   void requestGeometryUpdate({required ReaderGeometryInvalidation reason}) {
     onGeometryInvalidated?.call(reason);
-  }
-
-  /// 释放 Facade 自建的通知器；页面自持通知器时通过自建 publisher 注入，
-  /// 由页面负责其 dispose。
-  void disposeOwnNotifier() {
-    final notifier = publisher.notifier;
-    notifier.dispose();
   }
 
   // ── Window 构建（B4 §48：指纹/重建/锚点捕获编排 + Live 装载）──

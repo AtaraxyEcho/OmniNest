@@ -45,6 +45,6 @@ abstract interface class ReaderConsumeDelegate {
   /// 无事务帧的视觉进度兜底（原 bookVisualProgressFor）。
   double visualProgressFallback(String chapterId, double chapterVisualCursor);
 
-  /// 当前章内进度（B8 前由页面 State 持有）。
+  /// 当前章内进度（页面显示值，收敛抑制与阈值判定用）。
   double get currentChapterProgress;
 }

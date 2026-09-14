@@ -97,16 +97,23 @@ class ReaderRestoreManager {
   }
 
   /// 总超时退出（方案 §97：超时后当前物理位置成为事实）。
+  /// 仅 applying/stabilizing 有效——从未开始的恢复不得产生终态。
   void markTimedOut() {
-    _phase = ReaderRestorePhase.timedOut;
-    _target = null;
-    _identity = null;
+    if (_phase == ReaderRestorePhase.applying ||
+        _phase == ReaderRestorePhase.stabilizing) {
+      _phase = ReaderRestorePhase.timedOut;
+      _target = null;
+      _identity = null;
+    }
   }
 
-  /// 定位异常退出。
+  /// 定位异常退出（守卫同上）。
   void markFailed() {
-    _phase = ReaderRestorePhase.failed;
-    _target = null;
-    _identity = null;
+    if (_phase == ReaderRestorePhase.applying ||
+        _phase == ReaderRestorePhase.stabilizing) {
+      _phase = ReaderRestorePhase.failed;
+      _target = null;
+      _identity = null;
+    }
   }
 }

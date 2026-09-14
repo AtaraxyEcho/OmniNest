@@ -291,6 +291,13 @@ class ReaderWindowBuilder {
       // 装载边界已经调度器放行，此处提交为 Live 并登记结束性 Commit。
       final live = d.buildGeometrySnapshot();
       _runtime.geometry.publishCandidate(live);
+      _runtime.emitEvent(
+        ReaderRuntimeEvent(
+          type: ReaderRuntimeEventType.candidateUpdated,
+          at: _runtime.clock.now,
+          layoutRevision: '${live.revision}',
+        ),
+      );
       _runtime.geometry.commitCandidate();
       _runtime.diagnostics.geometryCommitCount++;
       _runtime.emitEvent(
