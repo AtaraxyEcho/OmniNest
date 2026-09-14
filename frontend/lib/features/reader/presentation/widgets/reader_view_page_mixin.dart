@@ -902,6 +902,22 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     }
     lastAppliedProgressAt = snapshot.updatedAt ?? DateTime.now();
 
+    // 同章回灌守卫：该章已有本机位置记账（用户正在该章阅读/刚恢复），
+    // 进度落库→provider 回灌→再次自动应用会启动恢复编排把用户拉回
+    // 保存点（回灌→恢复→拉回循环，实机日志实锤）。同章位置以本机
+    // 记账为准；跨设备真实差异由用户显式导航处理。
+    final trackedChapterId = runtime.logicalPosition.chapterId;
+    if (trackedChapterId == snapshot.chapterId) {
+      if (kDebugMode) {
+        readerDebugLog(
+          'ProgressRestore SKIP: same-chapter echo '
+          '(tracked=${runtime.logicalPosition.charOffset}, '
+          'snapshot=${snapshot.charOffset})',
+        );
+      }
+      return;
+    }
+
     if (kDebugMode) {
       readerDebugLog(
         'ProgressRestore APPLY: chapter=${snapshot.chapterId}, '
@@ -1025,6 +1041,12 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       effectiveCharOffset = runtime.modeSwitchAnchor!;
     } else if (isPageMode) {
       effectiveCharOffset = computePageCharOffset(pageModePage);
+      if (effectiveCharOffset <= 0 &&
+          runtime.logicalPosition.chapterId == snapshotChapterId &&
+          runtime.logicalPosition.charOffset > 0) {
+        // 图片页无字符：用最近文本记账兜底，防脏 0 进度。
+        effectiveCharOffset = runtime.logicalPosition.charOffset;
+      }
     } else if (!runtime.isRestoreBusy &&
         chapterId == null &&
         scrollController.hasClients &&
@@ -1043,6 +1065,13 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
                   snapshotChapterId,
                   scrollController.offset + viewportAnchorY,
                 );
+        if (effectiveCharOffset <= 0 &&
+            runtime.logicalPosition.chapterId == snapshotChapterId &&
+            runtime.logicalPosition.charOffset > 0) {
+          // 视口锚点落在图片块上（无字符可解析）：用最近文本记账兜底，
+          // 防止把脏 0 进度落库（实机日志 L623 实锤）。
+          effectiveCharOffset = runtime.logicalPosition.charOffset;
+        }
       } else {
         // 章节数据未就绪或不在当前窗口（跳章未落定/收养竞态）：窗口坐标
         // 对该章不可解释。退回 tracker 的自洽位置并同步修正章节身份，
