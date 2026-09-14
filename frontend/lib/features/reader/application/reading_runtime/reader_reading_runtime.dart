@@ -257,7 +257,8 @@ class ReaderReadingRuntime {
     window.clearPending();
     geometryScheduler.consumePendingCommit();
     final committed = positionState.commitTransient();
-    if (committed != null) {
+    // 空滚动 settle（无新 transient）不重复广播旧位置。
+    if (committed != null && settlingTx != null && committed.transactionId == settlingTx.id) {
       emitEvent(
         ReaderRuntimeEvent(
           type: ReaderRuntimeEventType.positionFinalized,

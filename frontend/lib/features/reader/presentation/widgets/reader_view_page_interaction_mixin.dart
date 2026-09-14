@@ -13,6 +13,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_scro
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_delegate.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
@@ -152,10 +153,26 @@ mixin ReaderViewPageInteractionMixin
   }) {
     // 封面/空章不记账（原 updateFromScroll 的 totalChars 守卫语义）。
     if (totalChars > 0) {
-      runtime.acceptLogicalPosition(
-        chapterId: snapshot.chapterId,
-        charOffset: snapshot.charOffset,
-      );
+      // 图片块无字符：锚点滑过图片时解析出的 charOffset 是块前缀
+      // （章首图片恒 0），记账回退到 0 会污染最近文本位置（后续快照
+      // 兜底与同章回灌判定都依赖它），跳过本次、保留上次文本位置。
+      final blocks = contentLoader?.getByChapterId(snapshot.chapterId)?.blocks;
+      final isImageBlock =
+          blocks != null &&
+          snapshot.blockIndex >= 0 &&
+          snapshot.blockIndex < blocks.length &&
+          blocks[snapshot.blockIndex] is ImageBlock;
+      final tracked = runtime.logicalPosition;
+      final zeroRegress =
+          snapshot.charOffset <= 0 &&
+          tracked.chapterId == snapshot.chapterId &&
+          tracked.charOffset > 0;
+      if (!isImageBlock || !zeroRegress) {
+        runtime.acceptLogicalPosition(
+          chapterId: snapshot.chapterId,
+          charOffset: snapshot.charOffset,
+        );
+      }
     }
     _debugContinuousPosition(
       snapshot,
