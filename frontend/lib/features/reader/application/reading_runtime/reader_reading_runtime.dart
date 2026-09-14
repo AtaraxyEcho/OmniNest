@@ -34,6 +34,11 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_scro
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction_manager.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_visual_extent_table.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_wheel_burst_tracker.dart';
+// 既有依赖方向（ReaderLayoutSnapshot 同引此类型）；B10 读口沿用，迁移另行立项。
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
+// 同上：锚点保持修正的入参类型（computeAnchorCorrection 转发签名）。
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart'
+    show VisualAnchor;
 import 'package:omninest/features/reader/application/reading_runtime/reader_window_manager.dart';
 
 /// Reader Reading Runtime Facade（方案 §83/§64 终态）：页面只经此访问运行时。
@@ -559,6 +564,56 @@ class ReaderReadingRuntime {
   }) {
     logicalPosition.accept(chapterId: chapterId, charOffset: charOffset);
   }
+
+  // ── 恢复相位 API（B10 §57 收口：页模式定位的相位借用经 Facade）──
+
+  /// 恢复相位投影（页面守卫唯一读取口，原 runtime.restore.isBusy）。
+  bool get isRestoreBusy => restore.isBusy;
+
+  /// 恢复相位目标读口（页模式定位链消费）。
+  ReaderPositionTarget? get restorePhaseTarget => restore.target;
+
+  /// 页模式定位相位登记：不走滚动恢复编排，遮罩与守卫经
+  /// [isRestoreBusy] 投影生效。
+  void beginRestorePhase(ReaderPositionTarget target) {
+    restore.begin(target, identity: identityProvider?.call());
+  }
+
+  /// 页模式定位完成。
+  void completeRestorePhase() => restore.markCompleted();
+
+  /// 页模式定位异常。
+  void failRestorePhase() => restore.markFailed();
+
+  /// 取消当前恢复相位（显式导航/离场/用户滚动）。
+  void cancelRestorePhase() => restore.cancel();
+
+  /// 全书进度显示发布（页面唯一 Progress 写口，内部经 publisher）。
+  void publishBookProgress(double value) => publisher.publish(value);
+
+  /// Live 几何快照读口（B4 只读化后的合法读路径）。
+  ReaderGeometrySnapshot? get geometryLive => geometry.live;
+
+  /// 锚点保持修正量计算（方案 §38/§94：无状态纯计算经 Facade 转发）。
+  double? computeAnchorCorrection({
+    required ReaderGeometrySnapshot oldGeometry,
+    required ReaderGeometrySnapshot candidate,
+    required VisualAnchor anchor,
+    required double anchorContentY,
+  }) {
+    return geometryCommit.computeAnchorCorrection(
+      oldGeometry: oldGeometry,
+      candidate: candidate,
+      anchor: anchor,
+      anchorContentY: anchorContentY,
+    );
+  }
+
+  /// 当前事务读口（诊断日志用）。
+  ReaderTransaction? get currentTransaction => transactions.current;
+
+  /// 当前切换请求读口（定位回调竞态比对）。
+  ReaderModeSwitchRequest? get modeSwitchRequest => modeSwitch.request;
 
   // ── Mode Switch 编排（B7：请求化 + Runtime 唯一权威）──
 

@@ -44,7 +44,7 @@ mixin ReaderViewPageInteractionMixin
     final max = scrollController.position.maxScrollExtent;
     if (max <= 0) return;
 
-    if (runtime.restore.isBusy || isSwitchingChapter) {
+    if (runtime.isRestoreBusy || isSwitchingChapter) {
       return;
     }
 
@@ -72,7 +72,7 @@ mixin ReaderViewPageInteractionMixin
     }
     // 优先取 GeometryStore 的 Live 快照（方案 §13）；Live 只能由
     // WindowBuilder 构建时装入（B4 只读化），此处不再补写 Store。
-    final storeLive = runtime.geometry.live;
+    final storeLive = runtime.geometryLive;
     final geometry =
         storeLive != null && storeLive.revision == geometryRevision
             ? storeLive
@@ -93,7 +93,7 @@ mixin ReaderViewPageInteractionMixin
   /// （B3 §6.2 onPhysicalOffsetChanged；B6 恢复期守卫统一为 isBusy 投影）。
   void onActualScrollOffsetChanged(double offset) {
     if (!mounted || isPageMode) return;
-    if (runtime.restore.isBusy || isSwitchingChapter) {
+    if (runtime.isRestoreBusy || isSwitchingChapter) {
       return;
     }
     final now = runtime.clock.now;
@@ -402,7 +402,7 @@ mixin ReaderViewPageInteractionMixin
       'displayedProgress=${bookProgressNotifier.value.toStringAsFixed(4)} '
       'contentY=${position.contentY.toStringAsFixed(1)} '
       'geometryRevision=${position.layoutRevision.geometryRevision} '
-      'txGeometryRevision=${runtime.transactions.current?.layout.geometry.revision} '
+      'txGeometryRevision=${runtime.currentTransaction?.layout.geometry.revision} '
       'layoutVersion=${chapterData?.layoutVersion} '
       'precise=${chapterData?.hasPreciseHeights} '
       'windowStart=${continuousScrollController.prefixHeightOf(position.chapterId).toStringAsFixed(1)} '
@@ -521,7 +521,7 @@ mixin ReaderViewPageInteractionMixin
   /// 导致滚动位移归零被误判为章末并触发跳章（方案 §59）。页面态清理
   /// 已随四态退役消失；_beginTransaction 内已调 manager.cancel。
   void cancelOngoingRestoreForUserScroll() {
-    final target = runtime.restore.target;
+    final target = runtime.restorePhaseTarget;
     if (target == null) {
       return;
     }
@@ -533,7 +533,7 @@ mixin ReaderViewPageInteractionMixin
         charOffset: target.charOffset,
       ),
     );
-    runtime.restore.cancel();
+    runtime.cancelRestorePhase();
     if (mounted) {
       setState(() {});
     }
@@ -719,7 +719,7 @@ mixin ReaderViewPageInteractionMixin
         } else {
           restoreScrollPositionFromOffset(savedCharOffset);
         }
-        // 滚动模式恢复期由 runtime.restore.isBusy 守卫，切换请求即此终结。
+        // 滚动模式恢复期由 runtime.isRestoreBusy 守卫，切换请求即此终结。
         runtime.completeModeSwitch();
       }
     }
@@ -799,8 +799,8 @@ mixin ReaderViewPageInteractionMixin
       }
       pageLocator.cancel();
       // 页模式重排定位：相位接管即登记（B7 改造），旧滚动恢复一并取消。
-      runtime.restore.cancel();
-      runtime.restore.begin(
+      runtime.cancelRestorePhase();
+      runtime.beginRestorePhase(
         ReaderPositionTarget(
           chapterId: currentChapterId,
           charOffset: restoreCharOffset,

@@ -314,7 +314,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     }
     // 加载/恢复/切章期间：页索引已提交（上方），进度写入推迟，
     // 避免加载窗口内 jumpToPage 触发的提交写脏进度。
-    if (runtime.restore.isBusy ||
+    if (runtime.isRestoreBusy ||
         isSwitchingChapter ||
         isLoadingChapter ||
         chapterLoadCoordinator.isLoading) {
@@ -516,7 +516,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
           _schedulePageNavigatorWarmup(navigator, localPage, data.chapterId);
         }
 
-        if (runtime.restore.target != null && data != null) {
+        if (runtime.restorePhaseTarget != null && data != null) {
           _schedulePendingPageCharOffsetRestore(data);
         }
 
@@ -1230,7 +1230,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     final shift =
         anchorBefore == null
             ? null
-            : runtime.geometryCommit.computeAnchorCorrection(
+            : runtime.computeAnchorCorrection(
               oldGeometry: geometryBefore,
               candidate: continuousScrollController.buildGeometrySnapshot(),
               anchor: anchorBefore,
@@ -1266,7 +1266,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     if (prevEntries.isEmpty || !scrollController.hasClients) {
       return;
     }
-    if (runtime.restore.isBusy || isLoadingChapter || isSwitchingChapter) {
+    if (runtime.isRestoreBusy || isLoadingChapter || isSwitchingChapter) {
       return;
     }
     final nextEntries = continuousScrollController.entries;
@@ -1318,7 +1318,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     required double anchorContentY,
   }) {
     if (previousPrefix == null ||
-        runtime.restore.isBusy ||
+        runtime.isRestoreBusy ||
         isLoadingChapter ||
         isSwitchingChapter) {
       return;
@@ -1583,7 +1583,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       if (!mounted) {
         return;
       }
-      final target = runtime.restore.target;
+      final target = runtime.restorePhaseTarget;
       if (target == null) {
         // 恢复目标已终结（用户消费/切章清理）：切换请求一并终结，
         // 防止切换守卫滞留吞掉后续 onPageChanged。
@@ -1601,7 +1601,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     final requestedChapterId = currentChapterId;
     // 捕获发起时的切换请求：定位完成时值比对，请求已被新切换取代则
     // 丢弃终结权（异步回调竞态防线，方案 §27-28）。
-    final switchRequestAtStart = runtime.modeSwitch.request;
+    final switchRequestAtStart = runtime.modeSwitchRequest;
     // 捕获当前导航令牌：await 定位期间若发生新的显式导航（含同章重复
     // 跳转），本次恢复结果已过时，必须整体丢弃（旧任务 ≠ 当前任务）。
     final navigationTokenAtStart = navigationTokens.current;
@@ -1618,7 +1618,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
           !navigationTokens.isUnchangedSince(navigationTokenAtStart)) {
         // 定位被取消或章节已切换：当前章节请求结束时必须退出恢复态，避免遮罩滞留
         if (requestedChapterId == currentChapterId) {
-          runtime.restore.cancel();
+          runtime.cancelRestorePhase();
           runtime.completeModeSwitch();
           setState(() {});
         }
@@ -1636,8 +1636,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       );
       // targetPage 为章内页；换算到跨章流全局索引。
       final anchorStart = _pageFlow?.startIndexOf(currentChapterId) ?? 0;
-      runtime.restore.markCompleted();
-      if (runtime.modeSwitch.request == switchRequestAtStart) {
+      runtime.completeRestorePhase();
+      if (runtime.modeSwitchRequest == switchRequestAtStart) {
         runtime.completeModeSwitch();
       }
       refreshBookProgressNow();
@@ -1646,7 +1646,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       });
     } catch (e) {
       if (mounted && requestedChapterId == currentChapterId) {
-        runtime.restore.markFailed();
+        runtime.failRestorePhase();
         runtime.completeModeSwitch();
         // 定位异常同样是统一失败退出（方案 §28）。
         setState(() {});

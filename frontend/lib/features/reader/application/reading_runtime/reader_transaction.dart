@@ -21,9 +21,6 @@ enum ReaderTransactionKind {
   /// 章节 / 锚点导航（程序化）。
   navigation,
 
-  /// 视觉进度条拖动 seek（程序化）。
-  visualSeek,
-
   /// 侧边点击翻屏（程序化）。
   sideTap,
 

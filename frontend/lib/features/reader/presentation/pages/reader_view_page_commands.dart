@@ -238,8 +238,8 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
           start || data == null ? 0 : math.max(0, data.totalChars - 1);
       // 页模式定位：相位接管即登记，由 pendingRestore → findPageByCharOffset
       // → startIndexOf 换算（B7 改造页模式链）。
-      _runtime.restore.cancel();
-      _runtime.restore.begin(
+      _runtime.cancelRestorePhase();
+      _runtime.beginRestorePhase(
         ReaderPositionTarget(
           chapterId: _currentChapterId,
           charOffset: targetOffset,

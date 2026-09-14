@@ -283,7 +283,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (!mounted) {
       return;
     }
-    _runtime.publisher.publish(_displayBookProgress);
+    _runtime.publishBookProgress(_displayBookProgress);
   }
 
   @override
@@ -337,7 +337,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         updatedAt == null ||
         isSwitchingChapter ||
         isLoadingChapter ||
-        _runtime.restore.isBusy ||
+        _runtime.isRestoreBusy ||
         showReturnControl) {
       return;
     }
@@ -715,7 +715,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     // 维护），全书进度取通知器缓存值（dispose 中 ref/BuildContext 不可
     // 用），阅读模式取实际值；翻页模式同样补报（旧实现依赖滚动视图
     // hasClients 而整块跳过）。
-    if (!_runtime.restore.isBusy &&
+    if (!_runtime.isRestoreBusy &&
         (_cachedContent != null ||
             _contentLoader?.getByChapterId(_currentChapterId) != null)) {
       final charOffset = _runtime.logicalPosition.charOffset;
@@ -758,7 +758,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     unawaited(_progressSaveCoordinator.dispose());
     // Runtime 内部计时资源兜底清理（B1 遗留缺口，B9 判归接线）。
     _runtime.dispose();
-    _runtime.restore.cancel();
+    _runtime.cancelRestorePhase();
     _chapterLoadCoordinator.cancel();
     _pageLocator.cancel();
     _pageTurnController.dispose();
@@ -1030,7 +1030,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         ),
         // 进度恢复加载遮罩：定位完成后自动消失
         // 内容未加载时 skeleton 已有加载指示器，不重复显示
-        if (_runtime.restore.isBusy && _cachedContent != null)
+        if (_runtime.isRestoreBusy && _cachedContent != null)
           Positioned.fill(
             child: ReaderDeferredRestoreOverlay(settings: _settings),
           ),
