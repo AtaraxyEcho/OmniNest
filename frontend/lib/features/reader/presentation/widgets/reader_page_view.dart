@@ -217,6 +217,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
   }
 
   void _initForMode() {
+    // 控制器重建后旧翻页意图的目标已失效，显式丢弃。
+    _pendingTurnDirection = null;
+    _pendingTurnFrames = 0;
     _localPageCount = widget.state.pageCount;
     _probingNext = false;
     _slideScrolling = false;
@@ -345,9 +348,9 @@ class _ReaderPageViewState extends State<ReaderPageView>
         _transitionInFlight = true;
         unawaited(_animateSlideTo(ctrl, nextIndex));
       } else {
-        // 控制器尚未挂载：下一帧重试，避免点击右侧/底栏无响应。
+        // 控制器尚未挂载：保留意图按帧重试（上限 4 帧），避免点击右侧/底栏无响应。
         _debugPageTurn('nextRetryScheduled', detail: 'controller not attached');
-        _scheduleSlideRetry();
+        _enqueuePendingTurn(1);
       }
     } else {
       _debugPageTurn('nextStart', detail: 'target=$nextIndex mode=flip');
@@ -358,25 +361,55 @@ class _ReaderPageViewState extends State<ReaderPageView>
     }
   }
 
-  bool _slideRetryScheduled = false;
+  // ── 待执行翻页意图（方案 §7-8）──
+  // 控制器未挂载时保留意图并按帧重试，最多 4 帧；挂载后按最新
+  // widget.state 重新解析目标，不缓存历史 index，超限显式放弃并留痕。
+  int? _pendingTurnDirection;
+  int _pendingTurnFrames = 0;
+  static const int _maxPendingTurnFrames = 4;
 
-  void _scheduleSlideRetry() {
-    if (_slideRetryScheduled) return;
-    _slideRetryScheduled = true;
+  void _enqueuePendingTurn(int direction) {
+    if (_pendingTurnDirection != null) {
+      return;
+    }
+    _pendingTurnDirection = direction;
+    _pendingTurnFrames = 0;
+    _pumpPendingTurn();
+  }
+
+  void _pumpPendingTurn() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _slideRetryScheduled = false;
-      if (!mounted || ReaderInteractionGate.blocksTapTurn(_blockReason)) {
+      if (!mounted) {
+        _pendingTurnDirection = null;
+        return;
+      }
+      final direction = _pendingTurnDirection;
+      if (direction == null) {
         return;
       }
       final ctrl = _pageController;
       if (ctrl != null && ctrl.hasClients) {
-        final nextIndex = widget.state.pageIndex + 1;
-        final atBoundary =
-            nextIndex >= _localPageCount && !widget.state.hasMore;
-        if (atBoundary) return;
-        _transitionInFlight = true;
-        unawaited(_animateSlideTo(ctrl, nextIndex));
+        _pendingTurnDirection = null;
+        _pendingTurnFrames = 0;
+        _debugPageTurn('pendingTurnExecute');
+        if (direction > 0) {
+          _goNextPage(tapTurn: true);
+        } else {
+          _goPreviousPage(tapTurn: true);
+        }
+        return;
       }
+      _pendingTurnFrames++;
+      if (_pendingTurnFrames > _maxPendingTurnFrames) {
+        _pendingTurnDirection = null;
+        _pendingTurnFrames = 0;
+        _debugPageTurn(
+          'pendingTurnDropped',
+          detail: 'controller never attached',
+        );
+        return;
+      }
+      _pumpPendingTurn();
     });
   }
 
@@ -418,7 +451,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
           'previousRetryScheduled',
           detail: 'controller not attached',
         );
-        _scheduleSlideRetry();
+        _enqueuePendingTurn(-1);
       }
     } else {
       _debugPageTurn('previousStart', detail: 'mode=flip');

@@ -11,18 +11,26 @@ class ReaderPageLocator {
   bool get isLocating => _isLocating;
 
   /// 根据字符偏移异步定位页码。
+  ///
+  /// 事务安全模型：成功、异常、取消、新导航覆盖旧导航四种路径都必须
+  /// 退出 locating 状态，任何 await 异常不得残留全局输入锁。
   Future<int?> locate(PageNavigator navigator, int charOffset) async {
     final generation = ++_generation;
     _isLocating = true;
-    final page = await navigator.findPageByCharOffset(
-      charOffset,
-      isCancelled: () => generation != _generation,
-    );
-    if (generation != _generation) {
-      return null;
+    try {
+      final page = await navigator.findPageByCharOffset(
+        charOffset,
+        isCancelled: () => generation != _generation,
+      );
+      if (generation != _generation) {
+        return null;
+      }
+      return page;
+    } finally {
+      if (generation == _generation) {
+        _isLocating = false;
+      }
     }
-    _isLocating = false;
-    return page;
   }
 
   /// 取消当前定位请求。

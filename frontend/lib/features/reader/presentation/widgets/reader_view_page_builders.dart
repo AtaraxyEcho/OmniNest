@@ -279,6 +279,45 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     pageModePage = globalIndex;
   }
 
+  /// 翻页页索引唯一提交入口：页索引写入、跨章收养、进度更新、持久化
+  /// 调度与边界预取在此一次完成，禁止多处重复修改状态。
+  void _commitPageIndex(int index) {
+    dismissReturnSnackBar();
+    if (pageModePage != index) {
+      pageModePage = index;
+      _handlePageFlowIndexChanged(index);
+      _requestReaderRebuild();
+    }
+    if (modeSwitchInProgress) {
+      modeSwitchInProgress = false;
+      return;
+    }
+    if (isRestoringProgress || isSwitchingChapter) return;
+    if (DateTime.now().isBefore(restoreSilenceUntil)) return;
+    final flow = _pageFlow;
+    // 模式切换期间（modeSwitchAnchor 未被用户交互消耗）：
+    // 只更新展示进度，不写 tracker 和 SQLite。
+    if (modeSwitchAnchor != null) {
+      final chapterId = flow?.chapterIdAt(index) ?? currentChapterId;
+      final chapterData = contentLoader?.get(chapterId, settings);
+      if (chapterData != null && chapterData.totalChars > 0) {
+        final charOffset = computePageCharOffset(index);
+        scrollProgress = (charOffset / chapterData.totalChars).clamp(0.0, 1.0);
+      }
+      return;
+    }
+    updateProgressFromPage();
+    final charOffset = computePageCharOffset(index);
+    scheduleLocalProgressSave(
+      chapterProgress: scrollProgress,
+      mode: 'page',
+      charOffset: charOffset,
+    );
+    onAnimationComplete();
+    final localIndex = flow?.keyAt(index)?.localPageIndex ?? index;
+    prefetchNextChapterAtBoundary(localIndex);
+  }
+
   PageTurnMode parsePageTurnMode(String mode) {
     return switch (mode) {
       'cover' => PageTurnMode.cover,
@@ -480,12 +519,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
               hasMore: hasMore,
               hasPreviousChapter: chapterIdx > 0,
               hasNextChapter: chapterIdx < chapters.length - 1,
+              // PageLocator.isLocating 不在此列（方案 §4）：后台定位恢复页
+              // 属于 Restore/Seek 事务，不得剥夺普通翻页的执行资格；
+              // 恢复期的进度写入由 isRestoringProgress 守卫。
               isPaginating:
                   isSwitchingChapter ||
                   isLoadingChapter ||
-                  chapterLoadCoordinator.isLoading ||
-                  pageLocator.isLocating,
-              // isRestoringProgress 不算分页中：否则恢复定位期间会锁手势。
+                  chapterLoadCoordinator.isLoading,
             ),
             selectionActive: selectionActive,
             pageBuilder: (index) {
@@ -558,43 +598,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
               return probe;
             },
             callbacks: PageTurnCallbacksImpl(
-              onPageChangedFn: (index) {
-                dismissReturnSnackBar();
-                if (pageModePage != index) {
-                  pageModePage = index;
-                  _handlePageFlowIndexChanged(index);
-                  _requestReaderRebuild();
-                }
-                if (modeSwitchInProgress) {
-                  modeSwitchInProgress = false;
-                  return;
-                }
-                if (isRestoringProgress || isSwitchingChapter) return;
-                if (DateTime.now().isBefore(restoreSilenceUntil)) return;
-                // 模式切换期间（modeSwitchAnchor 未被用户交互消耗）：
-                // 只更新展示进度，不写 tracker 和 SQLite。
-                if (modeSwitchAnchor != null) {
-                  final chapterId =
-                      flow?.chapterIdAt(index) ?? currentChapterId;
-                  final chapterData = contentLoader?.get(chapterId, settings);
-                  if (chapterData != null && chapterData.totalChars > 0) {
-                    final charOffset = computePageCharOffset(index);
-                    scrollProgress = (charOffset / chapterData.totalChars)
-                        .clamp(0.0, 1.0);
-                  }
-                  return;
-                }
-                updateProgressFromPage();
-                final charOffset = computePageCharOffset(index);
-                scheduleLocalProgressSave(
-                  chapterProgress: scrollProgress,
-                  mode: 'page',
-                  charOffset: charOffset,
-                );
-                onAnimationComplete();
-                final localIndex = flow?.keyAt(index)?.localPageIndex ?? index;
-                prefetchNextChapterAtBoundary(localIndex);
-              },
+              // 唯一页索引提交入口（方案 §9）：页索引、流归属、进度、
+              // 持久化与预取全部经 _commitPageIndex 一次收口。
+              onPageChangedFn: _commitPageIndex,
               onPreviousChapterFn: () {
                 // 流内还有前页时优先在流内后退；确在流首再硬切上一章。
                 if (pageModePage > 0) {
