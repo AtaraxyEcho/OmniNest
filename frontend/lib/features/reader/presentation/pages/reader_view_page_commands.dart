@@ -260,11 +260,11 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
               : 0.0;
       target = (prefix + extent - viewport).clamp(chapterStart, max);
     }
+    // 章节边界导航进入 Navigation 事务（方案 §33/§117）：不伪装成用户滚动。
     unawaited(
-      _scrollController.animateTo(
+      animateToOffsetProgrammatic(
         target,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOutCubic,
+        kind: ReaderTransactionKind.navigation,
       ),
     );
   }
@@ -395,7 +395,11 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       if (_scrollController.hasClients) {
         final max = _scrollController.position.maxScrollExtent;
         final target = (windowY - viewportAnchorY).clamp(0.0, max);
-        _scrollController.jumpTo(target);
+        // 视觉 seek 进入 VisualSeek 事务（方案 §33/§117）。
+        jumpToOffsetProgrammatic(
+          target,
+          kind: ReaderTransactionKind.visualSeek,
+        );
       }
       _isRestoringProgress = false;
       scheduleLocalProgressSave(

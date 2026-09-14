@@ -8,6 +8,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
@@ -174,6 +175,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   /// Runtime Restore 事务创建（方案 §55/§96，由 interaction mixin 实现）。
   ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target);
+
+  /// 程序化 jumpTo（方案 §33，由 interaction mixin 经 State 组合提供）。
+  void jumpToOffsetProgrammatic(
+    double targetOffset, {
+    required ReaderTransactionKind kind,
+  });
 
   // ── 页面尺寸 ──
 
@@ -1243,7 +1250,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if ((target - scrollController.offset).abs() < 0.5) {
       return;
     }
-    scrollController.jumpTo(target);
+    // 布局修正进入 LayoutCorrection 事务（方案 §21/§33）：修正性跳转
+    // 不伪装成用户滚动。
+    jumpToOffsetProgrammatic(
+      target,
+      kind: ReaderTransactionKind.layoutCorrection,
+    );
   }
 
   /// 滑窗时保持视口：坐标原点平移类补偿，经统一入口即时执行；

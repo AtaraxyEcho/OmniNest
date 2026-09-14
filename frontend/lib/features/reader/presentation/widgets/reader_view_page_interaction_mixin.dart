@@ -854,6 +854,60 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
+  /// 程序化 animateTo（方案 §33/§34）：显式事务包裹动画滚动，动画结束
+  /// 由 ScrollEnd/SETTLING 路径完成提交；用户手势进行中不抢占（§23）。
+  Future<void> animateToOffsetProgrammatic(
+    double targetOffset, {
+    ReaderTransactionKind kind = ReaderTransactionKind.navigation,
+  }) async {
+    if (!scrollController.hasClients) {
+      return;
+    }
+    final max = scrollController.position.maxScrollExtent;
+    final target = targetOffset.clamp(0.0, max);
+    if (!isScrollPhaseActive) {
+      _cancelOngoingRestoreForUserScroll();
+      _scrollSession = _beginScrollTransaction(kind);
+    }
+    await scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
+  }
+
+  /// 程序化 jumpTo（方案 §33）：显式事务包裹即时跳转，跳转后按事务冻结
+  /// 几何解析位置并一次提交（§40 Commit 后重新 Resolve 同源口径）。
+  void jumpToOffsetProgrammatic(
+    double targetOffset, {
+    ReaderTransactionKind kind = ReaderTransactionKind.layoutCorrection,
+  }) {
+    if (!scrollController.hasClients) {
+      return;
+    }
+    final max = scrollController.position.maxScrollExtent;
+    final target = targetOffset.clamp(0.0, max);
+    if (!isScrollPhaseActive) {
+      _cancelOngoingRestoreForUserScroll();
+      _scrollSession = _beginScrollTransaction(kind);
+    }
+    scrollController.jumpTo(target);
+    final session = _scrollSession;
+    final resolved = continuousScrollController.positionAtContentY(
+      scrollController.offset + viewportAnchorY,
+      source:
+          session == null
+              ? const LiveScrollGeometrySource()
+              : SnapshotScrollGeometrySource(session.geometry),
+    );
+    if (resolved != null) {
+      handleResolvedPosition(resolved);
+    }
+    if (!isScrollPhaseActive) {
+      _commitScrollSession();
+    }
+  }
+
   /// 滚动指定距离。返回 true 表示实际执行了滚动。
   ///
   /// [kind] 声明程序化滚动来源（方案 §33）：侧边点击 sideTap、键盘
@@ -1099,7 +1153,10 @@ mixin ReaderViewPageInteractionMixin
       }
       final max = scrollController.position.maxScrollExtent;
       final target = (anchorY - viewportAnchorY).clamp(0.0, max);
-      scrollController.jumpTo(target);
+      jumpToOffsetProgrammatic(
+        target,
+        kind: ReaderTransactionKind.layoutCorrection,
+      );
     });
   }
 
