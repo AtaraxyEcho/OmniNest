@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_consume_delegate.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
@@ -40,8 +40,12 @@ enum ReaderModeSwitchPhase {
 }
 
 /// 阅读页面的滚动交互、设置应用与重新分页逻辑。
+///
+/// 消费管线行为已内化 Runtime（B3 §6.2/§6.3）：本 mixin 只做薄转发守卫
+/// 并实现 [ReaderConsumeDelegate] 供给页面侧数据与动作。
 mixin ReaderViewPageInteractionMixin
-    on ConsumerState<ReaderViewPage>, ReaderViewPageMixin {
+    on ConsumerState<ReaderViewPage>, ReaderViewPageMixin
+    implements ReaderConsumeDelegate {
   static const restoreSilenceMs = 400;
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -110,8 +114,8 @@ mixin ReaderViewPageInteractionMixin
   }
 
   /// 实际滚动 offset 唯一入口（方案 §84/§87）：listener 只上抛 offset，
-  /// 解析经 Runtime PositionResolver 完成；事务持有冻结布局，idle 用
-  /// Live 布局快照；stale 事务回调按 §84 丢弃。
+  /// 页面只保留 Widget 生命周期与恢复期守卫，解析与消费全部内化 Runtime
+  /// （B3 §6.2 onPhysicalOffsetChanged）。
   void onActualScrollOffsetChanged(double offset) {
     if (!mounted || isPageMode) return;
     if (restore.shouldSuppressWrites ||
@@ -123,226 +127,99 @@ mixin ReaderViewPageInteractionMixin
     if (runtime.restore.isSilenced(now)) return;
     lastScrollActivityAt = now;
     dismissReturnSnackBar();
-
-    final tx = runtime.transactions.current;
-    if (tx != null && tx.phase == ReaderTransactionPhase.cancelled) {
-      return;
-    }
-    final layout = tx?.layout ?? currentLiveLayout();
-    final snapshot = runtime.position.resolve(
-      scrollOffset: offset,
-      layout: layout,
-      transactionId: tx?.id ?? 0,
-    );
-    if (snapshot == null) {
-      return;
-    }
-    _emitRuntimeEvent(
-      ReaderRuntimeEvent(
-        type: ReaderRuntimeEventType.positionResolved,
-        at: runtime.clock.now,
-        transactionId: snapshot.transactionId,
-        layoutRevision:
-            '${snapshot.layoutRevision.geometryRevision}/'
-            '${snapshot.layoutRevision.windowRevision}',
-        offset: snapshot.scrollOffset,
-        chapterId: snapshot.chapterId,
-        blockIndex: snapshot.blockIndex,
-        charOffset: snapshot.charOffset,
-        visualProgress: runtime.progress.visual.project(
-          snapshot,
-          layout.geometry,
-        ),
-        logicalProgress: runtime.progress.logical.project(
-          snapshot,
-          layout.geometry,
-        ),
-      ),
-    );
-    handleResolvedPosition(snapshot);
+    runtime.onPhysicalOffsetChanged(offset);
   }
 
-  /// 以 Runtime 解析出的位置事实（方案 §5）更新锚点章、进度与邻章窗口。
-  ///
-  /// 滚动回调与程序化滚动（scrollBy / jumpToOffsetProgrammatic）共用：
-  /// 键盘不产生指针事件，由程序化路径主动调用绕过指针守卫。
-  void handleResolvedPosition(ReaderPositionSnapshot position) {
-    dismissReturnSnackBar();
+  // ── ReaderConsumeDelegate（B3 §6.3）：消费管线的页面供给，全部 1-3 行 ──
 
-    final loader = contentLoader;
-    if (loader == null) return;
+  @override
+  int totalCharsOf(String chapterId) =>
+      contentLoader?.getByChapterId(chapterId)?.totalChars ?? 0;
 
-    // 事务同源校验（方案 §45-46/§85-§86）：旧事务/旧几何的回调直接
-    // 丢弃，不再重新解释（DEBUG 断言之外也有运行时防线）。
-    final tx = runtime.transactions.current;
-    if (tx != null) {
-      if (position.transactionId != tx.id) {
-        runtime.diagnostics.stalePositionDropCount++;
-        return;
-      }
-      if (position.layoutRevision.geometryRevision !=
-          tx.layout.geometry.revision) {
-        runtime.diagnostics.stalePositionDropCount++;
-        if (kDebugMode) {
-          readerDebugLog(
-            'ReaderScroll: discard stale position tx=${tx.id} '
-            'positionRevision=${position.layoutRevision.geometryRevision}',
-          );
-        }
-        return;
-      }
-    }
+  @override
+  bool isChapterHeightConverging(String chapterId) =>
+      !(contentLoader?.getByChapterId(chapterId)?.hasPreciseHeights ?? true);
 
-    // 顺序滚动进入邻章：事务期间只记录挂起收养（方案 §31/§64），
-    // SETTLING 一次提交——不得在用户滚动手势中途改写窗口几何。
-    if (position.chapterId != currentChapterId) {
-      if (tx != null) {
-        tx.pendingChapterId = position.chapterId;
-        runtime.window.requestChapter(position.chapterId);
-      } else {
-        adoptContinuousAnchorChapter(position.chapterId);
-      }
-    }
+  @override
+  void dismissReturnControl() => dismissReturnSnackBar();
 
-    // 视觉进度实时更新：物理 Y 直接查会话冻结映射（方案 §22-24），
-    // 图片内部滚动连续变化；收敛期抑制仅约束逻辑进度，不限制视觉进度。
-    lastChapterVisualCursor = position.chapterVisualCursor;
-    lastVisualProgressChapterId = position.chapterId;
-    if (!isPageMode) {
-      final offsetNowForDirection =
-          scrollController.hasClients ? scrollController.offset : 0.0;
-      if (tx != null) {
-        tx.forward = offsetNowForDirection >= tx.lastScrollOffset;
-        tx.lastScrollOffset = offsetNowForDirection;
-      }
-      final double nextProgress;
-      if (tx == null) {
-        nextProgress = bookVisualProgressFor(
-          position.chapterId,
-          position.chapterVisualCursor,
-        );
-      } else {
-        nextProgress =
-            tx.visualMap.progressAt(
-              (offsetNowForDirection + tx.layout.viewport.anchorY).clamp(
-                0.0,
-                double.infinity,
-              ),
-            ) ??
-            tx.displayedProgress;
-      }
-      final displayed = _applyDirectionalProgressClamp(nextProgress);
-      if (tx != null) {
-        tx.lastVisualProgress = displayed;
-      }
-      publishVisualProgress(tx, displayed);
-    }
-
-    // 图片主导的封面等章节 totalChars 为 0：不要用 charOffset=0 覆盖进度。
-    final chapterData = loader.getByChapterId(position.chapterId);
-    final totalChars = chapterData?.totalChars ?? 0;
-    if (totalChars <= 0) {
-      if (scrollController.hasClients) {
-        final max = scrollController.position.maxScrollExtent;
-        if (max - scrollController.offset < max * 0.5) {
-          preloadAdjacent();
-        }
-      }
-      return;
-    }
-
-    // 连续滚动：以窗口控制器的块级映射为准，避免与 contentYToCharOffset 双路径不一致。
-    final charOffset = position.charOffset;
-    final newProgress = (charOffset / totalChars).clamp(0.0, 1.0);
-
-    // 测高收敛期间（估算→精测分批替换），同一滚动位置的字符映射会来回
-    // 漂移；前向滚动中的映射回退不是真实回滚（真实回滚 offset 必减小），
-    // 抑制本次回写，避免进度显示与落库值在收敛期反复横跳。章节切换帧
-    // （此前显示值属于旧章）与本章精测已完成时不抑制。
-    final offsetNow =
-        scrollController.hasClients ? scrollController.offset : 0.0;
-    final forwardScroll =
-        runtime.lastResolvedOffset == null ||
-        offsetNow >= runtime.lastResolvedOffset! - 0.5;
-    final wasSameChapter =
-        runtime.lastResolvedProgressChapterId == position.chapterId;
-    final converging = !(chapterData?.hasPreciseHeights ?? true);
-    runtime.lastResolvedOffset = offsetNow;
-    var applyPosition = true;
-    if (converging &&
-        forwardScroll &&
-        wasSameChapter &&
-        newProgress < scrollProgress - 0.0005) {
-      applyPosition = false;
-      // 收敛期映射回退被抑制：这是图片/精测跳进度的首要诊断信号。
-      _debugContinuousPosition(
-        position,
-        chapterData,
-        event: 'convergingDriftSuppressed',
-        detail:
-            'displayed=$scrollProgress newProgress=$newProgress '
-            'offsetNow=$offsetNow lastOffset=${runtime.lastResolvedOffset}',
-      );
-    }
-
-    if (applyPosition) {
-      runtime.lastResolvedProgressChapterId = position.chapterId;
-      positionTracker.updateFromScroll(
-        offset: scrollController.hasClients ? scrollController.offset : 0,
-        maxExtent:
-            scrollController.hasClients
-                ? scrollController.position.maxScrollExtent
-                : 0,
-        totalChars: totalChars,
-        chapterId: position.chapterId,
-        charOffset: charOffset,
-      );
-      if ((newProgress - scrollProgress).abs() > 0.004 ||
-          (position.chapterId == currentChapterId &&
-              (charOffset - (_lastSavedScrollCharOffset ?? -1)).abs() >= 48)) {
-        // 热路径：只更新通知器；写盘经 coordinator 合并。
-        // 阈值避免滚动每帧都 schedule，降低写入与 noteOwnProgressSave 开销。
-        scrollProgress = newProgress;
-        _lastSavedScrollCharOffset = charOffset;
-        scheduleLocalProgressSave(
-          chapterProgress: newProgress,
-          mode: 'scroll',
-          charOffset: charOffset,
-        );
-        _debugContinuousPosition(
-          position,
-          chapterData,
-          event: 'positionApplied',
-          detail: 'chapterProgress=$newProgress',
-        );
-      }
-    }
-
-    if (scrollController.hasClients) {
-      final max = scrollController.position.maxScrollExtent;
-      final offset = scrollController.offset;
-      if (max > 0 && max - offset < max * 0.5) {
-        _throttledPreloadAdjacent();
-      }
-      if (max > 0 && max - offset < max * 0.35) {
-        if (tx != null) {
-          // 事务期间只记录挂起扩窗（方案 §32/§67），SETTLING 一次提交。
-          tx.pendingExpandForward = true;
-        } else {
-          _throttledExpandForward();
-        }
-      }
-      if (offset < 240) {
-        if (tx != null) {
-          tx.pendingExpandBackward = true;
-        } else {
-          _throttledExpandBackward();
-        }
-      }
+  @override
+  void preloadAdjacentAtTail() {
+    if (!scrollController.hasClients) return;
+    final max = scrollController.position.maxScrollExtent;
+    if (max - scrollController.offset < max * 0.5) {
+      preloadAdjacent();
     }
   }
 
-  int? _lastSavedScrollCharOffset;
+  @override
+  void preloadAdjacentThrottled() {
+    if (!scrollController.hasClients) return;
+    final max = scrollController.position.maxScrollExtent;
+    if (max > 0 && max - scrollController.offset < max * 0.5) {
+      _throttledPreloadAdjacent();
+    }
+  }
+
+  @override
+  void adoptChapter(String chapterId) =>
+      adoptContinuousAnchorChapter(chapterId);
+
+  @override
+  void expandWindow({required bool forward}) {
+    if (forward) {
+      _throttledExpandForward();
+    } else {
+      _throttledExpandBackward();
+    }
+  }
+
+  @override
+  void confirmAppliedPosition({
+    required ReaderPositionSnapshot snapshot,
+    required int totalChars,
+  }) {
+    positionTracker.updateFromScroll(
+      offset: scrollController.hasClients ? scrollController.offset : 0,
+      maxExtent:
+          scrollController.hasClients
+              ? scrollController.position.maxScrollExtent
+              : 0,
+      totalChars: totalChars,
+      chapterId: snapshot.chapterId,
+      charOffset: snapshot.charOffset,
+    );
+    _debugContinuousPosition(
+      snapshot,
+      contentLoader?.getByChapterId(snapshot.chapterId),
+      event: 'positionApplied',
+      detail:
+          'chapterProgress=${totalChars > 0 ? snapshot.charOffset / totalChars : 0.0}',
+    );
+  }
+
+  @override
+  void persistProgress({
+    required String chapterId,
+    required int charOffset,
+    required double chapterProgress,
+  }) {
+    // 热路径：只更新通知器；写盘经 coordinator 合并（阈值判定在 Runtime）。
+    scrollProgress = chapterProgress;
+    scheduleLocalProgressSave(
+      chapterProgress: chapterProgress,
+      mode: 'scroll',
+      charOffset: charOffset,
+    );
+  }
+
+  @override
+  double visualProgressFallback(String chapterId, double chapterVisualCursor) =>
+      bookVisualProgressFor(chapterId, chapterVisualCursor);
+
+  @override
+  double get currentChapterProgress => scrollProgress;
+
   Timer? _preloadDebounce;
   Timer? _expandForwardDebounce;
   Timer? _expandBackwardDebounce;
@@ -385,9 +262,6 @@ mixin ReaderViewPageInteractionMixin
 
   // ── 滚动事务的 Page 侧残留（仅服务程序化滚动，B2 迁移后删除）──
 
-  /// 最后一次发布的视觉进度（无事务的非 idle 帧保持该值，§25）。
-  double _lastPublishedVisualProgress = 0;
-
   @override
   int get modeSwitchGeneration => _modeSwitchGeneration;
 
@@ -427,13 +301,7 @@ mixin ReaderViewPageInteractionMixin
     );
   }
 
-  /// 生命周期事件发射（方案 §103/§126）：debug 构建同步输出验收日志。
-  void _emitRuntimeEvent(ReaderRuntimeEvent event) {
-    runtime.eventLog.emit(event);
-    if (kDebugMode) {
-      readerDebugLog(runtime.eventLog.format(event));
-    }
-  }
+  /// 生命周期事件发射统一走 Runtime Facade（B3 §6.3：页面不再自持发射器）。
 
   /// 滚动输入适配器（方案 §89/§137）：原生事件经适配器归一为输入源后
   /// 进入事务入口；输入源不携带位置信息。
@@ -460,58 +328,7 @@ mixin ReaderViewPageInteractionMixin
     runtime.onWheelSignal();
   }
 
-  /// 滚动期间的视觉进度：物理 Y 直接查冻结映射（方案 §22-24），
-  /// 不经过 charOffset；无 Live fallback（§25-26）。
-  double visualProgressDuringScroll(double contentY) {
-    final tx = runtime.transactions.current;
-    if (tx == null) {
-      // 无事务（程序化滚动窗口期）：保持最后合法进度，绝不回退
-      // Live Geometry 重新解释（方案 §25）。
-      return _lastPublishedVisualProgress;
-    }
-    return tx.visualMap.progressAt(contentY.clamp(0.0, double.infinity)) ??
-        tx.displayedProgress;
-  }
-
-  /// 唯一视觉进度发布入口（方案 §44/§50）：整个模块只允许经
-  /// ReaderVisualProgressPublisher 写 bookProgressNotifier；旧会话的
-  /// 回调按 id 丢弃（§45-46）。
-  void publishVisualProgress(ReaderTransaction? tx, double value) {
-    if (tx != null && runtime.transactions.current?.id != tx.id) {
-      return;
-    }
-    if (tx != null) {
-      tx.displayedProgress = value;
-    }
-    _lastPublishedVisualProgress = value;
-    runtime.publisher.publish(value);
-    _emitRuntimeEvent(
-      ReaderRuntimeEvent(
-        type: ReaderRuntimeEventType.progressPublished,
-        at: runtime.clock.now,
-        transactionId: tx?.id ?? 0,
-        visualProgress: value,
-      ),
-    );
-  }
-
-  /// 方向性单调钳制（方案 §42-43）：会话活跃期间（userDragging/
-  /// ballistic/settling）同一单调规则，最后一道防线不污染持久化。
-  double _applyDirectionalProgressClamp(double nextProgress) {
-    final tx = runtime.transactions.current;
-    if (tx == null || !runtime.isScrollBusy) {
-      return nextProgress;
-    }
-    return tx.forward
-        ? math.max(tx.lastVisualProgress, nextProgress)
-        : math.min(tx.lastVisualProgress, nextProgress);
-  }
-
   // ── 全书视觉进度表（D4：VisualProgress 与 LogicalProgress 语义独立） ──
-
-  /// 末次解析的章体视觉游标与所属章（视觉进度显示的事实源）。
-  double lastChapterVisualCursor = 0;
-  String? lastVisualProgressChapterId;
 
   /// 全书视觉进度：章前缀视觉高度 + 当前章视觉游标，除以全书视觉总高。
   double bookVisualProgressFor(String chapterId, double chapterVisualCursor) {
@@ -628,15 +445,7 @@ mixin ReaderViewPageInteractionMixin
       return;
     }
     _expandForwardInFlight = true;
-    // 扩窗意图经 WindowManager 记录（方案 §41/§42：请求与提交分离）。
-    runtime.window.requestForward();
-    _emitRuntimeEvent(
-      ReaderRuntimeEvent(
-        type: ReaderRuntimeEventType.windowRequested,
-        at: runtime.clock.now,
-        blockIndex: 1,
-      ),
-    );
+    // 扩窗意图记录与事件发射在 Runtime（B3 §6.2），页面只执行节流扩挂。
     onContinuousWindowExpand(forward: true);
     _expandForwardDebounce = Timer(const Duration(milliseconds: 600), () {
       _expandForwardInFlight = false;
@@ -647,14 +456,6 @@ mixin ReaderViewPageInteractionMixin
     if (_expandBackwardDebounce?.isActive ?? false) {
       return;
     }
-    runtime.window.requestBackward();
-    _emitRuntimeEvent(
-      ReaderRuntimeEvent(
-        type: ReaderRuntimeEventType.windowRequested,
-        at: runtime.clock.now,
-        blockIndex: 0,
-      ),
-    );
     onContinuousWindowExpand(forward: false);
     _expandBackwardDebounce = Timer(const Duration(milliseconds: 600), () {});
   }
@@ -744,7 +545,7 @@ mixin ReaderViewPageInteractionMixin
   /// 并使 Runtime 层的 Restore 事务失效（方案 §59）。
   void cancelOngoingRestoreForUserScroll() {
     if (runtime.restore.current != null) {
-      _emitRuntimeEvent(
+      runtime.emitEvent(
         ReaderRuntimeEvent(
           type: ReaderRuntimeEventType.restoreInvalidated,
           at: runtime.clock.now,

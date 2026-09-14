@@ -248,6 +248,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set currentChapterId(String v) {
     _currentChapterId = v;
     _annotationHandler?.updateChapter(v);
+    // 锚点章统一同步 choke point（B3 §6.3）：收养/切章/规范化均经此 setter。
+    _runtime.anchorChapterId = v;
   }
 
   @override
@@ -310,8 +312,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       return _bookProgress;
     }
     return bookVisualProgressFor(
-      lastVisualProgressChapterId ?? _currentChapterId,
-      lastChapterVisualCursor,
+      _runtime.lastVisualProgressChapterId ?? _currentChapterId,
+      _runtime.lastChapterVisualCursor,
     );
   }
 
@@ -733,6 +735,14 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     // 几何失效请求统一进入收敛调度器（方案 §72）：build/事件只请求。
     _runtime.onGeometryInvalidated =
         (reason) => requestContinuousWindowRebuild();
+    // 消费管线页面供给（B3 §6.3）与锚点章初始同步。
+    _runtime.consumeDelegate = this;
+    _runtime.anchorChapterId = _currentChapterId;
+    // 事务布局供给与收养/扩窗/指标提交回调（B1 §64 单向依赖接线）。
+    _runtime.layoutProvider = currentLiveLayout;
+    _runtime.onAdoptChapterRequested = adoptContinuousAnchorChapter;
+    _runtime.onExpandWindowRequested = onContinuousWindowExpand;
+    _runtime.onMetricsCommitRequested = commitPendingContinuousMetrics;
     loadSettings();
     checkBookmarkState();
     scrollController.addListener(onScroll);
