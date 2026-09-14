@@ -59,7 +59,10 @@ class ReaderRuntimeEventLog {
       case ReaderRuntimeEventType.progressPublished:
         return 'ReaderProgress: tx=${e.transactionId} visual=${e.visualProgress?.toStringAsFixed(4)}';
       case ReaderRuntimeEventType.restoreInvalidated:
-        return 'ReaderRestore: invalidated generation=${e.charOffset}';
+        return 'ReaderRestore: invalidated chapter=${e.chapterId} char=${e.charOffset}';
+      case ReaderRuntimeEventType.restoreFinished:
+        return 'ReaderRestore: finished phase=${e.phase} '
+            'chapter=${e.chapterId} char=${e.charOffset}';
     }
   }
 }

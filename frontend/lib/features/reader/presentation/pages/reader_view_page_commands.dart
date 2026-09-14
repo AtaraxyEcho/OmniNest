@@ -236,10 +236,15 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       final data = _contentLoader?.get(_currentChapterId, _settings);
       final targetOffset =
           start || data == null ? 0 : math.max(0, data.totalChars - 1);
-      pendingRestoreCharOffset = targetOffset;
-      isRestoringProgress = true;
-      // 不在此写 pageModePage=0：跨章流中 0 可能是窗口更前一章。
-      // 由 pendingRestore → findPageByCharOffset → startIndexOf 换算。
+      // 页模式定位：相位接管即登记，由 pendingRestore → findPageByCharOffset
+      // → startIndexOf 换算（B7 改造页模式链）。
+      _runtime.restore.cancel();
+      _runtime.restore.begin(
+        ReaderPositionTarget(
+          chapterId: _currentChapterId,
+          charOffset: targetOffset,
+        ),
+      );
       _updateState(() {});
       return;
     }
@@ -346,7 +351,10 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     );
   }
 
-  /// 窗口内章节：按 charOffset 换算 contentY 后 jumpTo。
+  /// 窗口内章节：按 charOffset 走恢复编排稳定落点。
+  ///
+  /// 恢复引擎（B6 §7.3）逐帧重算窗口坐标并稳定判定；视觉 seek 的即时
+  /// 落库由 delegate.onRestoreSettled 统一执行。
   Future<void> _seekWithinContinuousWindow(
     String chapterId,
     int charOffset,
@@ -360,57 +368,22 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       return;
     }
     final clamped = charOffset.clamp(0, data.totalChars);
-    isRestoringProgress = true;
-    restoreSilenceUntil = DateTime.now().add(
-      const Duration(milliseconds: ReaderViewPageMixin.restoreSilenceMs),
-    );
     if (chapterId != _currentChapterId) {
       adoptContinuousAnchorChapter(chapterId);
     }
-    final textScale = FontScaleScope.systemScalerOf(context).scale(1);
-    final intraY = loader.charOffsetToPixelOffset(
-      chapterId,
-      clamped,
-      pageWidth: computePageWidth(),
-      settings: _settings,
-      textScale: textScale,
-    );
     _positionTracker.setCharOffset(clamped, chapterId);
-    final chapterData = loader.getByChapterId(chapterId);
-    final totalChars = chapterData?.totalChars ?? 0;
-    final progress =
-        totalChars > 0 ? (clamped / totalChars).clamp(0.0, 1.0) : 0.0;
-    scrollProgress = progress;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      // 窗口已按新锚点重建后再取 prefix；章体起点 = 前缀 + 章头 chrome。
-      final windowY =
-          continuousScrollController.prefixHeightOf(chapterId) +
-          ReaderContinuousScrollController.chapterHeaderExtent +
-          intraY;
-      if (_scrollController.hasClients) {
-        final max = _scrollController.position.maxScrollExtent;
-        final target = (windowY - viewportAnchorY).clamp(0.0, max);
-        // 视觉 seek 进入 VisualSeek 事务（方案 §33/§117）。
-        runtime.jumpToOffset(target, kind: ReaderTransactionKind.visualSeek);
-      }
-      isRestoringProgress = false;
-      scheduleLocalProgressSave(
-        chapterProgress: progress,
-        mode: 'scroll',
-        charOffset: clamped,
-      );
-      _updateState(() {});
-    });
+    final totalChars = data.totalChars;
+    if (totalChars > 0) {
+      scrollProgress = (clamped / totalChars).clamp(0.0, 1.0);
+    }
+    _runtime.startRestore(
+      ReaderPositionTarget(chapterId: chapterId, charOffset: clamped),
+    );
+    _updateState(() {});
   }
 
   void _openReaderSearchResult(int offset) {
     _closeReaderPanel();
-    pendingRestoreCharOffset = offset;
-    isRestoringProgress = true;
     if (_isPageMode) {
       repaginateCurrentChapter(restoreCharOffset: offset);
     } else {

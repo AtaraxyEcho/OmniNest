@@ -20,8 +20,10 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_pers
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_resolver.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_state.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_publisher.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_restore_delegate.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_manager.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_clock.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
@@ -537,6 +539,226 @@ class ReaderReadingRuntime {
         at: clock.now,
         transactionId: tx?.id ?? 0,
         visualProgress: value,
+      ),
+    );
+  }
+
+  // ── Restore 编排（B6 §7.3：ScrollRestore 引擎机械动作吸收）──
+
+  /// Restore 编排页面供给（B6 §7.2）：目标换算、用户滚动探针与稳定
+  /// 回写由页面实现，initState 注入。
+  ReaderRestoreDelegate? restoreDelegate;
+
+  /// 恢复帧调度（B6 §7.3）：页面注入 addPostFrameCallback 包装；
+  /// 测试手动驱动帧推进。
+  void Function(void Function() callback)? frameScheduler;
+
+  /// 当前身份供给（方案 §57 的 B6 载体）：发起时登记，稳定回写前
+  /// 现查比对，item/mode 已变的恢复不得回写 tracker。
+  ReaderRuntimeIdentity Function()? identityProvider;
+
+  static const int _restoreStableFramesThreshold = 10;
+
+  static const double _restoreDriftThreshold = 10.0;
+
+  static const double _restoreMaxChangeThreshold = 24.0;
+
+  static const Duration _restoreMonitorDuration = Duration(seconds: 5);
+
+  static const Duration _restoreTotalTimeout = Duration(seconds: 10);
+
+  static const int _restoreMaxPendingFrames = 180;
+
+  DateTime? _restoreStartedAt;
+
+  int _restoreStableFrames = 0;
+
+  int _restorePendingFrames = 0;
+
+  double _restoreLastMax = 0;
+
+  double _restoreSettledOffset = 0;
+
+  double _restoreLastObservedOffset = -1;
+
+  bool _restoreSettled = false;
+
+  DateTime? _restoreSettledAt;
+
+  bool _restoreSelfJump = false;
+
+  int? _restoreTickToken;
+
+  /// 恢复编排唯一入口（B6 §7.3）：失效在途续作（场景 C）→ 登记目标与
+  /// 发起身份 → 启动帧编排。多帧重试与监控期机械动作全部在此驱动，
+  /// jumpTo 不创建事务；恢复期间位置回调由 isBusy 投影在页面转发层守卫。
+  void startRestore(ReaderPositionTarget target) {
+    if (restoreDelegate == null) {
+      return;
+    }
+    // 新恢复使全部在途续作失效（场景 C / 新方案 §59）。
+    operationToken.invalidate();
+    restore.begin(target, identity: identityProvider?.call());
+    _restoreStartedAt = clock.now;
+    _restoreStableFrames = 0;
+    _restorePendingFrames = 0;
+    _restoreLastMax = 0;
+    _restoreSettledOffset = 0;
+    _restoreLastObservedOffset = -1;
+    _restoreSettled = false;
+    _restoreSettledAt = null;
+    _restoreSelfJump = false;
+    _restoreTickToken = operationToken.issue();
+    _scheduleRestoreTick();
+  }
+
+  void _scheduleRestoreTick() {
+    frameScheduler?.call(_runRestoreTick);
+  }
+
+  void _runRestoreTick() {
+    final delegate = restoreDelegate;
+    final token = _restoreTickToken;
+    final startedAt = _restoreStartedAt;
+    if (delegate == null || token == null || startedAt == null) {
+      return;
+    }
+    // 场景 C：新输入/新恢复使在途帧整体中止。
+    if (!operationToken.isCurrent(token) || !restore.isBusy) {
+      return;
+    }
+    final target = restore.target;
+    if (target == null) {
+      return;
+    }
+    // 与进行中的用户手势对抗时让位：当前真实位置即事实。
+    if (delegate.isUserScrollingSince(startedAt)) {
+      _invalidateRestore(target, 'user scroll');
+      return;
+    }
+    if (clock.now.difference(startedAt) > _restoreTotalTimeout) {
+      restore.markTimedOut();
+      _restoreTickToken = null;
+      _emitRestoreFinished(ReaderRestorePhase.timedOut, target);
+      return;
+    }
+    final effect = scrollEffect;
+    if (effect == null || !effect.hasClients || effect.maxScrollExtent <= 0) {
+      _restorePendingFrames++;
+      if (_restorePendingFrames >= _restoreMaxPendingFrames) {
+        restore.markTimedOut();
+        _restoreTickToken = null;
+        _emitRestoreFinished(ReaderRestorePhase.timedOut, target);
+        return;
+      }
+      _scheduleRestoreTick();
+      return;
+    }
+    // 章节数据未就绪：等待后续帧（总超时兜底），不消耗 pendingFrames。
+    final resolved = delegate.resolveRestoreOffset(target);
+    if (resolved == null) {
+      _scheduleRestoreTick();
+      return;
+    }
+    final max = effect.maxScrollExtent;
+    final currentOffset = effect.offset;
+    // 非自身 jump 且 offset 变化：视为用户滚轮/拖动，让位。
+    if (!_restoreSelfJump &&
+        _restoreLastObservedOffset >= 0 &&
+        (currentOffset - _restoreLastObservedOffset).abs() > 2.0) {
+      _invalidateRestore(target, 'offset moved without jump');
+      return;
+    }
+    _restoreLastObservedOffset = currentOffset;
+
+    final targetOffset = resolved.clamp(0.0, max);
+    final drift = (currentOffset - targetOffset).abs();
+    final maxChanged =
+        (max - _restoreLastMax).abs() > _restoreMaxChangeThreshold;
+    final overflowed = currentOffset > max + 1.0;
+
+    if (!_restoreSettled) {
+      if (maxChanged || overflowed || drift > _restoreDriftThreshold) {
+        _restoreLastMax = max;
+        _restoreStableFrames = 0;
+        _restoreJump(effect, targetOffset);
+      } else {
+        _restoreStableFrames++;
+        if (_restoreStableFrames >= _restoreStableFramesThreshold) {
+          _restoreSettled = true;
+          _restoreSettledAt = clock.now;
+          _restoreSettledOffset = currentOffset;
+          _restoreLastMax = max;
+          restore.markStabilizing();
+          if (restore.matchesIdentity(identityProvider?.call())) {
+            delegate.onRestoreSettled(target);
+          } else {
+            diagnostics.restoreCallbackDropCount++;
+          }
+        }
+      }
+    } else {
+      // 监控期：绝不 jumpTo 对齐目标（图片渐进加载会把用户拉回），
+      // 仅越界钳制与滚离检测。
+      if (overflowed) {
+        _restoreJump(effect, max);
+        _restoreSettledOffset = max;
+      }
+      if ((currentOffset - _restoreSettledOffset).abs() >
+          _restoreDriftThreshold * 4) {
+        restore.markCompleted();
+        _restoreTickToken = null;
+        _emitRestoreFinished(ReaderRestorePhase.completed, target);
+        return;
+      }
+      if (clock.now.difference(_restoreSettledAt!) > _restoreMonitorDuration) {
+        restore.markCompleted();
+        _restoreTickToken = null;
+        _emitRestoreFinished(ReaderRestorePhase.completed, target);
+        return;
+      }
+    }
+    if (restore.isBusy) {
+      _scheduleRestoreTick();
+    }
+  }
+
+  /// 恢复期自身 jump（区分外力 offset 变化的让位判定）。
+  void _restoreJump(ReaderScrollEffect effect, double value) {
+    _restoreSelfJump = true;
+    effect.jumpTo(value);
+    _restoreLastObservedOffset = effect.hasClients ? effect.offset : value;
+    _restoreSelfJump = false;
+  }
+
+  /// 恢复被外力打断：相位取消、目标清除并发射失效事件（§103）。
+  void _invalidateRestore(ReaderPositionTarget target, String reason) {
+    restore.cancel();
+    _restoreTickToken = null;
+    emitEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.restoreInvalidated,
+        at: clock.now,
+        chapterId: target.chapterId,
+        charOffset: target.charOffset,
+      ),
+    );
+    if (kDebugMode) {
+      readerDebugLog('ReaderRestore: invalidated ($reason)');
+    }
+  }
+
+  void _emitRestoreFinished(
+    ReaderRestorePhase phase,
+    ReaderPositionTarget target,
+  ) {
+    emitEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.restoreFinished,
+        at: clock.now,
+        chapterId: target.chapterId,
+        charOffset: target.charOffset,
+        phase: phase.name,
       ),
     );
   }

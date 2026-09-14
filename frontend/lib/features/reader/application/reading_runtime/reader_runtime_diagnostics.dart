@@ -21,6 +21,8 @@ enum ReaderRuntimeEventType {
 
   restoreInvalidated,
 
+  restoreFinished,
+
   transactionCompleted,
 }
 

@@ -1,6 +1,5 @@
-import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_identity.dart';
 
 /// Restore 相位（方案 §97）：超时/被打断后当前物理位置即事实，
 /// 不得继续修改用户位置。
@@ -29,68 +28,58 @@ enum ReaderRestorePhase {
 
 /// Restore 生命周期唯一权威（方案 §55 / §96）。
 ///
-/// 所有恢复入口（restoreToChapterStart / 进度快照恢复 / 模式切换恢复 /
-/// 锚点恢复）都必须统一为 ReaderPositionTarget → RestoreTransaction；
-/// 不再存在多个 restore.start 入口（方案 §96 / §144）。generation 单调
-/// 递增：新恢复或取消都会使旧回调全部失效（方案 §14/§120）。
+/// 所有恢复入口（章首恢复 / 进度快照恢复 / 搜索跳转 / 视觉 seek）都
+/// 统一为 ReaderPositionTarget → [begin]；编排机械动作（多帧重试与
+/// 监控）由 Runtime Facade 驱动（B6 §7.3），本类只持有目标、相位与
+/// 发起身份，不再存在独立 generation / RestoreTransaction。
 class ReaderRestoreManager {
-  int _generation = 0;
-
-  ReaderRestoreTransaction? _current;
-
   ReaderRestorePhase _phase = ReaderRestorePhase.idle;
 
-  ReaderRestoreTransaction? get current => _current;
+  ReaderPositionTarget? _target;
 
-  int get generation => _generation;
+  ReaderRuntimeIdentity? _identity;
 
   ReaderRestorePhase get phase => _phase;
 
-  ReaderRestoreTransaction begin({
-    required ReaderPositionTarget target,
-    required ReaderLayoutSnapshot layout,
-    required String itemId,
-    required String readingMode,
-  }) {
-    _generation++;
-    final tx = ReaderRestoreTransaction(
-      generation: _generation,
-      itemId: itemId,
-      readingMode: readingMode,
-      target: target,
-      layout: layout,
-    );
-    _current = tx;
+  ReaderPositionTarget? get target => _target;
+
+  /// 恢复进行中（§82 守卫语义的唯一读取口）：applying 含多帧重试，
+  /// stabilizing 含监控期；恢复遮罩、位置回写抑制与模式切换守卫共用。
+  bool get isBusy =>
+      _phase == ReaderRestorePhase.applying ||
+      _phase == ReaderRestorePhase.stabilizing;
+
+  /// 发起一次恢复：登记目标与身份，相位进入 applying。
+  ///
+  /// 旧目标被清除；返回是否成功接管（调用方据此决定是否启动编排）。
+  bool begin(ReaderPositionTarget target, {ReaderRuntimeIdentity? identity}) {
+    _target = target;
+    _identity = identity;
     _phase = ReaderRestorePhase.applying;
-    return tx;
+    return true;
   }
 
-  /// [generation] 是否仍为当前恢复事务（方案 §58：所有回调必查）。
-  bool isCurrent(int generation) {
-    return generation == _generation && _current != null;
-  }
-
-  /// 当前回调是否仍然有效：generation + item/mode 身份双层校验
-  /// （方案 §57）。
-  bool isCallbackValid(
-    ReaderRestoreTransaction tx, {
-    required String itemId,
-    required String readingMode,
-  }) {
-    return identical(_current, tx) &&
-        tx.matchesIdentity(itemId: itemId, readingMode: readingMode);
-  }
-
-  /// 取消当前恢复：generation 前进，在途回调全部失效（方案 §59）。
-  void cancel() {
-    _generation++;
-    if (_current != null) {
-      _phase = ReaderRestorePhase.cancelled;
+  /// 发起身份是否仍与 [identity] 一致（方案 §57 的 B6 侧替代：
+  /// item/mode 已变的恢复不得回写 tracker）。
+  bool matchesIdentity(ReaderRuntimeIdentity? identity) {
+    if (_identity == null || identity == null) {
+      return true;
     }
-    _current = null;
+    return _identity == identity;
   }
 
-  /// 位置稳定进入监控期（引擎 settle(true) 后调用，方案 §97）。
+  /// 取消当前恢复：applying/stabilizing 进入 cancelled 并清除目标；
+  /// 已达终态（completed/timedOut/failed）或本就 idle 时保持原相位。
+  void cancel() {
+    if (_phase == ReaderRestorePhase.applying ||
+        _phase == ReaderRestorePhase.stabilizing) {
+      _phase = ReaderRestorePhase.cancelled;
+      _target = null;
+      _identity = null;
+    }
+  }
+
+  /// 位置稳定进入监控期（引擎稳定判定后调用，方案 §97）。
   void markStabilizing() {
     if (_phase == ReaderRestorePhase.applying) {
       _phase = ReaderRestorePhase.stabilizing;
@@ -102,35 +91,22 @@ class ReaderRestoreManager {
     if (_phase == ReaderRestorePhase.stabilizing ||
         _phase == ReaderRestorePhase.applying) {
       _phase = ReaderRestorePhase.completed;
+      _target = null;
+      _identity = null;
     }
   }
 
   /// 总超时退出（方案 §97：超时后当前物理位置成为事实）。
   void markTimedOut() {
     _phase = ReaderRestorePhase.timedOut;
+    _target = null;
+    _identity = null;
   }
 
   /// 定位异常退出。
   void markFailed() {
     _phase = ReaderRestorePhase.failed;
+    _target = null;
+    _identity = null;
   }
-
-  // ── Restore 请求与守卫状态（方案 §96/§140：所有权自页面 State 迁入）──
-
-  /// 恢复静默窗截止时刻（§60 过渡期兼容语义）：期间位置回调不回写
-  /// 进度，防止恢复 jumpTo 与进度守卫互相污染。
-  DateTime silenceUntil = DateTime.fromMillisecondsSinceEpoch(0);
-
-  /// 待恢复章内 charOffset（build 期登记，postFrame 消费）。
-  int? pendingCharOffset;
-
-  /// 待恢复章内进度比例（charOffset 未就绪时的降级恢复目标）。
-  double? pendingChapterProgress;
-
-  /// 恢复进行中：恢复遮罩显示与进度写入守卫共用（§82 守卫语义，
-  /// 遮罩渲染仍属 UI 层）。
-  bool isRestoring = false;
-
-  /// [now] 是否仍处于恢复静默窗内。
-  bool isSilenced(DateTime now) => now.isBefore(silenceUntil);
 }

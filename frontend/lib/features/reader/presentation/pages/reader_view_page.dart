@@ -6,12 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/appearance/application/font_scale_scope.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_publisher.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_identity.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scroll_effect.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
-import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
-import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -136,9 +137,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     0,
   ); // 最后一次真实触摸
   DateTime? _lastScrollActivityAt; // 最近滚动活动（滚轮/触控板）
-  // 滚动位置恢复器：max 阈值放宽到 24px，避免图片解码等细碎布局漂移
-  // 反复重激活监控期与用户滚动对抗。
-  final _restore = ScrollRestore(maxChangeThreshold: 24);
 
   // ── 章节导航与返回原进度 ──
   ReaderChapterNavigationIntent _chapterNavigationIntent =
@@ -172,7 +170,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   bool _bookshelfBusy = false;
   bool _selectionActive = false;
   bool _exitRequested = false;
-  // 指针按住未松开：ScrollRestore 探针据此识别"进行中的拖动"。
+  // 指针按住未松开：恢复引擎用户滚动探针据此识别"进行中的拖动"。
   bool _pointerDownActive = false;
 
   @override
@@ -232,8 +230,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   ReaderContinuousScrollController get continuousScrollController =>
       _continuousScrollController;
-  @override
-  ScrollRestore get restore => _restore;
   @override
   ReaderViewSettings get settings => _settings;
   @override
@@ -379,8 +375,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         updatedAt == null ||
         isSwitchingChapter ||
         isLoadingChapter ||
-        isRestoringProgress ||
-        restore.shouldSuppressWrites ||
+        _runtime.restore.isBusy ||
         showReturnControl) {
       return;
     }
@@ -395,25 +390,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   }
 
   @override
-  double? get pendingChapterProgress => _runtime.restore.pendingChapterProgress;
-  @override
-  set pendingChapterProgress(double? v) =>
-      _runtime.restore.pendingChapterProgress = v;
-  @override
-  int? get pendingRestoreCharOffset => _runtime.restore.pendingCharOffset;
-  @override
-  set pendingRestoreCharOffset(int? v) =>
-      _runtime.restore.pendingCharOffset = v;
-  @override
   ReaderChapterNavigationIntent get chapterNavigationIntent =>
       _chapterNavigationIntent;
   @override
   set chapterNavigationIntent(ReaderChapterNavigationIntent v) =>
       _chapterNavigationIntent = v;
-  @override
-  bool get isRestoringProgress => _runtime.restore.isRestoring;
-  @override
-  set isRestoringProgress(bool v) => _runtime.restore.isRestoring = v;
   @override
   bool get modeSwitchInProgress => _modeSwitchInProgress;
   @override
@@ -422,10 +403,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   int? get modeSwitchAnchor => _modeSwitchAnchor;
   @override
   set modeSwitchAnchor(int? v) => _modeSwitchAnchor = v;
-  @override
-  DateTime get restoreSilenceUntil => _runtime.restore.silenceUntil;
-  @override
-  set restoreSilenceUntil(DateTime v) => _runtime.restore.silenceUntil = v;
   @override
   DateTime get lastPointerDownTime => _lastPointerDownTime;
   @override
@@ -744,6 +721,17 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _runtime.layoutProvider = currentLiveLayout;
     _runtime.onAdoptChapterRequested = adoptContinuousAnchorChapter;
     _runtime.onExpandWindowRequested = onContinuousWindowExpand;
+    // Restore 编排供给（B6 §7.2/§7.3）：目标换算/用户滚动探针/稳定回写、
+    // 帧调度与身份供给。
+    _runtime.restoreDelegate = this;
+    _runtime.frameScheduler = (callback) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => callback());
+    };
+    _runtime.identityProvider =
+        () => ReaderRuntimeIdentity(
+          itemId: widget.itemId,
+          readingMode: _settings.readingMode,
+        );
     loadSettings();
     checkBookmarkState();
     scrollController.addListener(onScroll);
@@ -773,7 +761,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     // 维护），全书进度取通知器缓存值（dispose 中 ref/BuildContext 不可
     // 用），阅读模式取实际值；翻页模式同样补报（旧实现依赖滚动视图
     // hasClients 而整块跳过）。
-    if (!_restore.shouldSuppressWrites &&
+    if (!_runtime.restore.isBusy &&
         (_cachedContent != null ||
             _contentLoader?.getByChapterId(_currentChapterId) != null)) {
       final charOffset = _positionTracker.charOffset;
@@ -816,7 +804,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _dismissReturnTimer?.cancel();
     _chapterLoadingTimer?.cancel();
     unawaited(_progressSaveCoordinator.dispose());
-    _restore.cancel();
+    _runtime.restore.cancel();
     _chapterLoadCoordinator.cancel();
     _pageLocator.cancel();
     _pageTurnController.dispose();
@@ -1088,7 +1076,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         ),
         // 进度恢复加载遮罩：定位完成后自动消失
         // 内容未加载时 skeleton 已有加载指示器，不重复显示
-        if (isRestoringProgress && _cachedContent != null)
+        if (_runtime.restore.isBusy && _cachedContent != null)
           Positioned.fill(
             child: ReaderDeferredRestoreOverlay(settings: _settings),
           ),

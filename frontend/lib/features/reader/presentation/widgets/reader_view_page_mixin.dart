@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
@@ -29,7 +28,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_progress_he
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
-import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// reader_view_page.dart 的业务逻辑 mixin。
@@ -44,7 +42,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   set contentLoader(ReaderContentLoader? value);
   ScrollController get scrollController;
   ReaderContinuousScrollController get continuousScrollController;
-  ScrollRestore get restore;
   ReaderViewSettings get settings;
   set settings(ReaderViewSettings value);
   String get currentChapterId;
@@ -72,22 +69,14 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 章节加载/切换完成后立即重算全书进度一次（切章期间防抖重算被挂起）。
   void refreshBookProgressNow();
-  double? get pendingChapterProgress;
-  set pendingChapterProgress(double? value);
-  int? get pendingRestoreCharOffset;
-  set pendingRestoreCharOffset(int? value);
   ReaderChapterNavigationIntent get chapterNavigationIntent;
   set chapterNavigationIntent(ReaderChapterNavigationIntent value);
-  bool get isRestoringProgress;
-  set isRestoringProgress(bool value);
   bool get modeSwitchInProgress;
   set modeSwitchInProgress(bool value);
 
   /// 模式切换时冻结的 charOffset，跨多次 onPageChanged 保留原始锚点。
   int? get modeSwitchAnchor;
   set modeSwitchAnchor(int? value);
-  DateTime get restoreSilenceUntil;
-  set restoreSilenceUntil(DateTime value);
   DateTime get lastPointerDownTime;
 
   /// 最近一次滚动活动时间（滚轮/触控板），供补偿与进度守卫共用。
@@ -163,7 +152,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   DateTime get sessionStart;
   static const hideDelay = Duration(seconds: 3);
-  static const restoreSilenceMs = 400;
 
   // ── 按需加载章节内容 ──
 
@@ -381,8 +369,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         readerDebugLog('ReaderView: loadCurrentChapter failed: $e');
       }
       if (_isCurrentChapterRequest(requestedChapterId, generation)) {
-        isRestoringProgress = false;
-        restore.cancel();
+        runtime.restore.cancel();
       }
     } finally {
       // 代次未变时必须复位 loading：章节 id 被连续滚动 adopt 改写后
@@ -413,7 +400,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
     // 有真实恢复位置时不跳过；零进度恢复已提前返回，不会挡到这里。
-    if (isRestoringProgress || pendingRestoreCharOffset != null) {
+    if (runtime.restore.isBusy) {
       return;
     }
     // 显式导航（start/end/anchor）不跳过。
@@ -538,13 +525,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       ReaderChapterEntryPoint.anchor =>
         resolveAnchorCharOffset(chapterId, intent.anchorHref) ?? 0,
     };
-    pendingChapterProgress = null;
     if (charOffset <= 0) {
-      pendingRestoreCharOffset = null;
       if (isPageMode) {
         // 章首 = 跨章流内锚点章起始全局索引；0 可能是前缀章页面，禁止直写。
         anchorPageModeToChapterStart(chapterId);
-        isRestoringProgress = false;
+        runtime.restore.cancel();
         scrollProgress = 0;
       } else {
         // 连续滚动：章首是窗口坐标（前有前缀章），必须走稳定重试恢复，
@@ -553,8 +538,16 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       }
       return;
     }
-    pendingRestoreCharOffset = charOffset;
-    isRestoringProgress = true;
+    if (isPageMode) {
+      // 页模式恢复经 findPageByCharOffset 定位（B7 改造），相位即登记。
+      runtime.restore.begin(
+        ReaderPositionTarget(chapterId: chapterId, charOffset: charOffset),
+      );
+    } else {
+      runtime.startRestore(
+        ReaderPositionTarget(chapterId: chapterId, charOffset: charOffset),
+      );
+    }
     if (intent.offerReturn && returnToProgressSnapshot != null) {
       showReturnToProgressSnackBar();
     }
@@ -651,10 +644,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 当前冻结视口快照（方案 §8，由 interaction mixin 实现）。
   ReaderViewportSnapshot currentRuntimeViewport();
 
-  /// Runtime Restore 事务创建（方案 §55/§96，由 interaction mixin 实现）：
-  /// 恢复入口统一登记 ReaderPositionTarget，回调方经 isCallbackValid
-  /// 做 generation + item/mode 三层身份校验（§57）。
-  ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target);
+  /// 恢复引擎用户滚动探针（由 coordinate mixin 实现）。
+  bool isUserScrollActive({required DateTime since});
 
   /// 当前用户滚动会话（由 interaction mixin 实现）。
 
@@ -751,7 +742,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
           requestedChapterId == currentChapterId) {
         chapterLoadCoordinator.fail(requestGeneration, requestedChapterId);
         isSwitchingChapter = false;
-        isRestoringProgress = false;
+        runtime.restore.cancel();
         setState(() {});
       } else if (mounted) {
         // 章节已被切走或收养改写：结果不再被消费，必须释放协调器，
@@ -779,7 +770,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
             requestedChapterId == currentChapterId) {
           chapterLoadCoordinator.fail(requestGeneration, requestedChapterId);
           isSwitchingChapter = false;
-          isRestoringProgress = false;
+          runtime.restore.cancel();
         } else {
           chapterLoadCoordinator.releaseIfCurrent(
             requestGeneration,
@@ -889,8 +880,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
 
-    // 零进度快照无需恢复：避免 isRestoringProgress 挡住封面/空章跳过，
-    // 也避免 ScrollRestore 在 maxScrollExtent 尚未就绪时超时。
+    // 零进度快照无需恢复：避免恢复相位挡住封面/空章跳过，
+    // 也避免恢复引擎在 maxScrollExtent 尚未就绪时超时。
     final isZeroProgress =
         snapshot.charOffset <= 0 &&
         snapshot.chapterProgress <= 0 &&
@@ -925,8 +916,13 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
     if (isPageMode) {
       scrollProgress = chapterProgress;
-      isRestoringProgress = true;
-      pendingRestoreCharOffset = snapshot.charOffset;
+      // 页模式恢复经 findPageByCharOffset 定位（B7 改造），相位即登记。
+      runtime.restore.begin(
+        ReaderPositionTarget(
+          chapterId: snapshot.chapterId,
+          charOffset: snapshot.charOffset,
+        ),
+      );
       positionTracker.setCharOffset(snapshot.charOffset, snapshot.chapterId);
       if (mounted) setState(() {});
       return;
@@ -941,18 +937,18 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
           'totalChars=${chapterData.totalChars}',
         );
       }
-      isRestoringProgress = true;
-      restoreSilenceUntil = DateTime.now().add(
-        const Duration(milliseconds: restoreSilenceMs),
-      );
       scrollProgress = chapterProgress;
-      if (snapshot.charOffset > 0) {
-        pendingChapterProgress = null;
-        pendingRestoreCharOffset = snapshot.charOffset;
-      } else {
-        pendingRestoreCharOffset = null;
-        pendingChapterProgress = chapterProgress;
-      }
+      // charOffset 未就绪时以章内比例折算降级目标，统一走恢复编排。
+      final restoreOffset =
+          snapshot.charOffset > 0
+              ? snapshot.charOffset
+              : (chapterProgress * chapterData.totalChars).round();
+      runtime.startRestore(
+        ReaderPositionTarget(
+          chapterId: snapshot.chapterId,
+          charOffset: restoreOffset,
+        ),
+      );
       if (mounted) {
         setState(() {});
       }
@@ -1029,7 +1025,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       effectiveCharOffset = modeSwitchAnchor!;
     } else if (isPageMode) {
       effectiveCharOffset = computePageCharOffset(pageModePage);
-    } else if (!isRestoringProgress &&
+    } else if (!runtime.restore.isBusy &&
         chapterId == null &&
         scrollController.hasClients &&
         scrollController.position.maxScrollExtent > 0) {
@@ -1205,7 +1201,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 同步保存进度到本地（不阻塞、不依赖 mounted 状态）。
   void syncProgressSync() {
-    if (restore.shouldSuppressWrites) return;
+    if (runtime.restore.isBusy) return;
     final snapshot = buildProgressSnapshot();
     if (snapshot == null) return;
     if (kDebugMode) {
@@ -1412,8 +1408,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     currentChapterId = chapterId;
     cachedContent = prefetchedContent;
     lastLoadedChapterId = prefetchedContent == null ? null : chapterId;
-    pendingChapterProgress = null;
-    pendingRestoreCharOffset = null;
     if (isPageMode) {
       // 显式跳章：以待映射章内页 0 锚定目标章起始全局索引，禁止旧流
       // 身份重映射（邻章场景重映射会把跳转拉回旧章）。
@@ -1422,8 +1416,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       clearPendingPageLocalIndex();
     }
     contentLoader?.setActive(chapterId);
-    restore.cancel();
-    isRestoringProgress = false;
+    runtime.restore.cancel();
     chapterLoadingTimer?.cancel();
     showChapterLoadingOverlay = false;
     // 已有 blocks 时不要全屏遮罩：连续滚动可直接用块渲染。

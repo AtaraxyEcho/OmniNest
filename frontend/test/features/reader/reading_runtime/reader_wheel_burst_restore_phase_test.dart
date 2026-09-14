@@ -1,12 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_manager.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_clock.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_wheel_burst_tracker.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
-
-import 'geometry_fixtures.dart';
 
 class _FakeTimer implements Timer {
   _FakeTimer(this._clock, this._expireAt, this._callback);
@@ -91,60 +89,32 @@ void main() {
     });
   });
 
-  group('ReaderRestorePhase（方案 §97/§98）', () {
+  group('ReaderRestorePhase（方案 §97/§98；B6 相位迁移）', () {
     test('applying→stabilizing→completed 全程推进', () {
       final manager = ReaderRestoreManager();
-      final layout = layoutFor(
-        snapshotFor([
-          textEntry(id: 'c1', heights: const [100, 200, 300]),
-        ]),
-      );
-      final tx = manager.begin(
-        target: const ReaderPositionTarget(chapterId: 'c1', charOffset: 0),
-        layout: layout,
-        itemId: 'item',
-        readingMode: 'scroll',
-      );
+      manager.begin(const ReaderPositionTarget(chapterId: 'c1', charOffset: 0));
       expect(manager.phase, ReaderRestorePhase.applying);
 
       manager.markStabilizing();
       expect(manager.phase, ReaderRestorePhase.stabilizing);
-      // 监控期回调仍有效（§57）。
-      expect(
-        manager.isCallbackValid(tx, itemId: 'item', readingMode: 'scroll'),
-        isTrue,
-      );
+      expect(manager.isBusy, isTrue);
 
       manager.markCompleted();
       expect(manager.phase, ReaderRestorePhase.completed);
+      expect(manager.isBusy, isFalse);
     });
 
     test('用户取消与超时是互斥终态，物理位置即事实', () {
       final manager = ReaderRestoreManager();
-      final layout = layoutFor(
-        snapshotFor([
-          textEntry(id: 'c1', heights: const [100, 200, 300]),
-        ]),
-      );
-      manager.begin(
-        target: const ReaderPositionTarget(chapterId: 'c1', charOffset: 0),
-        layout: layout,
-        itemId: 'item',
-        readingMode: 'scroll',
-      );
+      manager.begin(const ReaderPositionTarget(chapterId: 'c1', charOffset: 0));
       manager.markTimedOut();
       expect(manager.phase, ReaderRestorePhase.timedOut);
 
-      manager.begin(
-        target: const ReaderPositionTarget(chapterId: 'c1', charOffset: 5),
-        layout: layout,
-        itemId: 'item',
-        readingMode: 'scroll',
-      );
+      manager.begin(const ReaderPositionTarget(chapterId: 'c1', charOffset: 5));
       expect(manager.phase, ReaderRestorePhase.applying);
       manager.cancel();
       expect(manager.phase, ReaderRestorePhase.cancelled);
-      expect(manager.current, isNull);
+      expect(manager.target, isNull);
     });
   });
 }

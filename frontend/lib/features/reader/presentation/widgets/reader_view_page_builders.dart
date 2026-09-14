@@ -9,8 +9,6 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_geom
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_window_builder.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_restore_manager.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
@@ -38,7 +36,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_return_to_p
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
-import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 
 /// reader_view_page.dart 的构建方法 mixin。
 ///
@@ -50,7 +47,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   bool _viewportUpdateScheduled = false;
   Size? _pendingViewportSize;
   bool _pageNavigatorWarmupScheduled = false;
-  bool _scrollRestoreScheduled = false;
   bool _pageRestoreScheduled = false;
   ReaderProgressSnapshot? _pendingProgressSnapshot;
   bool _progressSnapshotApplyScheduled = false;
@@ -74,23 +70,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   ReaderContinuousScrollController get continuousScrollController;
   ReaderPositionTracker get positionTracker;
   ScrollController get scrollController;
-  ScrollRestore get restore;
   ReaderViewSettings get settings;
   String get currentChapterId;
   @override
   bool get isPageMode;
   int get pageModePage;
   set pageModePage(int value);
-  bool get isRestoringProgress;
-  set isRestoringProgress(bool value);
-  DateTime get restoreSilenceUntil;
-  set restoreSilenceUntil(DateTime value);
   double get scrollProgress;
   set scrollProgress(double value);
-  double? get pendingChapterProgress;
-  set pendingChapterProgress(double? value);
-  int? get pendingRestoreCharOffset;
-  set pendingRestoreCharOffset(int? value);
   DateTime get lastPointerDownTime;
   DateTime? get lastScrollActivityAt;
   set lastPointerDownTime(DateTime value);
@@ -162,9 +149,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
 
   /// 滚轮/触控板输入入口（由 interaction mixin 经 State 组合提供）。
   void onPointerScrollInput();
-
-  /// Runtime Restore 事务创建（方案 §55/§96，由 interaction mixin 实现）。
-  ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target);
 
   // ── 页面尺寸 ──
 
@@ -343,13 +327,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     }
     // 加载/恢复/切章期间：页索引已提交（上方），进度写入推迟，
     // 避免加载窗口内 jumpToPage 触发的提交写脏进度。
-    if (isRestoringProgress ||
+    if (runtime.restore.isBusy ||
         isSwitchingChapter ||
         isLoadingChapter ||
         chapterLoadCoordinator.isLoading) {
       return;
     }
-    if (DateTime.now().isBefore(restoreSilenceUntil)) return;
     final flow = _pageFlow;
     // 模式切换期间（modeSwitchAnchor 未被用户交互消耗）：
     // 只更新展示进度，不写 tracker 和 SQLite。
@@ -543,7 +526,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
           _schedulePageNavigatorWarmup(navigator, localPage, data.chapterId);
         }
 
-        if (pendingRestoreCharOffset != null && data != null) {
+        if (runtime.restore.target != null && data != null) {
           _schedulePendingPageCharOffsetRestore(data);
         }
 
@@ -577,7 +560,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
               hasNextChapter: chapterIdx < chapters.length - 1,
               // PageLocator.isLocating 不在此列（方案 §4）：后台定位恢复页
               // 属于 Restore/Seek 事务，不得剥夺普通翻页的执行资格；
-              // 恢复期的进度写入由 isRestoringProgress 守卫。
+              // 恢复期的进度写入由恢复相位守卫。
               isPaginating:
                   isSwitchingChapter ||
                   isLoadingChapter ||
@@ -1295,10 +1278,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     if (prevEntries.isEmpty || !scrollController.hasClients) {
       return;
     }
-    if (isRestoringProgress ||
-        restore.shouldSuppressWrites ||
-        isLoadingChapter ||
-        isSwitchingChapter) {
+    if (runtime.restore.isBusy || isLoadingChapter || isSwitchingChapter) {
       return;
     }
     final nextEntries = continuousScrollController.entries;
@@ -1350,8 +1330,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     required double anchorContentY,
   }) {
     if (previousPrefix == null ||
-        isRestoringProgress ||
-        restore.shouldSuppressWrites ||
+        runtime.restore.isBusy ||
         isLoadingChapter ||
         isSwitchingChapter) {
       return;
@@ -1396,7 +1375,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     runtime.requestGeometryUpdate(
       reason: ReaderGeometryInvalidation.contentLoaded,
     );
-    _schedulePendingScrollRestore();
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1571,8 +1549,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     if (charOffset == null) {
       return;
     }
-    isRestoringProgress = true;
-    pendingRestoreCharOffset = charOffset;
+    runtime.startRestore(
+      ReaderPositionTarget(chapterId: currentChapterId, charOffset: charOffset),
+    );
     if (mounted) {
       setState(() {});
     }
@@ -1606,132 +1585,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     return match?.start;
   }
 
-  void _handlePendingCharOffsetRestore() {
-    final restoreCharOffset = pendingRestoreCharOffset;
-    pendingRestoreCharOffset = null;
-    if (restoreCharOffset == null) {
-      isRestoringProgress = false;
-      modeSwitchInProgress = false;
-      return;
-    }
-    final chapterData = contentLoader?.get(currentChapterId, settings);
-    if (chapterData == null || chapterData.totalChars <= 0) {
-      // 数据未就绪，重新排队等待下次 build 重试
-      pendingRestoreCharOffset = restoreCharOffset;
-      return;
-    }
-
-    if (restoreCharOffset <= 0) {
-      modeSwitchInProgress = false;
-      if (isPageMode) {
-        scrollProgress = 0;
-        positionTracker.setCharOffset(0, currentChapterId);
-        isRestoringProgress = false;
-      } else {
-        restoreToChapterStart(currentChapterId);
-      }
-      return;
-    }
-
-    final progress = (restoreCharOffset / chapterData.totalChars).clamp(
-      0.0,
-      1.0,
-    );
-    scrollProgress = progress;
-    final capturedCharOffset = restoreCharOffset;
-    final capturedPageWidth = computePageWidth();
-    final capturedSettings = settings;
-    final capturedTextScale = MediaQuery.textScalerOf(context).scale(1.0);
-    final capturedAnchorY = viewportAnchorY;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final restoreScheduledAt = DateTime.now();
-      final restoreTx = beginRuntimeRestore(
-        ReaderPositionTarget(
-          chapterId: currentChapterId,
-          charOffset: capturedCharOffset,
-        ),
-      );
-      restore.start(
-        scrollController: scrollController,
-        targetOffsetBuilder: () {
-          if (!scrollController.hasClients) return 0;
-          final max = scrollController.position.maxScrollExtent;
-          if (max <= 0) return 0;
-          final intraY = contentLoader?.charOffsetToPixelOffset(
-            currentChapterId,
-            capturedCharOffset,
-            pageWidth: capturedPageWidth,
-            settings: capturedSettings,
-            textScale: capturedTextScale,
-          );
-          final prefix = continuousScrollController.prefixHeightOf(
-            currentChapterId,
-          );
-          // 章体在窗口中的起点 = 前缀 + 章头 chrome；charOffset 原点是章体顶。
-          final windowY =
-              prefix +
-              ReaderContinuousScrollController.chapterHeaderExtent +
-              (intraY ?? 0.0);
-          return (windowY - capturedAnchorY).clamp(0.0, max);
-        },
-        isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
-        onTimedOut: () => runtime.restore.markTimedOut(),
-        onMonitorEnd: () => runtime.restore.markCompleted(),
-        onSettled: (completed) {
-          runtime.restore.markStabilizing();
-          if (!completed &&
-              runtime.restore.phase == ReaderRestorePhase.applying) {
-            runtime.restore.cancel();
-          }
-          if (completed) {
-            // 三层身份校验（方案 §57）：item/mode 已变的恢复不得回写 tracker。
-            if (runtime.restore.isCallbackValid(
-              restoreTx,
-              itemId: itemId,
-              readingMode: settings.readingMode,
-            )) {
-              positionTracker.setCharOffset(
-                capturedCharOffset,
-                currentChapterId,
-              );
-            } else {
-              runtime.diagnostics.restoreCallbackDropCount++;
-            }
-          } else {
-            // 被用户滚动中断或超时：当前真实位置即事实，恢复静默窗口
-            // 让进度写入立即恢复，追踪由下一次滚动回调修正
-            restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(0);
-          }
-          isRestoringProgress = false;
-          if (mounted) setState(() {});
-        },
-      );
-    });
-  }
-
-  void _schedulePendingScrollRestore() {
-    if (pendingRestoreCharOffset == null && pendingChapterProgress == null) {
-      return;
-    }
-    if (_scrollRestoreScheduled) {
-      return;
-    }
-    _scrollRestoreScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollRestoreScheduled = false;
-      if (!mounted) {
-        return;
-      }
-      if (pendingRestoreCharOffset != null) {
-        _handlePendingCharOffsetRestore();
-      } else if (pendingChapterProgress != null) {
-        _handlePendingProgressRestore();
-      }
-    });
-  }
-
   void _schedulePendingPageCharOffsetRestore(ChapterData chapterData) {
     if (_pageRestoreScheduled) {
       return;
@@ -1742,14 +1595,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       if (!mounted) {
         return;
       }
-      final restoreCharOffset = pendingRestoreCharOffset;
-      pendingRestoreCharOffset = null;
-      if (restoreCharOffset == null) {
-        isRestoringProgress = false;
+      final target = runtime.restore.target;
+      if (target == null) {
         modeSwitchInProgress = false;
         return;
       }
-      unawaited(_restorePageCharOffset(chapterData, restoreCharOffset));
+      unawaited(_restorePageCharOffset(chapterData, target.charOffset));
     });
   }
 
@@ -1776,8 +1627,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
           !navigationTokens.isUnchangedSince(navigationTokenAtStart)) {
         // 定位被取消或章节已切换：当前章节请求结束时必须退出恢复态，避免遮罩滞留
         if (requestedChapterId == currentChapterId) {
+          runtime.restore.cancel();
           setState(() {
-            isRestoringProgress = false;
             modeSwitchInProgress = false;
           });
           completeModeSwitchGeneration(txnGeneration);
@@ -1793,107 +1644,22 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       positionTracker.setCharOffset(restoreCharOffset, currentChapterId);
       // targetPage 为章内页；换算到跨章流全局索引。
       final anchorStart = _pageFlow?.startIndexOf(currentChapterId) ?? 0;
+      runtime.restore.markCompleted();
       setState(() {
         pageModePage = anchorStart + targetPage;
         modeSwitchInProgress = false;
-        isRestoringProgress = false;
       });
       completeModeSwitchGeneration(txnGeneration);
     } catch (e) {
       if (mounted && requestedChapterId == currentChapterId) {
+        runtime.restore.markFailed();
         setState(() {
-          isRestoringProgress = false;
           modeSwitchInProgress = false;
         });
         // 定位异常同样是统一失败退出（方案 §28）。
         abortModeSwitchGeneration(txnGeneration);
       }
     }
-  }
-
-  void _handlePendingProgressRestore() {
-    final progressRatio = pendingChapterProgress!.clamp(0.0, 1.0);
-    pendingChapterProgress = null;
-    scrollProgress = progressRatio;
-    final capturedRatio = progressRatio;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final restoreScheduledAt = DateTime.now();
-      final restoreTx = beginRuntimeRestore(
-        ReaderPositionTarget(
-          chapterId: currentChapterId,
-          charOffset:
-              (capturedRatio *
-                      (contentLoader
-                              ?.getByChapterId(currentChapterId)
-                              ?.totalChars ??
-                          0))
-                  .round(),
-        ),
-      );
-      restore.start(
-        scrollController: scrollController,
-        targetOffsetBuilder: () {
-          if (!scrollController.hasClients) return 0;
-          final max = scrollController.position.maxScrollExtent;
-          final data = contentLoader?.get(currentChapterId, settings);
-          final chapterHeight =
-              (data != null && data.cumulativeHeights.isNotEmpty)
-                  ? data.cumulativeHeights.last
-                  : 0.0;
-          if (chapterHeight <= 0) {
-            return capturedRatio * max;
-          }
-          // 章内比例映射到窗口坐标：前缀 + 章头 + ratio×章体高 − 视口锚点。
-          final target =
-              continuousScrollController.prefixHeightOf(currentChapterId) +
-              ReaderContinuousScrollController.chapterHeaderExtent +
-              capturedRatio * chapterHeight -
-              viewportAnchorY;
-          return target.clamp(0.0, max);
-        },
-        isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
-        onTimedOut: () => runtime.restore.markTimedOut(),
-        onMonitorEnd: () => runtime.restore.markCompleted(),
-        onSettled: (completed) {
-          runtime.restore.markStabilizing();
-          if (!completed &&
-              runtime.restore.phase == ReaderRestorePhase.applying) {
-            runtime.restore.cancel();
-          }
-          if (completed && scrollController.hasClients) {
-            final max = scrollController.position.maxScrollExtent;
-            final data = contentLoader?.get(currentChapterId, settings);
-            if (data != null &&
-                max > 0 &&
-                runtime.restore.isCallbackValid(
-                  restoreTx,
-                  itemId: itemId,
-                  readingMode: settings.readingMode,
-                )) {
-              final settledCharOffset = windowContentYToCharOffset(
-                currentChapterId,
-                scrollController.offset + viewportAnchorY,
-              );
-              positionTracker.updateFromScroll(
-                offset: scrollController.offset,
-                maxExtent: max,
-                totalChars: data.totalChars,
-                chapterId: currentChapterId,
-                charOffset: settledCharOffset,
-              );
-            } else if (max <= 0 || data == null) {
-              runtime.diagnostics.restoreCallbackDropCount++;
-            }
-          } else if (!completed) {
-            restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(0);
-          }
-          isRestoringProgress = false;
-          if (mounted) setState(() {});
-        },
-      );
-    });
   }
 
   // ── 返回原进度浮层 ──

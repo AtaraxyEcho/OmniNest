@@ -10,7 +10,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_posi
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_restore_delegate.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -44,9 +44,7 @@ enum ReaderModeSwitchPhase {
 /// 并实现 [ReaderConsumeDelegate] 供给页面侧数据与动作。
 mixin ReaderViewPageInteractionMixin
     on ConsumerState<ReaderViewPage>, ReaderViewPageMixin
-    implements ReaderConsumeDelegate {
-  static const restoreSilenceMs = 400;
-
+    implements ReaderConsumeDelegate, ReaderRestoreDelegate {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // 滚动模式交互
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -60,13 +58,9 @@ mixin ReaderViewPageInteractionMixin
     final max = scrollController.position.maxScrollExtent;
     if (max <= 0) return;
 
-    if (restore.shouldSuppressWrites ||
-        isRestoringProgress ||
-        isSwitchingChapter) {
+    if (runtime.restore.isBusy || isSwitchingChapter) {
       return;
     }
-
-    if (runtime.restore.isSilenced(runtime.clock.now)) return;
 
     // 连续滚动：进度由 ReaderContinuousScrollView 的 onScrollOffsetChanged
     // 上抛后经 Runtime 解析驱动。
@@ -110,16 +104,13 @@ mixin ReaderViewPageInteractionMixin
 
   /// 实际滚动 offset 唯一入口（方案 §84/§87）：listener 只上抛 offset，
   /// 页面只保留 Widget 生命周期与恢复期守卫，解析与消费全部内化 Runtime
-  /// （B3 §6.2 onPhysicalOffsetChanged）。
+  /// （B3 §6.2 onPhysicalOffsetChanged；B6 恢复期守卫统一为 isBusy 投影）。
   void onActualScrollOffsetChanged(double offset) {
     if (!mounted || isPageMode) return;
-    if (restore.shouldSuppressWrites ||
-        isRestoringProgress ||
-        isSwitchingChapter) {
+    if (runtime.restore.isBusy || isSwitchingChapter) {
       return;
     }
     final now = runtime.clock.now;
-    if (runtime.restore.isSilenced(now)) return;
     lastScrollActivityAt = now;
     dismissReturnSnackBar();
     runtime.onPhysicalOffsetChanged(offset);
@@ -237,14 +228,13 @@ mixin ReaderViewPageInteractionMixin
     _modeSwitchPhase = ReaderModeSwitchPhase.idle;
     modeSwitchInProgress = false;
     modeSwitchAnchor = null;
-    isRestoringProgress = false;
     if (kDebugMode) {
       readerDebugLog('ReaderModeTxn: commit generation=$generation');
     }
   }
 
-  /// 模式切换统一失败退出：不能只清 isRestoringProgress（方案 §28），
-  /// 否则可能遗留 modeSwitchAnchor / modeSwitchInProgress / pendingRestore。
+  /// 模式切换统一失败退出：不能只清相位（方案 §28），
+  /// 否则可能遗留 modeSwitchAnchor / modeSwitchInProgress。
   void abortModeSwitchGeneration(int generation) {
     if (generation != _modeSwitchGeneration) {
       return;
@@ -281,19 +271,63 @@ mixin ReaderViewPageInteractionMixin
     );
   }
 
-  /// Runtime Restore 事务创建（方案 §55/§96）：恢复入口统一登记目标。
+  /// Runtime Restore 编排的页面供给（B6 §7.2）：目标换算、用户滚动探针
+  /// 与稳定回写在页面实现，Runtime 经 [ReaderRestoreDelegate] 调用。
+
+  /// 恢复目标 → 窗口滚动 offset：charOffset>0 走 TextPainter 精度路径
+  /// （§144），charOffset=0 语义为章首（章头贴视口顶）。布局或章节数据
+  /// 未就绪返回 null，由引擎多帧重试。
   @override
-  ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target) {
-    return runtime.restore.begin(
-      target: target,
-      layout: ReaderLayoutSnapshot(
-        geometry: continuousScrollController.buildGeometrySnapshot(),
-        viewport: currentRuntimeViewport(),
-        windowRevision: continuousScrollController.windowRevision,
-      ),
-      itemId: itemId,
-      readingMode: settings.readingMode,
+  double? resolveRestoreOffset(ReaderPositionTarget target) {
+    if (!scrollController.hasClients) {
+      return null;
+    }
+    final max = scrollController.position.maxScrollExtent;
+    if (max <= 0) {
+      return null;
+    }
+    if (target.charOffset <= 0) {
+      return chapterStartScrollOffset(target.chapterId);
+    }
+    final data = contentLoader?.getByChapterId(target.chapterId);
+    if (data == null || data.totalChars <= 0) {
+      return null;
+    }
+    final intraY = contentLoader?.charOffsetToPixelOffset(
+      target.chapterId,
+      target.charOffset,
+      pageWidth: computePageWidth(),
+      settings: settings,
+      textScale: MediaQuery.textScalerOf(context).scale(1.0),
     );
+    // 章体在窗口中的起点 = 前缀 + 章头 chrome；charOffset 原点是章体顶。
+    final windowY =
+        continuousScrollController.prefixHeightOf(target.chapterId) +
+        ReaderContinuousScrollController.chapterHeaderExtent +
+        (intraY ?? 0.0);
+    return windowY;
+  }
+
+  @override
+  bool isUserScrollingSince(DateTime since) => isUserScrollActive(since: since);
+
+  /// 稳定回写：tracker 记账并立即落库一次（视觉 seek 的即时持久化语义
+  /// 统一到全部恢复站点；零进度由 scheduleLocalProgressSave 拦截）。
+  @override
+  void onRestoreSettled(ReaderPositionTarget target) {
+    positionTracker.setCharOffset(target.charOffset, target.chapterId);
+    final totalChars =
+        contentLoader?.getByChapterId(target.chapterId)?.totalChars ?? 0;
+    if (totalChars > 0) {
+      scheduleLocalProgressSave(
+        chapterProgress: (target.charOffset / totalChars).clamp(0.0, 1.0),
+        charOffset: target.charOffset,
+        mode: 'scroll',
+      );
+    }
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// 生命周期事件发射统一走 Runtime Facade（B3 §6.3：页面不再自持发射器）。
@@ -533,27 +567,23 @@ mixin ReaderViewPageInteractionMixin
 
   /// 用户主动滚动前终止进行中的进度恢复。
   ///
-  /// ScrollRestore 在恢复期与监控期都会 jumpTo 锚点，会与本次滚动对抗，
-  /// 导致滚动位移归零被误判为章末并触发跳章；同时清掉恢复遮罩，
-  /// 并使 Runtime 层的 Restore 事务失效（方案 §59）。
+  /// 恢复引擎在恢复期与监控期都会 jumpTo 锚点，会与本次滚动对抗，
+  /// 导致滚动位移归零被误判为章末并触发跳章（方案 §59）。页面态清理
+  /// 已随四态退役消失；_beginTransaction 内已调 manager.cancel。
   void cancelOngoingRestoreForUserScroll() {
-    if (runtime.restore.current != null) {
-      runtime.emitEvent(
-        ReaderRuntimeEvent(
-          type: ReaderRuntimeEventType.restoreInvalidated,
-          at: runtime.clock.now,
-          charOffset: runtime.restore.generation,
-        ),
-      );
-    }
-    runtime.restore.cancel();
-    if (!restore.shouldSuppressWrites && !isRestoringProgress) {
+    final target = runtime.restore.target;
+    if (target == null) {
       return;
     }
-    restore.cancel();
-    isRestoringProgress = false;
-    pendingChapterProgress = null;
-    pendingRestoreCharOffset = null;
+    runtime.emitEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.restoreInvalidated,
+        at: runtime.clock.now,
+        chapterId: target.chapterId,
+        charOffset: target.charOffset,
+      ),
+    );
+    runtime.restore.cancel();
     if (mounted) {
       setState(() {});
     }
@@ -741,7 +771,7 @@ mixin ReaderViewPageInteractionMixin
         } else {
           restoreScrollPositionFromOffset(savedCharOffset);
         }
-        // 滚动模式恢复期由 isRestoringProgress 守卫，切换事务即此提交。
+        // 滚动模式恢复期由 runtime.restore.isBusy 守卫，切换事务即此提交。
         _modeSwitchPhase = ReaderModeSwitchPhase.restoring;
         completeModeSwitchGeneration(modeSwitchGeneration);
       }
@@ -824,8 +854,14 @@ mixin ReaderViewPageInteractionMixin
         }
       }
       pageLocator.cancel();
-      isRestoringProgress = true;
-      pendingRestoreCharOffset = restoreCharOffset;
+      // 页模式重排定位：相位接管即登记（B7 改造），旧滚动恢复一并取消。
+      runtime.restore.cancel();
+      runtime.restore.begin(
+        ReaderPositionTarget(
+          chapterId: currentChapterId,
+          charOffset: restoreCharOffset,
+        ),
+      );
       setState(() {});
       return;
     }
@@ -929,15 +965,14 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
-  /// 用指定 charOffset 恢复滚动位置（模式切换专用）。
+  /// 用指定 charOffset 恢复滚动位置（模式切换/重测高后）。
+  ///
+  /// 布局重算当帧窗口未收敛：恢复引擎逐帧重算目标，多帧重试自收敛。
   void restoreScrollPositionFromOffset(int charOffset) {
     if (charOffset <= 0) return;
-    isRestoringProgress = true;
-    restoreSilenceUntil = DateTime.now().add(
-      const Duration(milliseconds: restoreSilenceMs),
+    runtime.startRestore(
+      ReaderPositionTarget(chapterId: currentChapterId, charOffset: charOffset),
     );
-    pendingChapterProgress = null;
-    pendingRestoreCharOffset = charOffset;
   }
 
   /// 重新分页所有章节。
