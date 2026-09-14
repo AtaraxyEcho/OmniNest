@@ -129,9 +129,10 @@ mixin ReaderViewPageInteractionMixin
     if (tx != null && tx.phase == ReaderTransactionPhase.cancelled) {
       return;
     }
+    final layout = tx?.layout ?? currentLiveLayout();
     final snapshot = runtime.position.resolve(
       scrollOffset: offset,
-      layout: tx?.layout ?? currentLiveLayout(),
+      layout: layout,
       transactionId: tx?.id ?? 0,
     );
     if (snapshot == null) {
@@ -149,6 +150,14 @@ mixin ReaderViewPageInteractionMixin
         chapterId: snapshot.chapterId,
         blockIndex: snapshot.blockIndex,
         charOffset: snapshot.charOffset,
+        visualProgress: runtime.progress.visual.project(
+          snapshot,
+          layout.geometry,
+        ),
+        logicalProgress: runtime.progress.logical.project(
+          snapshot,
+          layout.geometry,
+        ),
       ),
     );
     handleResolvedPosition(snapshot);
@@ -190,6 +199,7 @@ mixin ReaderViewPageInteractionMixin
     if (position.chapterId != currentChapterId) {
       if (tx != null) {
         tx.pendingChapterId = position.chapterId;
+        runtime.window.requestChapter(position.chapterId);
       } else {
         adoptContinuousAnchorChapter(position.chapterId);
       }
@@ -536,6 +546,8 @@ mixin ReaderViewPageInteractionMixin
       }
     }
     commitPendingContinuousMetrics();
+    runtime.window.clearPending();
+    runtime.window.pendingMetricUpdate = false;
     if (tx != null) {
       runtime.transactions.finish(tx.id);
       _emitRuntimeEvent(
@@ -763,6 +775,15 @@ mixin ReaderViewPageInteractionMixin
       return;
     }
     _expandForwardInFlight = true;
+    // 扩窗意图经 WindowManager 记录（方案 §41/§42：请求与提交分离）。
+    runtime.window.requestForward();
+    _emitRuntimeEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.windowRequested,
+        at: runtime.clock.now,
+        blockIndex: 1,
+      ),
+    );
     onContinuousWindowExpand(forward: true);
     _expandForwardDebounce = Timer(const Duration(milliseconds: 600), () {
       _expandForwardInFlight = false;
@@ -773,6 +794,14 @@ mixin ReaderViewPageInteractionMixin
     if (_expandBackwardDebounce?.isActive ?? false) {
       return;
     }
+    runtime.window.requestBackward();
+    _emitRuntimeEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.windowRequested,
+        at: runtime.clock.now,
+        blockIndex: 0,
+      ),
+    );
     onContinuousWindowExpand(forward: false);
     _expandBackwardDebounce = Timer(const Duration(milliseconds: 600), () {});
   }

@@ -153,7 +153,7 @@ class ReaderContinuousScrollController extends ChangeNotifier {
 
   /// 章在窗口中的完整占位高度：章头 + 章体 + 章尾。
   ///
-  /// 窗口坐标（prefix、positionAtContentY、contentYFor）必须与 view 的
+  /// 窗口坐标（prefix、resolver.resolveContentY、contentYFor）必须与 view 的
   /// sliver 布局（header + body + trailing）一致，否则跨章边界换算有
   /// 固定偏差。
   double effectiveExtentOf(ContinuousChapterEntry entry) {
