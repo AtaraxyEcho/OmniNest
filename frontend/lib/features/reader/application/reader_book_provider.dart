@@ -423,6 +423,9 @@ Future<ParsedBook> _awaitServerTextManifest(
 }
 
 /// 将路由、目录或历史进度中的章节标识解析为书籍章节索引。
+///
+/// 未知章节标识返回 null（显式失败），由调用方决定忽略请求或提示错误；
+/// 禁止静默回退到第一章伪造目标位置。
 int? resolveParsedChapterIndex(ParsedBook book, String chapterId) {
   if (book.chapters.isEmpty) return null;
 
@@ -441,7 +444,7 @@ int? resolveParsedChapterIndex(ParsedBook book, String chapterId) {
   final titleIndex = book.chapters.indexWhere(
     (chapter) => chapter.title == chapterId,
   );
-  return titleIndex >= 0 ? titleIndex : 0;
+  return titleIndex >= 0 ? titleIndex : null;
 }
 
 /// 返回客户端阅读器使用的规范章节标识。

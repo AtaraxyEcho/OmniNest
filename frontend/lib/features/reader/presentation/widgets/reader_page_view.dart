@@ -698,6 +698,21 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _scheduleTransitionRelease();
     } else {
       _probingNext = false;
+      // 探测页无内容：物理页不得停留在未确认页上。弹回最后确认页，
+      // 避免扩窗后物理位置与状态页索引脱节，后续翻页 animateToPage
+      // 空转造成边界处点击无响应（failure cleanup，方案 §33/§41）。
+      final ctrl = _pageController;
+      final lastConfirmed = _localPageCount - 1;
+      if (ctrl != null &&
+          ctrl.hasClients &&
+          lastConfirmed >= 0 &&
+          (ctrl.page ?? probeIndex).round() == probeIndex) {
+        _debugPageTurn(
+          'probePageSnapBack',
+          detail: 'from=$probeIndex to=$lastConfirmed',
+        );
+        ctrl.jumpToPage(lastConfirmed);
+      }
       _dispatchBoundaryRequest(
         widget.callbacks.onNextChapter,
         hasNeighbor: widget.state.hasNextChapter,

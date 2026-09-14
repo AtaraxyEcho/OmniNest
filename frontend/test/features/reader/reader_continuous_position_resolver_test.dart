@@ -183,5 +183,61 @@ void main() {
       final resolved = resolver.resolveContentY(36.0 + 100)!;
       expect(resolved.logical.charOffset, entry.blockCharPrefixes[1]);
     });
+
+    test('性质化扫描：密集网格上双坐标往返与单调性保持', () {
+      // 正文 + 图片 + 正文（图 600 高），章体总高 800。
+      final entry = _entryWithImage(id: 'c1');
+      final controller = _controller(anchor: entry);
+      final resolver = controller.resolver;
+
+      final bodyTop = 36.0;
+      final bodyHeight = entry.totalHeight;
+      var lastCursor = -1.0;
+      var lastCharOffset = -1;
+      for (var i = 0; i <= 400; i++) {
+        final contentY = bodyTop + bodyHeight * i / 400;
+        final resolved = resolver.resolveContentY(contentY)!;
+
+        // Visual 往返：块索引一致、比例误差有界。
+        final backY = resolver.contentYForVisualPosition(resolved.visual)!;
+        final again = resolver.visualAtContentY(backY)!;
+        expect(
+          again.blockIndex,
+          resolved.visual.blockIndex,
+          reason: 'y=$contentY',
+        );
+        expect(
+          again.blockRatio,
+          closeTo(resolved.visual.blockRatio, 0.001),
+          reason: 'y=$contentY',
+        );
+
+        // 视觉游标单调不减。
+        expect(
+          resolved.chapterVisualCursor,
+          greaterThanOrEqualTo(lastCursor),
+          reason: 'y=$contentY',
+        );
+        lastCursor = resolved.chapterVisualCursor;
+
+        // Logical 往返：charOffset → 视觉 → contentY → charOffset 有界。
+        final visual =
+            resolver.visualFromLogical('c1', resolved.logical.charOffset)!;
+        final logicalBack = resolver.logicalFromVisual(visual)!.charOffset;
+        expect(
+          (logicalBack - resolved.logical.charOffset).abs(),
+          lessThanOrEqualTo(2),
+          reason: 'y=$contentY charOffset=${resolved.logical.charOffset}',
+        );
+
+        // 逻辑进度随向下扫描单调不减。
+        expect(
+          resolved.logical.charOffset,
+          greaterThanOrEqualTo(lastCharOffset),
+          reason: 'y=$contentY',
+        );
+        lastCharOffset = resolved.logical.charOffset;
+      }
+    });
   });
 }

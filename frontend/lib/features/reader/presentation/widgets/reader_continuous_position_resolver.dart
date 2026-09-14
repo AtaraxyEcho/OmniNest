@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_visual_metrics.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -80,6 +81,8 @@ class ContinuousResolvedPosition {
     required this.chapterVisualProgress,
     required this.chapterVisualCursor,
     required this.chapterVisualExtent,
+    required this.visualBlockStart,
+    required this.visualBlockEnd,
     required this.contentY,
   });
 
@@ -98,6 +101,12 @@ class ContinuousResolvedPosition {
 
   /// 章体视觉总高度。
   final double chapterVisualExtent;
+
+  /// 当前块视觉区间起点（章体局部）。
+  final double visualBlockStart;
+
+  /// 当前块视觉区间终点（章体局部）。
+  final double visualBlockEnd;
 
   /// 窗口内容坐标（含前缀章与章头 chrome）。
   final double contentY;
@@ -152,12 +161,13 @@ class ReaderContinuousPositionResolver {
 
     final normalizedOffset = contentY.clamp(0.0, totalHeight);
 
-    // 二分查找 normalizedOffset 落在哪个 block 的累积高度区间内。
+    // 二分查找 normalizedOffset 落在哪个 block 的累积高度区间内，
+    // 块区间按 [start, end) 归属（块底归下一块），与窗口级映射一致。
     var lo = 0;
     var hi = cumulativeHeights.length - 1;
     while (lo < hi) {
       final mid = (lo + hi) ~/ 2;
-      if (cumulativeHeights[mid] < normalizedOffset) {
+      if (cumulativeHeights[mid] <= normalizedOffset) {
         lo = mid + 1;
       } else {
         hi = mid;
@@ -249,12 +259,29 @@ class ReaderContinuousPositionResolver {
                 start -
                 ReaderContinuousScrollController.chapterHeaderExtent)
             .clamp(0.0, entry.totalHeight);
-        final visual = _visualInEntry(entry, localY);
-        final charOffset = _charOffsetInEntry(entry, localY, visual);
+        final visualMetrics = ReaderContinuousVisualMetrics(
+          ReaderContentMetrics.fromEntry(entry),
+        );
+        final (blockIndex, offsetInBlock, blockRatio) = visualMetrics.visualAt(
+          localY,
+        );
+        final visual = VisualPosition(
+          chapterId: entry.chapterId,
+          blockIndex: blockIndex,
+          offsetInBlock: offsetInBlock,
+          blockRatio: blockRatio,
+        );
+        final charOffset = visualMetrics.charOffsetForBlock(
+          blockIndex,
+          blockRatio,
+          blocks: entry.blocks,
+        );
         final progress =
             entry.totalChars > 0
                 ? (charOffset / entry.totalChars).clamp(0.0, 1.0)
                 : 0.0;
+        final (visualBlockStart, visualBlockEnd) = visualMetrics
+            .visualRangeOfBlock(blockIndex);
         return ContinuousResolvedPosition(
           chapterId: entry.chapterId,
           visual: visual,
@@ -269,6 +296,8 @@ class ReaderContinuousPositionResolver {
                   : 0.0,
           chapterVisualCursor: localY,
           chapterVisualExtent: entry.totalHeight,
+          visualBlockStart: visualBlockStart,
+          visualBlockEnd: visualBlockEnd,
           contentY: y,
         );
       }
@@ -291,7 +320,19 @@ class ReaderContinuousPositionResolver {
                 start -
                 ReaderContinuousScrollController.chapterHeaderExtent)
             .clamp(0.0, entry.totalHeight);
-        return _visualInEntry(entry, localY);
+        final (
+          blockIndex,
+          offsetInBlock,
+          blockRatio,
+        ) = ReaderContinuousVisualMetrics(
+          ReaderContentMetrics.fromEntry(entry),
+        ).visualAt(localY);
+        return VisualPosition(
+          chapterId: entry.chapterId,
+          blockIndex: blockIndex,
+          offsetInBlock: offsetInBlock,
+          blockRatio: blockRatio,
+        );
       }
     }
     return null;
@@ -304,16 +345,14 @@ class ReaderContinuousPositionResolver {
     if (entry == null) {
       return null;
     }
-    final heights = entry.cumulativeHeights;
-    if (entry.blockCount <= 0 ||
-        heights.length != entry.blockCount ||
+    final metrics = ReaderContentMetrics.fromEntry(entry);
+    if (!metrics.hasBlockGeometry ||
         position.blockIndex < 0 ||
-        position.blockIndex >= entry.blockCount) {
+        position.blockIndex >= metrics.blockCount) {
       return null;
     }
-    final blockStartY =
-        position.blockIndex > 0 ? heights[position.blockIndex - 1] : 0.0;
-    final blockHeight = heights[position.blockIndex] - blockStartY;
+    final blockStartY = metrics.blockStartY(position.blockIndex);
+    final blockHeight = metrics.blockHeight(position.blockIndex);
     final offset =
         blockHeight > 0 ? position.offsetInBlock.clamp(0.0, blockHeight) : 0.0;
     return _controller.prefixHeightOf(position.chapterId) +
@@ -331,12 +370,15 @@ class ReaderContinuousPositionResolver {
     if (entry == null) {
       return null;
     }
+    final visualMetrics = ReaderContinuousVisualMetrics(
+      ReaderContentMetrics.fromEntry(entry),
+    );
     return LogicalPosition(
       chapterId: entry.chapterId,
-      charOffset: _charOffsetForBlock(
-        entry,
+      charOffset: visualMetrics.charOffsetForBlock(
         position.blockIndex,
         position.blockRatio,
+        blocks: entry.blocks,
       ),
     );
   }
@@ -350,11 +392,9 @@ class ReaderContinuousPositionResolver {
     if (entry == null) {
       return null;
     }
-    final heights = entry.cumulativeHeights;
+    final metrics = ReaderContentMetrics.fromEntry(entry);
     final prefixes = entry.blockCharPrefixes;
-    if (entry.blockCount <= 0 ||
-        heights.length != entry.blockCount ||
-        prefixes.length != entry.blockCount + 1) {
+    if (!metrics.hasBlockGeometry || !metrics.hasCharPrefixes) {
       return null;
     }
     if (charOffset <= 0) {
@@ -366,7 +406,7 @@ class ReaderContinuousPositionResolver {
       );
     }
     var blockIndex = 0;
-    while (blockIndex < entry.blockCount - 1 &&
+    while (blockIndex < metrics.blockCount - 1 &&
         prefixes[blockIndex + 1] <= charOffset) {
       blockIndex++;
     }
@@ -382,15 +422,14 @@ class ReaderContinuousPositionResolver {
       }
       blockIndex = b;
     }
-    final blockCharStart = prefixes[blockIndex];
-    final blockCharEnd = prefixes[blockIndex + 1];
+    final blockCharStart = metrics.charStartOfBlock(blockIndex);
+    final blockCharEnd = metrics.charEndOfBlock(blockIndex);
     final blockChars = blockCharEnd - blockCharStart;
     final ratio =
         blockChars > 0
             ? ((charOffset - blockCharStart) / blockChars).clamp(0.0, 1.0)
             : 0.0;
-    final blockStartY = blockIndex > 0 ? heights[blockIndex - 1] : 0.0;
-    final blockHeight = heights[blockIndex] - blockStartY;
+    final blockHeight = metrics.blockHeight(blockIndex);
     return VisualPosition(
       chapterId: chapterId,
       blockIndex: blockIndex,
@@ -417,9 +456,20 @@ class ReaderContinuousPositionResolver {
     if (entry == null || entry.totalChars <= 0 || entry.totalHeight <= 0) {
       return null;
     }
+    final metrics = ReaderContentMetrics.fromEntry(entry);
+    final visualMetrics = ReaderContinuousVisualMetrics(metrics);
     final localY = visualCursor.clamp(0.0, entry.totalHeight);
-    final visual = _visualInEntry(entry, localY);
-    return _charOffsetInEntry(entry, localY, visual);
+    final (blockIndex, _, blockRatio) = visualMetrics.visualAt(localY);
+    if (!metrics.hasCharPrefixes) {
+      // 未就绪章退回全章线性估算。
+      final ratio = entry.totalHeight > 0 ? (localY / entry.totalHeight) : 0.0;
+      return (ratio * entry.totalChars).round().clamp(0, entry.totalChars);
+    }
+    return visualMetrics.charOffsetForBlock(
+      blockIndex,
+      blockRatio,
+      blocks: entry.blocks,
+    );
   }
 
   /// 块重测高后重映射视觉位置：块高变化时按块内比例保持相对位置。
@@ -471,105 +521,6 @@ class ReaderContinuousPositionResolver {
       blockIndex: position.blockIndex,
       offsetInBlock: ratio * newBlockHeight,
       blockRatio: ratio.clamp(0.0, 1.0),
-    );
-  }
-
-  // ── 章内几何 ──
-
-  /// 章体内局部 Y → 视觉位置。
-  VisualPosition _visualInEntry(ContinuousChapterEntry entry, double localY) {
-    final blockIndex = _blockIndexAt(entry, localY);
-    final heights = entry.cumulativeHeights;
-    final hasHeights =
-        entry.blockCount > 0 && heights.length == entry.blockCount;
-    final blockStartY =
-        hasHeights && blockIndex > 0 ? heights[blockIndex - 1] : 0.0;
-    final blockHeight =
-        hasHeights ? heights[blockIndex] - blockStartY : entry.totalHeight;
-    final offsetInBlock = localY - blockStartY;
-    return VisualPosition(
-      chapterId: entry.chapterId,
-      blockIndex: blockIndex,
-      offsetInBlock: offsetInBlock,
-      blockRatio:
-          blockHeight > 0 ? (offsetInBlock / blockHeight).clamp(0.0, 1.0) : 0.0,
-    );
-  }
-
-  /// 块区间按 [start, end) 归属：块顶属当前块，块底（cumulativeHeights[i]）
-  /// 归下一块，避免边界 Y 随机归属。块级高度缺失时返回 0。
-  int _blockIndexAt(ContinuousChapterEntry entry, double localY) {
-    final heights = entry.cumulativeHeights;
-    if (entry.blockCount <= 0 || heights.length != entry.blockCount) {
-      return 0;
-    }
-    var lo = 0;
-    var hi = entry.blockCount - 1;
-    while (lo < hi) {
-      final mid = (lo + hi) >> 1;
-      if (heights[mid] <= localY) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-    return lo >= entry.blockCount ? entry.blockCount - 1 : lo;
-  }
-
-  /// 章体内局部 Y → 逻辑 charOffset。
-  ///
-  /// 就绪章按「块索引 + 块级字符前缀」映射，文本块按块内比例插值；
-  /// 未就绪章退回全章线性估算。
-  int _charOffsetInEntry(
-    ContinuousChapterEntry entry,
-    double localY,
-    VisualPosition visual,
-  ) {
-    if (entry.totalChars <= 0) {
-      return 0;
-    }
-    final prefixes = entry.blockCharPrefixes;
-    final hasPrefixes =
-        entry.isReady &&
-        prefixes.length == entry.blockCount + 1 &&
-        entry.cumulativeHeights.length == entry.blockCount &&
-        entry.blockCount > 0;
-    if (!hasPrefixes) {
-      final ratio = entry.totalHeight > 0 ? (localY / entry.totalHeight) : 0.0;
-      return (ratio * entry.totalChars).round().clamp(0, entry.totalChars);
-    }
-    return _charOffsetForBlock(entry, visual.blockIndex, visual.blockRatio);
-  }
-
-  /// 块索引 + 块内比例 → 逻辑 charOffset。
-  int _charOffsetForBlock(
-    ContinuousChapterEntry entry,
-    int blockIndex,
-    double blockRatio,
-  ) {
-    final prefixes = entry.blockCharPrefixes;
-    if (blockIndex < 0 || blockIndex >= entry.blockCount) {
-      return entry.totalChars;
-    }
-    final blockCharStart = prefixes[blockIndex];
-    final blockCharEnd = prefixes[blockIndex + 1];
-    final blockChars = blockCharEnd - blockCharStart;
-    if (blockChars <= 0) {
-      // 非文本块（图/分隔线等）：块内前半落块首字符，后半落块末字符。
-      return blockRatio >= 0.5 ? blockCharEnd : blockCharStart;
-    }
-    final isTextBlock =
-        blockIndex >= entry.blocks.length ||
-        entry.blocks[blockIndex] is ParagraphBlock ||
-        entry.blocks[blockIndex] is BlockquoteBlock ||
-        entry.blocks[blockIndex] is ListBlock ||
-        entry.blocks[blockIndex] is HeadingBlock;
-    if (!isTextBlock) {
-      return blockRatio >= 0.5 ? blockCharEnd : blockCharStart;
-    }
-    return (blockCharStart + (blockRatio * blockChars).round()).clamp(
-      blockCharStart,
-      blockCharEnd,
     );
   }
 }

@@ -10,6 +10,10 @@ void main() {
     WidgetTester tester,
     GlobalKey<_ImagePageHarnessState> harnessKey, {
     required bool imagePage,
+    int pageCount = 8,
+    int contentPages = 8,
+    bool hasMore = false,
+    bool hasNextChapter = false,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = const Size(800, 600);
@@ -18,7 +22,14 @@ void main() {
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
-          body: _ImagePageHarness(key: harnessKey, imagePage: imagePage),
+          body: _ImagePageHarness(
+            key: harnessKey,
+            imagePage: imagePage,
+            pageCount: pageCount,
+            contentPages: contentPages,
+            hasMore: hasMore,
+            hasNextChapter: hasNextChapter,
+          ),
         ),
       ),
     );
@@ -94,16 +105,100 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(harnessKey.currentState!.pageIndex, 1);
   });
+
+  testWidgets('边界请求超时后闸门释放，可再次请求（PT-2/PT-5）', (tester) async {
+    final harnessKey = GlobalKey<_ImagePageHarnessState>();
+    await pumpHarness(
+      tester,
+      harnessKey,
+      imagePage: false,
+      pageCount: 1,
+      hasNextChapter: true,
+    );
+
+    // 末页右击 → 边界请求；闸门临时阻塞期内重复点击被吞。
+    await tester.tapAt(const Offset(760, 300));
+    await tester.pump();
+    expect(harnessKey.currentState!.nextChapterRequests, 1);
+
+    await tester.tapAt(const Offset(760, 300));
+    await tester.pump();
+    expect(
+      harnessKey.currentState!.nextChapterRequests,
+      1,
+      reason: '边界请求进行中不得重复派发',
+    );
+
+    // 超时复位（1200ms）后闸门必须释放，再次点击重新有效。
+    await tester.pump(const Duration(milliseconds: 1300));
+    await tester.tapAt(const Offset(760, 300));
+    await tester.pump();
+    expect(harnessKey.currentState!.nextChapterRequests, 2);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('探测页无内容时转边界请求，闸门释放后扩窗可续读（PT-3）', (tester) async {
+    final harnessKey = GlobalKey<_ImagePageHarnessState>();
+    await pumpHarness(
+      tester,
+      harnessKey,
+      imagePage: false,
+      pageCount: 2,
+      hasMore: true,
+      contentPages: 2,
+      hasNextChapter: true,
+    );
+
+    // 翻到第 1 页。
+    await tester.tapAt(const Offset(760, 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(harnessKey.currentState!.pageIndex, 1);
+
+    // 再右击进入探测页（pageBuilder 返回 null）→ 转边界请求。
+    await tester.tapAt(const Offset(760, 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      harnessKey.currentState!.nextChapterRequests,
+      1,
+      reason: '探测失败必须转边界请求而不是卡死',
+    );
+
+    // 超时复位后模拟下一章就绪（真实流程中边界请求触发扩窗预热），
+    // 再次右击必须正常翻页：闸门不得残留阻塞。
+    await tester.pump(const Duration(milliseconds: 1300));
+    harnessKey.currentState!.expandNextChapter();
+    await tester.pump();
+    await tester.tapAt(const Offset(760, 300));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.takeException(), isNull);
+    expect(harnessKey.currentState!.pageIndex, 2, reason: '闸门必须最终释放');
+  });
 }
 
 class _ImagePageHarness extends StatefulWidget {
   const _ImagePageHarness({
     required this.imagePage,
+    this.pageCount = 8,
+    this.contentPages = 8,
+    this.hasMore = false,
+    this.hasNextChapter = false,
     super.key,
   });
 
   /// true：当前页渲染图片独占页（含预览 GestureDetector）。
   final bool imagePage;
+
+  /// 状态里的总页数（PagedState.pageCount）。
+  final int pageCount;
+
+  /// 实际有内容的页数；index >= contentPages 时 pageBuilder 返回 null。
+  final int contentPages;
+
+  final bool hasMore;
+  final bool hasNextChapter;
 
   @override
   State<_ImagePageHarness> createState() => _ImagePageHarnessState();
@@ -113,6 +208,9 @@ class _ImagePageHarnessState extends State<_ImagePageHarness> {
   final ReaderPageTurnController controller = ReaderPageTurnController();
   final List<int> observedPages = [];
   int pageIndex = 0;
+  int nextChapterRequests = 0;
+  late int pageCount = widget.pageCount;
+  late int contentPages = widget.contentPages;
   bool paginating = false;
   bool failedPlaceholder = false;
 
@@ -122,6 +220,14 @@ class _ImagePageHarnessState extends State<_ImagePageHarness> {
 
   void setFailedPlaceholder(bool value) {
     setState(() => failedPlaceholder = value);
+  }
+
+  /// 模拟边界请求后的扩窗：下一章就绪，探测页变为真实页。
+  void expandNextChapter() {
+    setState(() {
+      contentPages++;
+      pageCount++;
+    });
   }
 
   @override
@@ -139,11 +245,15 @@ class _ImagePageHarnessState extends State<_ImagePageHarness> {
           state: PagedState(
             chapterId: 'chapter-1',
             pageIndex: pageIndex,
-            pageCount: 8,
-            hasMore: false,
+            pageCount: pageCount,
+            hasMore: widget.hasMore,
+            hasNextChapter: widget.hasNextChapter,
             isPaginating: paginating,
           ),
           pageBuilder: (index) {
+            if (index >= contentPages) {
+              return null;
+            }
             if (failedPlaceholder && index == pageIndex) {
               // 模拟图片加载失败占位：内嵌重试 GestureDetector。
               return GestureDetector(
@@ -169,6 +279,9 @@ class _ImagePageHarnessState extends State<_ImagePageHarness> {
               observedPages.add(index);
               setState(() => pageIndex = index);
             },
+            handleNextChapter: () {
+              nextChapterRequests++;
+            },
           ),
           surfaceColor: Colors.white,
         );
@@ -178,15 +291,19 @@ class _ImagePageHarnessState extends State<_ImagePageHarness> {
 }
 
 class _ImageHarnessCallbacks implements PageTurnCallbacks {
-  _ImageHarnessCallbacks({required this.handlePageChanged});
+  _ImageHarnessCallbacks({
+    required this.handlePageChanged,
+    required this.handleNextChapter,
+  });
 
   final void Function(int) handlePageChanged;
+  final VoidCallback handleNextChapter;
 
   @override
   void onPageChanged(int pageIndex) => handlePageChanged(pageIndex);
 
   @override
-  void onNextChapter() {}
+  void onNextChapter() => handleNextChapter();
 
   @override
   void onPreviousChapter() {}

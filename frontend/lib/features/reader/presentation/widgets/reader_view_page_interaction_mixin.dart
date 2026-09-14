@@ -7,7 +7,6 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
@@ -640,8 +639,9 @@ mixin ReaderViewPageInteractionMixin
         );
         repaginateCurrentChapter(restoreCharOffset: savedCharOffset);
       } else {
-        // 运行时重排双锚点（§23/§28）：变化前冻结视觉+逻辑位置；
-        // 仅图片等零字符块内部走视觉恢复，文本位置逻辑恢复语义更准。
+        // 运行时重排双锚点（§23/§24/§28）：变化前冻结视觉+逻辑位置，
+        // 重排后一律优先按视觉锚点保持视口（§24 禁止 charOffset 反推
+        // contentY）；视觉锚点不可解析时回退逻辑恢复（§23 状态回退）。
         final runtimeAnchor = _captureRuntimeAnchorForReflow();
         contentLoader?.rekeyAndRecomputeHeights(
           currentChapterId,
@@ -667,8 +667,8 @@ mixin ReaderViewPageInteractionMixin
     setState(() {});
   }
 
-  /// 变化前冻结运行时双锚点：仅当视口顶位于零字符块（图片等）内部时
-  /// 返回锚点——文本位置由逻辑恢复保证阅读语义连续。
+  /// 变化前冻结运行时双锚点（§23）：视觉锚点用于重排后按块内比例保持
+  /// 视口；逻辑位置用于一致性确认与锚点不可解析时的状态回退。
   RuntimeAnchor? _captureRuntimeAnchorForReflow() {
     if (isPageMode || !scrollController.hasClients) {
       return null;
@@ -684,12 +684,6 @@ mixin ReaderViewPageInteractionMixin
       return null;
     }
     if (visual.blockIndex < 0 || visual.blockIndex >= entry.blocks.length) {
-      return null;
-    }
-    final block = entry.blocks[visual.blockIndex];
-    final isZeroCharVisualBlock =
-        block is ImageBlock || block is DividerBlock || block is TableBlock;
-    if (!isZeroCharVisualBlock) {
       return null;
     }
     return RuntimeAnchor(

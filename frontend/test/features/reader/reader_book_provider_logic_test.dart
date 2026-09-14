@@ -71,11 +71,14 @@ void main() {
       expect(canonicalReaderChapterId(book, '第二章'), 'chapter_1');
     });
 
-    test('无效历史章节标识回退到第一章', () {
+    test('未知章节标识显式失败返回 null，不静默回退第一章', () {
       final book = buildBook();
 
-      expect(resolveParsedChapterIndex(book, 'legacy-unknown'), 0);
-      expect(canonicalReaderChapterId(book, 'legacy-unknown'), 'chapter_0');
+      expect(resolveParsedChapterIndex(book, 'legacy-unknown'), isNull);
+      expect(
+        canonicalReaderChapterId(book, 'legacy-unknown'),
+        'legacy-unknown',
+      );
       expect(
         resolveParsedChapterIndex(const ParsedBook(chapters: []), 'chapter_0'),
         isNull,
