@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_visual_metrics.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -84,11 +85,15 @@ class ContinuousResolvedPosition {
     required this.visualBlockStart,
     required this.visualBlockEnd,
     required this.contentY,
+    required this.geometryRevision,
   });
 
   final String chapterId;
   final VisualPosition visual;
   final LogicalPosition logical;
+
+  /// 本次解析使用的几何版本号（诊断 ACTIVE 与 LIVE 是否同源）。
+  final int geometryRevision;
 
   /// 逻辑章节进度（charOffset / totalChars）。
   final double chapterProgress;
@@ -136,9 +141,27 @@ class RuntimeAnchor {
 /// 不做 setState、jumpTo、进度保存、章节切换或网络请求。
 /// 所有 contentY ↔ VisualPosition ↔ LogicalPosition 换算必须经此类。
 class ReaderContinuousPositionResolver {
-  const ReaderContinuousPositionResolver(this._controller);
+  ReaderContinuousPositionResolver(this._controller);
 
   final ReaderContinuousScrollController _controller;
+
+  late final _LiveResolverGeometry _liveGeometry = _LiveResolverGeometry(
+    _controller,
+  );
+  _SnapshotResolverGeometry? _lastSnapshotGeometry;
+
+  _ResolverGeometry _geometryFor(ReaderScrollGeometrySource source) {
+    if (source is SnapshotScrollGeometrySource) {
+      final existing = _lastSnapshotGeometry;
+      if (existing != null && identical(existing.snapshot, source.snapshot)) {
+        return existing;
+      }
+      final view = _SnapshotResolverGeometry(source.snapshot);
+      _lastSnapshotGeometry = view;
+      return view;
+    }
+    return _liveGeometry;
+  }
 
   /// 章体局部 contentY → charOffset（持久化精度路径）。
   ///
@@ -244,15 +267,19 @@ class ReaderContinuousPositionResolver {
   ///
   /// 块区间按 [start, end) 归属（块底归下一块，末块 [start, end]）。
   /// 未就绪章（无块级高度）视觉锚点落在 blockIndex=0、比例按章体估算。
-  ContinuousResolvedPosition? resolveContentY(double contentY) {
-    final entries = _controller.entries;
-    if (entries.isEmpty || _controller.anchorChapterId == null) {
+  ContinuousResolvedPosition? resolveContentY(
+    double contentY, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final geometry = _geometryFor(source);
+    final entries = geometry.entries;
+    if (entries.isEmpty || !geometry.resolvable) {
       return null;
     }
     final y = contentY < 0 ? 0.0 : contentY;
     for (final entry in entries) {
-      final start = _controller.prefixHeightOf(entry.chapterId);
-      final end = start + _controller.effectiveExtentOf(entry);
+      final start = geometry.prefixOf(entry.chapterId);
+      final end = start + geometry.extentOf(entry);
       if (y < end || identical(entry, entries.last)) {
         // 章体位于章头之后：章头区域映射章首，章尾留白映射章尾。
         final localY = (y -
@@ -299,6 +326,7 @@ class ReaderContinuousPositionResolver {
           visualBlockStart: visualBlockStart,
           visualBlockEnd: visualBlockEnd,
           contentY: y,
+          geometryRevision: geometry.revision,
         );
       }
     }
@@ -306,15 +334,19 @@ class ReaderContinuousPositionResolver {
   }
 
   /// 解析窗口 contentY 处的视觉位置（运行时锚点解析入口）。
-  VisualPosition? visualAtContentY(double contentY) {
-    final entries = _controller.entries;
-    if (entries.isEmpty || _controller.anchorChapterId == null) {
+  VisualPosition? visualAtContentY(
+    double contentY, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final geometry = _geometryFor(source);
+    final entries = geometry.entries;
+    if (entries.isEmpty || !geometry.resolvable) {
       return null;
     }
     final y = contentY < 0 ? 0.0 : contentY;
     for (final entry in entries) {
-      final start = _controller.prefixHeightOf(entry.chapterId);
-      final end = start + _controller.effectiveExtentOf(entry);
+      final start = geometry.prefixOf(entry.chapterId);
+      final end = start + geometry.extentOf(entry);
       if (y < end || identical(entry, entries.last)) {
         final localY = (y -
                 start -
@@ -340,8 +372,12 @@ class ReaderContinuousPositionResolver {
 
   /// 视觉位置对应的窗口 contentY；锚点章不在窗口或块级高度缺失时
   /// 返回 null，调用方应回退高度差补偿。
-  double? contentYForVisualPosition(VisualPosition position) {
-    final entry = _controller.entryFor(position.chapterId);
+  double? contentYForVisualPosition(
+    VisualPosition position, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final geometry = _geometryFor(source);
+    final entry = geometry.entryFor(position.chapterId);
     if (entry == null) {
       return null;
     }
@@ -355,7 +391,7 @@ class ReaderContinuousPositionResolver {
     final blockHeight = metrics.blockHeight(position.blockIndex);
     final offset =
         blockHeight > 0 ? position.offsetInBlock.clamp(0.0, blockHeight) : 0.0;
-    return _controller.prefixHeightOf(position.chapterId) +
+    return geometry.prefixOf(position.chapterId) +
         ReaderContinuousScrollController.chapterHeaderExtent +
         blockStartY +
         offset;
@@ -365,8 +401,12 @@ class ReaderContinuousPositionResolver {
   ///
   /// 非文本块（图/分隔线/表格）字符数为 0 或不逐字映射：块内前半落块首
   /// 字符、后半落块末字符；图片内部移动时 charOffset 保持不变是正确行为。
-  LogicalPosition? logicalFromVisual(VisualPosition position) {
-    final entry = _controller.entryFor(position.chapterId);
+  LogicalPosition? logicalFromVisual(
+    VisualPosition position, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final geometry = _geometryFor(source);
+    final entry = geometry.entryFor(position.chapterId);
     if (entry == null) {
       return null;
     }
@@ -387,8 +427,13 @@ class ReaderContinuousPositionResolver {
   ///
   /// charOffset 落在零字符块（图片）边界时映射到该块顶部，
   /// 避免恢复时直接跳到下一段正文把整图甩出视口。
-  VisualPosition? visualFromLogical(String chapterId, int charOffset) {
-    final entry = _controller.entryFor(chapterId);
+  VisualPosition? visualFromLogical(
+    String chapterId,
+    int charOffset, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final geometry = _geometryFor(source);
+    final entry = geometry.entryFor(chapterId);
     if (entry == null) {
       return null;
     }
@@ -451,8 +496,13 @@ class ReaderContinuousPositionResolver {
   ///
   /// seek 换算用：游标落在文本块时按块内比例投影，语义与
   /// resolveContentY 的正向映射互逆。
-  int? charOffsetForVisualCursor(String chapterId, double visualCursor) {
-    final entry = _controller.entryFor(chapterId);
+  int? charOffsetForVisualCursor(
+    String chapterId,
+    double visualCursor, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final geometry = _geometryFor(source);
+    final entry = geometry.entryFor(chapterId);
     if (entry == null || entry.totalChars <= 0 || entry.totalHeight <= 0) {
       return null;
     }
@@ -479,8 +529,10 @@ class ReaderContinuousPositionResolver {
   VisualPosition? remapVisualPosition(
     VisualPosition position, {
     ContinuousChapterEntry? oldEntry,
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
   }) {
-    final newEntry = _controller.entryFor(position.chapterId);
+    final geometry = _geometryFor(source);
+    final newEntry = geometry.entryFor(position.chapterId);
     if (newEntry == null) {
       return null;
     }
@@ -523,4 +575,82 @@ class ReaderContinuousPositionResolver {
       blockRatio: ratio.clamp(0.0, 1.0),
     );
   }
+}
+
+/// 解析器内部几何视图：统一 Live 与 Snapshot 两种来源的读取口径
+/// （方案 §6-8）。Resolver 本身仍是纯函数，几何由外部决定。
+abstract interface class _ResolverGeometry {
+  List<ContinuousChapterEntry> get entries;
+
+  double prefixOf(String chapterId);
+
+  ContinuousChapterEntry? entryFor(String chapterId);
+
+  double extentOf(ContinuousChapterEntry entry);
+
+  /// 窗口是否可解析（Live 需锚点存在；Snapshot 构建时已含锚点）。
+  bool get resolvable;
+
+  int get revision;
+}
+
+class _LiveResolverGeometry implements _ResolverGeometry {
+  const _LiveResolverGeometry(this.controller);
+
+  final ReaderContinuousScrollController controller;
+
+  @override
+  List<ContinuousChapterEntry> get entries => controller.entries;
+
+  @override
+  double prefixOf(String chapterId) => controller.prefixHeightOf(chapterId);
+
+  @override
+  ContinuousChapterEntry? entryFor(String chapterId) =>
+      controller.entryFor(chapterId);
+
+  @override
+  double extentOf(ContinuousChapterEntry entry) =>
+      controller.effectiveExtentOf(entry);
+
+  @override
+  bool get resolvable =>
+      controller.entries.isNotEmpty && controller.anchorChapterId != null;
+
+  @override
+  int get revision => controller.geometryRevision;
+}
+
+class _SnapshotResolverGeometry implements _ResolverGeometry {
+  _SnapshotResolverGeometry(this.snapshot);
+
+  final ReaderScrollGeometrySnapshot snapshot;
+
+  late final List<ContinuousChapterEntry> _synthesizedEntries = [
+    for (final id in snapshot.chapterIds) snapshot.chapterOf(id)!.toEntry(),
+  ];
+
+  @override
+  List<ContinuousChapterEntry> get entries => _synthesizedEntries;
+
+  @override
+  double prefixOf(String chapterId) => snapshot.prefixOf(chapterId);
+
+  @override
+  ContinuousChapterEntry? entryFor(String chapterId) =>
+      snapshot.chapterOf(chapterId)?.toEntry();
+
+  @override
+  double extentOf(ContinuousChapterEntry entry) =>
+      ReaderContinuousScrollController.chapterHeaderExtent +
+      entry.totalHeight +
+      (entry.isReady
+          ? ReaderContinuousScrollController.chapterTrailingExtent
+          : ReaderContinuousScrollController.chapterTrailingLoadingExtent);
+
+  @override
+  bool get resolvable => snapshot.chapterIds.isNotEmpty;
+
+  @override
+  int get revision => snapshot.revision;
 }

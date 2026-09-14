@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 
 /// 连续滚动窗口内的一章。
 @immutable
@@ -94,11 +95,15 @@ class ContinuousScrollPosition {
     required this.visual,
     required this.chapterVisualProgress,
     required this.chapterVisualCursor,
+    required this.geometryRevision,
   });
 
   final String chapterId;
   final int charOffset;
   final double chapterProgress;
+
+  /// 本次解析使用的几何版本号（ACTIVE_SCROLL 期间应恒定）。
+  final int geometryRevision;
 
   /// 窗口内容坐标（含前缀章节高度）。
   final double contentY;
@@ -264,7 +269,16 @@ class ReaderContinuousScrollController extends ChangeNotifier {
       running += effectiveExtentOf(entry);
     }
     _items = _buildItems(nextEntries);
+    geometryRevision++;
     notifyListeners();
+  }
+
+  /// 构建当前 Live 几何的不可变快照（方案 §10：ScrollStart 时生成）。
+  ReaderScrollGeometrySnapshot buildGeometrySnapshot({int? revision}) {
+    return ReaderScrollGeometrySnapshot.fromController(
+      this,
+      revision: revision ?? geometryRevision,
+    );
   }
 
   /// 窗口签名比较：章组成、就绪态与高度指纹一致则视为未变化。
@@ -324,9 +338,15 @@ class ReaderContinuousScrollController extends ChangeNotifier {
   late final ReaderContinuousPositionResolver resolver =
       ReaderContinuousPositionResolver(this);
 
+  /// 窗口几何版本号：rebuild 实际应用变化时递增，供快照与诊断对齐。
+  int geometryRevision = 0;
+
   /// 根据窗口内容 Y 解析阅读位置（双坐标：视觉 + 逻辑）。
-  ContinuousScrollPosition? positionAtContentY(double contentY) {
-    final resolved = resolver.resolveContentY(contentY);
+  ContinuousScrollPosition? positionAtContentY(
+    double contentY, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final resolved = resolver.resolveContentY(contentY, source: source);
     if (resolved == null) {
       return null;
     }
@@ -338,12 +358,16 @@ class ReaderContinuousScrollController extends ChangeNotifier {
       visual: resolved.visual,
       chapterVisualProgress: resolved.chapterVisualProgress,
       chapterVisualCursor: resolved.chapterVisualCursor,
+      geometryRevision: resolved.geometryRevision,
     );
   }
 
   /// 解析窗口 contentY 处的视觉锚点（运行时布局保持用）。
-  VisualAnchor? visualAnchorAt(double contentY) {
-    final visual = resolver.visualAtContentY(contentY);
+  VisualAnchor? visualAnchorAt(
+    double contentY, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final visual = resolver.visualAtContentY(contentY, source: source);
     if (visual == null) {
       return null;
     }
