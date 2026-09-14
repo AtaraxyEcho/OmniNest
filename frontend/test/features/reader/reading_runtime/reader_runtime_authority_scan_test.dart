@@ -83,7 +83,8 @@ void main() {
     'ReaderPersistenceQueue',
     'persistenceQueue',
     'ReaderTargetResolver',
-    'pendingChapterId',
+    // WindowManager 第二份收养状态的唯一写入口；tx.pendingChapterId
+    // 是合法活代码，不能按符号全域禁用。
     'requestChapter',
     'disposeOwnNotifier',
   ];
