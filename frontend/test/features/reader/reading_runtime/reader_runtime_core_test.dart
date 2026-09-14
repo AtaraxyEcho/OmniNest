@@ -77,17 +77,23 @@ void main() {
     });
   });
 
-  group('ReaderGeometryScheduler（新方案 §25/§42）', () {
-    test('手势期间挂起，终端提交消费挂起标记', () {
+  group('ReaderGeometryScheduler（B5 §49 装载边界）', () {
+    test('手势期间挂起拒绝，终端边界放行，挂起随终端消费清零', () {
       final scheduler = ReaderGeometryScheduler();
-      expect(scheduler.shouldCommitImmediately(inActiveGesture: true), isFalse);
+      expect(scheduler.authorizeInstall(inActiveGesture: true), isFalse);
       expect(scheduler.hasPendingCommit, isTrue);
 
-      expect(scheduler.shouldCommitImmediately(inActiveGesture: false), isTrue);
-      // 手势期间挂起过一次：空闲提交时消费挂起标记。
+      // 终端边界（settle 旁路）总是放行，取最新状态装载。
+      expect(
+        scheduler.authorizeInstall(inActiveGesture: true, terminal: true),
+        isTrue,
+      );
+      // 手势期间挂起过一次：终端消费挂起标记。
       expect(scheduler.consumePendingCommit(), isTrue);
       expect(scheduler.hasPendingCommit, isFalse);
       expect(scheduler.consumePendingCommit(), isFalse);
+      // 空闲边界直接放行。
+      expect(scheduler.authorizeInstall(inActiveGesture: false), isTrue);
     });
   });
 

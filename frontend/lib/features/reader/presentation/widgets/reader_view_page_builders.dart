@@ -1265,12 +1265,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
               anchor: anchorBefore,
               anchorContentY: anchorContentY,
             );
-    // 提交发生在当前事务内时登记结束性 Commit（方案 §68：每事务 ≤1 次）。
-    final tx = runtime.transactions.current;
-    if (tx != null && !tx.geometryCommitted) {
-      tx.geometryCommitted = true;
-      runtime.diagnostics.geometryCommitCount++;
-    }
+    // 结束性 Commit 登记已内化 WindowBuilder（B5 §49：边界归调度器）。
     final double target;
     if (shift != null) {
       target = (scrollController.offset + shift).clamp(0.0, max);

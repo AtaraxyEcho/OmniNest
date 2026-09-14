@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show immutable;
 
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 
@@ -181,15 +182,19 @@ class ReaderWindowBuilder {
 
   /// 执行一次窗口构建（B4 自页面 rebuildContinuousWindow 迁入）。
   ///
-  /// 返回是否真实发生重建。指纹未变化且窗口非空时整段跳过（§61：
-  /// 不 dispose/不重建任何已挂载图片）；手势活跃期默认挂起为
-  /// pendingMetricUpdate，ScrollEnd 终端提交时由调用方旁路该守卫。
+  /// 返回是否真实发生重建。提交边界由 GeometryScheduler 决定（B5 §49）：
+  /// 手势期间（非终端）只登记挂起并整段跳过（§61：不 dispose/不重建任何
+  /// 已挂载图片）；终端提交（settle 旁路）取最新状态一次装载；指纹未
+  /// 变化且窗口非空时同样跳过。
   bool build({bool deferIfGestureActive = true}) {
     final d = delegate;
     if (d == null || _building || d.isPageMode || !d.hasBuildData) {
       return false;
     }
-    if (deferIfGestureActive && _runtime.isInActiveGesture) {
+    if (!_runtime.geometryScheduler.authorizeInstall(
+      inActiveGesture: _runtime.isInActiveGesture,
+      terminal: !deferIfGestureActive,
+    )) {
       // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12），
       // 坐标系变化不得发生在用户滚动手势期间。
       _runtime.window.pendingMetricUpdate = true;
@@ -283,9 +288,19 @@ class ReaderWindowBuilder {
         );
       }
       // GeometryStore 接入（方案 §13/§42/§94）：builder 输出即 Candidate，
-      // 本方法只在 commit 边界（已有 ACTIVE 守卫）被调用，此处提交为 Live。
-      _runtime.geometry.publishCandidate(d.buildGeometrySnapshot());
+      // 装载边界已经调度器放行，此处提交为 Live 并登记结束性 Commit。
+      final live = d.buildGeometrySnapshot();
+      _runtime.geometry.publishCandidate(live);
       _runtime.geometry.commitCandidate();
+      _runtime.diagnostics.geometryCommitCount++;
+      _runtime.emitEvent(
+        ReaderRuntimeEvent(
+          type: ReaderRuntimeEventType.geometryCommitted,
+          at: _runtime.clock.now,
+          transactionId: _runtime.transactions.current?.id ?? 0,
+          layoutRevision: '${live.revision}',
+        ),
+      );
 
       // 滑窗已按首尾高度补偿，勿再按锚点 prefix 二次修正。
       if (!windowSlid) {

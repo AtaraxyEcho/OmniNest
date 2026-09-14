@@ -86,7 +86,4 @@ class ReaderTransaction {
   bool pendingExpandForward = false;
 
   bool pendingExpandBackward = false;
-
-  /// 本事务是否已完成结束性 Geometry Commit（方案 §68/§107：≤1 次）。
-  bool geometryCommitted = false;
 }

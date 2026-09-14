@@ -2,6 +2,7 @@ import 'package:flutter/material.dart' show Size;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_window_builder.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
@@ -128,7 +129,9 @@ class _FakeWindowDelegate implements ReaderWindowBuildDelegate {
     controller.rebuild(
       anchorChapterId: anchorChapterId,
       allChapterIds: chapterIds,
-      resolve: (id) => _chapter(id: id),
+      // 章体高度跟随采样高度：终端装载的 Live 几何可直接断言
+      // 「取最新 Candidate」语义。
+      resolve: (id) => _chapter(id: id, height: lastCumulativeHeight),
     );
   }
 
@@ -313,5 +316,58 @@ void main() {
     expect(delegate.entries.first.chapterId, 'c2');
     expect(delegate.slideCompensations, 1);
     expect(delegate.prefixCompensations, prefixBefore);
+  });
+
+  test('B5-场景D：滚动中多 Candidate 挂起，终端提交取最新状态装载', () {
+    final runtime = ReaderReadingRuntime();
+    final controller = ReaderContinuousScrollController();
+    final delegate = _FakeWindowDelegate(controller);
+    runtime.windowBuilder.delegate = delegate;
+    runtime.layoutProvider =
+        () => ReaderLayoutSnapshot(
+          geometry: controller.buildGeometrySnapshot(),
+          viewport: const ReaderViewportSnapshot(
+            viewportSize: Size(400, 800),
+            anchorY: 0,
+            contentWidth: 400,
+            textScale: 1.0,
+            safeAreaTop: 0,
+            safeAreaBottom: 0,
+          ),
+          windowRevision: controller.windowRevision,
+        );
+    addTearDown(() {
+      runtime.dispose();
+      runtime.publisher.notifier.dispose();
+      controller.dispose();
+    });
+
+    runtime.onPointerDragStarted();
+
+    // Candidate A：测高收敛中间态 → 手势期间只登记挂起，不装载。
+    delegate.lastCumulativeHeight = 2100;
+    expect(runtime.windowBuilder.build(), isFalse);
+    expect(runtime.geometry.live, isNull);
+    expect(runtime.geometryScheduler.hasPendingCommit, isTrue);
+    expect(runtime.window.pendingMetricUpdate, isTrue);
+
+    // Candidate B：收敛继续推进（滚动中的最新状态）。
+    delegate.lastCumulativeHeight = 2600;
+    expect(runtime.windowBuilder.build(), isFalse);
+    expect(runtime.geometry.live, isNull);
+
+    // 终端提交（settle 旁路）：取最新状态一次装载（§49）。
+    expect(runtime.windowBuilder.build(deferIfGestureActive: false), isTrue);
+    expect(runtime.geometry.live, isNotNull);
+    expect(runtime.geometry.live!.chapterOf('c0')!.toEntry().totalHeight, 2600);
+    expect(
+      runtime.eventLog.events.any(
+        (e) => e.type == ReaderRuntimeEventType.geometryCommitted,
+      ),
+      isTrue,
+    );
+    // 挂起随终端消费清零（_settle 路径）。
+    expect(runtime.geometryScheduler.consumePendingCommit(), isTrue);
+    expect(runtime.geometryScheduler.hasPendingCommit, isFalse);
   });
 }
