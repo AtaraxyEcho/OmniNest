@@ -219,10 +219,13 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     double viewportFactor,
   ) async {
     // 键盘滚动进入 Keyboard 事务（方案 §32）：无指针事件也保持事务身份。
-    final didScroll = await scrollBy(
+    final didScroll = await runtime.scrollBy(
       MediaQuery.sizeOf(context).height * viewportFactor,
       kind: ReaderTransactionKind.keyboard,
     );
+    if (didScroll) {
+      unawaited(syncProgressAsync());
+    }
     if (!didScroll && mounted) {
       tryNavigateChapter(viewportFactor > 0 ? 1 : -1);
     }
@@ -262,10 +265,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     }
     // 章节边界导航进入 Navigation 事务（方案 §33/§117）：不伪装成用户滚动。
     unawaited(
-      animateToOffsetProgrammatic(
-        target,
-        kind: ReaderTransactionKind.navigation,
-      ),
+      runtime.animateToOffset(target, kind: ReaderTransactionKind.navigation),
     );
   }
 
@@ -395,10 +395,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         final max = _scrollController.position.maxScrollExtent;
         final target = (windowY - viewportAnchorY).clamp(0.0, max);
         // 视觉 seek 进入 VisualSeek 事务（方案 §33/§117）。
-        jumpToOffsetProgrammatic(
-          target,
-          kind: ReaderTransactionKind.visualSeek,
-        );
+        runtime.jumpToOffset(target, kind: ReaderTransactionKind.visualSeek);
       }
       isRestoringProgress = false;
       scheduleLocalProgressSave(

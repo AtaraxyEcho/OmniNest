@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_publisher.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_scroll_effect.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
@@ -725,6 +726,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       },
     );
     if (kIsWeb) BrowserContextMenu.disableContextMenu();
+    // 物理滚动适配器注入（新方案 §43/§63）：Runtime 不持有 Controller。
+    _runtime.scrollEffect = _ReaderScrollEffectAdapter(_scrollController);
+    // 用户输入取消在途恢复（新方案 §59）：Runtime 发请求，页面清恢复态。
+    _runtime.onRestoreCancelRequested = cancelOngoingRestoreForUserScroll;
     // 几何失效请求统一进入收敛调度器（方案 §72）：build/事件只请求。
     _runtime.onGeometryInvalidated =
         (reason) => requestContinuousWindowRebuild();
@@ -1322,4 +1327,33 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (_isPageMode) return buildPageModeContent(content);
     return buildScrollModeContent(content, detail);
   }
+}
+
+/// 物理滚动适配器（新方案 §43）：State 持有 ScrollController，
+/// Runtime 仅面向 [ReaderScrollEffect] 接口。
+class _ReaderScrollEffectAdapter implements ReaderScrollEffect {
+  _ReaderScrollEffectAdapter(this._controller);
+
+  final ScrollController _controller;
+
+  @override
+  bool get hasClients => _controller.hasClients;
+
+  @override
+  double get offset => _controller.offset;
+
+  @override
+  double get maxScrollExtent => _controller.position.maxScrollExtent;
+
+  @override
+  Future<void> animateTo(
+    double offset, {
+    required Duration duration,
+    required Curve curve,
+  }) {
+    return _controller.animateTo(offset, duration: duration, curve: curve);
+  }
+
+  @override
+  void jumpTo(double offset) => _controller.jumpTo(offset);
 }

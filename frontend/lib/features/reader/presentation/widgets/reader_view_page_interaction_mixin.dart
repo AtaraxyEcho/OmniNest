@@ -435,71 +435,6 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
-  /// 事务唯一创建入口（方案 §25 原子切换）：取消旧事务（含在途
-  /// Restore）并冻结新事务的几何/视口/进度映射；滚动状态（方向、
-  /// 显示进度、视觉映射、挂起操作）全部由事务对象承载（§136 终态）。
-  ReaderTransaction _beginScrollTransaction(ReaderTransactionKind kind) {
-    _ensureBookVisualExtentTable();
-    runtime.restore.cancel();
-    final geometry = continuousScrollController.buildGeometrySnapshot();
-    final viewport = currentRuntimeViewport();
-    final tx = runtime.transactions.beginOrReplace(
-      kind: kind,
-      layout: ReaderLayoutSnapshot(
-        geometry: geometry,
-        viewport: viewport,
-        windowRevision: continuousScrollController.windowRevision,
-      ),
-      initialOffset:
-          scrollController.hasClients ? scrollController.offset : 0.0,
-      initialVisualProgress: bookProgressNotifier.value,
-    );
-    _emitRuntimeEvent(
-      ReaderRuntimeEvent(
-        type: ReaderRuntimeEventType.transactionStarted,
-        at: runtime.clock.now,
-        transactionId: tx.id,
-        kind: tx.kind.name,
-        layoutRevision:
-            '${geometry.revision}/${continuousScrollController.windowRevision}',
-        offset: tx.lastScrollOffset,
-      ),
-    );
-    return tx;
-  }
-
-  /// SETTLING 提交（方案 §31-36/§37）：挂起的章节收养与窗口扩容一次完成，
-  /// 随后重建窗口并应用单次锚点修正；事务在提交完成后才结束。
-  void _commitScrollTransaction() {
-    final tx = runtime.transactions.current;
-    if (tx != null) {
-      final pendingChapter = tx.pendingChapterId;
-      if (pendingChapter != null && pendingChapter != currentChapterId) {
-        adoptContinuousAnchorChapter(pendingChapter);
-      }
-      if (tx.pendingExpandForward) {
-        onContinuousWindowExpand(forward: true);
-      }
-      if (tx.pendingExpandBackward) {
-        onContinuousWindowExpand(forward: false);
-      }
-    }
-    commitPendingContinuousMetrics();
-    runtime.window.clearPending();
-    runtime.window.pendingMetricUpdate = false;
-    if (tx != null) {
-      runtime.transactions.finish(tx.id);
-      _emitRuntimeEvent(
-        ReaderRuntimeEvent(
-          type: ReaderRuntimeEventType.transactionCompleted,
-          at: runtime.clock.now,
-          transactionId: tx.id,
-          kind: tx.kind.name,
-        ),
-      );
-    }
-  }
-
   /// 滚动输入适配器（方案 §89/§137）：原生事件经适配器归一为输入源后
   /// 进入事务入口；输入源不携带位置信息。
   late final ReaderScrollInputAdapter scrollInput = ReaderScrollInputAdapter(
@@ -839,116 +774,33 @@ mixin ReaderViewPageInteractionMixin
     cancelOngoingRestoreForUserScroll();
     final viewportDelta =
         (forward ? 1 : -1) * MediaQuery.sizeOf(context).height * 0.8;
-    final didScroll = await scrollBy(viewportDelta);
+    final didScroll = await runtime.scrollBy(viewportDelta);
+    if (didScroll) {
+      unawaited(syncProgressAsync());
+    }
     if (!mounted) return;
     if (!didScroll) {
       // 连续滚动窗口：先扩挂邻章再尝试；大章测高需更长等待。
       onContinuousWindowExpand(forward: forward);
       await Future<void>.delayed(const Duration(milliseconds: 160));
       if (!mounted) return;
-      final again = await scrollBy(viewportDelta);
+      final again = await runtime.scrollBy(viewportDelta);
+      if (again) {
+        unawaited(syncProgressAsync());
+      }
       if (!again && mounted) {
         onContinuousWindowExpand(forward: forward);
         await Future<void>.delayed(const Duration(milliseconds: 200));
         if (!mounted) return;
-        final retry = await scrollBy(viewportDelta);
+        final retry = await runtime.scrollBy(viewportDelta);
+        if (retry) {
+          unawaited(syncProgressAsync());
+        }
         if (!retry && mounted) {
           tryNavigateChapter(forward ? 1 : -1);
         }
       }
     }
-  }
-
-  /// 程序化 animateTo（方案 §33/§34）：显式事务包裹动画滚动，动画结束
-  /// 由 ScrollEnd/SETTLING 路径完成提交；用户手势进行中不抢占（§23）。
-  Future<void> animateToOffsetProgrammatic(
-    double targetOffset, {
-    ReaderTransactionKind kind = ReaderTransactionKind.navigation,
-  }) async {
-    if (!scrollController.hasClients) {
-      return;
-    }
-    final max = scrollController.position.maxScrollExtent;
-    final target = targetOffset.clamp(0.0, max);
-    if (!runtime.isInActiveGesture) {
-      cancelOngoingRestoreForUserScroll();
-      _beginScrollTransaction(kind);
-    }
-    await scrollController.animateTo(
-      target,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOutCubic,
-    );
-  }
-
-  /// 程序化 jumpTo（方案 §33）：显式事务包裹即时跳转，跳转后按事务冻结
-  /// 几何解析位置并一次提交（§40 Commit 后重新 Resolve 同源口径）。
-  void jumpToOffsetProgrammatic(
-    double targetOffset, {
-    ReaderTransactionKind kind = ReaderTransactionKind.layoutCorrection,
-  }) {
-    if (!scrollController.hasClients) {
-      return;
-    }
-    final max = scrollController.position.maxScrollExtent;
-    final target = targetOffset.clamp(0.0, max);
-    if (!runtime.isInActiveGesture) {
-      cancelOngoingRestoreForUserScroll();
-      _beginScrollTransaction(kind);
-    }
-    scrollController.jumpTo(target);
-    final tx = runtime.transactions.current;
-    final snapshot = runtime.position.resolve(
-      scrollOffset: scrollController.offset,
-      layout: tx?.layout ?? currentLiveLayout(),
-      transactionId: tx?.id ?? 0,
-    );
-    if (snapshot != null) {
-      handleResolvedPosition(snapshot);
-    }
-    if (!runtime.isInActiveGesture) {
-      _commitScrollTransaction();
-    }
-  }
-
-  /// 滚动指定距离。返回 true 表示实际执行了滚动。
-  ///
-  /// [kind] 声明程序化滚动来源（方案 §33）：侧边点击 sideTap、键盘
-  /// keyboard；滚动全程属于显式事务，不得伪装成用户滚动（§35）。
-  Future<bool> scrollBy(
-    double delta, {
-    ReaderTransactionKind kind = ReaderTransactionKind.sideTap,
-  }) async {
-    if (!scrollController.hasClients) return false;
-    final currentOffset = scrollController.offset;
-    final max = scrollController.position.maxScrollExtent;
-    final target = (currentOffset + delta).clamp(0.0, max);
-    if ((target - currentOffset).abs() < 1.0) return false;
-    // 程序化滚动开启显式事务并终止在途恢复（§59）；用户手势进行中
-    // 不抢占其会话（§23 单一 active 事务）。
-    if (!runtime.isInActiveGesture) {
-      cancelOngoingRestoreForUserScroll();
-      _beginScrollTransaction(kind);
-    }
-    await scrollController.animateTo(
-      target,
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeOutCubic,
-    );
-    if (!mounted || !scrollController.hasClients) return true;
-    // 键盘/侧点滚动不产生指针事件：主动按窗口控制器解析结果汇报位置，
-    // 绕过"距上次指针事件 >2s"守卫的停更。
-    final tx = runtime.transactions.current;
-    final snapshot = runtime.position.resolve(
-      scrollOffset: scrollController.offset,
-      layout: tx?.layout ?? currentLiveLayout(),
-      transactionId: tx?.id ?? 0,
-    );
-    if (snapshot != null) {
-      handleResolvedPosition(snapshot);
-    }
-    unawaited(syncProgressAsync());
-    return true;
   }
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1154,7 +1006,7 @@ mixin ReaderViewPageInteractionMixin
       }
       final max = scrollController.position.maxScrollExtent;
       final target = (anchorY - viewportAnchorY).clamp(0.0, max);
-      jumpToOffsetProgrammatic(
+      runtime.jumpToOffset(
         target,
         kind: ReaderTransactionKind.layoutCorrection,
       );

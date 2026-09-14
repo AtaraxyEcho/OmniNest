@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/animation.dart' show Curves;
 
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_event_log.dart';
@@ -186,6 +187,8 @@ class ReaderReadingRuntime {
   }
 
   void _beginTransaction(ReaderTransactionKind kind) {
+    // 新操作使全部在途异步续作失效（新方案 §59/场景 E）。
+    operationToken.invalidate();
     final layout = layoutProvider?.call();
     if (layout == null) {
       return;
@@ -255,6 +258,81 @@ class ReaderReadingRuntime {
         _scrollPhase = _RuntimeScrollPhase.idle;
       }
     });
+  }
+
+  /// 程序化 scrollBy（新方案 §9/§45/§62）：显式事务 + Token 校验；
+  /// 位置消费由物理 offset 监听链完成（§87），settle 由 ScrollEnd 触发。
+  Future<bool> scrollBy(
+    double delta, {
+    ReaderTransactionKind kind = ReaderTransactionKind.sideTap,
+  }) {
+    final effect = scrollEffect;
+    if (effect == null || !effect.hasClients) {
+      return Future<bool>.value(false);
+    }
+    final target = (effect.offset + delta).clamp(0.0, effect.maxScrollExtent);
+    if ((target - effect.offset).abs() < 1.0) {
+      return Future<bool>.value(false);
+    }
+    return _runProgrammaticScroll(
+      target,
+      kind,
+      const Duration(milliseconds: 250),
+    );
+  }
+
+  /// 程序化 animateTo（新方案 §9/§45/§62）。
+  Future<bool> animateToOffset(
+    double targetOffset, {
+    ReaderTransactionKind kind = ReaderTransactionKind.navigation,
+  }) {
+    final effect = scrollEffect;
+    if (effect == null || !effect.hasClients) {
+      return Future<bool>.value(false);
+    }
+    final target = targetOffset.clamp(0.0, effect.maxScrollExtent);
+    return _runProgrammaticScroll(
+      target,
+      kind,
+      const Duration(milliseconds: 220),
+    );
+  }
+
+  /// 程序化 jumpTo（新方案 §9/§45/§62）。
+  void jumpToOffset(
+    double targetOffset, {
+    ReaderTransactionKind kind = ReaderTransactionKind.layoutCorrection,
+  }) {
+    final effect = scrollEffect;
+    if (effect == null || !effect.hasClients) {
+      return;
+    }
+    final target = targetOffset.clamp(0.0, effect.maxScrollExtent);
+    if (!isInActiveGesture) {
+      onRestoreCancelRequested?.call();
+      _beginTransaction(kind);
+    }
+    effect.jumpTo(target);
+  }
+
+  Future<bool> _runProgrammaticScroll(
+    double target,
+    ReaderTransactionKind kind,
+    Duration duration,
+  ) async {
+    final effect = scrollEffect!;
+    if (!isInActiveGesture) {
+      onRestoreCancelRequested?.call();
+      _beginTransaction(kind);
+    }
+    final token = operationToken.issue();
+    await effect.animateTo(
+      target,
+      duration: duration,
+      curve: Curves.easeOutCubic,
+    );
+    // 场景 E：动画期间出现新操作（用户输入等）→ 本次续作整体丢弃。
+    return operationToken.isCurrent(token);
   }
 
   /// 事件发射（方案 §103/§126）：debug 构建同步输出验收日志。

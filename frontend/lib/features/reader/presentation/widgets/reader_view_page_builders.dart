@@ -176,12 +176,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   /// Runtime Restore 事务创建（方案 §55/§96，由 interaction mixin 实现）。
   ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target);
 
-  /// 程序化 jumpTo（方案 §33，由 interaction mixin 经 State 组合提供）。
-  void jumpToOffsetProgrammatic(
-    double targetOffset, {
-    required ReaderTransactionKind kind,
-  });
-
   // ── 页面尺寸 ──
 
   double computePageWidth() {
@@ -1293,10 +1287,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     }
     // 布局修正进入 LayoutCorrection 事务（方案 §21/§33）：修正性跳转
     // 不伪装成用户滚动。
-    jumpToOffsetProgrammatic(
-      target,
-      kind: ReaderTransactionKind.layoutCorrection,
-    );
+    runtime.jumpToOffset(target, kind: ReaderTransactionKind.layoutCorrection);
   }
 
   /// 滑窗时保持视口：坐标原点平移类补偿，经统一入口即时执行；
