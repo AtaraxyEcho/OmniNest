@@ -103,6 +103,24 @@ class ContinuousResolvedPosition {
   final double contentY;
 }
 
+/// 运行时重排双锚点：布局变化前冻结的视觉 + 逻辑位置对。
+///
+/// [visual] 用于变化后在同一视觉位置（图片内部按块内比例）恢复；
+/// [logical] 用于一致性确认与视觉锚点不可解析时的状态回退。
+/// [oldEntry] 冻结变化前的章体几何，供块内比例重映射使用。
+@immutable
+class RuntimeAnchor {
+  const RuntimeAnchor({
+    required this.visual,
+    required this.logical,
+    this.oldEntry,
+  });
+
+  final VisualAnchor visual;
+  final LogicalPosition logical;
+  final ContinuousChapterEntry? oldEntry;
+}
+
 /// 连续阅读唯一位置解析器。
 ///
 /// 纯函数服务：只读窗口几何（章条目、前缀高度、chrome 常量），

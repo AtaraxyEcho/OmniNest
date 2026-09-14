@@ -7,6 +7,8 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -638,6 +640,9 @@ mixin ReaderViewPageInteractionMixin
         );
         repaginateCurrentChapter(restoreCharOffset: savedCharOffset);
       } else {
+        // 运行时重排双锚点（§23/§28）：变化前冻结视觉+逻辑位置；
+        // 仅图片等零字符块内部走视觉恢复，文本位置逻辑恢复语义更准。
+        final runtimeAnchor = _captureRuntimeAnchorForReflow();
         contentLoader?.rekeyAndRecomputeHeights(
           currentChapterId,
           computePageWidth(),
@@ -651,11 +656,75 @@ mixin ReaderViewPageInteractionMixin
           textScale: MediaQuery.textScalerOf(context).scale(1.0),
         );
         rebuildContinuousWindow();
-        restoreScrollPositionFromOffset(savedCharOffset);
+        if (runtimeAnchor != null) {
+          restoreRuntimeAnchor(runtimeAnchor);
+        } else {
+          restoreScrollPositionFromOffset(savedCharOffset);
+        }
       }
     }
 
     setState(() {});
+  }
+
+  /// 变化前冻结运行时双锚点：仅当视口顶位于零字符块（图片等）内部时
+  /// 返回锚点——文本位置由逻辑恢复保证阅读语义连续。
+  RuntimeAnchor? _captureRuntimeAnchorForReflow() {
+    if (isPageMode || !scrollController.hasClients) {
+      return null;
+    }
+    final visual = continuousScrollController.visualAnchorAt(
+      scrollController.offset + viewportAnchorY,
+    );
+    final entry =
+        visual == null
+            ? null
+            : continuousScrollController.entryFor(visual.chapterId);
+    if (visual == null || entry == null) {
+      return null;
+    }
+    if (visual.blockIndex < 0 || visual.blockIndex >= entry.blocks.length) {
+      return null;
+    }
+    final block = entry.blocks[visual.blockIndex];
+    final isZeroCharVisualBlock =
+        block is ImageBlock || block is DividerBlock || block is TableBlock;
+    if (!isZeroCharVisualBlock) {
+      return null;
+    }
+    return RuntimeAnchor(
+      visual: visual,
+      logical: LogicalPosition(
+        chapterId: currentChapterId,
+        charOffset: positionTracker.charOffset,
+      ),
+      oldEntry: entry,
+    );
+  }
+
+  /// 运行时重排后按冻结视觉锚点恢复：块内比例在新布局中保持。
+  void restoreRuntimeAnchor(RuntimeAnchor anchor) {
+    final remapped = continuousScrollController.remapVisualAnchor(
+      anchor.visual,
+      oldEntry: anchor.oldEntry,
+    );
+    final anchorY =
+        remapped == null
+            ? null
+            : continuousScrollController.contentYForVisualAnchor(remapped);
+    if (anchorY == null) {
+      // 视觉锚点不可解析：回退逻辑恢复。
+      restoreScrollPositionFromOffset(anchor.logical.charOffset);
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) {
+        return;
+      }
+      final max = scrollController.position.maxScrollExtent;
+      final target = (anchorY - viewportAnchorY).clamp(0.0, max);
+      scrollController.jumpTo(target);
+    });
   }
 
   /// 重新分页当前章节。
