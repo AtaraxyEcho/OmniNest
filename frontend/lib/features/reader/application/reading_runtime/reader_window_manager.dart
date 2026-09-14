@@ -11,10 +11,6 @@ class ReaderWindowManager {
   /// 会话期间挂起的锚点章收养请求（方案 §64）。
   String? pendingChapterId;
 
-  /// 窗口指标是否有未提交变化（迁移自页面 State 的
-  /// continuousMetricsDirty，方案 §95）：ACTIVE 期间置位，SETTLING 一次提交。
-  bool pendingMetricUpdate = false;
-
   void requestForward() {
     pendingForward = true;
   }

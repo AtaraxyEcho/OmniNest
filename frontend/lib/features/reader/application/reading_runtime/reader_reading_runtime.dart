@@ -245,7 +245,6 @@ class ReaderReadingRuntime {
     // 指标提交内化（B4 §48）：settle 终端构建旁路手势守卫。
     windowBuilder.build(deferIfGestureActive: false);
     window.clearPending();
-    window.pendingMetricUpdate = false;
     geometryScheduler.consumePendingCommit();
     positionState.commitTransient();
     if (settlingTx != null) {

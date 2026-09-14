@@ -285,7 +285,6 @@ void main() {
     runtime.onPointerDragStarted();
     expect(runtime.isInActiveGesture, isTrue);
     expect(runtime.windowBuilder.build(), isFalse);
-    expect(runtime.window.pendingMetricUpdate, isTrue);
     expect(delegate.rebuildCount, 0);
 
     // 终端构建（settle 路径）旁路手势守卫。
@@ -349,7 +348,6 @@ void main() {
     expect(runtime.windowBuilder.build(), isFalse);
     expect(runtime.geometry.live, isNull);
     expect(runtime.geometryScheduler.hasPendingCommit, isTrue);
-    expect(runtime.window.pendingMetricUpdate, isTrue);
 
     // Candidate B：收敛继续推进（滚动中的最新状态）。
     delegate.lastCumulativeHeight = 2600;

@@ -196,8 +196,8 @@ class ReaderWindowBuilder {
       terminal: !deferIfGestureActive,
     )) {
       // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12），
-      // 坐标系变化不得发生在用户滚动手势期间。
-      _runtime.window.pendingMetricUpdate = true;
+      // 坐标系变化不得发生在用户滚动手势期间；几何版本已变化，
+      // settle 终端构建经指纹门控自然还清。
       return false;
     }
     _building = true;

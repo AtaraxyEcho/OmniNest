@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 
@@ -54,20 +53,5 @@ mixin ReaderViewPageCoordinateMixin on ReaderViewPageMixin {
     return continuousScrollController
         .prefixHeightOf(chapterId)
         .clamp(0.0, double.infinity);
-  }
-
-  /// 滚动模式：将视口稳定恢复到章首（窗口坐标感知 + 多帧重试）。
-  ///
-  /// 懒布局下窗口重建当帧 maxScrollExtent 可能未收敛，单次 jumpTo 会被
-  /// clamp 短跳；恢复引擎（B6 §7.3）逐帧重算目标并稳定判定。恢复期间
-  /// isBusy 投影抑制位置回调，防止章首落点（窗口 offset≠0，前有前缀章）
-  /// 被位置回调误收养回前章。
-  @override
-  void restoreToChapterStart(String chapterId) {
-    scrollProgress = 0;
-    runtime.acceptLogicalPosition(chapterId: chapterId, charOffset: 0);
-    runtime.startRestore(
-      ReaderPositionTarget(chapterId: chapterId, charOffset: 0),
-    );
   }
 }

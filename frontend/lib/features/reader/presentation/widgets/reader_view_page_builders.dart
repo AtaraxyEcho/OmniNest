@@ -127,7 +127,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   Future<void> warmChapterPages(String chapterId, {int pageCount = 5});
   int windowContentYToCharOffset(String chapterId, double windowContentY);
   double chapterStartScrollOffset(String chapterId);
-  void restoreToChapterStart(String chapterId);
   void refreshBookProgressNow();
   bool get pointerDownActive;
   set pointerDownActive(bool value);
@@ -910,8 +909,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
         return;
       }
       if (runtime.isInActiveGesture) {
-        // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12）。
-        runtime.window.pendingMetricUpdate = true;
+        // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12）；
+        // 几何版本已变化，settle 终端构建自然还清。
         return;
       }
       final geometryBefore = continuousScrollController.geometryRevision;
@@ -1193,7 +1192,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       return;
     }
     if (runtime.isInActiveGesture) {
-      runtime.window.pendingMetricUpdate = true;
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1201,7 +1199,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
         return;
       }
       if (runtime.isInActiveGesture) {
-        runtime.window.pendingMetricUpdate = true;
         return;
       }
       _applyVisualCorrectionNow(

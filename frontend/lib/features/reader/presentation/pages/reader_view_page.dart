@@ -756,6 +756,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _dismissReturnTimer?.cancel();
     _chapterLoadingTimer?.cancel();
     unawaited(_progressSaveCoordinator.dispose());
+    // Runtime 内部计时资源兜底清理（B1 遗留缺口，B9 判归接线）。
+    _runtime.dispose();
     _runtime.restore.cancel();
     _chapterLoadCoordinator.cancel();
     _pageLocator.cancel();

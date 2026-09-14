@@ -223,9 +223,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   ///
   /// 合并到约 100ms 一拍，降低大章分批测高时的整页 setState 频率。
   void _onContinuousLayoutInvalidated() {
-    // ACTIVE_SCROLL 期间只标记 dirty，窗口重建推迟到 ScrollEnd（方案 §12）。
+    // ACTIVE_SCROLL 期间窗口重建推迟到 ScrollEnd（方案 §12）；
+    // 几何版本已变化，settle 终端构建自然还清。
     if (runtime.isInActiveGesture) {
-      runtime.window.pendingMetricUpdate = true;
       return;
     }
     if (!mounted || isPageMode || _layoutInvalidationScheduled) {
@@ -528,7 +528,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       } else {
         // 连续滚动：章首是窗口坐标（前有前缀章），必须走稳定重试恢复，
         // 且恢复期间抑制位置回调防止锚点被误收养回前章。
-        restoreToChapterStart(chapterId);
+        scrollProgress = 0;
+        runtime.acceptLogicalPosition(chapterId: chapterId, charOffset: 0);
+        runtime.startRestore(
+          ReaderPositionTarget(chapterId: chapterId, charOffset: 0),
+        );
       }
       return;
     }
@@ -981,9 +985,6 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 章首在窗口中的滚动 offset（章头贴视口顶）。
   double chapterStartScrollOffset(String chapterId);
-
-  /// 滚动模式：稳定恢复到章首；恢复期抑制位置回调防锚点误收养。
-  void restoreToChapterStart(String chapterId);
 
   /// 从候选快照中选取当前章节最新的进度。
   ReaderProgressSnapshot? latestProgressForCurrentChapter(
