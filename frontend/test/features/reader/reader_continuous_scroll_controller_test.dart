@@ -107,7 +107,7 @@ void main() {
       expect(controller.prefixHeightOf('c0'), 0);
     });
 
-    test('positionAtContentY resolves chapter and charOffset', () {
+    test('resolveContentY resolves chapter and charOffset', () {
       final controller = ReaderContinuousScrollController();
       final entries = {
         'c0': _entry(
@@ -132,14 +132,14 @@ void main() {
       );
 
       // 章体起点 = 前缀 + 章头 36；窗口 contentY 需含 chrome 偏移。
-      final inFirst = controller.positionAtContentY(36 + 50);
+      final inFirst = controller.resolver.resolveContentY(36 + 50);
       expect(inFirst!.chapterId, 'c0');
-      expect(inFirst.charOffset, 25);
+      expect(inFirst.logical.charOffset, 25);
 
       // c1 前缀 284，章体起点 320。
-      final inSecond = controller.positionAtContentY(320 + 50);
+      final inSecond = controller.resolver.resolveContentY(320 + 50);
       expect(inSecond!.chapterId, 'c1');
-      expect(inSecond.charOffset, 25);
+      expect(inSecond.logical.charOffset, 25);
     });
 
     test('contentYFor maps chapter charOffset to window Y', () {
@@ -375,7 +375,7 @@ void main() {
       final remapped =
           controller.remapVisualAnchor(anchor, oldEntry: oldEntry)!;
       final newY = controller.contentYForVisualAnchor(remapped)!;
-      final resolved = controller.positionAtContentY(newY)!;
+      final resolved = controller.resolver.resolveContentY(newY)!;
       expect(
         resolved.visual.blockIndex,
         anchor.blockIndex,

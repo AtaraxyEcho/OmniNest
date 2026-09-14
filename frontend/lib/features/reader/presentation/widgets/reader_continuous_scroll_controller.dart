@@ -84,40 +84,6 @@ class ContinuousScrollItem {
 
 enum ContinuousScrollItemKind { chapterHeader, block, chapterTrailing }
 
-/// 连续滚动阅读位置：同时携带视觉坐标与逻辑坐标（双坐标模型）。
-@immutable
-class ContinuousScrollPosition {
-  const ContinuousScrollPosition({
-    required this.chapterId,
-    required this.charOffset,
-    required this.chapterProgress,
-    required this.contentY,
-    required this.visual,
-    required this.chapterVisualProgress,
-    required this.chapterVisualCursor,
-    required this.geometryRevision,
-  });
-
-  final String chapterId;
-  final int charOffset;
-  final double chapterProgress;
-
-  /// 本次解析使用的几何版本号（ACTIVE_SCROLL 期间应恒定）。
-  final int geometryRevision;
-
-  /// 窗口内容坐标（含前缀章节高度）。
-  final double contentY;
-
-  /// 视觉坐标（块索引 + 块内偏移 + 块内比例）。
-  final VisualPosition visual;
-
-  /// 视觉章节进度：图片内部连续变化，与逻辑进度语义独立。
-  final double chapterVisualProgress;
-
-  /// 章体视觉游标（前面块高度 + 当前块内偏移）。
-  final double chapterVisualCursor;
-}
-
 /// 连续滚动的视觉锚点：视口顶所在块及块内偏移。
 ///
 /// 视觉坐标优先于逻辑坐标：charOffset 只是视觉位置向逻辑层的投影；
@@ -367,27 +333,6 @@ class ReaderContinuousScrollController extends ChangeNotifier {
   /// 窗口结构版本号（方案 §7）：窗口章节组成变化（A B C → A B C D）
   /// 时递增；块高度/前缀变化只递增 geometryRevision。
   int windowRevision = 0;
-
-  /// 根据窗口内容 Y 解析阅读位置（双坐标：视觉 + 逻辑）。
-  ContinuousScrollPosition? positionAtContentY(
-    double contentY, {
-    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
-  }) {
-    final resolved = resolver.resolveContentY(contentY, source: source);
-    if (resolved == null) {
-      return null;
-    }
-    return ContinuousScrollPosition(
-      chapterId: resolved.chapterId,
-      charOffset: resolved.logical.charOffset,
-      chapterProgress: resolved.chapterProgress,
-      contentY: resolved.contentY,
-      visual: resolved.visual,
-      chapterVisualProgress: resolved.chapterVisualProgress,
-      chapterVisualCursor: resolved.chapterVisualCursor,
-      geometryRevision: resolved.geometryRevision,
-    );
-  }
 
   /// 解析窗口 contentY 处的视觉锚点（运行时布局保持用）。
   VisualAnchor? visualAnchorAt(

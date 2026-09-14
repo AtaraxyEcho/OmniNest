@@ -75,15 +75,15 @@ void main() {
       );
       // 章体起点 = 章头 36；块内 Y 需加 chrome 偏移。
       // 落在第一块中点：char ≈ 25
-      final midFirst = controller.positionAtContentY(36 + 50)!;
+      final midFirst = controller.resolver.resolveContentY(36 + 50)!;
       expect(midFirst.chapterId, 'c0');
-      expect(midFirst.charOffset, 25);
+      expect(midFirst.logical.charOffset, 25);
       // 落在图片块：char 固定在块起点 50
-      final onImage = controller.positionAtContentY(36 + 140)!;
-      expect(onImage.charOffset, 50);
+      final onImage = controller.resolver.resolveContentY(36 + 140)!;
+      expect(onImage.logical.charOffset, 50);
       // 落在第三块中点：50 + 25
-      final midThird = controller.positionAtContentY(36 + 230)!;
-      expect(midThird.charOffset, 75);
+      final midThird = controller.resolver.resolveContentY(36 + 230)!;
+      expect(midThird.logical.charOffset, 75);
     });
   });
 
