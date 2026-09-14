@@ -328,13 +328,21 @@ void _processParagraph(
     prevWasBr = false;
   }
 
-  // 预遍历子节点，遇到 <img> 时刷新段落并创建 ImageBlock
+  // 预遍历子节点，遇到 <img> 时刷新段落并创建 ImageBlock。
+  // 内联包装元素（span/em 等）内部嵌套的 <img> 同样要提升为独立图片
+  // 块，否则会被 _walkInlineChildren 静默丢弃（方案 §34 双消费/零消费
+  // 防御：一个 DOM img 节点在段落上下文中只由此预遍历消费一次）。
   for (final child in element.nodes) {
-    if (child is dom.Element && child.localName == 'img') {
+    if (child is! dom.Element) continue;
+    final imgs =
+        child.localName == 'img'
+            ? <dom.Element>[child]
+            : child.querySelectorAll('img');
+    for (final img in imgs) {
       flushParagraph();
-      final src = child.attributes['src'];
+      final src = img.attributes['src'];
       if (src != null && src.isNotEmpty) {
-        blocks.add(ImageBlock(src: src, alt: child.attributes['alt']));
+        blocks.add(ImageBlock(src: src, alt: img.attributes['alt']));
       }
     }
   }

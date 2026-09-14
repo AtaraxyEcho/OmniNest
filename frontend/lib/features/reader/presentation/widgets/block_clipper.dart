@@ -85,6 +85,13 @@ class BlockClipper {
       if (blockStart >= endCharOffset) break;
 
       if (blockStart >= startCharOffset && blockEnd <= endCharOffset) {
+        // 图片独占页经块区间路径渲染本体；非零宽正文页不得再把起点
+        // 边界上的零宽图片块拖进来，否则同一图片双重渲染。
+        if (blocks[i] is ImageBlock &&
+            blockStart == blockEnd &&
+            blockStart == startCharOffset) {
+          continue;
+        }
         result.add(blocks[i]);
         continue;
       }

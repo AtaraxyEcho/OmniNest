@@ -556,17 +556,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                 );
                 if (slice == null) return null;
                 if (localIndex == 0 &&
-                    isCoverLikeChapter(
-                      totalChars: pageData.totalChars,
-                      blocks: pageData.blocks,
-                    )) {
+                    isDedicatedCoverPage(blocks: pageData.blocks)) {
                   return ReaderCoverPage(
                     title:
                         pageData.content.title.isNotEmpty
                             ? pageData.content.title
                             : chapterTitle,
                     settings: settings,
-                    blocks: pageData.blocks,
+                    visibleBlocks: _sliceVisibleBlocks(pageData, slice),
                     itemId: itemId,
                   );
                 }
@@ -671,18 +668,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (slice == null) {
         return null;
       }
-      if (localIndex == 0 &&
-          isCoverLikeChapter(
-            totalChars: pageData.totalChars,
-            blocks: pageData.blocks,
-          )) {
+      if (localIndex == 0 && isDedicatedCoverPage(blocks: pageData.blocks)) {
         return ReaderCoverPage(
           title:
               pageData.content.title.isNotEmpty
                   ? pageData.content.title
                   : title,
           settings: settings,
-          blocks: pageData.blocks,
+          visibleBlocks: _sliceVisibleBlocks(pageData, slice),
           itemId: itemId,
         );
       }
@@ -738,25 +731,30 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   // ── 单页内容 ──
 
+  /// PageSlice 的可见块：图片独占页的真实字符区间为零宽，只能按块
+  /// 区间取内容。封面页与普通页共用，保证一页只有一个内容来源。
+  List<ContentBlock> _sliceVisibleBlocks(ChapterData data, PageSlice slice) {
+    if (slice.endCharOffset > slice.startCharOffset) {
+      return BlockClipper.clipBlocksByCharRange(
+        data.blocks,
+        slice.startCharOffset,
+        slice.endCharOffset,
+      );
+    }
+    return BlockClipper.clipBlocksByIndexRange(
+      data.blocks,
+      slice.startIndex,
+      slice.endIndex,
+    );
+  }
+
   Widget buildPageContent(
     ChapterData data,
     PageSlice slice, {
     ScrollPhysics? scrollPhysics,
     String? chapterTitle,
   }) {
-    // 图片独占页的真实字符区间为零宽，只能按块区间取内容。
-    final blocks =
-        slice.endCharOffset > slice.startCharOffset
-            ? BlockClipper.clipBlocksByCharRange(
-              data.blocks,
-              slice.startCharOffset,
-              slice.endCharOffset,
-            )
-            : BlockClipper.clipBlocksByIndexRange(
-              data.blocks,
-              slice.startIndex,
-              slice.endIndex,
-            );
+    final blocks = _sliceVisibleBlocks(data, slice);
 
     bool isFirstBlockContinuation = false;
     if (blocks.isNotEmpty && slice.startCharOffset > 0) {
