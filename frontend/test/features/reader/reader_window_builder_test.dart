@@ -258,7 +258,7 @@ void main() {
     expect(delegate.rebuildCount, 2);
   });
 
-  test('B4-构建 手势活跃期挂起为 pendingMetricUpdate', () {
+  test('B4-构建 手势活跃期构建挂起，终端旁路', () {
     final runtime = ReaderReadingRuntime();
     final controller = ReaderContinuousScrollController();
     final delegate = _FakeWindowDelegate(controller);
