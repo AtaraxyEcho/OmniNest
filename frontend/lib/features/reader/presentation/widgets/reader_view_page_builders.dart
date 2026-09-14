@@ -55,6 +55,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   /// 翻页跨章页流（当前章 ±2）。pageModePage 表示流内全局页索引。
   ReaderPageFlow? _pageFlow;
 
+  /// 页流复用签名（方案 §47-48）：扩窗/排版变化才失效重建。
+  bool _pageFlowInvalidated = true;
+  String? _pageFlowSignatureAnchor;
+  double? _pageFlowSignatureWidth;
+  double? _pageFlowSignatureHeight;
+  double? _pageFlowSignatureTextScale;
+  ReaderViewSettings? _pageFlowSignatureSettings;
+
   /// 跨章收养后待映射的章内页；下一帧流重建时换算为全局索引。
   int? _pendingPageLocalIndex;
   double _windowLastChapterHeight = 0;
@@ -220,6 +228,17 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (loader == null) {
       return 0;
     }
+    // 锚点/排版/尺寸均未变化时复用现有页流（方案 §47-48）：
+    // 普通同章翻页不再每次 build 重建页流与触发邻章分页。
+    if (!_pageFlowInvalidated &&
+        _pageFlow != null &&
+        _pageFlowSignatureAnchor == currentChapterId &&
+        _pageFlowSignatureWidth == pageWidth &&
+        _pageFlowSignatureHeight == pageHeight &&
+        _pageFlowSignatureTextScale == textScale &&
+        _pageFlowSignatureSettings == settings) {
+      return _pageFlow!.startIndexOf(currentChapterId) ?? 0;
+    }
     final pendingLocal = _pendingPageLocalIndex;
     // 显式导航帧（切章锁定中）禁止旧页身份参与重映射：旧流 keyAt 可能
     // 解析出前缀章页面，把显式跳章拉回旧章（章节跳转错位的根因入口）。
@@ -244,6 +263,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       pendingLocalIndex: pendingLocal,
       explicitNavigation: explicitNavigation,
     );
+    _pageFlowInvalidated = false;
+    _pageFlowSignatureAnchor = currentChapterId;
+    _pageFlowSignatureWidth = pageWidth;
+    _pageFlowSignatureHeight = pageHeight;
+    _pageFlowSignatureTextScale = textScale;
+    _pageFlowSignatureSettings = settings;
     // 目标章尚无页（数据未就绪）时保留待映射索引，待下帧重试锚定。
     if (pendingLocal != null &&
         _pageFlow!.startIndexOf(currentChapterId) != null) {
@@ -290,9 +315,17 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void _commitPageIndex(int index) {
     dismissReturnSnackBar();
     if (pageModePage != index) {
+      final flowNow = _pageFlow;
+      final chapterChanged =
+          flowNow?.keyAt(index)?.chapterId !=
+          flowNow?.keyAt(pageModePage)?.chapterId;
       pageModePage = index;
       _handlePageFlowIndexChanged(index);
-      _requestReaderRebuild();
+      // 同章翻页不触发整体 rebuild（方案 §30-32）：页面内容已由
+      // PageView 呈现，进度/持久化已就地完成；跨章收养由 adopt 调度。
+      if (chapterChanged) {
+        _requestReaderRebuild();
+      }
     }
     if (modeSwitchInProgress) {
       modeSwitchInProgress = false;
@@ -559,15 +592,28 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                     ),
                   );
                 }
-                final slice = contentLoader?.computePage(
-                  chapterId: chapterId,
-                  settings: settings,
+                // pageBuilder 只查缓存不触发分页（方案 §33/§36）：
+                // 未预热页渲染占位，由 schedulePrefetch 异步补算后重建。
+                final slice = contentLoader?.peekPage(
+                  chapterId,
+                  settings,
                   pageWidth: pageWidth,
                   pageHeight: pageHeight,
                   pageIndex: localIndex,
                   textScale: textScale,
                 );
-                if (slice == null) return null;
+                if (slice == null) {
+                  return const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    ),
+                  );
+                }
                 if (localIndex == 0 &&
                     isDedicatedCoverPage(blocks: pageData.blocks)) {
                   return ReaderCoverPage(
@@ -670,15 +716,17 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (pageData == null) {
         return null;
       }
-      final slice = loader.computePage(
-        chapterId: chapterId,
-        settings: settings,
+      // Probe 只读缓存（方案 §37/§38）：未预热页不在此同步分页。
+      final slice = loader.peekPage(
+        chapterId,
+        settings,
         pageWidth: pageWidth,
         pageHeight: pageHeight,
         pageIndex: localIndex,
         textScale: textScale,
       );
       if (slice == null) {
+        unawaited(warmChapterPages(chapterId, pageCount: localIndex + 2));
         return null;
       }
       if (localIndex == 0 && isDedicatedCoverPage(blocks: pageData.blocks)) {
@@ -725,7 +773,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         unawaited(_expandPageFlowForward(nextId));
         return rendered;
       }
-      unawaited(warmChapterPages(nextId, pageCount: 3));
+      // 未预热：异步预热完成后扩窗，点击链路不做同步分页（方案 §46）。
+      unawaited(
+        warmChapterPages(nextId, pageCount: 3).then((_) {
+          if (mounted) {
+            unawaited(_expandPageFlowForward(nextId));
+          }
+        }),
+      );
     }
     return null;
   }
@@ -736,6 +791,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (!mounted) {
       return;
     }
+    _pageFlowInvalidated = true;
     _requestReaderRebuild();
     // 探测页翻转发生时页流尚未扩窗，keyAt 返回 null 会跳过跨章收养，
     // 目录高亮/进度章节滞后一页；扩窗完成后对当前页补一次归属解析。

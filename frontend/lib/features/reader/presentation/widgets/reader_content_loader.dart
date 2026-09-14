@@ -272,6 +272,10 @@ class PageNavigator {
   }
 
   /// 获取指定页的切片（懒计算 + LRU 缓存）。
+  /// 仅读取已缓存的切片，绝不触发分页计算（方案 §35-36）。
+  /// pageBuilder 热路径用 peek：未预热页返回 null 并交给预热调度。
+  PageSlice? peekPage(int index) => _cache[index];
+
   PageSlice? getSlice(int pageIndex) {
     if (pageIndex < 0) return null;
     if (_reachedEnd && pageIndex > _maxComputedPage) return null;
@@ -1304,6 +1308,27 @@ class ReaderContentLoader {
     }
     // charOffset 在最后一个 block 末尾
     return data.cumulativeHeights.isEmpty ? 0 : data.cumulativeHeights.last;
+  }
+
+  /// 只读分页切片：命中缓存返回，未命中返回 null 且不触发计算。
+  PageSlice? peekPage(
+    String chapterId,
+    ReaderViewSettings settings, {
+    required double pageWidth,
+    required double pageHeight,
+    required int pageIndex,
+    double textScale = 1.0,
+  }) {
+    final data = getByChapterId(chapterId);
+    if (data == null) return null;
+    return data
+        .getOrCreatePageNavigator(
+          pageWidth,
+          pageHeight,
+          settings,
+          textScale: textScale,
+        )
+        .peekPage(pageIndex);
   }
 
   /// 内容坐标 Y → 字符偏移（用于保存阅读进度）。

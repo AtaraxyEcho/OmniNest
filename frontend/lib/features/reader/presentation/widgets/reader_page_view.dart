@@ -325,6 +325,17 @@ class _ReaderPageViewState extends State<ReaderPageView>
       return;
     }
 
+    // 动画进行中：不重复算目标，只保留最后一次方向意图（方案 §43-44），
+    // 提交释放后执行一次，防重入但不丢用户意图。
+    if (_transitionInFlight &&
+        !_slideScrolling &&
+        !_boundaryRequestInFlight &&
+        _pageController != null) {
+      _pendingTurnDirection = 1;
+      _debugPageTurn('nextDeferredDuringAnimation');
+      return;
+    }
+
     // 目标基于控制器实际物理页：state 与物理页脱节时（历史 onPageChanged
     // 被吞等）按物理页前进，点击不再空转（方案 §8 最新状态重算）。
     final ctrl = _pageController;
@@ -371,6 +382,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
   // 控制器未挂载时保留意图并按帧重试，最多 4 帧；挂载后按最新
   // widget.state 重新解析目标，不缓存历史 index，超限显式放弃并留痕。
   int? _pendingTurnDirection;
+  bool _pendingTurnAttachRetry = false;
   int _pendingTurnFrames = 0;
   static const int _maxPendingTurnFrames = 4;
 
@@ -379,6 +391,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
       return;
     }
     _pendingTurnDirection = direction;
+    _pendingTurnAttachRetry = true;
     _pendingTurnFrames = 0;
     _pumpPendingTurn();
   }
@@ -396,6 +409,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
       final ctrl = _pageController;
       if (ctrl != null && ctrl.hasClients) {
         _pendingTurnDirection = null;
+        _pendingTurnAttachRetry = false;
         _pendingTurnFrames = 0;
         _debugPageTurn('pendingTurnExecute');
         if (direction > 0) {
@@ -429,6 +443,15 @@ class _ReaderPageViewState extends State<ReaderPageView>
         'previousBlocked',
         detail: 'source=${tapTurn ? 'tap' : 'command'}',
       );
+      return;
+    }
+
+    if (_transitionInFlight &&
+        !_slideScrolling &&
+        !_boundaryRequestInFlight &&
+        _pageController != null) {
+      _pendingTurnDirection = -1;
+      _debugPageTurn('previousDeferredDuringAnimation');
       return;
     }
 
@@ -499,6 +522,17 @@ class _ReaderPageViewState extends State<ReaderPageView>
       }
       if (_transitionInFlight) {
         setState(() => _transitionInFlight = false);
+      }
+      // 动画期间保留的方向意图在提交释放后执行一次（方案 §44）。
+      final direction = _pendingTurnDirection;
+      if (direction != null && !_pendingTurnAttachRetry) {
+        _pendingTurnDirection = null;
+        _debugPageTurn('pendingTurnConsumed', detail: 'direction=$direction');
+        if (direction > 0) {
+          _goNextPage(tapTurn: true);
+        } else {
+          _goPreviousPage(tapTurn: true);
+        }
       }
     });
   }
