@@ -128,8 +128,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   DateTime? _lastAppliedProgressAt;
   DateTime _lastPointerDownTime = DateTime.fromMillisecondsSinceEpoch(
     0,
-  ); // 最后一次真实触摸
-  DateTime? _lastScrollActivityAt; // 最近滚动活动（滚轮/触控板）
+    // 最后一次真实触摸
+  );
+  // 最近滚动活动（滚轮/触控板）
+  DateTime? _lastScrollActivityAt;
 
   // ── 章节导航与返回原进度 ──
   ReaderChapterNavigationIntent _chapterNavigationIntent =
@@ -138,8 +140,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   final ReaderNavigationTokenHolder _navigationTokens =
       ReaderNavigationTokenHolder();
   ReaderProgressSnapshot? _returnToProgressSnapshot;
-  bool _showReturnControl = false; // 是否显示"返回原进度"控件
-  Timer? _returnControlTimer; // 自动隐藏计时器
+  // 是否显示"返回原进度"控件
+  bool _showReturnControl = false;
+  // 自动隐藏计时器
+  Timer? _returnControlTimer;
 
   // ── 并发控制 ──
   bool _isAnimating = false;
@@ -156,7 +160,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   ReaderChapterContent? _cachedContent;
   bool _showControls = false;
   bool _showTts = false;
-  bool _isHoveringControls = false; // Web 端鼠标是否悬停在控件栏上
+  // Web 端鼠标是否悬停在控件栏上
+  bool _isHoveringControls = false;
   bool _isBookmarked = false;
   bool _isInBookshelf = false;
   bool _bookmarkBusy = false;

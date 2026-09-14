@@ -451,7 +451,8 @@ class ReaderPaginationEngine {
               ),
             ),
           );
-          charOffset += text.length + 1; // +1 for \n
+          // +1 for \n
+          charOffset += text.length + 1;
           isFirstTextLine = false;
           continue;
 
@@ -537,7 +538,8 @@ class ReaderPaginationEngine {
       isFirstTextLine = false;
     }
 
-    lineOffsets.add(charOffset); // 最终偏移
+    // 最终偏移
+    lineOffsets.add(charOffset);
     return TextSpan(children: children);
   }
 
@@ -555,7 +557,8 @@ class ReaderPaginationEngine {
   ) {
     final slices = <PageSlice>[];
     var usedHeight = 0.0;
-    var pageStartIdx = 0; // 当前页起始的 PaginationLineRef 索引
+    // 当前页起始的 PaginationLineRef 索引
+    var pageStartIdx = 0;
 
     // 预计算非文本块的精确高度
     final fixedHeights = <double>[];
@@ -620,7 +623,8 @@ class ReaderPaginationEngine {
       while (i < lineRefs.length && lineRefs[i].isTextual) {
         i++;
       }
-      final textSegmentEnd = i; // 不含
+      // 不含
+      final textSegmentEnd = i;
 
       // 用 TextPainter 在此文本段内逐行切割
       var segUsedHeight = 0.0;
@@ -712,7 +716,8 @@ class ReaderPaginationEngine {
     if (startIdx >= endIdx) return;
 
     final startRef = lineRefs[startIdx];
-    final endRef = lineRefs[endIdx - 1]; // endIdx 不含，取前一个
+    // endIdx 不含，取前一个
+    final endRef = lineRefs[endIdx - 1];
 
     // 确定 endLine：endIdx 指向下一个页面的第一行，
     // 所以当前页面的结束块包含 endRef.lineIndex。
@@ -720,7 +725,8 @@ class ReaderPaginationEngine {
     final endBlock = endRef.blockIndex;
 
     // 如果结束块和下一行是同一个块，说明块被分割了
-    var endLine = -1; // 默认包含整块
+    // 默认包含整块
+    var endLine = -1;
     if (endIdx < lineRefs.length &&
         lineRefs[endIdx].blockIndex == endRef.blockIndex) {
       // 结束块被分割：当前页到 endRef.lineIndex（不含下一行）

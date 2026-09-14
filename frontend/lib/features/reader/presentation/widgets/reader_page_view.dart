@@ -217,7 +217,10 @@ class _ReaderPageViewState extends State<ReaderPageView>
   }
 
   void _initForMode() {
-    // 控制器重建后旧翻页意图的目标已失效，显式丢弃。
+    // 控制器重建后旧翻页意图的目标已失效，显式丢弃；在途动画的
+    // status listener 随旧控制器销毁不再回调，动画标志必须一并复位，
+    // 否则 pageAnimationActive 恒真锁死翻页闸门。
+    _isAnimating = false;
     _pendingTurnDirection = null;
     _pendingTurnFrames = 0;
     _localPageCount = widget.state.pageCount;

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -1044,10 +1046,14 @@ class _ComicDetailWrapper extends ConsumerWidget {
         manifest.importStatus != ReaderImportStatus.pending &&
         manifest.importStatus != ReaderImportStatus.parsing;
     if (terminal && item.isParsing) {
+      // 后端已终态而本地解析标志未跟上：限流兜底刷新一次，避免以
+      // 网络往返为周期的零间隔隐式轮询。
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (context.mounted) {
-          ref.invalidate(readerItemDetailProvider(itemId));
-        }
+        Timer(const Duration(milliseconds: 500), () {
+          if (context.mounted) {
+            ref.invalidate(readerItemDetailProvider(itemId));
+          }
+        });
       });
     }
     return ReaderPageScaffold(

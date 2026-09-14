@@ -22,7 +22,8 @@ class ComicLayoutIndex {
   bool updateContentWidth(double newWidth) {
     if ((_contentWidth - newWidth).abs() < 1.0) return false;
     _contentWidth = newWidth;
-    _offsets = null; // 宽度变化，估算高度全部失效
+    // 宽度变化，估算高度全部失效
+    _offsets = null;
     return true;
   }
 
@@ -49,7 +50,8 @@ class ComicLayoutIndex {
     }
     if ((_heights[index] - height).abs() > 0.5) {
       _heights[index] = height;
-      _offsets = null; // 失效缓存
+      // 失效缓存
+      _offsets = null;
     }
   }
 

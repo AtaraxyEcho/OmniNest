@@ -2291,6 +2291,8 @@
     }
   },
   "readerRefreshFailed": "刷新失败，请稍后重试",
+  "readerCoverBadgeComic": "漫",
+  "readerCoverBadgeText": "文",
   "readerDone": "完成",
   "readerUnsupportedLink": "暂不支持打开该链接",
   "readerUnknownAuthor": "未知作者",

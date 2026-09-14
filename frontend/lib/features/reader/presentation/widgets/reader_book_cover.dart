@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
@@ -75,7 +76,9 @@ class ReaderBookCover extends StatelessWidget {
               ),
               alignment: Alignment.centerLeft,
               child: Text(
-                item.isComic ? '漫' : '文',
+                item.isComic
+                    ? AppLocalizations.of(context).readerCoverBadgeComic
+                    : AppLocalizations.of(context).readerCoverBadgeText,
                 style: TextStyle(
                   color: _coverText.withValues(alpha: 0.55),
                   fontSize: size == ReaderCoverSize.row ? 7 : 8,

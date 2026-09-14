@@ -132,7 +132,8 @@ class ComicSource {
 
   final String id;
   final String? fileNodeId;
-  final String fileFormat; // CBZ, ZIP, EPUB
+  // CBZ, ZIP, EPUB
+  final String fileFormat;
   final String sourceName;
   final String? sourceSortKey;
   final String? readingDirection;
@@ -203,8 +204,10 @@ class ComicCatalogNode {
 
   final String id;
   final String? parentId;
-  final String? sourceId; // 来源文件 ID（用于多源区分）
-  final String nodeType; // ROOT, SEASON, VOLUME, CHAPTER, COLLECTION, EXTRA
+  // 来源文件 ID（用于多源区分）
+  final String? sourceId;
+  // ROOT, SEASON, VOLUME, CHAPTER, COLLECTION, EXTRA
+  final String nodeType;
   final String title;
   final int sortOrder;
   final int pageCount;
@@ -331,7 +334,8 @@ class ComicProgressAnchor {
   final int? sourcePageIndex;
   final String? catalogKey;
   final String? catalogNodeId;
-  final double intraPageOffset; // 长条图页内偏移（0.0-1.0）
+  // 长条图页内偏移（0.0-1.0）
+  final double intraPageOffset;
   final int manifestVersion;
 
   factory ComicProgressAnchor.fromJson(Map<String, dynamic> json) =>

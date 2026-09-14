@@ -327,7 +327,8 @@ class _DataUriDecodeCache {
   Uint8List decode(String dataUri, Uint8List Function() decode) {
     final cached = _entries.remove(dataUri);
     if (cached != null) {
-      _entries[dataUri] = cached; // 重新插入尾部维持 LRU 顺序
+      // 重新插入尾部维持 LRU 顺序
+      _entries[dataUri] = cached;
       return cached;
     }
     final bytes = decode();

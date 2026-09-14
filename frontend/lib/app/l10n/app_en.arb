@@ -2417,6 +2417,8 @@
     }
   },
   "readerRefreshFailed": "Refresh failed, please try again later",
+  "readerCoverBadgeComic": "C",
+  "readerCoverBadgeText": "T",
   "readerDone": "Done",
   "readerUnsupportedLink": "This link is not supported yet",
   "readerUnknownAuthor": "Unknown author",

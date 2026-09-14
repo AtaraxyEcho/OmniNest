@@ -30,17 +30,24 @@ void main() {
     return idx < 0 ? line : line.substring(0, idx);
   }
 
-  /// 收集 dart 源码为 (相对路径, 代码行) 列表。
+  /// 收集 dart 源码为 (相对路径, 代码行) 列表；目录不存在即 fail
+  /// （防腐断言禁止 fail-open 假绿）。
   List<(String, String)> collect(Directory dir, {required bool strip}) {
+    expect(
+      dir.existsSync(),
+      isTrue,
+      reason: '扫描目录不存在（须从 frontend/ 包根运行）：${dir.path}',
+    );
+    final rootPrefix = '${Directory.current.path.replaceAll('\\', '/')}/';
     final result = <(String, String)>[];
-    if (!dir.existsSync()) {
-      return result;
-    }
     for (final entity in dir.listSync(recursive: true)) {
       if (entity is! File || !entity.path.endsWith('.dart')) {
         continue;
       }
-      final rel = entity.path.replaceAll('\\', '/').split('/lib/').last;
+      final normalized = entity.path.replaceAll('\\', '/');
+      final rel = normalized.startsWith(rootPrefix)
+          ? normalized.substring(rootPrefix.length)
+          : normalized;
       final lines = entity.readAsLinesSync();
       for (var i = 0; i < lines.length; i++) {
         final loc = '$rel:${i + 1}';

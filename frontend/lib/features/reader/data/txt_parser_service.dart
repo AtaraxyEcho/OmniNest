@@ -203,10 +203,14 @@ class TxtParserService {
 
   /// 根据标题文本推断层级
   int _inferLevel(String title) {
-    if (_volumePattern.hasMatch(title)) return 0; // 卷/篇
-    if (_sectionPattern.hasMatch(title)) return 2; // 节
-    if (_chapterPattern.hasMatch(title)) return 1; // 章/回
-    return 1; // 默认章级
+    // 卷/篇
+    if (_volumePattern.hasMatch(title)) return 0;
+    // 节
+    if (_sectionPattern.hasMatch(title)) return 2;
+    // 章/回
+    if (_chapterPattern.hasMatch(title)) return 1;
+    // 默认章级
+    return 1;
   }
 
   /// 将纯文本转换为 XHTML 片段

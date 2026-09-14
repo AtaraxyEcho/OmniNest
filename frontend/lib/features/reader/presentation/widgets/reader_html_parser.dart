@@ -75,7 +75,8 @@ List<ContentBlock> _mergeConsecutiveParagraphs(List<ContentBlock> blocks) {
           mergedLines.removeLast();
         }
         for (final line in block.lines) {
-          if (_isBlankLine(line)) continue; // 跳过空白行
+          // 跳过空白行
+          if (_isBlankLine(line)) continue;
           mergedLines.add(LineData(spans: line.spans, isNewParagraph: true));
         }
         pending = ParagraphBlock(
@@ -88,7 +89,8 @@ List<ContentBlock> _mergeConsecutiveParagraphs(List<ContentBlock> blocks) {
         // 单个段落块：过滤内部空白行，标记新段落
         final cleanedLines = <LineData>[];
         for (final line in block.lines) {
-          if (_isBlankLine(line)) continue; // 跳过空白行
+          // 跳过空白行
+          if (_isBlankLine(line)) continue;
           cleanedLines.add(
             LineData(
               spans: line.spans,

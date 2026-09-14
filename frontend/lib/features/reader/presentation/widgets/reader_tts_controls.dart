@@ -184,8 +184,9 @@ class _ReaderTtsControlsState extends ConsumerState<ReaderTtsControls> {
     _tts.setPauseHandler(() {});
     _tts.setContinueHandler(() {});
     // dispose 是同步方法，无法 await _tts.stop()。
-    // 已通过上方清除回调来降低竞态影响。
-    _tts.stop();
+    // 已通过上方清除回调来降低竞态影响；stop 的错误无处呈现，
+    // dispose 期丢弃属预期。
+    unawaited(_tts.stop());
     super.dispose();
   }
 }

@@ -45,9 +45,16 @@ void main() {
       expect(anchor.cumulativeHeights, isNotEmpty);
       expect(neighbor.cumulativeHeights, isNotEmpty);
 
-      // 等待锚点精测完成（小章节应很快）。
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(anchor.hasPreciseHeights, isTrue);
+      // 等待锚点精测完成（条件轮询，慢 CI 不受固定等待上限约束）。
+      Future<void> waitUntil(bool Function() condition) async {
+        const tick = Duration(milliseconds: 10);
+        for (var waited = 0; waited < 10000 && !condition(); waited += 10) {
+          await Future<void>.delayed(tick);
+        }
+        expect(condition(), isTrue, reason: '精测在 10s 内未完成');
+      }
+
+      await waitUntil(() => anchor.hasPreciseHeights);
       expect(
         neighbor.hasPreciseHeights,
         isFalse,
@@ -55,8 +62,7 @@ void main() {
       );
 
       loader.ensurePreciseHeights('c1', pageWidth: 400, settings: settings);
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-      expect(neighbor.hasPreciseHeights, isTrue);
+      await waitUntil(() => neighbor.hasPreciseHeights);
     });
 
     test('rekey marks precise heights', () async {
@@ -78,7 +84,12 @@ void main() {
         pageWidth: 400,
         settings: settings,
       );
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+      for (var waited = 0;
+          waited < 10000 &&
+          !(loader.getByChapterId('c0')?.hasPreciseHeights ?? false);
+          waited += 10) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
       final data = loader.getByChapterId('c0')!;
       expect(data.hasPreciseHeights, isTrue);
 

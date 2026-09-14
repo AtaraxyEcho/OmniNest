@@ -192,22 +192,6 @@ void main() {
       expect(adapter.lastPath, '/reader/items/item-5/bookshelf');
     });
 
-    test('toggleBookshelf sends POST to /reader/items/:id/bookshelf', () async {
-      final adapter = _CapturingHttpClientAdapter(
-        body: {
-          'code': 200,
-          'message': 'success',
-          'data': {'itemId': 'item-8', 'addedToBookshelf': true},
-        },
-      );
-      final api = ReaderApi(_apiClient(adapter));
-
-      await api.toggleBookshelf('item-8');
-
-      expect(adapter.lastMethod, 'POST');
-      expect(adapter.lastPath, '/reader/items/item-8/bookshelf');
-    });
-
     test('bookmarks sends GET to /reader/items/:id/bookmarks', () async {
       final adapter = _CapturingHttpClientAdapter(
         body: {

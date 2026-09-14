@@ -1424,9 +1424,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     }
     // 不在此处重置 scrollProgress：进度值由导航意图/进度快照在加载完成后
     // 一次写入，避免先闪 0 再跳目标的中间态。
-    setState(() {
-      isBookmarked = false;
-    });
+    if (mounted) {
+      setState(() {
+        isBookmarked = false;
+      });
+    }
     checkBookmarkState();
   }
 

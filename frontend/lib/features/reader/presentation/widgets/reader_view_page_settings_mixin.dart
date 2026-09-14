@@ -60,16 +60,23 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
 
   /// 从用户偏好快照加载阅读设置。
   Future<void> loadSettings() async {
-    final values = await ref.read(readerPreferencesProvider.future);
-    if (!mounted) return;
-    final resolved =
-        values.isEmpty
-            ? ReaderViewSettings()
-            : ReaderViewSettings.fromJson(values);
-    setState(() {
-      settings = resolved;
-    });
-    applyImmersiveMode(resolved.immersiveMode);
+    // 偏好读取失败时保持构造默认值，异常不得成为未捕获异步异常。
+    try {
+      final values = await ref.read(readerPreferencesProvider.future);
+      if (!mounted) return;
+      final resolved =
+          values.isEmpty
+              ? ReaderViewSettings()
+              : ReaderViewSettings.fromJson(values);
+      setState(() {
+        settings = resolved;
+      });
+      applyImmersiveMode(resolved.immersiveMode);
+    } catch (e) {
+      if (kDebugMode) {
+        readerDebugLog('ReaderView: loadSettings failed: $e');
+      }
+    }
   }
 
   /// 检查当前书籍的书签状态。

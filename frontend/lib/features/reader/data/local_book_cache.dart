@@ -519,7 +519,8 @@ class LocalBookCache {
       final toDelete = <String>[];
       var size = totalSize;
       for (final candidate in candidates) {
-        if (size <= _maxCacheBytes * 0.8) break; // 留 20% 余量
+        // 留 20% 余量
+        if (size <= _maxCacheBytes * 0.8) break;
         if (protectedPath != null && p.equals(candidate.path, protectedPath)) {
           continue;
         }

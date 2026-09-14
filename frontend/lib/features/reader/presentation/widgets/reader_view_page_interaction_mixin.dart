@@ -443,7 +443,6 @@ mixin ReaderViewPageInteractionMixin
     _preloadDebounce?.cancel();
     _expandForwardDebounce?.cancel();
     _expandBackwardDebounce?.cancel();
-    runtime.dispose();
   }
 
   /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。
@@ -715,7 +714,9 @@ mixin ReaderViewPageInteractionMixin
       }
     }
 
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
   }
 
   /// 变化前冻结运行时双锚点（§23）：视觉锚点用于重排后按块内比例保持
