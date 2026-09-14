@@ -9,6 +9,7 @@ import 'package:omninest/features/reader/presentation/pages/reader_view_page.dar
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -92,7 +93,7 @@ mixin ReaderViewPageInteractionMixin
     lastChapterVisualCursor = position.chapterVisualCursor;
     lastVisualProgressChapterId = position.chapterId;
     if (!isPageMode) {
-      bookProgressNotifier.value = bookVisualProgressFor(
+      bookProgressNotifier.value = visualProgressDuringScroll(
         position.chapterId,
         position.chapterVisualCursor,
       );
@@ -198,6 +199,86 @@ mixin ReaderViewPageInteractionMixin
   Timer? _expandForwardDebounce;
   Timer? _expandBackwardDebounce;
   bool _expandForwardInFlight = false;
+
+  // ── 滚动相位与视觉会话（方案 §4-7）──
+
+  ReaderScrollPhase _scrollPhase = ReaderScrollPhase.idle;
+  Timer? _settleToIdleTimer;
+
+  /// ACTIVE_SCROLL 开始时冻结的视觉进度表：一次滚动手势期间分母固定，
+  /// 后台精测/窗口变化不得改变当前手势的视觉进度基准。
+  List<String>? _sessionChapterIds;
+  List<double> _sessionChapterStarts = const [];
+  double _sessionVisualTotal = 0;
+
+  @override
+  ReaderScrollPhase get scrollPhase => _scrollPhase;
+
+  @override
+  bool get isScrollPhaseActive => _scrollPhase == ReaderScrollPhase.active;
+
+  /// 相位转移入口：ScrollStart/Update → active，ScrollEnd → settling。
+  @override
+  void onScrollPhaseChanged(ReaderScrollPhase phase) {
+    if (_scrollPhase == phase) {
+      return;
+    }
+    _scrollPhase = phase;
+    if (phase == ReaderScrollPhase.active) {
+      _settleToIdleTimer?.cancel();
+      _startScrollVisualSession();
+      return;
+    }
+    if (phase == ReaderScrollPhase.settling) {
+      // ScrollEnd：一次 metrics 提交 = 最多一次视口修正（方案 §13）。
+      commitPendingContinuousMetrics();
+      _settleToIdleTimer?.cancel();
+      _settleToIdleTimer = Timer(const Duration(milliseconds: 150), () {
+        if (_scrollPhase == ReaderScrollPhase.settling) {
+          _scrollPhase = ReaderScrollPhase.idle;
+          _clearScrollVisualSession();
+        }
+      });
+    }
+  }
+
+  /// 冻结当前视觉进度表为会话分母。
+  void _startScrollVisualSession() {
+    _ensureBookVisualExtentTable();
+    _sessionChapterIds = List.of(_visualExtentChapterIds);
+    _sessionChapterStarts = List.of(_visualExtentStarts);
+    _sessionVisualTotal = _visualExtentTotal;
+  }
+
+  void _clearScrollVisualSession() {
+    _sessionChapterIds = null;
+    _sessionChapterStarts = const [];
+    _sessionVisualTotal = 0;
+  }
+
+  /// 滚动期间的视觉进度：固定分母 + 动态 cursor（方案 §7）。
+  double visualProgressDuringScroll(
+    String chapterId,
+    double chapterVisualCursor,
+  ) {
+    final ids = _sessionChapterIds;
+    if (ids == null || _sessionVisualTotal <= 0) {
+      return bookVisualProgressFor(chapterId, chapterVisualCursor);
+    }
+    final idx = ids.indexOf(chapterId);
+    if (idx < 0) {
+      return bookVisualProgressFor(chapterId, chapterVisualCursor);
+    }
+    final start = _sessionChapterStarts[idx];
+    final end =
+        idx + 1 < _sessionChapterStarts.length
+            ? _sessionChapterStarts[idx + 1]
+            : _sessionVisualTotal;
+    final extent = end - start;
+    return ((start + chapterVisualCursor.clamp(0.0, extent)) /
+            _sessionVisualTotal)
+        .clamp(0.0, 1.0);
+  }
 
   // ── 全书视觉进度表（D4：VisualProgress 与 LogicalProgress 语义独立） ──
 
@@ -389,6 +470,7 @@ mixin ReaderViewPageInteractionMixin
     _preloadDebounce?.cancel();
     _expandForwardDebounce?.cancel();
     _expandBackwardDebounce?.cancel();
+    _settleToIdleTimer?.cancel();
   }
 
   /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。

@@ -142,6 +142,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool get pointerDownActive;
   set pointerDownActive(bool value);
   bool isUserScrollActive({required DateTime since});
+  void onScrollPhaseChanged(ReaderScrollPhase phase);
+  bool get isScrollPhaseActive;
+  abstract bool continuousMetricsDirty;
 
   // ── 页面尺寸 ──
 
@@ -856,6 +859,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (_continuousWindowRebuilding) {
       return;
     }
+    if (isScrollPhaseActive) {
+      // ACTIVE_SCROLL：窗口重建推迟到 ScrollEnd 一次提交（方案 §12），
+      // 坐标系变化不得发生在用户滚动手势期间。
+      continuousMetricsDirty = true;
+      return;
+    }
     final loader = contentLoader;
     if (loader == null) {
       return;
@@ -1082,49 +1091,29 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   // 坐标原点平移类（滑窗）不排队——拖动进新章时必须即时补偿，否则
   // 内容会在指下大幅位移。
 
-  /// ACTIVE_SCROLL 期间挂起的视觉校正（最后一次锚点生效）。
-  VisualAnchor? _pendingCorrectionAnchor;
-  ContinuousChapterEntry? _pendingCorrectionOldEntry;
-
-  /// 挂起锚点在捕获时（旧布局）的窗口内容坐标，应用期计算位移。
-  double _pendingCorrectionAnchorContentY = 0;
-  bool _correctionApplyScheduled = false;
-
   /// 布局变化后的视口保持：锚点保持优先，锚点不可解析时回退高度差。
   ///
-  /// [deferWhileScrolling] 为 true（高度收敛类）时，用户滚动期间挂起
-  /// 校正，SETTLING 后应用；为 false（坐标原点平移类）时始终即时应用。
+  /// ACTIVE_SCROLL 期间一律不改视口（方案 §8-10，含滑窗）：布局变化
+  /// 标记 dirty，ScrollEnd 后由 commitPendingContinuousMetrics 一次收敛。
   void _preserveVisualAnchorAfterLayoutChange({
     required VisualAnchor? anchorBefore,
     required ContinuousChapterEntry? oldAnchorEntry,
     required double fallbackDelta,
     required double anchorContentY,
-    required bool deferWhileScrolling,
   }) {
     if (!scrollController.hasClients) {
       return;
     }
-    if (deferWhileScrolling && _isUserScrollActive()) {
-      if (anchorBefore != null) {
-        _pendingCorrectionAnchor = anchorBefore;
-        _pendingCorrectionOldEntry = oldAnchorEntry;
-        _pendingCorrectionAnchorContentY = anchorContentY;
-        _schedulePendingCorrectionApply();
-      }
+    if (isScrollPhaseActive) {
+      continuousMetricsDirty = true;
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !scrollController.hasClients) {
         return;
       }
-      // 回调帧内用户开始滚动：可延迟的校正转为挂起，其余放弃。
-      if (deferWhileScrolling && _isUserScrollActive(quietWindowMs: 200)) {
-        if (anchorBefore != null) {
-          _pendingCorrectionAnchor = anchorBefore;
-          _pendingCorrectionOldEntry = oldAnchorEntry;
-          _pendingCorrectionAnchorContentY = anchorContentY;
-          _schedulePendingCorrectionApply();
-        }
+      if (isScrollPhaseActive) {
+        continuousMetricsDirty = true;
         return;
       }
       _applyVisualCorrectionNow(
@@ -1136,47 +1125,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     });
   }
 
-  /// SETTLING 轮询：等用户滚动结束（指针松开且 250ms 无滚动活动）后
-  /// 应用挂起的视觉校正，一次收敛。
-  void _schedulePendingCorrectionApply() {
-    if (_correctionApplyScheduled) {
-      return;
-    }
-    _correctionApplyScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _correctionApplyScheduled = false;
-      if (!mounted) {
-        _pendingCorrectionAnchor = null;
-        return;
-      }
-      final anchor = _pendingCorrectionAnchor;
-      if (anchor == null) {
-        return;
-      }
-      if (_isUserScrollActive(quietWindowMs: 250)) {
-        _schedulePendingCorrectionApply();
-        return;
-      }
-      _pendingCorrectionAnchor = null;
-      final oldEntry = _pendingCorrectionOldEntry;
-      final pendingAnchorContentY = _pendingCorrectionAnchorContentY;
-      _pendingCorrectionOldEntry = null;
-      _applyVisualCorrectionNow(
-        anchorBefore: anchor,
-        oldAnchorEntry: oldEntry,
-        fallbackDelta: 0,
-        anchorContentY: pendingAnchorContentY,
-      );
-    });
-  }
-
-  bool _isUserScrollActive({int quietWindowMs = 400}) {
-    if (pointerDownActive) {
-      return true;
-    }
-    final activity = lastScrollActivityAt;
-    return activity != null &&
-        DateTime.now().difference(activity).inMilliseconds < quietWindowMs;
+  void commitPendingContinuousMetrics() {
+    // ScrollEnd 一次收敛：清除挂起标记并重建窗口；窗口内部的锚点
+    // 补偿（settling 相位允许）负责唯一一次视口修正。
+    continuousMetricsDirty = false;
+    rebuildContinuousWindow();
   }
 
   void _applyVisualCorrectionNow({
@@ -1270,7 +1223,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       oldAnchorEntry: oldAnchorEntry,
       fallbackDelta: delta,
       anchorContentY: anchorContentY,
-      deferWhileScrolling: false,
     );
   }
 
@@ -1308,7 +1260,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       oldAnchorEntry: oldAnchorEntry,
       fallbackDelta: delta,
       anchorContentY: anchorContentY,
-      deferWhileScrolling: true,
     );
   }
 
@@ -1386,6 +1337,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             onSelectionActive: onReaderSelectionActive,
             onTap: toggleControls,
             onScrollPosition: onContinuousScrollPosition,
+            onScrollPhaseChanged: onScrollPhaseChanged,
             onHighlight: (text, start, end, chapterId) {
               if (!mounted) return;
               annotationHandler?.updateChapter(chapterId);

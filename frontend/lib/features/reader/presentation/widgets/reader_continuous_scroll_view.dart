@@ -13,6 +13,18 @@ import 'package:omninest/features/reader/presentation/widgets/reader_continuous_
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_range.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
+/// 连续滚动相位（方案 §4）：由 ScrollNotification 驱动，而非时间戳推测。
+enum ReaderScrollPhase {
+  /// 无滚动手势。
+  idle,
+
+  /// 用户正在滚动（ScrollStart/Update 期间）。
+  active,
+
+  /// ScrollEnd 后的收敛窗口，等待一次 metrics 提交。
+  settling,
+}
+
 /// 多章连续滚动视图。
 ///
 /// 将窗口内章节拼成一条滚动轴：粘性章头 + 按块虚拟化的正文，
@@ -25,6 +37,7 @@ class ReaderContinuousScrollView extends StatefulWidget {
     required this.itemId,
     required this.annotationsByChapter,
     this.onScrollPosition,
+    this.onScrollPhaseChanged,
     this.onTap,
     this.onHighlight,
     this.onAnnotate,
@@ -40,6 +53,10 @@ class ReaderContinuousScrollView extends StatefulWidget {
   final String itemId;
   final Map<String, List<ReaderAnnotation>> annotationsByChapter;
   final void Function(ContinuousScrollPosition position)? onScrollPosition;
+
+  /// 滚动相位回调（方案 §4）：ScrollStart/Update → active，
+  /// ScrollEnd → settling；settling → idle 由 State 的 settle 窗口处理。
+  final void Function(ReaderScrollPhase phase)? onScrollPhaseChanged;
   final VoidCallback? onTap;
   final void Function(String text, int start, int end, String chapterId)?
   onHighlight;
@@ -101,6 +118,20 @@ class _ReaderContinuousScrollViewState
     }
   }
 
+  bool _handleScrollPhaseNotification(ScrollNotification notification) {
+    final callback = widget.onScrollPhaseChanged;
+    if (callback == null) {
+      return false;
+    }
+    if (notification is ScrollStartNotification ||
+        notification is ScrollUpdateNotification) {
+      callback(ReaderScrollPhase.active);
+    } else if (notification is ScrollEndNotification) {
+      callback(ReaderScrollPhase.settling);
+    }
+    return false;
+  }
+
   void _handleScroll() {
     if (!widget.scrollController.hasClients) {
       return;
@@ -159,12 +190,15 @@ class _ReaderContinuousScrollViewState
                 behavior: ScrollConfiguration.of(
                   context,
                 ).copyWith(scrollbars: false),
-                child: CustomScrollView(
-                  controller: widget.scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(
-                    parent: ClampingScrollPhysics(),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _handleScrollPhaseNotification,
+                  child: CustomScrollView(
+                    controller: widget.scrollController,
+                    physics: const AlwaysScrollableScrollPhysics(
+                      parent: ClampingScrollPhysics(),
+                    ),
+                    slivers: slivers,
                   ),
-                  slivers: slivers,
                 ),
               ),
             ),

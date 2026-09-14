@@ -18,6 +18,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_block_text.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
@@ -241,6 +242,11 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   ///
   /// 合并到约 100ms 一拍，降低大章分批测高时的整页 setState 频率。
   void _onContinuousLayoutInvalidated() {
+    // ACTIVE_SCROLL 期间只标记 dirty，窗口重建推迟到 ScrollEnd（方案 §12）。
+    if (isScrollPhaseActive) {
+      continuousMetricsDirty = true;
+      return;
+    }
     if (!mounted || isPageMode || _layoutInvalidationScheduled) {
       return;
     }
@@ -634,6 +640,21 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 全书进度显示通知器（由 State 实现；连续模式写入视觉进度）。
   ValueNotifier<double> get bookProgressNotifier;
+
+  /// 当前连续滚动相位（由 interaction mixin 实现）。
+  ReaderScrollPhase get scrollPhase;
+
+  /// 是否处于 ACTIVE_SCROLL（用户正在滚动，禁止视口变更）。
+  bool get isScrollPhaseActive;
+
+  /// 滚动相位转移入口（由 interaction mixin 实现）。
+  void onScrollPhaseChanged(ReaderScrollPhase phase);
+
+  /// ScrollEnd 一次收敛提交（由 builders 实现：重建窗口 + 单次修正）。
+  void commitPendingContinuousMetrics();
+
+  /// 连续窗口布局是否有未提交变化（ACTIVE_SCROLL 期间置位）。
+  bool continuousMetricsDirty = false;
 
   /// 章节字数（由 builders 经解析元数据提供；未解析返回 null）。
   int? charCountForChapter(String chapterId);
