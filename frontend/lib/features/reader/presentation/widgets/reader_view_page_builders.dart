@@ -969,6 +969,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         prevLastId: prevLastId,
         prevFirstHeight: prevFirstHeight,
         prevLastHeight: prevLastHeight,
+        anchorBefore: anchorBefore,
+        oldAnchorEntry: oldAnchorEntry,
       );
       // 滑窗已按首尾高度补偿，勿再按锚点 prefix 二次修正。
       if (!windowSlid) {
@@ -1055,19 +1057,24 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     return _charCountForChapter(loader, chapterId);
   }
 
-  /// 滑窗时保持视口：前缀章卸载则 offset 减高，前缀章新增则加高。
+  /// 滑窗时保持视口：优先按视觉锚点重解析（§26），锚点不可解析时回退
+  /// 首尾高度差补偿（前缀章卸载则 offset 减高，前部新增章则加高）。
+  ///
+  /// 与 _compensateScrollForPrefixDelta 同套状态守卫：恢复/加载/切章期间
+  /// 滚动偏移由对应流程掌控，此处补偿会产生叠加跳变。不加指针守卫是有意的：
+  /// 滑窗恰发生在拖动进新章时，拖动中必须补偿才能保持坐标稳定。
   void _compensateScrollForWindowSlide({
     required List<ContinuousChapterEntry> prevEntries,
     required String? prevFirstId,
     required String? prevLastId,
     required double prevFirstHeight,
     required double prevLastHeight,
+    VisualAnchor? anchorBefore,
+    ContinuousChapterEntry? oldAnchorEntry,
   }) {
     if (prevEntries.isEmpty || !scrollController.hasClients) {
       return;
     }
-    // 与 _compensateScrollForPrefixDelta 同套状态守卫：恢复/加载/切章期间
-    // 滚动偏移由对应流程掌控，此处补偿会产生叠加跳变。
     if (isRestoringProgress ||
         restore.shouldSuppressWrites ||
         isLoadingChapter ||
@@ -1099,7 +1106,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         }
       }
     }
-    if (delta.abs() < 0.5) {
+    if (delta.abs() < 0.5 && anchorBefore == null) {
       return;
     }
     final captured = delta;
@@ -1108,7 +1115,27 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         return;
       }
       final max = scrollController.position.maxScrollExtent;
-      final target = (scrollController.offset + captured).clamp(0.0, max);
+      // 锚点保持优先：同一视觉锚点在新窗口中的窗口坐标。
+      final remapped =
+          anchorBefore == null
+              ? null
+              : continuousScrollController.remapVisualAnchor(
+                anchorBefore,
+                oldEntry: oldAnchorEntry,
+              );
+      final anchorY =
+          remapped == null
+              ? null
+              : continuousScrollController.contentYForVisualAnchor(remapped);
+      final double target;
+      if (anchorY != null) {
+        target = (anchorY - viewportAnchorY).clamp(0.0, max);
+      } else {
+        target = (scrollController.offset + captured).clamp(0.0, max);
+      }
+      if ((target - scrollController.offset).abs() < 0.5) {
+        return;
+      }
       scrollController.jumpTo(target);
     });
   }

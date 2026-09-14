@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -1308,7 +1309,8 @@ class ReaderContentLoader {
   /// 内容坐标 Y → 字符偏移（用于保存阅读进度）。
   ///
   /// [contentY] 是内容坐标系中的 Y 位置（scrollOffset + viewportAnchorY）。
-  /// 与 [charOffsetToContentY] 互为逆运算，使用同一套累积块高度坐标系。
+  /// 实现为唯一位置解析器的持久化精度包装；窗口级双坐标解析见
+  /// ReaderContinuousPositionResolver.resolveContentY。
   int contentYToCharOffset(
     String chapterId,
     double contentY, {
@@ -1317,96 +1319,16 @@ class ReaderContentLoader {
     double textScale = 1.0,
   }) {
     final data = getByChapterId(chapterId);
-    if (data == null || data.blocks.isEmpty) return 0;
-    if (data.cumulativeHeights.isEmpty) return 0;
-
-    final totalHeight = data.cumulativeHeights.last;
-    if (totalHeight <= 0) return 0;
-
-    // 直接用 contentY（不再通过 maxExtent 换算比例）
-    final normalizedOffset = contentY.clamp(0.0, totalHeight);
-
-    // 二分查找 normalizedOffset 落在哪个 block 的累积高度区间内
-    var lo = 0;
-    var hi = data.cumulativeHeights.length - 1;
-    while (lo < hi) {
-      final mid = (lo + hi) ~/ 2;
-      if (data.cumulativeHeights[mid] < normalizedOffset) {
-        lo = mid + 1;
-      } else {
-        hi = mid;
-      }
-    }
-
-    // lo 是 normalizedOffset 落入的 block 索引
-    // 累加前 lo 个 block 的字符数
-    var charOffset = 0;
-    for (var i = 0; i < lo; i++) {
-      charOffset += _blockCharCount(data.blocks[i]);
-    }
-
-    // 在 block 内：用 TextPainter 视觉行测量精确计算（与 charOffsetToContentY 互逆）
-    final blockHeight = _blockHeightAt(data, lo);
-    if (blockHeight > 0 && settings != null) {
-      final blockStart = lo > 0 ? data.cumulativeHeights[lo - 1] : 0;
-      final offsetInBlock = normalizedOffset - blockStart;
-      final block = data.blocks[lo];
-      final blockChars = _blockCharCount(block);
-
-      if (blockChars > 0 &&
-          block is! ImageBlock &&
-          block is! DividerBlock &&
-          block is! TableBlock &&
-          block is! HeadingBlock) {
-        // 文本块：用视觉行测量精确查找 charOffset
-        final visualLines = ReaderPaginationEngine.measureVisualLines(
-          block,
-          pageWidth,
-          settings,
-          textScale,
-          blockGlobalOffset: charOffset,
-        );
-        if (visualLines.isNotEmpty) {
-          var accumulated = 0.0;
-          for (var vi = 0; vi < visualLines.length; vi++) {
-            final vl = visualLines[vi];
-            if (offsetInBlock <= accumulated + vl.height) {
-              // 目标在当前视觉行内
-              final vlLocalStart = vl.globalStart - charOffset;
-              final vlLocalEnd = vl.globalEnd - charOffset;
-              final lineChars = vlLocalEnd - vlLocalStart;
-              if (lineChars > 0 && vl.height > 0) {
-                final ratioInLine = ((offsetInBlock - accumulated) / vl.height)
-                    .clamp(0.0, 1.0);
-                charOffset += vlLocalStart + (ratioInLine * lineChars).round();
-              } else {
-                charOffset += vlLocalStart;
-              }
-              return charOffset.clamp(0, data.totalChars);
-            }
-            accumulated += vl.height;
-          }
-          // 超出所有视觉行，返回块末尾
-          charOffset += blockChars;
-          return charOffset.clamp(0, data.totalChars);
-        }
-      }
-
-      // 非文本块或视觉行为空：线性插值
-      if (blockChars > 0) {
-        final progressInBlock = (offsetInBlock / blockHeight).clamp(0.0, 1.0);
-        charOffset += (progressInBlock * blockChars).round();
-      }
-    }
-
-    return charOffset.clamp(0, data.totalChars);
-  }
-
-  /// 获取指定 block 的高度（非累积）。
-  double _blockHeightAt(ChapterData data, int index) {
-    if (index < 0 || index >= data.cumulativeHeights.length) return 0;
-    final cumulative = data.cumulativeHeights[index];
-    final previous = index > 0 ? data.cumulativeHeights[index - 1] : 0;
-    return cumulative - previous;
+    if (data == null) return 0;
+    return ReaderContinuousPositionResolver.chapterLocalCharOffset(
+      blocks: data.blocks,
+      cumulativeHeights: data.cumulativeHeights,
+      totalChars: data.totalChars,
+      contentY: contentY,
+      pageWidth: pageWidth,
+      settings: settings,
+      textScale: textScale,
+      blockCharCount: _blockCharCount,
+    );
   }
 }

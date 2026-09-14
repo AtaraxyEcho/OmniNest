@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_pagination_engine.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 视觉坐标：用户当前真正看到内容的视觉位置。
 ///
@@ -110,6 +112,105 @@ class ReaderContinuousPositionResolver {
   const ReaderContinuousPositionResolver(this._controller);
 
   final ReaderContinuousScrollController _controller;
+
+  /// 章体局部 contentY → charOffset（持久化精度路径）。
+  ///
+  /// 文本块用 TextPainter 视觉行测量精确计算（与 charOffsetToPixelOffset
+  /// 互逆），非文本块或视觉行为空时线性插值；块区间按 [start, end)
+  /// 归属。ReaderContentLoader.contentYToCharOffset 是本方法的对外包装。
+  static int chapterLocalCharOffset({
+    required List<ContentBlock> blocks,
+    required List<double> cumulativeHeights,
+    required int totalChars,
+    required double contentY,
+    required double pageWidth,
+    ReaderViewSettings? settings,
+    double textScale = 1.0,
+    required int Function(ContentBlock block) blockCharCount,
+  }) {
+    if (blocks.isEmpty || cumulativeHeights.isEmpty) return 0;
+    final totalHeight = cumulativeHeights.last;
+    if (totalHeight <= 0) return 0;
+
+    final normalizedOffset = contentY.clamp(0.0, totalHeight);
+
+    // 二分查找 normalizedOffset 落在哪个 block 的累积高度区间内。
+    var lo = 0;
+    var hi = cumulativeHeights.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) ~/ 2;
+      if (cumulativeHeights[mid] < normalizedOffset) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+
+    // lo 是 normalizedOffset 落入的 block 索引，累加前 lo 个 block 的字符数。
+    var charOffset = 0;
+    for (var i = 0; i < lo; i++) {
+      charOffset += blockCharCount(blocks[i]);
+    }
+
+    // 在 block 内：用 TextPainter 视觉行测量精确计算。
+    final blockHeight =
+        lo < cumulativeHeights.length
+            ? cumulativeHeights[lo] - (lo > 0 ? cumulativeHeights[lo - 1] : 0.0)
+            : 0.0;
+    if (blockHeight > 0 && settings != null) {
+      final blockStart = lo > 0 ? cumulativeHeights[lo - 1] : 0.0;
+      final offsetInBlock = normalizedOffset - blockStart;
+      final block = blocks[lo];
+      final blockChars = blockCharCount(block);
+
+      if (blockChars > 0 &&
+          block is! ImageBlock &&
+          block is! DividerBlock &&
+          block is! TableBlock &&
+          block is! HeadingBlock) {
+        // 文本块：用视觉行测量精确查找 charOffset。
+        final visualLines = ReaderPaginationEngine.measureVisualLines(
+          block,
+          pageWidth,
+          settings,
+          textScale,
+          blockGlobalOffset: charOffset,
+        );
+        if (visualLines.isNotEmpty) {
+          var accumulated = 0.0;
+          for (var vi = 0; vi < visualLines.length; vi++) {
+            final vl = visualLines[vi];
+            if (offsetInBlock <= accumulated + vl.height) {
+              // 目标在当前视觉行内。
+              final vlLocalStart = vl.globalStart - charOffset;
+              final vlLocalEnd = vl.globalEnd - charOffset;
+              final lineChars = vlLocalEnd - vlLocalStart;
+              if (lineChars > 0 && vl.height > 0) {
+                final ratioInLine = ((offsetInBlock - accumulated) / vl.height)
+                    .clamp(0.0, 1.0);
+                charOffset += vlLocalStart + (ratioInLine * lineChars).round();
+              } else {
+                charOffset += vlLocalStart;
+              }
+              return charOffset.clamp(0, totalChars);
+            }
+            accumulated += vl.height;
+          }
+          // 超出所有视觉行，返回块末尾。
+          charOffset += blockChars;
+          return charOffset.clamp(0, totalChars);
+        }
+      }
+
+      // 非文本块或视觉行为空：线性插值。
+      if (blockChars > 0) {
+        final progressInBlock = (offsetInBlock / blockHeight).clamp(0.0, 1.0);
+        charOffset += (progressInBlock * blockChars).round();
+      }
+    }
+
+    return charOffset.clamp(0, totalChars);
+  }
 
   /// 解析窗口 contentY 处的完整位置。
   ///
