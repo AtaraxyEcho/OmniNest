@@ -4,6 +4,7 @@ import 'dart:ui' show PointerDeviceKind;
 import 'package:flutter/gestures.dart' show kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_interaction_gate.dart';
+import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// 翻页动画模式。
 enum PageTurnMode {
@@ -288,12 +289,36 @@ class _ReaderPageViewState extends State<ReaderPageView>
         pageTransitionInFlight: _transitionInFlight,
       );
 
+  /// 翻页链路诊断快照（D0 观测）：rightTapReceived=false 说明 HitTest/
+  /// 手势层有问题；tapBlocked=true 说明闸门/残留状态有问题；两者正常而
+  /// 画面不动说明 PageFlow/Transition 有问题。
+  String get _pageTurnDebugState =>
+      'chapter=${widget.state.chapterId} '
+      'pageIndex=${widget.state.pageIndex} '
+      'pageCount=${widget.state.pageCount} localPageCount=$_localPageCount '
+      'probingNext=$_probingNext hasMore=${widget.state.hasMore} '
+      'isPaginating=${widget.state.isPaginating} '
+      'slideScrolling=$_slideScrolling animating=$_isAnimating '
+      'transition=$_transitionInFlight boundary=$_boundaryRequestInFlight '
+      'gate=${_blockReason.name}';
+
+  void _debugPageTurn(String event, {String? detail}) {
+    readerDebugLog(
+      'ReaderPageTurn: $event'
+      '${detail == null ? '' : ' [$detail]'} | $_pageTurnDebugState',
+    );
+  }
+
   /// 统一：下一页。
   void _goNextPage({bool tapTurn = false}) {
     final reason = _blockReason;
     if (tapTurn
         ? ReaderInteractionGate.blocksTapTurn(reason)
         : ReaderInteractionGate.blocksInput(reason)) {
+      _debugPageTurn(
+        'nextBlocked',
+        detail: 'source=${tapTurn ? 'tap' : 'command'}',
+      );
       return;
     }
 
@@ -301,6 +326,11 @@ class _ReaderPageViewState extends State<ReaderPageView>
     final atBoundary = nextIndex >= _localPageCount && !widget.state.hasMore;
 
     if (atBoundary) {
+      _debugPageTurn(
+        'nextBoundaryRequest',
+        detail:
+            'nextIndex=$nextIndex hasNextChapter=${widget.state.hasNextChapter}',
+      );
       _dispatchBoundaryRequest(
         widget.callbacks.onNextChapter,
         hasNeighbor: widget.state.hasNextChapter,
@@ -311,13 +341,16 @@ class _ReaderPageViewState extends State<ReaderPageView>
     if (widget.turnMode == PageTurnMode.slide) {
       final ctrl = _pageController;
       if (ctrl != null && ctrl.hasClients) {
+        _debugPageTurn('nextStart', detail: 'target=$nextIndex');
         _transitionInFlight = true;
         unawaited(_animateSlideTo(ctrl, nextIndex));
       } else {
         // 控制器尚未挂载：下一帧重试，避免点击右侧/底栏无响应。
+        _debugPageTurn('nextRetryScheduled', detail: 'controller not attached');
         _scheduleSlideRetry();
       }
     } else {
+      _debugPageTurn('nextStart', detail: 'target=$nextIndex mode=flip');
       _transitionInFlight = true;
       _isForward = true;
       _flipProgress = 0.01;
@@ -353,12 +386,17 @@ class _ReaderPageViewState extends State<ReaderPageView>
     if (tapTurn
         ? ReaderInteractionGate.blocksTapTurn(reason)
         : ReaderInteractionGate.blocksInput(reason)) {
+      _debugPageTurn(
+        'previousBlocked',
+        detail: 'source=${tapTurn ? 'tap' : 'command'}',
+      );
       return;
     }
 
     final atBoundary = widget.state.pageIndex == 0;
 
     if (atBoundary) {
+      _debugPageTurn('previousBoundaryRequest');
       _dispatchBoundaryRequest(
         widget.callbacks.onPreviousChapter,
         hasNeighbor: widget.state.hasPreviousChapter,
@@ -369,12 +407,21 @@ class _ReaderPageViewState extends State<ReaderPageView>
     if (widget.turnMode == PageTurnMode.slide) {
       final ctrl = _pageController;
       if (ctrl != null && ctrl.hasClients) {
+        _debugPageTurn(
+          'previousStart',
+          detail: 'target=${widget.state.pageIndex - 1}',
+        );
         _transitionInFlight = true;
         unawaited(_animateSlideTo(ctrl, widget.state.pageIndex - 1));
       } else {
+        _debugPageTurn(
+          'previousRetryScheduled',
+          detail: 'controller not attached',
+        );
         _scheduleSlideRetry();
       }
     } else {
+      _debugPageTurn('previousStart', detail: 'mode=flip');
       _transitionInFlight = true;
       _isForward = false;
       _flipProgress = 0.01;
@@ -436,6 +483,11 @@ class _ReaderPageViewState extends State<ReaderPageView>
       if (!_boundaryRequestInFlight && !_transitionInFlight) {
         return;
       }
+      // 超时复位是失败恢复主路径：切章失败/被吞时强制释放闸门。
+      _debugPageTurn(
+        'boundaryTimeoutReset',
+        detail: 'hasNeighbor=$hasNeighbor delayMs=${delay.inMilliseconds}',
+      );
       setState(() {
         _boundaryRequestInFlight = false;
         _transitionInFlight = false;
@@ -503,14 +555,19 @@ class _ReaderPageViewState extends State<ReaderPageView>
   }
 
   void _onSlidePageChanged(int index) {
-    if (ReaderInteractionGate.locksScroll(_blockReason)) return;
+    if (ReaderInteractionGate.locksScroll(_blockReason)) {
+      _debugPageTurn('pageChangedSuppressed', detail: 'index=$index');
+      return;
+    }
     _transitionInFlight = true;
 
     if (index >= _localPageCount && widget.state.hasMore) {
+      _debugPageTurn('probePageReached', detail: 'index=$index');
       _handleProbePage(index);
       return;
     }
 
+    _debugPageTurn('pageCommitted', detail: 'index=$index');
     widget.callbacks.onPageChanged(index);
     // 翻页可能由 jumpToPage 触发（无 ScrollEnd 复位机会），统一补一次解锁。
     _scheduleTransitionRelease();
@@ -594,8 +651,10 @@ class _ReaderPageViewState extends State<ReaderPageView>
     final rightBound = w * (1 - _rightZoneRatio);
 
     if (x < leftBound) {
+      _debugPageTurn('leftTapReceived');
       _goPreviousPage(tapTurn: true);
     } else if (x > rightBound) {
+      _debugPageTurn('rightTapReceived');
       _goNextPage(tapTurn: true);
     } else {
       widget.callbacks.onToggleControls();

@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -119,6 +120,15 @@ mixin ReaderViewPageInteractionMixin
         wasSameChapter &&
         newProgress < scrollProgress - 0.0005) {
       applyPosition = false;
+      // 收敛期映射回退被抑制：这是图片/精测跳进度的首要诊断信号。
+      _debugContinuousPosition(
+        position,
+        chapterData,
+        event: 'convergingDriftSuppressed',
+        detail:
+            'displayed=$scrollProgress newProgress=$newProgress '
+            'offsetNow=$offsetNow lastOffset=$_lastResolvedOffset',
+      );
     }
 
     if (applyPosition) {
@@ -145,6 +155,12 @@ mixin ReaderViewPageInteractionMixin
           mode: 'scroll',
           charOffset: charOffset,
         );
+        _debugContinuousPosition(
+          position,
+          chapterData,
+          event: 'positionApplied',
+          detail: 'chapterProgress=$newProgress',
+        );
       }
     }
 
@@ -170,6 +186,26 @@ mixin ReaderViewPageInteractionMixin
   Timer? _expandForwardDebounce;
   Timer? _expandBackwardDebounce;
   bool _expandForwardInFlight = false;
+
+  /// 连续滚动位置诊断快照（D0 观测）。
+  void _debugContinuousPosition(
+    ContinuousScrollPosition position,
+    ChapterData? chapterData, {
+    required String event,
+    String? detail,
+  }) {
+    readerDebugLog(
+      'ReaderContinuousPosition: $event '
+      'chapter=${position.chapterId} charOffset=${position.charOffset} '
+      'chapterProgress=${position.chapterProgress.toStringAsFixed(4)} '
+      'contentY=${position.contentY.toStringAsFixed(1)} '
+      'layoutVersion=${chapterData?.layoutVersion} '
+      'precise=${chapterData?.hasPreciseHeights} '
+      'windowStart=${continuousScrollController.prefixHeightOf(position.chapterId).toStringAsFixed(1)} '
+      'windowEnd=${continuousScrollController.totalHeight.toStringAsFixed(1)}'
+      '${detail == null ? '' : ' | $detail'}',
+    );
+  }
 
   void _throttledPreloadAdjacent() {
     if (_preloadDebounce?.isActive ?? false) {
