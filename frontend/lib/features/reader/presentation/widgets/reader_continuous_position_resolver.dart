@@ -289,6 +289,20 @@ class ReaderContinuousPositionResolver {
     return contentYForVisualPosition(visual);
   }
 
+  /// 章体视觉游标 → 逻辑 charOffset（仅限该章在窗口内）。
+  ///
+  /// seek 换算用：游标落在文本块时按块内比例投影，语义与
+  /// resolveContentY 的正向映射互逆。
+  int? charOffsetForVisualCursor(String chapterId, double visualCursor) {
+    final entry = _controller.entryFor(chapterId);
+    if (entry == null || entry.totalChars <= 0 || entry.totalHeight <= 0) {
+      return null;
+    }
+    final localY = visualCursor.clamp(0.0, entry.totalHeight);
+    final visual = _visualInEntry(entry, localY);
+    return _charOffsetInEntry(entry, localY, visual);
+  }
+
   /// 块重测高后重映射视觉位置：块高变化时按块内比例保持相对位置。
   ///
   /// 例如用户位于图片中部（旧高 600、偏移 300），重测得新高 800 后

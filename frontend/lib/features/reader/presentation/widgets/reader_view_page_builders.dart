@@ -1047,6 +1047,14 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     return parsed.chapters[index].charCount;
   }
 
+  int? charCountForChapter(String chapterId) {
+    final loader = contentLoader;
+    if (loader == null) {
+      return null;
+    }
+    return _charCountForChapter(loader, chapterId);
+  }
+
   /// 滑窗时保持视口：前缀章卸载则 offset 减高，前缀章新增则加高。
   void _compensateScrollForWindowSlide({
     required List<ContinuousChapterEntry> prevEntries,

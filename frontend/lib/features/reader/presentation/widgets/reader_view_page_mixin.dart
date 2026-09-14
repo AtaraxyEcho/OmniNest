@@ -632,6 +632,12 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
   /// 显式导航令牌持有者（由 State 实现）：新导航使旧令牌失效。
   ReaderNavigationTokenHolder get navigationTokens;
 
+  /// 全书进度显示通知器（由 State 实现；连续模式写入视觉进度）。
+  ValueNotifier<double> get bookProgressNotifier;
+
+  /// 章节字数（由 builders 经解析元数据提供；未解析返回 null）。
+  int? charCountForChapter(String chapterId);
+
   /// 预加载指定章节内容。
   Future<void> prefetchChapter(String chapterId) async {
     if (!mounted) return;

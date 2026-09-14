@@ -86,6 +86,17 @@ mixin ReaderViewPageInteractionMixin
       adoptContinuousAnchorChapter(position.chapterId);
     }
 
+    // 视觉进度实时更新（不受逻辑写入阈值约束）：图片内部滚动连续变化，
+    // 零字符章同样适用；收敛期抑制仅约束逻辑进度，不限制视觉进度。
+    lastChapterVisualCursor = position.chapterVisualCursor;
+    lastVisualProgressChapterId = position.chapterId;
+    if (!isPageMode) {
+      bookProgressNotifier.value = bookVisualProgressFor(
+        position.chapterId,
+        position.chapterVisualCursor,
+      );
+    }
+
     // 图片主导的封面等章节 totalChars 为 0：不要用 charOffset=0 覆盖进度。
     final chapterData = loader.getByChapterId(position.chapterId);
     final totalChars = chapterData?.totalChars ?? 0;
@@ -187,6 +198,141 @@ mixin ReaderViewPageInteractionMixin
   Timer? _expandBackwardDebounce;
   bool _expandForwardInFlight = false;
 
+  // ── 全书视觉进度表（D4：VisualProgress 与 LogicalProgress 语义独立） ──
+
+  /// 末次解析的章体视觉游标与所属章（视觉进度显示的事实源）。
+  double lastChapterVisualCursor = 0;
+  String? lastVisualProgressChapterId;
+  List<ContinuousChapterEntry>? _visualExtentCacheSource;
+  List<String> _visualExtentChapterIds = const [];
+  List<double> _visualExtentStarts = const [];
+  double _visualExtentTotal = 0;
+
+  /// 全书视觉进度：章前缀视觉高度 + 当前章视觉游标，除以全书视觉总高。
+  ///
+  /// 视觉进度基于窗口几何而非 maxScrollExtent（动态窗口下后者不可用）；
+  /// 图片内部滚动时连续变化，逻辑进度可以保持不变。
+  double bookVisualProgressFor(String chapterId, double chapterVisualCursor) {
+    _ensureBookVisualExtentTable();
+    if (_visualExtentTotal <= 0 || _visualExtentChapterIds.isEmpty) {
+      return 0;
+    }
+    final idx = _visualExtentChapterIds.indexOf(chapterId);
+    if (idx < 0) {
+      return 0;
+    }
+    final start = _visualExtentStarts[idx];
+    final end =
+        idx + 1 < _visualExtentStarts.length
+            ? _visualExtentStarts[idx + 1]
+            : _visualExtentTotal;
+    final extent = end - start;
+    return ((start + chapterVisualCursor.clamp(0.0, extent)) /
+            _visualExtentTotal)
+        .clamp(0.0, 1.0);
+  }
+
+  /// 视觉进度条拖动 →（目标章，目标 charOffset）。
+  ///
+  /// 窗口内章经 Resolver 精确换算；窗口外章按视觉比例折算（与既有
+  /// 字数比例换算同一精度级别），跳转仍走稳定的逻辑位置。
+  (String, int)? resolveVisualSeekTarget(double ratio) {
+    _ensureBookVisualExtentTable();
+    final loader = contentLoader;
+    if (loader == null ||
+        _visualExtentTotal <= 0 ||
+        _visualExtentChapterIds.isEmpty) {
+      return null;
+    }
+    final target = ratio.clamp(0.0, 1.0) * _visualExtentTotal;
+    var idx = 0;
+    while (idx < _visualExtentChapterIds.length - 1 &&
+        target >= _visualExtentStarts[idx + 1]) {
+      idx++;
+    }
+    final chapterId = _visualExtentChapterIds[idx];
+    final chapterStart = _visualExtentStarts[idx];
+    final chapterEnd =
+        idx + 1 < _visualExtentStarts.length
+            ? _visualExtentStarts[idx + 1]
+            : _visualExtentTotal;
+    final cursor = (target - chapterStart).clamp(
+      0.0,
+      chapterEnd - chapterStart,
+    );
+
+    final windowEntry = continuousScrollController.entryFor(chapterId);
+    if (windowEntry != null) {
+      final offset = continuousScrollController.resolver
+          .charOffsetForVisualCursor(chapterId, cursor);
+      if (offset != null) {
+        return (chapterId, offset);
+      }
+    }
+    final data = loader.getByChapterId(chapterId);
+    if (data != null && data.totalChars > 0 && chapterEnd > chapterStart) {
+      final offset = (cursor / (chapterEnd - chapterStart) * data.totalChars)
+          .round()
+          .clamp(0, data.totalChars);
+      return (chapterId, offset);
+    }
+    return null;
+  }
+
+  /// 构建/复用全书视觉进度表：窗口章用实测高度，缓存章用已测高度，
+  /// 其余按已测「高度/字符」比率折算；窗口条目身份变化时重建。
+  void _ensureBookVisualExtentTable() {
+    final loader = contentLoader;
+    final entries = continuousScrollController.entries;
+    if (loader == null || entries.isEmpty) {
+      return;
+    }
+    if (identical(_visualExtentCacheSource, entries)) {
+      return;
+    }
+    _visualExtentCacheSource = entries;
+    double measuredExtent = 0;
+    var measuredChars = 0;
+    for (final entry in entries) {
+      if (entry.totalChars > 0 && entry.isReady && entry.totalHeight > 0) {
+        measuredExtent += entry.totalHeight;
+        measuredChars += entry.totalChars;
+      }
+    }
+    final heightPerChar =
+        measuredChars > 0 ? measuredExtent / measuredChars : 0.0;
+    final ids = <String>[];
+    final starts = <double>[];
+    var running = 0.0;
+    for (final id in loader.chapterIds) {
+      ids.add(id);
+      starts.add(running);
+      running += _chapterVisualExtentOf(id, heightPerChar);
+    }
+    _visualExtentChapterIds = ids;
+    _visualExtentStarts = starts;
+    _visualExtentTotal = running;
+  }
+
+  double _chapterVisualExtentOf(String chapterId, double heightPerChar) {
+    final entry = continuousScrollController.entryFor(chapterId);
+    if (entry != null && entry.totalHeight > 0) {
+      return entry.totalHeight;
+    }
+    final data = contentLoader?.getByChapterId(chapterId);
+    final heights = data?.cumulativeHeights;
+    if (heights != null && heights.isNotEmpty && heights.last > 0) {
+      return heights.last;
+    }
+    final chars = charCountForChapter(chapterId);
+    if (chars != null && chars > 0 && heightPerChar > 0) {
+      return chars * heightPerChar;
+    }
+    return ReaderContinuousScrollController.fallbackPlaceholderHeight;
+  }
+
+  /// 章节字数由 ReaderViewPageMixin 抽象提供（builders 实现）。
+
   /// 连续滚动位置诊断快照（D0 观测）。
   void _debugContinuousPosition(
     ContinuousScrollPosition position,
@@ -198,6 +344,9 @@ mixin ReaderViewPageInteractionMixin
       'ReaderContinuousPosition: $event '
       'chapter=${position.chapterId} charOffset=${position.charOffset} '
       'chapterProgress=${position.chapterProgress.toStringAsFixed(4)} '
+      'visualBlock=${position.visual.blockIndex} '
+      'visualRatio=${position.visual.blockRatio.toStringAsFixed(3)} '
+      'visualProgress=${position.chapterVisualProgress.toStringAsFixed(4)} '
       'contentY=${position.contentY.toStringAsFixed(1)} '
       'layoutVersion=${chapterData?.layoutVersion} '
       'precise=${chapterData?.hasPreciseHeights} '

@@ -272,6 +272,39 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
       return;
     }
+    final chapters = _contentLoader?.allChapters ?? const <ReaderChapter>[];
+
+    // 连续模式：滑条显示的是视觉全书进度，先按视觉表换算目标章与
+    // charOffset；换算结果仍走逻辑位置跳转（jumpTo / switchToChapter）。
+    if (!_isPageMode) {
+      final visualTarget = resolveVisualSeekTarget(progress);
+      if (visualTarget != null) {
+        final targetChapterId = visualTarget.$1;
+        final targetOffset = visualTarget.$2;
+        final currentIdx = chapters.indexWhere(
+          (c) => c.id == _currentChapterId,
+        );
+        final targetIdx = chapters.indexWhere((c) => c.id == targetChapterId);
+        final inWindow =
+            currentIdx >= 0 &&
+            targetIdx >= 0 &&
+            (targetIdx - currentIdx).abs() <= 1 &&
+            _contentLoader!.getByChapterId(targetChapterId) != null;
+        if (inWindow) {
+          await _seekWithinContinuousWindow(targetChapterId, targetOffset);
+          return;
+        }
+        await switchToChapter(
+          targetChapterId,
+          intent: ReaderChapterNavigationIntent.offset(
+            targetOffset,
+            offerReturn: true,
+          ),
+        );
+        return;
+      }
+    }
+
     final counts = parsedBook.chapters
         .map((chapter) => math.max(1, chapter.charCount))
         .toList(growable: false);
@@ -282,7 +315,6 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       target -= counts[chapterIndex];
       chapterIndex++;
     }
-    final chapters = _contentLoader?.allChapters ?? const <ReaderChapter>[];
     if (chapterIndex >= chapters.length) {
       return;
     }

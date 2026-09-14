@@ -248,6 +248,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   ReaderNavigationTokenHolder get navigationTokens => _navigationTokens;
 
   @override
+  ValueNotifier<double> get bookProgressNotifier => _bookProgressNotifier;
+
+  @override
   ReaderChapterContent? get cachedContent => _cachedContent;
   @override
   set cachedContent(ReaderChapterContent? v) => _cachedContent = v;
@@ -290,8 +293,20 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         return;
       }
       _lastBookProgressInput = _scrollProgressNotifier.value;
-      _bookProgressNotifier.value = _bookProgress;
+      _bookProgressNotifier.value = _displayBookProgress;
     });
+  }
+
+  /// 底栏/指示器显示进度：翻页模式为逻辑全书进度；连续模式为视觉全书
+  /// 进度（图片内部连续变化，不受逻辑进度冻结影响）。
+  double get _displayBookProgress {
+    if (_isPageMode) {
+      return _bookProgress;
+    }
+    return bookVisualProgressFor(
+      lastVisualProgressChapterId ?? _currentChapterId,
+      lastChapterVisualCursor,
+    );
   }
 
   @override
@@ -302,7 +317,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _bookProgressRecomputeTimer?.cancel();
     _bookProgressRecomputeTimer = null;
     _lastBookProgressInput = _scrollProgressNotifier.value;
-    _bookProgressNotifier.value = _bookProgress;
+    _bookProgressNotifier.value = _displayBookProgress;
   }
 
   @override
