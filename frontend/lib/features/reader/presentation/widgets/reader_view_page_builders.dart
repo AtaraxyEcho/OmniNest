@@ -146,7 +146,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void onReaderSelectionActive(bool active);
   DateTime? get lastAppliedProgressAt;
   void applyProgressSnapshot(ReaderProgressSnapshot snapshot);
-  void onContinuousScrollPosition(ContinuousScrollPosition position);
+  void onActualScrollOffsetChanged(double offset);
   void onContinuousWindowExpand({required bool forward});
   void prefetchNextChapterAtBoundary(int pageIndex);
   void adoptPageModeChapter(String chapterId, {int localPageIndex = 0});
@@ -1464,9 +1464,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             onLinkTap: handleReaderLinkTap,
             onSelectionActive: onReaderSelectionActive,
             onTap: toggleControls,
-            onScrollPosition: onContinuousScrollPosition,
+            onScrollOffsetChanged: onActualScrollOffsetChanged,
             onScrollPhaseChanged: onScrollPhaseChanged,
-            scrollSessionProvider: () => scrollSession,
             onHighlight: (text, start, end, chapterId) {
               if (!mounted) return;
               annotationHandler?.updateChapter(chapterId);

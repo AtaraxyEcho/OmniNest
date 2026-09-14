@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
@@ -18,7 +19,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_control_lay
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_scroll_session.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -71,25 +71,77 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
-  /// 连续滚动位置回调：更新锚点章、进度与邻章窗口。
-  void onContinuousScrollPosition(ContinuousScrollPosition position) {
+  /// Live 布局快照缓存（方案 §84 idle 路径）：按几何/窗口版本复用同一
+  /// 不可变快照，保证 Resolver 快照视图缓存命中，滚动帧零拷贝。
+  ReaderLayoutSnapshot? _cachedLiveLayout;
+  int? _cachedLiveLayoutGeometryRevision;
+  int? _cachedLiveLayoutWindowRevision;
+
+  ReaderLayoutSnapshot currentLiveLayout() {
+    final geometryRevision = continuousScrollController.geometryRevision;
+    final windowRevision = continuousScrollController.windowRevision;
+    final cached = _cachedLiveLayout;
+    if (cached != null &&
+        _cachedLiveLayoutGeometryRevision == geometryRevision &&
+        _cachedLiveLayoutWindowRevision == windowRevision) {
+      return cached;
+    }
+    final layout = ReaderLayoutSnapshot(
+      geometry: continuousScrollController.buildGeometrySnapshot(),
+      viewport: currentRuntimeViewport(),
+      windowRevision: windowRevision,
+    );
+    _cachedLiveLayout = layout;
+    _cachedLiveLayoutGeometryRevision = geometryRevision;
+    _cachedLiveLayoutWindowRevision = windowRevision;
+    return layout;
+  }
+
+  /// 实际滚动 offset 唯一入口（方案 §84/§87）：listener 只上抛 offset，
+  /// 解析经 Runtime PositionResolver 完成；事务持有冻结布局，idle 用
+  /// Live 布局快照；stale 事务回调按 §84 丢弃。
+  void onActualScrollOffsetChanged(double offset) {
     if (!mounted || isPageMode) return;
     if (restore.shouldSuppressWrites ||
         isRestoringProgress ||
         isSwitchingChapter) {
       return;
     }
-    if (DateTime.now().isBefore(restoreSilenceUntil)) return;
-    lastScrollActivityAt = DateTime.now();
+    final now = runtime.clock.now;
+    if (now.isBefore(restoreSilenceUntil)) return;
+    lastScrollActivityAt = now;
+    dismissReturnSnackBar();
 
-    handleResolvedPosition(position);
+    final tx = runtime.transactions.current;
+    if (tx != null && tx.phase == ReaderTransactionPhase.cancelled) {
+      return;
+    }
+    final session = _scrollSession;
+    final ReaderLayoutSnapshot layout;
+    final int transactionId;
+    if (session != null && tx != null && tx.id == session.id) {
+      layout = tx.layout;
+      transactionId = tx.id;
+    } else {
+      layout = currentLiveLayout();
+      transactionId = 0;
+    }
+    final snapshot = runtime.position.resolve(
+      scrollOffset: offset,
+      layout: layout,
+      transactionId: transactionId,
+    );
+    if (snapshot == null) {
+      return;
+    }
+    handleResolvedPosition(snapshot);
   }
 
-  /// 以窗口控制器解析出的位置更新锚点章、进度与邻章窗口。
+  /// 以 Runtime 解析出的位置事实（方案 §5）更新锚点章、进度与邻章窗口。
   ///
-  /// 滚动回调与键盘滚动（scrollBy）共用：键盘不产生指针事件，
-  /// 距上次指针事件 >2s 的守卫会使其停更，故由 scrollBy 主动调用。
-  void handleResolvedPosition(ContinuousScrollPosition position) {
+  /// 滚动回调与程序化滚动（scrollBy / jumpToOffsetProgrammatic）共用：
+  /// 键盘不产生指针事件，由程序化路径主动调用绕过指针守卫。
+  void handleResolvedPosition(ReaderPositionSnapshot position) {
     dismissReturnSnackBar();
 
     final loader = contentLoader;
@@ -103,12 +155,14 @@ mixin ReaderViewPageInteractionMixin
         runtime.diagnostics.stalePositionDropCount++;
         return;
       }
-      if (position.geometryRevision != session.geometry.revision) {
+      // 方案 §26/§86：位置快照的布局版本必须与事务布局一致。
+      if (position.layoutRevision.geometryRevision !=
+          session.geometry.revision) {
         runtime.diagnostics.stalePositionDropCount++;
         if (kDebugMode) {
           readerDebugLog(
             'ReaderScroll: discard stale position session=${session.id} '
-            'positionRevision=${position.geometryRevision}',
+            'positionRevision=${position.layoutRevision.geometryRevision}',
           );
         }
         return;
@@ -676,7 +730,7 @@ mixin ReaderViewPageInteractionMixin
 
   /// 连续滚动位置诊断快照（D0 观测）。
   void _debugContinuousPosition(
-    ContinuousScrollPosition position,
+    ReaderPositionSnapshot position,
     ChapterData? chapterData, {
     required String event,
     String? detail,
@@ -685,13 +739,13 @@ mixin ReaderViewPageInteractionMixin
       'ReaderContinuousPosition: $event '
       'phase=${_scrollPhase.name} '
       'chapter=${position.chapterId} charOffset=${position.charOffset} '
-      'chapterProgress=${position.chapterProgress.toStringAsFixed(4)} '
-      'visualBlock=${position.visual.blockIndex} '
-      'visualRatio=${position.visual.blockRatio.toStringAsFixed(3)} '
-      'visualProgress=${position.chapterVisualProgress.toStringAsFixed(4)} '
+      'chapterProgress=${(chapterData != null && chapterData.totalChars > 0 ? position.charOffset / chapterData.totalChars : 0.0).toStringAsFixed(4)} '
+      'visualBlock=${position.blockIndex} '
+      'visualRatio=${position.blockRatio.toStringAsFixed(3)} '
+      'visualCursor=${position.chapterVisualCursor.toStringAsFixed(1)} '
       'displayedProgress=${bookProgressNotifier.value.toStringAsFixed(4)} '
       'contentY=${position.contentY.toStringAsFixed(1)} '
-      'geometryRevision=${position.geometryRevision} '
+      'geometryRevision=${position.layoutRevision.geometryRevision} '
       'sessionGeometryRevision=${_scrollSession?.geometry.revision} '
       'layoutVersion=${chapterData?.layoutVersion} '
       'precise=${chapterData?.hasPreciseHeights} '
@@ -894,15 +948,23 @@ mixin ReaderViewPageInteractionMixin
     }
     scrollController.jumpTo(target);
     final session = _scrollSession;
-    final resolved = continuousScrollController.positionAtContentY(
-      scrollController.offset + viewportAnchorY,
-      source:
-          session == null
-              ? const LiveScrollGeometrySource()
-              : SnapshotScrollGeometrySource(session.geometry),
+    final tx = runtime.transactions.current;
+    final ReaderLayoutSnapshot layout;
+    final int transactionId;
+    if (session != null && tx != null && tx.id == session.id) {
+      layout = tx.layout;
+      transactionId = tx.id;
+    } else {
+      layout = currentLiveLayout();
+      transactionId = 0;
+    }
+    final snapshot = runtime.position.resolve(
+      scrollOffset: scrollController.offset,
+      layout: layout,
+      transactionId: transactionId,
     );
-    if (resolved != null) {
-      handleResolvedPosition(resolved);
+    if (snapshot != null) {
+      handleResolvedPosition(snapshot);
     }
     if (!isScrollPhaseActive) {
       _commitScrollSession();
@@ -937,15 +999,23 @@ mixin ReaderViewPageInteractionMixin
     // 键盘/侧点滚动不产生指针事件：主动按窗口控制器解析结果汇报位置，
     // 绕过"距上次指针事件 >2s"守卫的停更。
     final scrollSession = _scrollSession;
-    final resolved = continuousScrollController.positionAtContentY(
-      scrollController.offset + viewportAnchorY,
-      source:
-          scrollSession == null
-              ? const LiveScrollGeometrySource()
-              : SnapshotScrollGeometrySource(scrollSession.geometry),
+    final tx = runtime.transactions.current;
+    final ReaderLayoutSnapshot layout;
+    final int transactionId;
+    if (scrollSession != null && tx != null && tx.id == scrollSession.id) {
+      layout = tx.layout;
+      transactionId = tx.id;
+    } else {
+      layout = currentLiveLayout();
+      transactionId = 0;
+    }
+    final snapshot = runtime.position.resolve(
+      scrollOffset: scrollController.offset,
+      layout: layout,
+      transactionId: transactionId,
     );
-    if (resolved != null) {
-      handleResolvedPosition(resolved);
+    if (snapshot != null) {
+      handleResolvedPosition(snapshot);
     }
     unawaited(syncProgressAsync());
     return true;

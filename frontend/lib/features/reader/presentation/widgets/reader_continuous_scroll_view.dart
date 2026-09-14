@@ -10,8 +10,6 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_blo
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_scroll_session.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_range.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
@@ -35,7 +33,8 @@ enum ReaderScrollPhase {
 /// 多章连续滚动视图。
 ///
 /// 将窗口内章节拼成一条滚动轴：粘性章头 + 按块虚拟化的正文，
-/// 顺序滚动不重建阅读页，仅更新锚点章。
+/// 顺序滚动不重建阅读页，仅更新锚点章。视图只上抛实际滚动 offset
+/// （方案 §87），位置解析由 Runtime PositionResolver 在页面侧完成。
 class ReaderContinuousScrollView extends StatefulWidget {
   const ReaderContinuousScrollView({
     required this.controller,
@@ -43,9 +42,8 @@ class ReaderContinuousScrollView extends StatefulWidget {
     required this.scrollController,
     required this.itemId,
     required this.annotationsByChapter,
-    this.onScrollPosition,
+    this.onScrollOffsetChanged,
     this.onScrollPhaseChanged,
-    this.scrollSessionProvider,
     this.onTap,
     this.onHighlight,
     this.onAnnotate,
@@ -60,16 +58,15 @@ class ReaderContinuousScrollView extends StatefulWidget {
   final ScrollController scrollController;
   final String itemId;
   final Map<String, List<ReaderAnnotation>> annotationsByChapter;
-  final void Function(ContinuousScrollPosition position)? onScrollPosition;
+
+  /// 实际滚动 offset 上抛（方案 §84/§87）：不携带任何位置解释。
+  final ValueChanged<double>? onScrollOffsetChanged;
 
   /// 滚动相位回调（方案 §10-14）：userDragging 由指针事件触发，
   /// ballistic 由 pointer up 触发，settling 由 ScrollEnd 触发；
   /// ScrollStart/Update 不再创建会话（程序化滚动同样产生通知）。
   final void Function(ReaderScrollPhase phase)? onScrollPhaseChanged;
 
-  /// 当前滚动会话（方案 §9）：非空时位置解析使用会话的冻结几何与
-  /// 冻结 anchorY；null 表示 idle（允许 Live 几何）。
-  final ReaderScrollSession? Function()? scrollSessionProvider;
   final VoidCallback? onTap;
   final void Function(String text, int start, int end, String chapterId)?
   onHighlight;
@@ -145,36 +142,8 @@ class _ReaderContinuousScrollViewState
     if (!widget.scrollController.hasClients) {
       return;
     }
-    final position = widget.scrollController.position;
-    // 会话期间使用冻结的 anchorY 与快照几何（方案 §38）；
-    // idle 查询允许 Live 几何（方案 §28-D）。
-    final session = widget.scrollSessionProvider?.call();
-    final anchorY = session?.viewport.anchorY ?? _viewportAnchorY();
-    final contentY = position.pixels + anchorY;
-    final resolved = widget.controller.positionAtContentY(
-      contentY,
-      source:
-          session == null
-              ? const LiveScrollGeometrySource()
-              : SnapshotScrollGeometrySource(session.geometry),
-    );
-    if (resolved != null) {
-      widget.onScrollPosition?.call(resolved);
-    }
-    // 扩窗只走 handleResolvedPosition 的节流路径，此处不重复触发。
-  }
-
-  double _viewportAnchorY() {
-    final size = MediaQuery.sizeOf(context);
-    final topInset =
-        widget.settings.immersiveMode
-            ? 0.0
-            : MediaQuery.viewPaddingOf(context).top;
-    return ReaderChromeLayout.anchorViewportY(
-      viewportSize: size,
-      immersiveMode: widget.settings.immersiveMode,
-      topInset: topInset,
-    );
+    // 只上抛物理 offset（方案 §87）：不解析位置、不算进度、不切章。
+    widget.onScrollOffsetChanged?.call(widget.scrollController.position.pixels);
   }
 
   @override
