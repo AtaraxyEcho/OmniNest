@@ -1,23 +1,6 @@
-import 'package:flutter/foundation.dart';
-import 'package:flutter/rendering.dart';
-
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
-
-/// 视口快照（方案 §7/§38）：会话期间冻结的 viewport 基准。
-///
-/// contentY = scrollOffset + anchorY 在整个会话期间使用同一 anchorY，
-/// 窗口尺寸/沉浸式/SafeArea 变化不得在会话中途改变该换算。
-@immutable
-class ReaderViewportSnapshot {
-  const ReaderViewportSnapshot({
-    required this.viewportSize,
-    required this.anchorY,
-  });
-
-  final Size viewportSize;
-  final double anchorY;
-}
 
 /// 一次用户滚动手势的事务对象（方案 §9/§40-41）。
 ///

@@ -2,6 +2,7 @@ import 'dart:ui' show Size;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_scroll_session.dart';
@@ -43,6 +44,17 @@ ReaderContinuousScrollController _controllerWithImage() {
     resolve: (id) => textEntry,
   );
   return controller;
+}
+
+ReaderViewportSnapshot _testViewport() {
+  return ReaderViewportSnapshot(
+    viewportSize: const Size(800, 600),
+    anchorY: 36,
+    contentWidth: 720,
+    textScale: 1.0,
+    safeAreaTop: 0,
+    safeAreaBottom: 0,
+  );
 }
 
 void main() {
@@ -102,10 +114,7 @@ void main() {
       final session = ReaderScrollSession(
         id: 1,
         geometry: geometryV0,
-        viewport: const ReaderViewportSnapshot(
-          viewportSize: Size(800, 600),
-          anchorY: 36,
-        ),
+        viewport: _testViewport(),
         visualMap: ReaderVisualProgressMap.fromGeometry(geometryV0),
         initialScrollOffset: 150,
         initialVisualProgress: 0.5,
@@ -141,10 +150,7 @@ void main() {
       final sessionA = ReaderScrollSession(
         id: 1,
         geometry: geometry,
-        viewport: const ReaderViewportSnapshot(
-          viewportSize: Size(800, 600),
-          anchorY: 36,
-        ),
+        viewport: _testViewport(),
         visualMap: ReaderVisualProgressMap.fromGeometry(geometry),
         initialScrollOffset: 0,
         initialVisualProgress: 0.4,
@@ -152,10 +158,7 @@ void main() {
       final sessionB = ReaderScrollSession(
         id: 2,
         geometry: geometry,
-        viewport: const ReaderViewportSnapshot(
-          viewportSize: Size(800, 600),
-          anchorY: 36,
-        ),
+        viewport: _testViewport(),
         visualMap: ReaderVisualProgressMap.fromGeometry(geometry),
         initialScrollOffset: 0,
         initialVisualProgress: 0.9,

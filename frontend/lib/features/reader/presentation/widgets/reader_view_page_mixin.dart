@@ -5,6 +5,10 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
@@ -641,6 +645,20 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   /// 全书进度显示通知器（由 State 实现；连续模式写入视觉进度）。
   ValueNotifier<double> get bookProgressNotifier;
+
+  /// Reading Runtime Facade（由 State 实现；方案 §83）。
+  ///
+  /// 事务、几何、位置、进度发布、窗口与恢复的唯一访问入口；
+  /// 页面 State 不得绕过 Facade 直接改写运行时状态。
+  ReaderReadingRuntime get runtime;
+
+  /// 当前冻结视口快照（方案 §8，由 interaction mixin 实现）。
+  ReaderViewportSnapshot currentRuntimeViewport();
+
+  /// Runtime Restore 事务创建（方案 §55/§96，由 interaction mixin 实现）：
+  /// 恢复入口统一登记 ReaderPositionTarget，回调方经 isCallbackValid
+  /// 做 generation + item/mode 三层身份校验（§57）。
+  ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target);
 
   /// 当前连续滚动相位（由 interaction mixin 实现）。
   ReaderScrollPhase get scrollPhase;

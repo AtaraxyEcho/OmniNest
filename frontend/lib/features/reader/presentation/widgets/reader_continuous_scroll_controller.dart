@@ -218,6 +218,8 @@ class ReaderContinuousScrollController extends ChangeNotifier {
       _items = const [];
       _entryById.clear();
       _prefixHeights.clear();
+      // 早退守卫已确保此处确有变化（窗口被清空或锚点更换）。
+      windowRevision++;
       notifyListeners();
       return;
     }
@@ -257,6 +259,8 @@ class ReaderContinuousScrollController extends ChangeNotifier {
       return;
     }
 
+    final compositionChanged = !_chapterCompositionEqual(_entries, nextEntries);
+
     _anchorChapterId = anchorChapterId;
     _entries = nextEntries;
     _entryById
@@ -269,8 +273,27 @@ class ReaderContinuousScrollController extends ChangeNotifier {
       running += effectiveExtentOf(entry);
     }
     _items = _buildItems(nextEntries);
+    if (compositionChanged) {
+      windowRevision++;
+    }
     geometryRevision++;
     notifyListeners();
+  }
+
+  /// 窗口章节组成是否一致（仅章 id 序列，不含高度变化）。
+  bool _chapterCompositionEqual(
+    List<ContinuousChapterEntry> a,
+    List<ContinuousChapterEntry> b,
+  ) {
+    if (a.length != b.length) {
+      return false;
+    }
+    for (var i = 0; i < a.length; i++) {
+      if (a[i].chapterId != b[i].chapterId) {
+        return false;
+      }
+    }
+    return true;
   }
 
   /// 构建当前 Live 几何的不可变快照（方案 §10：ScrollStart 时生成）。
@@ -340,6 +363,10 @@ class ReaderContinuousScrollController extends ChangeNotifier {
 
   /// 窗口几何版本号：rebuild 实际应用变化时递增，供快照与诊断对齐。
   int geometryRevision = 0;
+
+  /// 窗口结构版本号（方案 §7）：窗口章节组成变化（A B C → A B C D）
+  /// 时递增；块高度/前缀变化只递增 geometryRevision。
+  int windowRevision = 0;
 
   /// 根据窗口内容 Y 解析阅读位置（双坐标：视觉 + 逻辑）。
   ContinuousScrollPosition? positionAtContentY(

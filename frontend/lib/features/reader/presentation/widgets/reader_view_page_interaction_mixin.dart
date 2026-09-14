@@ -5,10 +5,16 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
-import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
+import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
@@ -89,18 +95,24 @@ mixin ReaderViewPageInteractionMixin
     final loader = contentLoader;
     if (loader == null) return;
 
-    // 会话同源校验（方案 §45-46）：生产模式下旧会话/旧几何的回调
+    // 会话同源校验（方案 §45-46/§85）：生产模式下旧会话/旧几何的回调
     // 直接丢弃，不再重新解释（DEBUG 断言之外也有运行时防线）。
     final session = _scrollSession;
-    if (session != null &&
-        position.geometryRevision != session.geometry.revision) {
-      if (kDebugMode) {
-        readerDebugLog(
-          'ReaderScroll: discard stale position session=${session.id} '
-          'positionRevision=${position.geometryRevision}',
-        );
+    if (session != null) {
+      if (!runtime.transactions.isCurrent(session.id)) {
+        runtime.diagnostics.stalePositionDropCount++;
+        return;
       }
-      return;
+      if (position.geometryRevision != session.geometry.revision) {
+        runtime.diagnostics.stalePositionDropCount++;
+        if (kDebugMode) {
+          readerDebugLog(
+            'ReaderScroll: discard stale position session=${session.id} '
+            'positionRevision=${position.geometryRevision}',
+          );
+        }
+        return;
+      }
     }
 
     // 顺序滚动进入邻章：会话期间只记录挂起收养（方案 §31），
@@ -295,13 +307,14 @@ mixin ReaderViewPageInteractionMixin
     completeModeSwitchGeneration(generation);
   }
 
-  // ── 滚动相位与视觉会话（方案 §4-7）──
+  // ── 滚动相位与事务会话（方案 §4-7/§21-§26）──
 
   ReaderScrollPhase _scrollPhase = ReaderScrollPhase.idle;
   Timer? _settleToIdleTimer;
+  Timer? _wheelIdleTimer;
 
-  /// 当前用户滚动会话（方案 §9/§20）：几何/视口/进度映射/方向/显示
-  /// 进度同属一个事务；null = idle。不再保留散落的会话字段。
+  /// 当前滚动会话（方案 §9/§20/§136）：会话是事务的冻结快照视图，
+  /// 生命周期与 ReaderTransactionManager 中的事务一一对应；null = idle。
   ReaderScrollSession? _scrollSession;
 
   /// 最后一次发布的视觉进度（无会话的非 idle 帧保持该值，§25）。
@@ -321,7 +334,8 @@ mixin ReaderViewPageInteractionMixin
   @override
   ReaderScrollSession? get scrollSession => _scrollSession;
 
-  /// 相位转移入口：ScrollStart/Update → active，ScrollEnd → settling。
+  /// 相位转移入口：指针拖动超阈值 → active，ScrollEnd → settling。
+  /// ScrollNotification 不创建会话（程序化滚动同样产生通知，方案 §35）。
   @override
   void onScrollPhaseChanged(ReaderScrollPhase phase) {
     if (_scrollPhase == phase) {
@@ -329,10 +343,15 @@ mixin ReaderViewPageInteractionMixin
     }
     _scrollPhase = phase;
     if (phase == ReaderScrollPhase.userDragging) {
-      _beginUserScrollSession();
+      _beginScrollTransaction(ReaderTransactionKind.userDrag);
       return;
     }
     if (phase == ReaderScrollPhase.settling) {
+      // 滚轮/触控板 burst 存续期间（§30）ScrollEnd 逐 tick 到达，
+      // 不在此提交，统一由 burst 空闲超时一次提交。
+      if (_isWheelBurstOngoing) {
+        return;
+      }
       // ScrollEnd：挂起收养/扩窗 + 一次 metrics 提交 + 最多一次修正
       // （方案 §25/§31-36）。
       _commitScrollSession();
@@ -345,36 +364,90 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
-  /// 开始用户滚动会话：一次性冻结全部坐标基准（方案 §19）——
-  /// 几何、视口、进度映射、方向、初始进度同属一个事务。
-  void _beginUserScrollSession() {
-    _ensureBookVisualExtentTable();
-    final geometry = continuousScrollController.buildGeometrySnapshot();
-    _scrollSession = ReaderScrollSession(
-      id: ++_scrollSessionSequence,
-      geometry: geometry,
-      viewport: ReaderViewportSnapshot(
-        viewportSize: MediaQuery.sizeOf(context),
-        anchorY: viewportAnchorY,
+  bool get _isWheelBurstOngoing {
+    final tx = runtime.transactions.current;
+    if (tx == null ||
+        (tx.kind != ReaderTransactionKind.wheel &&
+            tx.kind != ReaderTransactionKind.touchpad)) {
+      return false;
+    }
+    return _wheelIdleTimer?.isActive ?? false;
+  }
+
+  /// 当前冻结视口快照（方案 §8：完整布局上下文一次冻结）。
+  @override
+  ReaderViewportSnapshot currentRuntimeViewport() {
+    final size = MediaQuery.sizeOf(context);
+    final viewPadding = MediaQuery.viewPaddingOf(context);
+    final textScale = MediaQuery.textScalerOf(context).scale(1.0);
+    final layout = ReaderControlLayout.resolve(
+      viewport: size,
+      fontSize: settings.fontSize,
+      textScale: textScale,
+    );
+    return ReaderViewportSnapshot(
+      viewportSize: size,
+      anchorY: viewportAnchorY,
+      contentWidth: layout.textColumnWidth,
+      textScale: textScale,
+      safeAreaTop: settings.immersiveMode ? 0.0 : viewPadding.top,
+      safeAreaBottom: viewPadding.bottom,
+    );
+  }
+
+  /// Runtime Restore 事务创建（方案 §55/§96）：恢复入口统一登记目标。
+  @override
+  ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target) {
+    return runtime.restore.begin(
+      target: target,
+      layout: ReaderLayoutSnapshot(
+        geometry: continuousScrollController.buildGeometrySnapshot(),
+        viewport: currentRuntimeViewport(),
+        windowRevision: continuousScrollController.windowRevision,
       ),
-      visualMap: ReaderVisualProgressMap.fromGeometry(geometry),
-      initialScrollOffset:
+      itemId: itemId,
+      readingMode: settings.readingMode,
+    );
+  }
+
+  /// 事务会话唯一创建入口（方案 §25 原子切换）：取消旧事务（含在途
+  /// Restore）并冻结新事务的几何/视口/进度映射。
+  ReaderScrollSession _beginScrollTransaction(ReaderTransactionKind kind) {
+    _ensureBookVisualExtentTable();
+    runtime.restore.cancel();
+    final geometry = continuousScrollController.buildGeometrySnapshot();
+    final viewport = currentRuntimeViewport();
+    final tx = runtime.transactions.beginOrReplace(
+      kind: kind,
+      layout: ReaderLayoutSnapshot(
+        geometry: geometry,
+        viewport: viewport,
+        windowRevision: continuousScrollController.windowRevision,
+      ),
+      initialOffset:
           scrollController.hasClients ? scrollController.offset : 0.0,
       initialVisualProgress: bookProgressNotifier.value,
     );
+    final session = ReaderScrollSession(
+      id: tx.id,
+      geometry: geometry,
+      viewport: viewport,
+      visualMap: ReaderVisualProgressMap.fromGeometry(geometry),
+      initialScrollOffset: tx.lastScrollOffset,
+      initialVisualProgress: tx.lastVisualProgress,
+    );
     if (kDebugMode) {
       readerDebugLog(
-        'ReaderScroll: session=${_scrollSession!.id} begin '
-        'geometryRevision=${geometry.revision} '
-        'anchorY=${_scrollSession!.viewport.anchorY.toStringAsFixed(1)}',
+        'ReaderTx: tx=${tx.id} started kind=${tx.kind.name} '
+        'geometry=${geometry.revision}/${continuousScrollController.windowRevision} '
+        'anchorY=${viewport.anchorY.toStringAsFixed(1)}',
       );
     }
+    return session;
   }
 
-  int _scrollSessionSequence = 0;
-
-  /// SETTLING 提交（方案 §31-36）：挂起的章节收养与窗口扩容一次完成，
-  /// 随后重建窗口并应用单次锚点修正；提交期间几何不再被守卫推迟。
+  /// SETTLING 提交（方案 §31-36/§37）：挂起的章节收养与窗口扩容一次完成，
+  /// 随后重建窗口并应用单次锚点修正；事务在提交完成后才结束。
   void _commitScrollSession() {
     final session = _scrollSession;
     if (session != null) {
@@ -391,6 +464,39 @@ mixin ReaderViewPageInteractionMixin
     }
     commitPendingContinuousMetrics();
     _scrollSession = null;
+    final tx = runtime.transactions.current;
+    if (tx != null) {
+      runtime.transactions.finish(tx.id);
+      if (kDebugMode) {
+        readerDebugLog('ReaderTx: tx=${tx.id} completed kind=${tx.kind.name}');
+      }
+    }
+  }
+
+  /// 滚轮/触控板输入（方案 §29-§31）：Pointer Event 只声明输入来源，
+  /// 不推算位置；burst 内复用同一事务，200ms 无事件进入 SETTLING。
+  void onPointerScrollInput() {
+    final tx = runtime.transactions.current;
+    // 用户拖动拥有当前坐标系，滚轮信号不抢占（§23 单一 active 事务）。
+    if (tx != null &&
+        tx.kind == ReaderTransactionKind.userDrag &&
+        isScrollPhaseActive) {
+      return;
+    }
+    _cancelOngoingRestoreForUserScroll();
+    final session = _scrollSession;
+    if (session == null ||
+        tx == null ||
+        (tx.kind != ReaderTransactionKind.wheel &&
+            tx.kind != ReaderTransactionKind.touchpad)) {
+      _scrollSession = _beginScrollTransaction(ReaderTransactionKind.wheel);
+    }
+    _wheelIdleTimer?.cancel();
+    _wheelIdleTimer = Timer(const Duration(milliseconds: 200), () {
+      if (_scrollPhase == ReaderScrollPhase.idle) {
+        _commitScrollSession();
+      }
+    });
   }
 
   /// 滚动期间的视觉进度：物理 Y 直接查冻结映射（方案 §22-24），
@@ -406,8 +512,9 @@ mixin ReaderViewPageInteractionMixin
         session.displayedProgress;
   }
 
-  /// 唯一视觉进度发布器（方案 §44/§83）：整个模块只允许此入口写
-  /// bookProgressNotifier；旧会话的回调按 id 丢弃（§45-46）。
+  /// 唯一视觉进度发布入口（方案 §44/§50）：整个模块只允许经
+  /// ReaderVisualProgressPublisher 写 bookProgressNotifier；旧会话的
+  /// 回调按 id 丢弃（§45-46）。
   void publishVisualProgress(ReaderScrollSession? session, double value) {
     if (session != null && _scrollSession?.id != session.id) {
       return;
@@ -416,9 +523,7 @@ mixin ReaderViewPageInteractionMixin
       session.displayedProgress = value;
     }
     _lastPublishedVisualProgress = value;
-    if (bookProgressNotifier.value != value) {
-      bookProgressNotifier.value = value;
-    }
+    runtime.publisher.publish(value);
   }
 
   /// 方向性单调钳制（方案 §42-43）：会话活跃期间（userDragging/
@@ -628,6 +733,7 @@ mixin ReaderViewPageInteractionMixin
     _expandForwardDebounce?.cancel();
     _expandBackwardDebounce?.cancel();
     _settleToIdleTimer?.cancel();
+    _wheelIdleTimer?.cancel();
   }
 
   /// 顺序滚动进入邻章：只更新锚点，不重建整棵阅读树。
@@ -703,8 +809,10 @@ mixin ReaderViewPageInteractionMixin
   /// 用户主动滚动前终止进行中的进度恢复。
   ///
   /// ScrollRestore 在恢复期与监控期都会 jumpTo 锚点，会与本次滚动对抗，
-  /// 导致滚动位移归零被误判为章末并触发跳章；同时清掉恢复遮罩。
+  /// 导致滚动位移归零被误判为章末并触发跳章；同时清掉恢复遮罩，
+  /// 并使 Runtime 层的 Restore 事务失效（方案 §59）。
   void _cancelOngoingRestoreForUserScroll() {
+    runtime.restore.cancel();
     if (!restore.shouldSuppressWrites && !isRestoringProgress) {
       return;
     }
@@ -747,21 +855,32 @@ mixin ReaderViewPageInteractionMixin
   }
 
   /// 滚动指定距离。返回 true 表示实际执行了滚动。
-  Future<bool> scrollBy(double delta) async {
+  ///
+  /// [kind] 声明程序化滚动来源（方案 §33）：侧边点击 sideTap、键盘
+  /// keyboard；滚动全程属于显式事务，不得伪装成用户滚动（§35）。
+  Future<bool> scrollBy(
+    double delta, {
+    ReaderTransactionKind kind = ReaderTransactionKind.sideTap,
+  }) async {
     if (!scrollController.hasClients) return false;
     final currentOffset = scrollController.offset;
     final max = scrollController.position.maxScrollExtent;
     final target = (currentOffset + delta).clamp(0.0, max);
     if ((target - currentOffset).abs() < 1.0) return false;
+    // 程序化滚动开启显式事务并终止在途恢复（§59）；用户手势进行中
+    // 不抢占其会话（§23 单一 active 事务）。
+    if (!isScrollPhaseActive) {
+      _cancelOngoingRestoreForUserScroll();
+      _scrollSession = _beginScrollTransaction(kind);
+    }
     await scrollController.animateTo(
       target,
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeOutCubic,
     );
     if (!mounted || !scrollController.hasClients) return true;
-    // 键盘滚动不产生指针事件：主动取消进行中的恢复并按窗口控制器
-    // 解析结果汇报位置，绕过"距上次指针事件 >2s"守卫的停更。
-    _cancelOngoingRestoreForUserScroll();
+    // 键盘/侧点滚动不产生指针事件：主动按窗口控制器解析结果汇报位置，
+    // 绕过"距上次指针事件 >2s"守卫的停更。
     final scrollSession = _scrollSession;
     final resolved = continuousScrollController.positionAtContentY(
       scrollController.offset + viewportAnchorY,

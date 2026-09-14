@@ -218,8 +218,10 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     ReaderItemDetail detail,
     double viewportFactor,
   ) async {
+    // 键盘滚动进入 Keyboard 事务（方案 §32）：无指针事件也保持事务身份。
     final didScroll = await scrollBy(
       MediaQuery.sizeOf(context).height * viewportFactor,
+      kind: ReaderTransactionKind.keyboard,
     );
     if (!didScroll && mounted) {
       tryNavigateChapter(viewportFactor > 0 ? 1 : -1);

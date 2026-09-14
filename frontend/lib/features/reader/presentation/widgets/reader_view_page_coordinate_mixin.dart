@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 
@@ -59,7 +60,8 @@ mixin ReaderViewPageCoordinateMixin on ReaderViewPageMixin {
   /// 懒布局下窗口重建当帧 maxScrollExtent 可能未收敛，单次 jumpTo 会被
   /// clamp 短跳；复用 ScrollRestore 的稳定重试。恢复期间 isRestoringProgress
   /// 抑制滚动位置回调，防止章首落点（窗口 offset≠0，前有前缀章）被位置
-  /// 回调误收养回前章。
+  /// 回调误收养回前章。恢复事务统一登记到 Runtime RestoreManager
+  /// （方案 §55/§96），回调经三层身份校验（§57）。
   @override
   void restoreToChapterStart(String chapterId) {
     scrollProgress = 0;
@@ -74,6 +76,9 @@ mixin ReaderViewPageCoordinateMixin on ReaderViewPageMixin {
         return;
       }
       final restoreScheduledAt = DateTime.now();
+      final restoreTx = beginRuntimeRestore(
+        ReaderPositionTarget(chapterId: chapterId, charOffset: 0),
+      );
       restore.start(
         scrollController: scrollController,
         targetOffsetBuilder: () {
@@ -86,6 +91,12 @@ mixin ReaderViewPageCoordinateMixin on ReaderViewPageMixin {
           if (!completed) {
             // 被用户滚动中断：当前真实位置即事实，立即恢复进度写入。
             restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(0);
+          } else if (!runtime.restore.isCallbackValid(
+            restoreTx,
+            itemId: itemId,
+            readingMode: settings.readingMode,
+          )) {
+            runtime.diagnostics.restoreCallbackDropCount++;
           }
           isRestoringProgress = false;
           if (mounted) setState(() {});

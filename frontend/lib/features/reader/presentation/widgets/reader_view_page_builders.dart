@@ -5,6 +5,10 @@ import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -158,6 +162,18 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   int get modeSwitchGeneration;
   void completeModeSwitchGeneration(int generation);
   void abortModeSwitchGeneration(int generation);
+
+  /// 当前冻结视口快照（由 interaction mixin 经 State 组合提供）。
+  ReaderViewportSnapshot currentRuntimeViewport();
+
+  /// Reading Runtime Facade（由 State 实现，方案 §83）。
+  ReaderReadingRuntime get runtime;
+
+  /// 滚轮/触控板输入入口（由 interaction mixin 经 State 组合提供）。
+  void onPointerScrollInput();
+
+  /// Runtime Restore 事务创建（方案 §55/§96，由 interaction mixin 实现）。
+  ReaderRestoreTransaction beginRuntimeRestore(ReaderPositionTarget target);
 
   // ── 页面尺寸 ──
 
@@ -1385,6 +1401,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           onPointerSignal: (event) {
             if (event is PointerScrollEvent) {
               lastPointerDownTime = DateTime.now();
+              // 滚轮/触控板输入进入事务层（方案 §29-§31）：burst 复用
+              // 同一事务，200ms 空闲后一次提交。
+              onPointerScrollInput();
             }
           },
           child: ReaderContinuousScrollView(
@@ -1590,6 +1609,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final restoreScheduledAt = DateTime.now();
+      final restoreTx = beginRuntimeRestore(
+        ReaderPositionTarget(
+          chapterId: currentChapterId,
+          charOffset: capturedCharOffset,
+        ),
+      );
       restore.start(
         scrollController: scrollController,
         targetOffsetBuilder: () {
@@ -1616,7 +1641,19 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         isUserScrolling: () => isUserScrollActive(since: restoreScheduledAt),
         onSettled: (completed) {
           if (completed) {
-            positionTracker.setCharOffset(capturedCharOffset, currentChapterId);
+            // 三层身份校验（方案 §57）：item/mode 已变的恢复不得回写 tracker。
+            if (runtime.restore.isCallbackValid(
+              restoreTx,
+              itemId: itemId,
+              readingMode: settings.readingMode,
+            )) {
+              positionTracker.setCharOffset(
+                capturedCharOffset,
+                currentChapterId,
+              );
+            } else {
+              runtime.diagnostics.restoreCallbackDropCount++;
+            }
           } else {
             // 被用户滚动中断或超时：当前真实位置即事实，恢复静默窗口
             // 让进度写入立即恢复，追踪由下一次滚动回调修正
@@ -1738,6 +1775,18 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final restoreScheduledAt = DateTime.now();
+      final restoreTx = beginRuntimeRestore(
+        ReaderPositionTarget(
+          chapterId: currentChapterId,
+          charOffset:
+              (capturedRatio *
+                      (contentLoader
+                              ?.getByChapterId(currentChapterId)
+                              ?.totalChars ??
+                          0))
+                  .round(),
+        ),
+      );
       restore.start(
         scrollController: scrollController,
         targetOffsetBuilder: () {
@@ -1764,7 +1813,13 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           if (completed && scrollController.hasClients) {
             final max = scrollController.position.maxScrollExtent;
             final data = contentLoader?.get(currentChapterId, settings);
-            if (data != null && max > 0) {
+            if (data != null &&
+                max > 0 &&
+                runtime.restore.isCallbackValid(
+                  restoreTx,
+                  itemId: itemId,
+                  readingMode: settings.readingMode,
+                )) {
               final settledCharOffset = windowContentYToCharOffset(
                 currentChapterId,
                 scrollController.offset + viewportAnchorY,
@@ -1776,6 +1831,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                 chapterId: currentChapterId,
                 charOffset: settledCharOffset,
               );
+            } else if (max <= 0 || data == null) {
+              runtime.diagnostics.restoreCallbackDropCount++;
             }
           } else if (!completed) {
             restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(0);

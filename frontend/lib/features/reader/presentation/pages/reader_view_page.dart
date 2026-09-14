@@ -6,6 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_progress_publisher.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -209,6 +212,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   // ── 阅读会话 ──
   late final DateTime _sessionStart = DateTime.now();
 
+  /// Reading Runtime Facade（方案 §83）：事务/几何/位置/进度发布/窗口/
+  /// 恢复的唯一聚合入口；publisher 包装页面自有的全书进度通知器。
+  late final ReaderReadingRuntime _runtime = ReaderReadingRuntime(
+    publisher: ReaderVisualProgressPublisher(_bookProgressNotifier),
+  );
+
+  @override
+  ReaderReadingRuntime get runtime => _runtime;
+
   bool get _isPageMode => supportsPageMode && _settings.readingMode == 'page';
 
   // ── 抽象成员实现（ReaderViewPageMixin + ReaderViewPageBuilders 共用） ──
@@ -293,7 +305,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         return;
       }
       _lastBookProgressInput = _scrollProgressNotifier.value;
-      _bookProgressNotifier.value = _displayBookProgress;
+      _runtime.publisher.publish(_displayBookProgress);
     });
   }
 
@@ -317,7 +329,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _bookProgressRecomputeTimer?.cancel();
     _bookProgressRecomputeTimer = null;
     _lastBookProgressInput = _scrollProgressNotifier.value;
-    _bookProgressNotifier.value = _displayBookProgress;
+    _runtime.publisher.publish(_displayBookProgress);
   }
 
   @override
