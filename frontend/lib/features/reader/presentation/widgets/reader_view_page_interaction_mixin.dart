@@ -14,6 +14,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_tran
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';
@@ -86,8 +87,19 @@ mixin ReaderViewPageInteractionMixin
         _cachedLiveLayoutWindowRevision == windowRevision) {
       return cached;
     }
+    // 优先取 GeometryStore 的 Live 快照（方案 §13）；未就绪时现建并
+    // 经 Store 提交，保证 idle 解析与产线提交同一几何来源。
+    final storeLive = runtime.geometry.live;
+    final ReaderGeometrySnapshot geometry;
+    if (storeLive != null && storeLive.revision == geometryRevision) {
+      geometry = storeLive;
+    } else {
+      geometry = continuousScrollController.buildGeometrySnapshot();
+      runtime.geometry.publishCandidate(geometry);
+      runtime.geometry.commitCandidate();
+    }
     final layout = ReaderLayoutSnapshot(
-      geometry: continuousScrollController.buildGeometrySnapshot(),
+      geometry: geometry,
       viewport: currentRuntimeViewport(),
       windowRevision: windowRevision,
     );

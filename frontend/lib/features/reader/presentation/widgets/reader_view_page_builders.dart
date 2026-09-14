@@ -21,6 +21,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
@@ -1014,10 +1015,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                 scrollController.offset + viewportAnchorY,
               )
               : null;
-      final oldAnchorEntry =
-          anchorBefore == null
-              ? null
-              : continuousScrollController.entryFor(anchorBefore.chapterId);
+      // 旧几何快照：Geometry Commit 的 old 侧输入（方案 §38/§70）。
+      final geometryBefore = continuousScrollController.buildGeometrySnapshot();
       // 锚点在旧布局中的窗口内容坐标：应用期按"新布局位置 - 旧布局
       // 位置"的位移修正当前 offset，与用户滚动自然叠加，不再回拉。
       final anchorContentY =
@@ -1112,15 +1111,22 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         prevFirstHeight: prevFirstHeight,
         prevLastHeight: prevLastHeight,
         anchorBefore: anchorBefore,
-        oldAnchorEntry: oldAnchorEntry,
+        geometryBefore: geometryBefore,
         anchorContentY: anchorContentY,
       );
+      // GeometryStore 接入（方案 §13/§42/§94）：builder 输出即 Candidate，
+      // 本方法只在 commit 边界（已有 ACTIVE 守卫）被调用，此处提交为 Live。
+      runtime.geometry.publishCandidate(
+        continuousScrollController.buildGeometrySnapshot(),
+      );
+      runtime.geometry.commitCandidate();
+
       // 滑窗已按首尾高度补偿，勿再按锚点 prefix 二次修正。
       if (!windowSlid) {
         _compensateScrollForPrefixDelta(
           previousPrefix,
           anchorBefore: anchorBefore,
-          oldAnchorEntry: oldAnchorEntry,
+          geometryBefore: geometryBefore,
           anchorContentY: anchorContentY,
         );
       }
@@ -1213,7 +1219,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   /// 标记 dirty，ScrollEnd 后由 commitPendingContinuousMetrics 一次收敛。
   void _preserveVisualAnchorAfterLayoutChange({
     required VisualAnchor? anchorBefore,
-    required ContinuousChapterEntry? oldAnchorEntry,
+    required ReaderGeometrySnapshot geometryBefore,
     required double fallbackDelta,
     required double anchorContentY,
   }) {
@@ -1234,7 +1240,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       }
       _applyVisualCorrectionNow(
         anchorBefore: anchorBefore,
-        oldAnchorEntry: oldAnchorEntry,
+        geometryBefore: geometryBefore,
         fallbackDelta: fallbackDelta,
         anchorContentY: anchorContentY,
       );
@@ -1250,7 +1256,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   void _applyVisualCorrectionNow({
     required VisualAnchor? anchorBefore,
-    required ContinuousChapterEntry? oldAnchorEntry,
+    required ReaderGeometrySnapshot geometryBefore,
     required double fallbackDelta,
     required double anchorContentY,
   }) {
@@ -1258,23 +1264,27 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       return;
     }
     final max = scrollController.position.maxScrollExtent;
-    final remapped =
+    // 锚点保持修正统一经 Runtime GeometryCommit 计算（方案 §38/§94）；
+    // 位移合成：锚点内容坐标在新旧布局间的位移量叠加到当前 offset，
+    // 用户在捕获与应用之间的滚动已在当前 offset 中自然叠加，不按绝对
+    // 目标回拉（慢滚回拉根因）。
+    final shift =
         anchorBefore == null
             ? null
-            : continuousScrollController.remapVisualAnchor(
-              anchorBefore,
-              oldEntry: oldAnchorEntry,
+            : runtime.geometryCommit.computeAnchorCorrection(
+              oldGeometry: geometryBefore,
+              candidate: continuousScrollController.buildGeometrySnapshot(),
+              anchor: anchorBefore,
+              anchorContentY: anchorContentY,
             );
-    final anchorY =
-        remapped == null
-            ? null
-            : continuousScrollController.contentYForVisualAnchor(remapped);
+    // 提交发生在当前事务内时登记结束性 Commit（方案 §68：每事务 ≤1 次）。
+    final tx = runtime.transactions.current;
+    if (tx != null && !tx.geometryCommitted) {
+      tx.geometryCommitted = true;
+      runtime.diagnostics.geometryCommitCount++;
+    }
     final double target;
-    if (anchorY != null) {
-      // 位移合成：锚点内容坐标在新旧布局间的位移量叠加到当前 offset。
-      // 用户在捕获与应用之间的滚动已在当前 offset 中，若按绝对目标跳转
-      // 会撤销用户滚动（慢滚回拉根因）；位移合成则两者自然叠加。
-      final shift = anchorY - anchorContentY;
+    if (shift != null) {
       target = (scrollController.offset + shift).clamp(0.0, max);
     } else {
       target = (scrollController.offset + fallbackDelta).clamp(0.0, max);
@@ -1299,7 +1309,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     required double prevFirstHeight,
     required double prevLastHeight,
     VisualAnchor? anchorBefore,
-    ContinuousChapterEntry? oldAnchorEntry,
+    required ReaderGeometrySnapshot geometryBefore,
     required double anchorContentY,
   }) {
     if (prevEntries.isEmpty || !scrollController.hasClients) {
@@ -1341,7 +1351,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     }
     _preserveVisualAnchorAfterLayoutChange(
       anchorBefore: anchorBefore,
-      oldAnchorEntry: oldAnchorEntry,
+      geometryBefore: geometryBefore,
       fallbackDelta: delta,
       anchorContentY: anchorContentY,
     );
@@ -1356,7 +1366,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void _compensateScrollForPrefixDelta(
     double? previousPrefix, {
     VisualAnchor? anchorBefore,
-    ContinuousChapterEntry? oldAnchorEntry,
+    required ReaderGeometrySnapshot geometryBefore,
     required double anchorContentY,
   }) {
     if (previousPrefix == null ||
@@ -1378,7 +1388,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     }
     _preserveVisualAnchorAfterLayoutChange(
       anchorBefore: anchorBefore,
-      oldAnchorEntry: oldAnchorEntry,
+      geometryBefore: geometryBefore,
       fallbackDelta: delta,
       anchorContentY: anchorContentY,
     );

@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_commit.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_store.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_resolver.dart';
@@ -29,6 +30,7 @@ class ReaderReadingRuntime {
     ReaderRestoreManager? restore,
     ReaderRuntimeClock? clock,
     ReaderRuntimeDiagnostics? diagnostics,
+    ReaderGeometryCommit? geometryCommit,
   }) : transactions = transactions ?? ReaderTransactionManager(),
        geometry = geometry ?? ReaderGeometryStore(),
        position = position ?? const ReaderPositionResolver(),
@@ -38,7 +40,8 @@ class ReaderReadingRuntime {
        window = window ?? ReaderWindowManager(),
        restore = restore ?? ReaderRestoreManager(),
        clock = clock ?? const SystemReaderRuntimeClock(),
-       diagnostics = diagnostics ?? ReaderRuntimeDiagnostics();
+       diagnostics = diagnostics ?? ReaderRuntimeDiagnostics(),
+       geometryCommit = geometryCommit ?? const ReaderGeometryCommit();
 
   final ReaderTransactionManager transactions;
 
@@ -58,6 +61,9 @@ class ReaderReadingRuntime {
   final ReaderRuntimeClock clock;
 
   final ReaderRuntimeDiagnostics diagnostics;
+
+  /// 结束性 Geometry Commit 与锚点保持修正（方案 §38/§94）。
+  final ReaderGeometryCommit geometryCommit;
 
   ReaderPositionSnapshot? currentPosition;
 
