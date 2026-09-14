@@ -141,13 +141,14 @@ class RuntimeAnchor {
 /// 不做 setState、jumpTo、进度保存、章节切换或网络请求。
 /// 所有 contentY ↔ VisualPosition ↔ LogicalPosition 换算必须经此类。
 class ReaderContinuousPositionResolver {
-  ReaderContinuousPositionResolver(this._controller);
+  /// [controller] 仅在需要 Live 几何时提供；纯快照解析（Runtime Facade、
+  /// Geometry Commit、Target Resolver）允许省略，此时请求 Live 几何为编程错误。
+  ReaderContinuousPositionResolver([this._controller]);
 
-  final ReaderContinuousScrollController _controller;
+  final ReaderContinuousScrollController? _controller;
 
-  late final _LiveResolverGeometry _liveGeometry = _LiveResolverGeometry(
-    _controller,
-  );
+  late final _LiveResolverGeometry? _liveGeometry =
+      _controller == null ? null : _LiveResolverGeometry(_controller);
   _SnapshotResolverGeometry? _lastSnapshotGeometry;
 
   _ResolverGeometry _geometryFor(ReaderScrollGeometrySource source) {
@@ -160,7 +161,14 @@ class ReaderContinuousPositionResolver {
       _lastSnapshotGeometry = view;
       return view;
     }
-    return _liveGeometry;
+    final live = _liveGeometry;
+    if (live == null) {
+      throw StateError(
+        'ReaderContinuousPositionResolver was created without a controller '
+        'and cannot serve live geometry',
+      );
+    }
+    return live;
   }
 
   /// 章体局部 contentY → charOffset（持久化精度路径）。
@@ -484,12 +492,16 @@ class ReaderContinuousPositionResolver {
   }
 
   /// 逻辑位置对应的窗口 contentY。
-  double? contentYForLogicalPosition(String chapterId, int charOffset) {
-    final visual = visualFromLogical(chapterId, charOffset);
+  double? contentYForLogicalPosition(
+    String chapterId,
+    int charOffset, {
+    ReaderScrollGeometrySource source = const LiveScrollGeometrySource(),
+  }) {
+    final visual = visualFromLogical(chapterId, charOffset, source: source);
     if (visual == null) {
       return null;
     }
-    return contentYForVisualPosition(visual);
+    return contentYForVisualPosition(visual, source: source);
   }
 
   /// 章体视觉游标 → 逻辑 charOffset（仅限该章在窗口内）。
@@ -624,7 +636,7 @@ class _LiveResolverGeometry implements _ResolverGeometry {
 class _SnapshotResolverGeometry implements _ResolverGeometry {
   _SnapshotResolverGeometry(this.snapshot);
 
-  final ReaderScrollGeometrySnapshot snapshot;
+  final ReaderGeometrySnapshot snapshot;
 
   late final List<ContinuousChapterEntry> _synthesizedEntries = [
     for (final id in snapshot.chapterIds) snapshot.chapterOf(id)!.toEntry(),

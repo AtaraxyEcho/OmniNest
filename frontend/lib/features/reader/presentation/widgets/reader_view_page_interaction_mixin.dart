@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
 import 'package:omninest/features/reader/presentation/pages/reader_view_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_position_resolver.dart';

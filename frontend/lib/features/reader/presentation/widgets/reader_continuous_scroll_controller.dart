@@ -274,8 +274,8 @@ class ReaderContinuousScrollController extends ChangeNotifier {
   }
 
   /// 构建当前 Live 几何的不可变快照（方案 §10：ScrollStart 时生成）。
-  ReaderScrollGeometrySnapshot buildGeometrySnapshot({int? revision}) {
-    return ReaderScrollGeometrySnapshot.fromController(
+  ReaderGeometrySnapshot buildGeometrySnapshot({int? revision}) {
+    return ReaderGeometrySnapshot.fromController(
       this,
       revision: revision ?? geometryRevision,
     );

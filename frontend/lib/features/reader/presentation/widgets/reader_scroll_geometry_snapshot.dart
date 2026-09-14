@@ -21,7 +21,7 @@ class LiveScrollGeometrySource extends ReaderScrollGeometrySource {
 class SnapshotScrollGeometrySource extends ReaderScrollGeometrySource {
   const SnapshotScrollGeometrySource(this.snapshot);
 
-  final ReaderScrollGeometrySnapshot snapshot;
+  final ReaderGeometrySnapshot snapshot;
 }
 
 /// 章节几何快照（方案 §4-5）：块级累积高度的不可变复制。
@@ -29,8 +29,8 @@ class SnapshotScrollGeometrySource extends ReaderScrollGeometrySource {
 /// cumulativeHeights / blockCharPrefixes / blocks 必须不可变复制，
 /// 不与 Live 几何共享可变列表——后台精测原地更新不得穿透快照。
 @immutable
-class ReaderChapterGeometrySnapshot {
-  const ReaderChapterGeometrySnapshot({
+class ReaderGeometryEntry {
+  const ReaderGeometryEntry({
     required this.chapterId,
     required this.chapterStart,
     required this.totalHeight,
@@ -96,23 +96,23 @@ class ReaderChapterGeometrySnapshot {
 /// 包含窗口章节顺序（§5）：快照自身保存章节顺序，不能只用 Map。
 /// 同一手势期间 Progress 与 Position 必须使用同一份快照（§16）。
 @immutable
-class ReaderScrollGeometrySnapshot {
-  const ReaderScrollGeometrySnapshot({
+class ReaderGeometrySnapshot {
+  const ReaderGeometrySnapshot({
     required this.revision,
     required this.chapterIds,
     required this.chapters,
   });
 
   /// 从控制器 Live 几何构建不可变快照（方案 §10：ScrollStart 时生成）。
-  factory ReaderScrollGeometrySnapshot.fromController(
+  factory ReaderGeometrySnapshot.fromController(
     ReaderContinuousScrollController controller, {
     required int revision,
   }) {
     final ids = <String>[];
-    final chapters = <String, ReaderChapterGeometrySnapshot>{};
+    final chapters = <String, ReaderGeometryEntry>{};
     for (final entry in controller.entries) {
       ids.add(entry.chapterId);
-      chapters[entry.chapterId] = ReaderChapterGeometrySnapshot(
+      chapters[entry.chapterId] = ReaderGeometryEntry(
         chapterId: entry.chapterId,
         chapterStart: controller.prefixHeightOf(entry.chapterId),
         totalHeight: entry.totalHeight,
@@ -124,12 +124,10 @@ class ReaderScrollGeometrySnapshot {
         blocks: List<ContentBlock>.unmodifiable(entry.blocks),
       );
     }
-    return ReaderScrollGeometrySnapshot(
+    return ReaderGeometrySnapshot(
       revision: revision,
       chapterIds: List<String>.unmodifiable(ids),
-      chapters: Map<String, ReaderChapterGeometrySnapshot>.unmodifiable(
-        chapters,
-      ),
+      chapters: Map<String, ReaderGeometryEntry>.unmodifiable(chapters),
     );
   }
 
@@ -139,12 +137,11 @@ class ReaderScrollGeometrySnapshot {
   /// 窗口章节顺序。
   final List<String> chapterIds;
 
-  final Map<String, ReaderChapterGeometrySnapshot> chapters;
+  final Map<String, ReaderGeometryEntry> chapters;
 
   bool contains(String chapterId) => chapters.containsKey(chapterId);
 
-  ReaderChapterGeometrySnapshot? chapterOf(String chapterId) =>
-      chapters[chapterId];
+  ReaderGeometryEntry? chapterOf(String chapterId) => chapters[chapterId];
 
   double prefixOf(String chapterId) => chapters[chapterId]?.chapterStart ?? 0;
 

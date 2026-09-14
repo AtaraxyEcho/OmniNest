@@ -45,7 +45,7 @@ ReaderContinuousScrollController _controller(
 }
 
 void main() {
-  group('ReaderScrollGeometrySnapshot 几何快照', () {
+  group('ReaderGeometrySnapshot 几何快照', () {
     test('快照是深冻结复制：Live 几何原地变化不穿透快照', () {
       final heights = [100.0, 200.0, 300.0];
       final entries = {'c1': _entry(id: 'c1', heights: heights)};
