@@ -12,6 +12,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_continuous_
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_session.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
@@ -87,37 +88,59 @@ mixin ReaderViewPageInteractionMixin
     final loader = contentLoader;
     if (loader == null) return;
 
-    // 顺序滚动进入邻章：先收养锚点，避免封面/短章 totalChars<=0 时
-    // 视口已过章但 currentChapterId 停留旧章导致跳章与扩窗错位。
-    if (position.chapterId != currentChapterId) {
-      adoptContinuousAnchorChapter(position.chapterId);
+    // 会话同源校验（方案 §45-46）：生产模式下旧会话/旧几何的回调
+    // 直接丢弃，不再重新解释（DEBUG 断言之外也有运行时防线）。
+    final session = _scrollSession;
+    if (session != null &&
+        position.geometryRevision != session.geometry.revision) {
+      if (kDebugMode) {
+        readerDebugLog(
+          'ReaderScroll: discard stale position session=${session.id} '
+          'positionRevision=${position.geometryRevision}',
+        );
+      }
+      return;
     }
 
-    // 视觉进度实时更新（不受逻辑写入阈值约束）：图片内部滚动连续变化，
-    // 零字符章同样适用；收敛期抑制仅约束逻辑进度，不限制视觉进度。
-    assert(
-      _scrollPhase != ReaderScrollPhase.active ||
-          _activeGeometry == null ||
-          position.geometryRevision == _activeGeometry!.revision,
-      'ACTIVE_SCROLL_GEOMETRY_VIOLATION: position resolved with '
-      'revision=${position.geometryRevision} but activeGeometry='
-      '${_activeGeometry?.revision}',
-    );
+    // 顺序滚动进入邻章：会话期间只记录挂起收养（方案 §31），
+    // SETTLING 一次提交——不得在用户滚动手势中途改写窗口几何。
+    if (position.chapterId != currentChapterId) {
+      if (session != null) {
+        session.pendingAnchorChapter = position.chapterId;
+      } else {
+        adoptContinuousAnchorChapter(position.chapterId);
+      }
+    }
+
+    // 视觉进度实时更新：物理 Y 直接查会话冻结映射（方案 §22-24），
+    // 图片内部滚动连续变化；收敛期抑制仅约束逻辑进度，不限制视觉进度。
     lastChapterVisualCursor = position.chapterVisualCursor;
     lastVisualProgressChapterId = position.chapterId;
     if (!isPageMode) {
       final offsetNowForDirection =
           scrollController.hasClients ? scrollController.offset : 0.0;
-      if (_lastResolvedOffset != null) {
-        _scrollDirectionForward = offsetNowForDirection >= _lastResolvedOffset!;
+      if (session != null) {
+        session.forward = offsetNowForDirection >= session.lastScrollOffset;
+        session.lastScrollOffset = offsetNowForDirection;
       }
-      final nextProgress = visualProgressDuringScroll(
-        position.chapterId,
-        position.chapterVisualCursor,
-      );
+      final nextProgress =
+          session == null
+              ? bookVisualProgressFor(
+                position.chapterId,
+                position.chapterVisualCursor,
+              )
+              : session.visualMap.progressAt(
+                    (offsetNowForDirection + session.viewport.anchorY).clamp(
+                      0.0,
+                      double.infinity,
+                    ),
+                  ) ??
+                  session.displayedProgress;
       final displayed = _applyDirectionalProgressClamp(nextProgress);
-      _displayedVisualProgress = displayed;
-      bookProgressNotifier.value = displayed;
+      if (session != null) {
+        session.lastVisualProgress = displayed;
+      }
+      publishVisualProgress(session, displayed);
     }
 
     // 图片主导的封面等章节 totalChars 为 0：不要用 charOffset=0 覆盖进度。
@@ -205,12 +228,26 @@ mixin ReaderViewPageInteractionMixin
         _throttledPreloadAdjacent();
       }
       if (max > 0 && max - offset < max * 0.35) {
-        _throttledExpandForward();
+        if (_scrollSession != null) {
+          // 会话期间只记录挂起扩窗（方案 §32/§67），SETTLING 一次提交。
+          _scrollSession!.pendingExpandForward = true;
+        } else {
+          _throttledExpandForward();
+        }
       }
       if (offset < 240) {
-        _throttledExpandBackward();
+        if (_scrollSession != null) {
+          _scrollSession!.pendingExpandBackward = true;
+        } else {
+          _throttledExpandBackward();
+        }
       }
     }
+  }
+
+  /// 会话期间物理 offset 相对上次汇报是否发生了可判方向的变化。
+  bool offsetNowForDirectionDelta(ReaderScrollSession session) {
+    return true;
   }
 
   int? _lastSavedScrollCharOffset;
@@ -262,13 +299,12 @@ mixin ReaderViewPageInteractionMixin
   ReaderScrollPhase _scrollPhase = ReaderScrollPhase.idle;
   Timer? _settleToIdleTimer;
 
-  /// ACTIVE_SCROLL 的唯一可信坐标系（方案 §4/§10）：ScrollStart 时从
-  /// Live 几何构建，手势期间不可变；Progress 与 Position 同源（§16）。
-  ReaderScrollGeometrySnapshot? _activeGeometry;
+  /// 当前用户滚动会话（方案 §9/§20）：几何/视口/进度映射/方向/显示
+  /// 进度同属一个事务；null = idle。不再保留散落的会话字段。
+  ReaderScrollSession? _scrollSession;
 
-  /// 手势滚动方向（forward = contentY 递增），用于单调进度防线。
-  bool _scrollDirectionForward = true;
-  double _displayedVisualProgress = 0;
+  /// 最后一次发布的视觉进度（无会话的非 idle 帧保持该值，§25）。
+  double _lastPublishedVisualProgress = 0;
 
   @override
   int get modeSwitchGeneration => _modeSwitchGeneration;
@@ -277,10 +313,12 @@ mixin ReaderViewPageInteractionMixin
   ReaderScrollPhase get scrollPhase => _scrollPhase;
 
   @override
-  bool get isScrollPhaseActive => _scrollPhase == ReaderScrollPhase.active;
+  bool get isScrollPhaseActive =>
+      _scrollPhase == ReaderScrollPhase.userDragging ||
+      _scrollPhase == ReaderScrollPhase.ballistic;
 
   @override
-  ReaderScrollGeometrySnapshot? get activeGeometry => _activeGeometry;
+  ReaderScrollSession? get scrollSession => _scrollSession;
 
   /// 相位转移入口：ScrollStart/Update → active，ScrollEnd → settling。
   @override
@@ -289,64 +327,109 @@ mixin ReaderViewPageInteractionMixin
       return;
     }
     _scrollPhase = phase;
-    if (phase == ReaderScrollPhase.active) {
-      _settleToIdleTimer?.cancel();
-      _startScrollVisualSession();
+    if (phase == ReaderScrollPhase.userDragging) {
+      _beginUserScrollSession();
       return;
     }
     if (phase == ReaderScrollPhase.settling) {
-      // ScrollEnd：一次 metrics 提交 = 最多一次视口修正（方案 §13）。
-      commitPendingContinuousMetrics();
+      // ScrollEnd：挂起收养/扩窗 + 一次 metrics 提交 + 最多一次修正
+      // （方案 §25/§31-36）。
+      _commitScrollSession();
       _settleToIdleTimer?.cancel();
       _settleToIdleTimer = Timer(const Duration(milliseconds: 150), () {
         if (_scrollPhase == ReaderScrollPhase.settling) {
           _scrollPhase = ReaderScrollPhase.idle;
-          _clearScrollVisualSession();
         }
       });
     }
   }
 
-  /// 冻结当前 Live 几何为本次手势的 Active 快照（方案 §10），
-  /// 进度分母与位置解析同源（§16），不得出现双标准。
-  void _startScrollVisualSession() {
+  /// 开始用户滚动会话：一次性冻结全部坐标基准（方案 §19）——
+  /// 几何、视口、进度映射、方向、初始进度同属一个事务。
+  void _beginUserScrollSession() {
     _ensureBookVisualExtentTable();
-    _activeGeometry = continuousScrollController.buildGeometrySnapshot();
-  }
-
-  void _clearScrollVisualSession() {
-    _activeGeometry = null;
-  }
-
-  /// 滚动期间的视觉进度：快照分母 + 动态 cursor（方案 §7/§15 同源）。
-  double visualProgressDuringScroll(
-    String chapterId,
-    double chapterVisualCursor,
-  ) {
-    final snapshot = _activeGeometry;
-    if (snapshot == null || snapshot.totalBodyExtent <= 0) {
-      return bookVisualProgressFor(chapterId, chapterVisualCursor);
+    final geometry = continuousScrollController.buildGeometrySnapshot();
+    _scrollSession = ReaderScrollSession(
+      id: ++_scrollSessionSequence,
+      geometry: geometry,
+      viewport: ReaderViewportSnapshot(
+        viewportSize: MediaQuery.sizeOf(context),
+        anchorY: viewportAnchorY,
+      ),
+      visualMap: ReaderVisualProgressMap.fromGeometry(geometry),
+      initialScrollOffset:
+          scrollController.hasClients ? scrollController.offset : 0.0,
+      initialVisualProgress: bookProgressNotifier.value,
+    );
+    if (kDebugMode) {
+      readerDebugLog(
+        'ReaderScroll: session=${_scrollSession!.id} begin '
+        'geometryRevision=${geometry.revision} '
+        'anchorY=${_scrollSession!.viewport.anchorY.toStringAsFixed(1)}',
+      );
     }
-    final chapter = snapshot.chapterOf(chapterId);
-    if (chapter == null) {
-      return bookVisualProgressFor(chapterId, chapterVisualCursor);
-    }
-    final start = snapshot.bodyStartOf(chapterId);
-    final extent = chapter.totalHeight;
-    return ((start + chapterVisualCursor.clamp(0.0, extent)) /
-            snapshot.totalBodyExtent)
-        .clamp(0.0, 1.0);
   }
 
-  /// 方向性单调钳制（方案 §17）：仅作用于 UI 显示进度的最后一道防线，
-  /// 不污染 tracker 与持久化的逻辑进度（§18）。
+  int _scrollSessionSequence = 0;
+
+  /// SETTLING 提交（方案 §31-36）：挂起的章节收养与窗口扩容一次完成，
+  /// 随后重建窗口并应用单次锚点修正；提交期间几何不再被守卫推迟。
+  void _commitScrollSession() {
+    final session = _scrollSession;
+    if (session != null) {
+      final pendingChapter = session.pendingAnchorChapter;
+      if (pendingChapter != null && pendingChapter != currentChapterId) {
+        adoptContinuousAnchorChapter(pendingChapter);
+      }
+      if (session.pendingExpandForward) {
+        onContinuousWindowExpand(forward: true);
+      }
+      if (session.pendingExpandBackward) {
+        onContinuousWindowExpand(forward: false);
+      }
+    }
+    commitPendingContinuousMetrics();
+    _scrollSession = null;
+  }
+
+  /// 滚动期间的视觉进度：物理 Y 直接查冻结映射（方案 §22-24），
+  /// 不经过 charOffset；无 Live fallback（§25-26）。
+  double visualProgressDuringScroll(double contentY) {
+    final session = _scrollSession;
+    if (session == null) {
+      // 非 idle 且无会话（程序化滚动窗口期）：保持最后合法进度，
+      // 绝不回退 Live Geometry 重新解释（方案 §25）。
+      return _lastPublishedVisualProgress;
+    }
+    return session.visualMap.progressAt(contentY.clamp(0.0, double.infinity)) ??
+        session.displayedProgress;
+  }
+
+  /// 唯一视觉进度发布器（方案 §44/§83）：整个模块只允许此入口写
+  /// bookProgressNotifier；旧会话的回调按 id 丢弃（§45-46）。
+  void publishVisualProgress(ReaderScrollSession? session, double value) {
+    if (session != null && _scrollSession?.id != session.id) {
+      return;
+    }
+    if (session != null) {
+      session.displayedProgress = value;
+    }
+    _lastPublishedVisualProgress = value;
+    if (bookProgressNotifier.value != value) {
+      bookProgressNotifier.value = value;
+    }
+  }
+
+  /// 方向性单调钳制（方案 §42-43）：会话活跃期间（userDragging/
+  /// ballistic/settling）同一单调规则，最后一道防线不污染持久化。
   double _applyDirectionalProgressClamp(double nextProgress) {
-    if (_scrollPhase != ReaderScrollPhase.active) {
+    final session = _scrollSession;
+    if (session == null || _scrollPhase == ReaderScrollPhase.idle) {
       return nextProgress;
     }
-    return _scrollDirectionForward
-        ? math.max(_displayedVisualProgress, nextProgress)
-        : math.min(_displayedVisualProgress, nextProgress);
+    return session.forward
+        ? math.max(session.lastVisualProgress, nextProgress)
+        : math.min(session.lastVisualProgress, nextProgress);
   }
 
   // ── 全书视觉进度表（D4：VisualProgress 与 LogicalProgress 语义独立） ──
@@ -502,7 +585,7 @@ mixin ReaderViewPageInteractionMixin
       'displayedProgress=${bookProgressNotifier.value.toStringAsFixed(4)} '
       'contentY=${position.contentY.toStringAsFixed(1)} '
       'geometryRevision=${position.geometryRevision} '
-      'activeGeometryRevision=${_activeGeometry?.revision} '
+      'sessionGeometryRevision=${_scrollSession?.geometry.revision} '
       'layoutVersion=${chapterData?.layoutVersion} '
       'precise=${chapterData?.hasPreciseHeights} '
       'windowStart=${continuousScrollController.prefixHeightOf(position.chapterId).toStringAsFixed(1)} '
@@ -678,8 +761,13 @@ mixin ReaderViewPageInteractionMixin
     // 键盘滚动不产生指针事件：主动取消进行中的恢复并按窗口控制器
     // 解析结果汇报位置，绕过"距上次指针事件 >2s"守卫的停更。
     _cancelOngoingRestoreForUserScroll();
+    final scrollSession = _scrollSession;
     final resolved = continuousScrollController.positionAtContentY(
       scrollController.offset + viewportAnchorY,
+      source:
+          scrollSession == null
+              ? const LiveScrollGeometrySource()
+              : SnapshotScrollGeometrySource(scrollSession.geometry),
     );
     if (resolved != null) {
       handleResolvedPosition(resolved);

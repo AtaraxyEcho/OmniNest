@@ -11,18 +11,24 @@ import 'package:omninest/features/reader/presentation/widgets/reader_control_lay
 import 'package:omninest/features/reader/presentation/widgets/reader_content_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_scroll_geometry_snapshot.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_scroll_session.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_selection_range.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
-/// 连续滚动相位（方案 §4）：由 ScrollNotification 驱动，而非时间戳推测。
+/// 连续滚动相位（方案 §10-11）：USER_DRAGGING/BALLISTIC 由指针事件
+/// 驱动（ScrollStart 不再等价于会话开始——restore/程序化滚动也会产生
+/// 通知），SETTLING 由 ScrollEnd 驱动，IDLE 由 State 的 settle 窗口处理。
 enum ReaderScrollPhase {
-  /// 无滚动手势。
+  /// 无滚动手势：允许 Live 几何更新与窗口重建。
   idle,
 
-  /// 用户正在滚动（ScrollStart/Update 期间）。
-  active,
+  /// 用户手指拖动中：坐标系/视口/进度映射全部冻结。
+  userDragging,
 
-  /// ScrollEnd 后的收敛窗口，等待一次 metrics 提交。
+  /// 手指已离开但存在惯性：沿用同一会话。
+  ballistic,
+
+  /// 滚动结束：一次 metrics 提交 + 最多一次视口修正。
   settling,
 }
 
@@ -39,7 +45,7 @@ class ReaderContinuousScrollView extends StatefulWidget {
     required this.annotationsByChapter,
     this.onScrollPosition,
     this.onScrollPhaseChanged,
-    this.activeGeometryProvider,
+    this.scrollSessionProvider,
     this.onTap,
     this.onHighlight,
     this.onAnnotate,
@@ -56,13 +62,14 @@ class ReaderContinuousScrollView extends StatefulWidget {
   final Map<String, List<ReaderAnnotation>> annotationsByChapter;
   final void Function(ContinuousScrollPosition position)? onScrollPosition;
 
-  /// 滚动相位回调（方案 §4）：ScrollStart/Update → active，
-  /// ScrollEnd → settling；settling → idle 由 State 的 settle 窗口处理。
+  /// 滚动相位回调（方案 §10-14）：userDragging 由指针事件触发，
+  /// ballistic 由 pointer up 触发，settling 由 ScrollEnd 触发；
+  /// ScrollStart/Update 不再创建会话（程序化滚动同样产生通知）。
   final void Function(ReaderScrollPhase phase)? onScrollPhaseChanged;
 
-  /// ACTIVE_SCROLL 期间位置解析的几何来源（方案 §13）：
-  /// 返回 ScrollStart 冻结的快照；null 表示非滚动手势（走 Live）。
-  final ReaderScrollGeometrySnapshot? Function()? activeGeometryProvider;
+  /// 当前滚动会话（方案 §9）：非空时位置解析使用会话的冻结几何与
+  /// 冻结 anchorY；null 表示 idle（允许 Live 几何）。
+  final ReaderScrollSession? Function()? scrollSessionProvider;
   final VoidCallback? onTap;
   final void Function(String text, int start, int end, String chapterId)?
   onHighlight;
@@ -125,15 +132,11 @@ class _ReaderContinuousScrollViewState
   }
 
   bool _handleScrollPhaseNotification(ScrollNotification notification) {
-    final callback = widget.onScrollPhaseChanged;
-    if (callback == null) {
-      return false;
-    }
-    if (notification is ScrollStartNotification ||
-        notification is ScrollUpdateNotification) {
-      callback(ReaderScrollPhase.active);
-    } else if (notification is ScrollEndNotification) {
-      callback(ReaderScrollPhase.settling);
+    // ScrollNotification 只负责滚动结束（方案 §12/§14）：它无法表达
+    // "是谁启动了滚动"——restore/程序化滚动同样产生通知，不得据此
+    // 创建用户会话。userDragging/ballistic 由指针事件驱动。
+    if (notification is ScrollEndNotification) {
+      widget.onScrollPhaseChanged?.call(ReaderScrollPhase.settling);
     }
     return false;
   }
@@ -143,14 +146,17 @@ class _ReaderContinuousScrollViewState
       return;
     }
     final position = widget.scrollController.position;
-    final contentY = position.pixels + _viewportAnchorY();
-    final activeGeometry = widget.activeGeometryProvider?.call();
+    // 会话期间使用冻结的 anchorY 与快照几何（方案 §38）；
+    // idle 查询允许 Live 几何（方案 §28-D）。
+    final session = widget.scrollSessionProvider?.call();
+    final anchorY = session?.viewport.anchorY ?? _viewportAnchorY();
+    final contentY = position.pixels + anchorY;
     final resolved = widget.controller.positionAtContentY(
       contentY,
       source:
-          activeGeometry == null
+          session == null
               ? const LiveScrollGeometrySource()
-              : SnapshotScrollGeometrySource(activeGeometry),
+              : SnapshotScrollGeometrySource(session.geometry),
     );
     if (resolved != null) {
       widget.onScrollPosition?.call(resolved);
@@ -445,11 +451,20 @@ class _ReaderContinuousScrollViewState
       return;
     }
     if ((event.position - down).distance > 12) {
-      _pointerMoved = true;
+      if (!_pointerMoved) {
+        // 用户真正开始拖动（pointer down + 移动超阈值）才进入
+        // USER_DRAGGING（方案 §13）：ScrollStart 不能等价于会话开始。
+        _pointerMoved = true;
+        widget.onScrollPhaseChanged?.call(ReaderScrollPhase.userDragging);
+      }
     }
   }
 
   void _handlePointerUp(PointerUpEvent event) {
+    if (_pointerMoved && _pointerDownPosition != null) {
+      // 手指离开：惯性阶段沿用同一会话（方案 §11 BALLISTIC）。
+      widget.onScrollPhaseChanged?.call(ReaderScrollPhase.ballistic);
+    }
     final down = _pointerDownPosition;
     final downAt = _pointerDownAt;
     final isTapLike =
