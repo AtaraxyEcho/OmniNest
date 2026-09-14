@@ -8,6 +8,7 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
@@ -525,6 +526,27 @@ mixin ReaderViewPageInteractionMixin
       if (kDebugMode) {
         readerDebugLog('ReaderTx: tx=${tx.id} completed kind=${tx.kind.name}');
       }
+    }
+  }
+
+  /// 滚动输入适配器（方案 §89/§137）：原生事件经适配器归一为输入源后
+  /// 进入事务入口；输入源不携带位置信息。
+  late final ReaderScrollInputAdapter scrollInput = ReaderScrollInputAdapter(
+    onInput: _onScrollInput,
+  );
+
+  void _onScrollInput(ReaderScrollInputSource source) {
+    switch (source) {
+      case ReaderScrollInputSource.mouseWheel:
+      case ReaderScrollInputSource.touchpad:
+        onPointerScrollInput();
+      case ReaderScrollInputSource.pointerDrag:
+        // 拖动阈值由视图驱动相位转移；事务在 userDragging 中原子创建，
+        // 重复通知被相位守卫吸收。
+        onScrollPhaseChanged(ReaderScrollPhase.userDragging);
+      case ReaderScrollInputSource.keyboard:
+        // 键盘无独立手势事件：事务由 scrollBy(kind: keyboard) 直接创建。
+        break;
     }
   }
 

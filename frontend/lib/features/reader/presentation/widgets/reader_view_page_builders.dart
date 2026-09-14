@@ -9,6 +9,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_geom
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_viewport_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
@@ -147,6 +148,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   DateTime? get lastAppliedProgressAt;
   void applyProgressSnapshot(ReaderProgressSnapshot snapshot);
   void onActualScrollOffsetChanged(double offset);
+
+  /// 滚动输入适配器（由 interaction mixin 经 State 组合提供）。
+  ReaderScrollInputAdapter get scrollInput;
   void onContinuousWindowExpand({required bool forward});
   void prefetchNextChapterAtBoundary(int pageIndex);
   void adoptPageModeChapter(String chapterId, {int localPageIndex = 0});
@@ -1449,9 +1453,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           onPointerSignal: (event) {
             if (event is PointerScrollEvent) {
               lastPointerDownTime = DateTime.now();
-              // 滚轮/触控板输入进入事务层（方案 §29-§31）：burst 复用
-              // 同一事务，200ms 空闲后一次提交。
-              onPointerScrollInput();
+              // 滚轮/触控板输入经适配器进入事务层（方案 §29-§31）。
+              scrollInput.pointerScroll();
             }
           },
           child: ReaderContinuousScrollView(
