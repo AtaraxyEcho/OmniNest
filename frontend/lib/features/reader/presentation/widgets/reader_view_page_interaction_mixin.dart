@@ -1330,8 +1330,12 @@ mixin ReaderViewPageInteractionMixin
     var anchorCharOffset = positionTracker.charOffset;
     if (scrollController.hasClients &&
         scrollController.position.maxScrollExtent > 0) {
-      final contentY = scrollController.offset + viewportAnchorY;
-      final resolved = continuousScrollController.positionAtContentY(contentY);
+      // 锚点冻结统一经 Runtime PositionResolver（方案 §18/§134）。
+      final resolved = runtime.position.resolve(
+        scrollOffset: scrollController.offset,
+        layout: currentLiveLayout(),
+        transactionId: 0,
+      );
       if (resolved != null) {
         anchorCharOffset = resolved.charOffset;
         if (resolved.chapterId != currentChapterId) {
