@@ -1061,12 +1061,134 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     return _charCountForChapter(loader, chapterId);
   }
 
-  /// 滑窗时保持视口：优先按视觉锚点重解析（§26），锚点不可解析时回退
-  /// 首尾高度差补偿（前缀章卸载则 offset 减高，前部新增章则加高）。
+  // ── 布局变化的视口保持统一入口（方案 §21/§22/§26/§31）──
+  // ACTIVE_SCROLL：指针按住或 400ms 内有滚动活动。期间高度收敛类校正
+  // 不抢视口，挂起为 pendingMetrics；SETTLING（滚动结束）后应用一次；
+  // 坐标原点平移类（滑窗）不排队——拖动进新章时必须即时补偿，否则
+  // 内容会在指下大幅位移。
+
+  /// ACTIVE_SCROLL 期间挂起的视觉校正（最后一次锚点生效）。
+  VisualAnchor? _pendingCorrectionAnchor;
+  ContinuousChapterEntry? _pendingCorrectionOldEntry;
+  bool _correctionApplyScheduled = false;
+
+  /// 布局变化后的视口保持：锚点保持优先，锚点不可解析时回退高度差。
   ///
-  /// 与 _compensateScrollForPrefixDelta 同套状态守卫：恢复/加载/切章期间
-  /// 滚动偏移由对应流程掌控，此处补偿会产生叠加跳变。不加指针守卫是有意的：
-  /// 滑窗恰发生在拖动进新章时，拖动中必须补偿才能保持坐标稳定。
+  /// [deferWhileScrolling] 为 true（高度收敛类）时，用户滚动期间挂起
+  /// 校正，SETTLING 后应用；为 false（坐标原点平移类）时始终即时应用。
+  void _preserveVisualAnchorAfterLayoutChange({
+    required VisualAnchor? anchorBefore,
+    required ContinuousChapterEntry? oldAnchorEntry,
+    required double fallbackDelta,
+    required bool deferWhileScrolling,
+  }) {
+    if (!scrollController.hasClients) {
+      return;
+    }
+    if (deferWhileScrolling && _isUserScrollActive()) {
+      if (anchorBefore != null) {
+        _pendingCorrectionAnchor = anchorBefore;
+        _pendingCorrectionOldEntry = oldAnchorEntry;
+        _schedulePendingCorrectionApply();
+      }
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) {
+        return;
+      }
+      // 回调帧内用户开始滚动：可延迟的校正转为挂起，其余放弃。
+      if (deferWhileScrolling && _isUserScrollActive(quietWindowMs: 200)) {
+        if (anchorBefore != null) {
+          _pendingCorrectionAnchor = anchorBefore;
+          _pendingCorrectionOldEntry = oldAnchorEntry;
+          _schedulePendingCorrectionApply();
+        }
+        return;
+      }
+      _applyVisualCorrectionNow(
+        anchorBefore: anchorBefore,
+        oldAnchorEntry: oldAnchorEntry,
+        fallbackDelta: fallbackDelta,
+      );
+    });
+  }
+
+  /// SETTLING 轮询：等用户滚动结束（指针松开且 250ms 无滚动活动）后
+  /// 应用挂起的视觉校正，一次收敛。
+  void _schedulePendingCorrectionApply() {
+    if (_correctionApplyScheduled) {
+      return;
+    }
+    _correctionApplyScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _correctionApplyScheduled = false;
+      if (!mounted) {
+        _pendingCorrectionAnchor = null;
+        return;
+      }
+      final anchor = _pendingCorrectionAnchor;
+      if (anchor == null) {
+        return;
+      }
+      if (_isUserScrollActive(quietWindowMs: 250)) {
+        _schedulePendingCorrectionApply();
+        return;
+      }
+      _pendingCorrectionAnchor = null;
+      final oldEntry = _pendingCorrectionOldEntry;
+      _pendingCorrectionOldEntry = null;
+      _applyVisualCorrectionNow(
+        anchorBefore: anchor,
+        oldAnchorEntry: oldEntry,
+        fallbackDelta: 0,
+      );
+    });
+  }
+
+  bool _isUserScrollActive({int quietWindowMs = 400}) {
+    if (pointerDownActive) {
+      return true;
+    }
+    final activity = lastScrollActivityAt;
+    return activity != null &&
+        DateTime.now().difference(activity).inMilliseconds < quietWindowMs;
+  }
+
+  void _applyVisualCorrectionNow({
+    required VisualAnchor? anchorBefore,
+    required ContinuousChapterEntry? oldAnchorEntry,
+    required double fallbackDelta,
+  }) {
+    if (!scrollController.hasClients) {
+      return;
+    }
+    final max = scrollController.position.maxScrollExtent;
+    final remapped =
+        anchorBefore == null
+            ? null
+            : continuousScrollController.remapVisualAnchor(
+              anchorBefore,
+              oldEntry: oldAnchorEntry,
+            );
+    final anchorY =
+        remapped == null
+            ? null
+            : continuousScrollController.contentYForVisualAnchor(remapped);
+    final double target;
+    if (anchorY != null) {
+      target = (anchorY - viewportAnchorY).clamp(0.0, max);
+    } else {
+      target = (scrollController.offset + fallbackDelta).clamp(0.0, max);
+    }
+    if ((target - scrollController.offset).abs() < 0.5) {
+      return;
+    }
+    scrollController.jumpTo(target);
+  }
+
+  /// 滑窗时保持视口：坐标原点平移类补偿，经统一入口即时执行；
+  /// 锚点不可解析时回退首尾高度差补偿。
   void _compensateScrollForWindowSlide({
     required List<ContinuousChapterEntry> prevEntries,
     required String? prevFirstId,
@@ -1113,45 +1235,20 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (delta.abs() < 0.5 && anchorBefore == null) {
       return;
     }
-    final captured = delta;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !scrollController.hasClients) {
-        return;
-      }
-      final max = scrollController.position.maxScrollExtent;
-      // 锚点保持优先：同一视觉锚点在新窗口中的窗口坐标。
-      final remapped =
-          anchorBefore == null
-              ? null
-              : continuousScrollController.remapVisualAnchor(
-                anchorBefore,
-                oldEntry: oldAnchorEntry,
-              );
-      final anchorY =
-          remapped == null
-              ? null
-              : continuousScrollController.contentYForVisualAnchor(remapped);
-      final double target;
-      if (anchorY != null) {
-        target = (anchorY - viewportAnchorY).clamp(0.0, max);
-      } else {
-        target = (scrollController.offset + captured).clamp(0.0, max);
-      }
-      if ((target - scrollController.offset).abs() < 0.5) {
-        return;
-      }
-      scrollController.jumpTo(target);
-    });
+    _preserveVisualAnchorAfterLayoutChange(
+      anchorBefore: anchorBefore,
+      oldAnchorEntry: oldAnchorEntry,
+      fallbackDelta: delta,
+      deferWhileScrolling: false,
+    );
   }
 
-  /// 前缀章高度变化或章内块重测高时补偿滚动偏移，避免测高收敛导致视口跳动。
+  /// 前缀章高度变化或章内块重测高时补偿滚动偏移（高度收敛类）。
   ///
-  /// 主流阅读器约定：用户正在滚动时绝不 jumpTo。图片解码/测高收敛
-  /// 只改映射表，不抢视口；仅在静止或窗口滑动时补偿。
-  ///
-  /// 补偿以布局变化前捕获的视觉锚点为中心（anchor preservation）：变化后
-  /// 重解析同一锚点的窗口坐标（块内按比例保持），保持"用户看到的内容"
-  /// 不变；锚点不可解析时回退前缀高度差补偿。
+  /// 以布局变化前捕获的视觉锚点为中心：变化后重解析同一锚点的窗口
+  /// 坐标（块内按比例保持），保持"用户看到的内容"不变。用户滚动期间
+  /// （ACTIVE_SCROLL）校正挂起为 pendingMetrics，滚动结束（SETTLING）
+  /// 后应用一次；锚点不可解析时回退前缀高度差补偿。
   void _compensateScrollForPrefixDelta(
     double? previousPrefix, {
     VisualAnchor? anchorBefore,
@@ -1164,15 +1261,6 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         isSwitchingChapter) {
       return;
     }
-    if (pointerDownActive) {
-      return;
-    }
-    // 滚轮/触控板：400ms 内有滚动活动则跳过补偿，避免「遇见图片就跳」。
-    final lastActivity = lastScrollActivityAt;
-    if (lastActivity != null &&
-        DateTime.now().difference(lastActivity).inMilliseconds < 400) {
-      return;
-    }
     final nextPrefix = continuousScrollController.prefixHeightOf(
       currentChapterId,
     );
@@ -1183,41 +1271,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     if (!scrollController.hasClients) {
       return;
     }
-    final capturedDelta = delta;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !scrollController.hasClients) {
-        return;
-      }
-      // 回调帧内若用户又开始滚动，放弃补偿。
-      final activity = lastScrollActivityAt;
-      if (activity != null &&
-          DateTime.now().difference(activity).inMilliseconds < 200) {
-        return;
-      }
-      final max = scrollController.position.maxScrollExtent;
-      // 锚点保持优先：同一视觉锚点在新布局中的窗口坐标。
-      final remapped =
-          anchorBefore == null
-              ? null
-              : continuousScrollController.remapVisualAnchor(
-                anchorBefore,
-                oldEntry: oldAnchorEntry,
-              );
-      final anchorY =
-          remapped == null
-              ? null
-              : continuousScrollController.contentYForVisualAnchor(remapped);
-      final double target;
-      if (anchorY != null) {
-        target = (anchorY - viewportAnchorY).clamp(0.0, max);
-      } else {
-        target = (scrollController.offset + capturedDelta).clamp(0.0, max);
-      }
-      if ((target - scrollController.offset).abs() < 0.5) {
-        return;
-      }
-      scrollController.jumpTo(target);
-    });
+    _preserveVisualAnchorAfterLayoutChange(
+      anchorBefore: anchorBefore,
+      oldAnchorEntry: oldAnchorEntry,
+      fallbackDelta: delta,
+      deferWhileScrolling: true,
+    );
   }
 
   Map<String, List<ReaderAnnotation>> _continuousAnnotationsByChapter() {

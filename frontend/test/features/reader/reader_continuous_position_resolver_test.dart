@@ -184,6 +184,24 @@ void main() {
       expect(resolved.logical.charOffset, entry.blockCharPrefixes[1]);
     });
 
+    test('C1/C2 图片内部慢滚：视觉进度连续且步进有界', () {
+      final entry = _entryWithImage(id: 'c1');
+      final controller = _controller(anchor: entry);
+      final resolver = controller.resolver;
+
+      final imageTop = 36.0 + 100;
+      var lastProgress =
+          resolver.resolveContentY(imageTop)!.chapterVisualProgress;
+      for (var step = 1; step <= 60; step++) {
+        final y = imageTop + 600 * step / 60;
+        final progress = resolver.resolveContentY(y)!.chapterVisualProgress;
+        final delta = progress - lastProgress;
+        expect(delta, greaterThanOrEqualTo(0), reason: 'y=$y 不得倒退');
+        expect(delta, lessThan(0.02), reason: 'y=$y 单步 10px 的进度增量必须连续，不得跳变');
+        lastProgress = progress;
+      }
+    });
+
     test('性质化扫描：密集网格上双坐标往返与单调性保持', () {
       // 正文 + 图片 + 正文（图 600 高），章体总高 800。
       final entry = _entryWithImage(id: 'c1');

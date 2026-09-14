@@ -320,6 +320,70 @@ void main() {
       expect(newY, closeTo(284 + 36 + 100 + 150, 0.01));
     });
 
+    test('C5 窗口前移后同一视觉锚点保持同一块', () {
+      final controller = ReaderContinuousScrollController();
+      final entries = {
+        'c0': _entry(
+          id: 'c0',
+          title: 'A',
+          blockCount: 2,
+          totalHeight: 200,
+          totalChars: 100,
+        ),
+        'c1': _entry(
+          id: 'c1',
+          title: 'B',
+          blockCount: 3,
+          totalHeight: 300,
+          totalChars: 300,
+          cumulativeHeights: const [100, 200, 300],
+        ),
+        'c2': _entry(
+          id: 'c2',
+          title: 'C',
+          blockCount: 2,
+          totalHeight: 200,
+          totalChars: 100,
+        ),
+      };
+      controller.rebuild(
+        anchorChapterId: 'c1',
+        allChapterIds: const ['c0', 'c1', 'c2'],
+        resolve: (id) => entries[id],
+      );
+      // 用户视口顶在 c1 块 1 中部（窗口坐标 = c1 前缀 284 + 章头 36 + 150）。
+      final anchor = controller.visualAnchorAt(284 + 36 + 150)!;
+      expect(anchor.chapterId, 'c1');
+      final oldEntry = controller.entryFor('c1');
+
+      // 窗口前移：[c0,c1,c2] → [c1,c2,c3]，c1 高度不变。
+      final c3 = _entry(
+        id: 'c3',
+        title: 'D',
+        blockCount: 2,
+        totalHeight: 200,
+        totalChars: 100,
+      );
+      controller.rebuild(
+        anchorChapterId: 'c1',
+        allChapterIds: const ['c1', 'c2', 'c3'],
+        resolve:
+            (id) =>
+                id == 'c1' ? entries['c1'] : (id == 'c2' ? entries['c2'] : c3),
+      );
+
+      final remapped =
+          controller.remapVisualAnchor(anchor, oldEntry: oldEntry)!;
+      final newY = controller.contentYForVisualAnchor(remapped)!;
+      final resolved = controller.positionAtContentY(newY)!;
+      expect(
+        resolved.visual.blockIndex,
+        anchor.blockIndex,
+        reason: '窗口前移不得改变用户正在看的块',
+      );
+      expect(resolved.chapterId, 'c1');
+    });
+
     test('锚点章重测后未就绪时透传锚点且无法解析窗口坐标', () {
       final controller = buildController(heights: const [100, 200]);
       final anchor = controller.visualAnchorAt(284 + 36 + 50)!;
