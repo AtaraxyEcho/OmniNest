@@ -5541,6 +5541,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerRefreshFailed => 'Refresh failed, please try again later';
 
   @override
+  String get readerCoverBadgeComic => 'C';
+
+  @override
+  String get readerCoverBadgeText => 'T';
+
+  @override
   String get readerDone => 'Done';
 
   @override

@@ -10163,6 +10163,18 @@ abstract class AppLocalizations {
   /// **'Refresh failed, please try again later'**
   String get readerRefreshFailed;
 
+  /// No description provided for @readerCoverBadgeComic.
+  ///
+  /// In en, this message translates to:
+  /// **'C'**
+  String get readerCoverBadgeComic;
+
+  /// No description provided for @readerCoverBadgeText.
+  ///
+  /// In en, this message translates to:
+  /// **'T'**
+  String get readerCoverBadgeText;
+
   /// No description provided for @readerDone.
   ///
   /// In en, this message translates to:

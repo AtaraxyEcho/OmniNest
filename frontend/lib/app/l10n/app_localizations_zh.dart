@@ -5368,6 +5368,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerRefreshFailed => '刷新失败，请稍后重试';
 
   @override
+  String get readerCoverBadgeComic => '漫';
+
+  @override
+  String get readerCoverBadgeText => '文';
+
+  @override
   String get readerDone => '完成';
 
   @override
