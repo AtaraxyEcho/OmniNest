@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import 'package:omninest/features/reader/application/reading_runtime/reader_event_log.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_commit.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_invalidation.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_geometry_store.dart';
@@ -71,6 +72,9 @@ class ReaderReadingRuntime {
 
   /// 滚轮/触控板 burst 跟踪（方案 §30/§31，时钟经 §109 注入）。
   final ReaderWheelBurstTracker wheelBurst;
+
+  /// 事件日志（方案 §103/§126）：环形缓冲 + 实机验收格式。
+  final ReaderRuntimeEventLog eventLog = ReaderRuntimeEventLog();
 
   ReaderPositionSnapshot? currentPosition;
 

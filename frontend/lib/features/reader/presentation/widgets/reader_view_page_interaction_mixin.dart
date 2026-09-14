@@ -8,6 +8,7 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_position_snapshot.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scrolling_input.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_transaction.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
@@ -136,6 +137,20 @@ mixin ReaderViewPageInteractionMixin
     if (snapshot == null) {
       return;
     }
+    _emitRuntimeEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.positionResolved,
+        at: runtime.clock.now,
+        transactionId: snapshot.transactionId,
+        layoutRevision:
+            '${snapshot.layoutRevision.geometryRevision}/'
+            '${snapshot.layoutRevision.windowRevision}',
+        offset: snapshot.scrollOffset,
+        chapterId: snapshot.chapterId,
+        blockIndex: snapshot.blockIndex,
+        charOffset: snapshot.charOffset,
+      ),
+    );
     handleResolvedPosition(snapshot);
   }
 
@@ -398,6 +413,15 @@ mixin ReaderViewPageInteractionMixin
       }
       // ScrollEnd：挂起收养/扩窗 + 一次 metrics 提交 + 最多一次修正
       // （方案 §25/§31-36）。
+      final settlingTx = runtime.transactions.current;
+      _emitRuntimeEvent(
+        ReaderRuntimeEvent(
+          type: ReaderRuntimeEventType.settlingStarted,
+          at: runtime.clock.now,
+          transactionId: settlingTx?.id ?? 0,
+          kind: settlingTx?.kind.name,
+        ),
+      );
       _commitScrollTransaction();
       _settleToIdleTimer?.cancel();
       _settleToIdleTimer = Timer(const Duration(milliseconds: 150), () {
@@ -454,6 +478,14 @@ mixin ReaderViewPageInteractionMixin
     );
   }
 
+  /// 生命周期事件发射（方案 §103/§126）：debug 构建同步输出验收日志。
+  void _emitRuntimeEvent(ReaderRuntimeEvent event) {
+    runtime.eventLog.emit(event);
+    if (kDebugMode) {
+      readerDebugLog(runtime.eventLog.format(event));
+    }
+  }
+
   /// 事务唯一创建入口（方案 §25 原子切换）：取消旧事务（含在途
   /// Restore）并冻结新事务的几何/视口/进度映射；滚动状态（方向、
   /// 显示进度、视觉映射、挂起操作）全部由事务对象承载（§136 终态）。
@@ -473,13 +505,17 @@ mixin ReaderViewPageInteractionMixin
           scrollController.hasClients ? scrollController.offset : 0.0,
       initialVisualProgress: bookProgressNotifier.value,
     );
-    if (kDebugMode) {
-      readerDebugLog(
-        'ReaderTx: tx=${tx.id} started kind=${tx.kind.name} '
-        'geometry=${geometry.revision}/${continuousScrollController.windowRevision} '
-        'anchorY=${viewport.anchorY.toStringAsFixed(1)}',
-      );
-    }
+    _emitRuntimeEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.transactionStarted,
+        at: runtime.clock.now,
+        transactionId: tx.id,
+        kind: tx.kind.name,
+        layoutRevision:
+            '${geometry.revision}/${continuousScrollController.windowRevision}',
+        offset: tx.lastScrollOffset,
+      ),
+    );
     return tx;
   }
 
@@ -502,9 +538,14 @@ mixin ReaderViewPageInteractionMixin
     commitPendingContinuousMetrics();
     if (tx != null) {
       runtime.transactions.finish(tx.id);
-      if (kDebugMode) {
-        readerDebugLog('ReaderTx: tx=${tx.id} completed kind=${tx.kind.name}');
-      }
+      _emitRuntimeEvent(
+        ReaderRuntimeEvent(
+          type: ReaderRuntimeEventType.transactionCompleted,
+          at: runtime.clock.now,
+          transactionId: tx.id,
+          kind: tx.kind.name,
+        ),
+      );
     }
   }
 
@@ -579,6 +620,14 @@ mixin ReaderViewPageInteractionMixin
     }
     _lastPublishedVisualProgress = value;
     runtime.publisher.publish(value);
+    _emitRuntimeEvent(
+      ReaderRuntimeEvent(
+        type: ReaderRuntimeEventType.progressPublished,
+        at: runtime.clock.now,
+        transactionId: tx?.id ?? 0,
+        visualProgress: value,
+      ),
+    );
   }
 
   /// 方向性单调钳制（方案 §42-43）：会话活跃期间（userDragging/
@@ -813,6 +862,15 @@ mixin ReaderViewPageInteractionMixin
   /// 导致滚动位移归零被误判为章末并触发跳章；同时清掉恢复遮罩，
   /// 并使 Runtime 层的 Restore 事务失效（方案 §59）。
   void _cancelOngoingRestoreForUserScroll() {
+    if (runtime.restore.current != null) {
+      _emitRuntimeEvent(
+        ReaderRuntimeEvent(
+          type: ReaderRuntimeEventType.restoreInvalidated,
+          at: runtime.clock.now,
+          charOffset: runtime.restore.generation,
+        ),
+      );
+    }
     runtime.restore.cancel();
     if (!restore.shouldSuppressWrites && !isRestoringProgress) {
       return;
@@ -1242,10 +1300,8 @@ mixin ReaderViewPageInteractionMixin
       );
       if (resolved != null) {
         anchorCharOffset = resolved.charOffset;
-        if (resolved.chapterId != currentChapterId) {
-          currentChapterId = resolved.chapterId;
-          annotationHandler?.updateChapter(resolved.chapterId);
-        }
+        // 章节身份变更统一经收养提交入口（方案 §62/§63）。
+        adoptContinuousAnchorChapter(resolved.chapterId);
       } else {
         final mapped = windowContentYToCharOffset(
           currentChapterId,
