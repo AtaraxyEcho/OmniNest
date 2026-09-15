@@ -64,6 +64,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   /// 跨章收养后待映射的章内页；下一帧流重建时换算为全局索引。
   int? _pendingPageLocalIndex;
 
+  /// 最近一次已提交页的流内身份：页流重建时全局索引可能因前缀章
+  /// 懒分页完成/导航器失效而漂移，且当前索引可能落在探测页（keyAt
+  /// 返回 null）；以提交时记录的（章，章内页）身份兜底重映射，防止
+  /// 身份丢失后钳制到 barely-paginated 前缀章起始（跳页/漂移根因）。
+  BookPageRef? _lastCommittedPageRef;
+
   // ── State 字段访问器（由 State 实现） ──
   ReaderContentLoader? get contentLoader;
   ReaderContinuousScrollController get continuousScrollController;
@@ -233,9 +239,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     // 显式导航帧（切章锁定中）禁止旧页身份参与重映射：旧流 keyAt 可能
     // 解析出前缀章页面，把显式跳章拉回旧章（章节跳转错位的根因入口）。
     final explicitNavigation = isSwitchingChapter;
+    // 页身份保底：当前索引落在探测页/流收缩区（keyAt null）时，用最近
+    // 一次提交记录的身份重映射，防止钳制到前缀章起始（跳页/漂移）。
     final previousRef =
         pendingLocal == null && !explicitNavigation
-            ? _pageFlow?.keyAt(pageModePage)
+            ? (_pageFlow?.keyAt(pageModePage) ?? _lastCommittedPageRef)
             : null;
     _pageFlow = ReaderPageFlow.fromLoader(
       loader: loader,
@@ -304,6 +312,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   /// 调度与边界预取在此一次完成，禁止多处重复修改状态。
   void _commitPageIndex(int index) {
     dismissReturnSnackBar();
+    // 页身份先于守卫记录：恢复/加载期提交的页索引同样是位置事实，
+    // 供页流重建时保底重映射。
+    final committedRef = _pageFlow?.keyAt(index);
+    if (committedRef != null) {
+      _lastCommittedPageRef = committedRef;
+    }
     if (pageModePage != index) {
       final flowNow = _pageFlow;
       final chapterChanged =
@@ -1610,6 +1624,9 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
     // 捕获当前导航令牌：await 定位期间若发生新的显式导航（含同章重复
     // 跳转），本次恢复结果已过时，必须整体丢弃（旧任务 ≠ 当前任务）。
     final navigationTokenAtStart = navigationTokens.current;
+    // 捕获发起时的恢复目标：await 期间被视口重分页等路径取消并以新
+    // 目标重启时，本次晚到的完成回调不得终结/覆盖新相位。
+    final targetAtStart = runtime.restorePhaseTarget;
     try {
       final targetPage = await findPageByCharOffset(
         chapterData,
@@ -1618,11 +1635,15 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
       if (!mounted) {
         return;
       }
+      final phaseReplaced =
+          runtime.restorePhaseTarget != null &&
+          !identical(runtime.restorePhaseTarget, targetAtStart);
       if (targetPage == null ||
+          phaseReplaced ||
           requestedChapterId != currentChapterId ||
           !navigationTokens.isUnchangedSince(navigationTokenAtStart)) {
         // 定位被取消或章节已切换：当前章节请求结束时必须退出恢复态，避免遮罩滞留
-        if (requestedChapterId == currentChapterId) {
+        if (requestedChapterId == currentChapterId && !phaseReplaced) {
           runtime.cancelRestorePhase();
           runtime.completeModeSwitch();
           setState(() {});

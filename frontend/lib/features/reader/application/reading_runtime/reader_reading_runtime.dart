@@ -244,6 +244,7 @@ class ReaderReadingRuntime {
         kind: settlingTx?.kind.name,
       ),
     );
+    _expandWindowIfWheelStruckAtBoundary(settlingTx);
     if (settlingTx != null) {
       final pendingChapter = settlingTx.pendingChapterId;
       if (pendingChapter != null) {
@@ -297,6 +298,34 @@ class ReaderReadingRuntime {
         _scrollPhase = _RuntimeScrollPhase.idle;
       }
     });
+  }
+
+  /// 滚轮/触控板在窗口边界被完全钳制时补发一次扩窗。
+  ///
+  /// 钳制滚轮不产生滚动通知：消费管线（含其中的窗口意图判定）完全
+  /// 不触发，窗口顶/底的滚轮成为死输入（拖拽路径因 offset 恒可消费
+  /// 而无此问题）。滚轮事务 settle 时按物理位置推断方向——offset 贴
+  /// 0 只有向上滚有意义，贴 max 只有向下滚有意义；扩窗幂等与节流在
+  /// 页面侧，书籍首尾章自然 no-op。
+  void _expandWindowIfWheelStruckAtBoundary(ReaderTransaction? settlingTx) {
+    if (settlingTx == null ||
+        (settlingTx.kind != ReaderTransactionKind.wheel &&
+            settlingTx.kind != ReaderTransactionKind.touchpad)) {
+      return;
+    }
+    final effect = scrollEffect;
+    if (effect == null || !effect.hasClients) {
+      return;
+    }
+    final max = effect.maxScrollExtent;
+    if (max <= 0) {
+      return;
+    }
+    if (effect.offset <= 1.0) {
+      consumeDelegate?.expandWindow(forward: false);
+    } else if (max - effect.offset <= 1.0) {
+      consumeDelegate?.expandWindow(forward: true);
+    }
   }
 
   // ── 消费管线（B3 §6.2：物理 offset 的唯一消费入口，四步拆分）──

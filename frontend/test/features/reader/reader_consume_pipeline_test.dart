@@ -371,4 +371,35 @@ void main() {
 
     expect(runtime.publisher.notifier.value, closeTo(0.05, 0.001));
   });
+
+  test('D6 边界钳制滚轮补发扩窗：顶向上/底向下/中段不触发', () async {
+    final pipeline = _Pipeline();
+    addTearDown(pipeline.dispose);
+    final runtime = pipeline.runtime;
+
+    // 窗口顶（offset 0）：滚轮被完全钳制，无滚动通知、消费管线不
+    // 触发；settle 按位置推断方向补发向后扩窗（拖拽路径无此问题，
+    // 因 offset 恒可消费）。
+    runtime.onWheelSignal();
+    runtime.onWheelBurstTimeout();
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    expect(pipeline.delegate.expandBackward, 1);
+    expect(pipeline.delegate.expandForward, 0);
+
+    // 中段：滚轮有位移，扩窗由消费管线窗口意图负责，不在此补发。
+    pipeline.effect.offsetValue = 2000;
+    runtime.onWheelSignal();
+    runtime.onWheelBurstTimeout();
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    expect(pipeline.delegate.expandBackward, 1);
+    expect(pipeline.delegate.expandForward, 0);
+
+    // 窗口底（offset = max 4000）：补发向前扩窗。
+    pipeline.effect.offsetValue = 4000;
+    runtime.onWheelSignal();
+    runtime.onWheelBurstTimeout();
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    expect(pipeline.delegate.expandBackward, 1);
+    expect(pipeline.delegate.expandForward, 1);
+  });
 }

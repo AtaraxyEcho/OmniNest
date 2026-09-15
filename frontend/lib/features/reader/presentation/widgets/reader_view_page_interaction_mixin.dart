@@ -883,18 +883,28 @@ mixin ReaderViewPageInteractionMixin
   void repaginateForViewportChange(Size newSize) {
     final previousSize = lastViewportSize;
     if (previousSize == newSize) return;
-    final widthChanged =
-        previousSize == null ||
-        (previousSize.width - newSize.width).abs() > 0.5;
     lastViewportSize = newSize;
     pageViewportSize = newSize;
+    if (previousSize == null) {
+      // 首次测量不是变化：开书分页本就按该视口计算。误判成变化会在
+      // 开书 80ms 后以空锚点重分页——取消在途开书定位、作废全部页
+      // 导航器，并按 barely-paginated 前缀章起始换算全局索引（开书
+      // 后无操作自动漂移到前章早期页的根因）。
+      return;
+    }
+    final widthChanged = (previousSize.width - newSize.width).abs() > 0.5;
     if (contentLoader == null) return;
     repaginateTimer?.cancel();
     repaginateTimer = Timer(const Duration(milliseconds: 80), () {
       if (!mounted) return;
       if (isPageMode) {
+        // 锚点优先级：模式切换冻结 > 在途恢复目标 > 逻辑记账；全部
+        // 为空才退回当前页换算——重分页期间在途定位仍持有正确目标，
+        // 不得用未定位的页索引覆盖。
         final trackedAnchor =
-            runtime.modeSwitchAnchor ?? runtime.logicalPosition.charOffset;
+            runtime.modeSwitchAnchor ??
+            runtime.restorePhaseTarget?.charOffset ??
+            runtime.logicalPosition.charOffset;
         final anchor =
             trackedAnchor > 0
                 ? trackedAnchor
