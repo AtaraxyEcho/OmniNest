@@ -11,6 +11,7 @@ import 'package:omninest/features/reader/presentation/widgets/block_clipper.dart
 import 'package:omninest/features/reader/presentation/widgets/reader_content_loader.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_cover_page.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_html_parser.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_view.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_locator.dart';
@@ -353,6 +354,18 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
               if (slice == null) return null;
               final pageData = contentLoader?.get(currentChapterId, settings);
               if (pageData == null) return null;
+              // 封面章首页：整页封面渲染（严格结构判定，非图块即否决）。
+              if (index == 0 && isDedicatedCoverPage(blocks: pageData.blocks)) {
+                return ReaderCoverPage(
+                  title:
+                      pageData.content.title.isNotEmpty
+                          ? pageData.content.title
+                          : chapterTitle,
+                  settings: settings,
+                  visibleBlocks: _sliceVisibleBlocks(pageData, slice),
+                  itemId: itemId,
+                );
+              }
               return buildPageContent(
                 pageData,
                 slice,
@@ -409,17 +422,30 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
 
   // ── 单页内容 ──
 
+  /// 按切片取可见块：字符区间非空走字符裁剪；零字符切片（图片
+  /// 独占页）走块索引裁剪，避免零宽块被字符裁剪丢弃。
+  List<ContentBlock> _sliceVisibleBlocks(ChapterData data, PageSlice slice) {
+    if (slice.endCharOffset > slice.startCharOffset) {
+      return BlockClipper.clipBlocksByCharRange(
+        data.blocks,
+        slice.startCharOffset,
+        slice.endCharOffset,
+      );
+    }
+    return BlockClipper.clipBlocksByIndexRange(
+      data.blocks,
+      slice.startIndex,
+      slice.endIndex,
+    );
+  }
+
   Widget buildPageContent(
     ChapterData data,
     PageSlice slice, {
     ScrollPhysics? scrollPhysics,
     String? chapterTitle,
   }) {
-    final blocks = BlockClipper.clipBlocksByCharRange(
-      data.blocks,
-      slice.startCharOffset,
-      slice.endCharOffset,
-    );
+    final blocks = _sliceVisibleBlocks(data, slice);
 
     bool isFirstBlockContinuation = false;
     if (blocks.isNotEmpty && slice.startCharOffset > 0) {
