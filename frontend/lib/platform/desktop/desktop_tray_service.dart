@@ -2,8 +2,13 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart' show Locale;
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/locale/application/locale_controller.dart';
+import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/window/desktop_close_flow.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -18,8 +23,16 @@ import 'package:window_manager/window_manager.dart';
 /// 退出可来自托盘菜单或关闭确认窗，共用同一清理链路。窗口销毁链路在
 /// Flutter 桌面引擎关停时可能长时间不返回，最终以短超时 + `exit(0)`
 /// 兜底，避免托盘退出后假死数秒。
+///
+/// 右键菜单文案进入 ARB：初始化时按持久化的设备语言解析，运行期语言
+/// 变化由应用层绑定经 [applyLanguage] 刷新。
 class DesktopTrayService with TrayListener, WindowListener {
   DesktopTrayService();
+
+  /// 当前实例；应用层语言绑定经此刷新托盘文案，未初始化时为 null。
+  static DesktopTrayService? get instance => _instance;
+
+  static DesktopTrayService? _instance;
 
   /// Windows 托盘 ICO（多尺寸，由 flutter_assets 打包）。
   static const String windowsTrayIconAsset = 'assets/icon/tray.ico';
@@ -48,19 +61,17 @@ class DesktopTrayService with TrayListener, WindowListener {
       debugPrint('托盘提示文案设置失败: $error');
     }
 
-    await trayManager.setContextMenu(
-      Menu(
-        items: [
-          MenuItem(key: 'brand', label: 'OmniNest', disabled: true),
-          MenuItem.separator(),
-          MenuItem(key: 'show', label: '显示主窗口'),
-          MenuItem.separator(),
-          MenuItem(key: 'quit', label: '退出'),
-        ],
-      ),
-    );
-
+    await _applyContextMenu();
     _initialized = true;
+    _instance = this;
+  }
+
+  /// 按应用语言刷新托盘右键菜单文案；初始化完成前忽略。
+  Future<void> applyLanguage(String languageCode) async {
+    if (!_initialized) {
+      return;
+    }
+    await _applyContextMenu(languageCode);
   }
 
   Future<void> _setIcon() async {
@@ -83,6 +94,39 @@ class DesktopTrayService with TrayListener, WindowListener {
       await trayManager.destroy();
     }
     _initialized = false;
+    _instance = null;
+  }
+
+  /// 组装并应用右键菜单；菜单项 key 是托盘点击分发与测试的稳定契约。
+  Future<void> _applyContextMenu([String? languageCode]) async {
+    final resolved = languageCode ?? await _resolveLanguageCode();
+    final l10n = lookupAppLocalizations(Locale(resolved));
+    try {
+      await trayManager.setContextMenu(
+        Menu(
+          items: [
+            MenuItem(key: 'brand', label: 'OmniNest', disabled: true),
+            MenuItem.separator(),
+            MenuItem(key: 'show', label: l10n.trayShowMainWindow),
+            MenuItem.separator(),
+            MenuItem(key: 'quit', label: l10n.trayQuit),
+          ],
+        ),
+      );
+    } on Object catch (error) {
+      debugPrint('托盘菜单设置失败: $error');
+    }
+  }
+
+  /// 解析托盘文案语言：设备偏好优先，缺失时跟随系统。
+  ///
+  /// 与应用启动期的语言解析保持同一键序（设备键 → 旧版全局键 → 系统语言）。
+  Future<String> _resolveLanguageCode() async {
+    final preferences = await SharedPreferences.getInstance();
+    final stored =
+        preferences.getString(localeDeviceLanguageKey) ??
+        preferences.getString(legacyGlobalLanguageKey);
+    return stored ?? resolveSystemLanguage();
   }
 
   /// 托盘菜单退出：短清理后立即结束进程。

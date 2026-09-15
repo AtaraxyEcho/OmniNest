@@ -18155,6 +18155,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Exit directly'**
   String get desktopCloseBehaviorExit;
+
+  /// No description provided for @trayShowMainWindow.
+  ///
+  /// In en, this message translates to:
+  /// **'Show Main Window'**
+  String get trayShowMainWindow;
+
+  /// No description provided for @trayQuit.
+  ///
+  /// In en, this message translates to:
+  /// **'Quit'**
+  String get trayQuit;
 }
 
 class _AppLocalizationsDelegate

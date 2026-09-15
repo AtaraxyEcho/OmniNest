@@ -12,6 +12,7 @@ import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
+import 'package:omninest/app/desktop_tray_locale_binding.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/router.dart';
@@ -67,6 +68,8 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     ref.watch(notificationRealtimeSubscriptionProvider);
     // 任务终态系统通知：监听任务列表并按偏好发送系统通知。
     ref.watch(taskSystemNotificationBindingProvider);
+    // 桌面托盘菜单文案跟随应用语言刷新（Web/移动端为空实现）。
+    ref.watch(desktopTrayLocaleBindingProvider);
     // omninest:// 深链：接住冷启动与运行期链接并落位白名单路由。
     ref.watch(deepLinkServiceProvider);
 

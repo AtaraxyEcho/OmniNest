@@ -1,6 +1,8 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/platform/desktop/desktop_tray_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -22,39 +24,32 @@ void main() {
     channelCalls.clear();
   });
 
-  test('托盘右键菜单包含应用名标题、显示主窗口与退出三段结构', () async {
-    final service = DesktopTrayService();
-    await service.init();
-
+  List<Map<Object?, Object?>> menuItems() {
     final contextCall = channelCalls.singleWhere(
       (call) => call.method == 'setContextMenu',
     );
     final menu =
         (contextCall.arguments as Map<Object?, Object?>)['menu']
             as Map<Object?, Object?>;
-    final items = menu['items'] as List<Object?>;
-    final labels =
-        items
-            .map((item) => (item as Map<Object?, Object?>)['label'] as String)
-            .toList();
-    final types =
-        items.map((item) => (item as Map<Object?, Object?>)['type']).toList();
+    return (menu['items'] as List<Object?>)
+        .map((item) => item as Map<Object?, Object?>)
+        .toList();
+  }
+
+  void expectThreeSectionStructure(List<Map<Object?, Object?>> items) {
+    final types = items.map((item) => item['type']).toList();
     final disabled =
         items
-            .where(
-              (item) => (item as Map<Object?, Object?>)['type'] == 'normal',
-            )
-            .map((item) => (item as Map<Object?, Object?>)['disabled'] as bool)
+            .where((item) => item['type'] == 'normal')
+            .map((item) => item['disabled'] as bool)
             .toList();
     final actionKeys =
         items
-            .where(
-              (item) => (item as Map<Object?, Object?>)['type'] != 'separator',
-            )
-            .map((item) => (item as Map<Object?, Object?>)['key'])
+            .where((item) => item['type'] != 'separator')
+            .map((item) => item['key'])
             .toList();
 
-    expect(labels, <String>['OmniNest', '', '显示主窗口', '', '退出']);
+    expect(items, hasLength(5));
     expect(types, <String?>[
       'normal',
       'separator',
@@ -64,5 +59,41 @@ void main() {
     ]);
     expect(disabled, <bool>[true, false, false]);
     expect(actionKeys, <String?>['brand', 'show', 'quit']);
+  }
+
+  test('托盘右键菜单文案按设备语言进入 ARB 并保持三段结构', () async {
+    SharedPreferences.setMockInitialValues({localeDeviceLanguageKey: 'zh'});
+    final service = DesktopTrayService();
+    await service.init();
+
+    expect(DesktopTrayService.instance, same(service));
+    final items = menuItems();
+    expectThreeSectionStructure(items);
+    expect(items.map((item) => item['label']), <String>[
+      'OmniNest',
+      '',
+      '显示主窗口',
+      '',
+      '退出',
+    ]);
+  });
+
+  test('运行期语言变化时托盘菜单按 ARB 刷新', () async {
+    SharedPreferences.setMockInitialValues({localeDeviceLanguageKey: 'zh'});
+    final service = DesktopTrayService();
+    await service.init();
+
+    channelCalls.clear();
+    await service.applyLanguage('en');
+
+    final items = menuItems();
+    expectThreeSectionStructure(items);
+    expect(items.map((item) => item['label']), <String>[
+      'OmniNest',
+      '',
+      'Show Main Window',
+      '',
+      'Quit',
+    ]);
   });
 }

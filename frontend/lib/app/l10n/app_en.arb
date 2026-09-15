@@ -4445,5 +4445,7 @@
   "desktopCloseDialogRemember": "Remember my choice and don't ask again",
   "desktopCloseBehaviorTitle": "Window close behavior",
   "desktopCloseBehaviorAsk": "Ask every time",
-  "desktopCloseBehaviorExit": "Exit directly"
+  "desktopCloseBehaviorExit": "Exit directly",
+  "trayShowMainWindow": "Show Main Window",
+  "trayQuit": "Quit"
 }

@@ -4319,5 +4319,7 @@
   "desktopCloseDialogRemember": "记住我的选择，下次不再询问",
   "desktopCloseBehaviorTitle": "关闭窗口行为",
   "desktopCloseBehaviorAsk": "每次询问",
-  "desktopCloseBehaviorExit": "直接退出"
+  "desktopCloseBehaviorExit": "直接退出",
+  "trayShowMainWindow": "显示主窗口",
+  "trayQuit": "退出"
 }

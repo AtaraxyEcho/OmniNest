@@ -9937,4 +9937,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get desktopCloseBehaviorExit => 'Exit directly';
+
+  @override
+  String get trayShowMainWindow => 'Show Main Window';
+
+  @override
+  String get trayQuit => 'Quit';
 }

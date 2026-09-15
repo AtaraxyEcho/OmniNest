@@ -9633,4 +9633,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get desktopCloseBehaviorExit => '直接退出';
+
+  @override
+  String get trayShowMainWindow => '显示主窗口';
+
+  @override
+  String get trayQuit => '退出';
 }
