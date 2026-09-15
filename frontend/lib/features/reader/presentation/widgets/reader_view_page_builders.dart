@@ -264,6 +264,8 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         pageIndex,
         onPageReady: () {
           if (!mounted) return;
+          // 预取循环不随切章取消：换章后旧章的预取回调不得污染新章计数。
+          if (currentChapterId != chapterId) return;
           pageCountNotifier.value = navigator.readablePageCount;
         },
       );
@@ -781,22 +783,32 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (!mounted) return;
       final restoreScheduledAt = DateTime.now();
       // 目标内容坐标只依赖冻结输入：恢复 tick 逐帧调用本构造器，
-      // 缓存避免每帧全章线性扫描 + TextPainter 测量。布局收敛由
-      // 发起方的收敛门与多帧重试保证，冻结目标与之配合。
+      // 缓存避免每帧全章线性扫描 + TextPainter 测量。精测收敛
+      // （hasPreciseHeights 翻转）时重算一次，估算落点随精测自愈。
       double? cachedRestoreContentY;
+      bool cachedRestorePrecise = false;
       restore.start(
         scrollController: scrollController,
         targetOffsetBuilder: () {
           if (!scrollController.hasClients) return 0;
           final max = scrollController.position.maxScrollExtent;
           if (max <= 0) return 0;
-          cachedRestoreContentY ??= contentLoader?.charOffsetToPixelOffset(
-            currentChapterId,
-            capturedCharOffset,
-            pageWidth: capturedPageWidth,
-            settings: capturedSettings,
-            textScale: capturedTextScale,
-          );
+          final precise =
+              contentLoader
+                  ?.get(currentChapterId, settings)
+                  ?.hasPreciseHeights ??
+              false;
+          if (cachedRestoreContentY == null ||
+              cachedRestorePrecise != precise) {
+            cachedRestoreContentY = contentLoader?.charOffsetToPixelOffset(
+              currentChapterId,
+              capturedCharOffset,
+              pageWidth: capturedPageWidth,
+              settings: capturedSettings,
+              textScale: capturedTextScale,
+            );
+            cachedRestorePrecise = precise;
+          }
           final contentY = cachedRestoreContentY;
           if (contentY == null || contentY <= 0) return 0;
           return (contentY - capturedAnchorY).clamp(0.0, max);

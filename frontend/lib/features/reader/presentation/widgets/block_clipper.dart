@@ -16,6 +16,9 @@ class BlockClipper {
   static final List<_ClipCacheEntry> _clipCache = <_ClipCacheEntry>[];
   static const _clipCacheLimit = 8;
 
+  /// 块索引区间裁剪缓存（图片独占页路径），与字符路径互相独立。
+  static final List<_ClipCacheEntry> _indexClipCache = <_ClipCacheEntry>[];
+
   /// 构建或复用 blocks 的累积字符前缀（blocks[i] 起始偏移，长度 = blocks.length + 1）。
   static List<int> _prefixFor(List<ContentBlock> blocks) {
     if (identical(_prefixBlocks, blocks) && _prefixOffsets != null) {
@@ -57,7 +60,26 @@ class BlockClipper {
     final start = startIndex.clamp(0, blocks.length);
     final end = endIndex.clamp(start, blocks.length);
     if (start >= end) return [];
-    return blocks.sublist(start, end);
+    // 与字符路径同等的身份稳定缓存：图片独占页每次整页重建时
+    // visibleBlocks 不再产生新身份，didUpdateWidget 判定可短路。
+    for (var i = 0; i < _indexClipCache.length; i++) {
+      final entry = _indexClipCache[i];
+      if (identical(entry.blocks, blocks) &&
+          entry.start == start &&
+          entry.end == end) {
+        if (i != 0) {
+          _indexClipCache.removeAt(i);
+          _indexClipCache.insert(0, entry);
+        }
+        return entry.result;
+      }
+    }
+    final result = blocks.sublist(start, end);
+    _indexClipCache.insert(0, _ClipCacheEntry(blocks, start, end, result));
+    while (_indexClipCache.length > _clipCacheLimit) {
+      _indexClipCache.removeLast();
+    }
+    return result;
   }
 
   /// 按字符范围裁剪 blocks 列表。

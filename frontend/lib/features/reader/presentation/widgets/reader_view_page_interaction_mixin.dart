@@ -306,6 +306,9 @@ mixin ReaderViewPageInteractionMixin
         modeSwitchInProgress = true;
         // 冻结锚点，防止 onPageChanged 用页首覆盖
         modeSwitchAnchor = savedCharOffset;
+        // 滚动恢复的 tick 在控制器脱管后进入挂起等待，会以僵尸
+        // onSettled 提前清掉翻页定位的恢复相位，必须显式取消。
+        restore.cancel();
       }
 
       if (kDebugMode) {

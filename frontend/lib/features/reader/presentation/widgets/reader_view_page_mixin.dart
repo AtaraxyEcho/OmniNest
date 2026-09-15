@@ -980,6 +980,12 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     lastLoadedChapterId = prefetchedContent == null ? null : chapterId;
     pendingChapterProgress = null;
     pendingRestoreCharOffset = null;
+    // 旧章的恢复目标与模式切换锚点不得泄漏进新章：
+    // restoreTargetCharOffset 残留会让新章前段的进度写入被防回退
+    // 守卫静默吞掉；modeSwitchAnchor 残留会把旧章偏移记进新章快照。
+    restoreTargetCharOffset = 0;
+    modeSwitchAnchor = null;
+    modeSwitchInProgress = false;
     pageModePage = 0;
     contentLoader?.setActive(chapterId);
     restore.cancel();

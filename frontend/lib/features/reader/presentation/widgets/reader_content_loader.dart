@@ -222,11 +222,25 @@ class PageNavigator {
   PageSlice? _computeSlice(int pageIndex) {
     final prevSlice = pageIndex > 0 ? getSlice(pageIndex - 1) : null;
     if (prevSlice != null &&
-        prevSlice.endCharOffset <= prevSlice.startCharOffset) {
+        prevSlice.nextCursor <= prevSlice.startCharOffset) {
       return null;
     }
-    final startCharOffset = prevSlice?.endCharOffset ?? 0;
-    return computeFn(startCharOffset);
+    final startCharOffset = prevSlice?.nextCursor ?? 0;
+    final slice = computeFn(startCharOffset);
+    if (slice == null) {
+      return null;
+    }
+    // 无进展保护：游标校正后若得到与上一页完全相同的页（块与行范围一致），
+    // 说明无法继续推进，判定内容结束，避免页链死循环。
+    if (prevSlice != null &&
+        slice.startIndex == prevSlice.startIndex &&
+        slice.startLine == prevSlice.startLine &&
+        slice.endIndex == prevSlice.endIndex &&
+        slice.endLine == prevSlice.endLine &&
+        slice.nextCursor <= prevSlice.nextCursor) {
+      return null;
+    }
+    return slice;
   }
 
   /// 在当前帧结束后逐页预热后续分页结果。
@@ -551,7 +565,14 @@ class ReaderContentLoader {
   }) async {
     final generation = ++_heightsGeneration;
     final blocks = data.blocks;
-    final heights = List<double>.filled(blocks.length, 0);
+    // 以现有高度表为基线（phase-one 估算或部分精测），逐块用实测覆盖：
+    // 分批发布的中间态保持单调且 totalHeight 恒有效，避免
+    // 「前缀实测 + 尾部全 0」窗口期内进度映射归零，也避免预取推进
+    // 代次时把当前章留在被截断的半精测状态。
+    final heights =
+        data.cumulativeHeights.length == blocks.length
+            ? List<double>.of(data.cumulativeHeights)
+            : List<double>.filled(blocks.length, 0);
     var cumulative = 0.0;
     for (var i = 0; i < blocks.length; i++) {
       cumulative += ReaderPaginationEngine.measureBlockHeight(
@@ -561,6 +582,9 @@ class ReaderContentLoader {
         textScale: textScale,
       );
       heights[i] = cumulative;
+      if (i > 0 && heights[i] < heights[i - 1]) {
+        heights[i] = heights[i - 1];
+      }
       if ((i + 1) % _metricsBatchBlocks == 0 || i == blocks.length - 1) {
         data.updateCumulativeHeights(heights);
         await Future<void>.delayed(Duration.zero);

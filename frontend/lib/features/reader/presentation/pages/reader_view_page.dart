@@ -190,6 +190,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   String? _cachedContentSource;
   Size? _lastViewportSize;
   Size? _pageViewportSize;
+  double _lastViewPaddingTop = 0;
   String? _lastLoadedChapterId;
 
   // ── 阅读会话 ──
@@ -633,6 +634,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     super.didChangeDependencies();
     // 分页测量只跟随系统缩放；应用字体档位变化不应触发阅读器重排。
     _lastTextScale = FontScaleScope.systemScalerOf(context).scale(1);
+    // 活动期捕获视口与插边缓存：dispose 时元素已 defunct，
+    // 禁止任何 MediaQuery 祖先查找（退出备份计算使用这份缓存）。
+    _lastViewportSize = MediaQuery.sizeOf(context);
+    _lastViewPaddingTop = MediaQuery.viewPaddingOf(context).top;
     _annotationHandler ??= ReaderAnnotationHandler(
       itemId: widget.itemId,
       chapterId: widget.chapterId,
@@ -655,37 +660,57 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (!_restore.shouldSuppressWrites && _scrollController.hasClients) {
       final max = _scrollController.position.maxScrollExtent;
       if (max > 0) {
-        final contentY = _scrollController.offset + viewportAnchorY;
-        final charOffset =
-            _contentLoader?.contentYToCharOffset(
-              _currentChapterId,
-              contentY,
-              pageWidth: computePageWidth(),
-              settings: _settings,
-              textScale: _lastTextScale,
-            ) ??
-            0;
-        // chapterProgress 从 charOffset 推导
-        final totalChars =
-            _contentLoader?.getByChapterId(_currentChapterId)?.totalChars ?? 0;
-        final progress =
-            totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
-        ReaderProgressBackupWeb.save(
-          itemId: widget.itemId,
-          chapterId: _currentChapterId,
-          charOffset: charOffset,
-          chapterProgress: progress,
-        );
-        // 退出时向服务端强制补报最终位置（节流不适用于离场）
-        unawaited(
-          _progressSync.sync(
+        // 元素已 defunct：viewportAnchorY/computePageWidth 内含
+        // MediaQuery 查找会触发断言，改用 didChangeDependencies 捕获的
+        // 视口与插边缓存做近似的退出备份（服务端 sync 同为兜底）。
+        final size = _lastViewportSize ?? _pageViewportSize;
+        if (size != null && size.width > 0) {
+          final chromeLayout = ReaderChromeLayout.resolve(
+            immersiveMode: _settings.immersiveMode,
+            isPageMode: _isPageMode,
+          );
+          final topInset = _settings.immersiveMode ? 0.0 : _lastViewPaddingTop;
+          final anchorY =
+              (size.height - topInset - chromeLayout.viewportVerticalReserve) *
+              0.25;
+          final controlLayout = ReaderControlLayout.resolve(
+            viewport: size,
+            fontSize: _settings.fontSize,
+            textScale: _lastTextScale,
+          );
+          final contentY = _scrollController.offset + anchorY;
+          final charOffset =
+              _contentLoader?.contentYToCharOffset(
+                _currentChapterId,
+                contentY,
+                pageWidth: controlLayout.textColumnWidth,
+                settings: _settings,
+                textScale: _lastTextScale,
+              ) ??
+              0;
+          // chapterProgress 从 charOffset 推导
+          final totalChars =
+              _contentLoader?.getByChapterId(_currentChapterId)?.totalChars ??
+              0;
+          final progress =
+              totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
+          ReaderProgressBackupWeb.save(
             itemId: widget.itemId,
-            charOffset: charOffset,
-            progressPercent: progress,
-            readingMode: 'scroll',
             chapterId: _currentChapterId,
-          ),
-        );
+            charOffset: charOffset,
+            chapterProgress: progress,
+          );
+          // 退出时向服务端强制补报最终位置（节流不适用于离场）
+          unawaited(
+            _progressSync.sync(
+              itemId: widget.itemId,
+              charOffset: charOffset,
+              progressPercent: progress,
+              readingMode: 'scroll',
+              chapterId: _currentChapterId,
+            ),
+          );
+        }
       }
     }
     _windowChromeLease?.release();
