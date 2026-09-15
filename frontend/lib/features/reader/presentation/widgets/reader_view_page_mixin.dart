@@ -321,6 +321,12 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         resolveAnchorCharOffset(chapterId, intent.anchorHref) ?? 0,
     };
     pendingChapterProgress = null;
+    // 目录跳章等显式导航：先展示"返回原阅读进度"胶囊（3s 自动隐藏，
+    // 点按回跳），再处理章首/章尾的落位分支——start 意图 charOffset=0
+    // 会走下方早退，展示逻辑必须在早退之前。
+    if (intent.offerReturn && returnToProgressSnapshot != null) {
+      showReturnToProgressSnackBar();
+    }
     if (charOffset <= 0) {
       pendingRestoreCharOffset = null;
       isRestoringProgress = false;
