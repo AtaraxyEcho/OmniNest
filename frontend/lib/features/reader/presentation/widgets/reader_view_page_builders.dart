@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/gestures.dart' show PointerScrollEvent;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +24,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.d
 import 'package:omninest/features/reader/presentation/widgets/reader_view_content.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
+import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// reader_view_page.dart 的构建方法 mixin。
 ///
@@ -887,6 +889,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (!mounted) {
         return;
       }
+      if (kDebugMode) {
+        readerDebugLog(
+          'PageRestore: charOffset=$restoreCharOffset → '
+          'targetPage=$targetPage (chapter=$requestedChapterId)',
+        );
+      }
       if (targetPage == null || requestedChapterId != currentChapterId) {
         // 定位被取消或章节已切换：当前章节请求结束时必须退出恢复态，避免遮罩滞留
         if (requestedChapterId == currentChapterId) {
@@ -915,6 +923,12 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
         isRestoringProgress = false;
       });
     } catch (e) {
+      if (kDebugMode) {
+        readerDebugLog(
+          'PageRestore: locate failed charOffset=$restoreCharOffset '
+          '(chapter=$requestedChapterId): $e',
+        );
+      }
       if (mounted && requestedChapterId == currentChapterId) {
         setState(() {
           isRestoringProgress = false;

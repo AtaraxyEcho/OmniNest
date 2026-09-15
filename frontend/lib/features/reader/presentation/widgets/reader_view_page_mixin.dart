@@ -560,6 +560,21 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       return;
     }
 
+    // 同章回灌守卫：本机刚保存的进度经 provider 回灌会再次自动应用，
+    // 恢复编排把用户拉回保存点（实机日志 charOffset=1011 被 767 拉回）。
+    // 同章以本机记账为准；开书首载记账为空（chapterId 空串）不受影响。
+    if (positionTracker.chapterId == snapshot.chapterId &&
+        positionTracker.charOffset > 0) {
+      if (kDebugMode) {
+        readerDebugLog(
+          'ProgressRestore SKIP: same-chapter echo '
+          '(tracked=${positionTracker.charOffset}, '
+          'snapshot=${snapshot.charOffset})',
+        );
+      }
+      return;
+    }
+
     double chapterProgress = snapshot.chapterProgress;
     if (chapterProgress <= 0 &&
         snapshot.charOffset > 0 &&
