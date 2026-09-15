@@ -410,7 +410,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         pageHeight: 0.0,
         settings: settings,
         textScale: textScale,
-        prepareScrollLayout: false,
+        // 预取期完成 phase-one 测高：切章帧零测量，消除落点顶走内容。
+        prepareScrollLayout: true,
       );
     } catch (e) {
       if (kDebugMode) {
