@@ -167,6 +167,7 @@ class _ReaderPageViewState extends State<ReaderPageView>
     setState(() {
       _localPageCount = value;
     });
+    _reconcilePagePositionIfIdle();
   }
 
   @override
@@ -204,6 +205,8 @@ class _ReaderPageViewState extends State<ReaderPageView>
     if (widget.turnMode == PageTurnMode.slide &&
         oldWidget.state.pageIndex != widget.state.pageIndex) {
       _syncPageView();
+    } else if (widget.turnMode == PageTurnMode.slide) {
+      _reconcilePagePositionIfIdle();
     }
 
     if (widget.turnMode != PageTurnMode.slide) {
@@ -283,6 +286,27 @@ class _ReaderPageViewState extends State<ReaderPageView>
         controller.jumpToPage(target);
       }
     });
+  }
+
+  /// 空闲期把物理页对齐到状态页。
+  ///
+  /// ReaderPageView 挂载早于分页完成时，PageController.initialPage 会因
+  /// item 数不足被钳制到 0；若恢复目标恰与挂载时的 state.pageIndex 相同
+  /// （模式切换回页模式的典型路径），此后 pageIndex 不再变化，仅靠
+  /// didUpdateWidget 的索引差异判定永远触发不了 _syncPageView，物理页
+  /// 滞留章首。在无加载、无边界请求、无动画且非拖拽的空闲期补一次对齐；
+  /// 恢复静默窗会吞掉对齐产生的 onPageChanged 回声，不污染进度写入。
+  void _reconcilePagePositionIfIdle() {
+    if (widget.turnMode != PageTurnMode.slide) {
+      return;
+    }
+    if (_slideScrolling || _probingNext) {
+      return;
+    }
+    if (_blockReason != ReaderInteractionBlockReason.none) {
+      return;
+    }
+    _syncPageView();
   }
 
   void _cacheCurrentPage() {

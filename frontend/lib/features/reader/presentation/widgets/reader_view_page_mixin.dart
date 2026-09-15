@@ -1008,6 +1008,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     modeSwitchAnchor = null;
     modeSwitchInProgress = false;
     pageModePage = 0;
+    // 旧章记账必须随章节切换失效：tracker 残留旧章偏移会把模式切换
+    // 锚点、进度快照回退指到新章错误位置，且恢复落定会把失效值记入新章。
+    positionTracker.setCharOffset(0, chapterId);
     contentLoader?.setActive(chapterId);
     restore.cancel();
     isRestoringProgress = false;

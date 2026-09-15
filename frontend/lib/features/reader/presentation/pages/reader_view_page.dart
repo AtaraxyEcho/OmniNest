@@ -312,6 +312,29 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         at.isBefore(ownAt.add(const Duration(seconds: 30)));
   }
 
+  /// 退出阅读器时把当前记账强制上报服务端。
+  ///
+  /// 书级续读指针以服务端为准，常规上报按节流窗口执行：跳章后未再
+  /// 产生滚动/翻页就退出时，指针仍停在跳章前的章节，下次打开会回退
+  /// 到旧章。退出是强一致节点，必须在页面仍在树内（ref 可用）时发出
+  /// 强制上报，不等待结果，不阻塞返回导航。
+  void _syncProgressOnExit() {
+    final snapshot = buildProgressSnapshot();
+    if (snapshot == null) {
+      return;
+    }
+    noteOwnProgressSave(snapshot);
+    unawaited(
+      _progressSync.sync(
+        itemId: widget.itemId,
+        charOffset: snapshot.charOffset,
+        progressPercent: snapshot.progress,
+        readingMode: snapshot.mode,
+        chapterId: snapshot.chapterId,
+      ),
+    );
+  }
+
   @override
   double? get pendingChapterProgress => _pendingChapterProgress;
   @override
@@ -828,6 +851,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         if (didPop) return;
         clearReaderSelection();
         syncProgressSync();
+        _syncProgressOnExit();
+        ref.invalidate(readerItemDetailProvider(widget.itemId));
         safePop();
       },
       child: Scaffold(

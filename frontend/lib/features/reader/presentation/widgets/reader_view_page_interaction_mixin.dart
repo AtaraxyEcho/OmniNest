@@ -287,7 +287,12 @@ mixin ReaderViewPageInteractionMixin
             ) ??
             positionTracker.charOffset;
       } else {
-        savedCharOffset = positionTracker.charOffset;
+        // 记账章节身份与当前章不一致时偏移已失效，回退章首，
+        // 防止旧章偏移被当作锚点恢复进新章。
+        savedCharOffset =
+            positionTracker.chapterId == currentChapterId
+                ? positionTracker.charOffset
+                : 0;
       }
     }
 
@@ -327,6 +332,10 @@ mixin ReaderViewPageInteractionMixin
           MediaQuery.textScalerOf(context).scale(1.0),
           prepareScrollLayout: false,
         );
+        // 进入页模式时页码清零：ReaderPageView 将重挂载，恢复目标可能
+        // 超出重分页初期的 item 数，initialPage 直接指向目标会被钳制到
+        // 章首且索引不再变化。落位统一交给 PageRestore 的索引变更路径。
+        pageModePage = 0;
         repaginateCurrentChapter(restoreCharOffset: savedCharOffset);
       } else {
         contentLoader?.rekeyAndRecomputeHeights(
