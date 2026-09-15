@@ -29,6 +29,11 @@ class FlutterWindow : public Win32Window {
   void SetWindowFullscreen(bool fullscreen);
   void SaveWindowPlacement();
   void RestoreWindowPlacement();
+  void StartFullscreenAnimation(const RECT& target, bool enter);
+  void OnFullscreenAnimationTick();
+  void FinishFullscreenAnimation();
+  void StopFullscreenAnimation();
+  bool VerifyWindowFrame();
 
   // The project to run.
   flutter::DartProject project_;
@@ -46,6 +51,15 @@ class FlutterWindow : public Win32Window {
   bool window_fullscreen_ = false;
   WINDOWPLACEMENT saved_window_placement_ = {};
   bool window_placement_saved_ = false;
+
+  // Borderless fullscreen transition animation (ease-out rect lerp).
+  static constexpr UINT_PTR kFullscreenAnimationTimer = 1;
+  static constexpr unsigned long kFullscreenAnimationMs = 180;
+  bool fullscreen_anim_active_ = false;
+  bool fullscreen_anim_enter_ = true;
+  RECT fullscreen_anim_start_ = {};
+  RECT fullscreen_anim_target_ = {};
+  ULONGLONG fullscreen_anim_start_tick_ = 0;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

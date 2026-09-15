@@ -13,6 +13,7 @@ constexpr const char kSetFrameHiddenMethod[] = "setFrameHidden";
 constexpr const char kSetWindowFullscreenMethod[] = "setWindowFullscreen";
 constexpr const char kSaveWindowPlacementMethod[] = "saveWindowPlacement";
 constexpr const char kRestoreWindowPlacementMethod[] = "restoreWindowPlacement";
+constexpr const char kVerifyWindowFrameMethod[] = "verifyWindowFrame";
 constexpr const char kShowWindowMethod[] = "showWindow";
 constexpr const char kIsWindowFullscreenMethod[] = "isWindowFullscreen";
 constexpr const char kFinishTrayMenuPopupMethod[] = "finishTrayMenuPopup";
@@ -78,6 +79,10 @@ bool FlutterWindow::OnCreate() {
           if (call.method_name() == kRestoreWindowPlacementMethod) {
             RestoreWindowPlacement();
             result->Success(flutter::EncodableValue(true));
+            return;
+          }
+          if (call.method_name() == kVerifyWindowFrameMethod) {
+            result->Success(flutter::EncodableValue(VerifyWindowFrame()));
             return;
           }
           if (call.method_name() == kSetWindowFullscreenMethod) {
@@ -208,18 +213,18 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
     window_frame_hidden_ = true;
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
-    // Zero the DWM frame margins before snapping to the monitor rect so no
-    // white edges show up during the transition.
+    // Zero the DWM frame margins before expanding so no white edges show up
+    // during the transition.
     MARGINS margins = {0, 0, 0, 0};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
-    const RECT monitor = monitor_info.rcMonitor;
-    SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
-                 monitor.right - monitor.left, monitor.bottom - monitor.top,
-                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-    // Snap again to absorb the 1px offset caused by DPI or frame changes.
-    SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
-                 monitor.right - monitor.left, monitor.bottom - monitor.top,
-                 SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    // Apply the frame change at the current rect and lift the window into
+    // the topmost band so the taskbar never draws over the expanding window.
+    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE |
+                     SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    // Expand continuously to the monitor rect instead of snapping, matching
+    // the smoothness of the native maximize animation.
+    StartFullscreenAnimation(monitor_info.rcMonitor, true);
     return;
   }
   // Clear the fullscreen flag before restoring windowed styles so the
@@ -228,12 +233,163 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
   // overlapping the restored title bar.
   window_fullscreen_ = false;
   window_frame_hidden_ = false;
+  StopFullscreenAnimation();
   SetWindowLongPtr(hwnd, GWL_STYLE, normal_window_style_);
   SetWindowLongPtr(hwnd, GWL_EXSTYLE, normal_window_ex_style_);
+  // Shrink continuously back to the saved rect when the placement is a normal
+  // restorable window, mirroring the native restore animation; maximized or
+  // minimized placements restore immediately.
+  if (window_placement_saved_ &&
+      saved_window_placement_.showCmd == SW_SHOWNORMAL) {
+    // Reapply the frame while still fullscreen-sized so the restored title
+    // bar is visible during the shrink, like the native restore animation.
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
+                     SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    StartFullscreenAnimation(saved_window_placement_.rcNormalPosition, false);
+    return;
+  }
   RestoreWindowPlacement();
   SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
                    SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
+void FlutterWindow::StartFullscreenAnimation(const RECT& target, bool enter) {
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return;
+  }
+  RECT current = {};
+  if (!GetWindowRect(hwnd, &current)) {
+    return;
+  }
+  fullscreen_anim_active_ = true;
+  fullscreen_anim_enter_ = enter;
+  fullscreen_anim_start_ = current;
+  fullscreen_anim_target_ = target;
+  fullscreen_anim_start_tick_ = GetTickCount64();
+  const bool at_target =
+      current.left == target.left && current.top == target.top &&
+      current.right == target.right && current.bottom == target.bottom;
+  if (at_target) {
+    FinishFullscreenAnimation();
+    return;
+  }
+  SetTimer(hwnd, kFullscreenAnimationTimer, 16, nullptr);
+  OnFullscreenAnimationTick();
+}
+
+void FlutterWindow::OnFullscreenAnimationTick() {
+  if (!fullscreen_anim_active_) {
+    return;
+  }
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    StopFullscreenAnimation();
+    return;
+  }
+  const ULONGLONG elapsed = GetTickCount64() - fullscreen_anim_start_tick_;
+  double progress = static_cast<double>(elapsed) / kFullscreenAnimationMs;
+  if (progress > 1.0) {
+    progress = 1.0;
+  }
+  // Ease-out cubic: fast start, decelerating settle, like the native
+  // maximize motion.
+  const double remain = 1.0 - progress;
+  const double eased = 1.0 - remain * remain * remain;
+  const auto lerp = [eased](LONG from, LONG to) {
+    return static_cast<LONG>(from + (to - from) * eased + 0.5);
+  };
+  const RECT current = {
+      lerp(fullscreen_anim_start_.left, fullscreen_anim_target_.left),
+      lerp(fullscreen_anim_start_.top, fullscreen_anim_target_.top),
+      lerp(fullscreen_anim_start_.right, fullscreen_anim_target_.right),
+      lerp(fullscreen_anim_start_.bottom, fullscreen_anim_target_.bottom)};
+  SetWindowPos(hwnd, nullptr, current.left, current.top,
+               current.right - current.left, current.bottom - current.top,
+               SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE |
+                   SWP_SHOWWINDOW);
+  if (progress >= 1.0) {
+    FinishFullscreenAnimation();
+  }
+}
+
+void FlutterWindow::FinishFullscreenAnimation() {
+  StopFullscreenAnimation();
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return;
+  }
+  if (fullscreen_anim_enter_) {
+    const RECT& monitor = fullscreen_anim_target_;
+    // Drop out of the topmost band and snap exactly onto the monitor rect.
+    SetWindowPos(hwnd, HWND_NOTOPMOST, monitor.left, monitor.top,
+                 monitor.right - monitor.left, monitor.bottom - monitor.top,
+                 SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    VerifyWindowFrame();
+    return;
+  }
+  RestoreWindowPlacement();
+  SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
+                   SWP_NOACTIVATE | SWP_FRAMECHANGED);
+}
+
+void FlutterWindow::StopFullscreenAnimation() {
+  if (!fullscreen_anim_active_) {
+    return;
+  }
+  fullscreen_anim_active_ = false;
+  HWND hwnd = GetHandle();
+  if (hwnd != nullptr) {
+    KillTimer(hwnd, kFullscreenAnimationTimer);
+  }
+}
+
+bool FlutterWindow::VerifyWindowFrame() {
+  if (!window_fullscreen_ || fullscreen_anim_active_) {
+    return false;
+  }
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr) {
+    return false;
+  }
+  MONITORINFO monitor_info = {};
+  monitor_info.cbSize = sizeof(MONITORINFO);
+  if (!GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
+                      &monitor_info)) {
+    return false;
+  }
+  bool adjusted = false;
+  const RECT& monitor = monitor_info.rcMonitor;
+  RECT window_rect = {};
+  if (GetWindowRect(hwnd, &window_rect) &&
+      (window_rect.left != monitor.left || window_rect.top != monitor.top ||
+       window_rect.right != monitor.right ||
+       window_rect.bottom != monitor.bottom)) {
+    SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
+                 monitor.right - monitor.left, monitor.bottom - monitor.top,
+                 SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    adjusted = true;
+  }
+  if (flutter_controller_ && flutter_controller_->view()) {
+    HWND child = flutter_controller_->view()->GetNativeWindow();
+    RECT client = {};
+    if (child != nullptr && GetClientRect(hwnd, &client)) {
+      POINT origin = {0, 0};
+      ClientToScreen(hwnd, &origin);
+      RECT child_rect = {};
+      if (GetWindowRect(child, &child_rect) &&
+          (child_rect.left != origin.x || child_rect.top != origin.y ||
+           child_rect.right != origin.x + client.right ||
+           child_rect.bottom != origin.y + client.bottom)) {
+        MoveWindow(child, 0, 0, client.right, client.bottom, TRUE);
+        adjusted = true;
+      }
+    }
+  }
+  return adjusted;
 }
 
 void FlutterWindow::SaveWindowPlacement() {
@@ -285,6 +441,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // style change (resize border re-added by any code path) can inset the
       // client area and expose white edges around the Flutter view.
       if (window_fullscreen_ && wparam) {
+        return 0;
+      }
+      break;
+    case WM_TIMER:
+      // Drive the borderless fullscreen transition from the UI thread; the
+      // animation must not block the platform thread or Flutter's WM_SIZE
+      // dispatch would stall and the content would jump instead of scaling.
+      if (wparam == kFullscreenAnimationTimer) {
+        OnFullscreenAnimationTick();
         return 0;
       }
       break;

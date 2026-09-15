@@ -63,6 +63,9 @@ final windowChromeControllerProvider =
 
 const _windowFrameChannel = MethodChannel('omninest/window_frame');
 
+/// Windows 侧无边框全屏扩缩动画时长（原生 flutter_window.cpp 同值）。
+const int _fullscreenAnimationMs = 180;
+
 class WindowChromeController extends Notifier<WindowChromeState> {
   final Map<int, _WindowChromeRequest> _requests = {};
   int _nextRequestId = 0;
@@ -335,6 +338,10 @@ class WindowChromeController extends Notifier<WindowChromeState> {
 
   Future<void> _setNativeFullscreen(bool fullscreen) async {
     if (defaultTargetPlatform == TargetPlatform.windows) {
+      // Windows 必须走自有通道：windowManager.setFullScreen 会激活其插件内
+      // 潜伏的 WM_NCCALCSIZE 分支与独立全屏状态（window_manager_plugin.cpp
+      // 中 IsFullScreen + title_bar_style 门控），与 runner 的钉扎/动画形成
+      // 双路径，禁止回切。
       await _windowFrameChannel.invokeMethod<void>(
         'setWindowFullscreen',
         <String, dynamic>{'fullscreen': fullscreen},
@@ -385,9 +392,30 @@ class WindowChromeController extends Notifier<WindowChromeState> {
     }
   }
 
-  Future<void> _settleNativeWindow() {
-    // 等待 Flutter 完成扩窗后的首帧布局，避免原生窗口已铺满但内容未同步时露白边。
-    return Future<void>.delayed(const Duration(milliseconds: 160));
+  Future<void> _settleNativeWindow() async {
+    final isWindows = defaultTargetPlatform == TargetPlatform.windows;
+    // Windows 侧等待扩缩动画（180ms）完成后再做原生几何断言；其余平台保持
+    // 既有等待，覆盖扩窗后的首帧布局同步。
+    await Future<void>.delayed(
+      isWindows
+          ? Duration(milliseconds: _fullscreenAnimationMs + 160)
+          : const Duration(milliseconds: 160),
+    );
+    if (isWindows) {
+      await _verifyNativeWindowFrame();
+    }
+  }
+
+  /// 原生几何断言：全屏窗口矩形贴合显示器、Flutter 子视图填满客户区，
+  /// 存在偏差时原生侧直接吸附自愈。
+  Future<void> _verifyNativeWindowFrame() async {
+    try {
+      await _windowFrameChannel.invokeMethod<bool>('verifyWindowFrame');
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Window frame verify failed: $error');
+      }
+    }
   }
 
   Future<void> _saveNativeWindowPlacement() async {

@@ -150,10 +150,14 @@ void main() {
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       const frameChannel = MethodChannel('omninest/window_frame');
       const windowManagerChannel = MethodChannel('window_manager');
+      final frameCalls = <String>[];
       final resizableCalls = <bool>[];
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-      messenger.setMockMethodCallHandler(frameChannel, (call) async => null);
+      messenger.setMockMethodCallHandler(frameChannel, (call) async {
+        frameCalls.add(call.method);
+        return null;
+      });
       addTearDown(() => messenger.setMockMethodCallHandler(frameChannel, null));
       messenger.setMockMethodCallHandler(windowManagerChannel, (call) async {
         if (call.method == 'setResizable') {
@@ -176,6 +180,8 @@ void main() {
       await controller.pendingApply;
       // 全屏应用期间禁止写入窗口样式，否则客户区内缩露出白边。
       expect(resizableCalls, isEmpty);
+      // Windows 侧 settle 后必须执行一次原生几何断言。
+      expect(frameCalls, contains('verifyWindowFrame'));
 
       lease.release();
       await Future<void>.delayed(Duration.zero);
