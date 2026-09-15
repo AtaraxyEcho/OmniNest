@@ -218,14 +218,9 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     ReaderItemDetail detail,
     double viewportFactor,
   ) async {
-    // 键盘滚动进入 Keyboard 事务（方案 §32）：无指针事件也保持事务身份。
-    final didScroll = await runtime.scrollBy(
+    final didScroll = await scrollBy(
       MediaQuery.sizeOf(context).height * viewportFactor,
-      kind: ReaderTransactionKind.keyboard,
     );
-    if (didScroll) {
-      unawaited(syncProgressAsync());
-    }
     if (!didScroll && mounted) {
       tryNavigateChapter(viewportFactor > 0 ? 1 : -1);
     }
@@ -236,41 +231,24 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       final data = _contentLoader?.get(_currentChapterId, _settings);
       final targetOffset =
           start || data == null ? 0 : math.max(0, data.totalChars - 1);
-      // 页模式定位：相位接管即登记，由 pendingRestore → findPageByCharOffset
-      // → startIndexOf 换算（B7 改造页模式链）。
-      _runtime.cancelRestorePhase();
-      _runtime.beginRestorePhase(
-        ReaderPositionTarget(
-          chapterId: _currentChapterId,
-          charOffset: targetOffset,
-        ),
-      );
-      _updateState(() {});
+      _pendingRestoreCharOffset = targetOffset;
+      _isRestoringProgress = true;
+      _updateState(() {
+        if (start) {
+          _pageModePage = 0;
+        }
+      });
       return;
     }
     if (!_scrollController.hasClients) {
       return;
     }
-    // 章首/章尾是窗口坐标（前有前缀章），不能用 0/maxScrollExtent：
-    // 0 是上一章顶部，max 是下一章尾部。
-    final prefix = continuousScrollController.prefixHeightOf(_currentChapterId);
-    final entry = continuousScrollController.entryFor(_currentChapterId);
-    final max = _scrollController.position.maxScrollExtent;
-    final viewport = _scrollController.position.viewportDimension;
-    final chapterStart = prefix.clamp(0.0, max);
-    final double target;
-    if (start) {
-      target = chapterStart;
-    } else {
-      final extent =
-          entry != null
-              ? continuousScrollController.effectiveExtentOf(entry)
-              : 0.0;
-      target = (prefix + extent - viewport).clamp(chapterStart, max);
-    }
-    // 章节边界导航进入 Navigation 事务（方案 §33/§117）：不伪装成用户滚动。
     unawaited(
-      runtime.animateToOffset(target, kind: ReaderTransactionKind.navigation),
+      _scrollController.animateTo(
+        start ? 0 : _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+      ),
     );
   }
 
@@ -279,39 +257,6 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
       return;
     }
-    final chapters = _contentLoader?.allChapters ?? const <ReaderChapter>[];
-
-    // 连续模式：滑条显示的是视觉全书进度，先按视觉表换算目标章与
-    // charOffset；换算结果仍走逻辑位置跳转（jumpTo / switchToChapter）。
-    if (!_isPageMode) {
-      final visualTarget = resolveVisualSeekTarget(progress);
-      if (visualTarget != null) {
-        final targetChapterId = visualTarget.$1;
-        final targetOffset = visualTarget.$2;
-        final currentIdx = chapters.indexWhere(
-          (c) => c.id == _currentChapterId,
-        );
-        final targetIdx = chapters.indexWhere((c) => c.id == targetChapterId);
-        final inWindow =
-            currentIdx >= 0 &&
-            targetIdx >= 0 &&
-            (targetIdx - currentIdx).abs() <= 1 &&
-            _contentLoader!.getByChapterId(targetChapterId) != null;
-        if (inWindow) {
-          await _seekWithinContinuousWindow(targetChapterId, targetOffset);
-          return;
-        }
-        await switchToChapter(
-          targetChapterId,
-          intent: ReaderChapterNavigationIntent.offset(
-            targetOffset,
-            offerReturn: true,
-          ),
-        );
-        return;
-      }
-    }
-
     final counts = parsedBook.chapters
         .map((chapter) => math.max(1, chapter.charCount))
         .toList(growable: false);
@@ -322,26 +267,12 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       target -= counts[chapterIndex];
       chapterIndex++;
     }
+    final chapters = _contentLoader?.allChapters ?? const <ReaderChapter>[];
     if (chapterIndex >= chapters.length) {
       return;
     }
     final targetChapter = chapters[chapterIndex];
     final targetOffset = target.clamp(0, counts[chapterIndex]);
-
-    // 连续滚动：目标在窗口邻域内时直接 jumpTo，避免整树切换。
-    if (!_isPageMode && _contentLoader != null) {
-      final currentIdx = chapters.indexWhere((c) => c.id == _currentChapterId);
-      final targetIdx = chapterIndex;
-      final inWindow =
-          currentIdx >= 0 &&
-          (targetIdx - currentIdx).abs() <= 1 &&
-          _contentLoader!.getByChapterId(targetChapter.id) != null;
-      if (inWindow) {
-        await _seekWithinContinuousWindow(targetChapter.id, targetOffset);
-        return;
-      }
-    }
-
     await switchToChapter(
       targetChapter.id,
       intent: ReaderChapterNavigationIntent.offset(
@@ -351,126 +282,16 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     );
   }
 
-  /// 窗口内章节：按 charOffset 走恢复编排稳定落点。
-  ///
-  /// 恢复引擎（B6 §7.3）逐帧重算窗口坐标并稳定判定；视觉 seek 的即时
-  /// 落库由 delegate.onRestoreSettled 统一执行。
-  Future<void> _seekWithinContinuousWindow(
-    String chapterId,
-    int charOffset,
-  ) async {
-    final loader = _contentLoader;
-    if (loader == null) {
-      return;
-    }
-    final data = loader.getByChapterId(chapterId);
-    if (data == null) {
-      return;
-    }
-    final clamped = charOffset.clamp(0, data.totalChars);
-    if (chapterId != _currentChapterId) {
-      adoptContinuousAnchorChapter(chapterId);
-    }
-    _runtime.acceptLogicalPosition(chapterId: chapterId, charOffset: clamped);
-    final totalChars = data.totalChars;
-    if (totalChars > 0) {
-      scrollProgress = (clamped / totalChars).clamp(0.0, 1.0);
-    }
-    _runtime.startRestore(
-      ReaderPositionTarget(chapterId: chapterId, charOffset: clamped),
-    );
-    _updateState(() {});
-  }
-
   void _openReaderSearchResult(int offset) {
     _closeReaderPanel();
+    _pendingRestoreCharOffset = offset;
+    _isRestoringProgress = true;
     if (_isPageMode) {
       repaginateCurrentChapter(restoreCharOffset: offset);
     } else {
       restoreScrollPositionFromOffset(offset);
     }
     _updateState(() {});
-  }
-
-  /// 构建搜索面板：连续滚动时检索窗口内多章，翻页仍限当前章。
-  Widget _buildFindPanel(ReaderChapterContent content) {
-    final fromBlocks = currentChapterPlainText();
-    final fallbackText =
-        fromBlocks.isNotEmpty ? fromBlocks : getPlainText(content.content);
-
-    if (_isPageMode || _contentLoader == null) {
-      return ReaderFindPanel(
-        plainText: fallbackText,
-        settings: _settings,
-        onSelect: _openReaderSearchResult,
-      );
-    }
-
-    final index = _buildWindowSearchIndex();
-    return ReaderFindPanel(
-      plainText: index.combinedText,
-      settings: _settings,
-      chapterTitleOf: index.titleOf,
-      onSelect: (globalOffset) {
-        final hit = index.resolve(globalOffset);
-        if (hit == null) {
-          _openReaderSearchResult(globalOffset);
-          return;
-        }
-        _openWindowSearchResult(hit);
-      },
-    );
-  }
-
-  ReaderWindowSearchIndex _buildWindowSearchIndex() {
-    final loader = _contentLoader!;
-    final chapters = <WindowSearchChapter>[];
-    for (final entry in continuousScrollController.entries) {
-      final data = loader.getByChapterId(entry.chapterId);
-      if (data == null || data.blocks.isEmpty) {
-        continue;
-      }
-      chapters.add(
-        WindowSearchChapter.fromBlocks(
-          chapterId: entry.chapterId,
-          title:
-              entry.title.isNotEmpty
-                  ? entry.title
-                  : _chapterTitleById(entry.chapterId),
-          blocks: data.blocks,
-        ),
-      );
-    }
-    if (chapters.isEmpty) {
-      final text = currentChapterPlainText();
-      chapters.add(
-        WindowSearchChapter(
-          chapterId: _currentChapterId,
-          title: _chapterTitleById(_currentChapterId),
-          plainText: text,
-        ),
-      );
-    }
-    return ReaderWindowSearchIndex(chapters);
-  }
-
-  String _chapterTitleById(String chapterId) {
-    final chapters = _contentLoader?.allChapters ?? const [];
-    for (final c in chapters) {
-      if (c.id == chapterId) {
-        return c.title;
-      }
-    }
-    return '';
-  }
-
-  void _openWindowSearchResult(WindowSearchHit hit) {
-    _closeReaderPanel();
-    if (_isPageMode) {
-      _openReaderSearchResult(hit.localOffset);
-      return;
-    }
-    unawaited(_seekWithinContinuousWindow(hit.chapterId, hit.localOffset));
   }
 
   List<Widget> _buildReaderPanels(
@@ -497,7 +318,11 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         onSettingsChanged: onSettingsChanged,
         embedded: true,
       ),
-      ReaderPanelType.search => _buildFindPanel(content),
+      ReaderPanelType.search => ReaderFindPanel(
+        plainText: getPlainText(content.content),
+        settings: _settings,
+        onSelect: _openReaderSearchResult,
+      ),
       ReaderPanelType.annotations =>
         _annotationHandler?.buildPanel(context) ?? const SizedBox.shrink(),
       ReaderPanelType.shortcuts => ReaderShortcutPanel(

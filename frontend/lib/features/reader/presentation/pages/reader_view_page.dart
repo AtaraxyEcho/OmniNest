@@ -6,20 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_position_target.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_progress_publisher.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_reading_runtime.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_identity.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_scroll_effect.dart';
-import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/features/reader/application/reader_chapter_load_coordinator.dart';
-import 'package:omninest/features/reader/application/reader_progress_echo.dart';
 import 'package:omninest/features/reader/application/reader_progress_sync_service.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
@@ -32,13 +26,12 @@ import 'package:omninest/features/reader/presentation/widgets/reader_content_loa
 import 'package:omninest/features/reader/presentation/widgets/reader_content_skeleton.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_deferred_restore_overlay.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_backup.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_position_tracker.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_tts_controls.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_bottom_bar.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_progress_indicator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_chapter_navigation.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_navigation_token.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_adaptive_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_find_panel.dart';
@@ -53,9 +46,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_page_c
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_library_actions_mixin.dart';
 import 'package:omninest/features/reader/application/reader_session_recorder.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_window_search.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_mixin.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_view_page_coordinate_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_interaction_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_settings_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_top_bar.dart';
@@ -67,20 +58,34 @@ class ReaderViewPage extends ConsumerStatefulWidget {
   const ReaderViewPage({
     required this.itemId,
     required this.chapterId,
-    this.entry,
     this.initialProgressPayload,
+    this.entry,
     super.key,
   });
 
   final String itemId;
   final String chapterId;
-
-  /// 路由进入语义（'chapter'=目录显式选章；其余按续读）。
-  final String? entry;
   final Map<String, dynamic>? initialProgressPayload;
+
+  /// 路由进入语义（`chapter`=目录显式选章进章首，其余=续读恢复）。
+  final String? entry;
 
   @override
   ConsumerState<ReaderViewPage> createState() => _ReaderViewPageState();
+}
+
+class _FlatPageEntry {
+  const _FlatPageEntry({
+    required this.chapterId,
+    required this.localPageIndex,
+    required this.chapterTitle,
+    required this.chapterIndex,
+  });
+
+  final String chapterId;
+  final int localPageIndex;
+  final String chapterTitle;
+  final int chapterIndex;
 }
 
 class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
@@ -90,9 +95,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         ReaderViewPageControlsMixin,
         ReaderViewPageLibraryActionsMixin,
         ReaderViewPageMixin,
-        ReaderViewPageCoordinateMixin,
         ReaderViewPageInteractionMixin {
   // ── 核心组件 ──
+  final _positionTracker = ReaderPositionTracker();
   ReaderContentLoader? _contentLoader;
   final ReaderPageTurnController _pageTurnController =
       ReaderPageTurnController();
@@ -104,6 +109,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   late final ReaderProgressSaveCoordinator _progressSaveCoordinator;
   late final WindowChromeController _windowChromeController;
   WindowChromeLease? _windowChromeLease;
+  double _lastTextScale = 1;
 
   @override
   WindowChromeController get windowChromeController => _windowChromeController;
@@ -118,38 +124,34 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   // ── 渲染状态 ──
   final ScrollController _scrollController = ScrollController();
-  final ReaderContinuousScrollController _continuousScrollController =
-      ReaderContinuousScrollController(sideChapterCount: 2);
+  List<_FlatPageEntry> _flatPages = [];
   int _currentPageIndex = 0;
   int _pageModePage = 0;
 
   // ── 进度 ──
-  // 章内显示进度：纯展示值，不驱动全书进度（B8 起全书进度由 Runtime
-  // progressPublished 与页面显式 refreshBookProgressNow 发布）。
   double _scrollProgress = 0;
-  // 全书进度通知器（底栏/指示器消费）。
-  final ValueNotifier<double> _bookProgressNotifier = ValueNotifier<double>(0);
   DateTime? _lastAppliedProgressAt;
+  ReaderProgressSnapshot? _lastOwnProgressSave; // 本机最近一次推送的进度快照
+  double? _pendingChapterProgress; // 恢复时的章节进度比例（0-1）
+  int? _pendingRestoreCharOffset; // 模式切换时待恢复的字符偏移（用于精确像素定位）
+  bool _isRestoringProgress = false; // 正在恢复阅读位置，显示加载遮罩
+  bool _modeSwitchInProgress = false; // 模式切换中，首次翻页/滚动后清除
+  int? _modeSwitchAnchor; // 模式切换时冻结的 charOffset，跨多次 onPageChanged 保留
+  int _restoreTargetCharOffset = 0; // 当前恢复目标 charOffset，用于防回退
+  DateTime _restoreSilenceUntil = DateTime.fromMillisecondsSinceEpoch(
+    0,
+  ); // 恢复后静默窗口
   DateTime _lastPointerDownTime = DateTime.fromMillisecondsSinceEpoch(
     0,
-    // 最后一次真实触摸
-  );
-  // 最近滚动活动（滚轮/触控板）
-  DateTime? _lastScrollActivityAt;
+  ); // 最后一次真实触摸
+  final _restore = ScrollRestore(); // 滚动位置恢复器（封装帧回调生命周期）
 
   // ── 章节导航与返回原进度 ──
-  // 路由进入语义经 intentForRouteEntry 一次性换算：目录显式选章为
-  // start，不会被「全局最新进度在别章」的续读 defer 劫持。
-  late ReaderChapterNavigationIntent _chapterNavigationIntent =
-      ReaderChapterNavigationIntent.intentForRouteEntry(widget.entry);
-  // 显式导航令牌：新导航使旧令牌失效，异步结果回写前校验。
-  final ReaderNavigationTokenHolder _navigationTokens =
-      ReaderNavigationTokenHolder();
+  ReaderChapterNavigationIntent _chapterNavigationIntent =
+      const ReaderChapterNavigationIntent.resume();
   ReaderProgressSnapshot? _returnToProgressSnapshot;
-  // 是否显示"返回原进度"控件
-  bool _showReturnControl = false;
-  // 自动隐藏计时器
-  Timer? _returnControlTimer;
+  bool _showReturnControl = false; // 是否显示"返回原进度"控件
+  Timer? _returnControlTimer; // 自动隐藏计时器
 
   // ── 并发控制 ──
   bool _isAnimating = false;
@@ -166,27 +168,14 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   ReaderChapterContent? _cachedContent;
   bool _showControls = false;
   bool _showTts = false;
-  // Web 端鼠标是否悬停在控件栏上
-  bool _isHoveringControls = false;
+  bool _isHoveringControls = false; // Web 端鼠标是否悬停在控件栏上
   bool _isBookmarked = false;
   bool _isInBookshelf = false;
   bool _bookmarkBusy = false;
   bool _bookshelfBusy = false;
   bool _selectionActive = false;
   bool _exitRequested = false;
-  // 指针按住未松开：恢复引擎用户滚动探针据此识别"进行中的拖动"。
-  bool _pointerDownActive = false;
-
-  @override
-  bool get pointerDownActive => _pointerDownActive;
-
-  @override
-  set pointerDownActive(bool value) => _pointerDownActive = value;
-
   ParsedBook? _parsedBookSnapshot;
-  // 章节列表缓存：parsedBook 身份不变时复用，避免每次 build O(章节) 重分配。
-  ParsedBook? _chaptersCacheSource;
-  List<ReaderChapter> _chaptersCache = const [];
   bool _readerBuildWorkScheduled = false;
   ParsedBook? _pendingParsedBook;
   ReaderChapterContent? _pendingReaderContent;
@@ -208,19 +197,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   // ── 阅读会话 ──
   late final DateTime _sessionStart = DateTime.now();
 
-  /// Reading Runtime Facade（方案 §83）：事务/几何/位置/进度发布/窗口/
-  /// 恢复的唯一聚合入口；publisher 包装页面自有的全书进度通知器。
-  late final ReaderReadingRuntime _runtime = ReaderReadingRuntime(
-    publisher: ReaderVisualProgressPublisher(_bookProgressNotifier),
-  );
-
-  @override
-  ReaderReadingRuntime get runtime => _runtime;
-
   bool get _isPageMode => supportsPageMode && _settings.readingMode == 'page';
 
   // ── 抽象成员实现（ReaderViewPageMixin + ReaderViewPageBuilders 共用） ──
   @override
+  ReaderPositionTracker get positionTracker => _positionTracker;
   @override
   ReaderPageTurnController get pageTurnController => _pageTurnController;
   @override
@@ -229,10 +210,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set contentLoader(ReaderContentLoader? v) => _contentLoader = v;
   @override
   ScrollController get scrollController => _scrollController;
-
   @override
-  ReaderContinuousScrollController get continuousScrollController =>
-      _continuousScrollController;
+  ScrollRestore get restore => _restore;
   @override
   ReaderViewSettings get settings => _settings;
   @override
@@ -247,15 +226,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set currentChapterId(String v) {
     _currentChapterId = v;
     _annotationHandler?.updateChapter(v);
-    // 锚点章统一同步 choke point（B3 §6.3）：收养/切章/规范化均经此 setter。
-    _runtime.anchorChapterId = v;
   }
-
-  @override
-  ReaderNavigationTokenHolder get navigationTokens => _navigationTokens;
-
-  @override
-  ValueNotifier<double> get bookProgressNotifier => _bookProgressNotifier;
 
   @override
   ReaderChapterContent? get cachedContent => _cachedContent;
@@ -263,6 +234,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set cachedContent(ReaderChapterContent? v) => _cachedContent = v;
   @override
   ReaderAnnotationHandler? get annotationHandler => _annotationHandler;
+  @override
+  dynamic get flatPages => _flatPages;
+  @override
+  set flatPages(dynamic v) => _flatPages = v;
   @override
   int get currentPageIndex => _currentPageIndex;
   @override
@@ -273,95 +248,45 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set pageModePage(int v) => _pageModePage = v;
   @override
   double get scrollProgress => _scrollProgress;
-
   @override
   set scrollProgress(double v) => _scrollProgress = v;
-
-  /// 底栏/指示器显示进度：翻页模式为逻辑全书进度；连续模式为视觉全书
-  /// 进度（图片内部连续变化，不受逻辑进度冻结影响）。
-  double get _displayBookProgress {
-    if (_isPageMode) {
-      return _bookProgress;
-    }
-    return bookVisualProgressFor(
-      _runtime.lastVisualProgressChapterId ?? _currentChapterId,
-      _runtime.lastChapterVisualCursor,
-    );
-  }
-
-  @override
-  void refreshBookProgressNow() {
-    if (!mounted) {
-      return;
-    }
-    _runtime.publishBookProgress(_displayBookProgress);
-  }
-
   @override
   DateTime? get lastAppliedProgressAt => _lastAppliedProgressAt;
   @override
   set lastAppliedProgressAt(DateTime? v) => _lastAppliedProgressAt = v;
 
-  // 回声检测器：环形记录本机近期保存（见 ReaderProgressEchoDetector）。
-  final _progressEchoDetector = ReaderProgressEchoDetector();
-
   /// 记录本机推送的进度快照，供回声判定使用。
   @override
   void noteOwnProgressSave(ReaderProgressSnapshot snapshot) {
-    _progressEchoDetector.note(
-      chapterId: snapshot.chapterId,
-      charOffset: snapshot.charOffset,
-      progress: snapshot.progress,
-      at: snapshot.updatedAt ?? DateTime.now(),
-    );
+    _lastOwnProgressSave = snapshot;
   }
 
-  /// 判断服务端回灌的进度快照是否为本机近期保存的自身回声。
-  bool _isOwnProgressEcho(ReaderProgressSnapshot snapshot, DateTime at) {
-    return _progressEchoDetector.isEcho(
-      chapterId: snapshot.chapterId,
-      charOffset: snapshot.charOffset,
-      progress: snapshot.progress,
-      at: at,
-    );
-  }
-
-  /// 远端进度浮层Offer的快照与去重时间戳；用 identical 判定当前浮层
-  /// 是否由远端 Offer 产生（切换离场路径覆写 returnToProgressSnapshot
-  /// 后自动失效，无需额外复位标志）。
-  ReaderProgressSnapshot? _remoteOfferSnapshot;
-  DateTime? _lastRemoteOfferAt;
-
-  /// 当前"返回原进度"浮层是否为远端进度同步入口。
-  @override
-  bool get returnControlIsRemoteOffer =>
-      returnToProgressSnapshot != null &&
-      identical(returnToProgressSnapshot, _remoteOfferSnapshot);
-
-  /// 阅读中途收到其他章节更新的服务端进度：不自动拽跳，浮层提供同步入口。
+  /// 判断服务端回灌的进度快照是否为本机刚保存的自身回声。
   ///
-  /// 自动拽离当前阅读位置会在活跃阅读中反复发生（对端按节流持续上报）；
-  /// 打开书时落到全局最新已由首载 defer 覆盖，中途只提示不打扰。
-  void offerRemoteProgressJump(ReaderProgressSnapshot snapshot) {
-    final updatedAt = snapshot.updatedAt;
-    if (!mounted ||
-        updatedAt == null ||
-        isSwitchingChapter ||
-        isLoadingChapter ||
-        _runtime.isRestoreBusy ||
-        showReturnControl) {
-      return;
+  /// 本机保存→服务端落库→详情 provider 刷新会产生一条与本地快照内容
+  /// 相同、时间戳略新的记录；不跳过就会把刚保存的位置重新施加回 UI，
+  /// 表现为每次滚动/点击后内容回跳"刷新"。跨设备更新时间必然晚于
+  /// 本机保存时刻，不受影响。
+  bool _isOwnProgressEcho(ReaderProgressSnapshot snapshot, DateTime at) {
+    final own = _lastOwnProgressSave;
+    final ownAt = own?.updatedAt;
+    if (own == null || ownAt == null) {
+      return false;
     }
-    final lastOfferAt = _lastRemoteOfferAt;
-    if (lastOfferAt != null && !updatedAt.isAfter(lastOfferAt)) {
-      return;
-    }
-    _lastRemoteOfferAt = updatedAt;
-    _remoteOfferSnapshot = snapshot;
-    returnToProgressSnapshot = snapshot;
-    showReturnToProgressSnackBar();
+    return own.chapterId == snapshot.chapterId &&
+        (own.charOffset - snapshot.charOffset).abs() <= 64 &&
+        (own.progress - snapshot.progress).abs() <= 0.002 &&
+        at.isBefore(ownAt.add(const Duration(seconds: 30)));
   }
 
+  @override
+  double? get pendingChapterProgress => _pendingChapterProgress;
+  @override
+  set pendingChapterProgress(double? v) => _pendingChapterProgress = v;
+  @override
+  int? get pendingRestoreCharOffset => _pendingRestoreCharOffset;
+  @override
+  set pendingRestoreCharOffset(int? v) => _pendingRestoreCharOffset = v;
   @override
   ReaderChapterNavigationIntent get chapterNavigationIntent =>
       _chapterNavigationIntent;
@@ -369,13 +294,29 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   set chapterNavigationIntent(ReaderChapterNavigationIntent v) =>
       _chapterNavigationIntent = v;
   @override
+  bool get isRestoringProgress => _isRestoringProgress;
+  @override
+  set isRestoringProgress(bool v) => _isRestoringProgress = v;
+  @override
+  bool get modeSwitchInProgress => _modeSwitchInProgress;
+  @override
+  set modeSwitchInProgress(bool v) => _modeSwitchInProgress = v;
+  @override
+  int? get modeSwitchAnchor => _modeSwitchAnchor;
+  @override
+  set modeSwitchAnchor(int? v) => _modeSwitchAnchor = v;
+  @override
+  int get restoreTargetCharOffset => _restoreTargetCharOffset;
+  @override
+  set restoreTargetCharOffset(int v) => _restoreTargetCharOffset = v;
+  @override
+  DateTime get restoreSilenceUntil => _restoreSilenceUntil;
+  @override
+  set restoreSilenceUntil(DateTime v) => _restoreSilenceUntil = v;
+  @override
   DateTime get lastPointerDownTime => _lastPointerDownTime;
   @override
   set lastPointerDownTime(DateTime v) => _lastPointerDownTime = v;
-  @override
-  DateTime? get lastScrollActivityAt => _lastScrollActivityAt;
-  @override
-  set lastScrollActivityAt(DateTime? v) => _lastScrollActivityAt = v;
   @override
   ReaderProgressSnapshot? get returnToProgressSnapshot =>
       _returnToProgressSnapshot;
@@ -498,30 +439,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   String get currentChapterTitle => _currentChapterTitle;
   @override
   double get bookProgress => _bookProgress;
-
-  /// 按(parsedBook 身份)缓存章节映射，避免每次 build O(章节) 重分配。
-  List<ReaderChapter> _cachedChaptersFor(ParsedBook? parsedBook) {
-    if (parsedBook == null) {
-      return const <ReaderChapter>[];
-    }
-    if (!identical(_chaptersCacheSource, parsedBook)) {
-      _chaptersCacheSource = parsedBook;
-      _chaptersCache =
-          parsedBook.chapters
-              .asMap()
-              .entries
-              .map(
-                (e) => ReaderChapter.fromParsed(
-                  e.key,
-                  e.value.title,
-                  contentPath: e.value.contentPath,
-                ),
-              )
-              .toList();
-    }
-    return _chaptersCache;
-  }
-
   @override
   String get itemId => widget.itemId;
   @override
@@ -535,6 +452,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Size? get pageViewportSize => _pageViewportSize;
   @override
   set pageViewportSize(Size? value) => _pageViewportSize = value;
+  @override
+  dynamic buildFlatPages() => _buildFlatPages();
 
   @override
   void onReaderSelectionActive(bool active) {
@@ -559,72 +478,60 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     }
   }
 
-  /// 当前章节标题，用于顶栏与加载遮罩显示。
-  ///
-  /// 始终以 currentChapterId 解析，禁止优先使用可能滞后的 _cachedContent，
-  /// 否则连续滚动进入下一章后顶栏仍显示上一章标题。
-  String get _currentChapterTitle {
-    final data = _contentLoader?.getByChapterId(_currentChapterId);
-    if (data != null && data.content.title.isNotEmpty) {
-      return data.content.title;
+  List<_FlatPageEntry> _buildFlatPages() {
+    final result = <_FlatPageEntry>[];
+    final chapters = contentLoader!.allChapters;
+    for (var ci = 0; ci < chapters.length; ci++) {
+      final data = contentLoader!.get(chapters[ci].id, settings);
+      if (data == null || data.slices.isEmpty) continue;
+      for (var i = 0; i < data.slices.length; i++) {
+        result.add(
+          _FlatPageEntry(
+            chapterId: chapters[ci].id,
+            localPageIndex: i,
+            chapterTitle: data.content.title,
+            chapterIndex: ci,
+          ),
+        );
+      }
     }
+    return result;
+  }
+
+  /// 当前章节标题，用于加载遮罩显示。
+  String get _currentChapterTitle {
+    // 优先从已加载的章节内容获取
+    if (_cachedContent?.title.isNotEmpty == true) return _cachedContent!.title;
+    // 从 contentLoader 获取
+    final data = _contentLoader?.getByChapterId(_currentChapterId);
+    if (data != null) return data.content.title;
+    // 从章节列表获取
     final chapters = _contentLoader?.allChapters ?? [];
     final idx = chapters.indexWhere((c) => c.id == _currentChapterId);
     if (idx >= 0 && chapters[idx].title.isNotEmpty) return chapters[idx].title;
-    if (_cachedContent?.title.isNotEmpty == true) return _cachedContent!.title;
     return '';
   }
 
-  /// 当前章 1-based 序号，用于底栏「第 X/共 N 章」。
-  int? get _currentChapterDisplayIndex {
-    final chapters = _contentLoader?.allChapters;
-    if (chapters == null || chapters.isEmpty) {
-      return null;
-    }
-    final idx = chapters.indexWhere((c) => c.id == _currentChapterId);
-    return idx < 0 ? null : idx + 1;
-  }
-
   /// 全书进度百分比（0.0-1.0），用于显示和同步。
-  double get _bookProgress =>
-      bookProgressFor(_currentChapterId, _runtime.logicalPosition.charOffset);
-
-  /// 按 [chapterId] + [charOffset] 计算全书加权进度。
-  ///
-  /// 离场快照在切换期会用 tracker 的章节身份取值，此时 chapterId 可能
-  /// 与 _currentChapterId 不同，因此身份与偏移必须成对传入。
-  @override
-  double bookProgressFor(String chapterId, int charOffset) {
-    // dispose 后的快照回退路径（buildSimpleSnapshot/syncProgressAsync）
-    // 仍会走到这里：ref 已失效，退化为章内显示进度兜底。
-    if (!mounted) {
-      return _scrollProgress.clamp(0.0, 1.0);
-    }
+  double get _bookProgress {
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
-      return _scrollProgress.clamp(0.0, 1.0);
-    }
-    // 章节身份无法解析时不静默按第一章累计：把错误章节折算成第一章
-    // 进度会伪造全书位置（含落库与同步），维持当前显示进度并交由调用方处理。
-    final allChapters = _contentLoader?.allChapters;
-    final currentChapterIdx =
-        allChapters?.indexWhere((c) => c.id == chapterId) ?? -1;
-    if (allChapters == null ||
-        currentChapterIdx < 0 ||
-        currentChapterIdx >= parsedBook.chapters.length) {
       return _scrollProgress.clamp(0.0, 1.0);
     }
     final chapterCharCounts =
         parsedBook.chapters.map((c) => c.charCount).toList();
     // 当前章节使用实际解析的 totalChars（与 parsedBook.charCount 可能因 HTML 标签不同）
-    final chapterData = _contentLoader?.getByChapterId(chapterId);
-    if (chapterData != null) {
+    final chapterData = _contentLoader?.getByChapterId(_currentChapterId);
+    final currentChapterIdx =
+        _contentLoader?.allChapters.indexWhere(
+          (c) => c.id == _currentChapterId,
+        ) ??
+        0;
+    if (chapterData != null && currentChapterIdx < chapterCharCounts.length) {
       chapterCharCounts[currentChapterIdx] = chapterData.totalChars;
     }
     final totalBookChars = chapterCharCounts.fold<int>(0, (s, c) => s + c);
-    if (totalBookChars <= 0) {
-      return _scrollProgress.clamp(0.0, 1.0);
-    }
+    if (totalBookChars <= 0) return _scrollProgress.clamp(0.0, 1.0);
 
     // 当前章节之前的字符数之和
     int previousChars = 0;
@@ -635,9 +542,12 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     ) {
       previousChars += chapterCharCounts[i];
     }
-    // 当前章节内的字符数：直接用传入的 charOffset，不依赖 _scrollProgress
+    // 当前章节内的字符数：直接用 tracker 的 charOffset，不依赖 _scrollProgress
     final chapterChars = chapterData?.totalChars ?? 0;
-    final currentChapterChars = charOffset.clamp(0, chapterChars);
+    final currentChapterChars = _positionTracker.charOffset.clamp(
+      0,
+      chapterChars,
+    );
 
     return ((previousChars + currentChapterChars) / totalBookChars).clamp(
       0.0,
@@ -650,6 +560,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   void initState() {
     super.initState();
+    _chapterNavigationIntent =
+        ReaderChapterNavigationIntent.intentForRouteEntry(widget.entry);
     _progressSync = ref.read(readerProgressSyncServiceProvider);
     _windowChromeController = ref.read(windowChromeControllerProvider.notifier);
     _progressSaveCoordinator = ReaderProgressSaveCoordinator(
@@ -675,35 +587,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       },
     );
     if (kIsWeb) BrowserContextMenu.disableContextMenu();
-    // 物理滚动适配器注入（新方案 §43/§63）：Runtime 不持有 Controller。
-    _runtime.scrollEffect = _ReaderScrollEffectAdapter(_scrollController);
-    // 用户输入取消在途恢复（新方案 §59）：Runtime 发请求，页面清恢复态。
-    _runtime.onRestoreCancelRequested = cancelOngoingRestoreForUserScroll;
-    // 几何失效请求统一进入收敛调度器（方案 §72）：build/事件只请求。
-    _runtime.onGeometryInvalidated =
-        (reason) => requestContinuousWindowRebuild();
-    // 消费管线页面供给（B3 §6.3）与锚点章初始同步。
-    _runtime.consumeDelegate = this;
-    _runtime.anchorChapterId = _currentChapterId;
-    // 窗口构建页面供给（B4 §48）：指纹/重建/补偿编排内化 WindowBuilder。
-    _runtime.windowBuilder.delegate = this;
-    // 事务布局供给与收养/扩窗回调（B1 §64 单向依赖接线）。
-    _runtime.layoutProvider = currentLiveLayout;
-    _runtime.onAdoptChapterRequested = adoptContinuousAnchorChapter;
-    _runtime.onExpandWindowRequested = onContinuousWindowExpand;
-    // Restore 编排供给（B6 §7.2/§7.3）：目标换算/用户滚动探针/稳定回写、
-    // 帧调度与身份供给。
-    _runtime.restoreDelegate = this;
-    _runtime.frameScheduler = (callback) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => callback());
-    };
-    _runtime.identityProvider =
-        () => ReaderRuntimeIdentity(
-          itemId: widget.itemId,
-          readingMode: _settings.readingMode,
-        );
-    // 装配完整性断言（debug）：11 个注入点缺一即在此暴露。
-    _runtime.validateBindings();
     loadSettings();
     checkBookmarkState();
     scrollController.addListener(onScroll);
@@ -712,6 +595,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    // 分页测量只跟随系统缩放；应用字体档位变化不应触发阅读器重排。
+    _lastTextScale = FontScaleScope.systemScalerOf(context).scale(1);
     _annotationHandler ??= ReaderAnnotationHandler(
       itemId: widget.itemId,
       chapterId: widget.chapterId,
@@ -729,44 +614,46 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       itemId: widget.itemId,
       sessionStart: _sessionStart,
     );
-    // 退出兜底：位置取逻辑位置记账（滚动/翻页两种模式均由正确路径
-    // 维护），全书进度取通知器缓存值（dispose 中 ref/BuildContext 不可
-    // 用），阅读模式取实际值；翻页模式同样补报（旧实现依赖滚动视图
-    // hasClients 而整块跳过）。
-    if (!_runtime.isRestoreBusy &&
-        (_cachedContent != null ||
-            _contentLoader?.getByChapterId(_currentChapterId) != null)) {
-      final charOffset = _runtime.logicalPosition.charOffset;
-      final chapterId = _currentChapterId;
-      final totalChars =
-          _contentLoader?.getByChapterId(chapterId)?.totalChars ?? 0;
-      final chapterProgress =
-          totalChars > 0
-              ? (charOffset / totalChars).clamp(0.0, 1.0)
-              : _scrollProgress.clamp(0.0, 1.0);
-      ReaderProgressBackupWeb.save(
-        itemId: widget.itemId,
-        chapterId: chapterId,
-        charOffset: charOffset,
-        chapterProgress: chapterProgress,
-      );
-      // 退出时向服务端强制补报最终位置（节流不适用于离场）；
-      // progressPercent 必须是全书加权值，不是章内进度。
-      unawaited(
-        _progressSync.sync(
+    // dispose 时用 localStorage 同步备份（不依赖 ref，不读 scroll controller 位置）。
+    // _syncProgressSync 不能在此调用 — ref 已卸载，_bookProgress 会崩溃。
+    if (!_restore.shouldSuppressWrites && _scrollController.hasClients) {
+      final max = _scrollController.position.maxScrollExtent;
+      if (max > 0) {
+        final contentY = _scrollController.offset + viewportAnchorY;
+        final charOffset =
+            _contentLoader?.contentYToCharOffset(
+              _currentChapterId,
+              contentY,
+              pageWidth: computePageWidth(),
+              settings: _settings,
+              textScale: _lastTextScale,
+            ) ??
+            0;
+        // chapterProgress 从 charOffset 推导
+        final totalChars =
+            _contentLoader?.getByChapterId(_currentChapterId)?.totalChars ?? 0;
+        final progress =
+            totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
+        ReaderProgressBackupWeb.save(
           itemId: widget.itemId,
+          chapterId: _currentChapterId,
           charOffset: charOffset,
-          progressPercent: _bookProgressNotifier.value,
-          readingMode: _settings.readingMode,
-          chapterId: chapterId,
-        ),
-      );
+          chapterProgress: progress,
+        );
+        // 退出时向服务端强制补报最终位置（节流不适用于离场）
+        unawaited(
+          _progressSync.sync(
+            itemId: widget.itemId,
+            charOffset: charOffset,
+            progressPercent: progress,
+            readingMode: 'scroll',
+            chapterId: _currentChapterId,
+          ),
+        );
+      }
     }
     _windowChromeLease?.release();
     if (kIsWeb) BrowserContextMenu.enableContextMenu();
-    disposeScrollThrottles();
-    disposeLayoutInvalidationTimer();
-    _bookProgressNotifier.dispose();
     _hideTimer?.cancel();
     _persistTimer?.cancel();
     _repaginateTimer?.cancel();
@@ -774,13 +661,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _dismissReturnTimer?.cancel();
     _chapterLoadingTimer?.cancel();
     unawaited(_progressSaveCoordinator.dispose());
-    // Runtime 内部计时资源兜底清理（B1 遗留缺口，B9 判归接线）。
-    _runtime.dispose();
-    _runtime.cancelRestorePhase();
+    _restore.cancel();
     _chapterLoadCoordinator.cancel();
     _pageLocator.cancel();
     _pageTurnController.dispose();
-    _continuousScrollController.dispose();
     _scrollController.dispose();
     // 释放 parsed blocks 缓存（离开阅读页后不再需要）
     _contentLoader?.invalidateAll();
@@ -832,7 +716,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       }
 
       if (content != null) {
-        // 内容已就绪时同步初始化 loader，减少一帧骨架闪烁。
         if (_contentLoader == null) {
           initContentLoader(chapters);
           stateChanged = true;
@@ -865,8 +748,19 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     final latestParsedBook = bookAsync.asData?.value;
     final parsedBook = latestParsedBook ?? _parsedBookSnapshot;
     final loadedContent = _cachedContent;
-    // 章节列表按 parsedBook 身份缓存，避免每次 build O(章节) 重分配。
-    final chapters = _cachedChaptersFor(parsedBook);
+    final chapters =
+        parsedBook?.chapters
+            .asMap()
+            .entries
+            .map(
+              (e) => ReaderChapter.fromParsed(
+                e.key,
+                e.value.title,
+                contentPath: e.value.contentPath,
+              ),
+            )
+            .toList() ??
+        <ReaderChapter>[];
     _scheduleReaderBuildWork(
       latestParsedBook: latestParsedBook,
       loadedContent: loadedContent,
@@ -895,29 +789,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
                 },
               );
             }
-            var content = loadedContent ?? _cachedContent;
-            final chapterDataForBlocks = _contentLoader?.getByChapterId(
-              _currentChapterId,
-            );
-            // HTML 已 drop 但 blocks 仍在时：不闪骨架，用占位 content 直接渲染。
-            if (content == null &&
-                _contentLoader != null &&
-                chapterDataForBlocks != null &&
-                chapterDataForBlocks.blocks.isNotEmpty) {
-              final titleFromList =
-                  chapters
-                      .where((c) => c.id == _currentChapterId)
-                      .map((c) => c.title)
-                      .firstOrNull;
-              content = ReaderChapterContent(
-                title:
-                    chapterDataForBlocks.content.title.isNotEmpty
-                        ? chapterDataForBlocks.content.title
-                        : (titleFromList ?? ''),
-                content: '',
-                wordCount: chapterDataForBlocks.totalChars,
-              );
-            }
+            final content = loadedContent ?? _cachedContent;
 
             if (kDebugMode) {
               readerDebugLog(
@@ -955,30 +827,14 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
                 detailAsync.asData?.value.progress,
               );
               final latestTime = latestSnapshot.updatedAt;
-              final isNewer =
+              final shouldApply =
+                  latestSnapshot.chapterId == _currentChapterId &&
                   latestTime != null &&
                   (_lastAppliedProgressAt == null ||
-                      latestTime.isAfter(_lastAppliedProgressAt!));
-              final notEcho =
-                  latestTime != null &&
+                      latestTime.isAfter(_lastAppliedProgressAt!)) &&
                   !_isOwnProgressEcho(latestSnapshot, latestTime);
-              if (latestSnapshot.chapterId == _currentChapterId) {
-                if (isNewer && notEcho) {
-                  scheduleProgressSnapshotApply(latestSnapshot);
-                }
-              } else if (latestSnapshot.chapterId.isNotEmpty &&
-                  latestSnapshot.hasReadableProgress &&
-                  isNewer &&
-                  notEcho) {
-                // 他章更新不自动拽跳（活跃阅读中被拽离是干扰），浮层提供入口；
-                // 浮层内部含 setState/Timer，build 期只声明、帧末执行。
-                final offerSnapshot = latestSnapshot;
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  if (!mounted) {
-                    return;
-                  }
-                  offerRemoteProgressJump(offerSnapshot);
-                });
+              if (shouldApply) {
+                scheduleProgressSnapshotApply(latestSnapshot);
               }
             }
 
@@ -1037,7 +893,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     final chromeLayout = ReaderChromeLayout.resolve(
       immersiveMode: _settings.immersiveMode,
       isPageMode: _isPageMode,
-      safePadding: MediaQuery.paddingOf(context),
     );
 
     return Stack(
@@ -1053,10 +908,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
             ),
           ),
         ),
-        // 进度恢复加载遮罩：只盖 applying（定位多帧重试期）；stabilizing
-        // 是定位完成后的被动监控期，内容已就位，不遮挡阅读。
-        // 内容未加载时 skeleton 已有加载指示器，不重复显示。
-        if (_runtime.isRestoreApplying && _cachedContent != null)
+        // 进度恢复加载遮罩：定位完成后自动消失
+        // 内容未加载时 skeleton 已有加载指示器，不重复显示
+        if (_isRestoringProgress && _cachedContent != null)
           Positioned.fill(
             child: ReaderDeferredRestoreOverlay(settings: _settings),
           ),
@@ -1099,16 +953,12 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         // 底部栏（在遮罩之上，可接收点击）
         _buildBottomBar(detail, content),
         if (chromeLayout.showPersistentProgress && !_showControls)
-          ValueListenableBuilder<double>(
-            valueListenable: _bookProgressNotifier,
-            builder:
-                (context, bookProgress, _) => ReaderProgressIndicator(
-                  key: const Key('readerPersistentProgress'),
-                  settings: _settings,
-                  progress: bookProgress,
-                  currentPage: _isPageMode ? _pageModePage : null,
-                  totalPages: null, // 懒分页不预知总页数
-                ),
+          ReaderProgressIndicator(
+            key: const Key('readerPersistentProgress'),
+            settings: _settings,
+            progress: _bookProgress,
+            currentPage: _isPageMode ? _pageModePage : null,
+            totalPages: null, // 懒分页不预知总页数
           ),
         ..._buildOverlays(content),
         Positioned.fill(
@@ -1189,21 +1039,16 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     );
   }
 
-  List<Widget> _buildOverlays(ReaderChapterContent content) {
-    final fromBlocks = currentChapterPlainText();
-    final ttsText =
-        fromBlocks.isNotEmpty ? fromBlocks : getPlainText(content.content);
-    return [
-      if (_showTts)
-        Positioned(
-          bottom: _showControls ? 82 : 0,
-          left: 0,
-          right: 0,
-          child: ReaderTtsControls(text: ttsText),
-        ),
-      if (_showReturnControl) buildReturnToProgressControl(),
-    ];
-  }
+  List<Widget> _buildOverlays(ReaderChapterContent content) => [
+    if (_showTts)
+      Positioned(
+        bottom: _showControls ? 82 : 0,
+        left: 0,
+        right: 0,
+        child: ReaderTtsControls(text: getPlainText(content.content)),
+      ),
+    if (_showReturnControl) buildReturnToProgressControl(),
+  ];
 
   /// 底部浮动"返回原进度"控件（参考微信读书样式）。
   ///
@@ -1228,7 +1073,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
             child: ReaderViewTopBar(
               settings: _settings,
               bookTitle: detail.item.title,
-              chapterTitle: _currentChapterTitle,
+              chapterTitle: content.title,
               onBack: () {
                 syncProgressSync();
                 safePop();
@@ -1248,7 +1093,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
               },
               onShowAnnotations:
                   () => _toggleReaderPanel(ReaderPanelType.annotations),
-              onToggleImmersive: _toggleReaderImmersive,
               isBookmarked: _isBookmarked,
               isInBookshelf: _isInBookshelf,
             ),
@@ -1277,24 +1121,18 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           child: MouseRegion(
             onEnter: (_) => onHoverControls(true),
             onExit: (_) => onHoverControls(false),
-            child: ValueListenableBuilder<double>(
-              valueListenable: _bookProgressNotifier,
-              builder:
-                  (context, bookProgress, _) => ReaderViewBottomBar(
-                    settings: _settings,
-                    progress: bookProgress,
-                    isPageMode: _isPageMode,
-                    chapterIndex: _currentChapterDisplayIndex,
-                    chapterCount: _contentLoader?.allChapters.length,
-                    onPrevious: () => _navigateReader(detail, forward: false),
-                    onNext: () => _navigateReader(detail, forward: true),
-                    onShowContents:
-                        () => _toggleReaderPanel(ReaderPanelType.contents),
-                    onShowSettings:
-                        () => _toggleReaderPanel(ReaderPanelType.settings),
-                    onToggleImmersive: _toggleReaderImmersive,
-                    onProgressSeek: (value) => _seekBookProgress(value),
-                  ),
+            child: ReaderViewBottomBar(
+              settings: _settings,
+              progress: _bookProgress,
+              isPageMode: _isPageMode,
+              onPrevious: () => _navigateReader(detail, forward: false),
+              onNext: () => _navigateReader(detail, forward: true),
+              onShowContents:
+                  () => _toggleReaderPanel(ReaderPanelType.contents),
+              onShowSettings:
+                  () => _toggleReaderPanel(ReaderPanelType.settings),
+              onToggleImmersive: _toggleReaderImmersive,
+              onProgressSeek: (value) => _seekBookProgress(value),
             ),
           ),
         ),
@@ -1303,36 +1141,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   }
 
   Widget _buildContent(ReaderChapterContent content, ReaderItemDetail detail) {
+    if (kDebugMode) {
+      readerDebugLog(
+        'ReaderView: rendering content — '
+        'mode=${_isPageMode ? "page" : "scroll"}, '
+        'contentLength=${content.content.length}, '
+        'flatPages=${_flatPages.length}',
+      );
+    }
     if (_isPageMode) return buildPageModeContent(content);
     return buildScrollModeContent(content, detail);
   }
-}
-
-/// 物理滚动适配器（新方案 §43）：State 持有 ScrollController，
-/// Runtime 仅面向 [ReaderScrollEffect] 接口。
-class _ReaderScrollEffectAdapter implements ReaderScrollEffect {
-  _ReaderScrollEffectAdapter(this._controller);
-
-  final ScrollController _controller;
-
-  @override
-  bool get hasClients => _controller.hasClients;
-
-  @override
-  double get offset => _controller.offset;
-
-  @override
-  double get maxScrollExtent => _controller.position.maxScrollExtent;
-
-  @override
-  Future<void> animateTo(
-    double offset, {
-    required Duration duration,
-    required Curve curve,
-  }) {
-    return _controller.animateTo(offset, duration: duration, curve: curve);
-  }
-
-  @override
-  void jumpTo(double offset) => _controller.jumpTo(offset);
 }

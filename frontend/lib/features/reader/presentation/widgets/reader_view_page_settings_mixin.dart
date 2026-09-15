@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/widgets.dart' show Size, WidgetsBinding;
+import 'package:flutter/widgets.dart' show Size;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
@@ -50,33 +50,23 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
   }
 
   /// 视口尺寸变化回调。
-  ///
-  /// 翻页模式：按新视口重新分页。
-  /// 连续滚动：宽度变化会导致换行变化，需重测窗口高度并恢复锚点。
   void onViewportChanged(Size newSize) {
-    if (contentLoader == null) return;
+    if (contentLoader == null || !isPageMode) return;
     repaginateForViewportChange(newSize);
   }
 
   /// 从用户偏好快照加载阅读设置。
   Future<void> loadSettings() async {
-    // 偏好读取失败时保持构造默认值，异常不得成为未捕获异步异常。
-    try {
-      final values = await ref.read(readerPreferencesProvider.future);
-      if (!mounted) return;
-      final resolved =
-          values.isEmpty
-              ? ReaderViewSettings()
-              : ReaderViewSettings.fromJson(values);
-      setState(() {
-        settings = resolved;
-      });
-      applyImmersiveMode(resolved.immersiveMode);
-    } catch (e) {
-      if (kDebugMode) {
-        readerDebugLog('ReaderView: loadSettings failed: $e');
-      }
-    }
+    final values = await ref.read(readerPreferencesProvider.future);
+    if (!mounted) return;
+    final resolved =
+        values.isEmpty
+            ? ReaderViewSettings()
+            : ReaderViewSettings.fromJson(values);
+    setState(() {
+      settings = resolved;
+    });
+    applyImmersiveMode(resolved.immersiveMode);
   }
 
   /// 检查当前书籍的书签状态。
@@ -86,14 +76,11 @@ mixin ReaderViewPageSettingsMixin on ConsumerState<ReaderViewPage> {
       final bookmarks = await ref
           .read(readerDataManagerProvider)
           .loadBookmarks(itemId);
-      if (!mounted) return;
-      // 查询返回时可能仍处于 layout/build 回调，统一延后到帧末。
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
+      if (mounted) {
         setState(() {
           isBookmarked = bookmarks.isNotEmpty;
         });
-      });
+      }
     } on Exception catch (e) {
       if (kDebugMode) {
         readerDebugLog('ReaderView: bookmark state query failed: $e');
