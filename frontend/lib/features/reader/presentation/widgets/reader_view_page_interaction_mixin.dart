@@ -122,6 +122,8 @@ mixin ReaderViewPageInteractionMixin
     _lastObservedMax = max;
     if (scrollController.offset >= max - 2 &&
         maxStable &&
+        (_programmaticScrollSettleUntil == null ||
+            DateTime.now().isAfter(_programmaticScrollSettleUntil!)) &&
         DateTime.now().isAfter(_lastAutoAdvanceAt) &&
         contentLoader != null &&
         contentLoader!.allChapters.indexWhere((c) => c.id == currentChapterId) +
@@ -155,6 +157,13 @@ mixin ReaderViewPageInteractionMixin
   /// 上一次滚动事件观察到的 maxScrollExtent，用于稳定门控
   double _lastObservedMax = -1;
 
+  /// 程序化滚动（侧边点按/键盘 scrollBy）的静默截止时间。
+  ///
+  /// 期间不触发章末自动续读：把视口带到章底属视口移动而非用户
+  /// 拖动到章末，是否跨章由下一次点按（scrollBy 返回 false）显式
+  /// 决定；时长覆盖动画 250ms 与落定事件。
+  DateTime? _programmaticScrollSettleUntil;
+
   /// 侧边点击处理。
   Future<void> handleSideTap(
     ReaderItemDetail detail, {
@@ -178,6 +187,9 @@ mixin ReaderViewPageInteractionMixin
     final max = scrollController.position.maxScrollExtent;
     final target = (currentOffset + delta).clamp(0.0, max);
     if ((target - currentOffset).abs() < 1.0) return false;
+    _programmaticScrollSettleUntil = DateTime.now().add(
+      const Duration(milliseconds: 700),
+    );
     await scrollController.animateTo(
       target,
       duration: const Duration(milliseconds: 250),

@@ -163,7 +163,7 @@ class ReaderDetailActions extends StatelessWidget {
   final ReaderItemDetail detail;
   final bool bookshelfBusy;
   final VoidCallback onToggleBookshelf;
-  final ValueChanged<ReaderChapter> onReadChapter;
+  final void Function(String chapterId, {required bool resume}) onReadChapter;
   final Map<String, dynamic>? localPayload;
   final AlignmentGeometry alignment;
 
@@ -193,7 +193,7 @@ class ReaderDetailActions extends StatelessWidget {
                         )
                         : detail.chapters.firstOrNull;
                 if (chapter != null) {
-                  onReadChapter(chapter);
+                  onReadChapter(chapter.id, resume: hasProgress);
                 }
               },
       icon: Icon(

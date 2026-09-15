@@ -104,12 +104,12 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
             chapters: parsedBook?.chapters ?? const [],
             bookshelfBusy: _bookshelfBusy,
             onToggleBookshelf: _toggleBookshelf,
-            onReadChapter: (chapterId) {
-              // entry=chapter：目录显式选章，跳过续读 defer，直接进入
-              // 目标章章首。
+            onReadChapter: (chapterId, {required resume}) {
+              // 显式选章（目录/书签）进目标章章首（entry=chapter）；
+              // 继续阅读不传 entry，走续读恢复（resume 意图）。
               context.push(
                 '/reader/items/${detail.item.id}/chapters/$chapterId'
-                '?entry=chapter',
+                '${resume ? '' : '?entry=chapter'}',
               );
             },
             onEditMetadata:
@@ -263,7 +263,7 @@ class _TextDetailContent extends ConsumerStatefulWidget {
   final List<ParsedChapter> chapters;
   final bool bookshelfBusy;
   final VoidCallback onToggleBookshelf;
-  final ValueChanged<String> onReadChapter;
+  final void Function(String chapterId, {required bool resume}) onReadChapter;
   final VoidCallback onEditMetadata;
   final VoidCallback onReparse;
   final VoidCallback onDelete;
@@ -315,7 +315,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
       _progressSnapshot,
     );
     if (chapter != null) {
-      widget.onReadChapter(chapter.id);
+      widget.onReadChapter(chapter.id, resume: true);
     }
   }
 
@@ -711,7 +711,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
       children: [
         for (var i = 0; i < chapters.length; i++)
           InkWell(
-            onTap: () => widget.onReadChapter('chapter_$i'),
+            onTap: () => widget.onReadChapter('chapter_$i', resume: false),
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 10),
               child: Row(
@@ -892,6 +892,7 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
                 onTap:
                     () => widget.onReadChapter(
                       _resolveBookmarkChapterId(bookmark),
+                      resume: false,
                     ),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 10),
