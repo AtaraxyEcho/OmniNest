@@ -1,5 +1,4 @@
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/features/reader/domain/reader_models.dart';
 
 /// 阅读模块展示层本地化辅助函数。
 ///
@@ -14,14 +13,6 @@ String readerTypeLabel(AppLocalizations l10n, String itemType) {
     'ZIP' => 'ZIP',
     'PDF' => 'PDF',
     _ => itemType.toUpperCase(),
-  };
-}
-
-/// 将 ReaderSortBy 映射到本地化标签。
-String readerSortLabel(AppLocalizations l10n, ReaderSortBy s) {
-  return switch (s) {
-    ReaderSortBy.recent => l10n.readerSortRecent,
-    ReaderSortBy.title => l10n.readerSortTitle,
   };
 }
 

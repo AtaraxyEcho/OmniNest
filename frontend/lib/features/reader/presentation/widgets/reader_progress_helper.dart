@@ -82,10 +82,4 @@ class ReaderProgressHelper {
     }
     return null;
   }
-
-  /// 从 charOffset 推算 chapterProgress。
-  static double progressFromCharOffset(int charOffset, int totalChars) {
-    if (totalChars <= 0) return 0.0;
-    return (charOffset / totalChars).clamp(0.0, 1.0);
-  }
 }

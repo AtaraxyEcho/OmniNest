@@ -513,23 +513,6 @@ class ReaderApi {
     );
   }
 
-  /// 请求生成漫画清单。
-  ///
-  /// 后端会创建或唤醒解析任务；返回值是当前已持久化的清单快照。
-  Future<ComicManifest> generateComicManifest(String itemId) async {
-    final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/reader/items/$itemId/comic/manifest',
-    );
-    final data = parseData(response.data);
-    if (data.isEmpty) {
-      throw const AppException(
-        message: '漫画清单为空',
-        code: 'READER_COMIC_MANIFEST_EMPTY',
-      );
-    }
-    return _comicManifestFromData(itemId, data);
-  }
-
   /// 获取漫画清单（来源 + 目录 + 页面）。
   ///
   /// 从后端读取已持久化的清单。漫画上传后由后端异步解析，

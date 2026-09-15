@@ -330,9 +330,4 @@ class ReaderDataManager {
   }
 
   // ── 同步 ──
-
-  /// 刷新离线同步队列（网络恢复时调用）
-  Future<void> flushSyncQueue() async {
-    await ReaderSyncQueue.flush(api: _api);
-  }
 }

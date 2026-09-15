@@ -79,14 +79,6 @@ class ReaderPositionTracker {
     );
   }
 
-  /// 序列化为 API payload。
-  Map<String, dynamic> toPayload() => {
-    'chapterId': _current.chapterId,
-    'charOffset': _current.charOffset,
-    'chapterProgress': _current.chapterProgress,
-    'mode': _current.mode,
-  };
-
   /// 从 API payload 恢复（兼容旧格式）。
   static ReaderPosition fromPayload(Map<String, dynamic> json) {
     // 新格式

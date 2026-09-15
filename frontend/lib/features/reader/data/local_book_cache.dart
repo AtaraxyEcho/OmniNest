@@ -305,46 +305,6 @@ class LocalBookCache {
     await _deletePartialFiles(file);
   }
 
-  /// 获取指定条目缓存大小（字节）
-  Future<int> getCacheSize(String itemId) async {
-    final currentUserId = userId;
-    if (currentUserId == null || currentUserId.isEmpty) return 0;
-    if (kIsWeb) {
-      return OfflineMemoryCache.read(
-            userId: currentUserId,
-            cacheType: 'reader-book',
-            businessId: itemId,
-          )?.length ??
-          0;
-    }
-    final file = await _fileFor(itemId);
-    if (await file.exists()) return file.length();
-    return 0;
-  }
-
-  /// 获取缓存总大小（字节）
-  Future<int> getTotalCacheSize() async {
-    if (kIsWeb) {
-      final currentUserId = userId;
-      return currentUserId == null || currentUserId.isEmpty
-          ? 0
-          : OfflineMemoryCache.sizeBytes(
-            userId: currentUserId,
-            cacheType: 'reader-book',
-          );
-    }
-    if (userId == null || userId!.isEmpty) return 0;
-    final dir = await _getCacheDir();
-    if (!await dir.exists()) return 0;
-    var total = 0;
-    await for (final entity in dir.list(recursive: true)) {
-      if (entity is File && entity.path.endsWith('.onf')) {
-        total += await entity.length();
-      }
-    }
-    return total;
-  }
-
   /// 清空全部缓存
   Future<void> clearAll() async {
     final currentUserId = userId;

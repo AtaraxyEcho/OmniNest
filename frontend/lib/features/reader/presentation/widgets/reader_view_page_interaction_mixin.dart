@@ -389,10 +389,4 @@ mixin ReaderViewPageInteractionMixin
     pendingChapterProgress = null;
     pendingRestoreCharOffset = charOffset;
   }
-
-  /// 重新分页所有章节。
-  void repaginateAll() {
-    contentLoader?.invalidateAll();
-    repaginateCurrentChapter(restoreCharOffset: positionTracker.charOffset);
-  }
 }

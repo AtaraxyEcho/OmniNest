@@ -55,13 +55,6 @@ class ComicLayoutIndex {
     }
   }
 
-  /// 获取指定页的顶部偏移。
-  double topOffset(int index, double viewportHeight) {
-    _ensureOffsets();
-    if (index < 0 || index >= _offsets!.length) return 0;
-    return _offsets![index];
-  }
-
   /// 获取指定页的高度。
   double pageHeight(int index, double viewportHeight) {
     if (index >= 0 && index < _heights.length && _heights[index] > 0) {

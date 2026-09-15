@@ -44,19 +44,6 @@ class ReaderChromeLayout {
       showPersistentProgress: true,
     );
   }
-
-  /// 连续滚动阅读位置换算的视口锚点 Y（窗口 contentY = 滚动 offset + 此值）。
-  ///
-  /// 页面与滚动视图必须共用本实现；两处公式漂移会造成读写位置天然错位。
-  static double anchorViewportY({
-    required Size viewportSize,
-    required bool immersiveMode,
-    required double topInset,
-  }) {
-    final chrome = resolve(immersiveMode: immersiveMode, isPageMode: false);
-    return (viewportSize.height - topInset - chrome.viewportVerticalReserve) *
-        0.25;
-  }
 }
 
 /// 阅读器根据实际视口计算的布局约束。

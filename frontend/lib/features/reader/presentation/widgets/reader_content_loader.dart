@@ -30,7 +30,7 @@ class ChapterData {
   final int totalChars;
 
   List<PageSlice> get slices => _slices;
-  List<PageSlice> _slices;
+  final List<PageSlice> _slices;
 
   List<double> get cumulativeHeights => _cumulativeHeights;
   List<double> _cumulativeHeights;
@@ -99,12 +99,6 @@ class ChapterData {
   static bool _sameDimension(double? previous, double current) =>
       previous != null && (previous - current).abs() < 0.5;
 
-  /// 清除分页缓存（保留 blocks）。
-  void invalidateSlices() => _slices = const [];
-
-  /// 更新分页切片（仅限 ReaderContentLoader 调用）。
-  void updateSlices(List<PageSlice> newSlices) => _slices = newSlices;
-
   /// 更新累积高度（仅限 ReaderContentLoader 调用）。
   ///
   /// 估算填充与精测分批都经此入口，更新即视为未精测；
@@ -155,28 +149,8 @@ class PageNavigator {
   /// PageView.itemCount 应使用此值。
   int get readablePageCount => _maxComputedPage + 1;
 
-  /// 包含探测页的页数（readablePageCount + 1 个探测位）。
-  ///
-  /// 用于 UI 判断是否还需要探测下一页。
-  int get probePageCount =>
-      _reachedEnd ? _maxComputedPage + 1 : _maxComputedPage + 2;
-
   /// 是否已确认所有页都计算完毕。
   bool get isFullyPaginated => _reachedEnd;
-
-  /// 探测指定页是否存在。
-  ///
-  /// 与 getSlice 不同，探测失败不会标记 _reachedEnd，
-  /// 因为探测页可能是暂时不可用（如正在分页中）。
-  /// 只有连续探测失败才应标记结束。
-  bool probePage(int pageIndex) {
-    if (pageIndex < 0) return false;
-    if (_reachedEnd && pageIndex > _maxComputedPage) return false;
-    if (_cache.containsKey(pageIndex)) return true;
-    // 尝试计算
-    final slice = _computeSlice(pageIndex);
-    return slice != null;
-  }
 
   /// 获取指定页的切片（懒计算 + LRU 缓存）。
   PageSlice? getSlice(int pageIndex) {
@@ -228,16 +202,6 @@ class PageNavigator {
     }
     final startCharOffset = prevSlice?.endCharOffset ?? 0;
     return computeFn(startCharOffset);
-  }
-
-  /// 预算相邻页（异步安全，不阻塞）。
-  void prefetchAdjacent(int currentIndex) {
-    if (currentIndex > 0 && !_cache.containsKey(currentIndex - 1)) {
-      getSlice(currentIndex - 1);
-    }
-    if (!_cache.containsKey(currentIndex + 1)) {
-      getSlice(currentIndex + 1);
-    }
   }
 
   /// 在当前帧结束后逐页预热后续分页结果。
@@ -348,15 +312,6 @@ class PageNavigator {
       }
     }
     return null;
-  }
-
-  /// 清除缓存和分页状态（设置变更或窗口变化时调用）。
-  void invalidateCache() {
-    _cache.clear();
-    _maxComputedPage = -1;
-    _reachedEnd = false;
-    _currentPage = 0;
-    _prefetchTargetPage = -1;
   }
 }
 
@@ -673,26 +628,6 @@ class ReaderContentLoader {
     return navigator.getSlice(pageIndex);
   }
 
-  /// 预算指定章节的相邻页。
-  void prefetchAdjacentPages({
-    required String chapterId,
-    required ReaderViewSettings settings,
-    required double pageWidth,
-    required double pageHeight,
-    required int currentIndex,
-    double textScale = 1.0,
-  }) {
-    final data = get(chapterId, settings);
-    if (data == null) return;
-    final navigator = data.getOrCreatePageNavigator(
-      pageWidth,
-      pageHeight,
-      settings,
-      textScale: textScale,
-    );
-    navigator.prefetchAdjacent(currentIndex);
-  }
-
   /// 切换活动章节，驱逐远章，返回需预加载的 chapterId 列表。
   List<String> setActive(String chapterId) {
     _activeChapterId = chapterId;
@@ -717,14 +652,6 @@ class ReaderContentLoader {
       needFetch.add(nextId);
     }
     return needFetch;
-  }
-
-  /// 清除所有章节的分页缓存（保留 blocks）。
-  void invalidateAllSlices() {
-    for (final data in _cache.values) {
-      data.invalidateSlices();
-      data.invalidatePageNavigator();
-    }
   }
 
   /// 清除所有缓存（分页 + 累积高度）。
@@ -831,37 +758,6 @@ class ReaderContentLoader {
             ),
       ),
     };
-  }
-
-  /// 块索引 → 字符偏移（用于翻页模式保存进度）。
-  ///
-  /// 累加前 [blockIndex] 个 block 的字符数。
-  int blockIndexToCharOffset(String chapterId, int blockIndex) {
-    final data = getByChapterId(chapterId);
-    if (data == null || blockIndex <= 0) return 0;
-    var accumulated = 0;
-    for (var i = 0; i < blockIndex && i < data.blocks.length; i++) {
-      accumulated += _blockCharCount(data.blocks[i]);
-    }
-    return accumulated;
-  }
-
-  /// 字符偏移 → 块索引（用于翻页模式定位）。
-  ///
-  /// 遍历 blocks 累加字符数，找到 [charOffset] 落在哪个 block。
-  /// 如果 charOffset 超出范围，返回最后一个 block 的索引。
-  int charOffsetToBlockIndex(String chapterId, int charOffset) {
-    final data = getByChapterId(chapterId);
-    if (data == null || data.blocks.isEmpty) return 0;
-    if (charOffset <= 0) return 0;
-    if (charOffset >= data.totalChars) return data.blocks.length - 1;
-    var accumulated = 0;
-    for (var i = 0; i < data.blocks.length; i++) {
-      final blockChars = _blockCharCount(data.blocks[i]);
-      if (accumulated + blockChars > charOffset) return i;
-      accumulated += blockChars;
-    }
-    return data.blocks.length - 1;
   }
 
   /// 字符偏移 → 像素偏移（用于从服务端/本地恢复滚动位置）。

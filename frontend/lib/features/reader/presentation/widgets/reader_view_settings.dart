@@ -39,7 +39,6 @@ class ReaderViewSettings {
   Color get accentColor => palette.accent;
   Color get controlSurfaceColor => palette.controlSurface;
   Color get selectionColor => palette.selection;
-  Color get annotationColor => palette.annotation;
   bool get isDark => paletteId == ReaderReadingPalette.dark.id;
 
   String? get resolvedFontFamily =>

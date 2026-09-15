@@ -74,18 +74,4 @@ class ParsedChapter {
 
   /// TXT 规范化文本中的章节结束字符偏移。
   final int? sourceEndOffset;
-
-  /// 创建一个内容已填充的副本
-  ParsedChapter withContent(String xhtml) {
-    return ParsedChapter(
-      number: number,
-      title: title,
-      xhtmlContent: xhtml,
-      charCount: charCount,
-      contentPath: contentPath,
-      level: level,
-      sourceStartOffset: sourceStartOffset,
-      sourceEndOffset: sourceEndOffset,
-    );
-  }
 }

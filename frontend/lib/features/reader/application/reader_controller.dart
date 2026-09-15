@@ -433,40 +433,6 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     }
   }
 
-  /// 等待文件索引完成并返回与文件名对应的导入候选项。
-  ///
-  /// 导入后的文件节点可能在上传事务提交后才出现在候选列表中。轮询属于
-  /// application 层流程，页面销毁不会让 Widget 再持有或访问无效的 ref。
-  Future<ReaderImportCandidate?> waitForImportCandidate(
-    String fileName, {
-    int maxAttempts = 24,
-    Duration interval = const Duration(milliseconds: 500),
-  }) async {
-    final api = _api;
-    Object? lastError;
-    var hasSuccessfulQuery = false;
-    for (var attempt = 0; attempt < maxAttempts; attempt++) {
-      await Future<void>.delayed(interval);
-      try {
-        final candidates = await api.importCandidates();
-        hasSuccessfulQuery = true;
-        for (final candidate in candidates) {
-          if (candidate.fileName == fileName) {
-            return candidate;
-          }
-        }
-      } on Exception catch (error) {
-        // 候选列表在上传索引完成前短暂不可用时，继续在限定时间内查询。
-        lastError = error;
-      }
-    }
-    if (!hasSuccessfulQuery && lastError != null) {
-      _setError(describeUserFacingError(lastError).displayMessage);
-      throw lastError;
-    }
-    return null;
-  }
-
   /// 使用文件节点设置条目封面。
   Future<void> setCoverFromFile({
     required String itemId,

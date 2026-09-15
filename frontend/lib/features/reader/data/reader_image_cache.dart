@@ -29,24 +29,6 @@ class ReaderImageCache {
     );
   }
 
-  /// 批量保存阅读图片。
-  static Future<void> saveImages({
-    required String itemId,
-    required Map<String, Uint8List> images,
-    String mimeType = 'image/png',
-  }) async {
-    await Future.wait(
-      images.entries.map(
-        (entry) => saveImage(
-          itemId: itemId,
-          imagePath: entry.key,
-          bytes: entry.value,
-          mimeType: mimeType,
-        ),
-      ),
-    );
-  }
-
   /// 读取单张阅读图片。
   static Future<Uint8List?> loadImage({
     required String itemId,

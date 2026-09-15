@@ -88,19 +88,6 @@ class ReaderProgressSnapshot {
   bool get hasReadableProgress =>
       chapterId.isNotEmpty && (progress > 0 || charOffset > 0);
 
-  /// 转换为可序列化的 Map（用于 API 传输和本地存储）
-  Map<String, dynamic> toPayload() {
-    return {
-      'chapterId': chapterId,
-      'charOffset': charOffset,
-      'progress': progress,
-      'chapterProgress': chapterProgress,
-      'chapterTitle': chapterTitle,
-      'mode': mode,
-      if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
-    };
-  }
-
   /// 从两个快照中选取更新时间较新的一方。
   ///
   /// 零进度快照（无 charOffset 且无 progress）不得作为“最新”，

@@ -20,15 +20,6 @@ class ComicManifest {
   final String? readingDirection;
   final ComicParseTask? parseTask;
 
-  /// 按 catalogNodeId 分组的页面。
-  Map<String?, List<ComicPage>> get pagesByCatalog {
-    final map = <String?, List<ComicPage>>{};
-    for (final page in pages) {
-      map.putIfAbsent(page.catalogNodeId, () => []).add(page);
-    }
-    return map;
-  }
-
   /// 总页数。
   int get totalPages => pages.length;
 
@@ -216,8 +207,6 @@ class ComicCatalogNode {
   final int? pageEndIndex;
 
   bool get isRoot => nodeType == 'ROOT';
-  bool get isChapter => nodeType == 'CHAPTER';
-
   factory ComicCatalogNode.fromJson(Map<String, dynamic> json) =>
       ComicCatalogNode(
         id: json['id']?.toString() ?? '',

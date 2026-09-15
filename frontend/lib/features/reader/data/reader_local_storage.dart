@@ -75,31 +75,6 @@ class ReaderLocalStorage {
       ..where((t) => t.itemId.equals(itemId))).go();
   }
 
-  /// 获取所有本地缓存的阅读进度
-  Future<List<ReaderProgress>> allProgress() async {
-    final rows = await _db.select(_db.cachedReaderProgress).get();
-    return rows
-        .map(
-          (row) => ReaderProgress(
-            readerItemId: row.itemId,
-            charOffset: row.charOffset,
-            progressPercent: row.chapterProgress,
-            readingMode: row.mode,
-            chapterId: row.chapterId,
-            pageId: row.pageId,
-            pageIndex: row.pageIndex,
-            pageFingerprint: row.pageFingerprint,
-            sourceId: row.sourceId,
-            sourcePageIndex: row.sourcePageIndex,
-            catalogKey: row.catalogKey,
-            manifestVersion: row.manifestVersion,
-            intraPageOffset: row.intraPageOffset,
-            updatedAt: row.updatedAt,
-          ),
-        )
-        .toList();
-  }
-
   // ─── Bookmarks ───────────────────────────────────────────────
 
   Future<void> saveBookmark(ReaderBookmark bookmark) async {
@@ -422,28 +397,6 @@ class ReaderLocalStorage {
 
   // ─── 书籍详情缓存 ──────────────────────────────────────────
 
-  Future<void> saveBookDetail({
-    required String itemId,
-    required String detailJson,
-  }) async {
-    await _db
-        .into(_db.cachedReaderBookDetails)
-        .insertOnConflictUpdate(
-          CachedReaderBookDetailsCompanion.insert(
-            itemId: itemId,
-            detailJson: detailJson,
-            cachedAt: DateTime.now(),
-          ),
-        );
-  }
-
-  Future<String?> loadBookDetail(String itemId) async {
-    final query = _db.select(_db.cachedReaderBookDetails)
-      ..where((t) => t.itemId.equals(itemId));
-    final row = await query.getSingleOrNull();
-    return row?.detailJson;
-  }
-
   Future<void> deleteBookDetail(String itemId) async {
     await (_db.delete(_db.cachedReaderBookDetails)
       ..where((t) => t.itemId.equals(itemId))).go();
@@ -459,15 +412,5 @@ class ReaderLocalStorage {
     await deleteNotesForItem(itemId);
     await deleteChaptersForItem(itemId);
     await deleteBookDetail(itemId);
-  }
-
-  /// 清理所有章节缓存
-  Future<void> cleanAllChapterCache() async {
-    await _db.delete(_db.cachedReaderChapters).go();
-  }
-
-  /// 清理所有章节缓存，保留书籍元数据和阅读进度。
-  Future<void> cleanAllCache() async {
-    await cleanAllChapterCache();
   }
 }
