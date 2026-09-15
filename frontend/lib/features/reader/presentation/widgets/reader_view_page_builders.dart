@@ -394,16 +394,19 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
             callbacks: PageTurnCallbacksImpl(
               onPageChangedFn: (index) {
                 dismissReturnSnackBar();
-                if (pageModePage != index) {
-                  pageModePage = index;
-                  _requestReaderRebuild();
-                }
+                // 物理页回调先过闸门再回写：恢复/模式切换动画的中间页
+                // 一旦写入 pageModePage 并触发重建，_syncPageView 会把
+                // PageView 拉回中间页，恢复目标永远无法到达。
                 if (modeSwitchInProgress) {
                   modeSwitchInProgress = false;
                   return;
                 }
                 if (isRestoringProgress || isSwitchingChapter) return;
                 if (DateTime.now().isBefore(restoreSilenceUntil)) return;
+                if (pageModePage != index) {
+                  pageModePage = index;
+                  _requestReaderRebuild();
+                }
                 // 模式切换期间（modeSwitchAnchor 未被用户交互消耗）：
                 // 只更新展示进度，不写 tracker 和 SQLite。
                 if (modeSwitchAnchor != null) {
@@ -901,6 +904,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
               : (restoreCharOffset / totalChars).clamp(0.0, 1.0).toDouble();
       scrollProgress = capturedProgress;
       positionTracker.setCharOffset(restoreCharOffset, currentChapterId);
+      // 落位动画（_syncPageView animateToPage）期间物理页会路过中间页，
+      // 静默窗内的提交按闸门丢弃，动画结束后的正常翻页不受影响。
+      restoreSilenceUntil = DateTime.now().add(
+        const Duration(milliseconds: 450),
+      );
       setState(() {
         pageModePage = targetPage;
         modeSwitchInProgress = false;
