@@ -76,6 +76,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(DesktopCloseConfirmDialog), findsOneWidget);
+    expect(find.text('关闭 OmniNest'), findsOneWidget);
 
     await tester.tap(find.text('取消'));
     await flowFuture;

@@ -8,7 +8,9 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const trayChannel = MethodChannel('tray_manager');
+  const windowFrameChannel = MethodChannel('omninest/window_frame');
   final channelCalls = <MethodCall>[];
+  final frameChannelCalls = <MethodCall>[];
 
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -16,12 +18,20 @@ void main() {
           channelCalls.add(call);
           return null;
         });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(windowFrameChannel, (call) async {
+          frameChannelCalls.add(call);
+          return null;
+        });
   });
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(trayChannel, null);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(windowFrameChannel, null);
     channelCalls.clear();
+    frameChannelCalls.clear();
   });
 
   List<Map<Object?, Object?>> menuItems() {
@@ -94,6 +104,27 @@ void main() {
       'Show Main Window',
       '',
       'Quit',
+    ]);
+  });
+
+  test('右键弹出菜单请求前台归属，关闭后补投收尾消息', () async {
+    SharedPreferences.setMockInitialValues({localeDeviceLanguageKey: 'zh'});
+    final service = DesktopTrayService();
+    await service.init();
+
+    channelCalls.clear();
+    frameChannelCalls.clear();
+    await service.popUpMenu();
+
+    final popupCall = channelCalls.singleWhere(
+      (call) => call.method == 'popUpContextMenu',
+    );
+    expect(
+      (popupCall.arguments as Map<Object?, Object?>)['bringAppToFront'],
+      isTrue,
+    );
+    expect(frameChannelCalls.map((call) => call.method), <String>[
+      'finishTrayMenuPopup',
     ]);
   });
 }

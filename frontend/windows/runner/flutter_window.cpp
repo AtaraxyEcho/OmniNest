@@ -15,6 +15,7 @@ constexpr const char kSaveWindowPlacementMethod[] = "saveWindowPlacement";
 constexpr const char kRestoreWindowPlacementMethod[] = "restoreWindowPlacement";
 constexpr const char kShowWindowMethod[] = "showWindow";
 constexpr const char kIsWindowFullscreenMethod[] = "isWindowFullscreen";
+constexpr const char kFinishTrayMenuPopupMethod[] = "finishTrayMenuPopup";
 constexpr const char kHiddenArgument[] = "hidden";
 constexpr const char kFullscreenArgument[] = "fullscreen";
 }  // namespace
@@ -59,6 +60,14 @@ bool FlutterWindow::OnCreate() {
           }
           if (call.method_name() == kIsWindowFullscreenMethod) {
             result->Success(flutter::EncodableValue(window_fullscreen_));
+            return;
+          }
+          if (call.method_name() == kFinishTrayMenuPopupMethod) {
+            // KB135788: after TrackPopupMenu returns, the menu owner window
+            // must receive a WM_NULL, otherwise the next tray click can
+            // dismiss the freshly opened menu immediately.
+            ::PostMessage(GetHandle(), WM_NULL, 0, 0);
+            result->Success(flutter::EncodableValue(true));
             return;
           }
           if (call.method_name() == kSaveWindowPlacementMethod) {

@@ -18111,13 +18111,13 @@ abstract class AppLocalizations {
   /// No description provided for @desktopCloseDialogTitle.
   ///
   /// In en, this message translates to:
-  /// **'Close'**
+  /// **'Close OmniNest'**
   String get desktopCloseDialogTitle;
 
   /// No description provided for @desktopCloseDialogBody.
   ///
   /// In en, this message translates to:
-  /// **'After the window is closed, OmniNest will keep running in the background.'**
+  /// **'When minimized to the tray, OmniNest keeps running in the background and the window can be restored from the tray at any time.'**
   String get desktopCloseDialogBody;
 
   /// No description provided for @desktopCloseDialogMinimize.

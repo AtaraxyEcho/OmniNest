@@ -9611,10 +9611,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesVersionsRestored => '已恢复版本';
 
   @override
-  String get desktopCloseDialogTitle => '关闭';
+  String get desktopCloseDialogTitle => '关闭 OmniNest';
 
   @override
-  String get desktopCloseDialogBody => '关闭窗口后，程序将在后台继续运行。';
+  String get desktopCloseDialogBody => '最小化到托盘后，程序将在后台继续运行，可随时从托盘恢复窗口。';
 
   @override
   String get desktopCloseDialogMinimize => '最小化到托盘';

@@ -9913,11 +9913,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesVersionsRestored => 'Version restored';
 
   @override
-  String get desktopCloseDialogTitle => 'Close';
+  String get desktopCloseDialogTitle => 'Close OmniNest';
 
   @override
   String get desktopCloseDialogBody =>
-      'After the window is closed, OmniNest will keep running in the background.';
+      'When minimized to the tray, OmniNest keeps running in the background and the window can be restored from the tray at any time.';
 
   @override
   String get desktopCloseDialogMinimize => 'Minimize to tray';

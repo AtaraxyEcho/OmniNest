@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart' show MethodChannel;
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
@@ -42,6 +43,12 @@ class DesktopTrayService with TrayListener, WindowListener {
 
   /// 托盘退出清理的硬超时；超时后强制结束进程。
   static const Duration quitCleanupBudget = Duration(milliseconds: 400);
+
+  /// Windows 原生窗口帧通道，与 runner 的 flutter_window.cpp 对齐；
+  /// window_chrome_controller 内亦声明了同名通道。
+  static const MethodChannel _windowFrameChannel = MethodChannel(
+    'omninest/window_frame',
+  );
 
   bool _initialized = false;
   bool _quitting = false;
@@ -169,11 +176,31 @@ class DesktopTrayService with TrayListener, WindowListener {
 
   @override
   void onTrayIconRightMouseDown() {
-    unawaited(
-      trayManager.popUpContextMenu().catchError((Object error) {
-        debugPrint('托盘右键菜单弹出失败: $error');
-      }),
-    );
+    unawaited(popUpMenu());
+  }
+
+  /// 弹出托盘右键菜单。
+  ///
+  /// `bringAppToFront` 触发原生 `SetForegroundWindow`，菜单归属前台窗口后
+  /// 点击桌面等外部区域才能正常收起；菜单关闭后补投 WM_NULL 收尾消息，
+  /// 避免下一次点击托盘时新菜单被旧菜单状态立即吞掉。
+  Future<void> popUpMenu() async {
+    try {
+      await trayManager.popUpContextMenu(
+        // 仅 Windows 实现该参数，也是托盘菜单可被外部点击收起的关键；
+        // 上游标记弃用但未提供替代，跟随上游演进前必须保留。
+        // ignore: deprecated_member_use
+        bringAppToFront: true,
+      );
+    } on Object catch (error) {
+      debugPrint('托盘右键菜单弹出失败: $error');
+      return;
+    }
+    try {
+      await _windowFrameChannel.invokeMethod<void>('finishTrayMenuPopup');
+    } on Object catch (error) {
+      debugPrint('托盘菜单收尾消息发送失败: $error');
+    }
   }
 
   @override
