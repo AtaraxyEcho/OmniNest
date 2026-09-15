@@ -265,6 +265,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         (state) => ReaderViewPage(
           itemId: state.pathParameters['itemId']!,
           chapterId: state.pathParameters['chapterId']!,
+          entry: state.uri.queryParameters['entry'],
         ),
       ),
       _animatedRoute(

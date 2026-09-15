@@ -67,12 +67,16 @@ class ReaderViewPage extends ConsumerStatefulWidget {
   const ReaderViewPage({
     required this.itemId,
     required this.chapterId,
+    this.entry,
     this.initialProgressPayload,
     super.key,
   });
 
   final String itemId;
   final String chapterId;
+
+  /// 路由进入语义（'chapter'=目录显式选章；其余按续读）。
+  final String? entry;
   final Map<String, dynamic>? initialProgressPayload;
 
   @override
@@ -134,8 +138,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   DateTime? _lastScrollActivityAt;
 
   // ── 章节导航与返回原进度 ──
-  ReaderChapterNavigationIntent _chapterNavigationIntent =
-      const ReaderChapterNavigationIntent.resume();
+  // 路由进入语义经 intentForRouteEntry 一次性换算：目录显式选章为
+  // start，不会被「全局最新进度在别章」的续读 defer 劫持。
+  late ReaderChapterNavigationIntent _chapterNavigationIntent =
+      ReaderChapterNavigationIntent.intentForRouteEntry(widget.entry);
   // 显式导航令牌：新导航使旧令牌失效，异步结果回写前校验。
   final ReaderNavigationTokenHolder _navigationTokens =
       ReaderNavigationTokenHolder();
@@ -1047,9 +1053,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
             ),
           ),
         ),
-        // 进度恢复加载遮罩：定位完成后自动消失
-        // 内容未加载时 skeleton 已有加载指示器，不重复显示
-        if (_runtime.isRestoreBusy && _cachedContent != null)
+        // 进度恢复加载遮罩：只盖 applying（定位多帧重试期）；stabilizing
+        // 是定位完成后的被动监控期，内容已就位，不遮挡阅读。
+        // 内容未加载时 skeleton 已有加载指示器，不重复显示。
+        if (_runtime.isRestoreApplying && _cachedContent != null)
           Positioned.fill(
             child: ReaderDeferredRestoreOverlay(settings: _settings),
           ),

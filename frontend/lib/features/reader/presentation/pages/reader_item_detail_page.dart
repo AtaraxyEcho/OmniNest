@@ -105,8 +105,11 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
             bookshelfBusy: _bookshelfBusy,
             onToggleBookshelf: _toggleBookshelf,
             onReadChapter: (chapterId) {
+              // entry=chapter：目录显式选章，跳过续读 defer，直接进入
+              // 目标章章首。
               context.push(
-                '/reader/items/${detail.item.id}/chapters/$chapterId',
+                '/reader/items/${detail.item.id}/chapters/$chapterId'
+                '?entry=chapter',
               );
             },
             onEditMetadata:

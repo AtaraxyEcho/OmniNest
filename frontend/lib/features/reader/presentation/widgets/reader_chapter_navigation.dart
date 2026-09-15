@@ -66,4 +66,16 @@ class ReaderChapterNavigationIntent {
 
   /// 是否为用户提供返回跳转前位置的入口。
   final bool offerReturn;
+
+  /// 路由 entry 查询参数 → 初始导航意图。
+  ///
+  /// `chapter` 表示用户从目录显式选章，进入目标章章首，不得被
+  /// 「全局最新进度在其他章」的续读 defer 劫持；其余值（含 null）
+  /// 一律按续读语义恢复。
+  static ReaderChapterNavigationIntent intentForRouteEntry(String? entry) {
+    if (entry == 'chapter') {
+      return const ReaderChapterNavigationIntent.start();
+    }
+    return const ReaderChapterNavigationIntent.resume();
+  }
 }

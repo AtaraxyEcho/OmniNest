@@ -49,6 +49,12 @@ class ReaderRestoreManager {
       _phase == ReaderRestorePhase.applying ||
       _phase == ReaderRestorePhase.stabilizing;
 
+  /// 是否处于 applying（多帧重试定位中）。
+  ///
+  /// 恢复遮罩只覆盖本相位：stabilizing 是定位完成后的被动监控期
+  /// （图片渐进加载漂移防护），内容已就位，不遮不挡。
+  bool get isApplying => _phase == ReaderRestorePhase.applying;
+
   /// 发起一次恢复：登记目标与身份，相位进入 applying。
   ///
   /// 旧目标被清除；返回是否成功接管（调用方据此决定是否启动编排）。

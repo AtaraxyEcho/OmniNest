@@ -297,6 +297,7 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       }
 
       if (!_isCurrentChapterRequest(requestedChapterId, generation)) {
+        _discardStaleNavigationIntent(navigationIntent);
         if (kDebugMode) {
           readerDebugLog(
             'ReaderView: loadCurrentChapter aborted after load - mounted=$mounted, generation=$generation, loadGeneration=$loadGeneration',
@@ -310,7 +311,10 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       currentPageIndex = 0;
 
       final snapshot = await progressFuture;
-      if (!_isCurrentChapterRequest(requestedChapterId, generation)) return;
+      if (!_isCurrentChapterRequest(requestedChapterId, generation)) {
+        _discardStaleNavigationIntent(navigationIntent);
+        return;
+      }
 
       // 跨设备：最新进度在其他章节（resume 语义下），转整章切换而非丢弃。
       // 仅开书首次加载允许（见 loadLocalProgress 的 defer 收紧）。
@@ -362,6 +366,8 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
       }
       if (_isCurrentChapterRequest(requestedChapterId, generation)) {
         runtime.cancelRestorePhase();
+      } else {
+        _discardStaleNavigationIntent(navigationIntent);
       }
     } finally {
       // 代次未变时必须复位 loading：章节 id 被连续滚动 adopt 改写后
@@ -381,6 +387,19 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
     return mounted &&
         generation == loadGeneration &&
         chapterId == currentChapterId;
+  }
+
+  /// 丢弃过期加载携带的导航意图。
+  ///
+  /// 请求因收养/切章过期时，[chapterNavigationIntent] 若仍是本次捕获的
+  /// 实例（无新显式导航），必须回落 resume；否则后续 build 工作队列
+  /// 重入 loadCurrentChapter 会重放过期意图，把已滚走的用户经恢复编排
+  /// 拉回旧目标（「每次滑动都触发正在恢复阅读位置」的根因之一）。
+  /// 新导航已改写字段时（identical 不成立）不得触碰。
+  void _discardStaleNavigationIntent(ReaderChapterNavigationIntent captured) {
+    if (identical(chapterNavigationIntent, captured)) {
+      chapterNavigationIntent = const ReaderChapterNavigationIntent.resume();
+    }
   }
 
   /// 封面/书讯章开书跳过。
@@ -525,6 +544,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
         // 显式导航使进行中的切换请求作废，防切换守卫滞留吞进度提交。
         runtime.completeModeSwitch();
         scrollProgress = 0;
+        // 章首即目标位置：记账同步补写为 (chapter, 0)，否则全书进度仍
+        // 按上一章 charOffset 计算，目录跳章瞬间显示为他章进度。
+        runtime.acceptLogicalPosition(chapterId: chapterId, charOffset: 0);
       } else {
         // 连续滚动：章首是窗口坐标（前有前缀章），必须走稳定重试恢复，
         // 且恢复期间抑制位置回调防止锚点被误收养回前章。

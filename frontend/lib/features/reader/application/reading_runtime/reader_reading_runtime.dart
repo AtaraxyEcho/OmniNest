@@ -623,6 +623,13 @@ class ReaderReadingRuntime {
   /// 恢复相位投影（页面守卫唯一读取口，原 runtime.restore.isBusy）。
   bool get isRestoreBusy => restore.isBusy;
 
+  /// 恢复是否处于 applying（定位多帧重试中）。
+  ///
+  /// 恢复遮罩的唯一显示依据：stabilizing 为定位完成后的被动监控期
+  /// （图片渐进加载漂移防护），内容已就位，遮罩滞留会挡住已恢复的
+  /// 内容，用户只能手动滚动解除。
+  bool get isRestoreApplying => restore.isApplying;
+
   /// 恢复相位目标读口（页模式定位链消费）。
   ReaderPositionTarget? get restorePhaseTarget => restore.target;
 

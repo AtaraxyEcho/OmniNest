@@ -19,6 +19,20 @@ void main() {
       expect(manager.target, target);
       expect(manager.phase, ReaderRestorePhase.applying);
       expect(manager.isBusy, isTrue);
+      // applying 是遮罩唯一覆盖相位。
+      expect(manager.isApplying, isTrue);
+    });
+
+    test('isApplying 在 stabilizing 监控期为假（遮罩不滞留）', () {
+      final manager = ReaderRestoreManager();
+      manager.begin(const ReaderPositionTarget(chapterId: 'c1', charOffset: 5));
+      manager.markStabilizing();
+      expect(manager.phase, ReaderRestorePhase.stabilizing);
+      expect(manager.isBusy, isTrue);
+      expect(manager.isApplying, isFalse);
+
+      manager.markCompleted();
+      expect(manager.isApplying, isFalse);
     });
 
     test('新 begin 清除旧目标（编排端凭 token 使旧帧失效）', () {
