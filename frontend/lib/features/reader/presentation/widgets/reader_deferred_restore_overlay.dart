@@ -6,6 +6,10 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 延迟显示阅读位置恢复遮罩，避免缓存命中时闪烁加载画面。
+///
+/// 延迟窗口内以不透明底色遮住内容：恢复定位期间内容尚未落在目标
+/// 位置（页模式需重算分页、滚动模式在首帧渲染于章首），直接透出会
+/// 闪现章首再跳到阅读位置；底色先行、加载指示延后，两端都不闪。
 class ReaderDeferredRestoreOverlay extends StatefulWidget {
   const ReaderDeferredRestoreOverlay({required this.settings, super.key});
 
@@ -40,7 +44,10 @@ class _ReaderDeferredRestoreOverlayState
   @override
   Widget build(BuildContext context) {
     if (!_visible) {
-      return const SizedBox.expand();
+      return ColoredBox(
+        key: const Key('readerRestoreCover'),
+        color: widget.settings.surfaceColor,
+      );
     }
     final settings = widget.settings;
     return ColoredBox(
