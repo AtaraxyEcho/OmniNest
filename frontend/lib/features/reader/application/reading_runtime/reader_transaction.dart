@@ -51,7 +51,11 @@ class ReaderTransaction {
     required this.id,
     required this.kind,
     required this.layout,
-  }) : visualMap = ReaderVisualProgressMap.fromGeometry(layout.geometry);
+    Map<String, ReaderChapterProgressAnchor>? visualAnchors,
+  }) : visualMap = ReaderVisualProgressMap.fromGeometry(
+         layout.geometry,
+         bookAnchors: visualAnchors,
+       );
 
   /// 事务 ID：旧回调按 id 丢弃（方案 §45-46，生产模式同样丢弃）。
   final int id;
@@ -67,8 +71,9 @@ class ReaderTransaction {
 
   double lastVisualProgress = 0.0;
 
-  /// 冻结几何下的物理 Y → 全书视觉进度映射（方案 §22-24）：
-  /// 图片内部滚动连续变化，不经过 charOffset。
+  /// 冻结几何下的物理 Y → 视觉进度映射（方案 §22-24）：携带全书锚点
+  /// 时与 idle 全书视觉表同尺度，图片内部滚动连续变化，不经过
+  /// charOffset。
   final ReaderVisualProgressMap visualMap;
 
   /// 滚动方向（以事务起始物理 offset 为基准，方案 §41）。

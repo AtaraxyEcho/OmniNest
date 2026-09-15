@@ -203,6 +203,9 @@ mixin ReaderViewPageInteractionMixin
       bookVisualProgressFor(chapterId, chapterVisualCursor);
 
   @override
+  void ensureVisualExtentTable() => _ensureBookVisualExtentTable();
+
+  @override
   double get currentChapterProgress => scrollProgress;
 
   Timer? _preloadDebounce;

@@ -72,6 +72,7 @@ class _FakeDelegate implements ReaderConsumeDelegate {
   int expandBackward = 0;
   int preloadTail = 0;
   int preloadThrottled = 0;
+  void Function()? ensureTable;
 
   @override
   int totalCharsOf(String chapterId) => totalChars[chapterId] ?? 0;
@@ -120,6 +121,9 @@ class _FakeDelegate implements ReaderConsumeDelegate {
       0.5;
 
   @override
+  void ensureVisualExtentTable() => ensureTable?.call();
+
+  @override
   double get currentChapterProgress => chapterProgress;
 }
 
@@ -136,6 +140,7 @@ class _Pipeline {
   _Pipeline({
     double chapterHeight = 2000,
     List<String> chapterIds = const ['c0', 'c1'],
+    List<String>? bookChapterIds,
   }) {
     _chapterHeight = chapterHeight;
     runtime.scrollEffect = effect;
@@ -150,6 +155,18 @@ class _Pipeline {
       allChapterIds: chapterIds,
       resolve: (id) => _chapter(id: id, height: _chapterHeight),
     );
+    if (bookChapterIds != null) {
+      delegate.ensureTable = () {
+        runtime.visualExtent.rebuildIfStale(
+          cacheSource: controller.entries,
+          windowEntries: controller.entries,
+          chapterIds: bookChapterIds,
+          measuredHeightOf: (id) => controller.entryFor(id)?.totalHeight,
+          charCountOf: (id) => controller.entryFor(id)?.totalChars,
+          fallbackExtent: chapterHeight,
+        );
+      };
+    }
   }
 
   ReaderLayoutSnapshot _buildLiveLayout() {
@@ -303,5 +320,55 @@ void main() {
     expect(pipeline.delegate.trackerUpdates, 0);
     expect(pipeline.delegate.persisted, isEmpty);
     expect(pipeline.delegate.chapterProgress, 0.4);
+  });
+
+  test('D5-1 全书视觉表锚点：窗口章映射到全书区间，缺章返回 null', () {
+    final pipeline = _Pipeline(
+      bookChapterIds: const ['c0', 'c1', 'c2', 'c3', 'c4'],
+    );
+    addTearDown(pipeline.dispose);
+    pipeline.delegate.ensureTable?.call();
+
+    final anchors = pipeline.runtime.visualExtent.anchorsFor(const [
+      'c0',
+      'c1',
+    ]);
+    // 全书 5 章等高 2000：c0=(0,0.2)、c1=(0.2,0.4)。
+    expect(anchors, isNotNull);
+    expect(anchors!['c0']!.start, closeTo(0.0, 0.001));
+    expect(anchors['c0']!.end, closeTo(0.2, 0.001));
+    expect(anchors['c1']!.start, closeTo(0.2, 0.001));
+    expect(anchors['c1']!.end, closeTo(0.4, 0.001));
+
+    // 非全书章 id 无锚点：调用方回退窗口相对映射。
+    expect(pipeline.runtime.visualExtent.anchorsFor(const ['ghost']), isNull);
+  });
+
+  test('D5-2 事务发布进度为全书尺度：冻结映射携带全书锚点', () {
+    // 全书 10 章等高，窗口仅 c0/c1：窗口相对口径会把 c0 章体中点
+    // 错报为 ~0.24（c0 占窗口一半），全书口径应为 ~0.048。
+    final pipeline = _Pipeline(
+      bookChapterIds: const [
+        'c0',
+        'c1',
+        'c2',
+        'c3',
+        'c4',
+        'c5',
+        'c6',
+        'c7',
+        'c8',
+        'c9',
+      ],
+    );
+    addTearDown(pipeline.dispose);
+    final runtime = pipeline.runtime;
+
+    runtime.onWheelSignal();
+    // c0 章体区间 [36, 2036]，中点 1036 → contentY=1036（anchorY=0）。
+    pipeline.effect.offsetValue = 1036;
+    pipeline.feed();
+
+    expect(runtime.publisher.notifier.value, closeTo(0.05, 0.001));
   });
 }

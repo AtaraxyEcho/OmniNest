@@ -1,3 +1,4 @@
+import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_continuous_scroll_controller.dart';
 
 /// 全书视觉进度表（方案 §46 idle 显示路径 / §81 状态自 Widget 迁入）。
@@ -11,6 +12,7 @@ class ReaderVisualExtentTable {
   List<String> _chapterIds = const [];
   List<double> _starts = const [];
   double _total = 0;
+  Map<String, int>? _indexById;
 
   /// 全书视觉总高；未构建或无数据时为 0。
   double get totalExtent => _total;
@@ -37,6 +39,7 @@ class ReaderVisualExtentTable {
       return;
     }
     _cacheSource = cacheSource;
+    _indexById = null;
     double measuredExtent = 0;
     var measuredChars = 0;
     for (final entry in windowEntries) {
@@ -133,5 +136,37 @@ class ReaderVisualExtentTable {
       chapterEnd - chapterStart,
     );
     return (_chapterIds[idx], cursor);
+  }
+
+  /// 窗口章的全书视觉进度锚点（章体起始/结束进度）。
+  ///
+  /// 供事务冻结映射（ReaderVisualProgressMap）把窗口物理区间锚定到
+  /// 全书尺度，事务期与空闲期发布同一分母的进度；任一窗口章不在表内
+  /// 时返回 null，调用方回退窗口相对映射。
+  Map<String, ReaderChapterProgressAnchor>? anchorsFor(
+    List<String> windowChapterIds,
+  ) {
+    if (!isBuilt || windowChapterIds.isEmpty) {
+      return null;
+    }
+    final index =
+        _indexById ??= {
+          for (var i = 0; i < _chapterIds.length; i++) _chapterIds[i]: i,
+        };
+    Map<String, ReaderChapterProgressAnchor>? anchors;
+    for (final id in windowChapterIds) {
+      final idx = index[id];
+      if (idx == null) {
+        return null;
+      }
+      final start = _starts[idx];
+      final end = idx + 1 < _starts.length ? _starts[idx + 1] : _total;
+      anchors ??= <String, ReaderChapterProgressAnchor>{};
+      anchors[id] = ReaderChapterProgressAnchor(
+        start: _total > 0 ? (start / _total).clamp(0.0, 1.0) : 0.0,
+        end: _total > 0 ? (end / _total).clamp(0.0, 1.0) : 0.0,
+      );
+    }
+    return anchors;
   }
 }

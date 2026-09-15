@@ -200,6 +200,9 @@ class ReaderReadingRuntime {
       return;
     }
     restore.cancel();
+    // 冻结映射的全书锚点：先确保全书视觉表按当前窗口构建，事务期与
+    // 空闲期发布同一分母的进度（窗口相对值会随窗口滑动整体重定基准）。
+    consumeDelegate?.ensureVisualExtentTable();
     final replacedTx = transactions.current;
     if (replacedTx != null) {
       emitEvent(
@@ -217,6 +220,7 @@ class ReaderReadingRuntime {
       initialOffset:
           scrollEffect?.hasClients == true ? scrollEffect!.offset : 0.0,
       initialVisualProgress: publisher.notifier.value,
+      visualAnchors: _bookVisualAnchorsFor(layout.geometry),
     );
     emitEvent(
       ReaderRuntimeEvent(
@@ -258,7 +262,9 @@ class ReaderReadingRuntime {
     geometryScheduler.consumePendingCommit();
     final committed = positionState.commitTransient();
     // 空滚动 settle（无新 transient）不重复广播旧位置。
-    if (committed != null && settlingTx != null && committed.transactionId == settlingTx.id) {
+    if (committed != null &&
+        settlingTx != null &&
+        committed.transactionId == settlingTx.id) {
       emitEvent(
         ReaderRuntimeEvent(
           type: ReaderRuntimeEventType.positionFinalized,
@@ -295,6 +301,14 @@ class ReaderReadingRuntime {
 
   // ── 消费管线（B3 §6.2：物理 offset 的唯一消费入口，四步拆分）──
 
+  /// 事务冻结映射的全书锚点（按当前全书视觉表采样；表未覆盖窗口章时
+  /// 返回 null，映射回退窗口相对并待下一事务重定基准）。
+  Map<String, ReaderChapterProgressAnchor>? _bookVisualAnchorsFor(
+    ReaderGeometrySnapshot geometry,
+  ) {
+    return visualExtent.anchorsFor(geometry.chapterIds);
+  }
+
   /// 物理滚动 offset 消费入口（B3 §6.2）：页面薄转发守卫后调用。
   /// 解析 → positionResolved 事件 → 同源守卫接受 → 视觉进度 →
   /// 窗口意图 → 逻辑位置确认。
@@ -327,11 +341,28 @@ class ReaderReadingRuntime {
         chapterId: snapshot.chapterId,
         blockIndex: snapshot.blockIndex,
         charOffset: snapshot.charOffset,
-        visualProgress: progress.visual.project(snapshot, layout.geometry),
+        visualProgress: _eventVisualProgress(tx, snapshot),
         logicalProgress: progress.logical.project(snapshot, layout.geometry),
       ),
     );
     _acceptPosition(snapshot, tx);
+  }
+
+  /// 位置事件的视觉进度基准：与发布值同源同尺度——事务帧读冻结映射
+  /// （携带全书锚点），无事务帧读全书视觉表兜底；不再输出窗口相对值。
+  double _eventVisualProgress(
+    ReaderTransaction? tx,
+    ReaderPositionSnapshot snapshot,
+  ) {
+    if (tx != null) {
+      return tx.visualMap.progressAt(snapshot.contentY) ??
+          _lastPublishedVisualProgress;
+    }
+    return consumeDelegate?.visualProgressFallback(
+          snapshot.chapterId,
+          snapshot.chapterVisualCursor,
+        ) ??
+        _lastPublishedVisualProgress;
   }
 
   /// 接受一次解析位置（§62 唯一写口）：事务同源双守卫后写入位置状态，

@@ -1,4 +1,5 @@
 import 'package:omninest/features/reader/application/reading_runtime/reader_layout_snapshot.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_progress_projection.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_transaction.dart';
 
 /// 事务所有权唯一权威（方案 §3.3 / §24）。
@@ -24,11 +25,17 @@ class ReaderTransactionManager {
     required ReaderLayoutSnapshot layout,
     required double initialOffset,
     required double initialVisualProgress,
+    Map<String, ReaderChapterProgressAnchor>? visualAnchors,
   }) {
     if (_current != null) {
       throw StateError('A Reader transaction is already active');
     }
-    final tx = ReaderTransaction(id: ++_sequence, kind: kind, layout: layout);
+    final tx = ReaderTransaction(
+      id: ++_sequence,
+      kind: kind,
+      layout: layout,
+      visualAnchors: visualAnchors,
+    );
     tx.lastScrollOffset = initialOffset;
     tx.lastVisualProgress = initialVisualProgress;
     tx.displayedProgress = initialVisualProgress;
@@ -44,12 +51,18 @@ class ReaderTransactionManager {
     required ReaderLayoutSnapshot layout,
     required double initialOffset,
     required double initialVisualProgress,
+    Map<String, ReaderChapterProgressAnchor>? visualAnchors,
   }) {
     final previous = _current;
     if (previous != null) {
       previous.phase = ReaderTransactionPhase.cancelled;
     }
-    final tx = ReaderTransaction(id: ++_sequence, kind: kind, layout: layout);
+    final tx = ReaderTransaction(
+      id: ++_sequence,
+      kind: kind,
+      layout: layout,
+      visualAnchors: visualAnchors,
+    );
     tx.lastScrollOffset = initialOffset;
     tx.lastVisualProgress = initialVisualProgress;
     tx.displayedProgress = initialVisualProgress;
