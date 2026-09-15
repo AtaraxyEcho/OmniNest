@@ -63,9 +63,6 @@ final windowChromeControllerProvider =
 
 const _windowFrameChannel = MethodChannel('omninest/window_frame');
 
-/// Windows 侧无边框全屏扩缩动画时长（原生 flutter_window.cpp 同值）。
-const int _fullscreenAnimationMs = 180;
-
 class WindowChromeController extends Notifier<WindowChromeState> {
   final Map<int, _WindowChromeRequest> _requests = {};
   int _nextRequestId = 0;
@@ -393,15 +390,10 @@ class WindowChromeController extends Notifier<WindowChromeState> {
   }
 
   Future<void> _settleNativeWindow() async {
-    final isWindows = defaultTargetPlatform == TargetPlatform.windows;
-    // Windows 侧等待扩缩动画（180ms）完成后再做原生几何断言；其余平台保持
-    // 既有等待，覆盖扩窗后的首帧布局同步。
-    await Future<void>.delayed(
-      isWindows
-          ? Duration(milliseconds: _fullscreenAnimationMs + 160)
-          : const Duration(milliseconds: 160),
-    );
-    if (isWindows) {
+    // 等待扩窗后的首帧布局同步；Windows 侧随后做一次原生几何断言，
+    // 全屏窗口矩形或子视图存在偏差时由原生直接吸附自愈。
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    if (defaultTargetPlatform == TargetPlatform.windows) {
       await _verifyNativeWindowFrame();
     }
   }

@@ -192,163 +192,47 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
     if (!window_placement_saved_) {
       SaveWindowPlacement();
     }
-    MONITORINFO monitor_info = {};
-    monitor_info.cbSize = sizeof(MONITORINFO);
-    if (!GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
-                        &monitor_info)) {
-      return;
-    }
     LONG_PTR style = normal_window_style_;
     LONG_PTR ex_style = normal_window_ex_style_;
     style &= ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_DLGFRAME);
     style |= WS_POPUP;
     ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE |
                   WS_EX_WINDOWEDGE);
-    // Flag fullscreen before touching styles so the WM_NCCALCSIZE handler
-    // pins client == window rect for this transition and for any style
-    // mutation later plugins perform while fullscreen (e.g. a bare
-    // WS_THICKFRAME write re-adding the resize border would otherwise inset
-    // the client area and expose white edges).
+    // Flag fullscreen before touching styles: WM_NCCALCSIZE pins client ==
+    // window rect for any style mutation while fullscreen, and
+    // WM_GETMINMAXINFO stretches the maximized rect to the full monitor.
     window_fullscreen_ = true;
     window_frame_hidden_ = true;
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
-    // Zero the DWM frame margins before expanding so no white edges show up
-    // during the transition.
+    // Zero the DWM frame margins so no white edges show up in the transition.
     MARGINS margins = {0, 0, 0, 0};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
-    // Apply the frame change at the current rect and lift the window into
-    // the topmost band so the taskbar never draws over the expanding window.
-    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER | SWP_NOACTIVATE |
-                     SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-    // Expand continuously to the monitor rect instead of snapping, matching
-    // the smoothness of the native maximize animation.
-    StartFullscreenAnimation(monitor_info.rcMonitor, true);
+    // Maximize the borderless window: DWM plays the same continuous zoom as
+    // the maximize button while the app itself relayouts exactly once, so the
+    // motion never stutters or flashes; WM_GETMINMAXINFO makes the maximized
+    // rect cover the taskbar.
+    ::ShowWindow(hwnd, SW_MAXIMIZE);
     return;
   }
   // Clear the fullscreen flag before restoring windowed styles so the
-  // default WM_NCCALCSIZE applies the caption/frame insets from here on;
-  // keeping the pin active through the restore would leave the client area
-  // overlapping the restored title bar.
+  // default WM_NCCALCSIZE applies the caption/frame insets from here on.
   window_fullscreen_ = false;
   window_frame_hidden_ = false;
-  StopFullscreenAnimation();
   SetWindowLongPtr(hwnd, GWL_STYLE, normal_window_style_);
   SetWindowLongPtr(hwnd, GWL_EXSTYLE, normal_window_ex_style_);
-  // Shrink continuously back to the saved rect when the placement is a normal
-  // restorable window, mirroring the native restore animation; maximized or
-  // minimized placements restore immediately.
-  if (window_placement_saved_ &&
-      saved_window_placement_.showCmd == SW_SHOWNORMAL) {
-    // Reapply the frame while still fullscreen-sized so the restored title
-    // bar is visible during the shrink, like the native restore animation.
-    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
-                     SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    StartFullscreenAnimation(saved_window_placement_.rcNormalPosition, false);
-    return;
-  }
-  RestoreWindowPlacement();
+  // Restore plays the mirrored DWM shrink animation with the caption back in
+  // place; the system restores the pre-maximize rect itself, so only the
+  // saved-placement flag needs clearing.
+  ::ShowWindow(hwnd, SW_RESTORE);
+  window_placement_saved_ = false;
   SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
                    SWP_NOACTIVATE | SWP_FRAMECHANGED);
-}
-
-void FlutterWindow::StartFullscreenAnimation(const RECT& target, bool enter) {
-  HWND hwnd = GetHandle();
-  if (hwnd == nullptr) {
-    return;
-  }
-  RECT current = {};
-  if (!GetWindowRect(hwnd, &current)) {
-    return;
-  }
-  fullscreen_anim_active_ = true;
-  fullscreen_anim_enter_ = enter;
-  fullscreen_anim_start_ = current;
-  fullscreen_anim_target_ = target;
-  fullscreen_anim_start_tick_ = GetTickCount64();
-  const bool at_target =
-      current.left == target.left && current.top == target.top &&
-      current.right == target.right && current.bottom == target.bottom;
-  if (at_target) {
-    FinishFullscreenAnimation();
-    return;
-  }
-  SetTimer(hwnd, kFullscreenAnimationTimer, 16, nullptr);
-  OnFullscreenAnimationTick();
-}
-
-void FlutterWindow::OnFullscreenAnimationTick() {
-  if (!fullscreen_anim_active_) {
-    return;
-  }
-  HWND hwnd = GetHandle();
-  if (hwnd == nullptr) {
-    StopFullscreenAnimation();
-    return;
-  }
-  const ULONGLONG elapsed = GetTickCount64() - fullscreen_anim_start_tick_;
-  double progress = static_cast<double>(elapsed) / kFullscreenAnimationMs;
-  if (progress > 1.0) {
-    progress = 1.0;
-  }
-  // Ease-out cubic: fast start, decelerating settle, like the native
-  // maximize motion.
-  const double remain = 1.0 - progress;
-  const double eased = 1.0 - remain * remain * remain;
-  const auto lerp = [eased](LONG from, LONG to) {
-    return static_cast<LONG>(from + (to - from) * eased + 0.5);
-  };
-  const RECT current = {
-      lerp(fullscreen_anim_start_.left, fullscreen_anim_target_.left),
-      lerp(fullscreen_anim_start_.top, fullscreen_anim_target_.top),
-      lerp(fullscreen_anim_start_.right, fullscreen_anim_target_.right),
-      lerp(fullscreen_anim_start_.bottom, fullscreen_anim_target_.bottom)};
-  SetWindowPos(hwnd, nullptr, current.left, current.top,
-               current.right - current.left, current.bottom - current.top,
-               SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_NOACTIVATE |
-                   SWP_SHOWWINDOW);
-  if (progress >= 1.0) {
-    FinishFullscreenAnimation();
-  }
-}
-
-void FlutterWindow::FinishFullscreenAnimation() {
-  StopFullscreenAnimation();
-  HWND hwnd = GetHandle();
-  if (hwnd == nullptr) {
-    return;
-  }
-  if (fullscreen_anim_enter_) {
-    const RECT& monitor = fullscreen_anim_target_;
-    // Drop out of the topmost band and snap exactly onto the monitor rect.
-    SetWindowPos(hwnd, HWND_NOTOPMOST, monitor.left, monitor.top,
-                 monitor.right - monitor.left, monitor.bottom - monitor.top,
-                 SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    VerifyWindowFrame();
-    return;
-  }
-  RestoreWindowPlacement();
-  SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
-                   SWP_NOACTIVATE | SWP_FRAMECHANGED);
-}
-
-void FlutterWindow::StopFullscreenAnimation() {
-  if (!fullscreen_anim_active_) {
-    return;
-  }
-  fullscreen_anim_active_ = false;
-  HWND hwnd = GetHandle();
-  if (hwnd != nullptr) {
-    KillTimer(hwnd, kFullscreenAnimationTimer);
-  }
 }
 
 bool FlutterWindow::VerifyWindowFrame() {
-  if (!window_fullscreen_ || fullscreen_anim_active_) {
+  if (!window_fullscreen_) {
     return false;
   }
   HWND hwnd = GetHandle();
@@ -444,13 +328,24 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
         return 0;
       }
       break;
-    case WM_TIMER:
-      // Drive the borderless fullscreen transition from the UI thread; the
-      // animation must not block the platform thread or Flutter's WM_SIZE
-      // dispatch would stall and the content would jump instead of scaling.
-      if (wparam == kFullscreenAnimationTimer) {
-        OnFullscreenAnimationTick();
-        return 0;
+    case WM_GETMINMAXINFO:
+      // While fullscreen the maximized rect must be the full monitor (the
+      // default is the work area), so the borderless maximize covers the
+      // taskbar exactly like a snapped fullscreen window.
+      if (window_fullscreen_) {
+        MONITORINFO monitor_info = {};
+        monitor_info.cbSize = sizeof(MONITORINFO);
+        if (GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
+                           &monitor_info)) {
+          MINMAXINFO* info = reinterpret_cast<MINMAXINFO*>(lparam);
+          info->ptMaxSize.x =
+              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
+          info->ptMaxSize.y =
+              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
+          info->ptMaxPosition.x = monitor_info.rcMonitor.left;
+          info->ptMaxPosition.y = monitor_info.rcMonitor.top;
+          return 0;
+        }
       }
       break;
   }

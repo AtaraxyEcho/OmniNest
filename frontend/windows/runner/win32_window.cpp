@@ -97,7 +97,9 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.hInstance = GetModuleHandle(nullptr);
     window_class.hIcon =
         LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
-    window_class.hbrBackground = 0;
+    // Areas exposed before Flutter repaints (style switches, resizes) erase
+    // black so they blend with the dark app shell instead of flashing white.
+    window_class.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
     RegisterClass(&window_class);
