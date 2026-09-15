@@ -741,14 +741,17 @@ class ReaderContentLoader {
     if (!prepareScrollLayout || data.cumulativeHeights.isNotEmpty) {
       return;
     }
-    // 第一阶段：精确测量头部若干块，以平均块高估算整章，立即填充
-    // cumulative 数组，保证滚动映射从首帧起无空洞。
-    // 估算基线优先取已精测章节的分块型高度均值（同书排版一致），
-    // 降低 estimate→precise 转换时的窗口高度跳变。
+    // 第一阶段：精确测量头部若干块，其余块按「字符数 × 头部像素/字
+    // 符比率」比例估算，立即填充 cumulative 数组，保证滚动映射从首帧
+    // 起无空洞。估算基线优先取已精测章节的分块型高度均值（同书排版
+    // 一致）；块高与块内字符数成正比，平坦块均值对块大小不均匀的章节
+    // 会产生数量级偏差（大章估出几百 px、精测后修正数万 px，视觉进度
+    // 随之重定基准跳变）。
     final blocks = data.blocks;
     final headCount = math.min(_metricsPhaseOneBlocks, blocks.length);
     final headHeights = <double>[];
     var headCumulative = 0.0;
+    var headChars = 0;
     for (var i = 0; i < headCount; i++) {
       headCumulative += ReaderPaginationEngine.measureBlockHeight(
         blocks[i],
@@ -756,10 +759,17 @@ class ReaderContentLoader {
         settings,
         textScale: textScale,
       );
+      headChars += _blockCharCount(blocks[i]);
       headHeights.add(headCumulative);
     }
     final estimateBase =
         headHeights.isEmpty ? 0.0 : headHeights.last / headCount;
+    // 头部测高退化（全部测出 0）时按文本最低比率兜底，禁止整章塌缩
+    // 到 0 高——0 高章会毒化类型均值估算并把视口主体让给邻章。
+    var pxPerChar = headChars > 0 ? headCumulative / headChars : 0.0;
+    if (headChars > 0 && pxPerChar < 0.05) {
+      pxPerChar = 0.3;
+    }
     final typeAverages = _measuredBlockAverages();
     final estimated = List<double>.filled(blocks.length, 0);
     var running = 0.0;
@@ -778,7 +788,16 @@ class ReaderContentLoader {
           textScale: textScale,
         );
       } else {
-        height = typeAverages?[block.runtimeType] ?? estimateBase;
+        // 文本块按块内字符数比例估算；比率退化时回退类型均值/头部
+        // 均值（零高度均值已被 _measuredBlockAverages 过滤）。
+        final blockChars = _blockCharCount(block);
+        final proportional =
+            blockChars > 0 && pxPerChar > 0 ? blockChars * pxPerChar : 0.0;
+        if (proportional > 0) {
+          height = proportional;
+        } else {
+          height = typeAverages?[block.runtimeType] ?? estimateBase;
+        }
       }
       running += height;
       estimated[i] = running;
@@ -820,7 +839,9 @@ class ReaderContentLoader {
       }
       return {
         for (final entry in sums.entries)
-          entry.key: entry.value / counts[entry.key]!,
+          // 零高度均值（空块章精测产物）会毒化后续章节的估算，使其
+          // 全章塌缩到头部高度；非正值不进入均值表。
+          if (entry.value > 0) entry.key: entry.value / counts[entry.key]!,
       };
     }
     return null;
