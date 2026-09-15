@@ -780,19 +780,24 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final restoreScheduledAt = DateTime.now();
+      // 目标内容坐标只依赖冻结输入：恢复 tick 逐帧调用本构造器，
+      // 缓存避免每帧全章线性扫描 + TextPainter 测量。布局收敛由
+      // 发起方的收敛门与多帧重试保证，冻结目标与之配合。
+      double? cachedRestoreContentY;
       restore.start(
         scrollController: scrollController,
         targetOffsetBuilder: () {
           if (!scrollController.hasClients) return 0;
           final max = scrollController.position.maxScrollExtent;
           if (max <= 0) return 0;
-          final contentY = contentLoader?.charOffsetToPixelOffset(
+          cachedRestoreContentY ??= contentLoader?.charOffsetToPixelOffset(
             currentChapterId,
             capturedCharOffset,
             pageWidth: capturedPageWidth,
             settings: capturedSettings,
             textScale: capturedTextScale,
           );
+          final contentY = cachedRestoreContentY;
           if (contentY == null || contentY <= 0) return 0;
           return (contentY - capturedAnchorY).clamp(0.0, max);
         },

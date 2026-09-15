@@ -35,6 +35,22 @@ class ChapterData {
   List<double> get cumulativeHeights => _cumulativeHeights;
   List<double> _cumulativeHeights;
 
+  List<int> _blockCharPrefixes = const [];
+
+  /// 累积字符前缀：`blockCharPrefixes[i]` = 前 i 块的字符数之和，
+  /// 长度 = 块数 + 1。blocks 创建后内容不变，惰性计算一次；
+  /// 供 contentYToCharOffset / charOffsetToPixelOffset 消除逐帧线性累加。
+  List<int> get blockCharPrefixes {
+    if (_blockCharPrefixes.length != blocks.length + 1) {
+      final prefixes = List<int>.filled(blocks.length + 1, 0);
+      for (var i = 0; i < blocks.length; i++) {
+        prefixes[i + 1] = prefixes[i] + _blockCharCount(blocks[i]);
+      }
+      _blockCharPrefixes = prefixes;
+    }
+    return _blockCharPrefixes;
+  }
+
   /// 翻页模式的懒分页导航器（按需计算单页）。
   PageNavigator? _pageNavigator;
   double? _navigatorPageWidth;
@@ -740,35 +756,6 @@ class ReaderContentLoader {
   String? _neighborId(int idx) =>
       idx >= 0 && idx < allChapters.length ? allChapters[idx].id : null;
 
-  int _blockCharCount(ContentBlock block) {
-    return switch (block) {
-      HeadingBlock(:final text) => text.length,
-      ParagraphBlock(:final lines) => lines.fold(
-        0,
-        (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
-      ),
-      ImageBlock() => 0,
-      DividerBlock() => 0,
-      BlockquoteBlock(:final lines) => lines.fold(
-        0,
-        (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
-      ),
-      ListBlock(:final items) => items.fold(
-        0,
-        (s, i) => s + i.spans.fold(0, (s2, sp) => s2 + sp.text.length),
-      ),
-      TableBlock(:final rows) => rows.fold(
-        0,
-        (s, r) =>
-            s +
-            r.cells.fold(
-              0,
-              (s2, c) => s2 + c.fold(0, (s3, sp) => s3 + sp.text.length),
-            ),
-      ),
-    };
-  }
-
   /// 字符偏移 → 像素偏移（用于从服务端/本地恢复滚动位置）。
   ///
   /// 遍历 blocks 累加字符数，找到 [charOffset] 落在哪个 block，
@@ -791,29 +778,33 @@ class ReaderContentLoader {
     if (charOffset >= data.totalChars) {
       return data.cumulativeHeights.isEmpty ? 0 : data.cumulativeHeights.last;
     }
-    var accumulated = 0;
-    for (var i = 0; i < data.blocks.length; i++) {
-      final blockChars = _blockCharCount(data.blocks[i]);
-      if (accumulated + blockChars > charOffset) {
-        // charOffset 落在这个 block 内
-        final blockStart = i > 0 ? data.cumulativeHeights[i - 1] : 0.0;
-        final charOffsetInBlock = charOffset - accumulated;
-        // 用 TextPainter 精确测量块内高度（与分页引擎同一套逻辑）
-        final heightInBlock = ReaderPaginationEngine.measureHeightToCharOffset(
-          data.blocks[i],
-          pageWidth,
-          settings,
-          charOffsetInBlock,
-          textScale: textScale,
-          blockGlobalOffset: accumulated,
-          isContinuation: false,
-        );
-        return blockStart + heightInBlock;
+    // 二分定位 charOffset 所在块（字符前缀表），替代逐块线性累加。
+    final prefixes = data.blockCharPrefixes;
+    var lo = 0;
+    var hi = data.blocks.length - 1;
+    while (lo < hi) {
+      final mid = (lo + hi) >> 1;
+      if (prefixes[mid + 1] <= charOffset) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
       }
-      accumulated += blockChars;
     }
-    // charOffset 在最后一个 block 末尾
-    return data.cumulativeHeights.isEmpty ? 0 : data.cumulativeHeights.last;
+    final accumulated = prefixes[lo];
+    // charOffset 落在这个 block 内
+    final blockStart = lo > 0 ? data.cumulativeHeights[lo - 1] : 0.0;
+    final charOffsetInBlock = charOffset - accumulated;
+    // 用 TextPainter 精确测量块内高度（与分页引擎同一套逻辑）
+    final heightInBlock = ReaderPaginationEngine.measureHeightToCharOffset(
+      data.blocks[lo],
+      pageWidth,
+      settings,
+      charOffsetInBlock,
+      textScale: textScale,
+      blockGlobalOffset: accumulated,
+      isContinuation: false,
+    );
+    return blockStart + heightInBlock;
   }
 
   /// 内容坐标 Y → 字符偏移（用于保存阅读进度）。
@@ -850,11 +841,8 @@ class ReaderContentLoader {
     }
 
     // lo 是 normalizedOffset 落入的 block 索引
-    // 累加前 lo 个 block 的字符数
-    var charOffset = 0;
-    for (var i = 0; i < lo; i++) {
-      charOffset += _blockCharCount(data.blocks[i]);
-    }
+    // 前缀表 O(1) 取前 lo 个 block 的字符数
+    var charOffset = data.blockCharPrefixes[lo];
 
     // 在 block 内：用 TextPainter 视觉行测量精确计算（与 charOffsetToContentY 互逆）
     final blockHeight = _blockHeightAt(data, lo);
@@ -920,4 +908,35 @@ class ReaderContentLoader {
     final previous = index > 0 ? data.cumulativeHeights[index - 1] : 0;
     return cumulative - previous;
   }
+}
+
+/// 单块字符数：与 `_ReaderPaginationTextLayout.blockCharCount` 同一口径
+/// 的顶层实现，供 ChapterData 前缀表与 ReaderContentLoader 共用。
+int _blockCharCount(ContentBlock block) {
+  return switch (block) {
+    HeadingBlock(:final text) => text.length,
+    ParagraphBlock(:final lines) => lines.fold(
+      0,
+      (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
+    ),
+    ImageBlock() => 0,
+    DividerBlock() => 0,
+    BlockquoteBlock(:final lines) => lines.fold(
+      0,
+      (s, l) => s + l.spans.fold(0, (s2, sp) => s2 + sp.text.length),
+    ),
+    ListBlock(:final items) => items.fold(
+      0,
+      (s, i) => s + i.spans.fold(0, (s2, sp) => s2 + sp.text.length),
+    ),
+    TableBlock(:final rows) => rows.fold(
+      0,
+      (s, r) =>
+          s +
+          r.cells.fold(
+            0,
+            (s2, c) => s2 + c.fold(0, (s3, sp) => s3 + sp.text.length),
+          ),
+    ),
+  };
 }

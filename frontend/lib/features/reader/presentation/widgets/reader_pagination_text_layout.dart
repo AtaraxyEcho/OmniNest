@@ -55,6 +55,14 @@ abstract final class _ReaderPaginationTextLayout {
     };
   }
 
+  /// 视觉行测量缓存：滚动热路径的 contentYToCharOffset 每帧对命中块
+  /// 调用本方法，无缓存时每帧重建 TextPainter。键含 settings 身份
+  /// （排版参数）与 blockGlobalOffset（块前缀，章内恒定）；LRU 上限
+  /// 64 防内存增长，换章/换排版自然淘汰。
+  static final List<_VisualLinesCacheEntry> _visualLinesCache =
+      <_VisualLinesCacheEntry>[];
+  static const _visualLinesCacheLimit = 64;
+
   static List<VisualLineInfo> measureVisualLines(
     ContentBlock block,
     double pageWidth,
@@ -63,6 +71,21 @@ abstract final class _ReaderPaginationTextLayout {
     required int blockGlobalOffset,
     bool isContinuation = false,
   }) {
+    for (var i = 0; i < _visualLinesCache.length; i++) {
+      final entry = _visualLinesCache[i];
+      if (identical(entry.block, block) &&
+          entry.pageWidth == pageWidth &&
+          identical(entry.settings, settings) &&
+          entry.textScale == textScale &&
+          entry.blockGlobalOffset == blockGlobalOffset &&
+          entry.isContinuation == isContinuation) {
+        if (i != 0) {
+          _visualLinesCache.removeAt(i);
+          _visualLinesCache.insert(0, entry);
+        }
+        return entry.result;
+      }
+    }
     final internal = measureVisualLinesInternal(
       block,
       pageWidth,
@@ -71,15 +94,32 @@ abstract final class _ReaderPaginationTextLayout {
       blockGlobalOffset: blockGlobalOffset,
       isContinuation: isContinuation,
     );
-    return internal
-        .map(
-          (line) => VisualLineInfo(
-            globalStart: line.globalStart,
-            globalEnd: line.globalEnd,
-            height: line.height,
-          ),
-        )
-        .toList();
+    final result =
+        internal
+            .map(
+              (line) => VisualLineInfo(
+                globalStart: line.globalStart,
+                globalEnd: line.globalEnd,
+                height: line.height,
+              ),
+            )
+            .toList();
+    _visualLinesCache.insert(
+      0,
+      _VisualLinesCacheEntry(
+        block: block,
+        pageWidth: pageWidth,
+        settings: settings,
+        textScale: textScale,
+        blockGlobalOffset: blockGlobalOffset,
+        isContinuation: isContinuation,
+        result: result,
+      ),
+    );
+    while (_visualLinesCache.length > _visualLinesCacheLimit) {
+      _visualLinesCache.removeLast();
+    }
+    return result;
   }
 
   static List<PaginationVisualLine> measureVisualLinesInternal(
@@ -241,4 +281,25 @@ class _PainterContentSegment {
   final int painterStart;
   final int painterEnd;
   final int globalStart;
+}
+
+/// 视觉行测量缓存条目。
+class _VisualLinesCacheEntry {
+  const _VisualLinesCacheEntry({
+    required this.block,
+    required this.pageWidth,
+    required this.settings,
+    required this.textScale,
+    required this.blockGlobalOffset,
+    required this.isContinuation,
+    required this.result,
+  });
+
+  final ContentBlock block;
+  final double pageWidth;
+  final ReaderViewSettings settings;
+  final double textScale;
+  final int blockGlobalOffset;
+  final bool isContinuation;
+  final List<VisualLineInfo> result;
 }

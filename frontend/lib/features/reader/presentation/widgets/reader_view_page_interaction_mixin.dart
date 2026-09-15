@@ -103,11 +103,15 @@ mixin ReaderViewPageInteractionMixin
       }
       // 热路径：只更新通知器（UI 消费者局部重建），不再 setState 整页。
       scrollProgress = newProgress;
-      scheduleLocalProgressSave(
-        chapterProgress: newProgress,
-        mode: 'scroll',
-        charOffset: charOffset,
-      );
+      final saveAt = DateTime.now();
+      if (saveAt.isAfter(_lastScrollSaveAt)) {
+        _lastScrollSaveAt = saveAt.add(const Duration(milliseconds: 200));
+        scheduleLocalProgressSave(
+          chapterProgress: newProgress,
+          mode: 'scroll',
+          charOffset: charOffset,
+        );
+      }
     }
     // 提前到过半即预取：邻章解析与测高需要数百毫秒，
     // 20% 余量在快速滚动下来不及就绪。
@@ -156,6 +160,11 @@ mixin ReaderViewPageInteractionMixin
 
   /// 上一次滚动事件观察到的 maxScrollExtent，用于稳定门控
   double _lastObservedMax = -1;
+
+  /// 滚动保存节流：进度快照构造含 O(章节) 全书进度计算，高频滚动下
+  /// 与 0.001 阈值叠加会逐帧执行，限频 200ms；停止/退出由 scrollBy
+  /// 尾部与 dispose 兜底保存。
+  DateTime _lastScrollSaveAt = DateTime.fromMillisecondsSinceEpoch(0);
 
   /// 程序化滚动（侧边点按/键盘 scrollBy）的静默截止时间。
   ///
