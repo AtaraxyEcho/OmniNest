@@ -10,7 +10,10 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
+import 'package:omninest/core/window/desktop_close_action.dart';
+import 'package:omninest/core/window/desktop_close_behavior_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
@@ -174,6 +177,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final themeMode = ref.watch(appearanceControllerProvider);
     final languageCode = ref.watch(localeControllerProvider);
     final fontScalePreset = ref.watch(fontScaleControllerProvider);
+    // 关闭窗口行为是桌面托盘专属设置，仅在桌面平台读取与展示。
+    final rememberedCloseAction =
+        isDesktopPlatform
+            ? ref.watch(desktopCloseBehaviorProvider).asData?.value
+            : null;
 
     if (MediaQuery.sizeOf(context).width < 860) {
       return Scaffold(
@@ -248,6 +256,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         themeMode: themeMode,
         languageCode: languageCode,
         fontScalePreset: fontScalePreset,
+        rememberedCloseAction: rememberedCloseAction,
       ),
     );
   }
@@ -264,6 +273,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     required ThemeMode themeMode,
     required String languageCode,
     required FontScalePreset fontScalePreset,
+    required DesktopCloseAction? rememberedCloseAction,
   }) {
     return switch (_selectedSection) {
       ProfileSection.account => LayoutBuilder(
@@ -310,6 +320,15 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               ref.read(fontScaleControllerProvider.notifier).setPreset(preset),
             ),
         onBackdropSettings: _showBackdropSettings,
+        rememberedCloseAction: rememberedCloseAction,
+        onCloseBehaviorChanged:
+            isDesktopPlatform
+                ? (value) => unawaited(
+                  ref
+                      .read(desktopCloseBehaviorProvider.notifier)
+                      .setAction(value),
+                )
+                : null,
       ),
       ProfileSection.notifications => _notificationPanel(),
       ProfileSection.security => Column(

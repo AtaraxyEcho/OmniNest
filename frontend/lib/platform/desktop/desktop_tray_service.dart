@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/core/window/desktop_close_flow.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
@@ -13,8 +14,10 @@ import 'package:window_manager/window_manager.dart';
 /// 会把相对路径拼到 `dirname(executable)/data/flutter_assets/` 下加载，
 /// 因此使用已打包的 flutter asset 相对路径。
 ///
-/// 退出只走托盘菜单。窗口销毁链路在 Flutter 桌面引擎关停时可能长时间
-/// 不返回，最终以短超时 + `exit(0)` 兜底，避免托盘退出后假死数秒。
+/// 窗口关闭拦截统一交给 [DesktopCloseFlow]（确认弹窗或记住的偏好），
+/// 退出可来自托盘菜单或关闭确认窗，共用同一清理链路。窗口销毁链路在
+/// Flutter 桌面引擎关停时可能长时间不返回，最终以短超时 + `exit(0)`
+/// 兜底，避免托盘退出后假死数秒。
 class DesktopTrayService with TrayListener, WindowListener {
   DesktopTrayService();
 
@@ -48,7 +51,9 @@ class DesktopTrayService with TrayListener, WindowListener {
     await trayManager.setContextMenu(
       Menu(
         items: [
-          MenuItem(key: 'show', label: '显示窗口'),
+          MenuItem(key: 'brand', label: 'OmniNest', disabled: true),
+          MenuItem.separator(),
+          MenuItem(key: 'show', label: '显示主窗口'),
           MenuItem.separator(),
           MenuItem(key: 'quit', label: '退出'),
         ],
@@ -141,8 +146,8 @@ class DesktopTrayService with TrayListener, WindowListener {
 
   @override
   void onWindowClose() {
-    // preventClose 已开启：关闭按钮隐藏到托盘，退出仅走托盘菜单。
-    unawaited(windowManager.hide());
+    // preventClose 已开启：关闭动作交由关闭确认流程决定（弹窗询问或执行记住的偏好）。
+    unawaited(DesktopCloseFlow.instance.handleWindowCloseRequest());
   }
 
   Future<void> _showAndFocus() async {

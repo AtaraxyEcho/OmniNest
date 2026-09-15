@@ -4437,5 +4437,13 @@
   "filesVersionsEmpty": "No history versions yet",
   "filesVersionsRestore": "Restore",
   "filesVersionsCurrent": "Current",
-  "filesVersionsRestored": "Version restored"
+  "filesVersionsRestored": "Version restored",
+  "desktopCloseDialogTitle": "Close",
+  "desktopCloseDialogBody": "After the window is closed, OmniNest will keep running in the background.",
+  "desktopCloseDialogMinimize": "Minimize to tray",
+  "desktopCloseDialogExit": "Exit app",
+  "desktopCloseDialogRemember": "Remember my choice and don't ask again",
+  "desktopCloseBehaviorTitle": "Window close behavior",
+  "desktopCloseBehaviorAsk": "Ask every time",
+  "desktopCloseBehaviorExit": "Exit directly"
 }

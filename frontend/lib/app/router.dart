@@ -49,6 +49,7 @@ import 'package:omninest/features/video/presentation/pages/movie_center_page.dar
 import 'package:omninest/features/video/presentation/pages/movie_detail_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_player_page.dart';
 import 'package:omninest/features/video/presentation/pages/series_detail_page.dart';
+import 'package:omninest/core/window/desktop_close_action.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authRefreshListenable = ValueNotifier<int>(0);
@@ -59,6 +60,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     authRefreshListenable.value++;
   });
   final router = GoRouter(
+    navigatorKey: desktopCloseNavigatorKey,
     initialLocation: '/',
     refreshListenable: authRefreshListenable,
     redirect: (context, state) {

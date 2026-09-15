@@ -9609,4 +9609,28 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesVersionsRestored => '已恢复版本';
+
+  @override
+  String get desktopCloseDialogTitle => '关闭';
+
+  @override
+  String get desktopCloseDialogBody => '关闭窗口后，程序将在后台继续运行。';
+
+  @override
+  String get desktopCloseDialogMinimize => '最小化到托盘';
+
+  @override
+  String get desktopCloseDialogExit => '退出程序';
+
+  @override
+  String get desktopCloseDialogRemember => '记住我的选择，下次不再询问';
+
+  @override
+  String get desktopCloseBehaviorTitle => '关闭窗口行为';
+
+  @override
+  String get desktopCloseBehaviorAsk => '每次询问';
+
+  @override
+  String get desktopCloseBehaviorExit => '直接退出';
 }

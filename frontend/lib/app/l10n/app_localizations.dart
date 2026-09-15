@@ -18107,6 +18107,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Version restored'**
   String get filesVersionsRestored;
+
+  /// No description provided for @desktopCloseDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Close'**
+  String get desktopCloseDialogTitle;
+
+  /// No description provided for @desktopCloseDialogBody.
+  ///
+  /// In en, this message translates to:
+  /// **'After the window is closed, OmniNest will keep running in the background.'**
+  String get desktopCloseDialogBody;
+
+  /// No description provided for @desktopCloseDialogMinimize.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimize to tray'**
+  String get desktopCloseDialogMinimize;
+
+  /// No description provided for @desktopCloseDialogExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit app'**
+  String get desktopCloseDialogExit;
+
+  /// No description provided for @desktopCloseDialogRemember.
+  ///
+  /// In en, this message translates to:
+  /// **'Remember my choice and don\'t ask again'**
+  String get desktopCloseDialogRemember;
+
+  /// No description provided for @desktopCloseBehaviorTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Window close behavior'**
+  String get desktopCloseBehaviorTitle;
+
+  /// No description provided for @desktopCloseBehaviorAsk.
+  ///
+  /// In en, this message translates to:
+  /// **'Ask every time'**
+  String get desktopCloseBehaviorAsk;
+
+  /// No description provided for @desktopCloseBehaviorExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit directly'**
+  String get desktopCloseBehaviorExit;
 }
 
 class _AppLocalizationsDelegate

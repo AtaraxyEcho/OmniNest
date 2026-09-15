@@ -3,6 +3,7 @@ import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
+import 'package:omninest/core/window/desktop_close_action.dart';
 
 class ProfileAppearancePanel extends StatelessWidget {
   const ProfileAppearancePanel({
@@ -13,6 +14,8 @@ class ProfileAppearancePanel extends StatelessWidget {
     required this.onLanguageChanged,
     required this.onFontScaleChanged,
     required this.onBackdropSettings,
+    this.rememberedCloseAction,
+    this.onCloseBehaviorChanged,
     super.key,
   });
 
@@ -23,6 +26,12 @@ class ProfileAppearancePanel extends StatelessWidget {
   final ValueChanged<String> onLanguageChanged;
   final ValueChanged<FontScalePreset> onFontScaleChanged;
   final VoidCallback onBackdropSettings;
+
+  /// 记住的关闭窗口动作；null 表示每次询问，仅桌面端传入。
+  final DesktopCloseAction? rememberedCloseAction;
+
+  /// 关闭行为变更回调；null 表示平台不支持托盘，隐藏该设置行。
+  final ValueChanged<DesktopCloseAction?>? onCloseBehaviorChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -121,6 +130,33 @@ class ProfileAppearancePanel extends StatelessWidget {
             ),
           ),
           const Divider(height: 32),
+          if (onCloseBehaviorChanged != null) ...[
+            _ResponsivePreferenceRow(
+              icon: Icons.exit_to_app_rounded,
+              title: l10n.desktopCloseBehaviorTitle,
+              control: SegmentedButton<DesktopCloseAction?>(
+                showSelectedIcon: false,
+                segments: [
+                  ButtonSegment(
+                    value: null,
+                    label: Text(l10n.desktopCloseBehaviorAsk),
+                  ),
+                  ButtonSegment(
+                    value: DesktopCloseAction.minimizeToTray,
+                    label: Text(l10n.desktopCloseDialogMinimize),
+                  ),
+                  ButtonSegment(
+                    value: DesktopCloseAction.exitApp,
+                    label: Text(l10n.desktopCloseBehaviorExit),
+                  ),
+                ],
+                selected: {rememberedCloseAction},
+                onSelectionChanged:
+                    (selection) => onCloseBehaviorChanged!(selection.first),
+              ),
+            ),
+            const Divider(height: 32),
+          ],
           Material(
             type: MaterialType.transparency,
             child: ListTile(

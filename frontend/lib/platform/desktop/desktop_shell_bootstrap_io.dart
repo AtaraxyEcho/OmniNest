@@ -3,13 +3,14 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:omninest/core/window/desktop_close_flow.dart';
 import 'package:omninest/platform/desktop/desktop_single_instance.dart';
 import 'package:omninest/platform/desktop/desktop_tray_service.dart';
 import 'package:omninest/platform/desktop/desktop_hotkey_service.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 import 'package:window_manager/window_manager.dart';
 
-/// 桌面壳层引导：单实例锁 + 系统托盘 + 关窗隐藏（退出仅走托盘菜单）。
+/// 桌面壳层引导：单实例锁 + 系统托盘 + 关闭确认流程（退出或最小化到托盘）。
 ///
 /// 由条件导入门面在 IO 平台调用，移动端与 Web 为空实现。
 Future<void> bootstrapDesktopShell() async {
@@ -23,11 +24,16 @@ Future<void> bootstrapDesktopShell() async {
   }
   await windowManager.ensureInitialized();
   await windowManager.setPreventClose(true);
-  await DesktopTrayService().init();
+  final trayService = DesktopTrayService();
+  DesktopCloseFlow.instance.bind(
+    hideWindow: windowManager.hide,
+    quitApp: trayService.quit,
+  );
+  await trayService.init();
   // E1：系统级媒体键（播放/暂停、上一首、下一首），命令由音乐播放会话层桥接。
   await DesktopHotkeyService().registerMediaKeys();
   unawaited(_registerWindowsProtocol());
-  debugPrint('桌面壳层初始化完成：托盘与关窗隐藏已启用');
+  debugPrint('桌面壳层初始化完成：托盘与关闭确认流程已启用');
 }
 
 /// Windows 注册 omninest:// 协议到当前用户注册表（无需管理员）。

@@ -4311,5 +4311,13 @@
   "filesVersionsEmpty": "暂无历史版本",
   "filesVersionsRestore": "恢复",
   "filesVersionsCurrent": "当前",
-  "filesVersionsRestored": "已恢复版本"
+  "filesVersionsRestored": "已恢复版本",
+  "desktopCloseDialogTitle": "关闭",
+  "desktopCloseDialogBody": "关闭窗口后，程序将在后台继续运行。",
+  "desktopCloseDialogMinimize": "最小化到托盘",
+  "desktopCloseDialogExit": "退出程序",
+  "desktopCloseDialogRemember": "记住我的选择，下次不再询问",
+  "desktopCloseBehaviorTitle": "关闭窗口行为",
+  "desktopCloseBehaviorAsk": "每次询问",
+  "desktopCloseBehaviorExit": "直接退出"
 }
