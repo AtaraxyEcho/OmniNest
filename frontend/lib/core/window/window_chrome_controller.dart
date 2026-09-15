@@ -279,7 +279,12 @@ class WindowChromeController extends Notifier<WindowChromeState> {
         return;
       }
     }
-    await _applyResizableOnce();
+    // 全屏或隐藏 chrome 期间禁止变更窗口样式：window_manager 的 setResizable
+    // 直接写入 WS_THICKFRAME 且无 FRAMECHANGED 修正，中途执行会导致客户区内缩
+    // 露出白边；一次性恢复推迟到回到窗口态后执行。
+    if (!target.chromeHidden) {
+      await _applyResizableOnce();
+    }
   }
 
   Future<void> _applyHiddenChrome(int revision, bool fullscreen) async {

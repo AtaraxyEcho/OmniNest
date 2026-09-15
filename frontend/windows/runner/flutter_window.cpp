@@ -199,6 +199,13 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
     style |= WS_POPUP;
     ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE |
                   WS_EX_WINDOWEDGE);
+    // Flag fullscreen before touching styles so the WM_NCCALCSIZE handler
+    // pins client == window rect for this transition and for any style
+    // mutation later plugins perform while fullscreen (e.g. a bare
+    // WS_THICKFRAME write re-adding the resize border would otherwise inset
+    // the client area and expose white edges).
+    window_fullscreen_ = true;
+    window_frame_hidden_ = true;
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
     // Zero the DWM frame margins before snapping to the monitor rect so no
@@ -213,18 +220,20 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
     SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
                  monitor.right - monitor.left, monitor.bottom - monitor.top,
                  SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-    window_fullscreen_ = true;
-    window_frame_hidden_ = true;
     return;
   }
+  // Clear the fullscreen flag before restoring windowed styles so the
+  // default WM_NCCALCSIZE applies the caption/frame insets from here on;
+  // keeping the pin active through the restore would leave the client area
+  // overlapping the restored title bar.
+  window_fullscreen_ = false;
+  window_frame_hidden_ = false;
   SetWindowLongPtr(hwnd, GWL_STYLE, normal_window_style_);
   SetWindowLongPtr(hwnd, GWL_EXSTYLE, normal_window_ex_style_);
   RestoreWindowPlacement();
   SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
                    SWP_NOACTIVATE | SWP_FRAMECHANGED);
-  window_fullscreen_ = false;
-  window_frame_hidden_ = false;
 }
 
 void FlutterWindow::SaveWindowPlacement() {
@@ -270,6 +279,14 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
+      break;
+    case WM_NCCALCSIZE:
+      // While fullscreen, pin the client area to the full window rect so no
+      // style change (resize border re-added by any code path) can inset the
+      // client area and expose white edges around the Flutter view.
+      if (window_fullscreen_ && wparam) {
+        return 0;
+      }
       break;
   }
 

@@ -142,4 +142,46 @@ void main() {
       );
     },
   );
+
+  test(
+    'one-shot resizable restore defers until chrome leaves hidden state',
+    () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      const frameChannel = MethodChannel('omninest/window_frame');
+      const windowManagerChannel = MethodChannel('window_manager');
+      final resizableCalls = <bool>[];
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(frameChannel, (call) async => null);
+      addTearDown(() => messenger.setMockMethodCallHandler(frameChannel, null));
+      messenger.setMockMethodCallHandler(windowManagerChannel, (call) async {
+        if (call.method == 'setResizable') {
+          resizableCalls.add(
+            (call.arguments as Map<Object?, Object?>)['isResizable'] as bool,
+          );
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(windowManagerChannel, null),
+      );
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+      final controller = container.read(
+        windowChromeControllerProvider.notifier,
+      );
+
+      final lease = controller.acquireImmersive(owner: 'photos.slideshow');
+      await controller.pendingApply;
+      // 全屏应用期间禁止写入窗口样式，否则客户区内缩露出白边。
+      expect(resizableCalls, isEmpty);
+
+      lease.release();
+      await Future<void>.delayed(Duration.zero);
+      await controller.pendingApply;
+      // 回到窗口态后一次性补上可缩放性恢复，且恰一次。
+      expect(resizableCalls, [true]);
+    },
+  );
 }
