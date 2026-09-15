@@ -99,6 +99,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void onReaderSelectionActive(bool active);
   DateTime? get lastAppliedProgressAt;
   void applyProgressSnapshot(ReaderProgressSnapshot snapshot);
+  void prefetchNextChapterAtBoundary(int pageIndex);
 
   // ── 页面尺寸 ──
 
@@ -407,6 +408,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                   charOffset: charOffset,
                 );
                 onAnimationComplete();
+                prefetchNextChapterAtBoundary(index);
               },
               onPreviousChapterFn: () => tryNavigateChapter(-1),
               onNextChapterFn: () => tryNavigateChapter(1),
