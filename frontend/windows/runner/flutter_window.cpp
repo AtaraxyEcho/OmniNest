@@ -192,27 +192,39 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
     if (!window_placement_saved_) {
       SaveWindowPlacement();
     }
+    MONITORINFO monitor_info = {};
+    monitor_info.cbSize = sizeof(MONITORINFO);
+    if (!GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
+                        &monitor_info)) {
+      return;
+    }
     LONG_PTR style = normal_window_style_;
     LONG_PTR ex_style = normal_window_ex_style_;
     style &= ~(WS_CAPTION | WS_THICKFRAME | WS_BORDER | WS_DLGFRAME);
     style |= WS_POPUP;
     ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE |
                   WS_EX_WINDOWEDGE);
-    // Flag fullscreen before touching styles: WM_NCCALCSIZE pins client ==
-    // window rect for any style mutation while fullscreen, and
-    // WM_GETMINMAXINFO stretches the maximized rect to the full monitor.
+    // Flag fullscreen before touching styles so the WM_NCCALCSIZE handler
+    // pins client == window rect for this transition and for any style
+    // mutation later plugins perform while fullscreen (e.g. a bare
+    // WS_THICKFRAME write re-adding the resize border would otherwise inset
+    // the client area and expose white edges).
     window_fullscreen_ = true;
     window_frame_hidden_ = true;
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
-    // Zero the DWM frame margins so no white edges show up in the transition.
+    // Zero the DWM frame margins before snapping to the monitor rect so no
+    // white edges show up during the transition.
     MARGINS margins = {0, 0, 0, 0};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
-    // Maximize the borderless window: DWM plays the same continuous zoom as
-    // the maximize button while the app itself relayouts exactly once, so the
-    // motion never stutters or flashes; WM_GETMINMAXINFO makes the maximized
-    // rect cover the taskbar.
-    ::ShowWindow(hwnd, SW_MAXIMIZE);
+    const RECT monitor = monitor_info.rcMonitor;
+    SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
+                 monitor.right - monitor.left, monitor.bottom - monitor.top,
+                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+    // Snap again to absorb the 1px offset caused by DPI or frame changes.
+    SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
+                 monitor.right - monitor.left, monitor.bottom - monitor.top,
+                 SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     return;
   }
   // Clear the fullscreen flag before restoring windowed styles so the
@@ -221,11 +233,7 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
   window_frame_hidden_ = false;
   SetWindowLongPtr(hwnd, GWL_STYLE, normal_window_style_);
   SetWindowLongPtr(hwnd, GWL_EXSTYLE, normal_window_ex_style_);
-  // Restore plays the mirrored DWM shrink animation with the caption back in
-  // place; the system restores the pre-maximize rect itself, so only the
-  // saved-placement flag needs clearing.
-  ::ShowWindow(hwnd, SW_RESTORE);
-  window_placement_saved_ = false;
+  RestoreWindowPlacement();
   SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
                    SWP_NOACTIVATE | SWP_FRAMECHANGED);
@@ -326,26 +334,6 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       // client area and expose white edges around the Flutter view.
       if (window_fullscreen_ && wparam) {
         return 0;
-      }
-      break;
-    case WM_GETMINMAXINFO:
-      // While fullscreen the maximized rect must be the full monitor (the
-      // default is the work area), so the borderless maximize covers the
-      // taskbar exactly like a snapped fullscreen window.
-      if (window_fullscreen_) {
-        MONITORINFO monitor_info = {};
-        monitor_info.cbSize = sizeof(MONITORINFO);
-        if (GetMonitorInfo(MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
-                           &monitor_info)) {
-          MINMAXINFO* info = reinterpret_cast<MINMAXINFO*>(lparam);
-          info->ptMaxSize.x =
-              monitor_info.rcMonitor.right - monitor_info.rcMonitor.left;
-          info->ptMaxSize.y =
-              monitor_info.rcMonitor.bottom - monitor_info.rcMonitor.top;
-          info->ptMaxPosition.x = monitor_info.rcMonitor.left;
-          info->ptMaxPosition.y = monitor_info.rcMonitor.top;
-          return 0;
-        }
       }
       break;
   }

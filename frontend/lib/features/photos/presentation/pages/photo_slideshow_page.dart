@@ -73,6 +73,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   late Animation<double> _transitionFade;
   WindowChromeLease? _windowChromeLease;
 
+  /// 入场自绘扩缩：原生窗口切换为一步吸附，丝滑过渡由内容层缩放+淡入承担。
+  late final AnimationController _entryController;
+  late final Animation<double> _entryScale;
+  late final Animation<double> _entryFade;
+
   /// 解码位图缓存：位图本体归 ImageCache 所有（live 保活），本页持窗口引用。
   late final SlideshowImageCache _imageCache = SlideshowImageCache();
 
@@ -117,11 +122,23 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       parent: _transitionController,
       curve: _transitionCurve,
     );
+    _entryController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+    );
+    final entryCurve = CurvedAnimation(
+      parent: _entryController,
+      curve: Curves.easeOutCubic,
+    );
+    _entryScale = Tween<double>(begin: 0.94, end: 1.0).animate(entryCurve);
+    _entryFade = Tween<double>(begin: 0.0, end: 1.0).animate(entryCurve);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _windowChromeLease = ref
           .read(windowChromeControllerProvider.notifier)
           .acquireImmersive(owner: 'photos.slideshow');
+      // 入场扩缩与窗口吸附同步启动，遮蔽原生一步切换的硬切感。
+      _entryController.forward();
       unawaited(_loadInitialImage());
     });
   }
@@ -160,6 +177,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _idleTimer?.cancel();
     _progressController.dispose();
     _transitionController.dispose();
+    _entryController.dispose();
     _windowChromeLease?.release();
     // 位图本体归 ImageCache 所有（live 保活），页面销毁不 dispose；
     // 窗口引用随 State 释放，后台完成的解码因 _disposed 守卫不再写回。
@@ -552,54 +570,60 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             behavior: HitTestBehavior.opaque,
             onTap: _resetIdle,
             onHorizontalDragEnd: _onHorizontalDragEnd,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                switch (_phase) {
-                  SlideshowPhase.loading => const Center(
-                    child: SizedBox.square(
-                      dimension: 28,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.5,
-                        color: Color(0x66FFFFFF),
+            child: FadeTransition(
+              opacity: _entryFade,
+              child: ScaleTransition(
+                scale: _entryScale,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    switch (_phase) {
+                      SlideshowPhase.loading => const Center(
+                        child: SizedBox.square(
+                          dimension: 28,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2.5,
+                            color: Color(0x66FFFFFF),
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                  SlideshowPhase.failed => _buildErrorRetry(context),
-                  SlideshowPhase.ready => Stack(
-                    fit: StackFit.expand,
-                    children: [_buildBackdropLayers(), _buildSlideLayers()],
-                  ),
-                },
-                _buildGradients(showControls),
-                _buildTopBar(context, photo, showControls),
-                if (_photos.length > 1) ...[
-                  _buildArrow(context, right: false, visible: showControls),
-                  _buildArrow(context, right: true, visible: showControls),
-                ],
-                _buildBottomArea(context, photo, showControls),
-                // 面板 scrim 在侧栏之下（zIndex 语义），点击空白处同时收起。
-                if (_showInfo || _showShare)
-                  Positioned.fill(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap:
+                      SlideshowPhase.failed => _buildErrorRetry(context),
+                      SlideshowPhase.ready => Stack(
+                        fit: StackFit.expand,
+                        children: [_buildBackdropLayers(), _buildSlideLayers()],
+                      ),
+                    },
+                    _buildGradients(showControls),
+                    _buildTopBar(context, photo, showControls),
+                    if (_photos.length > 1) ...[
+                      _buildArrow(context, right: false, visible: showControls),
+                      _buildArrow(context, right: true, visible: showControls),
+                    ],
+                    _buildBottomArea(context, photo, showControls),
+                    // 面板 scrim 在侧栏之下（zIndex 语义），点击空白处同时收起。
+                    if (_showInfo || _showShare)
+                      Positioned.fill(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap:
+                              () => setState(() {
+                                _showInfo = false;
+                                _showShare = false;
+                              }),
+                        ),
+                      ),
+                    _buildInfoPanel(context, photo),
+                    PhotoSharePanel(
+                      visible: _showShare,
+                      photo: photo,
+                      onDone:
                           () => setState(() {
-                            _showInfo = false;
                             _showShare = false;
                           }),
                     ),
-                  ),
-                _buildInfoPanel(context, photo),
-                PhotoSharePanel(
-                  visible: _showShare,
-                  photo: photo,
-                  onDone:
-                      () => setState(() {
-                        _showShare = false;
-                      }),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
