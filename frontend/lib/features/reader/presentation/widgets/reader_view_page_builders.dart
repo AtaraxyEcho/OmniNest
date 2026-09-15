@@ -32,6 +32,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool _viewportUpdateScheduled = false;
   Size? _pendingViewportSize;
   bool _pageNavigatorWarmupScheduled = false;
+  String? _pageCountWarmupChapterId;
   bool _scrollRestoreScheduled = false;
   bool _pageRestoreScheduled = false;
   ReaderProgressSnapshot? _pendingProgressSnapshot;
@@ -47,6 +48,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   bool get isPageMode;
   int get pageModePage;
   set pageModePage(int value);
+  ValueNotifier<int> get pageCountNotifier;
   bool get isRestoringProgress;
   set isRestoringProgress(bool value);
   DateTime get restoreSilenceUntil;
@@ -251,8 +253,20 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
       if (!mounted || currentChapterId != chapterId) {
         return;
       }
+      // 换章后重置就绪页数，避免旧章页数造成边界误判。
+      if (_pageCountWarmupChapterId != chapterId) {
+        _pageCountWarmupChapterId = chapterId;
+        pageCountNotifier.value = 0;
+      }
       navigator.ensurePage(0);
-      navigator.schedulePrefetch(pageIndex, onPageReady: _requestReaderRebuild);
+      pageCountNotifier.value = navigator.readablePageCount;
+      navigator.schedulePrefetch(
+        pageIndex,
+        onPageReady: () {
+          if (!mounted) return;
+          pageCountNotifier.value = navigator.readablePageCount;
+        },
+      );
     });
   }
 
@@ -328,6 +342,7 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
               '${settings.pageTurnMode}',
             ),
             controller: pageTurnController,
+            pageCountNotifier: pageCountNotifier,
             state: PagedState(
               chapterId: currentChapterId,
               pageIndex: pageModePage,

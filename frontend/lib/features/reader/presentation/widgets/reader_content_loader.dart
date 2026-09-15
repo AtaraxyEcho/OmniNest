@@ -162,7 +162,16 @@ class PageNavigator {
       return _cache[pageIndex];
     }
 
+    final sw = Stopwatch()..start();
     final slice = _computeSlice(pageIndex);
+    sw.stop();
+    if (kDebugMode && sw.elapsedMilliseconds > 8) {
+      // 帧预算观测：单页测量超过半帧（8ms/120Hz 预算）时告警。
+      readerDebugLog(
+        'PageNavigator: slice#$pageIndex computed in '
+        '${sw.elapsedMilliseconds}ms',
+      );
+    }
     if (slice == null) {
       _reachedEnd = true;
       return null;

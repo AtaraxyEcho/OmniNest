@@ -84,6 +84,7 @@ class ReaderPageView extends StatefulWidget {
     this.selectionActive = false,
     this.controller,
     this.turnMode = PageTurnMode.slide,
+    this.pageCountNotifier,
     super.key,
   });
 
@@ -96,6 +97,10 @@ class ReaderPageView extends StatefulWidget {
   final bool selectionActive;
   final ReaderPageTurnController? controller;
   final PageTurnMode turnMode;
+
+  /// 预取就绪页数通知器：变化只同步本 State 的 [_ReaderPageViewState._localPageCount]，
+  /// 不触发父级整页重建。
+  final ValueNotifier<int>? pageCountNotifier;
 
   @override
   State<ReaderPageView> createState() => _ReaderPageViewState();
@@ -149,7 +154,19 @@ class _ReaderPageViewState extends State<ReaderPageView>
   void initState() {
     super.initState();
     widget.controller?.addListener(_onExternalPageCommand);
+    widget.pageCountNotifier?.addListener(_onPageCountChanged);
     _initForMode();
+  }
+
+  /// 预取就绪页数直连：仅更新本地计数（事件时读点），不重建页面。
+  void _onPageCountChanged() {
+    final value = widget.pageCountNotifier?.value ?? _localPageCount;
+    if (!mounted || value == _localPageCount) {
+      return;
+    }
+    setState(() {
+      _localPageCount = value;
+    });
   }
 
   @override
@@ -159,6 +176,13 @@ class _ReaderPageViewState extends State<ReaderPageView>
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_onExternalPageCommand);
       widget.controller?.addListener(_onExternalPageCommand);
+    }
+    if (oldWidget.pageCountNotifier != widget.pageCountNotifier) {
+      oldWidget.pageCountNotifier?.removeListener(_onPageCountChanged);
+      widget.pageCountNotifier?.addListener(_onPageCountChanged);
+      if (widget.pageCountNotifier != null) {
+        _localPageCount = widget.pageCountNotifier!.value;
+      }
     }
 
     if (oldWidget.turnMode != widget.turnMode) {
@@ -177,27 +201,20 @@ class _ReaderPageViewState extends State<ReaderPageView>
       _boundaryRequestInFlight = false;
     }
 
-    // 允许窗口滑动导致页数增减；缩小时钳制当前页。
-    if (widget.state.pageCount != _localPageCount) {
-      _localPageCount = widget.state.pageCount;
-      if (_localPageCount > 0 &&
-          widget.state.pageIndex >=
-              _localPageCount + (widget.state.hasMore ? 1 : 0)) {
-        // 交给父级 onPageChanged / _syncPageView 纠正。
-      }
-    }
-
     if (widget.turnMode == PageTurnMode.slide &&
         oldWidget.state.pageIndex != widget.state.pageIndex) {
       _syncPageView();
     }
 
-    _cacheCurrentPage();
+    if (widget.turnMode != PageTurnMode.slide) {
+      _cacheCurrentPage();
+    }
   }
 
   @override
   void dispose() {
     widget.controller?.removeListener(_onExternalPageCommand);
+    widget.pageCountNotifier?.removeListener(_onPageCountChanged);
     _boundaryResetTimer?.cancel();
     _disposeControllers();
     _flipProgressNotifier.dispose();

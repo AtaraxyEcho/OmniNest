@@ -35,14 +35,30 @@ class ReaderAnnotationHandler {
 
   List<ReaderAnnotation> _annotations = [];
 
+  // 章节批注过滤结果缓存：以 _annotations 列表身份 + 章节为键。
+  // 批注重载（新列表身份）或切章自然失效，调用方在整页重建时
+  // 拿到稳定身份，下游 identical 判定生效、避免全章重投影。
+  List<ReaderAnnotation>? _chapterFilterCache;
+  List<ReaderAnnotation>? _chapterFilterSource;
+  String? _chapterFilterId;
+
   List<ReaderAnnotation> get annotations => _annotations;
 
   List<ReaderAnnotation> get chapterAnnotations =>
       annotationsForChapter(chapterId);
 
-  /// 指定章节的批注（连续滚动窗口内邻章渲染用）。
-  List<ReaderAnnotation> annotationsForChapter(String id) =>
-      _annotations.where((a) => a.chapterId == id).toList();
+  /// 指定章节的批注。
+  List<ReaderAnnotation> annotationsForChapter(String id) {
+    if (_chapterFilterSource == null ||
+        !identical(_chapterFilterSource, _annotations) ||
+        _chapterFilterId != id) {
+      _chapterFilterSource = _annotations;
+      _chapterFilterId = id;
+      _chapterFilterCache =
+          _annotations.where((a) => a.chapterId == id).toList();
+    }
+    return _chapterFilterCache!;
+  }
 
   /// 更新当前章节，确保批注读写使用正在显示的章节。
   void updateChapter(String value) {

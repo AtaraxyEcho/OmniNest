@@ -11,6 +11,11 @@ class BlockClipper {
   static List<ContentBlock>? _prefixBlocks;
   static List<int>? _prefixOffsets;
 
+  /// 裁剪结果缓存：同一 blocks 身份 + 同一字符区间的裁剪结果复用，
+  /// 使调用方（整页重建）拿到的列表身份稳定，下游 identical 判定生效。
+  static final List<_ClipCacheEntry> _clipCache = <_ClipCacheEntry>[];
+  static const _clipCacheLimit = 8;
+
   /// 构建或复用 blocks 的累积字符前缀（blocks[i] 起始偏移，长度 = blocks.length + 1）。
   static List<int> _prefixFor(List<ContentBlock> blocks) {
     if (identical(_prefixBlocks, blocks) && _prefixOffsets != null) {
@@ -67,6 +72,19 @@ class BlockClipper {
   ) {
     if (blocks.isEmpty || startCharOffset >= endCharOffset) return [];
 
+    for (var i = 0; i < _clipCache.length; i++) {
+      final entry = _clipCache[i];
+      if (identical(entry.blocks, blocks) &&
+          entry.start == startCharOffset &&
+          entry.end == endCharOffset) {
+        if (i != 0) {
+          _clipCache.removeAt(i);
+          _clipCache.insert(0, entry);
+        }
+        return entry.result;
+      }
+    }
+
     final offsets = _prefixFor(blocks);
     // 二分定位第一个 blockEnd > startCharOffset 的块
     var firstIdx = _lowerBound(offsets, startCharOffset);
@@ -108,6 +126,13 @@ class BlockClipper {
       if (trimmed != null) result.add(trimmed);
     }
 
+    _clipCache.insert(
+      0,
+      _ClipCacheEntry(blocks, startCharOffset, endCharOffset, result),
+    );
+    while (_clipCache.length > _clipCacheLimit) {
+      _clipCache.removeLast();
+    }
     return result;
   }
 
@@ -307,4 +332,14 @@ class BlockClipper {
       ),
     };
   }
+}
+
+/// 裁剪结果缓存条目：以 blocks 列表身份为键的一部分。
+class _ClipCacheEntry {
+  const _ClipCacheEntry(this.blocks, this.start, this.end, this.result);
+
+  final List<ContentBlock> blocks;
+  final int start;
+  final int end;
+  final List<ContentBlock> result;
 }

@@ -74,20 +74,6 @@ class ReaderViewPage extends ConsumerStatefulWidget {
   ConsumerState<ReaderViewPage> createState() => _ReaderViewPageState();
 }
 
-class _FlatPageEntry {
-  const _FlatPageEntry({
-    required this.chapterId,
-    required this.localPageIndex,
-    required this.chapterTitle,
-    required this.chapterIndex,
-  });
-
-  final String chapterId;
-  final int localPageIndex;
-  final String chapterTitle;
-  final int chapterIndex;
-}
-
 class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     with
         ReaderViewPageBuilders,
@@ -124,8 +110,10 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
 
   // ── 渲染状态 ──
   final ScrollController _scrollController = ScrollController();
-  List<_FlatPageEntry> _flatPages = [];
-  int _currentPageIndex = 0;
+
+  /// 页模式就绪页数通知器：PageNavigator 预取进度直连 ReaderPageView，
+  /// 预取不再触发父级整页重建。
+  final ValueNotifier<int> _pageCountNotifier = ValueNotifier<int>(0);
   int _pageModePage = 0;
 
   // ── 进度 ──
@@ -245,17 +233,11 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   ReaderAnnotationHandler? get annotationHandler => _annotationHandler;
   @override
-  dynamic get flatPages => _flatPages;
-  @override
-  set flatPages(dynamic v) => _flatPages = v;
-  @override
-  int get currentPageIndex => _currentPageIndex;
-  @override
-  set currentPageIndex(int v) => _currentPageIndex = v;
-  @override
   int get pageModePage => _pageModePage;
   @override
   set pageModePage(int v) => _pageModePage = v;
+  @override
+  ValueNotifier<int> get pageCountNotifier => _pageCountNotifier;
   @override
   double get scrollProgress => _scrollProgressNotifier.value;
 
@@ -526,8 +508,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Size? get pageViewportSize => _pageViewportSize;
   @override
   set pageViewportSize(Size? value) => _pageViewportSize = value;
-  @override
-  dynamic buildFlatPages() => _buildFlatPages();
 
   @override
   void onReaderSelectionActive(bool active) {
@@ -550,26 +530,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (mounted) {
       setState(update);
     }
-  }
-
-  List<_FlatPageEntry> _buildFlatPages() {
-    final result = <_FlatPageEntry>[];
-    final chapters = contentLoader!.allChapters;
-    for (var ci = 0; ci < chapters.length; ci++) {
-      final data = contentLoader!.get(chapters[ci].id, settings);
-      if (data == null || data.slices.isEmpty) continue;
-      for (var i = 0; i < data.slices.length; i++) {
-        result.add(
-          _FlatPageEntry(
-            chapterId: chapters[ci].id,
-            localPageIndex: i,
-            chapterTitle: data.content.title,
-            chapterIndex: ci,
-          ),
-        );
-      }
-    }
-    return result;
   }
 
   /// 当前章节标题，用于加载遮罩显示。
@@ -732,6 +692,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     if (kIsWeb) BrowserContextMenu.enableContextMenu();
     _scrollProgressNotifier.dispose();
     _bookProgressNotifier.dispose();
+    _pageCountNotifier.dispose();
     _bookProgressRecomputeTimer?.cancel();
     _hideTimer?.cancel();
     _persistTimer?.cancel();
@@ -1084,19 +1045,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   Widget _buildChapterPanel(ReaderItemDetail detail) {
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
     final allChapters =
-        parsedBook?.chapters
-            .asMap()
-            .entries
-            .map(
-              (e) => ReaderChapter.fromParsed(
-                e.key,
-                e.value.title,
-                contentPath: e.value.contentPath,
-                level: e.value.level,
-              ),
-            )
-            .toList() ??
-        detail.chapters;
+        parsedBook == null ? detail.chapters : _cachedChaptersFor(parsedBook);
 
     return ChapterPanel(
       chapters: allChapters,
@@ -1221,8 +1170,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       readerDebugLog(
         'ReaderView: rendering content — '
         'mode=${_isPageMode ? "page" : "scroll"}, '
-        'contentLength=${content.content.length}, '
-        'flatPages=${_flatPages.length}',
+        'contentLength=${content.content.length}',
       );
     }
     if (_isPageMode) return buildPageModeContent(content);
