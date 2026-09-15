@@ -639,17 +639,39 @@ class ReaderReadingRuntime {
   /// 失效全部在途续作（与 [startRestore] 同语义）：滚动恢复 tick 若在
   /// 途，下一帧经 token/isBusy 双检中止，不得驱动 jumpTo 追逐本相位
   /// 的新目标（B10 审查修正的编排互斥）。
+  ///
+  /// 相位完成完全依赖页面侧定位回调（build 期调度），无帧编排兜底；
+  /// 携带与滚动恢复一致的总超时（chapter 数据滞缺/调度链断裂时
+  /// isBusy 恒真会锁死进度回写与遮罩）。
   void beginRestorePhase(ReaderPositionTarget target) {
     operationToken.invalidate();
     restore.begin(target, identity: identityProvider?.call());
     _restoreTickToken = null;
+    _cancelRestorePhaseTimeout();
+    _restorePhaseTimeoutTimer = clock.schedule(_restoreTotalTimeout, () {
+      _restorePhaseTimeoutTimer = null;
+      if (!restore.isBusy) {
+        return;
+      }
+      final phaseTarget = restore.target;
+      restore.markTimedOut();
+      if (phaseTarget != null) {
+        _emitRestoreFinished(ReaderRestorePhase.timedOut, phaseTarget);
+      }
+    });
   }
 
   /// 页模式定位完成。
-  void completeRestorePhase() => restore.markCompleted();
+  void completeRestorePhase() {
+    _cancelRestorePhaseTimeout();
+    restore.markCompleted();
+  }
 
   /// 页模式定位异常。
-  void failRestorePhase() => restore.markFailed();
+  void failRestorePhase() {
+    _cancelRestorePhaseTimeout();
+    restore.markFailed();
+  }
 
   /// 取消当前恢复相位（显式导航/离场/用户滚动）。
   ///
@@ -660,6 +682,7 @@ class ReaderReadingRuntime {
     if (target == null) {
       return;
     }
+    _cancelRestorePhaseTimeout();
     restore.cancel();
     _restoreTickToken = null;
     emitEvent(
@@ -670,6 +693,15 @@ class ReaderReadingRuntime {
         charOffset: target.charOffset,
       ),
     );
+  }
+
+  /// 页模式恢复相位总超时计时器；正常经 [completeRestorePhase] /
+  /// [failRestorePhase] / [cancelRestorePhase] / 重复 begin 清除。
+  Timer? _restorePhaseTimeoutTimer;
+
+  void _cancelRestorePhaseTimeout() {
+    _restorePhaseTimeoutTimer?.cancel();
+    _restorePhaseTimeoutTimer = null;
   }
 
   /// 注入点装配完整性断言（debug 期）：任一缺失都会静默降级
@@ -1052,6 +1084,7 @@ class ReaderReadingRuntime {
   /// 页面离场释放内部计时资源。
   void dispose() {
     _settleTimer?.cancel();
+    _cancelRestorePhaseTimeout();
     wheelBurst.cancel();
   }
 

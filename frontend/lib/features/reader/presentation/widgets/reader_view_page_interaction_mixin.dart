@@ -251,16 +251,27 @@ mixin ReaderViewPageInteractionMixin
     if (max <= 0) {
       return null;
     }
+    // 目标章未入窗（切章后窗口重锚定经 100ms 合并延迟，startRestore 可能
+    // 先于重锚定启动）：等待窗口含目标章后再换算，前缀缺失静默落到 0
+    // 会把恢复落点锚到错误章节顶部（错章根因之一）。
+    if (continuousScrollController.entryFor(target.chapterId) == null) {
+      return null;
+    }
     if (target.charOffset <= 0) {
-      // 章首落点依赖窗口内各章高度：未精测的短章估算高度严重失真
-      // （348 字符仅估 84px），落点后精测修订会把内容顶走，视口主体
-      // 变成下一章。此处等待窗口高度收敛并主动触发精测，收敛前
-      // 返回 null 由引擎多帧重试（总超时兜底）。
+      // 章首落点只依赖目标章之前的窗口章高度（前缀），目标章之后的章
+      // 不参与换算，不等待其精测，缩短 applying 期。
       final entries = continuousScrollController.entries;
       // 窗口内已有估算高度但未精测的章：逐个触发精测（幂等，内部
       // 批处理去重）；无高度数据的章（空块）不阻塞，避免死等。
       final pendingPrecise = <String>[];
+      var reachedTarget = false;
       for (final e in entries) {
+        if (reachedTarget) {
+          break;
+        }
+        if (e.chapterId == target.chapterId) {
+          reachedTarget = true;
+        }
         final data = contentLoader?.getByChapterId(e.chapterId);
         if (data != null &&
             data.cumulativeHeights.isNotEmpty &&

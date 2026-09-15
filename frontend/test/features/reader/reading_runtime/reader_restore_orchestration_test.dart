@@ -7,6 +7,7 @@ import 'package:omninest/features/reader/application/reading_runtime/reader_read
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_delegate.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_restore_manager.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_clock.dart';
+import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_diagnostics.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_runtime_identity.dart';
 import 'package:omninest/features/reader/application/reading_runtime/reader_scroll_effect.dart';
 
@@ -98,19 +99,51 @@ void _pump(_ManualFrameScheduler frames, _FakeClock clock, Duration step) {
   frames.pump();
 }
 
+class _FakeScheduledTimer implements Timer {
+  _FakeScheduledTimer(this._clock, this._deadline, this._callback);
+
+  final _FakeClock _clock;
+  final DateTime _deadline;
+  final void Function() _callback;
+  bool _cancelled = false;
+
+  void fireIfDue() {
+    if (!_cancelled && !_clock.now.isBefore(_deadline)) {
+      _callback();
+      _cancelled = true;
+    }
+  }
+
+  @override
+  void cancel() => _cancelled = true;
+
+  @override
+  bool get isActive => !_cancelled;
+
+  @override
+  int get tick => _cancelled ? 1 : 0;
+}
+
 class _FakeClock implements ReaderRuntimeClock {
   DateTime _now = DateTime(2026, 1, 1);
+  final _timers = <_FakeScheduledTimer>[];
 
   @override
   DateTime get now => _now;
 
   @override
   Timer schedule(Duration duration, void Function() callback) {
-    throw UnimplementedError('restore orchestration does not use clock timers');
+    final timer = _FakeScheduledTimer(this, _now.add(duration), callback);
+    _timers.add(timer);
+    return timer;
   }
 
   void advance(Duration duration) {
     _now = _now.add(duration);
+    for (final timer in List<_FakeScheduledTimer>.of(_timers)) {
+      timer.fireIfDue();
+    }
+    _timers.removeWhere((t) => !t.isActive);
   }
 }
 
@@ -347,5 +380,41 @@ void main() {
     runtime.startRestore(target);
     expect(runtime.restore.phase, ReaderRestorePhase.idle);
     expect(frames.pendingCount, 0);
+  });
+
+  test('页模式相位超时：定位回调缺失时 10s 后 timedOut 解除占用', () {
+    final h = _buildHarness();
+    h.runtime.beginRestorePhase(target);
+    expect(h.runtime.restore.phase, ReaderRestorePhase.applying);
+    expect(h.runtime.isRestoreApplying, isTrue);
+
+    // 定位链未回调（chapter 数据滞缺/调度断裂）：推钟至总超时。
+    h.clock.advance(const Duration(seconds: 10));
+    expect(h.runtime.restore.phase, ReaderRestorePhase.timedOut);
+    expect(h.runtime.restorePhaseTarget, isNull);
+    expect(h.runtime.isRestoreApplying, isFalse);
+    expect(
+      h.runtime.eventLog.events.any(
+        (e) =>
+            e.type == ReaderRuntimeEventType.restoreFinished &&
+            e.phase == ReaderRestorePhase.timedOut.name,
+      ),
+      isTrue,
+    );
+  });
+
+  test('页模式相位完成/取消清除超时计时器，超时不再触发', () {
+    final h = _buildHarness();
+    h.runtime.beginRestorePhase(target);
+    h.runtime.completeRestorePhase();
+    expect(h.runtime.restore.phase, ReaderRestorePhase.completed);
+
+    h.runtime.beginRestorePhase(target);
+    h.runtime.cancelRestorePhase();
+    expect(h.runtime.restore.phase, ReaderRestorePhase.cancelled);
+
+    // 计时器已清除：推钟超过总超时不改变终态。
+    h.clock.advance(const Duration(seconds: 20));
+    expect(h.runtime.restore.phase, ReaderRestorePhase.cancelled);
   });
 }
