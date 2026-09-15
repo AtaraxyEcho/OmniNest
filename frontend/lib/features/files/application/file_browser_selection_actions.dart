@@ -149,10 +149,30 @@ extension FileBrowserSelectionActions on FileBrowserController {
     });
   }
 
+  /// purge 任务提交成功后从回收站列表乐观移除对应条目。
+  ///
+  /// 永久删除由后端异步任务执行，整页重拉会在任务处理前把条目重新带回
+  /// 列表；失败场景由任务中心呈现，不在此处轮询。
+  void _removeFromRecycleBin(Set<String> fileIds) {
+    final current = _currentState;
+    if (current == null || fileIds.isEmpty) {
+      return;
+    }
+    _emitState(
+      current.copyWith(
+        recycleBin:
+            current.recycleBin
+                .where((node) => !fileIds.contains(node.id))
+                .toList(),
+      ),
+    );
+  }
+
   Future<void> purgeFile(FileNode file) async {
     await _runAction(FileOperation.purge, () async {
       await _repository.purgeFile(file.id);
-      await showRecycleBin();
+      _removeFromRecycleBin({file.id});
+      notifyTaskSubmitted();
     });
   }
 
@@ -216,7 +236,8 @@ extension FileBrowserSelectionActions on FileBrowserController {
     await _runAction(FileOperation.batchPurge, () async {
       await _repository.batchPurgeFiles(ids.toList());
       _clearSelection();
-      await showRecycleBin();
+      _removeFromRecycleBin(ids);
+      notifyTaskSubmitted();
     });
   }
 

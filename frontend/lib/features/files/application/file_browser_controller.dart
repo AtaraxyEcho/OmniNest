@@ -15,6 +15,7 @@ import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 import 'package:omninest/features/files/domain/upload_part_size.dart';
+import 'package:omninest/features/tasks/application/task_controller.dart';
 
 export 'package:omninest/features/files/data/file_providers.dart';
 export 'package:omninest/features/files/application/file_browser_models.dart';
@@ -96,6 +97,11 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
       return;
     }
     state = AsyncData(current.copyWith(clearLastActionError: true));
+  }
+
+  /// 异步任务提交成功后刷新全局任务摘要徽标。
+  void notifyTaskSubmitted() {
+    ref.invalidate(activeTaskSummaryProvider);
   }
 
   Future<T> _runAction<T>(

@@ -98,6 +98,10 @@ extension FileBrowserUploadActions on FileBrowserController {
         ),
       );
       await _runUploadRuntime(taskId);
+      final settled = _findLocalUploadTask(taskId);
+      if (settled?.status.toUpperCase() == 'COMPLETED') {
+        await _refreshAfterLocalUploadSettled();
+      }
     });
   }
 
@@ -165,13 +169,16 @@ extension FileBrowserUploadActions on FileBrowserController {
         ),
       );
     }
-    await _uploadSingleFile(
+    final result = await _uploadSingleFile(
       pending.file,
       taskId: taskId,
       fileName: pending.fileName,
       sizeBytes: pending.sizeBytes,
       mimeType: pending.mimeType,
     );
+    if (result == _UploadFileResult.completed) {
+      await _refreshAfterLocalUploadSettled();
+    }
   }
 
   /// 取消冲突上传任务。
@@ -221,12 +228,7 @@ extension FileBrowserUploadActions on FileBrowserController {
           _recordActionError(FileOperation.upload, error);
         }
       }
-      final currentSection = _currentState?.section;
-      if (currentSection == FileManagerSection.uploadQueue) {
-        await showUploadQueue();
-      } else {
-        await refreshFileNodesForCurrentSection();
-      }
+      await _refreshAfterLocalUploadSettled();
       return FileUploadBatchResult(
         total: files.length,
         completed: completed,
@@ -237,6 +239,16 @@ extension FileBrowserUploadActions on FileBrowserController {
     } catch (error) {
       _recordActionError(FileOperation.upload, error);
       rethrow;
+    }
+  }
+
+  /// 本地上传任务完成后的列表收尾，与批量上传路径保持一致。
+  Future<void> _refreshAfterLocalUploadSettled() async {
+    final currentSection = _currentState?.section;
+    if (currentSection == FileManagerSection.uploadQueue) {
+      await showUploadQueue();
+    } else {
+      await refreshFileNodesForCurrentSection();
     }
   }
 

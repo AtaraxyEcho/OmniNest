@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -23,6 +25,7 @@ class BatchProgressDialog extends ConsumerStatefulWidget {
 
 class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
   bool _isDownloading = false;
+  bool _refreshedAfterTerminal = false;
 
   Future<void> _downloadArchive() async {
     if (_isDownloading) return;
@@ -66,6 +69,26 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
 
   @override
   Widget build(BuildContext context) {
+    // 改动型批量任务到达终态后立即刷新照片数据，不依赖 realtime 失效
+    // 事件兜底；下载任务只产出压缩包，不改动照片数据，无需刷新。失败
+    // 任务也可能已应用部分修改，同样刷新。
+    ref.listen<AsyncValue<PhotoBatchTaskMonitorState>>(
+      photoBatchTaskMonitorProvider(widget.taskId),
+      (previous, next) {
+        final task = next.asData?.value.task;
+        if (task == null || task.taskType == 'DOWNLOAD') {
+          return;
+        }
+        if (!task.isCompleted && !task.isFailed) {
+          return;
+        }
+        if (_refreshedAfterTerminal) {
+          return;
+        }
+        _refreshedAfterTerminal = true;
+        unawaited(ref.read(photoCenterControllerProvider.notifier).refresh());
+      },
+    );
     final monitor = ref.watch(photoBatchTaskMonitorProvider(widget.taskId));
     final snapshot = monitor.asData?.value;
     final task = snapshot?.task;

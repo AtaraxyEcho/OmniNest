@@ -11,6 +11,8 @@ import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/domain/file_operation.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/tasks/application/task_controller.dart';
+import 'package:omninest/features/tasks/domain/task_record.dart';
 
 void main() {
   test('paused upload resumes from next unfinished part', () async {
@@ -72,6 +74,107 @@ void main() {
     ]);
     expect(repository.completedPartNumbers, [1, 2]);
     expect(repository.completedSessions, ['upload-123']);
+  });
+
+  test(
+    'resuming a paused upload refreshes the file list on completion',
+    () async {
+      final repository = _FakeFileRepository();
+      final container = ProviderContainer.test(
+        overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+      );
+      addTearDown(container.dispose);
+      final controller = container.read(fileBrowserControllerProvider.notifier);
+      await container.read(fileBrowserControllerProvider.future);
+
+      final uploadFuture = controller.uploadFiles([
+        XFile.fromData(
+          Uint8List.fromList([1, 2, 3, 4, 5, 6]),
+          path: 'large.bin',
+          name: 'large.bin',
+          mimeType: 'application/octet-stream',
+        ),
+      ]);
+      await repository.firstUploadStarted.future;
+      final task =
+          container
+              .read(fileBrowserControllerProvider)
+              .value!
+              .localUploadTasks
+              .single;
+      controller.pauseLocalUploadTask(task.id);
+      repository.firstUploadResult.complete('etag-1');
+      await uploadFuture;
+
+      final requestCountBeforeResume = repository.personalPageRequests.length;
+      final resumeFuture = controller.resumeLocalUploadTask(task.id);
+      await repository.secondUploadStarted.future;
+      repository.secondUploadResult.complete('etag-2');
+      await resumeFuture;
+
+      final completedTask =
+          container
+              .read(fileBrowserControllerProvider)
+              .value!
+              .localUploadTasks
+              .single;
+      expect(completedTask.status, 'COMPLETED');
+      expect(
+        repository.personalPageRequests.length,
+        requestCountBeforeResume + 1,
+      );
+    },
+  );
+
+  test('purging a recycle bin item removes it optimistically', () async {
+    final file = _fileNode('trashed-1', 'old.txt');
+    final repository = _FakeFileRepository()..recycleBin = [file];
+    var summaryBuilds = 0;
+    final container = ProviderContainer.test(
+      overrides: [
+        fileRepositoryProvider.overrideWithValue(repository),
+        activeTaskSummaryProvider.overrideWith((ref) {
+          summaryBuilds += 1;
+          return const ActiveTaskSummary(activeCount: 0, failedCount: 0);
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    container.listen(activeTaskSummaryProvider, (_, _) {});
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+    await controller.showRecycleBin();
+
+    await controller.purgeFile(file);
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(fileBrowserControllerProvider).value!;
+    expect(state.recycleBin, isEmpty);
+    expect(state.section, FileManagerSection.recycleBin);
+    expect(repository.purgedFileIds, ['trashed-1']);
+    expect(summaryBuilds, 2);
+  });
+
+  test('batch purge removes selected entries optimistically', () async {
+    final first = _fileNode('trashed-1', 'one.txt');
+    final second = _fileNode('trashed-2', 'two.txt');
+    final repository = _FakeFileRepository()..recycleBin = [first, second];
+    final container = ProviderContainer.test(
+      overrides: [fileRepositoryProvider.overrideWithValue(repository)],
+    );
+    addTearDown(container.dispose);
+    final controller = container.read(fileBrowserControllerProvider.notifier);
+    await container.read(fileBrowserControllerProvider.future);
+    await controller.showRecycleBin();
+    controller.toggleSelection(first.id);
+    controller.toggleSelection(second.id);
+
+    await controller.batchPurgeFiles();
+
+    final state = container.read(fileBrowserControllerProvider).value!;
+    expect(state.recycleBin, isEmpty);
+    expect(repository.batchPurgedFileIds, ['trashed-1', 'trashed-2']);
+    expect(state.selectedFileIds, isEmpty);
   });
 
   test(
@@ -508,6 +611,9 @@ class _FakeFileRepository implements FileRepository {
   List<OfflineDownloadTask> offlineTasks = const [];
   List<ExternalStorageAccount> externalAccounts = const [];
   List<ExternalFileItem> externalFiles = const [];
+  List<FileNode> recycleBin = const [];
+  final purgedFileIds = <String>[];
+  final batchPurgedFileIds = <String>[];
   final uploadedPartUrls = <String>[];
   final completedPartNumbers = <int>[];
   final completedSessions = <String>[];
@@ -786,8 +892,9 @@ class _FakeFileRepository implements FileRepository {
   Future<List<FileNode>> listRecentFiles() => throw UnimplementedError();
 
   @override
-  Future<List<FileNode>> listRecycleBin({String spaceType = 'PERSONAL'}) =>
-      throw UnimplementedError();
+  Future<List<FileNode>> listRecycleBin({
+    String spaceType = 'PERSONAL',
+  }) async => recycleBin;
 
   @override
   Future<List<FileShareLink>> listShareLinks() => throw UnimplementedError();
@@ -796,7 +903,10 @@ class _FakeFileRepository implements FileRepository {
   Future<List<SharedFileItem>> listSharedWithMe() => throw UnimplementedError();
 
   @override
-  Future<void> purgeFile(String fileId) => throw UnimplementedError();
+  Future<TaskSubmission> purgeFile(String fileId) async {
+    purgedFileIds.add(fileId);
+    return const TaskSubmission(taskId: 'purge-task', status: 'QUEUED');
+  }
 
   @override
   Future<void> removeFavorite(String fileId) => throw UnimplementedError();
@@ -861,8 +971,10 @@ class _FakeFileRepository implements FileRepository {
       throw UnimplementedError();
 
   @override
-  Future<void> batchPurgeFiles(List<String> fileIds) =>
-      throw UnimplementedError();
+  Future<TaskSubmission> batchPurgeFiles(List<String> fileIds) async {
+    batchPurgedFileIds.addAll(fileIds);
+    return const TaskSubmission(taskId: 'purge-batch-task', status: 'QUEUED');
+  }
 
   @override
   Future<List<FileNode>> batchMoveFiles(

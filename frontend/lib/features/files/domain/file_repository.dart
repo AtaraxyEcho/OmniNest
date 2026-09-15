@@ -1,6 +1,7 @@
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/tasks/domain/task_record.dart';
 
 abstract interface class FileRepository {
   Future<List<FileNode>> listFiles({String? parentId, String? category});
@@ -44,7 +45,8 @@ abstract interface class FileRepository {
 
   Future<FileNode> restoreFile(String fileId);
 
-  Future<void> purgeFile(String fileId);
+  /// 永久删除单个回收站文件，返回后端异步任务提交结果。
+  Future<TaskSubmission> purgeFile(String fileId);
 
   Future<FileNode> addFavorite(String fileId);
 
@@ -54,7 +56,8 @@ abstract interface class FileRepository {
 
   Future<List<FileNode>> batchRestoreFiles(List<String> fileIds);
 
-  Future<void> batchPurgeFiles(List<String> fileIds);
+  /// 批量永久删除回收站文件，返回后端异步任务提交结果。
+  Future<TaskSubmission> batchPurgeFiles(List<String> fileIds);
 
   Future<List<FileNode>> batchMoveFiles(List<String> fileIds, String parentId);
 

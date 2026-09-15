@@ -3,6 +3,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/tasks/domain/task_record.dart';
 
 class FileRepositoryImpl implements FileRepository {
   const FileRepositoryImpl(this.fileApi);
@@ -101,7 +102,7 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
-  Future<void> purgeFile(String fileId) {
+  Future<TaskSubmission> purgeFile(String fileId) {
     return fileApi.purgeFile(fileId);
   }
 
@@ -126,7 +127,7 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
-  Future<void> batchPurgeFiles(List<String> fileIds) {
+  Future<TaskSubmission> batchPurgeFiles(List<String> fileIds) {
     return fileApi.batchPurgeFiles(fileIds);
   }
 

@@ -16,6 +16,7 @@ import 'package:omninest/app/desktop_tray_locale_binding.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/router.dart';
+import 'package:omninest/app/session/session_reset_coordinator.dart';
 import 'package:omninest/app/app_scroll_behavior.dart';
 import 'package:omninest/app/sync/app_sync_coordinator.dart';
 import 'package:omninest/app/theme/app_theme.dart';
@@ -70,6 +71,8 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
     ref.watch(taskSystemNotificationBindingProvider);
     // 桌面托盘菜单文案跟随应用语言刷新（Web/移动端为空实现）。
     ref.watch(desktopTrayLocaleBindingProvider);
+    // 登出或换号时重置全部常驻业务 provider，防止跨账号残留缓存。
+    ref.watch(sessionResetCoordinatorProvider);
     // omninest:// 深链：接住冷启动与运行期链接并落位白名单路由。
     ref.watch(deepLinkServiceProvider);
 
