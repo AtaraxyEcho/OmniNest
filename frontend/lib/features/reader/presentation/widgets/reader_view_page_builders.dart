@@ -190,14 +190,19 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage>
   int computePageCharOffset(int pageIndex) {
     final flow = _pageFlow;
     final ref = flow?.keyAt(pageIndex);
-    final chapterId = ref?.chapterId ?? currentChapterId;
-    final localIndex = ref?.localPageIndex ?? pageIndex;
+    if (ref == null) {
+      // 页引用缺失（探测页/流重建窗口期/收养未落定）：跨章全局索引不可
+      // 当章内索引用——错误页的 startCharOffset 会写脏进度与持久化，
+      // 回退逻辑位置记账（章身份不符时 0）。
+      final tracked = runtime.logicalPosition;
+      return tracked.chapterId == currentChapterId ? tracked.charOffset : 0;
+    }
     final slice = contentLoader?.computePage(
-      chapterId: chapterId,
+      chapterId: ref.chapterId,
       settings: settings,
       pageWidth: computePageWidth(),
       pageHeight: computePageHeight(),
-      pageIndex: localIndex,
+      pageIndex: ref.localPageIndex,
       textScale: MediaQuery.textScalerOf(context).scale(1.0),
     );
     return slice?.startCharOffset ?? 0;
