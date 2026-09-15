@@ -101,14 +101,17 @@ mixin ReaderViewPageInteractionMixin
           'charOffset=$charOffset (totalChars=${chapterData?.totalChars ?? 0})',
         );
       }
-      setState(() => scrollProgress = newProgress);
+      // 热路径：只更新通知器（UI 消费者局部重建），不再 setState 整页。
+      scrollProgress = newProgress;
       scheduleLocalProgressSave(
         chapterProgress: newProgress,
         mode: 'scroll',
         charOffset: charOffset,
       );
     }
-    if (max - scrollController.offset < max * 0.2) {
+    // 提前到过半即预取：邻章解析与测高需要数百毫秒，
+    // 20% 余量在快速滚动下来不及就绪。
+    if (max - scrollController.offset < max * 0.5) {
       preloadAdjacent();
     }
 

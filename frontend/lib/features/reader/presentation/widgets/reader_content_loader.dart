@@ -106,8 +106,21 @@ class ChapterData {
   void updateSlices(List<PageSlice> newSlices) => _slices = newSlices;
 
   /// 更新累积高度（仅限 ReaderContentLoader 调用）。
-  void updateCumulativeHeights(List<double> newHeights) =>
-      _cumulativeHeights = newHeights;
+  ///
+  /// 估算填充与精测分批都经此入口，更新即视为未精测；
+  /// 精测全部批次完成后由 [markPreciseHeights] 置位。
+  void updateCumulativeHeights(List<double> newHeights) {
+    _cumulativeHeights = newHeights;
+    _hasPreciseHeights = false;
+  }
+
+  bool _hasPreciseHeights = false;
+
+  /// 累积高度是否已完成第二阶段精测。
+  bool get hasPreciseHeights => _hasPreciseHeights;
+
+  /// 精测全部批次完成标记（仅限 ReaderContentLoader 调用）。
+  void markPreciseHeights() => _hasPreciseHeights = true;
 }
 
 /// 滚动模式测高分批参数：头部精确测量块数与每批测量块数。
@@ -184,7 +197,23 @@ class PageNavigator {
     _cache[pageIndex] = slice;
     _currentPage = pageIndex;
     if (pageIndex > _maxComputedPage) _maxComputedPage = pageIndex;
+    _evictFarPages();
     return slice;
+  }
+
+  /// 窗口保护式淘汰：只清除距当前页 ±_evictWindow 以外的页。
+  /// _computeSlice 递归依赖前一页缓存，朴素 LRU 会级联重算。
+  static const _evictWindow = 32;
+  static const _maxCacheSize = 128;
+
+  void _evictFarPages() {
+    if (_cache.length <= _maxCacheSize) {
+      return;
+    }
+    final lo = _currentPage - _evictWindow;
+    final hi = _currentPage + _evictWindow;
+    // _maxComputedPage 以下的页可能被递归依赖（_computeSlice(pageIndex-1) 链），保留 [0, hi] 窗口。
+    _cache.removeWhere((page, _) => page < lo || page > hi);
   }
 
   /// 计算指定页的切片（递归依赖前一页）。
@@ -492,6 +521,8 @@ class ReaderContentLoader {
     }
     // 第一阶段：精确测量头部若干块，以平均块高估算整章，立即填充
     // cumulative 数组，保证滚动映射从首帧起无空洞。
+    // 估算基线优先取已精测章节的分块型高度均值（同书排版一致），
+    // 降低 estimate→precise 转换时的窗口高度跳变。
     final blocks = data.blocks;
     final headCount = math.min(_metricsPhaseOneBlocks, blocks.length);
     final headHeights = <double>[];
@@ -507,13 +538,14 @@ class ReaderContentLoader {
     }
     final estimateBase =
         headHeights.isEmpty ? 0.0 : headHeights.last / headCount;
+    final typeAverages = _measuredBlockAverages();
     final estimated = List<double>.filled(blocks.length, 0);
     var running = 0.0;
     for (var i = 0; i < blocks.length; i++) {
       running +=
           i < headCount
               ? headHeights[i] - (i == 0 ? 0.0 : headHeights[i - 1])
-              : estimateBase;
+              : (typeAverages?[blocks[i].runtimeType] ?? estimateBase);
       estimated[i] = running;
     }
     data.updateCumulativeHeights(estimated);
@@ -558,6 +590,36 @@ class ReaderContentLoader {
         }
       }
     }
+    data.markPreciseHeights();
+  }
+
+  /// 从首个已精测章节提取各块类型的平均高度，供邻章 phase-one 估算。
+  ///
+  /// 同一书排版一致，跨章块型均值比仅头部块实测更接近全章真实均值；
+  /// 无已精测章节时返回 null，调用方退回头部均值。
+  Map<Type, double>? _measuredBlockAverages() {
+    for (final data in _cache.values) {
+      if (!data.hasPreciseHeights || data.blocks.isEmpty) {
+        continue;
+      }
+      final heights = data.cumulativeHeights;
+      if (heights.length != data.blocks.length) {
+        continue;
+      }
+      final sums = <Type, double>{};
+      final counts = <Type, int>{};
+      for (var i = 0; i < data.blocks.length; i++) {
+        final type = data.blocks[i].runtimeType;
+        final height = heights[i] - (i == 0 ? 0.0 : heights[i - 1]);
+        sums[type] = (sums[type] ?? 0) + height;
+        counts[type] = (counts[type] ?? 0) + 1;
+      }
+      return {
+        for (final entry in sums.entries)
+          entry.key: entry.value / counts[entry.key]!,
+      };
+    }
+    return null;
   }
 
   bool _shouldRetainChapter(String chapterId) {

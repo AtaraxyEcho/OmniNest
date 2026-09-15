@@ -129,7 +129,14 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   int _pageModePage = 0;
 
   // ── 进度 ──
-  double _scrollProgress = 0;
+  // 章节内进度通知器：滚动/翻页热路径只更新此值，UI 消费者局部重建。
+  final ValueNotifier<double> _scrollProgressNotifier = ValueNotifier<double>(
+    0,
+  );
+  // 全书进度通知器：_bookProgress 计算是 O(章节)，用防抖避免逐帧重算。
+  final ValueNotifier<double> _bookProgressNotifier = ValueNotifier<double>(0);
+  Timer? _bookProgressRecomputeTimer;
+  double _lastBookProgressInput = -1;
   DateTime? _lastAppliedProgressAt;
   ReaderProgressSnapshot? _lastOwnProgressSave; // 本机最近一次推送的进度快照
   double? _pendingChapterProgress; // 恢复时的章节进度比例（0-1）
@@ -176,6 +183,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   bool _selectionActive = false;
   bool _exitRequested = false;
   ParsedBook? _parsedBookSnapshot;
+  // 章节列表缓存：parsedBook 身份不变时复用，避免每次 build O(章节) 重分配。
+  ParsedBook? _chaptersCacheSource;
+  List<ReaderChapter> _chaptersCache = const [];
   bool _readerBuildWorkScheduled = false;
   ParsedBook? _pendingParsedBook;
   ReaderChapterContent? _pendingReaderContent;
@@ -247,9 +257,49 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   set pageModePage(int v) => _pageModePage = v;
   @override
-  double get scrollProgress => _scrollProgress;
+  double get scrollProgress => _scrollProgressNotifier.value;
+
   @override
-  set scrollProgress(double v) => _scrollProgress = v;
+  set scrollProgress(double v) {
+    _scrollProgressNotifier.value = v;
+    _scheduleBookProgressRecompute();
+  }
+
+  /// 防抖重算全书进度（O 章节），滚动期间最多每 200ms 一次。
+  void _scheduleBookProgressRecompute() {
+    if (_bookProgressRecomputeTimer != null) {
+      return;
+    }
+    final input = _scrollProgressNotifier.value;
+    if ((input - _lastBookProgressInput).abs() < 0.0005) {
+      return;
+    }
+    _bookProgressRecomputeTimer = Timer(const Duration(milliseconds: 200), () {
+      _bookProgressRecomputeTimer = null;
+      if (!mounted) {
+        return;
+      }
+      // 切章/加载期间 tracker 仍是旧章偏移，此时重算会得到错误中间值；
+      // 挂起重算，待加载完成后由 refreshBookProgressNow 一次到位。
+      if (_isSwitchingChapter || _isLoadingChapter) {
+        return;
+      }
+      _lastBookProgressInput = _scrollProgressNotifier.value;
+      _bookProgressNotifier.value = _bookProgress;
+    });
+  }
+
+  @override
+  void refreshBookProgressNow() {
+    if (!mounted) {
+      return;
+    }
+    _bookProgressRecomputeTimer?.cancel();
+    _bookProgressRecomputeTimer = null;
+    _lastBookProgressInput = _scrollProgressNotifier.value;
+    _bookProgressNotifier.value = _bookProgress;
+  }
+
   @override
   DateTime? get lastAppliedProgressAt => _lastAppliedProgressAt;
   @override
@@ -439,6 +489,30 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   String get currentChapterTitle => _currentChapterTitle;
   @override
   double get bookProgress => _bookProgress;
+
+  /// 按(parsedBook 身份)缓存章节映射，避免每次 build O(章节) 重分配。
+  List<ReaderChapter> _cachedChaptersFor(ParsedBook? parsedBook) {
+    if (parsedBook == null) {
+      return const <ReaderChapter>[];
+    }
+    if (!identical(_chaptersCacheSource, parsedBook)) {
+      _chaptersCacheSource = parsedBook;
+      _chaptersCache =
+          parsedBook.chapters
+              .asMap()
+              .entries
+              .map(
+                (e) => ReaderChapter.fromParsed(
+                  e.key,
+                  e.value.title,
+                  contentPath: e.value.contentPath,
+                ),
+              )
+              .toList();
+    }
+    return _chaptersCache;
+  }
+
   @override
   String get itemId => widget.itemId;
   @override
@@ -516,7 +590,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   double get _bookProgress {
     final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
     if (parsedBook == null || parsedBook.chapters.isEmpty) {
-      return _scrollProgress.clamp(0.0, 1.0);
+      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
     }
     final chapterCharCounts =
         parsedBook.chapters.map((c) => c.charCount).toList();
@@ -531,7 +605,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       chapterCharCounts[currentChapterIdx] = chapterData.totalChars;
     }
     final totalBookChars = chapterCharCounts.fold<int>(0, (s, c) => s + c);
-    if (totalBookChars <= 0) return _scrollProgress.clamp(0.0, 1.0);
+    if (totalBookChars <= 0) {
+      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
+    }
 
     // 当前章节之前的字符数之和
     int previousChars = 0;
@@ -654,6 +730,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     }
     _windowChromeLease?.release();
     if (kIsWeb) BrowserContextMenu.enableContextMenu();
+    _scrollProgressNotifier.dispose();
+    _bookProgressNotifier.dispose();
+    _bookProgressRecomputeTimer?.cancel();
     _hideTimer?.cancel();
     _persistTimer?.cancel();
     _repaginateTimer?.cancel();
@@ -748,19 +827,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     final latestParsedBook = bookAsync.asData?.value;
     final parsedBook = latestParsedBook ?? _parsedBookSnapshot;
     final loadedContent = _cachedContent;
-    final chapters =
-        parsedBook?.chapters
-            .asMap()
-            .entries
-            .map(
-              (e) => ReaderChapter.fromParsed(
-                e.key,
-                e.value.title,
-                contentPath: e.value.contentPath,
-              ),
-            )
-            .toList() ??
-        <ReaderChapter>[];
+    // 章节列表按 parsedBook 身份缓存，避免每次 build O(章节) 重分配。
+    final chapters = _cachedChaptersFor(parsedBook);
     _scheduleReaderBuildWork(
       latestParsedBook: latestParsedBook,
       loadedContent: loadedContent,
@@ -953,12 +1021,16 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         // 底部栏（在遮罩之上，可接收点击）
         _buildBottomBar(detail, content),
         if (chromeLayout.showPersistentProgress && !_showControls)
-          ReaderProgressIndicator(
-            key: const Key('readerPersistentProgress'),
-            settings: _settings,
-            progress: _bookProgress,
-            currentPage: _isPageMode ? _pageModePage : null,
-            totalPages: null, // 懒分页不预知总页数
+          ValueListenableBuilder<double>(
+            valueListenable: _bookProgressNotifier,
+            builder:
+                (context, bookProgress, _) => ReaderProgressIndicator(
+                  key: const Key('readerPersistentProgress'),
+                  settings: _settings,
+                  progress: bookProgress,
+                  currentPage: _isPageMode ? _pageModePage : null,
+                  totalPages: null, // 懒分页不预知总页数
+                ),
           ),
         ..._buildOverlays(content),
         Positioned.fill(
@@ -1121,18 +1193,22 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           child: MouseRegion(
             onEnter: (_) => onHoverControls(true),
             onExit: (_) => onHoverControls(false),
-            child: ReaderViewBottomBar(
-              settings: _settings,
-              progress: _bookProgress,
-              isPageMode: _isPageMode,
-              onPrevious: () => _navigateReader(detail, forward: false),
-              onNext: () => _navigateReader(detail, forward: true),
-              onShowContents:
-                  () => _toggleReaderPanel(ReaderPanelType.contents),
-              onShowSettings:
-                  () => _toggleReaderPanel(ReaderPanelType.settings),
-              onToggleImmersive: _toggleReaderImmersive,
-              onProgressSeek: (value) => _seekBookProgress(value),
+            child: ValueListenableBuilder<double>(
+              valueListenable: _bookProgressNotifier,
+              builder:
+                  (context, bookProgress, _) => ReaderViewBottomBar(
+                    settings: _settings,
+                    progress: bookProgress,
+                    isPageMode: _isPageMode,
+                    onPrevious: () => _navigateReader(detail, forward: false),
+                    onNext: () => _navigateReader(detail, forward: true),
+                    onShowContents:
+                        () => _toggleReaderPanel(ReaderPanelType.contents),
+                    onShowSettings:
+                        () => _toggleReaderPanel(ReaderPanelType.settings),
+                    onToggleImmersive: _toggleReaderImmersive,
+                    onProgressSeek: (value) => _seekBookProgress(value),
+                  ),
             ),
           ),
         ),
