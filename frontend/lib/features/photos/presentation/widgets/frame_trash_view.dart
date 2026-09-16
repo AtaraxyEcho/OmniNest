@@ -50,17 +50,8 @@ class _FrameTrashViewState extends State<FrameTrashView> {
   }
 
   Future<void> _confirmDeleteForever(PhotoItem photo) async {
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await showFrameConfirmDialog(
-      context,
-      title: l10n.photosDeleteForeverConfirmTitle,
-      body: l10n.photosDeleteForeverConfirmBody,
-      confirmLabel: l10n.photosDeleteForever,
-      destructive: true,
-    );
-    if (confirmed) {
-      widget.onDeleteForever(photo);
-    }
+    // 确认与级联影响由页面层 confirmAndRunFilePurge 统一处理，避免双重弹窗。
+    widget.onDeleteForever(photo);
   }
 
   @override

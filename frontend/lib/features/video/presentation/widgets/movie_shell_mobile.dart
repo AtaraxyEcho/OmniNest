@@ -282,6 +282,38 @@ class _MovieMobileTopBar extends StatelessWidget {
             builder:
                 (context, ref, _) => MediaImportButton(
                   subsystemDirectory: 'Media',
+                  acceptedExtensions: const <String>[
+                    'mp4',
+                    'mkv',
+                    'webm',
+                    'mov',
+                    'm4v',
+                    'avi',
+                    'flv',
+                    'wmv',
+                    'ts',
+                    'm2ts',
+                  ],
+                  onImportCompleteWithResult: (result) async {
+                    final taskApi = ref.read(taskApiProvider);
+                    for (final file in result.imported) {
+                      final taskId = file.mediaAutoImportTaskId;
+                      if (taskId == null || taskId.isEmpty) {
+                        continue;
+                      }
+                      try {
+                        await taskApi.waitForTerminal(
+                          taskId,
+                          timeout: const Duration(minutes: 2),
+                          interval: const Duration(seconds: 2),
+                        );
+                      } on Object {
+                        // 自动导入失败不阻断已完成的上传结果。
+                      }
+                    }
+                    await onRefresh?.call();
+                    return null;
+                  },
                   onImportComplete: onRefresh ?? () async {},
                   style: ImportButtonStyle.iconButton,
                   color: palette.mutedForeground,

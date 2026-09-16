@@ -10,6 +10,7 @@ import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
@@ -198,7 +199,9 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
       },
       error:
           (error, stackTrace) => AppErrorView(
-            message: AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)),
+            message: AppLocalizations.of(
+              context,
+            ).localizeUserFacing(describeUserFacingError(error)),
             onRetry: () => ref.invalidate(photoCenterControllerProvider),
           ),
       loading: () => const AppLoading.grid(),
@@ -273,7 +276,9 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
       },
       error:
           (error, stackTrace) => AppErrorView(
-            message: AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)),
+            message: AppLocalizations.of(
+              context,
+            ).localizeUserFacing(describeUserFacingError(error)),
             onRetry: () => ref.invalidate(photoCenterControllerProvider),
           ),
       loading:
@@ -308,7 +313,13 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     } on Exception catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)))),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).localizeUserFacing(describeUserFacingError(error)),
+          ),
+        ),
       );
     }
   }
@@ -316,17 +327,29 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
   /// 永久删除回收站中的照片。
   Future<void> _purgeFromTrash(PhotoItem photo) async {
     try {
-      await ref
-          .read(photoCenterControllerProvider.notifier)
-          .purgePhotoFromTrash(photo.id);
-      if (!mounted) return;
+      final deleted = await confirmAndRunFilePurge(
+        context,
+        resourceName: photo.title,
+        action: (cascade) async {
+          await ref
+              .read(photoCenterControllerProvider.notifier)
+              .purgePhotoFromTrash(photo.id, cascade: cascade);
+        },
+      );
+      if (!deleted || !mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context).photosTrashPurged)),
       );
     } on Exception catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)))),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).localizeUserFacing(describeUserFacingError(error)),
+          ),
+        ),
       );
     }
   }
@@ -342,7 +365,13 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     } on Exception catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)))),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).localizeUserFacing(describeUserFacingError(error)),
+          ),
+        ),
       );
     }
   }
@@ -356,7 +385,13 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
     } on Exception catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context).localizeUserFacing(describeUserFacingError(error)))),
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(
+              context,
+            ).localizeUserFacing(describeUserFacingError(error)),
+          ),
+        ),
       );
     }
   }
