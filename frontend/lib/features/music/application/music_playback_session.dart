@@ -52,11 +52,12 @@ final musicPlaybackSessionProvider =
 
 /// 全局音乐播放会话控制器。
 class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
-  late final MusicAudioPlayback _player;
+  /// 会话可能被 invalidate 后在同一 notifier 实例上重建，字段不能声明为 late final。
+  late MusicAudioPlayback _player;
   StreamSubscription<bool>? _completedSub;
   StreamSubscription<MusicAudioLog>? _logSub;
   StreamSubscription<Duration>? _positionSub;
-  late final MusicProgressRepository _progressRepository;
+  late MusicProgressRepository _progressRepository;
   String? _loadedUrl;
   MusicPlayableItem? _loadedItem;
   bool _syncing = false;
@@ -75,6 +76,10 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   MusicPlaybackSession build() {
     _player = ref.watch(musicAudioPlaybackProvider);
     _progressRepository = ref.read(globalMusicProgressRepositoryProvider);
+    // 重建（登出/换号 invalidate）时丢弃上一会话的加载状态，避免旧播放计划签名 URL 残留。
+    _loadedUrl = null;
+    _loadedItem = null;
+    _lastSavedSecond = -1;
     _completedSub = _player.stream.completed.listen((completed) {
       if (!completed) {
         return;
