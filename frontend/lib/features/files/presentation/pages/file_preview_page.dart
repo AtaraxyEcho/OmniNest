@@ -517,7 +517,12 @@ class _TextPreview extends ConsumerWidget {
             child: Text(
               AppLocalizations.of(
                 context,
-              ).filesLoadFailed(describeUserFacingError(error).displayMessage),
+              ).filesLoadFailed(
+                describeUserFacingError(
+                  error,
+                  l10n: AppLocalizations.of(context),
+                ).displayMessage,
+              ),
             ),
           ),
     );
