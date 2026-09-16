@@ -31,7 +31,7 @@ public class PhotoScanConsumer {
             log.info("收到照片扫描任务: jobId={}, ownerUserId={}", event.jobId(), event.ownerUserId());
             photoAdminService.executeScanJob(event.jobId(), event.ownerUserId());
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("照片扫描处理失败: jobId={}", event.jobId(), e);
             channel.basicNack(deliveryTag, false, false);
         }

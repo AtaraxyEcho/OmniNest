@@ -32,7 +32,7 @@ public class MusicScanConsumer {
             log.info("收到音乐扫描任务: jobId={}, ownerUserId={}", event.jobId(), event.ownerUserId());
             musicAdminService.executeScanJob(event.jobId(), event.ownerUserId());
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             log.error("音乐扫描处理失败: jobId={}", event.jobId(), e);
             try {
                 retryService.handleScanFailure(event, e);

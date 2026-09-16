@@ -53,7 +53,7 @@ public class BackdropSecurityScanConsumer {
                     Map.of("assetId", event.assetId().toString())
             );
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException executionException) {
+        } catch (Throwable executionException) {
             log.error("背景素材安全扫描执行失败: taskId={}, errorType={}",
                     event.taskId(), executionException.getClass().getSimpleName(), executionException);
             try {

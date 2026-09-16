@@ -41,7 +41,7 @@ public class ReaderTextParseConsumer {
         try {
             taskService.process(event);
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException exception) {
+        } catch (Throwable exception) {
             try {
                 retryService.handleFailure(event, exception);
                 channel.basicAck(deliveryTag, false);

@@ -47,27 +47,31 @@ public class RabbitSyncEventConsumer {
             containerFactory = "broadcastListenerContainerFactory"
     )
     public void onSyncEvent(SyncEventEnvelope envelope) {
-        if (!supported(envelope)) {
-            return;
+        try {
+            if (!supported(envelope)) {
+                return;
+            }
+            SyncEventDto event = new SyncEventDto(
+                    envelope.schemaVersion(),
+                    envelope.eventId(),
+                    envelope.sequenceNo(),
+                    envelope.scope().name(),
+                    envelope.resourceType(),
+                    envelope.resourceId(),
+                    envelope.action().name(),
+                    envelope.resourceVersion(),
+                    envelope.hints(),
+                    envelope.occurredAt()
+            );
+            messagingTemplate.convertAndSendToUser(
+                    envelope.recipientUserId().toString(),
+                    "/queue/sync",
+                    event
+            );
+            projectNotification(envelope);
+        } catch (Throwable t) {
+            log.error("同步事件处理失败: eventId={}", envelope == null ? null : envelope.eventId(), t);
         }
-        SyncEventDto event = new SyncEventDto(
-                envelope.schemaVersion(),
-                envelope.eventId(),
-                envelope.sequenceNo(),
-                envelope.scope().name(),
-                envelope.resourceType(),
-                envelope.resourceId(),
-                envelope.action().name(),
-                envelope.resourceVersion(),
-                envelope.hints(),
-                envelope.occurredAt()
-        );
-        messagingTemplate.convertAndSendToUser(
-                envelope.recipientUserId().toString(),
-                "/queue/sync",
-                event
-        );
-        projectNotification(envelope);
     }
 
     private void projectNotification(SyncEventEnvelope envelope) {

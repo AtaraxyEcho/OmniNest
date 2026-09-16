@@ -38,7 +38,7 @@ public class LocalVideoLibraryApplyConsumer {
             log.info("收到本地媒体入库任务: taskId={}, scanRunId={}", event.taskId(), event.scanRunId());
             applyExecutor.execute(event);
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException exception) {
+        } catch (Throwable exception) {
             try {
                 retryService.handleFailure(event, exception);
                 channel.basicAck(deliveryTag, false);

@@ -43,7 +43,7 @@ public class PhotoGeoImportConsumer {
                     event.taskId(), event.datasetVersion(), event.dumpDate());
             geonamesImportService.executeImportTask(event.taskId());
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             log.error("GeoNames 导入任务失败: taskId={}, datasetVersion={}", event.taskId(), event.datasetVersion(), e);
             try {
                 retryService.handleImportFailure(event, e);

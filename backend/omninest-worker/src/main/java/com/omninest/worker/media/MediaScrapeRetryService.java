@@ -36,7 +36,7 @@ public class MediaScrapeRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleFailure(MediaScrapeRequestedEvent event, Exception exception) {
+    public void handleFailure(MediaScrapeRequestedEvent event, Throwable exception) {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {

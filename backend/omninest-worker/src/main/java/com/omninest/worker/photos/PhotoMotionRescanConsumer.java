@@ -41,7 +41,7 @@ public class PhotoMotionRescanConsumer {
             log.info("收到动态照片回扫任务: taskId={}, ownerUserId={}", event.taskId(), event.ownerUserId());
             photoMotionRescanService.executeRescanTask(event.taskId());
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             log.error("动态照片回扫任务执行异常: taskId={}", event.taskId(), e);
             channel.basicAck(deliveryTag, false);
         }

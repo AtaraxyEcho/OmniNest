@@ -49,7 +49,7 @@ public class LocalVideoLibraryScanConsumer {
             log.info("收到本地影视库扫描任务: taskId={}, sourceId={}", event.taskId(), event.sourceId());
             sourceService.executeScan(event);
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             try {
                 retryService.handleFailure(event, e);
                 channel.basicAck(deliveryTag, false);

@@ -43,7 +43,7 @@ public class PhotoAiTaskRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handlePhotoAiFailure(PhotoAiEvent event, RuntimeException exception) {
+    public void handlePhotoAiFailure(PhotoAiEvent event, Throwable exception) {
         if (event == null || event.taskId() == null) {
             log.warn("旧版照片图像分析消息缺少任务标识，失败后不进入重试: photoId={}",
                     event == null ? null : event.photoId());
@@ -145,12 +145,12 @@ public class PhotoAiTaskRetryService {
      * @param exception 执行异常
      * @return 是否依赖未就绪
      */
-    public boolean isDependencyNotReady(RuntimeException exception) {
+    public boolean isDependencyNotReady(Throwable exception) {
         return exception instanceof BusinessException businessException
                 && businessException.errorCode() == ErrorCode.TASK_DEPENDENCY_NOT_READY;
     }
 
-    private boolean isNonRetryable(RuntimeException exception) {
+    private boolean isNonRetryable(Throwable exception) {
         if (!(exception instanceof BusinessException businessException)) {
             return false;
         }
@@ -161,7 +161,7 @@ public class PhotoAiTaskRetryService {
         };
     }
 
-    private String errorSummary(RuntimeException exception) {
+    private String errorSummary(Throwable exception) {
         return exception instanceof BusinessException businessException
                 ? businessException.errorCode().name()
                 : exception.getClass().getSimpleName();

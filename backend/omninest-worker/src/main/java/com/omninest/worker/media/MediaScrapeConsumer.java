@@ -52,7 +52,7 @@ public class MediaScrapeConsumer {
                 mediaScrapeRetryService.handleFailure(event, e);
             }
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // 重试状态持久化失败时不再吞异常后 ack，消息转入死信队列保留现场。
             log.error("媒体刮削处理失败: taskId={}", event.taskId(), e);
             channel.basicNack(deliveryTag, false, false);

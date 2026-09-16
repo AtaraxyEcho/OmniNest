@@ -58,7 +58,7 @@ public class DeadLetterConsumer {
                 }
             });
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("死信处理失败", e);
             channel.basicNack(deliveryTag, false, false);
         }

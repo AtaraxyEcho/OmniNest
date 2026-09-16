@@ -38,7 +38,7 @@ public class PhotoGeoBackfillRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleBackfillFailure(PhotoGeoBackfillEvent event, RuntimeException exception) {
+    public void handleBackfillFailure(PhotoGeoBackfillEvent event, Throwable exception) {
         String errorSummary = errorSummary(exception);
         if (isNonRetryable(exception)) {
             taskRecordService.markDeadLetter(event.taskId(), errorSummary);
@@ -110,7 +110,7 @@ public class PhotoGeoBackfillRetryService {
         return new PhotoGeoBackfillEvent(taskId, batchSize, string(payload.get("datasetVersion")));
     }
 
-    private boolean isNonRetryable(RuntimeException exception) {
+    private boolean isNonRetryable(Throwable exception) {
         if (!(exception instanceof BusinessException businessException)) {
             return false;
         }
@@ -120,7 +120,7 @@ public class PhotoGeoBackfillRetryService {
         };
     }
 
-    private String errorSummary(RuntimeException exception) {
+    private String errorSummary(Throwable exception) {
         return exception instanceof BusinessException businessException
                 ? businessException.errorCode().name()
                 : exception.getClass().getSimpleName();

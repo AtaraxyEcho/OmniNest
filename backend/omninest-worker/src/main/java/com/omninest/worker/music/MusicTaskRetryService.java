@@ -40,7 +40,7 @@ public class MusicTaskRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleScanFailure(MusicScanEvent event, RuntimeException exception) {
+    public void handleScanFailure(MusicScanEvent event, Throwable exception) {
         handleFailure(
                 event.jobId(),
                 QueueNames.MUSIC_SCAN_ROUTING_KEY,
@@ -56,7 +56,7 @@ public class MusicTaskRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleScrapeFailure(MusicScrapeEvent event, RuntimeException exception) {
+    public void handleScrapeFailure(MusicScrapeEvent event, Throwable exception) {
         handleFailure(
                 event.jobId(),
                 QueueNames.MUSIC_SCRAPE_ROUTING_KEY,
@@ -113,7 +113,7 @@ public class MusicTaskRetryService {
             UUID taskId,
             String routingKey,
             Object event,
-            RuntimeException exception
+            Throwable exception
     ) {
         String errorSummary = errorSummary(exception);
         if (isNonRetryable(exception)) {
@@ -171,7 +171,7 @@ public class MusicTaskRetryService {
         }
     }
 
-    private boolean isNonRetryable(RuntimeException exception) {
+    private boolean isNonRetryable(Throwable exception) {
         if (!(exception instanceof BusinessException businessException)) {
             return false;
         }
@@ -183,7 +183,7 @@ public class MusicTaskRetryService {
         };
     }
 
-    private String errorSummary(RuntimeException exception) {
+    private String errorSummary(Throwable exception) {
         return exception instanceof BusinessException businessException
                 ? businessException.errorCode().name()
                 : exception.getClass().getSimpleName();

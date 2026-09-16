@@ -43,7 +43,7 @@ public class PhotoGeoBackfillConsumer {
                     event.taskId(), event.batchSize(), event.datasetVersion());
             backfillService.executeBackfillTask(event.taskId());
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             log.error("照片位置回填任务失败: taskId={}", event.taskId(), e);
             try {
                 retryService.handleBackfillFailure(event, e);

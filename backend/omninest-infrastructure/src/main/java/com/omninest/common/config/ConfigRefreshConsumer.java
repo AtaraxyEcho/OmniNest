@@ -30,16 +30,20 @@ public class ConfigRefreshConsumer {
             containerFactory = "broadcastListenerContainerFactory"
     )
     public void onConfigRefresh(ConfigRefreshEvent event) {
-        String key = event.key();
-        if (key == null || key.isBlank()) {
-            log.warn("收到配置变更事件但 key 为空，清除全部配置缓存");
-            runtimeConfigCache.evictAll();
+        try {
+            String key = event.key();
+            if (key == null || key.isBlank()) {
+                log.warn("收到配置变更事件但 key 为空，清除全部配置缓存");
+                runtimeConfigCache.evictAll();
+                publishLocalEvent(event);
+                return;
+            }
+            runtimeConfigCache.evict(key);
             publishLocalEvent(event);
-            return;
+            log.info("配置热更新: 已清除缓存 key={}", key);
+        } catch (Throwable t) {
+            log.error("配置热更新处理失败: key={}", event == null ? null : event.key(), t);
         }
-        runtimeConfigCache.evict(key);
-        publishLocalEvent(event);
-        log.info("配置热更新: 已清除缓存 key={}", key);
     }
 
     private void publishLocalEvent(ConfigRefreshEvent event) {

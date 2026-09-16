@@ -34,7 +34,7 @@ public class VideoLibraryScanRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleFailure(LocalVideoLibraryScanRequestedEvent event, RuntimeException exception) {
+    public void handleFailure(LocalVideoLibraryScanRequestedEvent event, Throwable exception) {
         String errorSummary = errorSummary(exception);
         if (!isRetryable(exception)) {
             taskRecordService.markFailed(event.taskId(), errorSummary);
@@ -61,7 +61,7 @@ public class VideoLibraryScanRetryService {
                 event.taskId(), retryCount, nextRetryAt, errorSummary);
     }
 
-    private boolean isRetryable(RuntimeException exception) {
+    private boolean isRetryable(Throwable exception) {
         if (exception instanceof BusinessException businessException) {
             return ErrorCode.DEPENDENCY_UNAVAILABLE.equals(businessException.errorCode())
                     || ErrorCode.INTERNAL_ERROR.equals(businessException.errorCode());
@@ -69,7 +69,7 @@ public class VideoLibraryScanRetryService {
         return true;
     }
 
-    private String errorSummary(RuntimeException exception) {
+    private String errorSummary(Throwable exception) {
         if (exception instanceof BusinessException businessException) {
             return businessException.errorCode().name();
         }

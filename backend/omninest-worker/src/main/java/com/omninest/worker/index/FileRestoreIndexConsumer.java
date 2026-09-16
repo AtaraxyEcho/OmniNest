@@ -51,7 +51,7 @@ public class FileRestoreIndexConsumer {
             }
             log.error("恢复文件索引业务处理失败: fileNodeId={}", event.fileNodeId(), exception);
             channel.basicNack(deliveryTag, false, false);
-        } catch (RuntimeException exception) {
+        } catch (Throwable exception) {
             log.error("恢复文件索引处理失败: fileNodeId={}", event.fileNodeId(), exception);
             channel.basicNack(deliveryTag, false, false);
         }

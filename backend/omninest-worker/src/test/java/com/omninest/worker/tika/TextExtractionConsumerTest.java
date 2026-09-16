@@ -168,6 +168,29 @@ class TextExtractionConsumerTest {
     }
 
     @Test
+    @DisplayName("解析链路抛出 Error 时仍应走失败路径并确认消息，不中断消费者线程")
+    void handle_whenErrorThrownFromPipeline_shouldRouteToFailurePath() throws IOException {
+        FileUploadedEvent event = createEvent("poison.epub", "application/epub+zip");
+        // 复现依赖版本冲突场景：Error 不允许穿透消费者导致应用退出。
+        when(objectStorageClient.getObject(any(ObjectStorageKey.class)))
+                .thenThrow(new NoSuchMethodError("模拟 FontBox API 缺失"));
+
+        textExtractionConsumer.handle(event, createMessage(), channel);
+
+        verify(fileSearchIndexService, never()).indexFile(
+                any(), any(), any(), any()
+        );
+        verify(taskTracker).handleFailure(
+                eq("TEXT_EXTRACTION"),
+                eq(QueueNames.TEXT_EXTRACTION_ROUTING_KEY),
+                any(),
+                eq(event),
+                any(NoSuchMethodError.class)
+        );
+        verify(channel).basicAck(1L, false);
+    }
+
+    @Test
     @DisplayName("解析失败时经任务跟踪器失败处理且不调用索引服务")
     void handle_withBlankExtractedText_shouldNotCallIndexService() throws IOException {
         FileUploadedEvent event = createEvent("empty.pdf", "application/pdf");

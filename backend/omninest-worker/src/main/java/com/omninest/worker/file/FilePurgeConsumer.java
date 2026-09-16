@@ -41,7 +41,7 @@ public class FilePurgeConsumer {
         try {
             executionService.execute(event);
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException executionException) {
+        } catch (Throwable executionException) {
             log.error("文件永久删除执行失败: taskId={}, errorType={}",
                     event.taskId(), executionException.getClass().getSimpleName(), executionException);
             try {

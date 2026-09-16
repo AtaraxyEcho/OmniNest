@@ -74,7 +74,7 @@ public class PhotoMotionConsumer {
                 ));
             }
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("动态视频提取失败: fileNodeId={}", event.fileNodeId(), e);
             taskTracker.handleFailure(
                     TASK_TYPE,

@@ -45,7 +45,7 @@ public class PhotoIndexConsumer {
                 return;
             }
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("照片索引处理失败: photoId={}", event.photoId(), e);
             channel.basicNack(deliveryTag, false, false);
         }

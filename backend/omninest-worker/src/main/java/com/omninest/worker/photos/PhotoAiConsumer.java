@@ -49,7 +49,7 @@ public class PhotoAiConsumer {
             );
             photoAiTaskService.execute(event);
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             if (retryService.isDependencyNotReady(e)) {
                 log.warn(
                         "照片 AI 任务依赖未就绪，等待重试: taskId={}, photoId={}, error={}",

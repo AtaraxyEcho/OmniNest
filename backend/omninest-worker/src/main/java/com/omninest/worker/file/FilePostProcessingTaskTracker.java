@@ -106,7 +106,7 @@ public class FilePostProcessingTaskTracker {
             String routingKey,
             UUID taskId,
             Object event,
-            Exception exception) {
+            Throwable exception) {
         String errorSummary = errorSummary(exception);
         if (taskId == null) {
             log.warn("文件后处理失败且无任务记录，仅丢弃消息: taskType={}, errorType={}",
@@ -139,7 +139,7 @@ public class FilePostProcessingTaskTracker {
                 taskId, taskType, retryCount, nextRetryAt, errorSummary);
     }
 
-    private boolean isNonRetryable(Exception exception) {
+    private boolean isNonRetryable(Throwable exception) {
         if (!(exception instanceof BusinessException businessException)) {
             return false;
         }
@@ -150,7 +150,7 @@ public class FilePostProcessingTaskTracker {
         };
     }
 
-    private String errorSummary(Exception exception) {
+    private String errorSummary(Throwable exception) {
         return exception instanceof BusinessException businessException
                 ? businessException.errorCode().name()
                 : exception.getClass().getSimpleName();

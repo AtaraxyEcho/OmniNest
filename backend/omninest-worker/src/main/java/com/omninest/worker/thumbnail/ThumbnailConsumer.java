@@ -95,7 +95,7 @@ public class ThumbnailConsumer {
             }
             taskTracker.complete(tracked.taskId(), Map.of("thumbnailId", thumbnailId == null ? "" : thumbnailId.toString()));
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("缩略图生成失败: fileNodeId={}", event.fileNodeId(), e);
             taskTracker.handleFailure(TASK_TYPE, QueueNames.THUMBNAIL_ROUTING_KEY, tracked.taskId(), event, e);
             channel.basicAck(deliveryTag, false);

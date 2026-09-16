@@ -40,7 +40,7 @@ public class PhotoGeoImportRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleImportFailure(PhotoGeoImportEvent event, RuntimeException exception) {
+    public void handleImportFailure(PhotoGeoImportEvent event, Throwable exception) {
         handleFailure(event.taskId(), exception, () -> rebuildImportEvent(event.taskId()));
     }
 
@@ -71,7 +71,7 @@ public class PhotoGeoImportRetryService {
         }
     }
 
-    private void handleFailure(UUID taskId, RuntimeException exception, EventSupplier eventSupplier) {
+    private void handleFailure(UUID taskId, Throwable exception, EventSupplier eventSupplier) {
         String errorSummary = errorSummary(exception);
         if (isNonRetryable(exception)) {
             taskRecordService.markDeadLetter(taskId, errorSummary);
@@ -112,7 +112,7 @@ public class PhotoGeoImportRetryService {
         );
     }
 
-    private boolean isNonRetryable(RuntimeException exception) {
+    private boolean isNonRetryable(Throwable exception) {
         if (!(exception instanceof BusinessException businessException)) {
             return false;
         }
@@ -122,7 +122,7 @@ public class PhotoGeoImportRetryService {
         };
     }
 
-    private String errorSummary(RuntimeException exception) {
+    private String errorSummary(Throwable exception) {
         return exception instanceof BusinessException businessException
                 ? businessException.errorCode().name()
                 : exception.getClass().getSimpleName();

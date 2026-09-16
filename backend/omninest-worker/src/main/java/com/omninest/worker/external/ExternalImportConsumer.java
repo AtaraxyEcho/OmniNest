@@ -32,7 +32,7 @@ public class ExternalImportConsumer {
             log.info("收到外部存储导入任务: taskId={}", event.taskId());
             executionService.execute(event);
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("外部存储导入处理失败: taskId={}", event.taskId(), e);
             channel.basicNack(deliveryTag, false, false);
         }

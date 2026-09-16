@@ -42,7 +42,7 @@ public class ComicParseRetryService {
      * @param exception 基础设施异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleFailure(ComicParseTaskEvent event, RuntimeException exception) {
+    public void handleFailure(ComicParseTaskEvent event, Throwable exception) {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {

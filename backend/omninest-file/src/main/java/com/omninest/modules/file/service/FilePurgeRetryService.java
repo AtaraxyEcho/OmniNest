@@ -36,7 +36,7 @@ public class FilePurgeRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleFailure(FilePurgeRequestedEvent event, RuntimeException exception) {
+    public void handleFailure(FilePurgeRequestedEvent event, Throwable exception) {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {

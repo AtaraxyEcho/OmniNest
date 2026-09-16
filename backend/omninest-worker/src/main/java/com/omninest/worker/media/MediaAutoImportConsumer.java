@@ -53,14 +53,14 @@ public class MediaAutoImportConsumer {
                 return;
             }
             handleFailure(event, exception, deliveryTag, channel);
-        } catch (RuntimeException exception) {
+        } catch (Throwable exception) {
             handleFailure(event, exception, deliveryTag, channel);
         }
     }
 
     private void handleFailure(
             MediaAutoImportRequestedEvent event,
-            RuntimeException exception,
+            Throwable exception,
             long deliveryTag,
             Channel channel
     ) throws IOException {

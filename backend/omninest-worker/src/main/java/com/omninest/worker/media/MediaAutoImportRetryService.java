@@ -36,7 +36,7 @@ public class MediaAutoImportRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleFailure(MediaAutoImportRequestedEvent event, RuntimeException exception) {
+    public void handleFailure(MediaAutoImportRequestedEvent event, Throwable exception) {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {

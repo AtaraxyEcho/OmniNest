@@ -25,7 +25,7 @@ public class VideoLibraryApplyRetryService {
 
     /** 根据异常类型结束任务或创建延迟重试 Outbox。 */
     @Transactional(rollbackFor = Exception.class)
-    public void handleFailure(LocalVideoLibraryApplyRequestedEvent event, RuntimeException exception) {
+    public void handleFailure(LocalVideoLibraryApplyRequestedEvent event, Throwable exception) {
         String errorSummary = errorSummary(exception);
         if (!isRetryable(exception)) {
             taskRecordService.markFailed(event.taskId(), errorSummary);
@@ -54,7 +54,7 @@ public class VideoLibraryApplyRetryService {
         );
     }
 
-    private boolean isRetryable(RuntimeException exception) {
+    private boolean isRetryable(Throwable exception) {
         if (exception instanceof BusinessException businessException) {
             return ErrorCode.DEPENDENCY_UNAVAILABLE.equals(businessException.errorCode())
                     || ErrorCode.INTERNAL_ERROR.equals(businessException.errorCode());
@@ -62,7 +62,7 @@ public class VideoLibraryApplyRetryService {
         return true;
     }
 
-    private String errorSummary(RuntimeException exception) {
+    private String errorSummary(Throwable exception) {
         if (exception instanceof BusinessException businessException) {
             return businessException.errorCode().name();
         }

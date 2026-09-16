@@ -31,7 +31,7 @@ public class PhotoBatchConsumer {
             log.info("收到照片批量任务: taskId={}, ownerUserId={}", event.taskId(), event.ownerUserId());
             photoBatchService.executeBatchTask(event.taskId(), event.ownerUserId());
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("照片批量处理失败: taskId={}", event.taskId(), e);
             channel.basicNack(deliveryTag, false, false);
         }

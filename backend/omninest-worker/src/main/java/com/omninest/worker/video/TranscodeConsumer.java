@@ -51,7 +51,7 @@ public class TranscodeConsumer {
                 throw e;
             }
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("转码处理失败: taskId={}", event.taskId(), e);
             channel.basicNack(deliveryTag, false, false);
         }

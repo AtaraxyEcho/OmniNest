@@ -44,7 +44,7 @@ public class ComicParseConsumer {
                     event.itemId(), event.sourceId(), event.fileFormat(), event.isRetry());
             taskService.process(event);
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException exception) {
+        } catch (Throwable exception) {
             log.error("漫画解析基础设施异常，将按任务策略重试: taskId={}, itemId={}, sourceId={}",
                     event.taskId(), event.itemId(), event.sourceId(), exception);
             try {

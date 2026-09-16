@@ -66,7 +66,7 @@ public class FileIndexConsumer {
             taskTracker.handleFailure(
                     TASK_TYPE, QueueNames.FILE_INDEX_ROUTING_KEY, tracked.taskId(), event, exception);
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("文件索引处理失败: fileNodeId={}", event.fileNodeId(), e);
             taskTracker.handleFailure(TASK_TYPE, QueueNames.FILE_INDEX_ROUTING_KEY, tracked.taskId(), event, e);
             channel.basicAck(deliveryTag, false);

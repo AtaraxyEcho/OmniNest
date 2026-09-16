@@ -30,7 +30,7 @@ public class PhotoThumbnailRegenerationConsumer {
             log.info("收到缩略图重生成任务: taskId={}, ownerUserId={}", event.taskId(), event.ownerUserId());
             photoAdminService.executeThumbnailRegeneration(event.taskId(), event.ownerUserId());
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("缩略图重生成处理失败: taskId={}", event.taskId(), e);
             channel.basicNack(deliveryTag, false, false);
         }

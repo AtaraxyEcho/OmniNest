@@ -27,7 +27,7 @@ public class OfflineDownloadConsumer {
             log.info("收到离线下载任务: taskId={}", event.taskId());
             executionService.execute(event);
             channel.basicAck(deliveryTag, false);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log.error("离线下载处理失败: taskId={}", event.taskId(), e);
             channel.basicNack(deliveryTag, false, false);
         }

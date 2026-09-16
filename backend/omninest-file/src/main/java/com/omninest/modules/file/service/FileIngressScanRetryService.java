@@ -49,7 +49,7 @@ public class FileIngressScanRetryService {
      * @param exception 执行异常
      */
     @Transactional(rollbackFor = Exception.class)
-    public void handleFailure(FileSecurityScanRequestedEvent event, RuntimeException exception) {
+    public void handleFailure(FileSecurityScanRequestedEvent event, Throwable exception) {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (exception instanceof FileIngressRejectedException || currentRetries >= MAX_RETRIES) {

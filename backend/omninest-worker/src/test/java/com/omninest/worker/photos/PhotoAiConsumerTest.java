@@ -80,6 +80,21 @@ class PhotoAiConsumerTest {
         Mockito.verify(channel, Mockito.never()).basicAck(Mockito.anyLong(), Mockito.anyBoolean());
     }
 
+    @Test
+    void handleRoutesErrorToRetryServiceAndAcknowledges() throws IOException {
+        PhotoAiEvent event = event();
+        // Error 级异常（如依赖版本冲突的 NoSuchMethodError）不允许中断消费者线程，必须走失败路径。
+        Mockito.doThrow(new NoSuchMethodError("模拟依赖版本冲突导致的 Error"))
+                .when(taskService).execute(event);
+
+        consumer.handle(event, message(), channel);
+
+        Mockito.verify(retryService).handlePhotoAiFailure(
+                Mockito.eq(event), Mockito.any(NoSuchMethodError.class));
+        Mockito.verify(channel).basicAck(1L, false);
+        Mockito.verify(channel, Mockito.never()).basicNack(Mockito.anyLong(), Mockito.anyBoolean(), Mockito.anyBoolean());
+    }
+
     private PhotoAiEvent event() {
         return new PhotoAiEvent(
                 UUID.randomUUID(),

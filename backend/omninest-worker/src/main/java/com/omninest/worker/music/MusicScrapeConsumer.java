@@ -41,7 +41,7 @@ public class MusicScrapeConsumer {
                     event.jobId(), event.ownerUserId(), event.force());
             musicScrapeService.executeScrapeLibrary(event.jobId(), event.ownerUserId(), event.force());
             channel.basicAck(deliveryTag, false);
-        } catch (RuntimeException e) {
+        } catch (Throwable e) {
             log.error("音乐刮削处理失败: jobId={}", event.jobId(), e);
             try {
                 retryService.handleScrapeFailure(event, e);
