@@ -301,7 +301,7 @@ void main() {
       failedState.lastActionError?.operation,
       FileOperation.moveToRecycleBin,
     );
-    expect(failedState.lastActionError?.message, '存储配额不足');
+    expect(failedState.lastActionError?.message, 'FILE_QUOTA_EXCEEDED');
     expect(failedState.lastActionError?.code, 'FILE_QUOTA_EXCEEDED');
   });
 
@@ -529,7 +529,7 @@ void main() {
 
       var state = container.read(fileBrowserControllerProvider).value!;
       expect(state.isExternalBrowseLoading, isFalse);
-      expect(state.externalBrowseError, '外部存储参数无效');
+      expect(state.externalBrowseError, 'EXTERNAL_STORAGE_INVALID');
       expect(state.isBusy, isFalse);
 
       await controller.showFiles();

@@ -119,30 +119,38 @@ public class FileController {
     @GetMapping("/api/v1/files/recycle-bin")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<PageResponse<FileNodeDto>> listRecycleBin(
-            @RequestParam(defaultValue = "PERSONAL") String spaceType
+            @RequestParam(defaultValue = "PERSONAL") String spaceType,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         SpaceType type = SpaceType.fromValue(spaceType);
         var files = fileQueryService.listRecycleBin(ownerUserId, type);
-        return ApiResponse.success(PageResponse.of(files, 0, 50, files.size()));
+        return ApiResponse.success(PageResponse.of(files, page, size, files.size()));
     }
 
     @Operation(summary = "列出最近文件", description = "列出当前用户最近访问的文件")
     @GetMapping("/api/v1/files/recent")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<PageResponse<FileNodeDto>> listRecentFiles() {
+    ApiResponse<PageResponse<FileNodeDto>> listRecentFiles(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var files = fileManagerService.listRecentFiles(ownerUserId);
-        return ApiResponse.success(PageResponse.of(files, 0, 50, files.size()));
+        return ApiResponse.success(PageResponse.of(files, page, size, files.size()));
     }
 
     @Operation(summary = "列出收藏文件", description = "列出当前用户收藏的文件")
     @GetMapping("/api/v1/files/favorites")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<PageResponse<FileNodeDto>> listFavoriteFiles() {
+    ApiResponse<PageResponse<FileNodeDto>> listFavoriteFiles(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var files = fileManagerService.listFavoriteFiles(ownerUserId);
-        return ApiResponse.success(PageResponse.of(files, 0, 50, files.size()));
+        return ApiResponse.success(PageResponse.of(files, page, size, files.size()));
     }
 
     @Operation(summary = "重命名文件", description = "重命名指定的文件或文件夹")
@@ -390,19 +398,25 @@ public class FileController {
     @Operation(summary = "列出共享给我的文件", description = "列出其他用户共享给当前用户的文件")
     @GetMapping("/api/v1/files/shared-with-me")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<PageResponse<FileSharedItemDto>> listSharedWithMe() {
+    ApiResponse<PageResponse<FileSharedItemDto>> listSharedWithMe(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileManagerService.listSharedWithMe(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, 0, 50, items.size()));
+        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
     }
 
     @Operation(summary = "列出我的分享链接", description = "列出当前用户创建的所有分享链接")
     @GetMapping("/api/v1/files/shares")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<PageResponse<FileShareLinkDto>> listShareLinks() {
+    ApiResponse<PageResponse<FileShareLinkDto>> listShareLinks(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileManagerService.listMyShares(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, 0, 50, items.size()));
+        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
     }
 
     @Operation(summary = "创建分享链接", description = "为指定文件创建分享链接，可设置密码和过期时间")
@@ -484,10 +498,13 @@ public class FileController {
     @Operation(summary = "列出上传队列", description = "列出当前用户的上传任务队列")
     @GetMapping("/api/v1/uploads/sessions")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<PageResponse<FileUploadQueueItemDto>> listUploadQueue() {
+    ApiResponse<PageResponse<FileUploadQueueItemDto>> listUploadQueue(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileManagerService.listUploadQueue(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, 0, 50, items.size()));
+        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
     }
 
     @Operation(summary = "创建上传会话", description = "创建分片上传会话，支持大文件断点续传")
@@ -564,10 +581,13 @@ public class FileController {
     @Operation(summary = "列出离线下载任务", description = "列出当前用户的离线下载任务")
     @GetMapping("/api/v1/offline-downloads")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<PageResponse<OfflineDownloadTaskDto>> listOfflineDownloads() {
+    ApiResponse<PageResponse<OfflineDownloadTaskDto>> listOfflineDownloads(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = offlineDownloadRequestService.listTasks(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, 0, 50, items.size()));
+        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
     }
 
     @Operation(summary = "创建离线下载任务", description = "提交离线下载任务，服务端异步下载文件")
@@ -592,10 +612,13 @@ public class FileController {
     @Operation(summary = "列出外部存储", description = "列出当前用户关联的外部存储账户")
     @GetMapping("/api/v1/external-storages")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<PageResponse<ExternalStorageAccountDto>> listExternalStorages() {
+    ApiResponse<PageResponse<ExternalStorageAccountDto>> listExternalStorages(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         var items = fileManagerService.listExternalAccounts(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, 0, 50, items.size()));
+        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
     }
 
     @Operation(summary = "创建外部存储", description = "关联一个新的外部存储账户")
