@@ -20,9 +20,7 @@ public final class ExternalStorageProviders {
             "GDRIVE",
             "GOOGLE_DRIVE",
             "ALIYUN_DRIVE",
-            "DROPBOX",
-            "QUARK",
-            "BAIDU"
+            "DROPBOX"
     );
 
     private ExternalStorageProviders() {

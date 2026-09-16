@@ -13,8 +13,6 @@ Map<String, String> _providerLabels(AppLocalizations l10n) => {
   'GDRIVE': 'Google Drive',
   'ALIYUN_DRIVE': l10n.filesAliyunDrive,
   'DROPBOX': 'Dropbox',
-  'QUARK': '夸克网盘',
-  'BAIDU': '百度网盘',
 };
 
 const List<String> _s3ProviderTypes = [
@@ -73,8 +71,6 @@ class _ExternalStorageAccountDialogState
   late final TextEditingController _oauthClientIdCtrl;
   late final TextEditingController _oauthClientSecretCtrl;
   late final TextEditingController _oauthTokenCtrl;
-  // Cookie 兜底（夸克/百度等）
-  late final TextEditingController _cookieCtrl;
 
   @override
   void initState() {
@@ -91,7 +87,6 @@ class _ExternalStorageAccountDialogState
     _oauthClientIdCtrl = TextEditingController();
     _oauthClientSecretCtrl = TextEditingController();
     _oauthTokenCtrl = TextEditingController();
-    _cookieCtrl = TextEditingController();
 
     if (account != null) {
       _provider = account.provider;
@@ -132,7 +127,6 @@ class _ExternalStorageAccountDialogState
     _oauthClientIdCtrl.dispose();
     _oauthClientSecretCtrl.dispose();
     _oauthTokenCtrl.dispose();
-    _cookieCtrl.dispose();
     super.dispose();
   }
 
@@ -152,8 +146,6 @@ class _ExternalStorageAccountDialogState
       'GDRIVE' ||
       'ALIYUN_DRIVE' ||
       'DROPBOX' => canKeepSecret || _oauthTokenCtrl.text.trim().isNotEmpty,
-      'QUARK' ||
-      'BAIDU' => canKeepSecret || _cookieCtrl.text.trim().isNotEmpty,
       _ => false,
     };
   }
@@ -183,10 +175,6 @@ class _ExternalStorageAccountDialogState
           'client_secret': _oauthClientSecretCtrl.text.trim(),
         if (_oauthTokenCtrl.text.trim().isNotEmpty)
           'token': _oauthTokenCtrl.text.trim(),
-      },
-      'QUARK' || 'BAIDU' => {
-        if (_cookieCtrl.text.trim().isNotEmpty)
-          'cookie': _cookieCtrl.text.trim(),
       },
       _ => <String, String>{},
     };
@@ -424,21 +412,6 @@ class _ExternalStorageAccountDialogState
             hintText:
                 widget.account == null
                     ? '{"access_token":"...","refresh_token":"...","expiry":"..."}'
-                    : l10n.filesKeepExistingSecretHint,
-            isDense: true,
-          ),
-          maxLines: 4,
-          onChanged: (_) => setState(() {}),
-        ),
-      ],
-      'QUARK' || 'BAIDU' => [
-        TextField(
-          controller: _cookieCtrl,
-          decoration: InputDecoration(
-            labelText: 'Cookie',
-            hintText:
-                widget.account == null
-                    ? '从浏览器复制网盘 Cookie'
                     : l10n.filesKeepExistingSecretHint,
             isDense: true,
           ),

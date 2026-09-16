@@ -37,7 +37,6 @@ public class ExternalStorageController {
     private final ExternalStorageService externalStorageService;
     private final CurrentUserContext currentUserContext;
     private final com.omninest.modules.file.service.ExternalStorageOAuthService oauthService;
-    private final com.omninest.modules.file.service.ExternalStorageQrSessionService qrSessionService;
 
     @Operation(summary = "列出连接器目录", description = "返回可接入的远程存储类型")
     @GetMapping("/api/v1/external-connectors")
@@ -66,25 +65,6 @@ public class ExternalStorageController {
     ) {
         oauthService.handleCallback(state, oauthCode);
         return ApiResponse.success();
-    }
-
-    @Operation(summary = "发起扫码登录", description = "创建网盘扫码会话")
-    @PostMapping("/api/v1/external-storages/{accountId}/qr/start")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
-    ApiResponse<com.omninest.modules.file.dto.QrSessionResponse> qrStart(@PathVariable UUID accountId) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(qrSessionService.start(ownerUserId, accountId));
-    }
-
-    @Operation(summary = "查询扫码状态", description = "轮询扫码登录会话状态")
-    @GetMapping("/api/v1/external-storages/{accountId}/qr/status")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<com.omninest.modules.file.dto.QrSessionResponse> qrStatus(
-            @PathVariable UUID accountId,
-            @RequestParam String sessionId
-    ) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(qrSessionService.status(ownerUserId, accountId, sessionId));
     }
 
     @Operation(summary = "测试连接", description = "验证外部存储账户是否可连通")

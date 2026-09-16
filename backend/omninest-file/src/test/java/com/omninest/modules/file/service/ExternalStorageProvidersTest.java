@@ -18,10 +18,14 @@ class ExternalStorageProvidersTest {
                 .doesNotThrowAnyException();
         assertThatCode(() -> ExternalStorageProviders.requireAllowed("S3"))
                 .doesNotThrowAnyException();
-        assertThatCode(() -> ExternalStorageProviders.requireAllowed("QUARK"))
-                .doesNotThrowAnyException();
-        assertThatCode(() -> ExternalStorageProviders.requireAllowed("BAIDU"))
-                .doesNotThrowAnyException();
+    }
+
+    @Test
+    void rejectsChineseNetdiskWithoutAdapter() {
+        assertThatThrownBy(() -> ExternalStorageProviders.requireAllowed("QUARK"))
+                .isInstanceOf(BusinessException.class);
+        assertThatThrownBy(() -> ExternalStorageProviders.requireAllowed("BAIDU"))
+                .isInstanceOf(BusinessException.class);
     }
 
     @Test
