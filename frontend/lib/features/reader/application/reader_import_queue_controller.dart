@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/reader/application/reader_book_provider.dart';
@@ -140,6 +142,8 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
     if (file == null) return;
     final cancellation = MediaImportCancellationToken();
     _cancellations[jobId] = cancellation;
+    // parentId 提升到方法级，供 catch 内的自愈轮询复用。
+    String? parentId;
     try {
       _update(
         jobId,
@@ -154,7 +158,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
             directoryName: 'Reader',
             spaceType: 'PERSONAL',
           );
-      final parentId = await _readerDirectory;
+      parentId = await _readerDirectory;
       if (!ref.mounted) return;
       if (parentId == null) throw StateError('Reader directory unavailable');
       cancellation.throwIfCancelled();
@@ -199,16 +203,89 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
     } on MediaImportCancelledException {
       _remove(jobId);
     } on Object catch (error) {
+      // 安全扫描受理失败时后端晋升与自动导入链仍可能完成：
+      // 进入自愈轮询，按文件节点找回已导入的书，找回即视为成功。
+      if (error is AppException &&
+          error.code == AppErrorCodes.securityScanFailed) {
+        var recovered = false;
+        var cancelled = false;
+        try {
+          recovered = await _awaitLibraryRegistration(
+            jobId,
+            file,
+            parentId,
+            cancellation,
+          );
+        } on MediaImportCancelledException {
+          cancelled = true;
+        } on Object {
+          recovered = false;
+        }
+        if (cancelled) {
+          _remove(jobId);
+          return;
+        }
+        if (recovered) {
+          return;
+        }
+      }
       _update(
         jobId,
         (job) => job.copyWith(
           status: ReaderImportJobStatus.failed,
-          errorMessage: describeUserFacingError(error).displayMessage,
+          errorMessage: _describeImportError(error),
         ),
       );
     } finally {
       _cancellations.remove(jobId);
     }
+  }
+
+  /// 安全扫描受理失败后的自愈轮询：后端晋升与自动导入完成即补齐书架。
+  Future<bool> _awaitLibraryRegistration(
+    String jobId,
+    XFile file,
+    String? parentId,
+    MediaImportCancellationToken cancellation,
+  ) async {
+    final importService = ref.read(mediaImportServiceProvider);
+    for (var attempt = 0; attempt < 60; attempt++) {
+      if (!ref.mounted) return false;
+      cancellation.throwIfCancelled();
+      final node = await importService.findImportedNode(
+        parentId: parentId,
+        fileName: file.name,
+        timeout: const Duration(seconds: 5),
+      );
+      if (!ref.mounted) return false;
+      if (node == null) {
+        continue;
+      }
+      final importedItem = await ref
+          .read(readerApiProvider)
+          .importFile(
+            fileNodeId: node,
+            contentKindOverride: _contentKind(file.name),
+          );
+      if (!ref.mounted) return false;
+      ref.invalidate(textParseProgressProvider(importedItem.id));
+      await ref.read(readerCenterControllerProvider.notifier).refresh();
+      if (!ref.mounted) return false;
+      _remove(jobId);
+      return true;
+    }
+    return false;
+  }
+
+  /// 队列内无 BuildContext，优先展示异常自带的可读信息，再回退统一映射。
+  String _describeImportError(Object error) {
+    if (error is AppException) {
+      final message = error.message;
+      if (message.isNotEmpty && message != error.code) {
+        return '$message（${error.code}）';
+      }
+    }
+    return describeUserFacingError(error).displayMessage;
   }
 
   String? _contentKind(String fileName) {

@@ -490,7 +490,7 @@ class MediaImportService {
       if (fileNodeId == null || fileNodeId.isEmpty) {
         throw const AppException(
           code: AppErrorCodes.securityScanFailed,
-          message: AppErrorCodes.securityScanFailed,
+          message: '安全扫描未完成，文件已保留；请稍后在书库查看或重新导入',
         );
       }
       return (fileNodeId: fileNodeId, mediaAutoImportTaskId: null);
@@ -499,7 +499,7 @@ class MediaImportService {
     if (taskId == null || taskId.isEmpty) {
       throw const AppException(
         code: AppErrorCodes.securityScanFailed,
-        message: AppErrorCodes.securityScanFailed,
+        message: '安全扫描未完成，文件已保留；请稍后在书库查看或重新导入',
       );
     }
     // 扫描时限护栏 30 分钟 + 重试窗口，超时按扫描失败处理。
@@ -515,9 +515,12 @@ class MediaImportService {
       );
     }
     if (task.status != 'COMPLETED') {
+      final detail = task.errorMessage ?? '';
       throw AppException(
         code: AppErrorCodes.securityScanFailed,
-        message: task.errorMessage ?? AppErrorCodes.securityScanFailed,
+        message:
+            '安全扫描未完成，文件已保留；请稍后在书库查看或重新导入'
+            '${detail.isEmpty ? '' : '（$detail）'}',
       );
     }
     final payload =
@@ -538,7 +541,11 @@ class MediaImportService {
         'falling back to directory lookup for $fileName',
       );
     }
-    final resolved = await _resolvePromotedNode(fileName, parentId);
+    final resolved = await findImportedNode(
+      parentId: parentId,
+      fileName: fileName,
+      timeout: const Duration(minutes: 2),
+    );
     if (resolved == null) {
       if (kDebugMode) {
         debugPrint(
@@ -546,20 +553,24 @@ class MediaImportService {
           'fileName=$fileName, parentId=$parentId',
         );
       }
-      throw const AppException(
+      throw AppException(
         code: AppErrorCodes.securityScanFailed,
-        message: AppErrorCodes.securityScanFailed,
+        message: '安全扫描已完成但未能定位文件「$fileName」；请刷新书库查看或重新导入',
       );
     }
     return (fileNodeId: resolved, mediaAutoImportTaskId: null);
   }
 
   /// 在目标目录按文件名轮询查找晋升后的文件节点。
-  Future<String?> _resolvePromotedNode(
-    String fileName,
-    String? parentId,
-  ) async {
-    for (var attempt = 0; attempt < 10; attempt++) {
+  ///
+  /// 供导入队列在扫描等待异常时自愈：后端晋升与自动导入链完成即能找回。
+  Future<String?> findImportedNode({
+    required String? parentId,
+    required String fileName,
+    Duration timeout = const Duration(minutes: 5),
+  }) async {
+    final deadline = DateTime.now().add(timeout);
+    while (DateTime.now().isBefore(deadline)) {
       try {
         final nodes = await _fileApi.listFiles(parentId: parentId);
         for (final node in nodes) {
@@ -570,7 +581,7 @@ class MediaImportService {
       } on AppException {
         // 列表查询失败按未找到处理，继续下一轮。
       }
-      await Future<void>.delayed(const Duration(seconds: 2));
+      await Future<void>.delayed(const Duration(seconds: 3));
     }
     return null;
   }
