@@ -144,6 +144,8 @@ public final class ConfigDefinitionCatalog {
                 "config.security.clamav.port", "ClamAV 服务端口", 1, 65_535));
         add(values, number("clamav.timeout-millis", "2000000", "security", ConfigSurface.GENERAL,
                 "config.security.clamav.timeout", "单文件安全扫描时限（毫秒，活性护栏）", 1_000, 3_600_000));
+        add(values, number("security.quarantine.retention-days", "7", "security", ConfigSurface.GENERAL,
+                "config.security.quarantine.retentionDays", "隔离滞留对象保留天数", 1, 90));
         add(values, string("auth.two-factor.required-roles", "SUPER_ADMIN,ADMIN", "auth", ConfigSurface.GENERAL,
                 "config.auth.twoFactorRequiredRoles", "强制开启两步验证的角色编码列表（逗号分隔，留空表示全员自愿）", false, 200));
         add(values, bool("weather.enabled", true, "weather", ConfigSurface.INTEGRATION,

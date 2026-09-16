@@ -37,7 +37,7 @@ class BuiltinConfigCatalogScriptContractTest {
                 .map(ConfigDefinition::key)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
 
-        assertThat(baselineKeys).hasSize(68).containsExactlyInAnyOrderElementsOf(catalogKeys);
+        assertThat(baselineKeys).hasSize(69).containsExactlyInAnyOrderElementsOf(catalogKeys);
     }
 
     private String readResource(String resourceName) throws IOException {
