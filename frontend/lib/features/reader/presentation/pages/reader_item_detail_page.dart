@@ -1032,14 +1032,6 @@ class _ComicDetailWrapper extends ConsumerWidget {
   final ReaderItem item;
   final String itemId;
 
-  void _handleBack(BuildContext context) {
-    if (context.canPop()) {
-      context.pop();
-      return;
-    }
-    context.go('/reader');
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final monitor = ref.watch(comicManifestMonitorProvider(itemId));
@@ -1067,20 +1059,16 @@ class _ComicDetailWrapper extends ConsumerWidget {
         });
       });
     }
-    return ReaderPageScaffold(
-      target: ReaderPageTarget.library,
-      enablePopGuard: false,
-      headerPadding: EdgeInsets.zero,
-      header: _DetailBackBar(onTap: () => _handleBack(context)),
-      child: ComicDetailPage(
-        item: item,
-        chapters: manifest.catalog,
-        sources: manifest.sources,
-        canRead: manifest.pages.isNotEmpty,
-        parseProgress: manifest.parseTask?.progress,
-        onRetrySource: (source) => _retryComicSource(context, ref, source),
-        onDeleteSource: (source) => _deleteComicSource(context, ref, source),
-      ),
+    // 外层详情页已提供 ReaderPageScaffold（页头/滚动/材质）；
+    // 此处再嵌一层会在无界约束下产生嵌套 Scaffold 布局错误。
+    return ComicDetailPage(
+      item: item,
+      chapters: manifest.catalog,
+      sources: manifest.sources,
+      canRead: manifest.pages.isNotEmpty,
+      parseProgress: manifest.parseTask?.progress,
+      onRetrySource: (source) => _retryComicSource(context, ref, source),
+      onDeleteSource: (source) => _deleteComicSource(context, ref, source),
     );
   }
 

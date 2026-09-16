@@ -680,11 +680,7 @@ class _CompletedScanTaskApi extends TaskApi {
     Duration interval = const Duration(seconds: 1),
   }) async {
     waitCalled = true;
-    return _taskRecord(
-      'COMPLETED',
-      _resultJson ??
-          '{"fileNodeId":"promoted-id","mediaAutoImportTaskId":"media-task-1"}',
-    );
+    return _taskRecord('COMPLETED', _resultJson);
   }
 }
 

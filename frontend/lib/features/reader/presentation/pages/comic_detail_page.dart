@@ -65,108 +65,102 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
     final horizontalPadding =
         MediaQuery.sizeOf(context).width < 600 ? 16.0 : 24.0;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Column(
-        children: [
-          // 内容区域居中约束
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 640),
-              child: Padding(
-                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                child: Column(
-                  children: [
-                    const SizedBox(height: 32),
-                    // 封面
-                    _ComicDetailCover(item: item),
-                    const SizedBox(height: 28),
-                    // 标题
-                    Text(
-                      item.title,
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: context.readerColors.onSurface,
-                        fontSize: AppTypography.headlineSmall,
-                        height: 1.3,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    // 作者
-                    if (item.authorName?.isNotEmpty == true) ...[
-                      const SizedBox(height: 6),
-                      Text(
-                        item.authorName!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: context.readerColors.onSurface.withValues(
-                            alpha: 0.6,
-                          ),
-                          fontSize: AppTypography.bodyLarge,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
-                    // 导入状态提示
-                    if (item.isParsing) ...[
-                      const SizedBox(height: 12),
-                      _ImportStatusBanner(
-                        icon: Icons.hourglass_top_rounded,
-                        message: l10n.readerComicParsingMessage,
-                        color: context.readerColors.tertiary,
-                      ),
-                      if (widget.parseProgress != null) ...[
-                        const SizedBox(height: 8),
-                        LinearProgressIndicator(
-                          value: widget.parseProgress!.clamp(0, 100) / 100,
-                        ),
-                      ],
-                    ] else if (item.isPartialFailed) ...[
-                      const SizedBox(height: 12),
-                      _ImportStatusBanner(
-                        icon: Icons.warning_amber_rounded,
-                        message: l10n.readerComicPartialFailedMessage,
-                        color: context.readerColors.warning,
-                      ),
-                    ] else if (item.isFailed) ...[
-                      const SizedBox(height: 12),
-                      _ImportStatusBanner(
-                        icon: Icons.error_outline_rounded,
-                        message: l10n.readerComicFailedMessage,
-                        color: context.readerColors.danger,
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    // 数据胶囊行
-                    _buildCapsuleRow(item),
-                    // 分类标签
-                    if (item.genres?.isNotEmpty == true) ...[
-                      const SizedBox(height: 10),
-                      _buildGenreTags(item.genres!),
-                    ],
-                    const SizedBox(height: 28),
-                    // 阅读按钮
-                    _buildActionButtons(context, item),
-                    const SizedBox(height: 32),
-                    // 简介
-                    _buildDescriptionSection(context, item),
-                    // 来源解析状态
-                    if (widget.sources.isNotEmpty) ...[
-                      const SizedBox(height: 28),
-                      _buildSourcesSection(context, widget.sources),
-                    ],
-                    // 目录
-                    if (widget.chapters.isNotEmpty) ...[
-                      const SizedBox(height: 28),
-                      _buildCatalogSection(context, widget.chapters),
-                    ],
-                    const SizedBox(height: 40),
-                  ],
+    // 滚动由外层详情页的滚动体承担；本页自身再嵌滚动/Scaffold
+    // 会在无界约束下产生布局错误。
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+          child: Column(
+            children: [
+              const SizedBox(height: 32),
+              // 封面
+              _ComicDetailCover(item: item),
+              const SizedBox(height: 28),
+              // 标题
+              Text(
+                item.title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: context.readerColors.onSurface,
+                  fontSize: AppTypography.headlineSmall,
+                  height: 1.3,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-            ),
+              // 作者
+              if (item.authorName?.isNotEmpty == true) ...[
+                const SizedBox(height: 6),
+                Text(
+                  item.authorName!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: context.readerColors.onSurface.withValues(
+                      alpha: 0.6,
+                    ),
+                    fontSize: AppTypography.bodyLarge,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+              // 导入状态提示
+              if (item.isParsing) ...[
+                const SizedBox(height: 12),
+                _ImportStatusBanner(
+                  icon: Icons.hourglass_top_rounded,
+                  message: l10n.readerComicParsingMessage,
+                  color: context.readerColors.tertiary,
+                ),
+                if (widget.parseProgress != null) ...[
+                  const SizedBox(height: 8),
+                  LinearProgressIndicator(
+                    value: widget.parseProgress!.clamp(0, 100) / 100,
+                  ),
+                ],
+              ] else if (item.isPartialFailed) ...[
+                const SizedBox(height: 12),
+                _ImportStatusBanner(
+                  icon: Icons.warning_amber_rounded,
+                  message: l10n.readerComicPartialFailedMessage,
+                  color: context.readerColors.warning,
+                ),
+              ] else if (item.isFailed) ...[
+                const SizedBox(height: 12),
+                _ImportStatusBanner(
+                  icon: Icons.error_outline_rounded,
+                  message: l10n.readerComicFailedMessage,
+                  color: context.readerColors.danger,
+                ),
+              ],
+              const SizedBox(height: 16),
+              // 数据胶囊行
+              _buildCapsuleRow(item),
+              // 分类标签
+              if (item.genres?.isNotEmpty == true) ...[
+                const SizedBox(height: 10),
+                _buildGenreTags(item.genres!),
+              ],
+              const SizedBox(height: 28),
+              // 阅读按钮
+              _buildActionButtons(context, item),
+              const SizedBox(height: 32),
+              // 简介
+              _buildDescriptionSection(context, item),
+              // 来源解析状态
+              if (widget.sources.isNotEmpty) ...[
+                const SizedBox(height: 28),
+                _buildSourcesSection(context, widget.sources),
+              ],
+              // 目录
+              if (widget.chapters.isNotEmpty) ...[
+                const SizedBox(height: 28),
+                _buildCatalogSection(context, widget.chapters),
+              ],
+              const SizedBox(height: 40),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
