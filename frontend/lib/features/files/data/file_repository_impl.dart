@@ -404,6 +404,17 @@ class FileRepositoryImpl implements FileRepository {
     return fileApi.testExternalStorageConnection(accountId);
   }
 
+  @override
+  Future<String> startExternalOAuth({
+    required String connectorCode,
+    required String accountId,
+  }) {
+    return fileApi.startExternalOAuth(
+      connectorCode: connectorCode,
+      accountId: accountId,
+    );
+  }
+
   // ============================================================
   // 共享空间相关方法
   // ============================================================

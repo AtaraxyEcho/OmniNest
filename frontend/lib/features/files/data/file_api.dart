@@ -726,6 +726,23 @@ class FileApi {
     }
   }
 
+  /// 开始 OAuth 授权，返回授权 URL。
+  Future<String> startExternalOAuth({
+    required String connectorCode,
+    required String accountId,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/external-connectors/$connectorCode/oauth/start',
+      queryParameters: {'accountId': accountId},
+    );
+    final data = parseData(response.data);
+    final url = data['authorizationUrl']?.toString() ?? '';
+    if (url.isEmpty) {
+      throw Exception('未返回授权地址，请检查 OAuth 应用配置');
+    }
+    return url;
+  }
+
   FileNodePage parseFilePageResponse(Map<String, dynamic>? body) {
     return _responseParser.parseFilePageResponse(body);
   }

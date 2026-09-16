@@ -2947,6 +2947,10 @@ abstract class AppLocalizations {
   /// 测试连接
   String get filesTestConnection;
 
+  String get filesAuthorizeAccount;
+
+  String get filesAuthorizeHint;
+
   /// No description provided for @filesImport.
   ///
   /// In en, this message translates to:

@@ -183,6 +183,12 @@ abstract interface class FileRepository {
   /// 测试外部存储连通性
   Future<void> testExternalStorageConnection(String accountId);
 
+  /// 开始 OAuth 授权
+  Future<String> startExternalOAuth({
+    required String connectorCode,
+    required String accountId,
+  });
+
   // ============================================================
   // 共享空间相关方法
   // ============================================================

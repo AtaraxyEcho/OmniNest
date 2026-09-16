@@ -1518,6 +1518,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesTestConnection => '测试连接';
 
   @override
+  String get filesAuthorizeAccount => '去授权';
+
+  @override
+  String get filesAuthorizeHint =>
+      '在浏览器中打开以下链接完成授权，完成后回到本页刷新连接：';
+
+  @override
   String get filesImport => '导入';
 
   @override

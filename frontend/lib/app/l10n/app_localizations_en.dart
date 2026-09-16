@@ -1569,6 +1569,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesTestConnection => 'Test connection';
 
   @override
+  String get filesAuthorizeAccount => 'Authorize';
+
+  @override
+  String get filesAuthorizeHint =>
+      'Open this link in a browser to finish authorization, then refresh the connection:';
+
+  @override
   String get filesImport => 'Import';
 
   @override

@@ -102,6 +102,22 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
                                     : null,
                             icon: const Icon(Icons.wifi_tethering_rounded),
                           ),
+                          if (_isOAuthProvider(account.provider))
+                            IconButton(
+                              tooltip: l10n.filesAuthorizeAccount,
+                              onPressed:
+                                  enabled
+                                      ? () => unawaited(
+                                        _startOAuthAuthorize(
+                                          context,
+                                          ref,
+                                          controller,
+                                          account,
+                                        ),
+                                      )
+                                      : null,
+                              icon: const Icon(Icons.open_in_new_rounded),
+                            ),
                           IconButton(
                             tooltip: l10n.filesBrowseRemote,
                             onPressed:
@@ -168,6 +184,65 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
         ],
       ],
     );
+  }
+
+  bool _isOAuthProvider(String provider) {
+    final code = provider.toUpperCase();
+    return code == 'ONEDRIVE' ||
+        code == 'GDRIVE' ||
+        code == 'GOOGLE_DRIVE' ||
+        code == 'DROPBOX';
+  }
+
+  Future<void> _startOAuthAuthorize(
+    BuildContext context,
+    WidgetRef ref,
+    FileBrowserController controller,
+    ExternalStorageAccount account,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final url = await controller.startExternalOAuth(
+        connectorCode: account.provider,
+        accountId: account.id,
+      );
+      if (!context.mounted) {
+        return;
+      }
+      await showDialog<void>(
+        context: context,
+        builder:
+            (dialogContext) => AlertDialog(
+              title: Text(l10n.filesAuthorizeAccount),
+              content: SelectableText(
+                '${l10n.filesAuthorizeHint}\n\n$url',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: Text(l10n.filesCancel),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    await Clipboard.setData(ClipboardData(text: url));
+                    if (dialogContext.mounted) {
+                      Navigator.of(dialogContext).pop();
+                    }
+                  },
+                  child: Text(l10n.filesCopyLink),
+                ),
+              ],
+            ),
+      );
+      if (context.mounted) {
+        await controller.showExternalStorage();
+      }
+    } on Exception catch (error) {
+      messenger.showSnackBar(
+        SnackBar(content: Text(describeUserFacingError(error).message)),
+      );
+    }
   }
 }
 

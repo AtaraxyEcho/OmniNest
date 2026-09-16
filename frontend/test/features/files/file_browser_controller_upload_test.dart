@@ -742,6 +742,12 @@ class _FakeFileRepository implements FileRepository {
       throw UnimplementedError();
 
   @override
+  Future<String> startExternalOAuth({
+    required String connectorCode,
+    required String accountId,
+  }) async => 'https://example.com/oauth';
+
+  @override
   Future<FileShareLink> createShareLink({
     required String resourceId,
     String resourceType = 'FILE',

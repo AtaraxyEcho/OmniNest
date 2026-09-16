@@ -540,6 +540,8 @@
   "filesImportMessage": "将 \"{name}\" 导入到当前文件目录。",
   "filesImportSizeGuardHint": "超大文件可能被拒绝导入；4K 等重片源请放入本地媒体目录。",
   "filesTestConnection": "测试连接",
+  "filesAuthorizeAccount": "去授权",
+  "filesAuthorizeHint": "在浏览器中打开以下链接完成授权，完成后回到本页刷新连接：",
   "filesImport": "导入",
   "filesNoImportTasks": "暂无导入任务",
   "filesCancelImportConfirm": "取消导入任务？",

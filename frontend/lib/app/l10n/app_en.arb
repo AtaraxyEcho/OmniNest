@@ -615,6 +615,8 @@
   "filesImportMessage": "Import \"{name}\" to current file directory.",
   "filesImportSizeGuardHint": "Very large files may be rejected; put 4K originals in the local media library instead.",
   "filesTestConnection": "Test connection",
+  "filesAuthorizeAccount": "Authorize",
+  "filesAuthorizeHint": "Open this link in a browser to finish authorization, then refresh the connection:",
   "@filesImportMessage": {
     "placeholders": {
       "name": {}

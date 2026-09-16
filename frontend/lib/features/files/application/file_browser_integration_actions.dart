@@ -217,6 +217,19 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     await showExternalStorage();
   }
 
+  /// 开始 OAuth 授权并返回授权 URL。
+  Future<String> startExternalOAuth({
+    required String connectorCode,
+    required String accountId,
+  }) {
+    return _repository
+        .startExternalOAuth(
+          connectorCode: connectorCode,
+          accountId: accountId,
+        )
+        .timeout(const Duration(seconds: 20));
+  }
+
   Future<void> createImportTask(
     String accountId,
     String sourcePath, {
