@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
-import com.omninest.common.security.MalwareScanGateway;
 import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.backdrop.config.BackdropRuntimeConfigService;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
@@ -24,6 +23,7 @@ import com.omninest.modules.backdrop.dto.BackdropDtos.BackdropAssetDto;
 import com.omninest.modules.backdrop.repository.BackdropAssetRepository;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileIngressStagingService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.io.ByteArrayOutputStream;
@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -44,14 +45,14 @@ import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionSynchronizationUtils;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 以 mock 依赖驱动背景素材上传/删除链路,覆盖方案 B2 的校验、去重、配额与补偿语义。
+ * 背景素材应用服务测试。
  *
  * @author OmniNest
  */
 class BackdropAssetServiceTest {
-
     private static final UUID OWNER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
     private BackdropAssetRepository backdropAssetRepository;
@@ -60,7 +61,8 @@ class BackdropAssetServiceTest {
     private FileQueryService fileQueryService;
     private StorageQuotaService storageQuotaService;
     private UserStorageCommand userStorageCommand;
-    private MalwareScanGateway malwareScanGateway;
+    private FileIngressStagingService ingressStagingService;
+    private BackdropScanTaskService backdropScanTaskService;
     private RateLimitService rateLimitService;
     private BackdropVideoThumbnailExtractor videoThumbnailExtractor;
     private BackdropAssetService service;
@@ -74,7 +76,8 @@ class BackdropAssetServiceTest {
         fileQueryService = mock(FileQueryService.class);
         storageQuotaService = mock(StorageQuotaService.class);
         userStorageCommand = mock(UserStorageCommand.class);
-        malwareScanGateway = mock(MalwareScanGateway.class);
+        ingressStagingService = mock(FileIngressStagingService.class);
+        backdropScanTaskService = mock(BackdropScanTaskService.class);
         rateLimitService = mock(RateLimitService.class);
         videoThumbnailExtractor = mock(BackdropVideoThumbnailExtractor.class);
         when(videoThumbnailExtractor.extractFirstFrame(any(), any(), any(), any()))
@@ -85,8 +88,6 @@ class BackdropAssetServiceTest {
         when(runtimeConfigService.maxImageBytes()).thenReturn(20 * 1024 * 1024);
         when(runtimeConfigService.maxVideoBytes()).thenReturn(64 * 1024 * 1024);
         when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
-        when(malwareScanGateway.scan(any(java.nio.file.Path.class)))
-                .thenReturn(MalwareScanGateway.ScanResult.clean());
         when(backdropAssetRepository.save(any())).thenAnswer(invocation -> {
             storedAsset.set(invocation.getArgument(0));
             return invocation.getArgument(0);
@@ -103,7 +104,8 @@ class BackdropAssetServiceTest {
                 fileQueryService,
                 storageQuotaService,
                 userStorageCommand,
-                malwareScanGateway,
+                ingressStagingService,
+                backdropScanTaskService,
                 rateLimitService,
                 videoThumbnailExtractor,
                 afterCommitFiringTransactionManager()
@@ -144,28 +146,27 @@ class BackdropAssetServiceTest {
     }
 
     @Test
-    void uploadImageCompletesWholePipeline() throws IOException {
+    void uploadImageStagesAndDispatchesSecurityScan() throws IOException {
         stubFreshInsert();
-        UUID fileNodeId = UUID.randomUUID();
-        UUID thumbFileId = UUID.randomUUID();
-        when(derivedAssetStorageService.store(
-                eq(OWNER_ID), anyString(), any(UUID.class), anyString(), anyString(), anyString(),
-                any(java.nio.file.Path.class)))
-                .thenReturn(fileNodeId, thumbFileId);
+        UUID ingressItemId = UUID.randomUUID();
+        UUID scanTaskId = UUID.randomUUID();
+        when(ingressStagingService.stage(any(), anyString(), any(UUID.class), anyString(), anyString(),
+                any(java.nio.file.Path.class))).thenReturn(ingressItemId);
+        when(backdropScanTaskService.enqueueScanTask(any(), any(UUID.class), any(UUID.class), anyString()))
+                .thenReturn(scanTaskId);
 
         BackdropAssetDto dto = service.uploadAsset(OWNER_ID, pngUpload());
 
-        assertThat(storedAsset.get().getStatus()).isEqualTo(BackdropAssetStatus.READY);
-        assertThat(storedAsset.get().getFileNodeId()).isEqualTo(fileNodeId);
-        assertThat(storedAsset.get().getThumbFileId()).isEqualTo(thumbFileId);
-        assertThat(dto.status()).isEqualTo("READY");
-        assertThat(dto.contentUrl()).contains(fileNodeId.toString());
-        assertThat(dto.thumbUrl()).contains(thumbFileId.toString());
+        assertThat(storedAsset.get().getStatus()).isEqualTo(BackdropAssetStatus.PROCESSING);
+        assertThat(storedAsset.get().getFileNodeId()).isNull();
+        assertThat(dto.status()).isEqualTo("PROCESSING");
         verify(storageQuotaService).reserve(eq(OWNER_ID), eq("BACKDROP_UPLOAD"), any(UUID.class),
                 anyLong(), any(Instant.class));
-        verify(storageQuotaService).settleReservation(eq("BACKDROP_UPLOAD"), any(UUID.class),
-                eq(pngUpload().getSize()));
-        verify(derivedAssetStorageService, never()).deleteOwned(any(), any());
+        verify(storageQuotaService).extendReservation(eq("BACKDROP_UPLOAD"), any(UUID.class), any(Instant.class));
+        verify(backdropScanTaskService).enqueueScanTask(eq(OWNER_ID), any(UUID.class), eq(ingressItemId), anyString());
+        verify(derivedAssetStorageService, never()).store(any(), anyString(), any(), anyString(), anyString(),
+                anyString(), any(java.nio.file.Path.class));
+        verify(ingressStagingService, never()).markAvailable(any(), any());
     }
 
     @Test
@@ -180,26 +181,31 @@ class BackdropAssetServiceTest {
         verify(derivedAssetStorageService, never()).store(any(), anyString(), any(), anyString(), anyString(),
                 anyString(), any(java.nio.file.Path.class));
         verify(storageQuotaService, never()).reserve(any(), anyString(), any(), anyLong(), any(Instant.class));
+        verify(ingressStagingService, never()).stage(any(), anyString(), any(), anyString(), anyString(),
+                any(java.nio.file.Path.class));
     }
 
     @Test
-    void duplicateFailedAssetIsRebuiltToReady() throws IOException {
+    void duplicateFailedAssetIsRestagedForSecurityScan() throws IOException {
         BackdropAsset failed = readyAsset();
         failed.setStatus(BackdropAssetStatus.FAILED);
         failed.setFailReason("原始对象缺失，对账标记");
         UUID oldNodeId = failed.getFileNodeId();
+        UUID ingressItemId = UUID.randomUUID();
         when(backdropAssetRepository.findByOwnerUserIdAndSha256(any(), any()))
                 .thenReturn(Optional.of(failed));
-        when(derivedAssetStorageService.store(
-                eq(OWNER_ID), anyString(), eq(failed.getId()), anyString(), anyString(), anyString(),
-                any(java.nio.file.Path.class)))
+        when(ingressStagingService.stage(any(), anyString(), any(UUID.class), anyString(), anyString(),
+                any(java.nio.file.Path.class))).thenReturn(ingressItemId);
+        when(backdropScanTaskService.enqueueScanTask(any(), any(UUID.class), any(UUID.class), anyString()))
                 .thenReturn(UUID.randomUUID());
 
         BackdropAssetDto dto = service.uploadAsset(OWNER_ID, pngUpload());
 
         verify(derivedAssetStorageService).deleteOwned(OWNER_ID, oldNodeId);
-        assertThat(dto.status()).isEqualTo("READY");
+        assertThat(failed.getStatus()).isEqualTo(BackdropAssetStatus.PROCESSING);
         assertThat(failed.getFailReason()).isNull();
+        assertThat(failed.getFileNodeId()).isNull();
+        assertThat(dto.status()).isEqualTo("PROCESSING");
     }
 
     @Test
@@ -217,10 +223,9 @@ class BackdropAssetServiceTest {
     }
 
     @Test
-    void storeFailureCompensatesRowAndReservation() throws IOException {
+    void stageFailureCompensatesRowAndReservation() throws IOException {
         stubFreshInsert();
-        when(derivedAssetStorageService.store(
-                eq(OWNER_ID), anyString(), any(), anyString(), anyString(), anyString(),
+        when(ingressStagingService.stage(any(), anyString(), any(UUID.class), anyString(), anyString(),
                 any(java.nio.file.Path.class)))
                 .thenThrow(new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败"));
 
@@ -230,24 +235,7 @@ class BackdropAssetServiceTest {
 
         verify(storageQuotaService).releaseReservation("BACKDROP_UPLOAD", storedAsset.get().getId());
         verify(backdropAssetRepository).delete(storedAsset.get());
-    }
-
-    @Test
-    void thumbnailStoreFailureCompensatesRowAndReservation() throws IOException {
-        stubFreshInsert();
-        when(derivedAssetStorageService.store(
-                eq(OWNER_ID), anyString(), any(UUID.class), anyString(), anyString(), anyString(),
-                any(java.nio.file.Path.class)))
-                .thenReturn(UUID.randomUUID())
-                .thenThrow(new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败"));
-
-        assertThatThrownBy(() -> service.uploadAsset(OWNER_ID, pngUpload()))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode().getCode()).isEqualTo(4001));
-
-        verify(storageQuotaService).releaseReservation(eq("BACKDROP_UPLOAD"), any());
-        verify(backdropAssetRepository).delete(any(BackdropAsset.class));
-        verify(derivedAssetStorageService).deleteOwned(eq(OWNER_ID), any(UUID.class));
+        verify(backdropScanTaskService, never()).enqueueScanTask(any(), any(), any(), anyString());
     }
 
     @Test
@@ -260,30 +248,6 @@ class BackdropAssetServiceTest {
                         new MockMultipartFile("file", "wallpaper.png", "image/png", garbage)))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode().getCode()).isEqualTo(8002));
-    }
-
-    @Test
-    void malwareInfectedIsRejectedWithDistinctCode() throws IOException {
-        stubFreshInsert();
-        when(malwareScanGateway.scan(any(java.nio.file.Path.class)))
-                .thenReturn(MalwareScanGateway.ScanResult.infected("EICAR"));
-
-        assertThatThrownBy(() -> service.uploadAsset(OWNER_ID, pngUpload()))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode().getCode()).isEqualTo(8006));
-        verify(derivedAssetStorageService, never()).store(any(), anyString(), any(), anyString(), anyString(),
-                anyString(), any(java.nio.file.Path.class));
-    }
-
-    @Test
-    void scanUnavailableFailsClosed() throws IOException {
-        stubFreshInsert();
-        when(malwareScanGateway.scan(any(java.nio.file.Path.class)))
-                .thenReturn(MalwareScanGateway.ScanResult.error("clamav down"));
-
-        assertThatThrownBy(() -> service.uploadAsset(OWNER_ID, pngUpload()))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode().getCode()).isEqualTo(8005));
     }
 
     @Test
@@ -324,6 +288,8 @@ class BackdropAssetServiceTest {
                         assertThat(exception.errorCode().getCode()).isEqualTo(429));
         verify(derivedAssetStorageService, never()).store(any(), anyString(), any(), anyString(), anyString(),
                 anyString(), any(java.nio.file.Path.class));
+        verify(ingressStagingService, never()).stage(any(), anyString(), any(), anyString(), anyString(),
+                any(java.nio.file.Path.class));
     }
 
     @Test
@@ -382,6 +348,61 @@ class BackdropAssetServiceTest {
         verify(backdropAssetRepository).delete(second);
         verify(userStorageCommand, org.mockito.Mockito.times(2))
                 .decrementUsage(eq(OWNER_ID), anyLong());
+    }
+
+    @Test
+    void completeStagedAssetPublishesAndMarksAvailable() throws IOException {
+        BackdropAsset processing = readyAsset();
+        processing.setStatus(BackdropAssetStatus.PROCESSING);
+        processing.setFileNodeId(null);
+        processing.setThumbFileId(null);
+        UUID ingressItemId = UUID.randomUUID();
+        UUID publishedNodeId = UUID.randomUUID();
+        UUID thumbFileId = UUID.randomUUID();
+        java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("staged-test", ".png");
+        java.nio.file.Files.write(tempFile, pngBytes());
+        when(ingressStagingService.copyToTempFile(ingressItemId)).thenReturn(tempFile);
+        when(backdropAssetRepository.findById(processing.getId()))
+                .thenReturn(Optional.of(processing));
+        when(derivedAssetStorageService.store(
+                eq(OWNER_ID), anyString(), eq(processing.getId()), anyString(), anyString(), anyString(),
+                any(java.nio.file.Path.class)))
+                .thenReturn(publishedNodeId, thumbFileId);
+
+        service.completeStagedAsset(OWNER_ID, processing.getId(), ingressItemId, "original.png");
+
+        assertThat(processing.getStatus()).isEqualTo(BackdropAssetStatus.READY);
+        assertThat(processing.getFileNodeId()).isEqualTo(publishedNodeId);
+        assertThat(processing.getThumbFileId()).isEqualTo(thumbFileId);
+        verify(storageQuotaService).settleReservation("BACKDROP_UPLOAD", processing.getId(), 1024L);
+        verify(ingressStagingService).markAvailable(ingressItemId, publishedNodeId);
+        verify(derivedAssetStorageService, never()).deleteOwned(any(), any());
+    }
+
+    @Test
+    void completeStagedAssetFailureMarksFailedAndReleasesReservation() throws IOException {
+        BackdropAsset processing = readyAsset();
+        processing.setStatus(BackdropAssetStatus.PROCESSING);
+        processing.setFileNodeId(null);
+        UUID ingressItemId = UUID.randomUUID();
+        java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("staged-test", ".png");
+        java.nio.file.Files.write(tempFile, pngBytes());
+        when(ingressStagingService.copyToTempFile(ingressItemId)).thenReturn(tempFile);
+        when(backdropAssetRepository.findById(processing.getId()))
+                .thenReturn(Optional.of(processing));
+        when(derivedAssetStorageService.store(
+                eq(OWNER_ID), anyString(), eq(processing.getId()), anyString(), anyString(), anyString(),
+                any(java.nio.file.Path.class)))
+                .thenThrow(new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源保存失败"));
+
+        assertThatThrownBy(() -> service.completeStagedAsset(
+                OWNER_ID, processing.getId(), ingressItemId, "original.png"))
+                .isInstanceOf(BusinessException.class);
+
+        assertThat(processing.getStatus()).isEqualTo(BackdropAssetStatus.FAILED);
+        assertThat(processing.getFileNodeId()).isNull();
+        verify(storageQuotaService).releaseReservation("BACKDROP_UPLOAD", processing.getId());
+        verify(ingressStagingService, never()).markAvailable(any(), any());
     }
 
     private UUID stubFreshInsert() {

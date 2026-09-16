@@ -19,7 +19,8 @@ import org.springframework.stereotype.Service;
  *
  * <p>仅作为灾难恢复与进程异常后的兜底机制,不承担正常上传链路职责。三类检查:
  * 孤儿派生节点(MinIO/节点存在但素材行不存在)立即清理;素材行存在但原始对象缺失的标记 FAILED;
- * 卡死超过阈值的 PROCESSING 依据对象存在性自愈或标记 FAILED。</p>
+ * 卡死超过阈值且无进行中安全扫描任务的 PROCESSING 依据对象存在性自愈或标记 FAILED。
+ * 存在进行中扫描任务的素材一律跳过,避免把正在异步扫描的素材误判为卡死。</p>
  *
  * @author OmniNest
  */
@@ -33,6 +34,7 @@ public class BackdropReconciliationService {
 
     private final BackdropAssetRepository backdropAssetRepository;
     private final DerivedAssetStorageService derivedAssetStorageService;
+    private final BackdropScanTaskService backdropScanTaskService;
 
     /**
      * 执行一轮对账。
@@ -65,6 +67,10 @@ public class BackdropReconciliationService {
         boolean hasOriginalObject = nodeRefs.stream()
                 .anyMatch(nodeRef -> nodeRef.normalizedPath().contains("/" + asset.getId() + "/"));
         if (asset.getStatus() == BackdropAssetStatus.PROCESSING && beyondThreshold) {
+            if (backdropScanTaskService.hasActiveScanTask(asset.getOwnerUserId(), asset.getId())) {
+                log.debug("背景素材存在进行中安全扫描任务,跳过对账: assetId={}", asset.getId());
+                return;
+            }
             if (hasOriginalObject) {
                 asset.setStatus(BackdropAssetStatus.READY);
                 log.info("背景素材卡死自愈: assetId={} 对象存在,恢复 READY", asset.getId());

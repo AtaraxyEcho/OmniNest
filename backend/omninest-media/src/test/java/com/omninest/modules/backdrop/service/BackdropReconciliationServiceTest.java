@@ -32,15 +32,33 @@ class BackdropReconciliationServiceTest {
 
     private BackdropAssetRepository backdropAssetRepository;
     private DerivedAssetStorageService derivedAssetStorageService;
+    private BackdropScanTaskService backdropScanTaskService;
     private BackdropReconciliationService service;
 
     @BeforeEach
     void setUp() {
         backdropAssetRepository = mock(BackdropAssetRepository.class);
         derivedAssetStorageService = mock(DerivedAssetStorageService.class);
+        backdropScanTaskService = mock(BackdropScanTaskService.class);
         when(derivedAssetStorageService.listOwnerIdsByDerivedPathPrefix("BACKDROP"))
                 .thenReturn(List.of(OWNER_ID));
-        service = new BackdropReconciliationService(backdropAssetRepository, derivedAssetStorageService);
+        when(backdropScanTaskService.hasActiveScanTask(any(UUID.class), any(UUID.class))).thenReturn(false);
+        service = new BackdropReconciliationService(
+                backdropAssetRepository, derivedAssetStorageService, backdropScanTaskService);
+    }
+
+    @Test
+    void stuckProcessingWithActiveScanTaskIsSkipped() {
+        BackdropAsset asset = asset(BackdropAssetStatus.PROCESSING, Instant.now().minusSeconds(1200));
+        when(backdropAssetRepository.findByOwnerUserIdOrderByUpdatedAtDesc(OWNER_ID))
+                .thenReturn(List.of(asset));
+        when(backdropScanTaskService.hasActiveScanTask(OWNER_ID, asset.getId())).thenReturn(true);
+
+        service.reconcile();
+
+        assertThat(asset.getStatus()).isEqualTo(BackdropAssetStatus.PROCESSING);
+        verify(backdropAssetRepository, never()).save(any());
+        verify(derivedAssetStorageService, never()).deleteOwnedBatch(any(), anyList());
     }
 
     @Test

@@ -53,7 +53,7 @@ public class BackdropController {
      * @param file 素材文件
      * @return 新建素材 DTO
      */
-    @Operation(summary = "上传背景素材", description = "单文件上传,服务端同步完成校验、扫描、落库与缩略图")
+    @Operation(summary = "上传背景素材", description = "单文件上传,受理后返回 PROCESSING,安全扫描通过后自动转 READY")
     @PreAuthorize("hasAuthority('" + Permissions.BACKDROP_WRITE + "')")
     @PostMapping(value = "/api/v1/backdrops", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<BackdropAssetDto> uploadAsset(

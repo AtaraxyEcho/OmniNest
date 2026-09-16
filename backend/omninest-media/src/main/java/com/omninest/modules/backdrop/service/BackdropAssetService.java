@@ -3,8 +3,6 @@ package com.omninest.modules.backdrop.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
-import com.omninest.common.security.MalwareScanGateway;
-import com.omninest.common.security.MalwareScanGateway.ScanResult;
 import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.backdrop.config.BackdropRuntimeConfigService;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
@@ -14,6 +12,7 @@ import com.omninest.modules.backdrop.dto.BackdropDtos.BackdropAssetDto;
 import com.omninest.modules.backdrop.repository.BackdropAssetRepository;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileIngressStagingService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.io.IOException;
@@ -45,9 +44,10 @@ import org.springframework.web.multipart.MultipartFile;
  * 背景素材应用服务。
  *
  * <p>上传链路:限流 → 扩展名与大小校验 → staging 流式写入并计算 SHA-256 → 魔数校验 →
- * ClamAV 扫描(fail-closed) → 用户级去重 → 数量预检 → 存储预留 → 事务内数量检查与落行(PROCESSING) →
- * 发布 MinIO 对象 → 同步生成缩略图 → READY。任一步失败按方案执行补偿:释放预留、删除已发布节点与素材行,
- * 不残留幽灵素材;进程崩溃窗口由对账任务兜底。</p>
+ * 用户级去重 → 数量预检 → 存储预留 → 事务内落行(PROCESSING) → 隔离桶暂存并受理
+ * BACKDROP_SECURITY_SCAN 异步任务 → 立即返回 PROCESSING。Worker 扫描通过后由
+ * {@link #completeStagedAsset} 发布对象与缩略图并置 READY;检测到威胁或重试耗尽则
+ * 标记 FAILED、释放预留并通知用户。进程崩溃窗口由对账任务兜底。</p>
  *
  * @author OmniNest
  */
@@ -94,7 +94,8 @@ public class BackdropAssetService {
     private final FileQueryService fileQueryService;
     private final StorageQuotaService storageQuotaService;
     private final UserStorageCommand userStorageCommand;
-    private final MalwareScanGateway malwareScanGateway;
+    private final FileIngressStagingService ingressStagingService;
+    private final BackdropScanTaskService backdropScanTaskService;
     private final RateLimitService rateLimitService;
     private final BackdropVideoThumbnailExtractor videoThumbnailExtractor;
     private final TransactionTemplate transactionTemplate;
@@ -108,7 +109,8 @@ public class BackdropAssetService {
      * @param fileQueryService 文件查询服务
      * @param storageQuotaService 存储配额服务
      * @param userStorageCommand 用户存储命令端口
-     * @param malwareScanGateway 文件安全扫描端口
+     * @param ingressStagingService 隔离暂存与扫描服务
+     * @param backdropScanTaskService 扫描任务服务
      * @param rateLimitService 限流服务
      * @param transactionManager 事务管理器
      */
@@ -119,7 +121,8 @@ public class BackdropAssetService {
             FileQueryService fileQueryService,
             StorageQuotaService storageQuotaService,
             UserStorageCommand userStorageCommand,
-            MalwareScanGateway malwareScanGateway,
+            FileIngressStagingService ingressStagingService,
+            BackdropScanTaskService backdropScanTaskService,
             RateLimitService rateLimitService,
             BackdropVideoThumbnailExtractor videoThumbnailExtractor,
             PlatformTransactionManager transactionManager
@@ -130,7 +133,8 @@ public class BackdropAssetService {
         this.fileQueryService = fileQueryService;
         this.storageQuotaService = storageQuotaService;
         this.userStorageCommand = userStorageCommand;
-        this.malwareScanGateway = malwareScanGateway;
+        this.ingressStagingService = ingressStagingService;
+        this.backdropScanTaskService = backdropScanTaskService;
         this.rateLimitService = rateLimitService;
         this.videoThumbnailExtractor = videoThumbnailExtractor;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
@@ -183,7 +187,6 @@ public class BackdropAssetService {
             }
             DetectedMedia media = detectMedia(stagingFile, clientExtension);
             enforceSizeLimit(writtenBytes, media, clientExtension);
-            enforceSafeForStorage(stagingFile);
             Optional<BackdropAsset> existing =
                     backdropAssetRepository.findByOwnerUserIdAndSha256(ownerUserId, sha256);
             if (existing.isPresent()) {
@@ -196,28 +199,27 @@ public class BackdropAssetService {
             }
             storageQuotaService.reserve(
                     ownerUserId, RESERVATION_SOURCE_TYPE, assetId, writtenBytes, Instant.now().plus(RESERVATION_TTL));
-            UUID publishedNodeId = null;
+            UUID ingressItemId = null;
             try {
                 createAssetRow(ownerUserId, assetId, file.getOriginalFilename(), media, writtenBytes, sha256);
-                publishedNodeId = derivedAssetStorageService.store(
-                        ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
+                ingressItemId = ingressStagingService.stage(
+                        ownerUserId, "BACKDROP", assetId,
                         originalFileName(media.extension()), media.mimeType(), stagingFile);
-                ImageDimensions dimensions = readImageDimensions(stagingFile, media);
-                // 不做服务端降质衍生:壁纸默认原片,由客户端可选本地缓存。
-                UUID thumbNodeId = generateAndStoreThumbnail(
-                        ownerUserId, assetId, stagingFile, media, publishedNodeId);
-                BackdropAsset ready = finalizePublishedAsset(
-                        ownerUserId, assetId, publishedNodeId, null, thumbNodeId, dimensions);
-                storageQuotaService.settleReservation(RESERVATION_SOURCE_TYPE, assetId, writtenBytes);
-                log.info("背景素材上传完成: userId={}, assetId={}, mediaType={}, size={}",
-                        ownerUserId, assetId, media.mediaType(), writtenBytes);
-                return toDto(ready);
+                UUID scanTaskId = backdropScanTaskService.enqueueScanTask(
+                        ownerUserId, assetId, ingressItemId, originalFileName(media.extension()));
+                storageQuotaService.extendReservation(
+                        RESERVATION_SOURCE_TYPE, assetId, Instant.now().plus(RESERVATION_TTL));
+                BackdropAsset processing = backdropAssetRepository.findById(assetId)
+                        .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
+                log.info("背景素材上传受理安全扫描: userId={}, assetId={}, mediaType={}, size={}, taskId={}",
+                        ownerUserId, assetId, media.mediaType(), writtenBytes, scanTaskId);
+                return toDto(processing);
             } catch (RuntimeException ex) {
-                compensateFailedUpload(ownerUserId, assetId, publishedNodeId);
+                compensateFailedUpload(ownerUserId, assetId, ingressItemId);
                 if (ex instanceof BusinessException businessException) {
                     throw businessException;
                 }
-                log.warn("背景素材上传处理失败: userId={}, assetId={}", ownerUserId, assetId, ex);
+                log.warn("背景素材上传受理失败: userId={}, assetId={}", ownerUserId, assetId, ex);
                 throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "背景素材处理失败");
             }
         } catch (IOException ex) {
@@ -304,37 +306,37 @@ public class BackdropAssetService {
 
     private BackdropAssetDto reuseExistingAsset(
             UUID ownerUserId, BackdropAsset existing, Path stagingFile, DetectedMedia media) {
-        if (existing.getStatus() != BackdropAssetStatus.FAILED) {
+        if (existing.getStatus() == BackdropAssetStatus.READY
+                || existing.getStatus() == BackdropAssetStatus.PROCESSING) {
             return toDto(existing);
         }
+        UUID ingressItemId = null;
         try {
             deleteDerivedQuietly(ownerUserId, existing.getFileNodeId());
             deleteDerivedQuietly(ownerUserId, existing.getPlaybackFileId());
             deleteDerivedQuietly(ownerUserId, existing.getThumbFileId());
-            UUID fileNodeId = derivedAssetStorageService.store(
-                    ownerUserId, RESOURCE_TYPE, existing.getId(), ASSET_TYPE_ORIGINAL,
-                    originalFileName(media.extension()), media.mimeType(), stagingFile);
-            existing.setFileNodeId(fileNodeId);
-            ImageDimensions dimensions = readImageDimensions(stagingFile, media);
-            if (dimensions != null) {
-                existing.setWidth(dimensions.width());
-                existing.setHeight(dimensions.height());
-            }
+            existing.setFileNodeId(null);
             existing.setPlaybackFileId(null);
-            UUID thumbFileId = generateAndStoreThumbnail(
-                    ownerUserId, existing.getId(), stagingFile, media, fileNodeId);
-            existing.setThumbFileId(thumbFileId);
-            existing.setStatus(BackdropAssetStatus.READY);
+            existing.setThumbFileId(null);
             existing.setFailReason(null);
-            BackdropAsset saved = backdropAssetRepository.save(existing);
-            log.info("背景素材重建完成: userId={}, assetId={}", ownerUserId, existing.getId());
-            return toDto(saved);
+            ingressItemId = ingressStagingService.stage(
+                    ownerUserId, "BACKDROP", existing.getId(),
+                    originalFileName(media.extension()), media.mimeType(), stagingFile);
+            existing.setStatus(BackdropAssetStatus.PROCESSING);
+            backdropAssetRepository.save(existing);
+            backdropScanTaskService.enqueueScanTask(
+                    ownerUserId, existing.getId(), ingressItemId, originalFileName(media.extension()));
+            log.info("背景素材重新受理安全扫描: userId={}, assetId={}", ownerUserId, existing.getId());
+            return toDto(existing);
         } catch (RuntimeException ex) {
-            log.warn("背景素材重建失败,保留 FAILED 状态等待重试: userId={}, assetId={}",
-                    ownerUserId, existing.getId(), ex);
+            if (ingressItemId != null) {
+                ingressStagingService.releaseObject(ingressItemId);
+            }
             if (ex instanceof BusinessException businessException) {
                 throw businessException;
             }
+            log.warn("背景素材重新受理失败,保留 FAILED 状态等待重试: userId={}, assetId={}",
+                    ownerUserId, existing.getId(), ex);
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "背景素材处理失败");
         }
     }
@@ -487,10 +489,12 @@ public class BackdropAssetService {
         }
     }
 
-    private void compensateFailedUpload(UUID ownerUserId, UUID assetId, UUID publishedNodeId) {
+    private void compensateFailedUpload(UUID ownerUserId, UUID assetId, UUID ingressItemId) {
         safeReleaseReservation(assetId);
         try {
-            deleteDerivedQuietly(ownerUserId, publishedNodeId);
+            if (ingressItemId != null) {
+                ingressStagingService.releaseObject(ingressItemId);
+            }
             backdropAssetRepository.findById(assetId).ifPresent(asset -> {
                 deleteDerivedQuietly(ownerUserId, asset.getFileNodeId());
                 deleteDerivedQuietly(ownerUserId, asset.getPlaybackFileId());
@@ -521,15 +525,76 @@ public class BackdropAssetService {
         }
     }
 
-    private void enforceSafeForStorage(Path stagingFile) {
-        ScanResult scanResult = malwareScanGateway.scan(stagingFile);
-        switch (scanResult.status()) {
-            case CLEAN, SKIPPED -> {
-                // CLEAN 放行;SKIPPED 表示管理员关闭了扫描功能,按策略放行
-            }
-            case INFECTED -> throw new BusinessException(ErrorCode.BACKDROP_MALWARE_DETECTED, "文件检测到安全威胁");
-            case ERROR -> throw new BusinessException(ErrorCode.BACKDROP_SCAN_UNAVAILABLE, "安全扫描服务不可用");
+    /**
+     * 完成暂存素材的发布:读取暂存对象、存储原始节点、生成缩略图并置 READY。
+     * 由安全扫描 Worker 在扫描通过后调用;失败时清理本次派生节点、标记 FAILED 并释放预留。
+     *
+     * @param ownerUserId 归属用户 ID
+     * @param assetId 素材 ID
+     * @param ingressItemId 入库记录 ID
+     * @param originalFileName 暂存对象原始文件名
+     */
+    public void completeStagedAsset(UUID ownerUserId, UUID assetId, UUID ingressItemId, String originalFileName) {
+        Path stagingFile = null;
+        try {
+            stagingFile = ingressStagingService.copyToTempFile(ingressItemId);
+            DetectedMedia media = detectMedia(stagingFile, extensionOf(originalFileName));
+            UUID publishedNodeId = derivedAssetStorageService.store(
+                    ownerUserId, RESOURCE_TYPE, assetId, ASSET_TYPE_ORIGINAL,
+                    originalFileName, media.mimeType(), stagingFile);
+            ImageDimensions dimensions = readImageDimensions(stagingFile, media);
+            // 不做服务端降质衍生:壁纸默认原片,由客户端可选本地缓存。
+            UUID thumbNodeId = generateAndStoreThumbnail(
+                    ownerUserId, assetId, stagingFile, media, publishedNodeId);
+            finalizePublishedAsset(ownerUserId, assetId, publishedNodeId, null, thumbNodeId, dimensions);
+            BackdropAsset asset = backdropAssetRepository.findById(assetId)
+                    .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
+            storageQuotaService.settleReservation(RESERVATION_SOURCE_TYPE, assetId, asset.getFileSize());
+            ingressStagingService.markAvailable(ingressItemId, publishedNodeId);
+            log.info("背景素材异步发布完成: userId={}, assetId={}", ownerUserId, assetId);
+        } catch (IOException ex) {
+            BusinessException wrapped = new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "背景素材暂存对象读取失败");
+            failProcessingAsset(ownerUserId, assetId, wrapped);
+            throw wrapped;
+        } catch (RuntimeException ex) {
+            failProcessingAsset(ownerUserId, assetId, ex);
+            throw ex;
+        } finally {
+            deleteStagingQuietly(stagingFile);
         }
+    }
+
+    private void failProcessingAsset(UUID ownerUserId, UUID assetId, RuntimeException cause) {
+        try {
+            BackdropAsset asset = backdropAssetRepository.findById(assetId).orElse(null);
+            if (asset == null || asset.getStatus() == BackdropAssetStatus.READY) {
+                return;
+            }
+            deleteDerivedQuietly(ownerUserId, asset.getFileNodeId());
+            deleteDerivedQuietly(ownerUserId, asset.getPlaybackFileId());
+            deleteDerivedQuietly(ownerUserId, asset.getThumbFileId());
+            asset.setFileNodeId(null);
+            asset.setPlaybackFileId(null);
+            asset.setThumbFileId(null);
+            asset.setStatus(BackdropAssetStatus.FAILED);
+            asset.setFailReason(cause.getMessage() == null
+                    ? "安全扫描后发布失败"
+                    : cause.getMessage().substring(0, Math.min(cause.getMessage().length(), 200)));
+            backdropAssetRepository.save(asset);
+            safeReleaseReservation(assetId);
+        } catch (RuntimeException settleException) {
+            log.warn("背景素材失败状态落盘失败,等待对账兜底: assetId={}", assetId, settleException);
+        }
+    }
+
+    private String extensionOf(String originalFileName) {
+        if (originalFileName == null) {
+            return "bin";
+        }
+        int dotIndex = originalFileName.lastIndexOf('.');
+        return dotIndex < 0 || dotIndex == originalFileName.length() - 1
+                ? "bin"
+                : originalFileName.substring(dotIndex + 1);
     }
 
     private void enforceSizeLimit(long actualBytes, DetectedMedia media, String clientExtension) {

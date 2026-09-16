@@ -206,6 +206,11 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Queue backdropSecurityScanQueue() {
+        return durableQueue(QueueNames.BACKDROP_SECURITY_SCAN_QUEUE);
+    }
+
+    @Bean
     Queue deadLetterQueue() {
         return new Queue(QueueNames.DEAD_LETTER_QUEUE, true);
     }
@@ -343,6 +348,13 @@ public class RabbitMqConfig {
         return BindingBuilder.bind(fileSecurityScanQueue)
                 .to(taskExchange)
                 .with(QueueNames.FILE_SECURITY_SCAN_ROUTING_KEY);
+    }
+
+    @Bean
+    Binding backdropSecurityScanBinding(Queue backdropSecurityScanQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(backdropSecurityScanQueue)
+                .to(taskExchange)
+                .with(QueueNames.BACKDROP_SECURITY_SCAN_ROUTING_KEY);
     }
 
     @Bean

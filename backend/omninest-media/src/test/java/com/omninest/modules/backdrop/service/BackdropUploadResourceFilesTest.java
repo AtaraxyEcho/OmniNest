@@ -15,7 +15,6 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
-import com.omninest.common.security.MalwareScanGateway;
 import com.omninest.common.user.UserStorageCommand;
 import com.omninest.modules.backdrop.config.BackdropRuntimeConfigService;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
@@ -25,6 +24,7 @@ import com.omninest.modules.backdrop.dto.BackdropDtos.BackdropAssetDto;
 import com.omninest.modules.backdrop.repository.BackdropAssetRepository;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileIngressStagingService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import java.io.IOException;
@@ -70,7 +70,8 @@ class BackdropUploadResourceFilesTest {
     FileQueryService fileQueryService;
     StorageQuotaService storageQuotaService;
     UserStorageCommand userStorageCommand;
-    MalwareScanGateway malwareScanGateway;
+    FileIngressStagingService ingressStagingService;
+    BackdropScanTaskService backdropScanTaskService;
     RateLimitService rateLimitService;
     BackdropVideoThumbnailExtractor videoThumbnailExtractor;
     BackdropAssetService service;
@@ -99,7 +100,8 @@ class BackdropUploadResourceFilesTest {
         fileQueryService = mock(FileQueryService.class);
         storageQuotaService = mock(StorageQuotaService.class);
         userStorageCommand = mock(UserStorageCommand.class);
-        malwareScanGateway = mock(MalwareScanGateway.class);
+        ingressStagingService = mock(FileIngressStagingService.class);
+        backdropScanTaskService = mock(BackdropScanTaskService.class);
         rateLimitService = mock(RateLimitService.class);
         videoThumbnailExtractor = mock(BackdropVideoThumbnailExtractor.class);
         when(videoThumbnailExtractor.extractFirstFrame(any(), any(), any(), any()))
@@ -110,7 +112,10 @@ class BackdropUploadResourceFilesTest {
         when(runtimeConfigService.maxImageBytes()).thenReturn(20 * 1024 * 1024);
         when(runtimeConfigService.maxVideoBytes()).thenReturn(64 * 1024 * 1024);
         when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
-        when(malwareScanGateway.scan(any(Path.class))).thenReturn(MalwareScanGateway.ScanResult.clean());
+        when(ingressStagingService.stage(any(), anyString(), any(UUID.class), anyString(), anyString(),
+                any(Path.class))).thenReturn(UUID.randomUUID());
+        when(backdropScanTaskService.enqueueScanTask(any(), any(UUID.class), any(UUID.class), anyString()))
+                .thenReturn(UUID.randomUUID());
         when(backdropAssetRepository.save(any())).thenAnswer(invocation -> {
             BackdropAsset asset = invocation.getArgument(0);
             storedAssets.removeIf(existing -> existing.getId().equals(asset.getId()));
@@ -139,7 +144,8 @@ class BackdropUploadResourceFilesTest {
                 fileQueryService,
                 storageQuotaService,
                 userStorageCommand,
-                malwareScanGateway,
+                ingressStagingService,
+                backdropScanTaskService,
                 rateLimitService,
                 videoThumbnailExtractor,
                 afterCommitFiringTransactionManager()
@@ -192,36 +198,38 @@ class BackdropUploadResourceFilesTest {
     }
 
     @Test
-    @DisplayName("真实 JPG 全链路:魔数/SHA256/真实缩略图/READY")
+    @DisplayName("真实 JPG 全链路:魔数/SHA256/受理 PROCESSING 交由异步扫描")
     void realJpgFullPipeline() throws Exception {
         stubStore();
         String expectedSha = sha256OfFile("01_5wtlkjl0.jpg");
 
         BackdropAssetDto dto = service.uploadAsset(OWNER_ID, real("01_5wtlkjl0.jpg"));
 
-        assertThat(dto.status()).isEqualTo("READY");
+        assertThat(dto.status()).isEqualTo("PROCESSING");
         assertThat(dto.mediaType()).isEqualTo("image");
         assertThat(storedAsset.get().getSha256()).isEqualTo(expectedSha);
         assertThat(storedAsset.get().getFileSize()).isEqualTo(1039651L);
-        assertThat(storedAsset.get().getThumbFileId()).isNotNull();
-        // 原始 + 缩略图两次派生发布
-        assertThat(storeCalls.get()).isEqualTo(2);
+        assertThat(storedAsset.get().getThumbFileId()).isNull();
+        // 异步化后上传路径不再派生发布
+        assertThat(storeCalls.get()).isEqualTo(0);
+        verify(ingressStagingService).stage(any(), anyString(), any(UUID.class), anyString(), anyString(),
+                any(Path.class));
     }
 
     @Test
-    @DisplayName("真实视频全链路:容器识别/无缩略图/READY")
+    @DisplayName("真实视频全链路:容器识别/受理 PROCESSING 交由异步扫描")
     void realVideoFullPipeline() throws Exception {
         stubStore();
         String expectedSha = sha256OfFile("horizon-sky.mp4");
 
         BackdropAssetDto dto = service.uploadAsset(OWNER_ID, real("horizon-sky.mp4"));
 
-        assertThat(dto.status()).isEqualTo("READY");
+        assertThat(dto.status()).isEqualTo("PROCESSING");
         assertThat(dto.mediaType()).isEqualTo("video");
         assertThat(storedAsset.get().getSha256()).isEqualTo(expectedSha);
         assertThat(storedAsset.get().getFileSize()).isEqualTo(25302036L);
         assertThat(storedAsset.get().getThumbFileId()).isNull();
-        assertThat(storeCalls.get()).isEqualTo(1);
+        assertThat(storeCalls.get()).isEqualTo(0);
     }
 
     @Test
@@ -317,18 +325,13 @@ class BackdropUploadResourceFilesTest {
     }
 
     @Test
-    @DisplayName("扫描不可用 fail-closed(8005)与检出威胁(8006)")
-    void scanFailClosedAndThreat() throws Exception {
-        when(malwareScanGateway.scan(any(Path.class)))
-                .thenReturn(MalwareScanGateway.ScanResult.error("clamav down"));
-        assertThatThrownBy(() -> service.uploadAsset(OWNER_ID, real("01_5wtlkjl0.jpg")))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode().getCode()).isEqualTo(8005));
+    @DisplayName("受理后逐次投递安全扫描任务,不重复派发")
+    void scanTaskDispatchedPerUpload() throws Exception {
+        stubStore();
+        service.uploadAsset(OWNER_ID, real("01_5wtlkjl0.jpg"));
+        service.uploadAsset(OWNER_ID, real("01_xmgmpd4s.jpg"));
 
-        when(malwareScanGateway.scan(any(Path.class)))
-                .thenReturn(MalwareScanGateway.ScanResult.infected("EICAR"));
-        assertThatThrownBy(() -> service.uploadAsset(OWNER_ID, real("01_5wtlkjl0.jpg")))
-                .isInstanceOfSatisfying(BusinessException.class, exception ->
-                        assertThat(exception.errorCode().getCode()).isEqualTo(8006));
+        verify(backdropScanTaskService, org.mockito.Mockito.times(2))
+                .enqueueScanTask(eq(OWNER_ID), any(UUID.class), any(UUID.class), anyString());
     }
 }
