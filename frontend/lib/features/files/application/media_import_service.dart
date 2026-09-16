@@ -487,16 +487,33 @@ class MediaImportService {
   }) async {
     if (!result.isScanning) {
       final fileNodeId = result.fileNodeId;
-      if (fileNodeId == null || fileNodeId.isEmpty) {
-        throw const AppException(
-          code: AppErrorCodes.securityScanFailed,
-          message: '安全扫描未完成，文件已保留；请稍后在书库查看或重新导入',
-        );
+      if (fileNodeId != null && fileNodeId.isNotEmpty) {
+        return (fileNodeId: fileNodeId, mediaAutoImportTaskId: null);
       }
-      return (fileNodeId: fileNodeId, mediaAutoImportTaskId: null);
+      // 后端可能已完成晋升但未回传节点，按目录名回退查找，避免把成功导入报成扫描失败。
+      final recovered = await _resolvePromotedNode(
+        fileName: fileName,
+        parentId: parentId,
+        timeout: const Duration(seconds: 15),
+      );
+      if (recovered != null) {
+        return (fileNodeId: recovered, mediaAutoImportTaskId: null);
+      }
+      throw const AppException(
+        code: AppErrorCodes.securityScanFailed,
+        message: '安全扫描未完成，文件已保留；请稍后在书库查看或重新导入',
+      );
     }
     final taskId = result.taskId;
     if (taskId == null || taskId.isEmpty) {
+      final recovered = await _resolvePromotedNode(
+        fileName: fileName,
+        parentId: parentId,
+        timeout: const Duration(seconds: 15),
+      );
+      if (recovered != null) {
+        return (fileNodeId: recovered, mediaAutoImportTaskId: null);
+      }
       throw const AppException(
         code: AppErrorCodes.securityScanFailed,
         message: '安全扫描未完成，文件已保留；请稍后在书库查看或重新导入',
@@ -515,6 +532,15 @@ class MediaImportService {
       );
     }
     if (task.status != 'COMPLETED') {
+      // 终态失败通常意味着未晋升；仅做一次快速目录确认，避免空等。
+      final recovered = await _resolvePromotedNode(
+        fileName: fileName,
+        parentId: parentId,
+        timeout: Duration.zero,
+      );
+      if (recovered != null) {
+        return (fileNodeId: recovered, mediaAutoImportTaskId: null);
+      }
       final detail = task.errorMessage ?? '';
       throw AppException(
         code: AppErrorCodes.securityScanFailed,
@@ -561,6 +587,25 @@ class MediaImportService {
     return (fileNodeId: resolved, mediaAutoImportTaskId: null);
   }
 
+  /// 短窗口按文件名回退定位晋升后的节点，用于扫描结果缺失时的自愈。
+  Future<String?> _resolvePromotedNode({
+    required String fileName,
+    required String? parentId,
+    required Duration timeout,
+  }) async {
+    if (kDebugMode) {
+      debugPrint(
+        'MediaImport: scan result incomplete, recovering by name — '
+        'fileName=$fileName, parentId=$parentId, timeout=${timeout.inSeconds}s',
+      );
+    }
+    return findImportedNode(
+      parentId: parentId,
+      fileName: fileName,
+      timeout: timeout,
+    );
+  }
+
   /// 在目标目录按文件名轮询查找晋升后的文件节点。
   ///
   /// 供导入队列在扫描等待异常时自愈：后端晋升与自动导入链完成即能找回。
@@ -570,7 +615,9 @@ class MediaImportService {
     Duration timeout = const Duration(minutes: 5),
   }) async {
     final deadline = DateTime.now().add(timeout);
-    while (DateTime.now().isBefore(deadline)) {
+    var attempted = false;
+    while (!attempted || DateTime.now().isBefore(deadline)) {
+      attempted = true;
       try {
         final nodes = await _fileApi.listFiles(parentId: parentId);
         for (final node in nodes) {
@@ -580,6 +627,9 @@ class MediaImportService {
         }
       } on AppException {
         // 列表查询失败按未找到处理，继续下一轮。
+      }
+      if (!DateTime.now().isBefore(deadline)) {
+        break;
       }
       await Future<void>.delayed(const Duration(seconds: 3));
     }

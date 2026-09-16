@@ -537,11 +537,7 @@ class FileApi {
           'asVersionOfFileId': asVersionOfFileId,
       },
     );
-    final data = response.data;
-    if (data == null) {
-      throw const FormatException('上传完成受理响应格式不正确');
-    }
-    return FileUploadCompleteResult.fromJson(data);
+    return FileUploadCompleteResult.fromJson(parseData(response.data));
   }
 
   Future<void> cancelUploadSession(String uploadId) async {

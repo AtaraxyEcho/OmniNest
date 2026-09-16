@@ -123,6 +123,29 @@ class TextExtractionConsumerTest {
     }
 
     @Test
+    @DisplayName("超过写入上限时按已提取片段完成索引而不触发失败重试")
+    void handle_whenWriteLimitReached_shouldIndexPartialTextAndComplete() throws IOException {
+        FileUploadedEvent event = createEvent("long-novel.epub", "application/epub+zip");
+        // 远超默认上限的纯文本，触发 BodyContentHandler 写入上限。
+        String longText = "长".repeat(2_100_000);
+        InputStream inputStream = new ByteArrayInputStream(longText.getBytes(StandardCharsets.UTF_8));
+        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
+
+        textExtractionConsumer.handle(event, createMessage(), channel);
+
+        verify(fileSearchIndexService).indexFile(
+                eq(event.fileNodeId()),
+                eq(event.ownerUserId()),
+                eq(event.fileName()),
+                textCaptor.capture()
+        );
+        assertThat(textCaptor.getValue().length()).isGreaterThan(500_000);
+        verify(taskTracker).complete(any(), any());
+        verify(taskTracker, never()).handleFailure(any(), any(), any(), any(), any());
+        verify(channel).basicAck(1L, false);
+    }
+
+    @Test
     @DisplayName("对象存储抛出异常时经任务跟踪器失败处理且不调用索引服务")
     void handle_whenStorageThrows_shouldNotCallIndexService() throws IOException {
         FileUploadedEvent event = createEvent("broken.pdf", "application/pdf");

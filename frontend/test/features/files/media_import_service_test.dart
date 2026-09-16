@@ -34,6 +34,37 @@ void main() {
     expect(taskApi.waitCalled, isTrue);
   });
 
+  test('上传完成结果缺少节点时按目录回退找回已晋升文件', () async {
+    final fileApi = _ScanningFileApi(
+        directory: <FileNode>[
+          FileNode(
+            id: 'recovered-id',
+            parentId: 'photos',
+            name: 'photo.jpg',
+            isFolder: false,
+            nodeType: 'FILE',
+            normalizedPath: '/Photos/photo.jpg',
+            sizeBytes: 4,
+            updatedAt: null,
+            mimeType: 'image/jpeg',
+          ),
+        ],
+      )
+      ..completeOverride = const FileUploadCompleteResult(
+        uploadId: 'upload-1',
+        status: '',
+      );
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
+
+    final imported = await service.importFile(
+      file: await _photoFile(),
+      parentId: 'photos',
+      reuseExistingFiles: false,
+    );
+
+    expect(imported.fileNodeId, 'recovered-id');
+  });
+
   test('安全扫描终态拒绝时抛出稳定错误码', () async {
     final fileApi = _ScanningFileApi();
     final taskApi = _FailedScanTaskApi();
@@ -584,6 +615,7 @@ class _ScanningFileApi extends FileApi {
       );
 
   final List<FileNode> _directory;
+  FileUploadCompleteResult? completeOverride;
 
   @override
   Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
@@ -647,11 +679,12 @@ class _ScanningFileApi extends FileApi {
     String? sha256,
     String? asVersionOfFileId,
   }) async {
-    return const FileUploadCompleteResult(
-      uploadId: 'upload-1',
-      status: 'SCANNING',
-      taskId: 'scan-task-1',
-    );
+    return completeOverride ??
+        const FileUploadCompleteResult(
+          uploadId: 'upload-1',
+          status: 'SCANNING',
+          taskId: 'scan-task-1',
+        );
   }
 }
 
