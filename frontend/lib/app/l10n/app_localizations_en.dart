@@ -1566,6 +1566,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Very large files may be rejected; put 4K originals in the local media library instead.';
 
   @override
+  String get filesTestConnection => 'Test connection';
+
+  @override
   String get filesImport => 'Import';
 
   @override

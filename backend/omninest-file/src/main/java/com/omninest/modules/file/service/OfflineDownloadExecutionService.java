@@ -369,7 +369,7 @@ public class OfflineDownloadExecutionService {
         folder.setNormalizedPath(resolveChildPath(targetParent, availableName));
         folder.setSizeBytes(0L);
         folder.setSourceType(SourceType.LOCAL.getValue());
-        folder.setSpaceType(SpaceType.PERSONAL);
+        folder.setSpaceType(resolveSpaceType(task));
         return fileNodeRepository.save(folder);
     }
 
@@ -386,7 +386,7 @@ public class OfflineDownloadExecutionService {
             Path relative = taskDirectory.relativize(file).normalize();
             FileNode parent = importRoot == null
                     ? targetParent
-                    : resolveNestedParent(task.getOwnerUserId(), importRoot, relative.getParent(), folderCache);
+                    : resolveNestedParent(task.getOwnerUserId(), importRoot, relative.getParent(), folderCache, resolveSpaceType(task));
             lastImported = importSingleFile(task, parent, file, relative.getFileName().toString());
         }
         if (lastImported == null) {
@@ -399,7 +399,8 @@ public class OfflineDownloadExecutionService {
             UUID ownerUserId,
             FileNode importRoot,
             Path relativeParent,
-            Map<Path, FileNode> folderCache
+            Map<Path, FileNode> folderCache,
+            SpaceType spaceType
     ) {
         if (relativeParent == null) {
             return importRoot;
@@ -423,11 +424,22 @@ public class OfflineDownloadExecutionService {
             folder.setNormalizedPath(resolveChildPath(current, availableName));
             folder.setSizeBytes(0L);
             folder.setSourceType(SourceType.LOCAL.getValue());
-            folder.setSpaceType(SpaceType.PERSONAL);
+            folder.setSpaceType(spaceType);
             current = fileNodeRepository.save(folder);
             folderCache.put(currentPath, current);
         }
         return current;
+    }
+
+    private SpaceType resolveSpaceType(DownloadOfflineTask task) {
+        if (task.getSpaceType() == null || task.getSpaceType().isBlank()) {
+            return SpaceType.PERSONAL;
+        }
+        try {
+            return SpaceType.fromValue(task.getSpaceType());
+        } catch (IllegalArgumentException exception) {
+            return SpaceType.PERSONAL;
+        }
     }
 
     private FileNode importSingleFile(DownloadOfflineTask task, FileNode parent, Path source, String rawFileName) {
@@ -509,7 +521,7 @@ public class OfflineDownloadExecutionService {
         fileNode.setSizeBytes(savedObject.getSizeBytes());
         fileNode.setCurrentObjectId(savedObject.getId());
         fileNode.setSourceType(SourceType.LOCAL.getValue());
-        fileNode.setSpaceType(SpaceType.PERSONAL);
+        fileNode.setSpaceType(resolveSpaceType(task));
         FileNode savedFile = fileNodeRepository.save(fileNode);
         registerObjectFinalization(quarantineKey, targetKey, ingressId, savedFile.getId());
         publishFileUploaded(savedFile, savedObject);

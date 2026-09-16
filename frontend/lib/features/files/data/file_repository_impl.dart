@@ -392,6 +392,11 @@ class FileRepositoryImpl implements FileRepository {
     return fileApi.getExternalStorageSpace(accountId);
   }
 
+  @override
+  Future<void> testExternalStorageConnection(String accountId) {
+    return fileApi.testExternalStorageConnection(accountId);
+  }
+
   // ============================================================
   // 共享空间相关方法
   // ============================================================

@@ -213,6 +213,14 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     }
   }
 
+  /// 测试外部存储连接。
+  Future<void> testExternalStorageConnection(String accountId) async {
+    await _repository
+        .testExternalStorageConnection(accountId)
+        .timeout(_externalBrowseTimeout);
+    await showExternalStorage();
+  }
+
   Future<void> _runExternalMutation({
     required FileOperation operationLabel,
     required String accountId,

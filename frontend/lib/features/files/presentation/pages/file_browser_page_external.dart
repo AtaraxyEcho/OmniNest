@@ -85,6 +85,22 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
                             icon: const Icon(Icons.edit_outlined),
                           ),
                           IconButton(
+                            tooltip: l10n.filesTestConnection,
+                            onPressed:
+                                enabled
+                                    ? () => unawaited(
+                                      _runFileAction(
+                                        context,
+                                        () => controller
+                                            .testExternalStorageConnection(
+                                              account.id,
+                                            ),
+                                      ),
+                                    )
+                                    : null,
+                            icon: const Icon(Icons.wifi_tethering_rounded),
+                          ),
+                          IconButton(
                             tooltip: l10n.filesBrowseRemote,
                             onPressed:
                                 enabled

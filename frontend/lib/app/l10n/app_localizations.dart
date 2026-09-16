@@ -2944,6 +2944,9 @@ abstract class AppLocalizations {
   /// 超大文件导入提示
   String get filesImportSizeGuardHint;
 
+  /// 测试连接
+  String get filesTestConnection;
+
   /// No description provided for @filesImport.
   ///
   /// In en, this message translates to:

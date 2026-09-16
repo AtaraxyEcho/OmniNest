@@ -177,6 +177,9 @@ abstract interface class FileRepository {
   /// 获取外部存储空间用量
   Future<ExternalSpaceUsage> getExternalStorageSpace(String accountId);
 
+  /// 测试外部存储连通性
+  Future<void> testExternalStorageConnection(String accountId);
+
   // ============================================================
   // 共享空间相关方法
   // ============================================================

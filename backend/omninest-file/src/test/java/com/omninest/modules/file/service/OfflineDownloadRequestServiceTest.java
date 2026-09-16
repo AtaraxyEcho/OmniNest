@@ -50,6 +50,8 @@ class OfflineDownloadRequestServiceTest {
     private TaskRecordService taskRecordService;
     @Mock
     private TaskDispatchService taskDispatchService;
+    @Mock
+    private SharedSpaceService sharedSpaceService;
 
     @InjectMocks
     private OfflineDownloadRequestService service;
@@ -66,7 +68,7 @@ class OfflineDownloadRequestServiceTest {
         when(sourceResolver.resolve(sourceUri))
                 .thenReturn(new ResolvedSource(SourceKind.HTTP, URI.create(sourceUri)));
 
-        var result = service.createTask(OWNER_ID, new CreateOfflineDownloadRequest(sourceUri, null));
+        var result = service.createTask(OWNER_ID, new CreateOfflineDownloadRequest(sourceUri, null, null));
 
         assertThat(result.id()).isNotNull();
         assertThat(result.taskId()).isEqualTo(result.id());
@@ -96,7 +98,7 @@ class OfflineDownloadRequestServiceTest {
                 .thenReturn(new ResolvedSource(SourceKind.HTTP, URI.create(sourceUri)));
         TransactionSynchronizationManager.initSynchronization();
         try {
-            var result = service.createTask(OWNER_ID, new CreateOfflineDownloadRequest(sourceUri, null));
+            var result = service.createTask(OWNER_ID, new CreateOfflineDownloadRequest(sourceUri, null, null));
 
             // Outbox 行在事务内同步写入，不再延迟到事务提交后直发消息。
             ArgumentCaptor<OfflineDownloadRequestedEvent> eventCaptor =

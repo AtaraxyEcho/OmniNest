@@ -39,6 +39,18 @@ public class OfflineDownloadRequestService {
     private final OfflineDownloadSourceResolver sourceResolver;
     private final TaskRecordService taskRecordService;
     private final TaskDispatchService taskDispatchService;
+    private final SharedSpaceService sharedSpaceService;
+
+    private String resolveSpaceType(String spaceType) {
+        if (spaceType == null || spaceType.isBlank()) {
+            return "PERSONAL";
+        }
+        String normalized = spaceType.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!"PERSONAL".equals(normalized) && !"SHARED".equals(normalized)) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的空间类型");
+        }
+        return normalized;
+    }
 
     /**
      * 查询用户的离线下载任务。
@@ -65,10 +77,15 @@ public class OfflineDownloadRequestService {
     public OfflineDownloadTaskDto createTask(UUID ownerUserId, CreateOfflineDownloadRequest request) {
         sourceResolver.resolve(request.sourceUri());
         FileNode parent = resolveParent(ownerUserId, request.targetParentId());
+        String spaceType = resolveSpaceType(request.spaceType());
+        if ("SHARED".equals(spaceType)) {
+            sharedSpaceService.requireSharedWrite(ownerUserId);
+        }
         UUID taskId = UUID.randomUUID();
         Map<String, Object> payload = new LinkedHashMap<>();
         payload.put("sourceUri", request.sourceUri().trim());
         payload.put("targetParentId", parent == null ? null : parent.getId().toString());
+        payload.put("spaceType", spaceType);
         taskRecordService.createQueuedTask(
                 taskId,
                 ownerUserId,
@@ -82,6 +99,7 @@ public class OfflineDownloadRequestService {
         task.setOwnerUserId(ownerUserId);
         task.setSourceUri(request.sourceUri().trim());
         task.setTargetParentId(parent == null ? null : parent.getId());
+        task.setSpaceType(spaceType);
         task.setTaskId(taskId);
         task.setStatus(TaskStatus.QUEUED.getValue());
         DownloadOfflineTask saved = offlineTaskRepository.save(task);

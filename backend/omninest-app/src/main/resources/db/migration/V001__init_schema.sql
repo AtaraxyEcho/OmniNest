@@ -399,6 +399,7 @@ CREATE TABLE "omni"."download_offline_tasks" (
   "owner_user_id" uuid NOT NULL,
   "source_uri" text NOT NULL,
   "target_parent_id" uuid,
+  "space_type" varchar(16) NOT NULL DEFAULT 'PERSONAL'::character varying,
   "task_id" uuid,
   "aria2_gid" varchar(32),
   "file_name" varchar(255),
@@ -418,6 +419,7 @@ COMMENT ON COLUMN "omni"."download_offline_tasks"."id" IS '任务唯一标识，
 COMMENT ON COLUMN "omni"."download_offline_tasks"."owner_user_id" IS '所属用户ID，关联auth_users';
 COMMENT ON COLUMN "omni"."download_offline_tasks"."source_uri" IS '离线下载源地址';
 COMMENT ON COLUMN "omni"."download_offline_tasks"."target_parent_id" IS '目标父级文件夹ID，关联file_nodes';
+COMMENT ON COLUMN "omni"."download_offline_tasks"."space_type" IS '目标空间：PERSONAL 或 SHARED';
 COMMENT ON COLUMN "omni"."download_offline_tasks"."task_id" IS '系统任务ID，关联sys_tasks';
 COMMENT ON COLUMN "omni"."download_offline_tasks"."aria2_gid" IS 'aria2 RPC任务GID';
 COMMENT ON COLUMN "omni"."download_offline_tasks"."file_name" IS '下载结果显示名称';

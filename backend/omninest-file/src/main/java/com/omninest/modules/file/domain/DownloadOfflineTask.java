@@ -31,6 +31,9 @@ public class DownloadOfflineTask {
     @Column(name = "target_parent_id")
     private UUID targetParentId;
 
+    @Column(name = "space_type", nullable = false, length = 16)
+    private String spaceType = "PERSONAL";
+
     @Column(name = "task_id")
     private UUID taskId;
 

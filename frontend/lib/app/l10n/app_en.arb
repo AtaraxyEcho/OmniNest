@@ -614,6 +614,7 @@
   "filesImportConfirm": "Import External Content?",
   "filesImportMessage": "Import \"{name}\" to current file directory.",
   "filesImportSizeGuardHint": "Very large files may be rejected; put 4K originals in the local media library instead.",
+  "filesTestConnection": "Test connection",
   "@filesImportMessage": {
     "placeholders": {
       "name": {}
