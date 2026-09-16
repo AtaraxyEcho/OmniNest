@@ -9833,6 +9833,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get errorUploadUrlMissing => 'Invalid upload URL';
 
   @override
+  String get errorSecurityScanFailed =>
+      'Security scan did not finish. The file is kept; check the library later or import again.';
+
+  @override
   String get errorOtherCategory => 'Other';
 
   @override

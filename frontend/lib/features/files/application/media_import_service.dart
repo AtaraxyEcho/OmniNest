@@ -508,6 +508,12 @@ class MediaImportService {
       timeout: const Duration(minutes: 90),
       interval: const Duration(seconds: 3),
     );
+    if (kDebugMode) {
+      debugPrint(
+        'MediaImport: scan task terminal — taskId=$taskId, '
+        'status=${task.status}, hasResult=${task.result != null}',
+      );
+    }
     if (task.status != 'COMPLETED') {
       throw AppException(
         code: AppErrorCodes.securityScanFailed,
@@ -526,8 +532,20 @@ class MediaImportService {
       );
     }
     // 旧版本后端的任务结果不含晋升产物标识，按文件名回退解析。
+    if (kDebugMode) {
+      debugPrint(
+        'MediaImport: scan task result missing fileNodeId, '
+        'falling back to directory lookup for $fileName',
+      );
+    }
     final resolved = await _resolvePromotedNode(fileName, parentId);
     if (resolved == null) {
+      if (kDebugMode) {
+        debugPrint(
+          'MediaImport: promoted node not found in parent directory — '
+          'fileName=$fileName, parentId=$parentId',
+        );
+      }
       throw const AppException(
         code: AppErrorCodes.securityScanFailed,
         message: AppErrorCodes.securityScanFailed,

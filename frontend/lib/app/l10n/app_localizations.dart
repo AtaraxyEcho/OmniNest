@@ -17970,6 +17970,12 @@ abstract class AppLocalizations {
   /// **'Invalid upload URL'**
   String get errorUploadUrlMissing;
 
+  /// No description provided for @errorSecurityScanFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Security scan did not finish. The file is kept; check the library later or import again.'**
+  String get errorSecurityScanFailed;
+
   /// No description provided for @errorOtherCategory.
   ///
   /// In en, this message translates to:

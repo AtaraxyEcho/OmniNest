@@ -9536,6 +9536,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get errorUploadUrlMissing => '上传地址无效';
 
   @override
+  String get errorSecurityScanFailed => '安全扫描未完成，文件已保留；请稍后在书库查看，或重新导入';
+
+  @override
   String get errorOtherCategory => '其他';
 
   @override

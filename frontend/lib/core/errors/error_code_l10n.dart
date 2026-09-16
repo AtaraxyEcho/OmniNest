@@ -28,6 +28,8 @@ extension AppErrorCodeL10n on AppLocalizations {
         return errorUnnamedResource;
       case AppErrorCodes.uploadUrlMissing:
         return errorUploadUrlMissing;
+      case AppErrorCodes.securityScanFailed:
+        return errorSecurityScanFailed;
       case AppErrorCodes.other:
         return errorOtherCategory;
       case 'READER_WEB_PDF_TOO_LARGE':
