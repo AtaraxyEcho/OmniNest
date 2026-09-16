@@ -55,6 +55,35 @@ void main() {
     );
   });
 
+  test('旧版本后端任务结果缺失时按文件名回退解析晋升节点', () async {
+    final fileApi = _ScanningFileApi(
+      directory: <FileNode>[
+        FileNode(
+          id: 'resolved-id',
+          parentId: 'photos',
+          name: 'photo.jpg',
+          isFolder: false,
+          nodeType: 'FILE',
+          normalizedPath: '/Photos/photo.jpg',
+          sizeBytes: 4,
+          updatedAt: null,
+          mimeType: 'image/jpeg',
+        ),
+      ],
+    );
+    final taskApi = _CompletedScanTaskApi(resultJson: '{}');
+    final service = MediaImportService(fileApi, taskApi);
+
+    final imported = await service.importFile(
+      file: await _photoFile(),
+      parentId: 'photos',
+      reuseExistingFiles: false,
+    );
+
+    expect(imported.fileNodeId, 'resolved-id');
+    expect(taskApi.waitCalled, isTrue);
+  });
+
   test('单文件复用会返回稳定的文件节点 ID', () async {
     final fileApi = _ConflictFileApi(
       error: const AppException(
@@ -543,8 +572,9 @@ class _UnusedTaskApi extends TaskApi {
 }
 
 class _ScanningFileApi extends FileApi {
-  _ScanningFileApi()
-    : super(
+  _ScanningFileApi({List<FileNode>? directory})
+    : _directory = directory ?? const <FileNode>[],
+      super(
         ApiClient(
           const AppEnvironment(
             apiBaseUrl: 'http://localhost:8080/api/v1',
@@ -552,6 +582,13 @@ class _ScanningFileApi extends FileApi {
           ),
         ),
       );
+
+  final List<FileNode> _directory;
+
+  @override
+  Future<List<FileNode>> listFiles({String? parentId, String? category}) async {
+    return _directory;
+  }
 
   @override
   Future<FileUploadPolicy> uploadPolicy() async {
@@ -619,15 +656,20 @@ class _ScanningFileApi extends FileApi {
 }
 
 class _CompletedScanTaskApi extends TaskApi {
-  _CompletedScanTaskApi()
-    : super(
-        ApiClient(
-          const AppEnvironment(
-            apiBaseUrl: 'http://localhost:8080/api/v1',
-            wsBaseUrl: 'ws://localhost:8080/ws',
-          ),
-        ),
-      );
+  _CompletedScanTaskApi({
+    String resultJson =
+        '{"fileNodeId":"promoted-id","mediaAutoImportTaskId":"media-task-1"}',
+  }) : _resultJson = resultJson,
+       super(
+         ApiClient(
+           const AppEnvironment(
+             apiBaseUrl: 'http://localhost:8080/api/v1',
+             wsBaseUrl: 'ws://localhost:8080/ws',
+           ),
+         ),
+       );
+
+  final String _resultJson;
 
   bool waitCalled = false;
 
@@ -640,7 +682,8 @@ class _CompletedScanTaskApi extends TaskApi {
     waitCalled = true;
     return _taskRecord(
       'COMPLETED',
-      '{"fileNodeId":"promoted-id","mediaAutoImportTaskId":"media-task-1"}',
+      _resultJson ??
+          '{"fileNodeId":"promoted-id","mediaAutoImportTaskId":"media-task-1"}',
     );
   }
 }

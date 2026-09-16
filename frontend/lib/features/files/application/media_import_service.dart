@@ -307,7 +307,11 @@ class MediaImportService {
                 uploadCancellation,
                 cancellationToken,
               );
-      final promoted = await _waitForPromotion(result);
+      final promoted = await _waitForPromotion(
+        result,
+        fileName: fileName,
+        parentId: parentId,
+      );
       return ImportedMediaFile(
         fileName: fileName,
         fileNodeId: promoted.fileNodeId,
@@ -476,7 +480,11 @@ class MediaImportService {
 
   /// 等待安全扫描晋升完成，返回稳定的文件节点与媒体导入任务标识。
   Future<({String fileNodeId, String? mediaAutoImportTaskId})>
-  _waitForPromotion(FileUploadCompleteResult result) async {
+  _waitForPromotion(
+    FileUploadCompleteResult result, {
+    required String fileName,
+    required String? parentId,
+  }) async {
     if (!result.isScanning) {
       final fileNodeId = result.fileNodeId;
       if (fileNodeId == null || fileNodeId.isEmpty) {
@@ -511,16 +519,42 @@ class MediaImportService {
             ? const <String, dynamic>{}
             : (convert.jsonDecode(task.result!) as Map<String, dynamic>);
     final fileNodeId = payload['fileNodeId']?.toString();
-    if (fileNodeId == null || fileNodeId.isEmpty) {
+    if (fileNodeId != null && fileNodeId.isNotEmpty) {
+      return (
+        fileNodeId: fileNodeId,
+        mediaAutoImportTaskId: payload['mediaAutoImportTaskId']?.toString(),
+      );
+    }
+    // 旧版本后端的任务结果不含晋升产物标识，按文件名回退解析。
+    final resolved = await _resolvePromotedNode(fileName, parentId);
+    if (resolved == null) {
       throw const AppException(
         code: AppErrorCodes.securityScanFailed,
         message: AppErrorCodes.securityScanFailed,
       );
     }
-    return (
-      fileNodeId: fileNodeId,
-      mediaAutoImportTaskId: payload['mediaAutoImportTaskId']?.toString(),
-    );
+    return (fileNodeId: resolved, mediaAutoImportTaskId: null);
+  }
+
+  /// 在目标目录按文件名轮询查找晋升后的文件节点。
+  Future<String?> _resolvePromotedNode(
+    String fileName,
+    String? parentId,
+  ) async {
+    for (var attempt = 0; attempt < 10; attempt++) {
+      try {
+        final nodes = await _fileApi.listFiles(parentId: parentId);
+        for (final node in nodes) {
+          if (!node.isFolder && node.name == fileName) {
+            return node.id;
+          }
+        }
+      } on AppException {
+        // 列表查询失败按未找到处理，继续下一轮。
+      }
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+    return null;
   }
 
   Future<void> _cancelUploadSession(String uploadId) async {
