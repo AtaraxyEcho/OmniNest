@@ -51,4 +51,6 @@ public interface FileUploadSessionRepository extends JpaRepository<FileUploadSes
 
     List<FileUploadSession> findByStatusInAndUpdatedAtBefore(List<String> statuses, Instant updatedAt);
 
+    Optional<FileUploadSession> findByIngressItemId(UUID ingressItemId);
+
 }

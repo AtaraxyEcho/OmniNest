@@ -150,6 +150,17 @@ public class TaskRecordService {
     }
 
     /**
+     * 按标识查找任务记录，供重试服务从任务载荷重建消息。
+     *
+     * @param taskId 任务 ID
+     * @return 任务记录
+     */
+    @Transactional(readOnly = true)
+    public Optional<TaskRecord> findTaskRecord(UUID taskId) {
+        return taskRecordRepository.findById(taskId);
+    }
+
+    /**
      * 原子领取排队或等待重试的任务，避免重复消息并发执行。
      *
      * @param taskId 任务 ID

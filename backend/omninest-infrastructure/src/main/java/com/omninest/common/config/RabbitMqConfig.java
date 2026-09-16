@@ -201,6 +201,11 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Queue fileSecurityScanQueue() {
+        return durableQueue(QueueNames.FILE_SECURITY_SCAN_QUEUE);
+    }
+
+    @Bean
     Queue deadLetterQueue() {
         return new Queue(QueueNames.DEAD_LETTER_QUEUE, true);
     }
@@ -331,6 +336,13 @@ public class RabbitMqConfig {
     @Bean
     Binding filePurgeBinding(Queue filePurgeQueue, DirectExchange taskExchange) {
         return BindingBuilder.bind(filePurgeQueue).to(taskExchange).with(QueueNames.FILE_PURGE_ROUTING_KEY);
+    }
+
+    @Bean
+    Binding fileSecurityScanBinding(Queue fileSecurityScanQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(fileSecurityScanQueue)
+                .to(taskExchange)
+                .with(QueueNames.FILE_SECURITY_SCAN_ROUTING_KEY);
     }
 
     @Bean

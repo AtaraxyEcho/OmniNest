@@ -18,11 +18,6 @@ import com.omninest.common.config.RuntimeConfigCache;
 import com.omninest.common.ratelimit.TokenBucketRateLimiter;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
-import com.omninest.common.storage.ObjectStorageKey;
-import com.omninest.common.sync.SyncAction;
-import com.omninest.common.sync.SyncEventCommand;
-import com.omninest.common.sync.SyncScope;
-import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.upload.FileUploadSettings;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
@@ -34,7 +29,6 @@ import com.omninest.modules.file.dto.CompleteFileUploadPartRequest;
 import com.omninest.modules.file.dto.CompleteFileUploadRequest;
 import com.omninest.modules.file.dto.CreateFileUploadSessionRequest;
 import com.omninest.modules.file.event.FileUploadedEvent;
-import com.omninest.modules.file.service.FileIngressSafetyService.InspectionResult;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
 import com.omninest.modules.file.repository.FileUploadPartRepository;
@@ -48,7 +42,6 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import com.omninest.common.security.MalwareScanGateway.Status;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -65,6 +58,7 @@ class FileUploadSessionServiceTest {
     private static final UUID QUOTA_RESERVATION_ID =
             UUID.fromString("00000000-0000-0000-0000-000000000005");
     private static final UUID MEDIA_TASK_ID = UUID.fromString("00000000-0000-0000-0000-000000000006");
+    private static final UUID SCAN_TASK_ID = UUID.fromString("00000000-0000-0000-0000-000000000007");
 
     private FileUploadSessionRepository uploadSessionRepository;
     private FileUploadPartRepository uploadPartRepository;
@@ -73,7 +67,8 @@ class FileUploadSessionServiceTest {
     private StorageQuotaService storageQuotaService;
     private ObjectStorageClient objectStorageClient;
     private FilePostProcessingTaskService postProcessingTaskService;
-    private UserSyncEventRecorder syncEventRecorder;
+    private FileIngressLifecycleService ingressLifecycleService;
+    private FileIngressScanTaskService ingressScanTaskService;
     private FileUploadSessionService service;
     private ConfigValueProvider configValueProvider;
 
@@ -86,7 +81,7 @@ class FileUploadSessionServiceTest {
         storageQuotaService = mock(StorageQuotaService.class);
         objectStorageClient = mock(ObjectStorageClient.class);
         postProcessingTaskService = mock(FilePostProcessingTaskService.class);
-        syncEventRecorder = mock(UserSyncEventRecorder.class);
+        ingressScanTaskService = mock(FileIngressScanTaskService.class);
         ObjectStorageBuckets objectStorageBuckets = mock(ObjectStorageBuckets.class);
         when(objectStorageBuckets.userFiles()).thenReturn("user-files");
         when(objectStorageBuckets.quarantine()).thenReturn("file-quarantine");
@@ -97,17 +92,13 @@ class FileUploadSessionServiceTest {
         when(uploadSettings.presignedPartBurstCapacity()).thenReturn(8);
         when(uploadSettings.bandwidthLimitEnabled()).thenReturn(true);
         TokenBucketRateLimiter bandwidthLimiter = mock(TokenBucketRateLimiter.class);
-        FileIngressSafetyService ingressSafetyService = mock(FileIngressSafetyService.class);
-        FileIngressLifecycleService ingressLifecycleService = mock(FileIngressLifecycleService.class);
+        ingressLifecycleService = mock(FileIngressLifecycleService.class);
         configValueProvider = mock(ConfigValueProvider.class);
         RuntimeConfigCache runtimeConfigCache = mock(RuntimeConfigCache.class);
-        FileManagerService fileManagerService = mock(FileManagerService.class);
         FileContentChangePublisher fileContentChangePublisher =
                 new FileContentChangePublisher(postProcessingTaskService);
         when(runtimeConfigCache.get(anyString())).thenReturn(Optional.empty());
         when(ingressLifecycleService.open(any())).thenReturn(UUID.randomUUID());
-        when(ingressSafetyService.inspect(any(ObjectStorageKey.class), anyLong(), anyString(), any(UUID.class)))
-                .thenReturn(new InspectionResult(Status.CLEAN, "文件安全", "0".repeat(64)));
         when(storageQuotaService.reserve(
                 eq(OWNER_ID),
                 eq("UPLOAD"),
@@ -126,12 +117,10 @@ class FileUploadSessionServiceTest {
                 postProcessingTaskService,
                 objectStorageBuckets,
                 uploadSettings,
-                syncEventRecorder,
-                ingressSafetyService,
                 ingressLifecycleService,
+                ingressScanTaskService,
                 configValueProvider,
                 runtimeConfigCache,
-                fileManagerService,
                 fileContentChangePublisher
         );
     }
@@ -310,7 +299,7 @@ class FileUploadSessionServiceTest {
     }
 
     @Test
-    void completeSessionCompletesMultipartAndPublishesIndexEvent() {
+    void completeSessionDispatchesSecurityScanAndReturnsScanning() {
         FileUploadSession session = session();
         FileUploadPart part = part(1, "COMPLETED", "etag-1");
         when(uploadSessionRepository.findByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
@@ -320,35 +309,43 @@ class FileUploadSessionServiceTest {
         when(uploadPartRepository.findByUploadSessionIdOrderByPartNumber(SESSION_ID)).thenReturn(List.of(part));
         when(fileNodeRepository.existsByOwnerUserIdAndParentIdIsNullAndNameAndDeletedFalse(OWNER_ID, "demo.pdf"))
                 .thenReturn(false);
-        when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
-            FileObject object = invocation.getArgument(0);
-            object.setId(FILE_OBJECT_ID);
-            return object;
-        });
-        when(fileNodeRepository.save(any())).thenAnswer(invocation -> {
-            FileNode node = invocation.getArgument(0);
-            node.setId(FILE_NODE_ID);
-            return node;
-        });
         when(uploadSessionRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(ingressScanTaskService.enqueueScanTask(any(), any(), any(), any())).thenReturn(SCAN_TASK_ID);
 
-        var file = service.completeSession(OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of(), null));
+        var result = service.completeSession(OWNER_ID, "upload-123", new CompleteFileUploadRequest(null, List.of(), null));
 
-        assertThat(file.id()).isEqualTo(FILE_NODE_ID);
-        assertThat(file.name()).isEqualTo("demo.pdf");
-        verify(storageQuotaService).settleReservation("UPLOAD", SESSION_ID, 512);
-        assertThat(session.getStatus()).isEqualTo("COMPLETED");
+        assertThat(result.status()).isEqualTo("SCANNING");
+        assertThat(result.taskId()).isEqualTo(SCAN_TASK_ID);
+        assertThat(result.fileNodeId()).isNull();
+        assertThat(session.getStatus()).isEqualTo("SCANNING");
         verify(objectStorageClient).completeMultipartUpload(any(), eq("upload-123"), any());
-        verify(postProcessingTaskService).enqueueMediaAutoImport(any(FileUploadedEvent.class));
-        ArgumentCaptor<FileUploadedEvent> postCaptor = ArgumentCaptor.forClass(FileUploadedEvent.class);
-        verify(postProcessingTaskService).enqueuePostProcess(postCaptor.capture(), anyString());
-        assertThat(postCaptor.getValue().fileNodeId()).isEqualTo(FILE_NODE_ID);
-        assertThat(postCaptor.getValue().fileObjectId()).isEqualTo(FILE_OBJECT_ID);
-        ArgumentCaptor<SyncEventCommand> syncCaptor = ArgumentCaptor.forClass(SyncEventCommand.class);
-        verify(syncEventRecorder).record(syncCaptor.capture());
-        assertThat(syncCaptor.getValue().scope()).isEqualTo(SyncScope.FILES);
-        assertThat(syncCaptor.getValue().action()).isEqualTo(SyncAction.CREATED);
-        assertThat(syncCaptor.getValue().resourceId()).isEqualTo(FILE_NODE_ID.toString());
+        verify(ingressLifecycleService).open(any());
+        verify(storageQuotaService).extendReservation(eq("UPLOAD"), eq(SESSION_ID), any(Instant.class));
+        verify(fileNodeRepository, Mockito.never()).save(any());
+        verify(objectStorageClient, Mockito.never()).copyObject(any(), any());
+        verify(storageQuotaService, Mockito.never()).settleReservation(any(), any(), anyLong());
+    }
+
+    @Test
+    void completeSessionIsIdempotentWhileScanning() {
+        FileUploadSession session = session();
+        session.setStatus(UploadStatus.SCANNING.getValue());
+        session.setCompletionTaskId(SCAN_TASK_ID);
+        when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
+                .thenReturn(Optional.of(session));
+
+        var result = service.completeSession(
+                OWNER_ID,
+                "upload-123",
+                new CompleteFileUploadRequest(null, List.of(), null)
+        );
+
+        assertThat(result.status()).isEqualTo("SCANNING");
+        assertThat(result.taskId()).isEqualTo(SCAN_TASK_ID);
+        assertThat(result.fileNodeId()).isNull();
+        verify(ingressScanTaskService, Mockito.never()).enqueueScanTask(any(), any(), any(), any());
+        verify(uploadSessionRepository, Mockito.never()).save(any());
+        verify(objectStorageClient, Mockito.never()).completeMultipartUpload(any(), any(), any());
     }
 
     // ── 新增测试 ──
@@ -465,16 +462,13 @@ class FileUploadSessionServiceTest {
     }
 
     @Test
-    void completeCompletedSessionReturnsExistingFileWithoutMutatingSession() {
+    void completeCompletedSessionReturnsExistingResultWithoutMutatingSession() {
         FileUploadSession session = session();
         session.setStatus(UploadStatus.COMPLETED.getValue());
         session.setResultFileNodeId(FILE_NODE_ID);
         session.setCompletionTaskId(MEDIA_TASK_ID);
-        FileNode file = fileNode("demo.pdf", "application/pdf", 512L);
         when(uploadSessionRepository.findForUpdateByUploadIdAndOwnerUserId("upload-123", OWNER_ID))
                 .thenReturn(Optional.of(session));
-        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_NODE_ID, OWNER_ID))
-                .thenReturn(Optional.of(file));
 
         var result = service.completeSession(
                 OWNER_ID,
@@ -482,8 +476,9 @@ class FileUploadSessionServiceTest {
                 new CompleteFileUploadRequest(null, List.of(), null)
         );
 
-        assertThat(result.id()).isEqualTo(FILE_NODE_ID);
-        assertThat(result.mediaAutoImportTaskId()).isEqualTo(MEDIA_TASK_ID);
+        assertThat(result.status()).isEqualTo("COMPLETED");
+        assertThat(result.fileNodeId()).isEqualTo(FILE_NODE_ID);
+        assertThat(result.taskId()).isEqualTo(MEDIA_TASK_ID);
         verify(uploadSessionRepository, Mockito.never()).save(any());
         verify(objectStorageClient, Mockito.never()).copyObject(any(), any());
     }

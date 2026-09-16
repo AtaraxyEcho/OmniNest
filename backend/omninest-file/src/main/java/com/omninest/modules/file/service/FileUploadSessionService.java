@@ -12,10 +12,6 @@ import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageCompletedPart;
 import com.omninest.common.storage.ObjectStorageKey;
-import com.omninest.common.sync.SyncAction;
-import com.omninest.common.sync.SyncEventCommand;
-import com.omninest.common.sync.SyncScope;
-import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.common.upload.FileUploadSettings;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
@@ -28,9 +24,8 @@ import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.dto.FileUploadPartDto;
 import com.omninest.modules.file.dto.FileUploadPartsDto;
 import com.omninest.modules.file.dto.FileUploadPolicyDto;
+import com.omninest.modules.file.dto.FileUploadCompleteResultDto;
 import com.omninest.modules.file.dto.FileUploadSessionDto;
-import com.omninest.modules.file.event.FileUploadedEvent;
-import com.omninest.modules.file.service.FileIngressSafetyService.InspectionResult;
 import com.omninest.modules.file.service.FileIngressLifecycleService.IngressCommand;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
@@ -57,8 +52,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaTypeFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.MimeType;
 
 /**
@@ -77,6 +70,7 @@ public class FileUploadSessionService {
     private static final int MAX_PART_SIZE_BYTES = 100 * 1024 * 1024;
     private static final int MAX_TOTAL_PARTS = 1000;
     private static final int TARGET_PARTS = 64;
+    private static final Duration SCAN_WINDOW = Duration.ofHours(24);
 
     private final FileUploadSessionRepository fileUploadSessionRepository;
     private final FileUploadPartRepository fileUploadPartRepository;
@@ -88,12 +82,10 @@ public class FileUploadSessionService {
     private final FilePostProcessingTaskService postProcessingTaskService;
     private final ObjectStorageBuckets objectStorageBuckets;
     private final FileUploadSettings uploadSettings;
-    private final UserSyncEventRecorder syncEventRecorder;
-    private final FileIngressSafetyService ingressSafetyService;
     private final FileIngressLifecycleService ingressLifecycleService;
+    private final FileIngressScanTaskService ingressScanTaskService;
     private final ConfigValueProvider configValueProvider;
     private final RuntimeConfigCache runtimeConfigCache;
-    private final FileManagerService fileManagerService;
     private final FileContentChangePublisher fileContentChangePublisher;
 
     public FileUploadPolicyDto uploadPolicy() {
@@ -262,10 +254,13 @@ public class FileUploadSessionService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public FileNodeDto completeSession(UUID ownerUserId, String uploadId, CompleteFileUploadRequest request) {
+    public FileUploadCompleteResultDto completeSession(UUID ownerUserId, String uploadId, CompleteFileUploadRequest request) {
         FileUploadSession session = findSessionForUpdate(ownerUserId, uploadId);
         if (UploadStatus.COMPLETED.getValue().equals(session.getStatus())) {
-            return completedResult(ownerUserId, session);
+            return completedResult(session);
+        }
+        if (UploadStatus.SCANNING.getValue().equals(session.getStatus())) {
+            return scanningResult(session);
         }
         ensureCompletable(session);
         if (isDirectUpload(session)) {
@@ -284,7 +279,7 @@ public class FileUploadSessionService {
         List<FileUploadPart> parts = fileUploadPartRepository.findByUploadSessionIdOrderByPartNumber(session.getId());
         ensureAllPartsCompleted(session, parts);
 
-        FileNode parent = resolveParent(ownerUserId, session.getTargetParentId());
+        resolveParent(ownerUserId, session.getTargetParentId());
         UUID asVersionOfFileIdForCheck = request == null ? null : request.asVersionOfFileId();
         if (asVersionOfFileIdForCheck == null
                 && sameNameExists(ownerUserId, session.getTargetParentId(), session.getFileName())) {
@@ -296,40 +291,7 @@ public class FileUploadSessionService {
         fileUploadSessionRepository.save(session);
         objectStorageClient.completeMultipartUpload(key, session.getUploadId(), toCompletedParts(parts));
 
-        PublishedObject publishedObject = publishSafeObject(session, key);
-
-        FileObject savedObject = fileObjectRepository.save(toFileObject(session, publishedObject));
-        UUID asVersionOfFileId = request == null ? null : request.asVersionOfFileId();
-        if (asVersionOfFileId != null) {
-            session.setIngressItemId(publishedObject.ingressId());
-            session.setResultFileNodeId(asVersionOfFileId);
-            session.setResultObjectId(savedObject.getId());
-            registerObjectFinalization(publishedObject, asVersionOfFileId);
-            settleUploadQuota(session);
-            session.setUploadedParts(session.getTotalParts());
-            session.setStatus(UploadStatus.COMPLETED.getValue());
-            fileUploadSessionRepository.save(session);
-            FileNodeDto versioned = fileManagerService.saveNewVersion(
-                    ownerUserId,
-                    asVersionOfFileId,
-                    savedObject.getId(),
-                    savedObject.getSizeBytes(),
-                    null);
-            return versioned;
-        }
-        FileNode savedFile = fileNodeRepository.save(toFileNode(ownerUserId, parent, session, savedObject));
-        session.setIngressItemId(publishedObject.ingressId());
-        session.setResultFileNodeId(savedFile.getId());
-        session.setResultObjectId(savedObject.getId());
-        registerObjectFinalization(publishedObject, savedFile.getId());
-        settleUploadQuota(session);
-
-        session.setUploadedParts(session.getTotalParts());
-        session.setStatus(UploadStatus.COMPLETED.getValue());
-        session.setCompletionTaskId(publishFileUploadedAfterCommit(savedFile, savedObject, ownerUserId));
-        fileUploadSessionRepository.save(session);
-        recordFileCreated(ownerUserId, savedFile);
-        return toFileNodeDto(savedFile, session.getCompletionTaskId());
+        return dispatchSecurityScan(ownerUserId, session, request == null ? null : request.asVersionOfFileId());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -448,7 +410,7 @@ public class FileUploadSessionService {
         return session;
     }
 
-    private FileNodeDto completeDirectSession(
+    private FileUploadCompleteResultDto completeDirectSession(
             UUID ownerUserId,
             FileUploadSession session,
             CompleteFileUploadRequest request
@@ -461,9 +423,9 @@ public class FileUploadSessionService {
             session.setSha256(sha256);
         }
 
-        FileNode parent = resolveParent(ownerUserId, session.getTargetParentId());
-        UUID asVersionOfFileIdForCheck = request == null ? null : request.asVersionOfFileId();
-        if (asVersionOfFileIdForCheck == null
+        resolveParent(ownerUserId, session.getTargetParentId());
+        UUID asVersionOfFileId = request == null ? null : request.asVersionOfFileId();
+        if (asVersionOfFileId == null
                 && sameNameExists(ownerUserId, session.getTargetParentId(), session.getFileName())) {
             throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件");
         }
@@ -473,43 +435,7 @@ public class FileUploadSessionService {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "文件内容尚未上传完成");
         }
 
-        session.setStatus(UploadStatus.SCANNING.getValue());
-        fileUploadSessionRepository.save(session);
-        PublishedObject publishedObject = publishSafeObject(session, key);
-
-        FileObject savedObject = fileObjectRepository.save(toFileObject(session, publishedObject));
-        UUID asVersionOfFileId = request == null ? null : request.asVersionOfFileId();
-        if (asVersionOfFileId != null) {
-            session.setIngressItemId(publishedObject.ingressId());
-            session.setResultFileNodeId(asVersionOfFileId);
-            session.setResultObjectId(savedObject.getId());
-            registerObjectFinalization(publishedObject, asVersionOfFileId);
-            settleUploadQuota(session);
-            session.setUploadedParts(1);
-            session.setStatus(UploadStatus.COMPLETED.getValue());
-            fileUploadSessionRepository.save(session);
-            return fileManagerService.saveNewVersion(
-                    ownerUserId,
-                    asVersionOfFileId,
-                    savedObject.getId(),
-                    savedObject.getSizeBytes(),
-                    null);
-        }
-        FileNode savedFile = fileNodeRepository.save(toFileNode(ownerUserId, parent, session, savedObject));
-        session.setIngressItemId(publishedObject.ingressId());
-        session.setResultFileNodeId(savedFile.getId());
-        session.setResultObjectId(savedObject.getId());
-        registerObjectFinalization(publishedObject, savedFile.getId());
-
-        settleUploadQuota(session);
-
-        session.setUploadedParts(1);
-        session.setStatus(UploadStatus.COMPLETED.getValue());
-        UUID mediaAutoImportTaskId = publishFileUploadedAfterCommit(savedFile, savedObject, ownerUserId);
-        session.setCompletionTaskId(mediaAutoImportTaskId);
-        fileUploadSessionRepository.save(session);
-        recordFileCreated(ownerUserId, savedFile);
-        return toFileNodeDto(savedFile, mediaAutoImportTaskId);
+        return dispatchSecurityScan(ownerUserId, session, asVersionOfFileId);
     }
 
     /**
@@ -774,179 +700,72 @@ public class FileUploadSessionService {
         return session.getTotalSizeBytes() - uploadedBeforeLastPart;
     }
 
-    private FileObject toFileObject(FileUploadSession session, PublishedObject publishedObject) {
-        FileObject fileObject = new FileObject();
-        fileObject.setBucketName(publishedObject.key().bucket());
-        fileObject.setObjectKey(publishedObject.key().objectKey());
-        fileObject.setSha256(publishedObject.inspection().sha256());
-        fileObject.setSizeBytes(session.getTotalSizeBytes());
-        fileObject.setMimeType(session.getMimeType());
-        return fileObject;
-    }
-
-    private PublishedObject publishSafeObject(FileUploadSession session, ObjectStorageKey quarantineKey) {
-        ObjectStorageKey publishedKey = new ObjectStorageKey(
-                objectStorageBuckets.userFiles(),
-                "users/" + session.getOwnerUserId() + "/files/" + UUID.randomUUID()
-                        + "/" + session.getFileName()
-        );
+    /**
+     * 创建安全入库记录并受理安全扫描任务，上传请求在此立即返回。
+     * 文件节点由 Worker 在扫描通过后创建，期间会话保持 SCANNING。
+     */
+    private FileUploadCompleteResultDto dispatchSecurityScan(
+            UUID ownerUserId,
+            FileUploadSession session,
+            UUID asVersionOfFileId
+    ) {
         UUID ingressId = ingressLifecycleService.open(new IngressCommand(
-                session.getOwnerUserId(),
+                ownerUserId,
                 "UPLOAD",
                 null,
                 session.getId(),
-                quarantineKey.bucket(),
-                quarantineKey.objectKey(),
-                publishedKey.bucket(),
-                publishedKey.objectKey(),
+                session.getTargetBucket(),
+                session.getTargetObjectKey(),
+                objectStorageBuckets.userFiles(),
+                "users/" + ownerUserId + "/files/" + UUID.randomUUID() + "/" + session.getFileName(),
                 session.getTargetParentId(),
                 session.getFileName(),
                 session.getTotalSizeBytes(),
                 session.getMimeType()
         ));
-        ingressLifecycleService.markScanning(ingressId);
-        InspectionResult inspection;
-        try {
-            inspection = ingressSafetyService.inspect(
-                    quarantineKey,
-                    session.getTotalSizeBytes(),
-                    "UPLOAD",
-                    session.getId()
-            );
-        } catch (BusinessException exception) {
-            boolean rejected = exception.errorCode() == ErrorCode.FILE_SECURITY_REJECTED;
-            ingressLifecycleService.markFailed(
-                    ingressId,
-                    rejected,
-                    exception.errorCode().name(),
-                    exception.getMessage()
-            );
-            throw exception;
-        }
-        if (session.getSha256() != null
-                && !session.getSha256().equalsIgnoreCase(inspection.sha256())) {
-            ingressLifecycleService.markFailed(
-                    ingressId,
-                    false,
-                    ErrorCode.FILE_UPLOAD_FAILED.name(),
-                    "服务端计算的文件摘要与客户端声明不一致"
-            );
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "服务端计算的文件摘要与客户端声明不一致");
-        }
-        ingressLifecycleService.markClean(ingressId, inspection.sha256());
-        objectStorageClient.copyObject(quarantineKey, publishedKey);
-        return new PublishedObject(quarantineKey, publishedKey, inspection, ingressId);
+        extendScanWindow(session);
+        UUID scanTaskId = ingressScanTaskService.enqueueScanTask(
+                ownerUserId, ingressId, asVersionOfFileId, session.getSha256());
+        session.setIngressItemId(ingressId);
+        session.setCompletionTaskId(scanTaskId);
+        session.setUploadedParts(session.getTotalParts());
+        session.setStatus(UploadStatus.SCANNING.getValue());
+        fileUploadSessionRepository.save(session);
+        return new FileUploadCompleteResultDto(
+                session.getUploadId(),
+                UploadStatus.SCANNING.getValue(),
+                scanTaskId,
+                null
+        );
     }
 
-    private void registerObjectFinalization(PublishedObject publishedObject, UUID fileNodeId) {
-        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            markIngressAvailableQuietly(publishedObject.ingressId(), fileNodeId);
-            removeObjectQuietly(publishedObject.quarantineKey());
-            return;
-        }
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCompletion(int status) {
-                if (status == TransactionSynchronization.STATUS_COMMITTED) {
-                    markIngressAvailableQuietly(publishedObject.ingressId(), fileNodeId);
-                    removeObjectQuietly(publishedObject.quarantineKey());
-                    return;
-                }
-                markIngressFailedQuietly(publishedObject.ingressId(), "文件业务元数据提交失败");
-                removeObjectQuietly(publishedObject.publishedKey());
-            }
-        });
-    }
-
-    private FileNodeDto completedResult(UUID ownerUserId, FileUploadSession session) {
-        if (session.getResultFileNodeId() == null) {
-            throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "上传会话已完成但结果文件缺失");
-        }
-        FileNode node = fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
-                        session.getResultFileNodeId(),
-                        ownerUserId
-                )
-                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "上传结果文件不存在"));
-        return toFileNodeDto(node, session.getCompletionTaskId());
-    }
-
-    private void settleUploadQuota(FileUploadSession session) {
-        if (session.getSpaceType() != SpaceType.PERSONAL) {
-            return;
-        }
-        if (session.getQuotaReservationId() == null) {
-            storageQuotaService.checkQuota(session.getOwnerUserId(), session.getTotalSizeBytes());
-            storageQuotaService.incrementUsage(session.getOwnerUserId(), session.getTotalSizeBytes());
-            return;
-        }
-        storageQuotaService.settleReservation("UPLOAD", session.getId(), session.getTotalSizeBytes());
-    }
-
-    private void markIngressAvailableQuietly(UUID ingressId, UUID fileNodeId) {
-        try {
-            ingressLifecycleService.markAvailable(ingressId, fileNodeId);
-        } catch (RuntimeException exception) {
-            log.warn("更新文件入库可用状态失败: ingressId={}, errorType={}",
-                    ingressId, exception.getClass().getSimpleName());
+    /**
+     * 延长会话有效期与配额预留覆盖扫描与重试窗口，防止扫描期间被过期回收。
+     */
+    private void extendScanWindow(FileUploadSession session) {
+        Instant extendedExpiresAt = Instant.now().plus(SCAN_WINDOW);
+        session.setExpiresAt(extendedExpiresAt);
+        if (session.getQuotaReservationId() != null) {
+            storageQuotaService.extendReservation("UPLOAD", session.getId(), extendedExpiresAt);
         }
     }
 
-    private void markIngressFailedQuietly(UUID ingressId, String message) {
-        try {
-            ingressLifecycleService.markFailed(
-                    ingressId,
-                    false,
-                    ErrorCode.FILE_UPLOAD_FAILED.name(),
-                    message
-            );
-        } catch (RuntimeException exception) {
-            log.warn("更新文件入库失败状态失败: ingressId={}, errorType={}",
-                    ingressId, exception.getClass().getSimpleName());
-        }
+    private FileUploadCompleteResultDto completedResult(FileUploadSession session) {
+        return new FileUploadCompleteResultDto(
+                session.getUploadId(),
+                UploadStatus.COMPLETED.getValue(),
+                session.getCompletionTaskId(),
+                session.getResultFileNodeId()
+        );
     }
 
-    private void removeObjectQuietly(ObjectStorageKey key) {
-        try {
-            objectStorageClient.removeObject(key);
-        } catch (RuntimeException exception) {
-            log.warn("清理文件入库临时对象失败: bucket={}, errorType={}",
-                    key.bucket(), exception.getClass().getSimpleName());
-        }
-    }
-
-    private record PublishedObject(
-            ObjectStorageKey quarantineKey,
-            ObjectStorageKey publishedKey,
-            InspectionResult inspection,
-            UUID ingressId
-    ) {
-        private ObjectStorageKey key() {
-            return publishedKey;
-        }
-    }
-
-    private FileNode toFileNode(UUID ownerUserId, FileNode parent, FileUploadSession session, FileObject object) {
-        FileNode file = new FileNode();
-        file.setOwnerUserId(ownerUserId);
-        file.setParentId(session.getTargetParentId());
-        file.setNodeType("FILE");
-        file.setName(session.getFileName());
-        file.setNormalizedPath(resolveChildPath(parent, session.getFileName()));
-        file.setMimeType(session.getMimeType());
-        file.setSizeBytes(session.getTotalSizeBytes());
-        file.setCurrentObjectId(object.getId());
-        file.setSpaceType(session.getSpaceType());
-        if (session.getSpaceType() == SpaceType.SHARED) {
-            file.setUploadedBy(ownerUserId);
-        }
-        return file;
-    }
-
-    private String resolveChildPath(FileNode parent, String childName) {
-        if (parent == null) {
-            return "/" + childName;
-        }
-        return parent.getNormalizedPath() + "/" + childName;
+    private FileUploadCompleteResultDto scanningResult(FileUploadSession session) {
+        return new FileUploadCompleteResultDto(
+                session.getUploadId(),
+                UploadStatus.SCANNING.getValue(),
+                session.getCompletionTaskId(),
+                null
+        );
     }
 
     private FileUploadSessionDto toSessionDto(FileUploadSession session, List<FileUploadPart> parts, boolean includeUrls) {
@@ -1023,10 +842,6 @@ public class FileUploadSessionService {
                 .toList();
     }
 
-    private FileNodeDto toFileNodeDto(FileNode node) {
-        return toFileNodeDto(node, null);
-    }
-
     private FileNodeDto toFileNodeDto(FileNode node, UUID mediaAutoImportTaskId) {
         return new FileNodeDto(
                 node.getId(),
@@ -1043,17 +858,5 @@ public class FileUploadSessionService {
                 node.getUploadedBy(),
                 mediaAutoImportTaskId
         );
-    }
-
-    private void recordFileCreated(UUID ownerUserId, FileNode file) {
-        syncEventRecorder.record(new SyncEventCommand(
-                ownerUserId,
-                SyncScope.FILES,
-                "FILE_NODE",
-                file.getId().toString(),
-                SyncAction.CREATED,
-                null,
-                Map.of("source", "UPLOAD")
-        ));
     }
 }

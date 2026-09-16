@@ -32,6 +32,7 @@ import com.omninest.modules.file.dto.FileVersionDto;
 import com.omninest.modules.file.dto.FileSharedItemDto;
 import com.omninest.modules.file.dto.FileStorageStatsDto;
 import com.omninest.modules.file.dto.FileUploadPartDto;
+import com.omninest.modules.file.dto.FileUploadCompleteResultDto;
 import com.omninest.modules.file.dto.FileUploadPartsDto;
 import com.omninest.modules.file.dto.FileUploadPolicyDto;
 import com.omninest.modules.file.dto.FileUploadQueueItemDto;
@@ -539,10 +540,10 @@ public class FileController {
         return ApiResponse.success(fileUploadSessionService.completePart(ownerUserId, uploadId, partNumber, body));
     }
 
-    @Operation(summary = "完成上传会话", description = "所有分片上传完成后合并文件并创建文件节点")
+    @Operation(summary = "完成上传会话", description = "受理安全扫描后立即返回扫描任务标识，文件节点由扫描通过后创建")
     @PostMapping("/api/v1/uploads/{uploadId}/complete")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
-    ApiResponse<FileNodeDto> completeUploadSession(
+    ApiResponse<FileUploadCompleteResultDto> completeUploadSession(
             @PathVariable String uploadId,
             @Valid @RequestBody(required = false) CompleteFileUploadRequest body
     ) {

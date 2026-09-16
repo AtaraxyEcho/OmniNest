@@ -66,6 +66,8 @@ public final class QueueNames {
     public static final String READER_PARSE_ROUTING_KEY = "reader.parse";
     public static final String FILE_PURGE_QUEUE = "omni.task.file-purge";
     public static final String FILE_PURGE_ROUTING_KEY = "file.purge";
+    public static final String FILE_SECURITY_SCAN_QUEUE = "omni.task.file-security-scan";
+    public static final String FILE_SECURITY_SCAN_ROUTING_KEY = "file.security-scan";
 
     private static final List<String> DURABLE_QUEUES = List.of(
             FILE_INDEX_QUEUE,
@@ -92,6 +94,7 @@ public final class QueueNames {
             COMIC_PARSE_QUEUE,
             READER_PARSE_QUEUE,
             FILE_PURGE_QUEUE,
+            FILE_SECURITY_SCAN_QUEUE,
             DEAD_LETTER_QUEUE
     );
 
