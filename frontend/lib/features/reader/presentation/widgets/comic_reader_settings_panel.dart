@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
@@ -11,12 +12,16 @@ class ComicReaderSettingsPanel extends StatelessWidget {
     required this.displaySettings,
     required this.themeSettings,
     required this.onChanged,
+    required this.volumeKeyPaging,
+    required this.onVolumeKeyPagingChanged,
     super.key,
   });
 
   final ComicReaderDisplaySettings displaySettings;
   final ReaderViewSettings themeSettings;
   final ValueChanged<ComicReaderDisplaySettings> onChanged;
+  final bool volumeKeyPaging;
+  final ValueChanged<bool> onVolumeKeyPagingChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -94,6 +99,19 @@ class ComicReaderSettingsPanel extends StatelessWidget {
           onChanged:
               (value) => onChanged(displaySettings.copyWith(pageGap: value)),
         ),
+        // 音量键翻页依赖原生按键拦截，仅移动端提供设置项。
+        if (isMobilePlatform) ...[
+          const SizedBox(height: 18),
+          SwitchListTile(
+            value: volumeKeyPaging,
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              l10n.readerVolumeKeyPaging,
+              style: TextStyle(color: themeSettings.onSurfaceColor),
+            ),
+            onChanged: onVolumeKeyPagingChanged,
+          ),
+        ],
       ],
     );
   }

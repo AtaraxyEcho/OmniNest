@@ -29,6 +29,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_shortcut_pa
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+import 'package:omninest/platform/android/reader_volume_key_service.dart';
 
 /// 漫画阅读模式。
 enum ComicReadingMode {
@@ -106,6 +107,8 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
   late ReaderProgressSyncService _progressSync;
   final ReaderPanelCoordinator _panelCoordinator = ReaderPanelCoordinator();
   final ReaderCommandGate _commandGate = ReaderCommandGate();
+  VoidCallback? _volumeKeyEventCancel;
+  bool _volumeKeyPagingPushed = false;
 
   ComicManifest get _manifest => widget.manifest;
   List<ComicPage> get _pages => _manifest.pages;
@@ -145,7 +148,14 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
     _pageController = PageController(initialPage: initialPage);
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
-    _loadSettings();
+    _volumeKeyEventCancel = ReaderVolumeKeyService.instance().addListener(
+      _handleVolumeKeyEvent,
+    );
+    unawaited(
+      _loadSettings().then((_) {
+        if (mounted) _syncVolumeKeyPaging();
+      }),
+    );
   }
 
   @override
@@ -172,7 +182,62 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
     _hideControlsTimer?.cancel();
     _scrollSaveTimer?.cancel();
     _displaySettingsSaveTimer?.cancel();
+    _volumeKeyEventCancel?.call();
+    if (_volumeKeyPagingPushed) {
+      _volumeKeyPagingPushed = false;
+      unawaited(
+        ReaderVolumeKeyService.instance().setVolumeKeyPagingEnabled(
+          enabled: false,
+        ),
+      );
+    }
     super.dispose();
+  }
+
+  /// 将音量键拦截开关同步到原生层（仅 Android 实际生效）。
+  void _syncVolumeKeyPaging() {
+    final shouldEnable = isAndroidPlatform && _settings.volumeKeyPaging;
+    if (_volumeKeyPagingPushed == shouldEnable) {
+      return;
+    }
+    _volumeKeyPagingPushed = shouldEnable;
+    unawaited(
+      ReaderVolumeKeyService.instance().setVolumeKeyPagingEnabled(
+        enabled: shouldEnable,
+      ),
+    );
+  }
+
+  /// 音量键事件映射为阅读命令：下键向后翻，上键向前翻（页模式随阅读方向）。
+  void _handleVolumeKeyEvent(ReaderVolumeKeyDirection direction) {
+    if (!mounted) {
+      return;
+    }
+    final forward = direction == ReaderVolumeKeyDirection.down;
+    if (_readingMode == ComicReadingMode.page) {
+      final delta = forward ? (_isRtl ? -1 : 1) : (_isRtl ? 1 : -1);
+      final command =
+          delta > 0 ? ReaderCommand.nextPage : ReaderCommand.previousPage;
+      if (_requiresCommandGate(command) && !_commandGate.accept()) {
+        return;
+      }
+      _goToRelativePage(delta);
+      return;
+    }
+    _scrollByPage(forward ? 1 : -1);
+  }
+
+  /// 设置面板切换音量键翻页：更新本地设置、推送平台态并落库。
+  void _updateVolumeKeyPaging(bool value) {
+    setState(() {
+      _settings = _settings.copyWith(volumeKeyPaging: value);
+    });
+    _syncVolumeKeyPaging();
+    unawaited(
+      ref.read(readerPreferencesProvider.notifier).save({
+        'volumeKeyPaging': value,
+      }),
+    );
   }
 
   @override
@@ -814,6 +879,8 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
         displaySettings: _displaySettings,
         themeSettings: controlSettings,
         onChanged: _applyDisplaySettings,
+        volumeKeyPaging: _settings.volumeKeyPaging,
+        onVolumeKeyPagingChanged: _updateVolumeKeyPaging,
       ),
       _ => ReaderShortcutPanel(settings: controlSettings, isComic: true),
     };
