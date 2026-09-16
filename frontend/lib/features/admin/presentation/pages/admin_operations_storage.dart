@@ -769,8 +769,11 @@ class _StorageLocationWizardState
               ],
             ),
             const SizedBox(height: 8),
-            Expanded(
+            // Expanded 会把 AlertDialog 撑满剩余可用高度，
+            // 目录浏览区用 Flexible 限高，弹窗按内容自适应。
+            Flexible(
               child: Container(
+                height: 300,
                 width: double.infinity,
                 decoration: BoxDecoration(
                   border: Border.all(color: Theme.of(context).dividerColor),
