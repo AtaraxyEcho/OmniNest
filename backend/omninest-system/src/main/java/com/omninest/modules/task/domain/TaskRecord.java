@@ -62,6 +62,10 @@ public class TaskRecord {
     @Column(name = "error_summary", columnDefinition = "TEXT")
     private String errorMessage;
 
+    /** 失败堆栈摘要，脱敏截断 */
+    @Column(name = "stack_summary", columnDefinition = "TEXT")
+    private String stackSummary;
+
     /** 已重试次数 */
     @Column(name = "retry_count", nullable = false)
     private int retryCount;

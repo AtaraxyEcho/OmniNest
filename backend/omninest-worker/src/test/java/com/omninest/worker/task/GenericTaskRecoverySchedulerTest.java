@@ -52,7 +52,7 @@ class GenericTaskRecoverySchedulerTest {
     private TaskDispatch dispatch() {
         TaskDispatch dispatch = new TaskDispatch();
         dispatch.setTaskId(TASK);
-        dispatch.setExchangeName("omninest.tasks");
+        dispatch.setExchangeName("omni.task");
         dispatch.setRoutingKey("thumbnail.generate");
         dispatch.setPayload("{\"fileNodeId\":\"1\"}");
         dispatch.setStatus("PUBLISHED");
@@ -85,7 +85,7 @@ class GenericTaskRecoverySchedulerTest {
         // 重试状态与退避由 recoverStaleTask 单点完成，恢复重投不得重复计数。
         verify(taskRecordService, never()).markRetryWait(any(), anyString(), any());
         verify(taskDispatchService).enqueueAt(
-                eq(TASK), eq("omninest.tasks"), eq("thumbnail.generate"), any(), eq(NEXT_RETRY));
+                eq(TASK), eq("omni.task"), eq("thumbnail.generate"), any(), eq(NEXT_RETRY));
     }
 
     @Test

@@ -31,6 +31,7 @@ import com.omninest.modules.photos.repository.PhotoScanJobRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.annotation.PostConstruct;
+import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -196,7 +197,7 @@ public class PhotoAdminService {
             log.error("照片扫描任务执行失败: jobId={}", jobId, ex);
             job.setStatus(TaskStatus.FAILED.getValue());
             job.setMessage("扫描失败: " + ex.getMessage());
-            taskRecordService.markFailed(jobId, ex.getMessage());
+            taskRecordService.markFailed(jobId, ex.getMessage(), ThrowableDescriber.describe(ex));
             // 发送扫描失败通知
             notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
                     "照片扫描失败", "扫描失败: " + ex.getMessage(),
@@ -579,7 +580,7 @@ public class PhotoAdminService {
             taskRecordService.markCompleted(taskId, Map.of("regenerated", regenerated));
             log.info("缩略图重新生成完成: ownerUserId={}, total={}, regenerated={}", ownerUserId, total, regenerated);
         } catch (RuntimeException ex) {
-            taskRecordService.markFailed(taskId, ex.getMessage());
+            taskRecordService.markFailed(taskId, ex.getMessage(), ThrowableDescriber.describe(ex));
             throw ex;
         }
     }

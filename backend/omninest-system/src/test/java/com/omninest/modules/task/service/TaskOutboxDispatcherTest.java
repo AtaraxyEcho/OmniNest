@@ -121,7 +121,7 @@ class TaskOutboxDispatcherTest {
         return new ClaimedTaskDispatch(
                 DISPATCH_ID,
                 TASK_ID,
-                "omninest.tasks",
+                "omni.task",
                 "reader.parse",
                 "{\"taskId\":\"" + TASK_ID + "\"}",
                 attemptCount,

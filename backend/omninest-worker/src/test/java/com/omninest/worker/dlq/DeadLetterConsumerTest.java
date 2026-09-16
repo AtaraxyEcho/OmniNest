@@ -129,7 +129,7 @@ class DeadLetterConsumerTest {
         if (taskIdHeader != null) {
             properties.setHeader("taskId", taskIdHeader);
         }
-        properties.setReceivedExchange("omninest.tasks");
+        properties.setReceivedExchange("omni.task");
         properties.setReceivedRoutingKey(routingKey);
         properties.setDeliveryTag(1L);
         return new Message(body.getBytes(StandardCharsets.UTF_8), properties);

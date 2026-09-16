@@ -2515,6 +2515,7 @@ CREATE TABLE "omni"."sys_tasks" (
   "payload" text,
   "result" text,
   "error_summary" text,
+  "stack_summary" text,
   "retry_count" int4 NOT NULL DEFAULT 0,
   "progress" int4 NOT NULL DEFAULT 0,
   "max_retries" int4 NOT NULL DEFAULT 3,
@@ -2538,6 +2539,7 @@ COMMENT ON COLUMN "omni"."sys_tasks"."resource_id" IS '任务关联资源ID';
 COMMENT ON COLUMN "omni"."sys_tasks"."payload" IS '任务载荷，JSON文本';
 COMMENT ON COLUMN "omni"."sys_tasks"."result" IS '执行结果，JSON文本';
 COMMENT ON COLUMN "omni"."sys_tasks"."error_summary" IS '错误摘要';
+COMMENT ON COLUMN "omni"."sys_tasks"."stack_summary" IS '失败堆栈摘要，脱敏截断';
 COMMENT ON COLUMN "omni"."sys_tasks"."retry_count" IS '已重试次数';
 COMMENT ON COLUMN "omni"."sys_tasks"."progress" IS '进度值（0~100）';
 COMMENT ON COLUMN "omni"."sys_tasks"."max_retries" IS '最大重试次数';

@@ -19,6 +19,7 @@ public record TaskDto(
         @Schema(description = "关联资源 ID") UUID resourceId,
         @Schema(description = "已重试次数", example = "0") int retryCount,
         @Schema(description = "错误摘要") String errorSummary,
+        @Schema(description = "失败堆栈摘要，脱敏截断") String stackSummary,
         @Schema(description = "更新时间") Instant updatedAt
 ) {
 
@@ -36,6 +37,7 @@ public record TaskDto(
                 record.getResourceId(),
                 record.getRetryCount(),
                 record.getErrorMessage(),
+                record.getStackSummary(),
                 record.getUpdatedAt()
         );
     }

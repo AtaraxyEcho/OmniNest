@@ -270,12 +270,25 @@ public class TaskRecordService {
      */
     @Transactional(rollbackFor = Exception.class)
     public void markFailed(UUID taskId, String errorMessage) {
+        markFailed(taskId, errorMessage, null);
+    }
+
+    /**
+     * 标记任务失败并记录错误与堆栈摘要。
+     *
+     * @param taskId 任务 ID
+     * @param errorMessage 错误摘要
+     * @param stackSummary 脱敏截断后的堆栈摘要，可为 null
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void markFailed(UUID taskId, String errorMessage, String stackSummary) {
         TaskRecord record = requireTask(taskId);
         if (isTerminal(record)) {
             return;
         }
         record.setStatus(TaskStatus.FAILED.getValue());
         record.setErrorMessage(errorMessage);
+        record.setStackSummary(stackSummary);
         record.setCompletedAt(Instant.now());
         taskRecordRepository.save(record);
         recordEvent(record, SyncAction.FAILED);

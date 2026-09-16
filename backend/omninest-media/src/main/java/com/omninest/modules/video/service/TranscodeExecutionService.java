@@ -12,6 +12,7 @@ import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -404,7 +405,7 @@ public class TranscodeExecutionService {
 
     private void failH265Task(UUID taskId, UUID videoItemId, UUID ownerUserId, Exception exception) {
         log.error("H265 转码任务失败: taskId={}, videoItemId={}", taskId, videoItemId, exception);
-        taskRecordService.markFailed(taskId, exception.getMessage());
+        taskRecordService.markFailed(taskId, exception.getMessage(), ThrowableDescriber.describe(exception));
         notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
                 "视频转码失败", "转码失败: " + exception.getMessage(),
                 Map.of("taskId", taskId.toString(), "videoItemId", videoItemId.toString()));
@@ -412,7 +413,7 @@ public class TranscodeExecutionService {
 
     private void failAudioTask(UUID taskId, UUID videoItemId, UUID ownerUserId, Exception exception) {
         log.error("音频转码任务失败: taskId={}, videoItemId={}", taskId, videoItemId, exception);
-        taskRecordService.markFailed(taskId, exception.getMessage());
+        taskRecordService.markFailed(taskId, exception.getMessage(), ThrowableDescriber.describe(exception));
         notificationService.notifyOrLog(ownerUserId, "TASK_FAILED",
                 "音频提取失败", "音频提取失败: " + exception.getMessage(),
                 Map.of("taskId", taskId.toString(), "videoItemId", videoItemId.toString()));
@@ -420,6 +421,6 @@ public class TranscodeExecutionService {
 
     private void failWebOptimizeTask(UUID taskId, UUID videoItemId, Exception exception) {
         log.error("Web 优化转码失败: taskId={}, videoItemId={}", taskId, videoItemId, exception);
-        taskRecordService.markFailed(taskId, exception.getMessage());
+        taskRecordService.markFailed(taskId, exception.getMessage(), ThrowableDescriber.describe(exception));
     }
 }

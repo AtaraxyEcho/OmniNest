@@ -123,7 +123,7 @@ class TaskRedispatchServiceTest {
     void redispatchPrefersLatestDispatchPayloadOverRecordPayload() {
         TaskDispatch dispatch = new TaskDispatch();
         dispatch.setTaskId(TASK_ID);
-        dispatch.setExchangeName("omninest.tasks");
+        dispatch.setExchangeName("omni.task");
         dispatch.setRoutingKey(QueueNames.PHOTO_MOTION_ROUTING_KEY);
         // 文件后处理类记录载荷缺 bucket/objectKey，只有投递行携带完整事件。
         dispatch.setPayload("""

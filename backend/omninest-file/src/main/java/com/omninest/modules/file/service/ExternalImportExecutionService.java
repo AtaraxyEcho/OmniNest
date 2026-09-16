@@ -30,6 +30,7 @@ import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
@@ -211,7 +212,7 @@ public class ExternalImportExecutionService {
 
         } catch (Exception e) {
             log.warn("LOCAL 导入失败: taskId={}, message={}", task.getId(), e.getMessage());
-            markFailed(task.getId(), summarize(e));
+            markFailed(task.getId(), summarize(e), ThrowableDescriber.describe(e));
         }
     }
 
@@ -614,7 +615,7 @@ public class ExternalImportExecutionService {
 
         } catch (Exception e) {
             log.warn("外部存储导入失败: taskId={}, message={}", task.getId(), e.getMessage());
-            markFailed(task.getId(), summarize(e));
+            markFailed(task.getId(), summarize(e), ThrowableDescriber.describe(e));
         } finally {
             cleanupTempDir(tempDir);
         }
@@ -1006,6 +1007,10 @@ public class ExternalImportExecutionService {
     }
 
     private void markFailed(UUID taskId, String errorSummary) {
+        markFailed(taskId, errorSummary, null);
+    }
+
+    private void markFailed(UUID taskId, String errorSummary, String stackSummary) {
         transactionTemplate.executeWithoutResult(status -> {
             StorageImportTask task = requireTask(taskId);
             if (ImportTaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
@@ -1020,7 +1025,7 @@ public class ExternalImportExecutionService {
             task.setSpeedBytes(0L);
             task.setErrorSummary(errorSummary);
             importTaskRepository.save(task);
-            taskRecordService.markFailed(systemTaskId(task), errorSummary);
+            taskRecordService.markFailed(systemTaskId(task), errorSummary, stackSummary);
         });
         // 发送失败通知
         StorageImportTask failedTask = importTaskRepository.findById(taskId).orElse(null);

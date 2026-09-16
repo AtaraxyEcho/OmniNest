@@ -31,6 +31,7 @@ import com.omninest.modules.file.repository.FileObjectRepository;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.common.util.ThrowableDescriber;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -126,7 +127,7 @@ public class OfflineDownloadExecutionService {
             importCompletedFiles(task.getId(), taskDirectory, status, completedFiles);
         } catch (Exception exception) {
             log.warn("离线下载任务执行失败: taskId={}", task.getId(), exception);
-            markFailed(task.getId(), summarize(exception));
+            markFailed(task.getId(), summarize(exception), ThrowableDescriber.describe(exception));
         } finally {
             if (downloadCompleted) {
                 cleanupCompletedDownload(taskDirectory);
@@ -721,6 +722,10 @@ public class OfflineDownloadExecutionService {
     }
 
     private void markFailed(UUID taskId, String errorSummary) {
+        markFailed(taskId, errorSummary, null);
+    }
+
+    private void markFailed(UUID taskId, String errorSummary, String stackSummary) {
         transactionTemplate.executeWithoutResult(status -> {
             DownloadOfflineTask task = requireTask(taskId);
             if (TaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
@@ -735,7 +740,7 @@ public class OfflineDownloadExecutionService {
         // 发送失败通知
         DownloadOfflineTask failedTask = offlineTaskRepository.findById(taskId).orElse(null);
         if (failedTask != null) {
-            taskRecordService.markFailed(systemTaskId(failedTask), errorSummary);
+            taskRecordService.markFailed(systemTaskId(failedTask), errorSummary, stackSummary);
             notificationService.notifyOrLog(failedTask.getOwnerUserId(), "TASK_FAILED",
                     "离线下载失败", "下载失败: " + errorSummary,
                     Map.of("taskId", taskId.toString()));

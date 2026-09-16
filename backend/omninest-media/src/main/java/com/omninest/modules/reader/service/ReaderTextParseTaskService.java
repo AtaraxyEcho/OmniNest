@@ -6,6 +6,7 @@ import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.reader.event.ReaderParseTaskEvent;
 import com.omninest.modules.reader.service.ReaderTextParser.ParsedTextBook;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.common.util.ThrowableDescriber;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,7 +69,7 @@ public class ReaderTextParseTaskService {
                 return;
             }
             manifestService.markFailed(event.itemId(), exception.errorCode().name(), exception.getMessage());
-            taskRecordService.markFailed(event.taskId(), exception.getMessage());
+            taskRecordService.markFailed(event.taskId(), exception.getMessage(), ThrowableDescriber.describe(exception));
             log.warn("文本书籍解析业务失败: taskId={}, itemId={}, errorCode={}",
                     event.taskId(), event.itemId(), exception.errorCode().getCode());
         }

@@ -106,7 +106,7 @@ class RabbitTaskDispatchPublisherTest {
                         new Message("body".getBytes(StandardCharsets.UTF_8)),
                         312,
                         "NO_ROUTE",
-                        "omninest.tasks",
+                        "omni.task",
                         "missing.route"
                 ));
             }
@@ -132,7 +132,7 @@ class RabbitTaskDispatchPublisherTest {
         return new ClaimedTaskDispatch(
                 DISPATCH_ID,
                 TASK_ID,
-                "omninest.tasks",
+                "omni.task",
                 "reader.parse",
                 payload,
                 0,

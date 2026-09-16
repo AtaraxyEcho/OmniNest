@@ -28,6 +28,7 @@ import com.omninest.modules.photos.repository.PhotoItemRepository;
 import com.omninest.modules.photos.repository.PhotoTagRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.channels.FileChannel;
@@ -201,7 +202,7 @@ public class PhotoBatchService {
             task.setStatus("FAILED");
             task.setErrorMessage(ex.getMessage());
             batchTaskRepository.save(task);
-            taskRecordService.markFailed(taskId, ex.getMessage());
+            taskRecordService.markFailed(taskId, ex.getMessage(), ThrowableDescriber.describe(ex));
         }
     }
 
