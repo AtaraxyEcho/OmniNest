@@ -138,6 +138,32 @@ mixin ReaderViewPageInteractionMixin
     }
   }
 
+  /// 反向章界回退：用户在窗口顶部继续上滚且仍有上一章时，自动回退到
+  /// 上一章末尾，与 onScroll 的正向章界自动续读对称。
+  ///
+  /// 由滚动内容的 ScrollOverscrollNotification（向上越界）驱动：普通
+  /// 上滚在章内移动不会越界，只有抵达章首仍继续上滚才触发。切章与
+  /// 恢复落位停在章首不产生越界通知；程序化滚动由 settle 守卫与冷却
+  /// 窗区分，回退沿用 tryNavigateChapter(-1) 的"回到原进度"浮层兜底。
+  void handleBackwardChapterOverscroll() {
+    if (!mounted || contentLoader == null) return;
+    if (isLoadingChapter || isSwitchingChapter || isRestoringProgress) return;
+    if (restore.shouldSuppressWrites) return;
+    if (DateTime.now().isBefore(restoreSilenceUntil)) return;
+    if (_programmaticScrollSettleUntil != null &&
+        DateTime.now().isBefore(_programmaticScrollSettleUntil!)) {
+      return;
+    }
+    if (DateTime.now().isBefore(_lastAutoAdvanceAt)) return;
+    if (!scrollController.hasClients || scrollController.offset > 2) return;
+    final chapterIndex = contentLoader!.allChapters.indexWhere(
+      (c) => c.id == currentChapterId,
+    );
+    if (chapterIndex <= 0) return;
+    _lastAutoAdvanceAt = DateTime.now().add(const Duration(seconds: 1));
+    tryNavigateChapter(-1);
+  }
+
   /// 用户主动滚动前终止进行中的进度恢复。
   ///
   /// ScrollRestore 在恢复期与监控期都会 jumpTo 锚点，会与本次滚动对抗，

@@ -105,6 +105,10 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
   void applyProgressSnapshot(ReaderProgressSnapshot snapshot);
   void prefetchNextChapterAtBoundary(int pageIndex);
 
+  /// 反向章界回退：用户在窗口顶部继续上滚时回退到上一章末尾，
+  /// 由 ReaderViewPageInteractionMixin 实现并在滚动内容越界时调用。
+  void handleBackwardChapterOverscroll();
+
   // ── 页面尺寸 ──
 
   double computePageWidth() {
@@ -582,32 +586,43 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           lastPointerDownTime = DateTime.now();
         }
       },
-      child: ReaderViewContent(
-        htmlContent: content.content,
-        settings: settings,
-        itemId: itemId,
-        annotations: annotationHandler?.chapterAnnotations ?? [],
-        rawBlocks: chapterData?.blocks,
-        scrollController: scrollController,
-        onHighlight: (text, start, end) {
-          if (!mounted) return;
-          annotationHandler?.highlight(text, start, end, context);
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          // 章首向上越界 = 用户在本章顶部继续上滚，回退到上一章末尾。
+          if (notification is OverscrollNotification &&
+              notification.overscroll < 0 &&
+              notification.depth == 0) {
+            handleBackwardChapterOverscroll();
+          }
+          return false;
         },
-        onAnnotate: (text, start, end) {
-          if (!mounted) return;
-          annotationHandler?.annotate(text, start, end, context);
-        },
-        onRemoveHighlight: (a) {
-          if (!mounted) return;
-          annotationHandler?.delete(a);
-        },
-        onRemoveAnnotation: (a) {
-          if (!mounted) return;
-          annotationHandler?.delete(a);
-        },
-        onLinkTap: handleReaderLinkTap,
-        onSelectionActive: onReaderSelectionActive,
-        onTap: toggleControls,
+        child: ReaderViewContent(
+          htmlContent: content.content,
+          settings: settings,
+          itemId: itemId,
+          annotations: annotationHandler?.chapterAnnotations ?? [],
+          rawBlocks: chapterData?.blocks,
+          scrollController: scrollController,
+          onHighlight: (text, start, end) {
+            if (!mounted) return;
+            annotationHandler?.highlight(text, start, end, context);
+          },
+          onAnnotate: (text, start, end) {
+            if (!mounted) return;
+            annotationHandler?.annotate(text, start, end, context);
+          },
+          onRemoveHighlight: (a) {
+            if (!mounted) return;
+            annotationHandler?.delete(a);
+          },
+          onRemoveAnnotation: (a) {
+            if (!mounted) return;
+            annotationHandler?.delete(a);
+          },
+          onLinkTap: handleReaderLinkTap,
+          onSelectionActive: onReaderSelectionActive,
+          onTap: toggleControls,
+        ),
       ),
     );
   }
