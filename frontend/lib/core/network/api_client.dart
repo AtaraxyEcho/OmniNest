@@ -55,6 +55,7 @@ class ApiClient {
             handler.next(response);
             return;
           }
+          final isForbidden = response.statusCode == 403;
 
           try {
             final originalToken =
@@ -69,6 +70,18 @@ class ApiClient {
                     : await _refreshOnce();
 
             if (!refreshed) {
+              if (isForbidden) {
+                // 刷新不可用时的 403 多为真实权限拒绝，不清除会话，
+                // 原样上抛由业务层呈现无权限反馈。
+                handler.reject(
+                  DioException.badResponse(
+                    statusCode: response.statusCode ?? 403,
+                    requestOptions: response.requestOptions,
+                    response: response,
+                  ),
+                );
+                return;
+              }
               await _clearSession?.call();
               handler.reject(
                 DioException.badResponse(
@@ -94,7 +107,18 @@ class ApiClient {
               );
             }
           } catch (_) {
-            // _refreshOnce() 或后续逻辑抛出异常时，清理会话并拒绝请求
+            // _refreshOnce() 或后续逻辑抛出异常时，清理会话并拒绝请求；
+            // 403 路径不清会话，避免权限误判升级为登出。
+            if (isForbidden) {
+              handler.reject(
+                DioException.badResponse(
+                  statusCode: response.statusCode ?? 403,
+                  requestOptions: response.requestOptions,
+                  response: response,
+                ),
+              );
+              return;
+            }
             await _clearSession?.call();
             handler.reject(
               DioException.badResponse(
@@ -149,7 +173,11 @@ class ApiClient {
   }
 
   bool _shouldRefresh(Response<dynamic> response) {
-    if (response.statusCode != 401 ||
+    // 401 表示令牌过期；403 可能是本地 JWT 缺少最新授权 claim（角色权限
+    // 变更后服务端不重发令牌），两者都值得刷新会话后重试一次。
+    final statusCode = response.statusCode;
+    final isAuthChallenge = statusCode == 401 || statusCode == 403;
+    if (!isAuthChallenge ||
         response.requestOptions.extra[skipAuthorizationKey] == true) {
       return false;
     }

@@ -69,11 +69,76 @@ void main() {
     expect(adapter.externalAuthorization, isNull);
     expect(refreshCount, 0);
   });
+
+  test('403 刷新会话并携带新令牌重试一次成功', () async {
+    var accessToken = 'stale-claims-token';
+    var refreshCount = 0;
+    var clearCount = 0;
+    final adapter = _ReplayAdapter();
+    final client = ApiClient(
+      const AppEnvironment(
+        apiBaseUrl: 'http://localhost:8080/api/v1',
+        wsBaseUrl: 'ws://localhost:8080/ws',
+      ),
+      readAccessToken: () => accessToken,
+      refreshSession: () async {
+        refreshCount++;
+        accessToken = 'fresh-claims-token';
+        return true;
+      },
+      clearSession: () async {
+        clearCount++;
+      },
+      httpClientAdapter: adapter,
+    );
+
+    final response = await client.dio.get<Map<String, dynamic>>('/claims');
+
+    expect(refreshCount, 1);
+    expect(clearCount, 0);
+    expect(response.data?['code'], 200);
+    expect(adapter.claimAuthorizationHeaders, [
+      'Bearer stale-claims-token',
+      'Bearer fresh-claims-token',
+    ]);
+  });
+
+  test('403 真实权限拒绝重试后原样上抛且不清除会话', () async {
+    var accessToken = 'stale-claims-token';
+    var refreshCount = 0;
+    var clearCount = 0;
+    final adapter = _ReplayAdapter();
+    final client = ApiClient(
+      const AppEnvironment(
+        apiBaseUrl: 'http://localhost:8080/api/v1',
+        wsBaseUrl: 'ws://localhost:8080/ws',
+      ),
+      readAccessToken: () => accessToken,
+      refreshSession: () async {
+        refreshCount++;
+        accessToken = 'fresh-claims-token';
+        return true;
+      },
+      clearSession: () async {
+        clearCount++;
+      },
+      httpClientAdapter: adapter,
+    );
+
+    final response = await client.dio.get<Map<String, dynamic>>('/forbidden');
+
+    expect(response.statusCode, 403);
+    expect(refreshCount, 1);
+    expect(clearCount, 0);
+    expect(adapter.forbiddenRequestCount, 2);
+  });
 }
 
 class _ReplayAdapter implements HttpClientAdapter {
   int secureRequestCount = 0;
+  int forbiddenRequestCount = 0;
   String? externalAuthorization;
+  final claimAuthorizationHeaders = <String>[];
 
   @override
   Future<ResponseBody> fetch(
@@ -84,6 +149,37 @@ class _ReplayAdapter implements HttpClientAdapter {
     if (options.uri.host == 'storage.example') {
       externalAuthorization = options.headers['Authorization']?.toString();
       return ResponseBody.fromString('expired signature', 401);
+    }
+    if (options.path.endsWith('/claims')) {
+      claimAuthorizationHeaders.add(
+        options.headers['Authorization']?.toString() ?? '',
+      );
+      if (options.headers['Authorization'] == 'Bearer fresh-claims-token') {
+        return ResponseBody.fromString(
+          '{"code":200,"message":"success","data":{"ok":true}}',
+          200,
+          headers: {
+            Headers.contentTypeHeader: ['application/json; charset=utf-8'],
+          },
+        );
+      }
+      return ResponseBody.fromString(
+        '{"code":403,"message":"令牌声明过期","data":null}',
+        403,
+        headers: {
+          Headers.contentTypeHeader: ['application/json; charset=utf-8'],
+        },
+      );
+    }
+    if (options.path.endsWith('/forbidden')) {
+      forbiddenRequestCount++;
+      return ResponseBody.fromString(
+        '{"code":403,"message":"无权限","data":null}',
+        403,
+        headers: {
+          Headers.contentTypeHeader: ['application/json; charset=utf-8'],
+        },
+      );
     }
     if (options.path.endsWith('/secure')) {
       secureRequestCount++;
