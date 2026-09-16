@@ -38,7 +38,7 @@ import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
-import org.apache.lucene.store.MMapDirectory;
+import org.apache.lucene.store.NIOFSDirectory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -104,7 +104,9 @@ public class FileSearchIndexService implements Closeable {
                 try {
                     Path userPath = getUserIndexPath(id);
                     Files.createDirectories(userPath);
-                    Directory directory = new MMapDirectory(userPath);
+                    // Windows 上 MMapDirectory 在杀软扫描/并发 commit 时易触发 JVM ACCESS_VIOLATION，
+                    // 与相册索引一致使用 NIOFSDirectory。
+                    Directory directory = new NIOFSDirectory(userPath);
                     IndexWriter writer = new IndexWriter(directory, new IndexWriterConfig(analyzer));
                     return new UserIndexState(directory, writer);
                 } catch (IOException e) {
