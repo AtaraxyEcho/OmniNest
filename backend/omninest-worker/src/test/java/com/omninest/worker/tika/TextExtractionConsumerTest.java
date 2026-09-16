@@ -9,10 +9,15 @@ import com.omninest.modules.search.service.FileSearchIndexService;
 import com.omninest.worker.file.FilePostProcessingTaskTracker;
 import com.rabbitmq.client.Channel;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.zip.CRC32;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -185,6 +190,110 @@ class TextExtractionConsumerTest {
 
         verify(objectStorageClient).getObject(any(ObjectStorageKey.class));
         verify(channel).basicAck(1L, false);
+    }
+
+    @Test
+    @DisplayName("EPUB 内嵌 TTF 字体时应正常提取文本而不中断解析")
+    void handle_withEpubContainingEmbeddedFont_shouldExtractText() throws IOException {
+        FileUploadedEvent event = createEvent("sample.epub", "application/epub+zip");
+        byte[] epubBytes = buildEpubWithEmbeddedFont(loadEmbeddedFontBytes());
+        when(objectStorageClient.getObject(any(ObjectStorageKey.class)))
+                .thenReturn(new ByteArrayInputStream(epubBytes));
+
+        textExtractionConsumer.handle(event, createMessage(), channel);
+
+        verify(fileSearchIndexService).indexFile(
+                eq(event.fileNodeId()),
+                eq(event.ownerUserId()),
+                eq(event.fileName()),
+                textCaptor.capture()
+        );
+        assertThat(textCaptor.getValue()).contains("内嵌字体文本提取回归测试内容");
+        verify(channel).basicAck(1L, false);
+    }
+
+    /**
+     * 读取测试资源中的真实 TTF 字体（仓库前端自带的 OFL 字体副本），
+     * 保证内嵌字体可被 FontBox 完整解析，覆盖 Tika 与 FontBox 版本不匹配的历史缺陷。
+     */
+    private byte[] loadEmbeddedFontBytes() throws IOException {
+        try (InputStream fontStream = getClass().getResourceAsStream("/fonts/InstrumentSerif-Regular.ttf")) {
+            if (fontStream == null) {
+                throw new IOException("测试字体资源缺失: /fonts/InstrumentSerif-Regular.ttf");
+            }
+            return fontStream.readAllBytes();
+        }
+    }
+
+    /**
+     * 构造内嵌 TTF 字体的最小 EPUB（mimetype 首条目 + container + opf + 章节 + 字体）。
+     */
+    private byte[] buildEpubWithEmbeddedFont(byte[] fontBytes) throws IOException {
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(buffer)) {
+            byte[] mimetypeBytes = "application/epub+zip".getBytes(StandardCharsets.US_ASCII);
+            ZipEntry mimetype = new ZipEntry("mimetype");
+            mimetype.setMethod(ZipEntry.STORED);
+            mimetype.setSize(mimetypeBytes.length);
+            CRC32 crc = new CRC32();
+            crc.update(mimetypeBytes);
+            mimetype.setCrc(crc.getValue());
+            zip.putNextEntry(mimetype);
+            zip.write(mimetypeBytes);
+            zip.closeEntry();
+
+            putTextEntry(zip, "META-INF/container.xml", """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                      <rootfiles>
+                        <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+                      </rootfiles>
+                    </container>
+                    """);
+            putTextEntry(zip, "OEBPS/content.opf", """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
+                      <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                        <dc:title>font-embedded-regression</dc:title>
+                        <dc:identifier id="bookid">urn:uuid:00000000-0000-0000-0000-000000000001</dc:identifier>
+                        <dc:language>zh</dc:language>
+                      </metadata>
+                      <manifest>
+                        <item id="chapter1" href="chapter1.xhtml" media-type="application/xhtml+xml"/>
+                        <item id="embedded-font" href="fonts/InstrumentSerif-Regular.ttf" media-type="font/ttf"/>
+                      </manifest>
+                      <spine>
+                        <itemref idref="chapter1"/>
+                      </spine>
+                    </package>
+                    """);
+            putTextEntry(zip, "OEBPS/chapter1.xhtml", """
+                    <?xml version="1.0" encoding="UTF-8"?>
+                    <html xmlns="http://www.w3.org/1999/xhtml">
+                      <head><title>chapter</title></head>
+                      <body><p>内嵌字体文本提取回归测试内容</p></body>
+                    </html>
+                    """);
+
+            ZipEntry fontEntry = new ZipEntry("OEBPS/fonts/InstrumentSerif-Regular.ttf");
+            fontEntry.setSize(fontBytes.length);
+            CRC32 fontCrc = new CRC32();
+            fontCrc.update(fontBytes);
+            fontEntry.setCrc(fontCrc.getValue());
+            zip.putNextEntry(fontEntry);
+            zip.write(fontBytes);
+            zip.closeEntry();
+        }
+        return buffer.toByteArray();
+    }
+
+    /**
+     * 向 EPUB 压缩包写入一个 UTF-8 文本条目。
+     */
+    private void putTextEntry(ZipOutputStream zip, String entryName, String content) throws IOException {
+        zip.putNextEntry(new ZipEntry(entryName));
+        zip.write(content.getBytes(StandardCharsets.UTF_8));
+        zip.closeEntry();
     }
 
     @Test

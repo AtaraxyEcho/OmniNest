@@ -84,11 +84,11 @@
             <artifactId>commons-imaging</artifactId>
             <version>1.0.0-alpha5</version>
         </dependency>
-        <!-- PDF 解析：页数与首页封面 -->
+        <!-- PDF 解析：页数与首页封面；版本与 worker 的 Tika 3.3.0（pdfbox 3.0.7）保持一致，避免 FontBox API 冲突 -->
         <dependency>
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
-            <version>3.0.3</version>
+            <version>3.0.7</version>
         </dependency>
         <!-- JWT (Ed25519 支持) -->
         <dependency>
