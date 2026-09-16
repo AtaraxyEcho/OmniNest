@@ -1511,8 +1511,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get filesImportSizeGuardHint =>
-      '超大文件可能被拒绝导入；4K 等重片源请放入本地媒体目录。';
+  String get filesImportSizeGuardHint => '超大文件可能被拒绝导入；4K 等重片源请放入本地媒体目录。';
 
   @override
   String get filesTestConnection => '测试连接';
@@ -1521,8 +1520,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesAuthorizeAccount => '去授权';
 
   @override
-  String get filesAuthorizeHint =>
-      '在浏览器中打开以下链接完成授权，完成后回到本页刷新连接：';
+  String get filesAuthorizeHint => '在浏览器中打开以下链接完成授权，完成后回到本页刷新连接：';
 
   @override
   String get filesImport => '导入';
@@ -3797,7 +3795,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStorageParentDir => '上一级';
 
   @override
-  String get adminStorageManagementSubtitle => '管理 MinIO 桶与本地媒体位置；4K 等重片源使用本地位置直连播放。';
+  String get adminStorageManagementSubtitle =>
+      '管理 MinIO 桶与本地媒体位置；4K 等重片源使用本地位置直连播放。';
 
   @override
   String get adminBucketConfig => '桶配置';

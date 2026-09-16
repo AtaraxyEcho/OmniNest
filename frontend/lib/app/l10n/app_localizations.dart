@@ -2941,14 +2941,28 @@ abstract class AppLocalizations {
   /// **'Import \"{name}\" to current file directory.'**
   String filesImportMessage(Object name);
 
-  /// 超大文件导入提示
+  /// No description provided for @filesImportSizeGuardHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Very large files may be rejected; put 4K originals in the local media library instead.'**
   String get filesImportSizeGuardHint;
 
-  /// 测试连接
+  /// No description provided for @filesTestConnection.
+  ///
+  /// In en, this message translates to:
+  /// **'Test connection'**
   String get filesTestConnection;
 
+  /// No description provided for @filesAuthorizeAccount.
+  ///
+  /// In en, this message translates to:
+  /// **'Authorize'**
   String get filesAuthorizeAccount;
 
+  /// No description provided for @filesAuthorizeHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Open this link in a browser to finish authorization, then refresh the connection:'**
   String get filesAuthorizeHint;
 
   /// No description provided for @filesImport.
@@ -7250,7 +7264,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminStorageManagementSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Manage MinIO buckets, capacity, and index maintenance.'**
+  /// **'Manage MinIO buckets and local media locations; use local locations for 4K playback.'**
   String get adminStorageManagementSubtitle;
 
   /// No description provided for @adminBucketConfig.
@@ -7304,13 +7318,25 @@ abstract class AppLocalizations {
   /// No description provided for @adminExternalStorageSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Connect WebDAV, S3, SMB and mount cloud drives.'**
+  /// **'Govern remote connection health; create and import connections under Files → Remote Import.'**
   String get adminExternalStorageSubtitle;
 
+  /// No description provided for @adminOAuthAppsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth apps'**
   String get adminOAuthAppsTitle;
 
+  /// No description provided for @adminOAuthAppsSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Configure instance-level OAuth apps (BYOA) for OneDrive / Google connectors.'**
   String get adminOAuthAppsSubtitle;
 
+  /// No description provided for @adminNoOAuthApps.
+  ///
+  /// In en, this message translates to:
+  /// **'No OAuth apps configured yet.'**
   String get adminNoOAuthApps;
 
   /// No description provided for @adminNewConnection.
