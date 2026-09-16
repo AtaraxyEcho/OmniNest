@@ -30,7 +30,7 @@ abstract interface class RealtimeTransport {
 class RealtimeStompClient implements RealtimeTransport {
   RealtimeStompClient({
     required this.url,
-    required this.accessToken,
+    required this.accessTokenResolver,
     Random? random,
   }) : _random = random ?? Random();
 
@@ -43,7 +43,9 @@ class RealtimeStompClient implements RealtimeTransport {
   ];
 
   final String url;
-  final String accessToken;
+
+  /// 每次建立连接时实时解析访问令牌；令牌在会话内轮换后重连仍可用。
+  final String Function() accessTokenResolver;
   final Random _random;
   final StreamController<RealtimeSyncEvent> _syncEvents =
       StreamController<RealtimeSyncEvent>.broadcast();
@@ -103,6 +105,7 @@ class RealtimeStompClient implements RealtimeTransport {
   void _open() {
     if (_disposed || !_desired || _client != null) return;
     _setState(RealtimeTransportState.connecting);
+    final accessToken = accessTokenResolver();
     final client = StompClient(
       config: StompConfig(
         url: url,

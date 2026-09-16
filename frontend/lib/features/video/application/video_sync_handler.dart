@@ -38,7 +38,8 @@ class VideoSyncHandler implements RealtimeScopeHandler {
     }
     await Future.wait(refreshes);
     _auxiliaryRevisions.markCompleted(auxiliary);
-    if (!ref.exists(movieCenterControllerProvider)) return false;
+    // 影视中心从未激活时无状态可刷，首次打开自取最新数据。
+    if (!ref.exists(movieCenterControllerProvider)) return true;
     await ref.read(movieCenterControllerProvider.future);
     await ref.read(movieCenterControllerProvider.notifier).refreshForRealtime();
     _auxiliaryRevisions.clear(invalidations);
@@ -103,7 +104,8 @@ class VideoTaskSyncHandler implements RealtimeScopeHandler {
 
   @override
   Future<bool> refresh(List<RealtimeInvalidation> invalidations) async {
-    if (!ref.exists(movieCenterControllerProvider)) return false;
+    // 影视中心从未激活时无状态可刷，首次打开自取最新数据。
+    if (!ref.exists(movieCenterControllerProvider)) return true;
     await ref.read(movieCenterControllerProvider.future);
     await ref
         .read(movieCenterControllerProvider.notifier)

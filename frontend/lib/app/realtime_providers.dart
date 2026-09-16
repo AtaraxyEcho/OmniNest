@@ -11,10 +11,18 @@ import 'package:omninest/core/realtime/realtime_stomp_client.dart';
 import 'package:omninest/core/realtime/realtime_store.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
 
+/// 当前登录用户 id；token 周期刷新产生的新会话实例不会改变该值，
+/// 协调器只跟随用户身份重建，避免长连接被无谓打断。
+final realtimeSessionUserIdProvider = Provider<String?>((ref) {
+  return ref.watch(
+    authSessionProvider.select((async) => async.asData?.value.user?.id),
+  );
+});
+
 /// 当前登录用户的全平台实时同步协调器。
 final realtimeCoordinatorProvider = Provider<RealtimeCoordinator?>((ref) {
-  final auth = ref.watch(authSessionProvider).asData?.value;
-  if (auth == null || !auth.isAuthenticated || auth.user == null) {
+  final userId = ref.watch(realtimeSessionUserIdProvider);
+  if (userId == null) {
     return null;
   }
   final apiClient = ref.watch(apiClientProvider);
@@ -31,11 +39,11 @@ final realtimeCoordinatorProvider = Provider<RealtimeCoordinator?>((ref) {
   final store = RealtimeStore(
     database: ref.watch(localDatabaseProvider),
     serverKey: _serverKey(environment.apiBaseUrl),
-    userId: auth.user!.id,
+    userId: userId,
   );
   final client = RealtimeStompClient(
     url: '${_withoutTrailingSlash(environment.wsBaseUrl)}/realtime',
-    accessToken: accessToken,
+    accessTokenResolver: () => apiClient.currentAccessToken() ?? '',
   );
   final coordinator = RealtimeCoordinator(
     api: RealtimeApi(apiClient),

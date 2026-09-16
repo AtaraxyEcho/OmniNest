@@ -36,7 +36,8 @@ class FileSyncHandler implements RealtimeScopeHandler {
       await ref.read(myShareLinksProvider.notifier).load();
     }
     _auxiliaryRevisions.markCompleted(auxiliary);
-    if (!ref.exists(fileBrowserControllerProvider)) return false;
+    // 文件浏览模块从未激活时无状态可刷，首次打开自取最新数据。
+    if (!ref.exists(fileBrowserControllerProvider)) return true;
     await ref.read(fileBrowserControllerProvider.future);
     await ref.read(fileBrowserControllerProvider.notifier).refreshForRealtime();
     _auxiliaryRevisions.clear(invalidations);
@@ -62,7 +63,8 @@ class FileTaskSyncHandler implements RealtimeScopeHandler {
 
   @override
   Future<bool> refresh(List<RealtimeInvalidation> invalidations) async {
-    if (!ref.exists(fileBrowserControllerProvider)) return false;
+    // 文件模块从未激活时无状态可刷，首次打开自取最新数据。
+    if (!ref.exists(fileBrowserControllerProvider)) return true;
     await ref.read(fileBrowserControllerProvider.future);
     final section =
         ref.read(fileBrowserControllerProvider).asData?.value.section;
@@ -71,6 +73,10 @@ class FileTaskSyncHandler implements RealtimeScopeHandler {
       await notifier.showOfflineDownloads();
       return true;
     }
-    return notifier.refreshImportTasksForRealtime();
+    if (section == FileManagerSection.importTasks) {
+      return notifier.refreshImportTasksForRealtime();
+    }
+    // 其余分区不展示任务视图，进入对应分区时本就会重拉。
+    return true;
   }
 }

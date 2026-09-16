@@ -34,6 +34,33 @@ void main() {
     await dirtyScopes.close();
   });
 
+  test('无订阅 handler 的作用域直接确认消费', () async {
+    final dirtyScopes = StreamController<Set<RealtimeScope>>.broadcast();
+    final handler = _FakeHandler(RealtimeScope.files);
+    final musicInvalidation = _invalidation(
+      'music',
+      scope: RealtimeScope.music,
+    );
+    final acknowledged = <RealtimeInvalidation>[];
+    final dispatcher = RealtimeInvalidationDispatcher(
+      dirtyScopes: dirtyScopes.stream,
+      pendingInvalidations: () async => [musicInvalidation],
+      acknowledge: (invalidation) async {
+        acknowledged.add(invalidation);
+        return 1;
+      },
+      handlers: [handler],
+      retryDelay: null,
+    );
+
+    await dispatcher.start();
+
+    expect(handler.calls, 0);
+    expect(acknowledged, [musicInvalidation]);
+    await dispatcher.dispose();
+    await dirtyScopes.close();
+  });
+
   test('刷新失败时不确认失效记录', () async {
     final dirtyScopes = StreamController<Set<RealtimeScope>>.broadcast();
     final handler = _FakeHandler(RealtimeScope.photos, shouldFail: true);
@@ -148,10 +175,14 @@ void main() {
   });
 }
 
-RealtimeInvalidation _invalidation(String key, {int revision = 1}) {
+RealtimeInvalidation _invalidation(
+  String key, {
+  int revision = 1,
+  RealtimeScope? scope,
+}) {
   return RealtimeInvalidation(
     key: key,
-    scope: key == 'photo' ? RealtimeScope.photos : RealtimeScope.files,
+    scope: scope ?? (key == 'photo' ? RealtimeScope.photos : RealtimeScope.files),
     resourceType: 'RESOURCE',
     revision: revision,
     createdAt: DateTime.utc(2026, 7, 17),

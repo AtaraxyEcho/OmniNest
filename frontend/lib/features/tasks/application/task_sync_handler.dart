@@ -23,7 +23,9 @@ class TaskSyncHandler implements RealtimeScopeHandler {
       final _ = await ref.refresh(activeTaskSummaryProvider.future);
     }
     _summaryRevisions.markCompleted(summaryPending);
-    if (!ref.exists(taskListProvider)) return false;
+    // 任务列表 provider 不存在说明任务模块从未激活：无本地状态可刷，
+    // 页面首次打开本就会拉取最新数据，直接确认消费避免持久记录无限重试。
+    if (!ref.exists(taskListProvider)) return true;
     await ref.read(taskListProvider.notifier).load();
     _summaryRevisions.clear(invalidations);
     return true;

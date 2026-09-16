@@ -90,7 +90,15 @@ class RealtimeInvalidationDispatcher {
         }
         for (final entry in grouped.entries) {
           final handlers = _handlers[entry.key];
-          if (handlers == null) {
+          if (handlers == null || handlers.isEmpty) {
+            // 该作用域没有任何订阅 handler：没有本地状态需要刷新，
+            // 直接确认消费，避免持久失效记录无限重试。
+            for (final invalidation in entry.value) {
+              final acknowledged = await _acknowledge(invalidation);
+              if (acknowledged == 0) {
+                _dispatchRequested = true;
+              }
+            }
             continue;
           }
           try {
