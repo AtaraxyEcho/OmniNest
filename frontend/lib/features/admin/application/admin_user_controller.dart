@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/admin/data/admin_user_api.dart';
 import 'package:omninest/features/admin/domain/admin_user.dart';
 
@@ -134,6 +137,11 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
   Future<void> updateUserRoles(String userId, Set<String> roles) async {
     await _api.updateUserRoles(userId, roles);
     await refreshUsers();
+    // 修改自己所属角色时本地 JWT claims 已过期，轮换会话令牌。
+    final currentUser = ref.read(authSessionProvider).asData?.value.user;
+    if (currentUser != null && currentUser.id == userId) {
+      unawaited(ref.read(authSessionProvider.notifier).refreshSession());
+    }
   }
 
   Future<void> updateUserQuota(String userId, int quotaBytes) async {

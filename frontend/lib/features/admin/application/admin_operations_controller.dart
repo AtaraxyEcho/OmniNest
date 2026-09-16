@@ -1,10 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/admin/data/admin_operations_api.dart';
 import 'package:omninest/features/admin/domain/admin_analytics.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
+import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 
 final adminSearchProvider = NotifierProvider<AdminSearchNotifier, String>(
@@ -175,11 +179,29 @@ class AdminOperationsActions {
   ) async {
     await _api.updateRolePermissions(roleCode, permissions);
     ref.invalidate(adminRolesProvider);
+    _refreshSessionIfAffectsCurrentUser(roleCode: roleCode);
+  }
+
+  /// 角色权限变更影响当前用户所属角色时轮换本地 JWT，使 claims 与服务端一致。
+  void _refreshSessionIfAffectsCurrentUser({String? roleCode, String? userId}) {
+    final user = ref.read(authSessionProvider).asData?.value.user;
+    if (user == null) {
+      return;
+    }
+    final affectsCurrentUser =
+        (roleCode != null &&
+            (user.roles.contains(roleCode) || user.role == roleCode)) ||
+        (userId != null && userId == user.id);
+    if (affectsCurrentUser) {
+      unawaited(ref.read(authSessionProvider.notifier).refreshSession());
+    }
   }
 
   Future<void> updateConfig(String key, String value, {String? reason}) async {
     await _api.updateConfig(key, value, reason);
     ref.invalidate(adminConfigsProvider);
+    // 天气配置派生自配置中心，任何配置写入后强制重读（配置变更低频）。
+    ref.invalidate(weatherConfigProvider);
   }
 
   Future<void> retryTask(String taskId) async {
@@ -217,6 +239,7 @@ class AdminOperationsActions {
     final entry = await _api.rollbackConfig(historyId);
     ref.invalidate(adminConfigsProvider);
     ref.invalidate(adminConfigHistoryProvider(entry.key));
+    ref.invalidate(weatherConfigProvider);
     return entry;
   }
 
