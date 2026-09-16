@@ -685,11 +685,19 @@ class _DlqTab extends StatelessWidget {
                       '${item.progress}%',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    Text(
-                      item.errorSummary ?? l10n.adminNoErrorSummary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
+                    Tooltip(
+                      message:
+                          (item.errorSummary ?? l10n.adminNoErrorSummary) +
+                          ((item.stackSummary == null ||
+                                  item.stackSummary!.isEmpty)
+                              ? ''
+                              : '\n\n${item.stackSummary}'),
+                      child: Text(
+                        item.errorSummary ?? l10n.adminNoErrorSummary,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
                     ),
                     Text(
                       item.updatedAt,

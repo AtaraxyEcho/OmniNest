@@ -231,6 +231,7 @@ class AdminDlqTask {
     required this.progress,
     required this.updatedAt,
     this.errorSummary,
+    this.stackSummary,
   });
 
   factory AdminDlqTask.fromJson(Map<String, dynamic> json) {
@@ -240,6 +241,7 @@ class AdminDlqTask {
       status: json['status']?.toString() ?? '',
       progress: _int(json['progress']),
       errorSummary: json['errorSummary']?.toString(),
+      stackSummary: json['stackSummary']?.toString(),
       updatedAt: json['updatedAt']?.toString() ?? '',
     );
   }
@@ -249,6 +251,7 @@ class AdminDlqTask {
   final String status;
   final int progress;
   final String? errorSummary;
+  final String? stackSummary;
   final String updatedAt;
 }
 
