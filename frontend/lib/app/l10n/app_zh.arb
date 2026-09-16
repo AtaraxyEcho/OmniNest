@@ -1515,7 +1515,7 @@
   "adminStorageFieldManagement": "管理模式",
   "adminStorageFieldNode": "节点",
   "adminStorageParentDir": "上一级",
-  "adminStorageManagementSubtitle": "管理 MinIO 桶、容量与索引维护。",
+  "adminStorageManagementSubtitle": "管理 MinIO 桶与本地媒体位置；4K 等重片源使用本地位置直连播放。",
   "adminBucketConfig": "桶配置",
   "adminMinioBuckets": "MinIO Buckets",
   "adminRecentRecords": "最近记录",

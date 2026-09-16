@@ -2,14 +2,6 @@ part of 'file_browser_controller.dart';
 
 const _externalBrowseTimeout = Duration(seconds: 30);
 
-typedef _ExternalBrowseContext =
-    ({
-      String accountId,
-      String path,
-      FileManagerSection section,
-      int generation,
-    });
-
 extension FileBrowserIntegrationActions on FileBrowserController {
   Future<void> createOfflineDownload(
     String sourceUri, {
@@ -223,88 +215,6 @@ extension FileBrowserIntegrationActions on FileBrowserController {
         .testExternalStorageConnection(accountId)
         .timeout(_externalBrowseTimeout);
     await showExternalStorage();
-  }
-
-  Future<void> _runExternalMutation({
-    required FileOperation operationLabel,
-    required String accountId,
-    required Future<void> Function() mutation,
-    bool loadSpace = false,
-  }) async {
-    final browseContext = _captureExternalBrowseContext(accountId);
-    await _runAction(operationLabel, () async {
-      await mutation().timeout(_externalBrowseTimeout);
-      if (browseContext == null ||
-          !_isExternalBrowseContextCurrent(browseContext)) {
-        return;
-      }
-      await _refreshExternalBrowseAfterMutation(
-        browseContext,
-        operationLabel: operationLabel,
-        loadSpace: loadSpace,
-      );
-    });
-  }
-
-  _ExternalBrowseContext? _captureExternalBrowseContext(String accountId) {
-    final current = _currentState;
-    final path = current?.externalBrowsePath;
-    if (current == null ||
-        current.section != FileManagerSection.externalStorage ||
-        current.externalBrowseAccountId != accountId ||
-        path == null) {
-      return null;
-    }
-    return (
-      accountId: accountId,
-      path: path,
-      section: current.section,
-      generation: _externalBrowseRequestGeneration,
-    );
-  }
-
-  bool _isExternalBrowseContextCurrent(_ExternalBrowseContext context) {
-    final current = _currentState;
-    return current != null &&
-        context.generation == _externalBrowseRequestGeneration &&
-        current.section == context.section &&
-        current.externalBrowseAccountId == context.accountId &&
-        current.externalBrowsePath == context.path;
-  }
-
-  Future<void> _refreshExternalBrowseAfterMutation(
-    _ExternalBrowseContext previousContext, {
-    required FileOperation operationLabel,
-    required bool loadSpace,
-  }) async {
-    final refreshContext = (
-      accountId: previousContext.accountId,
-      path: previousContext.path,
-      section: previousContext.section,
-      generation: ++_externalBrowseRequestGeneration,
-    );
-    try {
-      final spaceFuture =
-          loadSpace
-              ? _loadExternalSpaceSafely(refreshContext.accountId)
-              : Future<ExternalSpaceUsage?>.value(_currentState?.externalSpace);
-      final files = await _repository
-          .browseExternalStorage(refreshContext.accountId, refreshContext.path)
-          .timeout(_externalBrowseTimeout);
-      final space = await spaceFuture;
-      if (!_isExternalBrowseContextCurrent(refreshContext)) {
-        return;
-      }
-      final latest = _currentState;
-      if (latest == null) {
-        return;
-      }
-      _emitState(latest.copyWith(externalFiles: files, externalSpace: space));
-    } on Object catch (error) {
-      if (_isExternalBrowseContextCurrent(refreshContext)) {
-        _recordActionError(operationLabel, error);
-      }
-    }
   }
 
   Future<void> createImportTask(

@@ -39,6 +39,7 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
                       ? () => unawaited(
                         _showExternalStorageDialog(
                           context: context,
+                          ref: ref,
                           onSubmit: controller.createExternalStorage,
                         ),
                       )
@@ -66,6 +67,7 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
                                 enabled
                                     ? () => _showExternalStorageDialog(
                                       context: context,
+                                      ref: ref,
                                       account: account,
                                       onSubmit:
                                           ({

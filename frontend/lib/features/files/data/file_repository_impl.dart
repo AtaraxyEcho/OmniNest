@@ -319,6 +319,11 @@ class FileRepositoryImpl implements FileRepository {
   }
 
   @override
+  Future<List<ExternalStorageConnector>> listExternalConnectors() {
+    return fileApi.listExternalConnectors();
+  }
+
+  @override
   Future<ExternalStorageAccount> createExternalStorage({
     required String provider,
     required String displayName,

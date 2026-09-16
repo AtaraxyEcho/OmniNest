@@ -3923,7 +3923,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminStorageManagementSubtitle =>
-      'Manage MinIO buckets, capacity, and index maintenance.';
+      'Manage MinIO buckets and local media locations; use local locations for 4K playback.';
 
   @override
   String get adminBucketConfig => 'Bucket Config';

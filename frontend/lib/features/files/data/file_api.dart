@@ -584,6 +584,26 @@ class FileApi {
     return parseExternalStoragePageResponse(response.data);
   }
 
+  /// 列出可用连接器目录。
+  Future<List<ExternalStorageConnector>> listExternalConnectors() async {
+    final response = await apiClient.dio.get<List<dynamic>>(
+      '/external-connectors',
+    );
+    final items = response.data ?? const [];
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(
+          (json) => ExternalStorageConnector(
+            code: json['code']?.toString() ?? '',
+            displayName: json['displayName']?.toString() ?? '',
+            authMode: json['authMode']?.toString() ?? '',
+            availability: json['availability']?.toString() ?? '',
+          ),
+        )
+        .where((item) => item.code.isNotEmpty)
+        .toList();
+  }
+
   Future<ExternalStorageAccount> createExternalStorage({
     required String provider,
     required String displayName,

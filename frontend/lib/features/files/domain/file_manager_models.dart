@@ -328,6 +328,20 @@ class ExternalStorageAccount {
   final DateTime? updatedAt;
 }
 
+class ExternalStorageConnector {
+  const ExternalStorageConnector({
+    required this.code,
+    required this.displayName,
+    required this.authMode,
+    this.availability = '',
+  });
+
+  final String code;
+  final String displayName;
+  final String authMode;
+  final String availability;
+}
+
 class ExternalFileItem {
   const ExternalFileItem({
     required this.name,

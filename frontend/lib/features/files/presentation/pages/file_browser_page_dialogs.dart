@@ -784,13 +784,32 @@ Future<void> _showExternalStorageDialog({
   })
   onSubmit,
   ExternalStorageAccount? account,
+  required WidgetRef ref,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
+  List<ExternalStorageConnector> connectors = const [];
+  if (account == null) {
+    try {
+      connectors = await ref
+          .read(fileRepositoryProvider)
+          .listExternalConnectors()
+          .timeout(const Duration(seconds: 10));
+    } on Exception {
+      connectors = const [];
+    }
+  }
+  if (!context.mounted) {
+    return;
+  }
   final result = await showDialog<
     ({String provider, String displayName, String credentialsJson})
   >(
     context: context,
-    builder: (context) => ExternalStorageAccountDialog(account: account),
+    builder:
+        (context) => ExternalStorageAccountDialog(
+          account: account,
+          connectors: connectors,
+        ),
   );
   if (result != null) {
     await _runFileActionWithMessenger(

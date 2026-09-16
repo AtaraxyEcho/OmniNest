@@ -142,6 +142,8 @@ abstract interface class FileRepository {
 
   Future<List<ExternalStorageAccount>> listExternalStorages();
 
+  Future<List<ExternalStorageConnector>> listExternalConnectors();
+
   Future<ExternalStorageAccount> createExternalStorage({
     required String provider,
     required String displayName,

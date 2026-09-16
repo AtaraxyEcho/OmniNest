@@ -3790,7 +3790,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStorageParentDir => '上一级';
 
   @override
-  String get adminStorageManagementSubtitle => '管理 MinIO 桶、容量与索引维护。';
+  String get adminStorageManagementSubtitle => '管理 MinIO 桶与本地媒体位置；4K 等重片源使用本地位置直连播放。';
 
   @override
   String get adminBucketConfig => '桶配置';

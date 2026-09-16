@@ -34,10 +34,17 @@ const List<String> _webdavVendors = [
 
 /// 创建或编辑外部存储账号的凭据表单。
 class ExternalStorageAccountDialog extends StatefulWidget {
-  const ExternalStorageAccountDialog({this.account, super.key});
+  const ExternalStorageAccountDialog({
+    this.account,
+    this.connectors = const [],
+    super.key,
+  });
 
   /// 非空时表示编辑模式，预填表单且禁用 provider 切换。
   final ExternalStorageAccount? account;
+
+  /// 服务端连接器目录；为空时回退到内置允许列表。
+  final List<ExternalStorageConnector> connectors;
 
   @override
   State<ExternalStorageAccountDialog> createState() =>
@@ -204,8 +211,15 @@ class _ExternalStorageAccountDialogState
                   value: _provider,
                   label: l10n.filesStorageType,
                   items: [
-                    for (final e in _providerLabels(l10n).entries)
-                      AppDropdownItem(value: e.key, label: e.value),
+                    if (widget.connectors.isNotEmpty)
+                      for (final connector in widget.connectors)
+                        AppDropdownItem(
+                          value: connector.code,
+                          label: connector.displayName,
+                        )
+                    else
+                      for (final e in _providerLabels(l10n).entries)
+                        AppDropdownItem(value: e.key, label: e.value),
                   ],
                   onChanged:
                       isEdit

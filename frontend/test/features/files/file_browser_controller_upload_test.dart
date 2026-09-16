@@ -821,6 +821,10 @@ class _FakeFileRepository implements FileRepository {
       Future.value(externalAccounts);
 
   @override
+  Future<List<ExternalStorageConnector>> listExternalConnectors() async =>
+      const [];
+
+  @override
   Future<List<FileNode>> listFavoriteFiles() => throw UnimplementedError();
 
   @override
