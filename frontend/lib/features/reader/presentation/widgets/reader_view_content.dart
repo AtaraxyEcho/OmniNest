@@ -398,9 +398,22 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     SelectableRegionState selectableRegionState,
   ) {
     final range = _resolveSelectionRange(_selectedText);
+    // 选中范围与已有高亮重叠时，高亮项切换为取消高亮（主流阅读器语义：
+    // 再次选中已高亮文本应可移除高亮，而非只能重建）。
+    final overlappingHighlights =
+        range == null
+            ? const <ReaderAnnotation>[]
+            : widget.annotations
+                .where(
+                  (a) => a.startOffset < range.$2 && a.endOffset > range.$1,
+                )
+                .toList();
+    final hasHighlightOverlap = overlappingHighlights.isNotEmpty;
     final items = <ContextMenuButtonItem>[
       ...selectableRegionState.contextMenuButtonItems,
-      if (range != null && widget.onHighlight != null)
+      if (range != null &&
+          widget.onHighlight != null &&
+          !hasHighlightOverlap)
         ContextMenuButtonItem(
           label: AppLocalizations.of(context).readerHighlight,
           onPressed: () {
@@ -408,6 +421,17 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
             selectableRegionState.hideToolbar();
             selectableRegionState.clearSelection();
             widget.onHighlight?.call(selectedText, range.$1, range.$2);
+          },
+        ),
+      if (hasHighlightOverlap && widget.onRemoveHighlight != null)
+        ContextMenuButtonItem(
+          label: AppLocalizations.of(context).readerRemoveHighlight,
+          onPressed: () {
+            selectableRegionState.hideToolbar();
+            selectableRegionState.clearSelection();
+            for (final annotation in overlappingHighlights) {
+              widget.onRemoveHighlight?.call(annotation);
+            }
           },
         ),
       if (range != null && widget.onAnnotate != null)
