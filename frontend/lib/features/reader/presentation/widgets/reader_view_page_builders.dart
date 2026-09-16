@@ -818,6 +818,18 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
                   ?.get(currentChapterId, settings)
                   ?.hasPreciseHeights ??
               false;
+          if (!precise) {
+            // 高度未精测：估算图对章尾低估可达数十个百分点，此时落位
+            // 会停在半途。触发精测并原地保持（返回 null 不 settle），
+            // 待收敛后由本 builder 给出真实目标。
+            contentLoader?.ensurePreciseHeights(
+              chapterId: currentChapterId,
+              pageWidth: capturedPageWidth,
+              settings: capturedSettings,
+              textScale: capturedTextScale,
+            );
+            return null;
+          }
           if (cachedRestoreContentY == null ||
               cachedRestorePrecise != precise) {
             cachedRestoreContentY = contentLoader?.charOffsetToPixelOffset(

@@ -597,6 +597,28 @@ class ReaderContentLoader {
     data.markPreciseHeights();
   }
 
+  /// 确保指定章节高度已精测：未精测且非空块章时触发分批精测（幂等，
+  /// 重复调用由代次去重）。供进度恢复在落位前等待真实高度使用。
+  void ensurePreciseHeights({
+    required String chapterId,
+    required double pageWidth,
+    required ReaderViewSettings settings,
+    required double textScale,
+  }) {
+    final data = get(chapterId, settings);
+    if (data == null || data.blocks.isEmpty || data.hasPreciseHeights) {
+      return;
+    }
+    unawaited(
+      _schedulePreciseHeights(
+        data,
+        pageWidth: pageWidth,
+        settings: settings,
+        textScale: textScale,
+      ),
+    );
+  }
+
   /// 从首个已精测章节提取各块类型的平均高度，供邻章 phase-one 估算。
   ///
   /// 同一书排版一致，跨章块型均值比仅头部块实测更接近全章真实均值；

@@ -57,6 +57,11 @@ class ScrollRestore {
   /// 使用 [addPostFrameCallback] 自循环，每帧检查偏移量与目标的偏差。
   /// 恢复完成或取消后自动停止调度，不会积累永久回调。
   ///
+  /// [targetOffsetBuilder] 返回 null 表示目标未就绪（如章节高度尚未
+  /// 精测收敛，估算落点会偏差数十个百分点）：恢复原地保持不跳转、
+  /// 不积累稳定帧，逐帧重试直至 builder 给出真实目标；总时长仍受
+  /// [totalTimeout] 兜底。
+  ///
   /// [onSettled] 在恢复流程结束时触发（无论是否到达目标）：参数为
   /// true 表示已稳定到达目标位置；false 表示被 [isUserScrolling] 的
   /// 用户主动滚动中断或超过 [totalTimeout]，此时调用方不得把恢复
@@ -68,7 +73,7 @@ class ScrollRestore {
   /// 变化时，用户活动探针与总超时保证循环必然终止。
   void start({
     required ScrollController scrollController,
-    required double Function() targetOffsetBuilder,
+    required double? Function() targetOffsetBuilder,
     required ValueChanged<bool> onSettled,
     bool Function()? isUserScrolling,
     Duration totalTimeout = const Duration(seconds: 10),
@@ -135,7 +140,18 @@ class ScrollRestore {
         return;
       }
 
-      final target = targetOffsetBuilder().clamp(0.0, max);
+      final builtTarget = targetOffsetBuilder();
+      if (builtTarget == null) {
+        // 目标未就绪：原地保持不跳转、不积累稳定帧（否则会在错误位置
+        // settle），逐帧重试等待 builder 给出真实目标；totalTimeout 兜底。
+        if (kDebugMode) {
+          readerDebugLog('ScrollRestore: target not ready, holding position');
+        }
+        SchedulerBinding.instance.addPostFrameCallback((_) => tick());
+        return;
+      }
+
+      final target = builtTarget.clamp(0.0, max);
       final currentOffset = scrollController.offset;
       final drift = (currentOffset - target).abs();
       final maxChanged = (max - lastMax).abs() > _maxChangeThreshold;
