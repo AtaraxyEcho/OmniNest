@@ -11,10 +11,12 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/files/media_import_ui.dart'
     show ImportButtonStyle, MediaImportButton;
 import 'package:omninest/features/reader/application/reader_controller.dart';
+import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/application/reader_local_progress.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_import_queue_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
@@ -92,6 +94,7 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
   Widget _buildContent(ReaderCenterState data) {
     final l10n = AppLocalizations.of(context);
     final visibleItems = data.visibleItems;
+    final importJobs = ref.watch(readerImportQueueProvider);
     final showContinue =
         data.librarySegment == ReaderLibrarySegment.all &&
         data.searchQuery.trim().isEmpty &&
@@ -115,6 +118,14 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
               ),
             ],
           ),
+        if (importJobs.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          for (final job in importJobs)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: ImportJobRow(job: job),
+            ),
+        ],
         if (showContinue) ...[
           const SizedBox(height: 28),
           _ContinueSection(
@@ -312,6 +323,9 @@ class _LibraryImportButton extends ConsumerWidget {
         subsystemDirectory: 'Reader',
         acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
         reuseExistingFiles: true,
+        onFilesPicked: (files) {
+          ref.read(readerImportQueueProvider.notifier).enqueue(files);
+        },
         onImportComplete: () {
           ref.read(readerCenterControllerProvider.notifier).refresh();
         },

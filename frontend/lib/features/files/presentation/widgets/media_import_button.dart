@@ -27,7 +27,8 @@ final mediaImportFilePickerProvider = Provider<MediaImportFilePicker>((ref) {
 
 /// 可复用的媒体导入按钮。
 ///
-/// 点击后依次执行：文件选择 → 空间选择 → 目录解析 → 上传 → 完成回调。
+/// 默认流程：文件选择 → 空间选择 → 目录解析 → 上传 → 完成回调。
+/// 提供 [onFilesPicked] 时改为后台队列模式：选择后立即返回，不阻塞当前页。
 class MediaImportButton extends ConsumerStatefulWidget {
   const MediaImportButton({
     required this.subsystemDirectory,
@@ -40,6 +41,7 @@ class MediaImportButton extends ConsumerStatefulWidget {
     this.unsupportedExtensions = const <String>[],
     this.reuseExistingFiles = false,
     this.enableCamera = false,
+    this.onFilesPicked,
     super.key,
   });
 
@@ -75,6 +77,11 @@ class MediaImportButton extends ConsumerStatefulWidget {
 
   /// 移动端是否提供「拍摄上传」入口。
   final bool enableCamera;
+
+  /// 选择文件后交给外部队列处理，不弹模态进度窗口。
+  ///
+  /// 设置后跳过空间选择与阻塞式上传对话框；上传、扫描与入库由调用方异步完成。
+  final void Function(List<XFile> files)? onFilesPicked;
 
   @override
   ConsumerState<MediaImportButton> createState() => _MediaImportButtonState();
@@ -124,6 +131,12 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
             ),
           ),
         );
+        return;
+      }
+
+      final onFilesPicked = widget.onFilesPicked;
+      if (onFilesPicked != null) {
+        onFilesPicked(files);
         return;
       }
 

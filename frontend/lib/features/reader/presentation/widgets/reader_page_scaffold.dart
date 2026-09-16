@@ -16,6 +16,7 @@ import 'package:omninest/features/files/media_import_ui.dart'
     show ImportButtonStyle, MediaImportButton;
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
+import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 
 /// 阅读模块页面目标，对应模块内一级导航与路由
@@ -273,6 +274,9 @@ class _ReaderModuleTopBar extends ConsumerWidget {
                 subsystemDirectory: 'Reader',
                 acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
                 reuseExistingFiles: true,
+                onFilesPicked: (files) {
+                  ref.read(readerImportQueueProvider.notifier).enqueue(files);
+                },
                 onImportComplete: () {
                   ref.read(readerCenterControllerProvider.notifier).refresh();
                 },
