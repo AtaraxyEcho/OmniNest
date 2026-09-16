@@ -244,6 +244,29 @@ class _OfflineDownloadWorkspace extends ConsumerWidget {
 
   final FileBrowserState state;
 
+  Future<void> _createOfflineDownloadWithSpace(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    final l10n = AppLocalizations.of(context);
+    final controller = ref.read(fileBrowserControllerProvider.notifier);
+    final spaceSelection = await showSpaceSelectorSheet(context);
+    if (spaceSelection == null || !context.mounted) {
+      return;
+    }
+    final spaceType =
+        spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
+    await _showNameDialog(
+      context: context,
+      title: l10n.filesNewOfflineDownload,
+      actionLabel: l10n.filesCreate,
+      labelText: l10n.filesDownloadLink,
+      hintText: l10n.filesOfflineDownloadHint,
+      onSubmit:
+          (uri) => controller.createOfflineDownload(uri, spaceType: spaceType),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -269,14 +292,7 @@ class _OfflineDownloadWorkspace extends ConsumerWidget {
           onPressed:
               enabled
                   ? () => unawaited(
-                    _showNameDialog(
-                      context: context,
-                      title: l10n.filesNewOfflineDownload,
-                      actionLabel: l10n.filesCreate,
-                      labelText: l10n.filesDownloadLink,
-                      hintText: l10n.filesOfflineDownloadHint,
-                      onSubmit: controller.createOfflineDownload,
-                    ),
+                    _createOfflineDownloadWithSpace(context, ref),
                   )
                   : null,
           icon: const Icon(Icons.add_link_rounded, size: 18),

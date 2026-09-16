@@ -299,10 +299,12 @@ class FileRepositoryImpl implements FileRepository {
   Future<OfflineDownloadTask> createOfflineDownload({
     required String sourceUri,
     String? targetParentId,
+    String? spaceType,
   }) {
     return fileApi.createOfflineDownload(
       sourceUri: sourceUri,
       targetParentId: targetParentId,
+      spaceType: spaceType,
     );
   }
 

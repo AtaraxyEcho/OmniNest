@@ -135,6 +135,7 @@ abstract interface class FileRepository {
   Future<OfflineDownloadTask> createOfflineDownload({
     required String sourceUri,
     String? targetParentId,
+    String? spaceType,
   });
 
   Future<void> cancelOfflineDownload(String taskId);

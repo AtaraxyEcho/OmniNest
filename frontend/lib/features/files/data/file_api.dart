@@ -557,10 +557,15 @@ class FileApi {
   Future<OfflineDownloadTask> createOfflineDownload({
     required String sourceUri,
     String? targetParentId,
+    String? spaceType,
   }) async {
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/offline-downloads',
-      data: {'sourceUri': sourceUri, 'targetParentId': targetParentId},
+      data: {
+        'sourceUri': sourceUri,
+        'targetParentId': targetParentId,
+        if (spaceType != null) 'spaceType': spaceType,
+      },
     );
     return parseOfflineTaskResponse(response.data);
   }

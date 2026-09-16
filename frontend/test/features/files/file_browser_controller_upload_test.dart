@@ -734,7 +734,12 @@ class _FakeFileRepository implements FileRepository {
   Future<OfflineDownloadTask> createOfflineDownload({
     required String sourceUri,
     String? targetParentId,
+    String? spaceType,
   }) => throw UnimplementedError();
+
+  @override
+  Future<void> testExternalStorageConnection(String accountId) =>
+      throw UnimplementedError();
 
   @override
   Future<FileShareLink> createShareLink({

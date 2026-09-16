@@ -11,11 +11,15 @@ typedef _ExternalBrowseContext =
     });
 
 extension FileBrowserIntegrationActions on FileBrowserController {
-  Future<void> createOfflineDownload(String sourceUri) async {
+  Future<void> createOfflineDownload(
+    String sourceUri, {
+    String? spaceType,
+  }) async {
     await _runAction(FileOperation.createOfflineDownload, () async {
       await _repository.createOfflineDownload(
         sourceUri: sourceUri,
         targetParentId: _currentState?.parentId,
+        spaceType: spaceType,
       );
       await showOfflineDownloads();
     });
