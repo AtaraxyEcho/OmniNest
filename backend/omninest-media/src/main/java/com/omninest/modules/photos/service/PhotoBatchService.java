@@ -5,6 +5,8 @@ import com.alibaba.fastjson2.TypeReference;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.dto.FileObjectDescriptor;
@@ -12,6 +14,7 @@ import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.config.PhotoBatchDownloadProperties;
 import com.omninest.modules.photos.domain.PhotoBatchTask;
 import com.omninest.modules.photos.domain.PhotoItem;
@@ -71,6 +74,7 @@ public class PhotoBatchService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
     private final TaskRecordService taskRecordService;
+    private final MediaSyncEventService syncEventService;
     private final PhotoBatchDownloadProperties downloadProperties;
     private final TransactionTemplate transactionTemplate;
 
@@ -255,6 +259,7 @@ public class PhotoBatchService {
                 .toList();
         if (!toInsert.isEmpty()) {
             photoTagRepository.saveAll(toInsert);
+            recordBatchMutationEvent(ownerUserId);
         }
     }
 
@@ -281,7 +286,26 @@ public class PhotoBatchService {
         }
         if (!photos.isEmpty()) {
             photoItemRepository.saveAll(photos);
+            recordBatchMutationEvent(ownerUserId);
         }
+    }
+
+    /**
+     * 批量修改落库后补发照片域失效事件，驱动各端 realtime 兜底刷新。
+     *
+     * <p>批量任务无单一资源实体可挂版本，事件不携带 resourceId 与版本号，
+     * 客户端按 PHOTOS 作用域整体刷新。MOVE 路径经相册服务自带事件，不在此
+     * 重复发布。</p>
+     */
+    private void recordBatchMutationEvent(UUID ownerUserId) {
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.PHOTOS,
+                "PHOTO_BATCH",
+                null,
+                SyncAction.UPDATED,
+                null,
+                Map.of());
     }
 
     /**

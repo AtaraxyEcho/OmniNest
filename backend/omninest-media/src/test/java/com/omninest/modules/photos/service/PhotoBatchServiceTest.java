@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -11,6 +12,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.alibaba.fastjson2.JSON;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -19,6 +22,7 @@ import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.config.PhotoBatchDownloadProperties;
 import com.omninest.modules.photos.domain.PhotoBatchTask;
 import com.omninest.modules.photos.domain.PhotoItem;
@@ -75,6 +79,7 @@ class PhotoBatchServiceTest {
     private final DerivedAssetStorageService derivedAssetStorageService = mock(DerivedAssetStorageService.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
+    private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final PhotoBatchDownloadProperties downloadProperties = new PhotoBatchDownloadProperties();
     private final TransactionTemplate transactionTemplate = mock(TransactionTemplate.class);
     private final PhotoBatchService service = new PhotoBatchService(
@@ -87,6 +92,7 @@ class PhotoBatchServiceTest {
             derivedAssetStorageService,
             fileQueryService,
             taskRecordService,
+            syncEventService,
             downloadProperties,
             transactionTemplate
     );
@@ -114,6 +120,41 @@ class PhotoBatchServiceTest {
         assertThat(eventCaptor.getValue().ownerUserId()).isEqualTo(OWNER_ID);
         verify(taskRecordService).createQueuedTask(
                 any(UUID.class), eq(OWNER_ID), eq("PHOTO_BATCH_TAG"), any(), any());
+    }
+
+    @Test
+    void executeTagTaskPublishesSyncEventAfterMutation() {
+        PhotoBatchTask task = new PhotoBatchTask();
+        task.setId(TASK_ID);
+        task.setTaskId(TASK_ID);
+        task.setOwnerUserId(OWNER_ID);
+        task.setTaskType("TAG");
+        task.setTotalItems(1);
+        task.setParams(JSON.toJSONString(
+                Map.of("photoIds", List.of(PHOTO_ID.toString()), "tag", "holiday")));
+
+        when(batchTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        when(batchTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID)))
+                .thenReturn(List.of());
+        when(photoTagRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        doAnswer(invocation -> {
+            Consumer<TransactionStatus> action = invocation.getArgument(0);
+            action.accept(null);
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+
+        service.executeBatchTask(TASK_ID, OWNER_ID);
+
+        verify(syncEventService).record(
+                eq(OWNER_ID),
+                eq(SyncScope.PHOTOS),
+                eq("PHOTO_BATCH"),
+                isNull(),
+                eq(SyncAction.UPDATED),
+                isNull(),
+                eq(Map.of()));
+        verify(taskRecordService).markCompleted(eq(TASK_ID), any(Map.class));
     }
 
     @Test
@@ -356,6 +397,7 @@ class PhotoBatchServiceTest {
                 derivedAssetStorageService,
                 fileQueryService,
                 taskRecordService,
+                syncEventService,
                 properties,
                 transactionTemplate
         );
