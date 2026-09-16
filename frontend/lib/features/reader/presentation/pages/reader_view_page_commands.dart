@@ -116,16 +116,16 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
         _pageTurnController.previous();
         return;
       case ReaderCommand.nextViewport:
-        unawaited(_scrollReaderViewport(detail, 0.88));
+        unawaited(_scrollReaderViewport(0.88));
         return;
       case ReaderCommand.previousViewport:
-        unawaited(_scrollReaderViewport(detail, -0.88));
+        unawaited(_scrollReaderViewport(-0.88));
         return;
       case ReaderCommand.scrollForward:
-        unawaited(_scrollReaderViewport(detail, 0.16));
+        unawaited(_scrollReaderViewport(0.16));
         return;
       case ReaderCommand.scrollBackward:
-        unawaited(_scrollReaderViewport(detail, -0.16));
+        unawaited(_scrollReaderViewport(-0.16));
         return;
       case ReaderCommand.chapterStart:
         _jumpToReaderChapterBoundary(start: true);
@@ -214,10 +214,7 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
     unawaited(handleSideTap(detail, forward: forward));
   }
 
-  Future<void> _scrollReaderViewport(
-    ReaderItemDetail detail,
-    double viewportFactor,
-  ) async {
+  Future<void> _scrollReaderViewport(double viewportFactor) async {
     final didScroll = await scrollBy(
       MediaQuery.sizeOf(context).height * viewportFactor,
     );

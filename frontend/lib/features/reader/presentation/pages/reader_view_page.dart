@@ -51,6 +51,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_view_page_i
 import 'package:omninest/features/reader/presentation/widgets/reader_view_page_settings_mixin.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_top_bar.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
+import 'package:omninest/platform/android/reader_volume_key_service.dart';
 
 part 'reader_view_page_commands.dart';
 
@@ -89,6 +90,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       ReaderPageTurnController();
   final ReaderPanelCoordinator _panelCoordinator = ReaderPanelCoordinator();
   final ReaderCommandGate _readerCommandGate = ReaderCommandGate();
+  VoidCallback? _volumeKeyEventCancel;
+  bool _volumeKeyPagingPushed = false;
   final ReaderChapterLoadCoordinator _chapterLoadCoordinator =
       ReaderChapterLoadCoordinator();
   final ReaderPageLocator _pageLocator = ReaderPageLocator();
@@ -648,7 +651,14 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
       },
     );
     if (kIsWeb) BrowserContextMenu.disableContextMenu();
-    loadSettings();
+    _volumeKeyEventCancel = ReaderVolumeKeyService.instance().addListener(
+      _handleVolumeKeyEvent,
+    );
+    unawaited(
+      loadSettings().then((_) {
+        if (mounted) syncVolumeKeyPaging();
+      }),
+    );
     checkBookmarkState();
     scrollController.addListener(onScroll);
   }
@@ -739,6 +749,15 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     }
     _windowChromeLease?.release();
     if (kIsWeb) BrowserContextMenu.enableContextMenu();
+    _volumeKeyEventCancel?.call();
+    if (_volumeKeyPagingPushed) {
+      _volumeKeyPagingPushed = false;
+      unawaited(
+        ReaderVolumeKeyService.instance().setVolumeKeyPagingEnabled(
+          enabled: false,
+        ),
+      );
+    }
     _scrollProgressNotifier.dispose();
     _bookProgressNotifier.dispose();
     _pageCountNotifier.dispose();
@@ -759,6 +778,43 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _contentLoader?.invalidateAll();
     _contentLoader = null;
     super.dispose();
+  }
+
+  /// 将音量键拦截开关同步到原生层（仅 Android 实际生效）。
+  @override
+  void syncVolumeKeyPaging() {
+    final shouldEnable = isAndroidPlatform && _settings.volumeKeyPaging;
+    if (_volumeKeyPagingPushed == shouldEnable) {
+      return;
+    }
+    _volumeKeyPagingPushed = shouldEnable;
+    unawaited(
+      ReaderVolumeKeyService.instance().setVolumeKeyPagingEnabled(
+        enabled: shouldEnable,
+      ),
+    );
+  }
+
+  /// 音量键事件映射为阅读命令：下键向后翻，上键向前翻。
+  void _handleVolumeKeyEvent(ReaderVolumeKeyDirection direction) {
+    if (!mounted) {
+      return;
+    }
+    final forward = direction == ReaderVolumeKeyDirection.down;
+    if (_isPageMode) {
+      final command =
+          forward ? ReaderCommand.nextPage : ReaderCommand.previousPage;
+      if (_requiresReaderCommandGate(command) && !_readerCommandGate.accept()) {
+        return;
+      }
+      if (forward) {
+        _pageTurnController.next();
+      } else {
+        _pageTurnController.previous();
+      }
+      return;
+    }
+    unawaited(_scrollReaderViewport(forward ? 0.88 : -0.88));
   }
 
   void _scheduleReaderBuildWork({
@@ -1166,8 +1222,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
               onShowAnnotations:
                   () => _toggleReaderPanel(ReaderPanelType.annotations),
               isBookmarked: _isBookmarked,
-              isInBookshelf:
-                  _bookshelfOverride ?? detail.item.addedToBookshelf,
+              isInBookshelf: _bookshelfOverride ?? detail.item.addedToBookshelf,
             ),
           ),
         ),

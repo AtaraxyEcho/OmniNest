@@ -15,6 +15,7 @@ class ReaderViewSettings {
     this.readingMode = 'scroll',
     this.immersiveMode = false,
     this.pageTurnMode = 'slide',
+    this.volumeKeyPaging = true,
   }) : paletteId =
            paletteId ?? ReaderReadingPalette.idFromLegacyIndex(themeIndex ?? 2);
 
@@ -31,6 +32,9 @@ class ReaderViewSettings {
 
   /// 翻页动画样式：'slide' | 'cover' | 'fade'。
   final String pageTurnMode;
+
+  /// 音量键翻页：移动端将音量键映射为翻页命令，默认开启。
+  final bool volumeKeyPaging;
 
   ReaderReadingPalette get palette => ReaderReadingPalette.fromId(paletteId);
   Color get surfaceColor => palette.surface;
@@ -68,6 +72,7 @@ class ReaderViewSettings {
     String? readingMode,
     bool? immersiveMode,
     String? pageTurnMode,
+    bool? volumeKeyPaging,
   }) {
     return ReaderViewSettings(
       fontFamily: fontFamily ?? this.fontFamily,
@@ -81,6 +86,7 @@ class ReaderViewSettings {
       readingMode: readingMode ?? this.readingMode,
       immersiveMode: immersiveMode ?? this.immersiveMode,
       pageTurnMode: pageTurnMode ?? this.pageTurnMode,
+      volumeKeyPaging: volumeKeyPaging ?? this.volumeKeyPaging,
     );
   }
 
@@ -93,6 +99,7 @@ class ReaderViewSettings {
     'readingMode': readingMode,
     'immersiveMode': immersiveMode,
     'pageTurnMode': pageTurnMode,
+    'volumeKeyPaging': volumeKeyPaging,
     'version': _settingsVersion,
   };
 
@@ -118,6 +125,10 @@ class ReaderViewSettings {
         legacyThemeIndex,
       );
     }
+    if (version < 5) {
+      // v4 → v5：新增 volumeKeyPaging 字段，默认开启
+      migrated['volumeKeyPaging'] ??= true;
+    }
 
     final rawFontSize = (migrated['fontSize'] as num?)?.toDouble() ?? 18.0;
     final rawLineHeight = (migrated['lineHeight'] as num?)?.toDouble() ?? 1.8;
@@ -139,10 +150,11 @@ class ReaderViewSettings {
       immersiveMode: migrated['immersiveMode'] as bool? ?? false,
       pageTurnMode:
           allowedTurnModes.contains(rawTurnMode) ? rawTurnMode : 'slide',
+      volumeKeyPaging: migrated['volumeKeyPaging'] as bool? ?? true,
     );
   }
 
-  static const _settingsVersion = 4;
+  static const _settingsVersion = 5;
 }
 
 class ReaderViewSettingsPanel extends StatelessWidget {
@@ -177,6 +189,8 @@ class ReaderViewSettingsPanel extends StatelessWidget {
         _buildThemeSelector(context),
         const SizedBox(height: 18),
         _buildImmersiveToggle(context),
+        const SizedBox(height: 18),
+        _buildVolumeKeyPagingToggle(context),
       ],
     );
     if (embedded) {
@@ -546,6 +560,40 @@ class ReaderViewSettingsPanel extends StatelessWidget {
           value: settings.immersiveMode,
           onChanged:
               (v) => onSettingsChanged(settings.copyWith(immersiveMode: v)),
+          activeThumbColor: settings.accentColor,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildVolumeKeyPagingToggle(BuildContext context) {
+    // 音量键翻页依赖原生按键拦截，仅移动端提供设置项。
+    if (!isMobilePlatform) {
+      return const SizedBox.shrink();
+    }
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      children: [
+        Icon(
+          Icons.volume_up_rounded,
+          color: settings.onSurfaceVariantColor,
+          size: 20,
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            l10n.readerVolumeKeyPaging,
+            style: TextStyle(
+              color: settings.onSurfaceVariantColor,
+              fontSize: AppTypography.bodyMedium,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Switch(
+          value: settings.volumeKeyPaging,
+          onChanged:
+              (v) => onSettingsChanged(settings.copyWith(volumeKeyPaging: v)),
           activeThumbColor: settings.accentColor,
         ),
       ],

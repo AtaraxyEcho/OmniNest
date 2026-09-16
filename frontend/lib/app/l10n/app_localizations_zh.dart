@@ -4753,6 +4753,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerImmersiveMode => '沉浸模式';
 
   @override
+  String get readerVolumeKeyPaging => '音量键翻页';
+
+  @override
   String get readerPreviousPage => '上一页';
 
   @override

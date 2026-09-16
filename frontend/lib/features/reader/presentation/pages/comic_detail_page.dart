@@ -271,19 +271,15 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
         foregroundColor: context.readerColors.onPrimaryContainer,
       ),
     );
-    final bookshelfButton = FilledButton(
+    final bookshelfButton = FilledButton.icon(
       onPressed: _bookshelfBusy ? null : () => _toggleBookshelf(item),
-      style: FilledButton.styleFrom(
-        backgroundColor:
-            item.addedToBookshelf
-                ? context.readerColors.primary.withValues(alpha: 0.12)
-                : context.readerColors.surfaceContainerHigh,
-        foregroundColor:
-            item.addedToBookshelf
-                ? context.readerColors.primary
-                : context.readerColors.onSurfaceVariant,
+      icon: Icon(
+        item.addedToBookshelf
+            ? Icons.bookmark_rounded
+            : Icons.bookmark_add_rounded,
+        size: 18,
       ),
-      child:
+      label:
           _bookshelfBusy
               ? SizedBox(
                 width: 18,
@@ -298,6 +294,16 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
                     ? l10n.readerAddedToBookshelf
                     : l10n.readerAddToBookshelf,
               ),
+      style: FilledButton.styleFrom(
+        backgroundColor:
+            item.addedToBookshelf
+                ? context.readerColors.primary.withValues(alpha: 0.12)
+                : context.readerColors.surfaceContainerHigh,
+        foregroundColor:
+            item.addedToBookshelf
+                ? context.readerColors.primary
+                : context.readerColors.onSurfaceVariant,
+      ),
     );
 
     return LayoutBuilder(

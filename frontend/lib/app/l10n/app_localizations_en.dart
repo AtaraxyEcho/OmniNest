@@ -4912,6 +4912,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerImmersiveMode => 'Immersive mode';
 
   @override
+  String get readerVolumeKeyPaging => 'Volume keys turn pages';
+
+  @override
   String get readerPreviousPage => 'Previous page';
 
   @override

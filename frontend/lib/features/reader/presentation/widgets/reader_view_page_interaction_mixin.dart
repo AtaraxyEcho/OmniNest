@@ -331,6 +331,7 @@ mixin ReaderViewPageInteractionMixin
     }
     settings = newSettings;
     persistSettings(newSettings);
+    syncVolumeKeyPaging();
 
     if (layoutChanged) {
       if (modeChanged) {

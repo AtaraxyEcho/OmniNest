@@ -187,6 +187,9 @@ mixin ReaderViewPageMixin on ConsumerState<ReaderViewPage> {
 
   void clearReaderSelection();
 
+  /// 将音量键翻页开关同步到平台层。
+  void syncVolumeKeyPaging();
+
   // ── 常量 ──
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

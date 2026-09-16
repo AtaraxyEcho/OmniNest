@@ -458,7 +458,9 @@ class _TextDetailContentState extends ConsumerState<_TextDetailContent> {
         OutlinedButton.icon(
           onPressed: widget.bookshelfBusy ? null : widget.onToggleBookshelf,
           icon: Icon(
-            Icons.bookmark_rounded,
+            widget.item.addedToBookshelf
+                ? Icons.bookmark_rounded
+                : Icons.bookmark_add_rounded,
             size: 18,
             color:
                 widget.item.addedToBookshelf
@@ -998,9 +1000,14 @@ class _PdfDetailContent extends StatelessWidget {
           label: Text(l10n.readerPdfTitle),
         ),
         const SizedBox(height: 12),
-        OutlinedButton(
+        OutlinedButton.icon(
           onPressed: bookshelfBusy ? null : onToggleBookshelf,
-          child: Text(
+          icon: Icon(
+            item.addedToBookshelf
+                ? Icons.bookmark_rounded
+                : Icons.bookmark_add_rounded,
+          ),
+          label: Text(
             item.addedToBookshelf
                 ? l10n.readerAddedToBookshelf
                 : l10n.readerAddToBookshelf,

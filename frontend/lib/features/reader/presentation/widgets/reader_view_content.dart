@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_annotations.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_block_item.dart';
@@ -127,6 +128,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   bool _isLoading = true;
   late final FocusNode _selectionFocusNode;
   String _selectedText = '';
+  String _lastSelectionRawText = '';
   Offset? _pointerDownPosition;
   DateTime? _pointerDownAt;
   bool _pointerMoved = false;
@@ -382,7 +384,8 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
   }
 
   void _handleSelectionChanged(SelectedContent? selection) {
-    final selectedText = selection?.plainText.trim() ?? '';
+    _lastSelectionRawText = selection?.plainText ?? '';
+    final selectedText = _lastSelectionRawText.trim();
     if (selectedText.isNotEmpty) {
       if (mounted) {
         setState(() => _selectedText = selectedText);
@@ -409,6 +412,16 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
                 )
                 .toList();
     final hasHighlightOverlap = overlappingHighlights.isNotEmpty;
+    // 临时诊断日志：定位「取消高亮」与批注存储偏移的对齐问题。
+    readerDebugLog(
+      '[reader-selection][menu] '
+      'mode=${widget.visibleBlocks != null ? 'page' : 'scroll'} '
+      'raw="${_debugPreviewText(_lastSelectionRawText)}" '
+      'trimmed="${_debugPreviewText(_selectedText)}" '
+      'range=${range == null ? 'null' : '(${range.$1}, ${range.$2})'} '
+      'annotations=[${_debugDescribeAnnotations(widget.annotations)}] '
+      'overlap=[${_debugDescribeAnnotations(overlappingHighlights)}]',
+    );
     final items = <ContextMenuButtonItem>[
       ...selectableRegionState.contextMenuButtonItems,
       if (range != null && widget.onHighlight != null && !hasHighlightOverlap)
@@ -457,27 +470,68 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     if (selectedText.isEmpty) {
       return null;
     }
-    final candidates = <ReaderInlineSpan>[
-      ..._visibleTextSpans(),
-      if (!identical(_rawBlocks, _blocks)) ..._textSpans(_rawBlocks),
+    final candidates = <(ReaderInlineSpan, String)>[
+      for (final span in _visibleTextSpans()) (span, 'projected'),
+      if (!identical(_rawBlocks, _blocks))
+        for (final span in _textSpans(_rawBlocks)) (span, 'raw'),
     ];
-    for (final span in candidates) {
+    for (final (span, source) in candidates) {
       final localOffset = span.text.indexOf(selectedText);
       if (localOffset >= 0) {
-        return (
+        return _logResolvedRange(source, span, false, localOffset, (
           span.startOffset + localOffset,
           span.startOffset + localOffset + selectedText.length,
-        );
+        ));
       }
       final normalized = _findNormalizedOffset(span.text, selectedText);
       if (normalized != null) {
-        return (
+        return _logResolvedRange(source, span, true, normalized, (
           span.startOffset + normalized,
           span.startOffset + normalized + selectedText.length,
-        );
+        ));
       }
     }
+    readerDebugLog(
+      '[reader-selection][range] 未命中任何 span：候选 ${candidates.length} 个，'
+      '选中 "${_debugPreviewText(selectedText)}"',
+    );
     return null;
+  }
+
+  /// 诊断辅助：输出命中 span 的来源与偏移明细后返回解析区间。
+  (int, int) _logResolvedRange(
+    String source,
+    ReaderInlineSpan span,
+    bool normalizedMatch,
+    int localOffset,
+    (int, int) range,
+  ) {
+    readerDebugLog(
+      '[reader-selection][range] 命中 $source '
+      'span(start=${span.startOffset}, len=${span.text.length}, '
+      'text="${_debugPreviewText(span.text)}") '
+      '${normalizedMatch ? 'normalized' : 'exact'} local=$localOffset '
+      'range=(${range.$1}, ${range.$2})',
+    );
+    return range;
+  }
+
+  String _debugPreviewText(String text) {
+    final escaped = text
+        .replaceAll('\n', r'\n')
+        .replaceAll('\r', r'\r')
+        .replaceAll('\t', r'\t');
+    return escaped.length <= 48 ? escaped : '${escaped.substring(0, 48)}...';
+  }
+
+  String _debugDescribeAnnotations(List<ReaderAnnotation> annotations) {
+    return annotations
+        .map(
+          (a) =>
+              '${a.id.length > 8 ? a.id.substring(0, 8) : a.id}'
+              ':${a.startOffset}..${a.endOffset}',
+        )
+        .join(', ');
   }
 
   int? _findNormalizedOffset(String source, String selectedText) {

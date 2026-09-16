@@ -8,6 +8,7 @@ import android.content.res.Configuration
 import android.os.Build
 import android.os.PowerManager
 import android.util.Rational
+import android.view.KeyEvent
 import com.ryanheise.audioservice.AudioServiceActivity
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
@@ -16,6 +17,8 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : AudioServiceActivity() {
     private var pipChannel: MethodChannel? = null
     private var pipEligible = false
+    private var readerVolumeChannel: MethodChannel? = null
+    private var volumeKeyPagingEnabled = false
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -57,6 +60,40 @@ class MainActivity : AudioServiceActivity() {
                 else -> result.notImplemented()
             }
         }
+        // 阅读器音量键翻页：开启后拦截音量键并转发方向，关闭后恢复系统音量。
+        MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "omninest/reader_volume"
+        ).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "setEnabled" -> {
+                    volumeKeyPagingEnabled = call.argument<Boolean>("enabled") ?: false
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
+        readerVolumeChannel = MethodChannel(
+            flutterEngine.dartExecutor.binaryMessenger,
+            "omninest/reader_volume"
+        )
+    }
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (volumeKeyPagingEnabled) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                    if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
+                        readerVolumeChannel?.invokeMethod(
+                            "onVolumeKey",
+                            if (event.keyCode == KeyEvent.KEYCODE_VOLUME_UP) "up" else "down"
+                        )
+                    }
+                    return true
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onUserLeaveHint() {

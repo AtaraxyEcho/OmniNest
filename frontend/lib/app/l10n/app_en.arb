@@ -2059,6 +2059,7 @@
   "readerFontSystem": "System",
   "readerTheme": "Theme",
   "readerImmersiveMode": "Immersive mode",
+  "readerVolumeKeyPaging": "Volume keys turn pages",
   "readerPreviousPage": "Previous page",
   "readerNextPage": "Next page",
   "readerPreviousChapter": "Previous chapter",

@@ -9083,6 +9083,12 @@ abstract class AppLocalizations {
   /// **'Immersive mode'**
   String get readerImmersiveMode;
 
+  /// No description provided for @readerVolumeKeyPaging.
+  ///
+  /// In en, this message translates to:
+  /// **'Volume keys turn pages'**
+  String get readerVolumeKeyPaging;
+
   /// No description provided for @readerPreviousPage.
   ///
   /// In en, this message translates to:
