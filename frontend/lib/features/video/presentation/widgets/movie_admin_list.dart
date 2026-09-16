@@ -378,6 +378,8 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
             _runAction('audio', () => _controller.createAudioExtractTask(item));
           case 'nfo':
             unawaited(_showNfoPreview(context, item));
+          case 'delete':
+            unawaited(_confirmAndDeleteItem(context, l10n, item));
         }
       },
       itemBuilder:
@@ -412,8 +414,45 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
               label: l10n.videoAudioExtract,
               enabled: !busy || _runningAction == 'audio',
             ),
+            _menuItem(
+              value: 'delete',
+              icon: Icons.delete_outline_rounded,
+              label: l10n.videoDelete,
+              enabled: !busy,
+            ),
           ],
     );
+  }
+
+  Future<void> _confirmAndDeleteItem(
+    BuildContext context,
+    AppLocalizations l10n,
+    MovieVideoItem item,
+  ) async {
+    if (_runningAction != null) {
+      return;
+    }
+    setState(() => _runningAction = 'delete');
+    try {
+      final deleted = await confirmAndRunFilePurge(
+        context,
+        resourceName: item.title,
+        action: (cascade) => _controller.deleteItem(item, cascade: cascade),
+      );
+      if (!deleted || !mounted || !context.mounted) {
+        return;
+      }
+      showMovieFeedback(context, l10n.videoMovedToRecycleBin);
+    } catch (error) {
+      if (!mounted || !context.mounted) {
+        return;
+      }
+      showMovieFeedback(context, movieErrorMessage(error), isError: true);
+    } finally {
+      if (mounted) {
+        setState(() => _runningAction = null);
+      }
+    }
   }
 
   PopupMenuItem<String> _menuItem({
