@@ -411,9 +411,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     final hasHighlightOverlap = overlappingHighlights.isNotEmpty;
     final items = <ContextMenuButtonItem>[
       ...selectableRegionState.contextMenuButtonItems,
-      if (range != null &&
-          widget.onHighlight != null &&
-          !hasHighlightOverlap)
+      if (range != null && widget.onHighlight != null && !hasHighlightOverlap)
         ContextMenuButtonItem(
           label: AppLocalizations.of(context).readerHighlight,
           onPressed: () {
@@ -425,7 +423,11 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
         ),
       if (hasHighlightOverlap && widget.onRemoveHighlight != null)
         ContextMenuButtonItem(
-          label: AppLocalizations.of(context).readerRemoveHighlight,
+          // 重叠批注含备注时按「取消批注」表述，纯高亮按「取消高亮」。
+          label:
+              overlappingHighlights.any((a) => (a.note ?? '').isNotEmpty)
+                  ? AppLocalizations.of(context).readerRemoveAnnotation
+                  : AppLocalizations.of(context).readerRemoveHighlight,
           onPressed: () {
             selectableRegionState.hideToolbar();
             selectableRegionState.clearSelection();
@@ -589,6 +591,11 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     scheduleMicrotask(() {
       if (!mounted || _suppressNextContentTap) {
         _suppressNextContentTap = false;
+        return;
+      }
+      // 本次按下-抬起产生了文本选区（小距离拖选）：是选择手势而非点击，
+      // 不得切换顶栏/底栏，否则选词过程中控制栏反复弹出遮挡内容。
+      if (_selectedText.isNotEmpty) {
         return;
       }
       widget.onTap?.call();

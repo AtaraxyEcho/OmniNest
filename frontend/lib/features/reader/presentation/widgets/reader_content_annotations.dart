@@ -60,7 +60,12 @@ abstract final class ReaderContentAnnotationProjector {
     List<ReaderAnnotation> annotations,
   ) {
     return lines.map((line) {
-      return LineData(spans: _applyToSpans(line.spans, annotations));
+      // isNewParagraph 是首行缩进标记，必须随行保留：投影重建时丢弃
+      // 会让加过批注的段落失去首行缩进（布局视为非段首行）。
+      return LineData(
+        spans: _applyToSpans(line.spans, annotations),
+        isNewParagraph: line.isNewParagraph,
+      );
     }).toList();
   }
 
