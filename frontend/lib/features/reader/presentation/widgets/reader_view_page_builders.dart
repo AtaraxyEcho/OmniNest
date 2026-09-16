@@ -912,6 +912,17 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
               : (restoreCharOffset / totalChars).clamp(0.0, 1.0).toDouble();
       scrollProgress = capturedProgress;
       positionTracker.setCharOffset(restoreCharOffset, currentChapterId);
+      // locate 按需算出目标页后，页数通知器可能仍停留在预热进度；先同步到
+      // 导航器实际页数，避免恢复跳转因 PageView item 数不足被钳制到半途页。
+      final navigator = chapterData.getOrCreatePageNavigator(
+        computePageWidth(),
+        computePageHeight(),
+        settings,
+        textScale: MediaQuery.textScalerOf(context).scale(1.0),
+      );
+      if (pageCountNotifier.value < targetPage + 1) {
+        pageCountNotifier.value = navigator.readablePageCount;
+      }
       // 落位动画（_syncPageView animateToPage）期间物理页会路过中间页，
       // 静默窗内的提交按闸门丢弃，动画结束后的正常翻页不受影响。
       restoreSilenceUntil = DateTime.now().add(
