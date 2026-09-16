@@ -51,9 +51,11 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
     final detailAsync = ref.watch(readerItemDetailProvider(widget.itemId));
 
     // 详情视图渲染在模块内容区域内（顶栏/侧栏/底导航保持可见），返回条为固定页头。
+    // 漫画分支自带 Sliver 滚动体，声明后骨架不再二次包裹。
     return ReaderPageScaffold(
       target: ReaderPageTarget.library,
       enablePopGuard: false,
+      childOwnScroll: detailAsync.asData?.value.item.isComic ?? false,
       headerPadding: EdgeInsets.zero,
       header: _DetailBackBar(onTap: _handleBack),
       child: detailAsync.when(

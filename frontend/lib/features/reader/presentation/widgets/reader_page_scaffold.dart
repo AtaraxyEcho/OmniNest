@@ -61,6 +61,7 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
   const ReaderPageScaffold({
     required this.target,
     required this.child,
+    this.childOwnScroll = false,
     this.onRefresh,
     this.header,
     this.headerPadding,
@@ -70,9 +71,13 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
 
   final ReaderPageTarget target;
 
-  /// 页面内容（默认非滚动容器，由骨架负责滚动；自带 ScrollView 的
-  /// 页面直接承接滚动与刷新，由页面自管内边距与物理）。
+  /// 页面内容（默认非滚动容器，由骨架负责滚动）。
   final Widget child;
+
+  /// 页面自带滚动体（如详情页 Sliver 虚拟化列表）时置 true：
+  /// 骨架不再用 SingleChildScrollView 包裹，滚动、物理与内边距由页面自管；
+  /// 下拉刷新仍由骨架的 RefreshIndicator 承接。
+  final bool childOwnScroll;
 
   final Future<void> Function()? onRefresh;
 
@@ -119,6 +124,7 @@ class _ReaderPageScaffoldState extends ConsumerState<ReaderPageScaffold> {
       onRefresh: widget.onRefresh,
       header: widget.header,
       headerPadding: widget.headerPadding,
+      childOwnScroll: widget.childOwnScroll,
       child: widget.child,
     );
 
@@ -524,12 +530,17 @@ class _ReaderModuleBottomNav extends StatelessWidget {
 class _ReaderPageScrollArea extends StatelessWidget {
   const _ReaderPageScrollArea({
     required this.child,
+    this.childOwnScroll = false,
     this.header,
     this.headerPadding,
     this.onRefresh,
   });
 
   final Widget child;
+
+  /// true 时不再包裹 SingleChildScrollView（页面自带滚动体）。
+  final bool childOwnScroll;
+
   final Widget? header;
   final EdgeInsetsGeometry? headerPadding;
   final Future<void> Function()? onRefresh;
@@ -538,10 +549,8 @@ class _ReaderPageScrollArea extends StatelessWidget {
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final wide = MediaQuery.sizeOf(context).width >= 1024;
-    // 页面自带滚动体（如详情页 Sliver 虚拟化列表）时直接承接滚动与
-    // 下拉刷新，不再二次包裹，避免嵌套滚动。
     final Widget scroll;
-    if (child is ScrollView) {
+    if (childOwnScroll) {
       scroll = child;
     } else {
       scroll = SingleChildScrollView(
