@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 public class ClamAvRuntimeConfig {
     private static final String ENABLED = "clamav.enabled";
     private static final String HOST = "clamav.host";
+    private static final String TIMEOUT_MILLIS = "clamav.timeout-millis";
     private static final int MINIMUM_TIMEOUT_MILLIS = 1_000;
     private static final int MAXIMUM_TIMEOUT_MILLIS = 3_600_000;
 
@@ -95,7 +96,7 @@ public class ClamAvRuntimeConfig {
     }
 
     /**
-     * 获取单文件扫描时限。
+     * 获取单文件扫描时限。配置中心热值优先，越界或非法值回落部署默认值。
      *
      * @return 单文件扫描时限
      */
@@ -105,7 +106,11 @@ public class ClamAvRuntimeConfig {
                 MINIMUM_TIMEOUT_MILLIS,
                 MAXIMUM_TIMEOUT_MILLIS
         );
-        return Duration.ofMillis(deploymentTimeout);
+        return configuredValue(TIMEOUT_MILLIS, "security.clamav.timeout-millis")
+                .map(value -> parseInt(value, -1))
+                .filter(value -> value >= MINIMUM_TIMEOUT_MILLIS && value <= MAXIMUM_TIMEOUT_MILLIS)
+                .map(Duration::ofMillis)
+                .orElse(Duration.ofMillis(deploymentTimeout));
     }
 
     private Optional<String> configuredValue(String key, String legacyKey) {
@@ -146,6 +151,20 @@ public class ClamAvRuntimeConfig {
                             3310,
                             1,
                             65_535
+                    )
+            ));
+            case "security.clamav.timeout-millis" -> Optional.of(Integer.toString(
+                    legacyDeploymentConfigResolver.integerValue(
+                            "OMNINEST_CLAMAV_TIMEOUT_MILLIS",
+                            legacyKey,
+                            (int) Math.clamp(
+                                    properties.getTimeout().toMillis(),
+                                    MINIMUM_TIMEOUT_MILLIS,
+                                    MAXIMUM_TIMEOUT_MILLIS
+                            ),
+                            10_000,
+                            MINIMUM_TIMEOUT_MILLIS,
+                            MAXIMUM_TIMEOUT_MILLIS
                     )
             ));
             default -> Optional.empty();

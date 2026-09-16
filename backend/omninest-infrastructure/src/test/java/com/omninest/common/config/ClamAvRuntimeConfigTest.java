@@ -35,4 +35,53 @@ class ClamAvRuntimeConfigTest {
         assertThat(config.port()).isEqualTo(3310);
         assertThat(config.timeout()).isEqualTo(Duration.ofSeconds(10));
     }
+
+    @Test
+    void readsHotTimeoutValueFromConfigCenter() {
+        ConfigValueProvider provider = Mockito.mock(ConfigValueProvider.class);
+        RuntimeConfigCache cache = Mockito.mock(RuntimeConfigCache.class);
+        ClamAvProperties properties = new ClamAvProperties();
+        Mockito.when(cache.get("clamav.timeout-millis")).thenReturn(Optional.of("60000"));
+        LegacyDeploymentConfigResolver resolver = new LegacyDeploymentConfigResolver(
+                provider,
+                cache,
+                new MockEnvironment()
+        );
+        ClamAvRuntimeConfig config = new ClamAvRuntimeConfig(properties, resolver, provider, cache);
+
+        assertThat(config.timeout()).isEqualTo(Duration.ofSeconds(60));
+    }
+
+    @Test
+    void rejectsOutOfRangeHotTimeoutAndFallsBackToDeploymentDefault() {
+        ConfigValueProvider provider = Mockito.mock(ConfigValueProvider.class);
+        RuntimeConfigCache cache = Mockito.mock(RuntimeConfigCache.class);
+        ClamAvProperties properties = new ClamAvProperties();
+        Mockito.when(cache.get("clamav.timeout-millis")).thenReturn(Optional.of("100"));
+        LegacyDeploymentConfigResolver resolver = new LegacyDeploymentConfigResolver(
+                provider,
+                cache,
+                new MockEnvironment()
+        );
+        ClamAvRuntimeConfig config = new ClamAvRuntimeConfig(properties, resolver, provider, cache);
+
+        assertThat(config.timeout()).isEqualTo(Duration.ofSeconds(10));
+    }
+
+    @Test
+    void fallsBackToLegacyKeyWhenHotKeyMissing() {
+        ConfigValueProvider provider = Mockito.mock(ConfigValueProvider.class);
+        RuntimeConfigCache cache = Mockito.mock(RuntimeConfigCache.class);
+        ClamAvProperties properties = new ClamAvProperties();
+        Mockito.when(cache.get("clamav.timeout-millis")).thenReturn(Optional.empty());
+        Mockito.when(cache.get("security.clamav.timeout-millis")).thenReturn(Optional.of("30000"));
+        LegacyDeploymentConfigResolver resolver = new LegacyDeploymentConfigResolver(
+                provider,
+                cache,
+                new MockEnvironment()
+        );
+        ClamAvRuntimeConfig config = new ClamAvRuntimeConfig(properties, resolver, provider, cache);
+
+        assertThat(config.timeout()).isEqualTo(Duration.ofSeconds(30));
+    }
 }

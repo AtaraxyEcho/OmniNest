@@ -45,6 +45,7 @@ INSERT INTO omni.config_entries (
     ('clamav.enabled', 'true', 'BOOLEAN', 'security', 'HOT', '是否启用 ClamAV 文件安全扫描', false),
     ('clamav.host', 'localhost', 'STRING', 'security', 'HOT', 'ClamAV 服务主机', false),
     ('clamav.port', '3310', 'NUMBER', 'security', 'HOT', 'ClamAV 服务端口', false),
+    ('clamav.timeout-millis', '2000000', 'NUMBER', 'security', 'HOT', '单文件安全扫描时限（毫秒，活性护栏）', false),
     ('weather.enabled', 'true', 'BOOLEAN', 'weather', 'HOT', '是否启用天气服务', false),
     ('media.tmdb.enabled', 'true', 'BOOLEAN', 'media', 'HOT', '是否启用 TMDB', false),
     ('media.tmdb.key', '', 'STRING', 'media', 'HOT', 'TMDB v3 API Key', true),
