@@ -18,6 +18,10 @@ class ExternalStorageProvidersTest {
                 .doesNotThrowAnyException();
         assertThatCode(() -> ExternalStorageProviders.requireAllowed("S3"))
                 .doesNotThrowAnyException();
+        assertThatCode(() -> ExternalStorageProviders.requireAllowed("QUARK"))
+                .doesNotThrowAnyException();
+        assertThatCode(() -> ExternalStorageProviders.requireAllowed("BAIDU"))
+                .doesNotThrowAnyException();
     }
 
     @Test

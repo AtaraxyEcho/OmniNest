@@ -158,10 +158,12 @@ public class ExternalStorageService {
         return List.of(
                 new com.omninest.modules.file.dto.ExternalStorageConnectorDto("WEBDAV", "WebDAV", "PASSWORD", "AVAILABLE"),
                 new com.omninest.modules.file.dto.ExternalStorageConnectorDto("S3", "S3", "ACCESS_KEY", "AVAILABLE"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("ONEDRIVE", "OneDrive", "OAUTH2", "TOKEN_PASTE"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("GDRIVE", "Google Drive", "OAUTH2", "TOKEN_PASTE"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("DROPBOX", "Dropbox", "OAUTH2", "TOKEN_PASTE"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("ALIYUN_DRIVE", "Aliyun Drive", "COOKIE", "TOKEN_PASTE")
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("ONEDRIVE", "OneDrive", "OAUTH2", "OAUTH"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("GDRIVE", "Google Drive", "OAUTH2", "OAUTH"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("DROPBOX", "Dropbox", "OAUTH2", "OAUTH"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("ALIYUN_DRIVE", "Aliyun Drive", "COOKIE", "TOKEN_PASTE"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("QUARK", "夸克网盘", "COOKIE", "ADAPTER_PENDING"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("BAIDU", "百度网盘", "COOKIE", "ADAPTER_PENDING")
         );
     }
 
@@ -390,6 +392,10 @@ public class ExternalStorageService {
             case "GDRIVE", "GOOGLE_DRIVE" -> "drive";
             case "ALIYUN_DRIVE" -> "alipan";
             case "DROPBOX" -> "dropbox";
+            case "QUARK", "BAIDU" -> throw new BusinessException(
+                    ErrorCode.DEPENDENCY_UNAVAILABLE,
+                    "该网盘的数据面 Adapter 尚未接入，当前仅支持保存连接凭据"
+            );
             default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的外部存储类型");
         };
     }
