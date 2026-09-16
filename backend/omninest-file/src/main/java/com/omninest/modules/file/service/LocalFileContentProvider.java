@@ -93,24 +93,33 @@ public class LocalFileContentProvider implements FileContentProvider {
 
     private ResolvedContent resolve(FileNode node) {
         if (!runtimeConfigService.isEnabled()) {
-            throw unavailable();
+            throw unavailable("本地媒体功能未启用");
         }
         FileContentRef reference = contentRefRepository.findByFileNodeId(node.getId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件内容引用不存在"));
-        if (!AVAILABLE.equals(reference.getAvailabilityStatus())) {
-            throw unavailable();
-        }
         StorageLocation location = storageLocationRepository.findById(reference.getStorageLocationId())
-                .orElseThrow(this::unavailable);
+                .orElseThrow(() -> unavailable("存储位置不存在"));
         if (!location.isEnabled() || !PROVIDER_TYPE.equals(location.getProviderType())) {
-            throw unavailable();
+            throw unavailable("存储位置已停用或类型不匹配");
         }
         Path path = pathResolver.resolveFile(location, reference.getRelativePath());
+        // NAS 短暂离线后恢复时，播放请求可直接把引用拉回 AVAILABLE，避免等待下次扫描。
+        if (!AVAILABLE.equals(reference.getAvailabilityStatus())) {
+            reference.setAvailabilityStatus(AVAILABLE);
+            reference.setMissingSince(null);
+            reference.setMissingConfirmations(0);
+            reference.setLastSeenAt(java.time.Instant.now());
+            contentRefRepository.save(reference);
+        }
         return new ResolvedContent(reference, location, path);
     }
 
     private BusinessException unavailable() {
-        return new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "本地媒体文件当前不可用");
+        return unavailable("本地媒体文件当前不可用");
+    }
+
+    private BusinessException unavailable(String message) {
+        return new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, message);
     }
 
     private record ResolvedContent(FileContentRef reference, StorageLocation location, Path path) {

@@ -174,7 +174,10 @@ public class StorageLocationService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "无权使用该存储位置");
         }
         if (!pathResolver.isAvailable(location)) {
-            throw new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "存储位置在当前节点不可用");
+            throw new BusinessException(
+                    ErrorCode.DEPENDENCY_UNAVAILABLE,
+                    "存储位置在当前节点不可用，请检查本地媒体挂载与目录权限"
+            );
         }
         return location;
     }
