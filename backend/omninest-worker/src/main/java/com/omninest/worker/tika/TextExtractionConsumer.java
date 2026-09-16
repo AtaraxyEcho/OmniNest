@@ -12,11 +12,13 @@ import com.omninest.worker.file.FilePostProcessingTaskTracker;
 import com.rabbitmq.client.Channel;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.Writer;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.tika.exception.WriteLimitReachedException;
 import org.apache.tika.metadata.Metadata;
 import org.apache.tika.parser.AutoDetectParser;
 import org.apache.tika.parser.ParseContext;
@@ -29,7 +31,7 @@ import org.springframework.stereotype.Component;
 /**
  * 文本提取消费者，使用 Apache Tika 从文件中提取文本内容并写入 Lucene 索引。
  * 同步维护 sys_tasks 生命周期：领取 → 执行 → 完成 / 失败重试。
- * 超过写入上限时按已提取片段完成索引，避免长文（如长篇小说 EPUB）被误判为提取失败。
+ * 超长文本（千万字级网文）按固定字符块分片写入多条 Lucene 文档，避免单文档内存与字段体积失控。
  */
 @Slf4j
 @Component
@@ -38,9 +40,13 @@ import org.springframework.stereotype.Component;
 public class TextExtractionConsumer {
 
     /**
-     * 搜索索引用文本写入上限。足够覆盖多数长篇中文小说，同时约束单文档内存占用。
+     * 单个 Lucene 文档的最大正文字符数。
      */
-    private static final int MAX_CONTENT_LENGTH = 2_000_000;
+    private static final int CHUNK_SIZE_CHARS = 500_000;
+    /**
+     * 安全护栏：单文件最多索引的块数，对应约 1 亿字符。
+     */
+    private static final int MAX_CHUNKS = 200;
     private static final String TASK_TYPE = "TEXT_EXTRACTION";
 
     private final ObjectStorageClient objectStorageClient;
@@ -67,52 +73,46 @@ public class TextExtractionConsumer {
             }
             log.info("收到文本提取任务: fileNodeId={}, fileName={}", event.fileNodeId(), event.fileName());
             ObjectStorageKey key = new ObjectStorageKey(event.bucket(), event.objectKey());
-            int textLength = 0;
-            boolean truncated = false;
+            ChunkingTextCollector collector = new ChunkingTextCollector(CHUNK_SIZE_CHARS, MAX_CHUNKS);
             try (InputStream inputStream = objectStorageClient.getObject(key)) {
                 AutoDetectParser parser = new AutoDetectParser();
-                BodyContentHandler handler = new BodyContentHandler(MAX_CONTENT_LENGTH);
+                BodyContentHandler handler = new BodyContentHandler(collector);
                 Metadata metadata = new Metadata();
                 ParseContext context = new ParseContext();
                 context.set(Parser.class, parser);
-                try {
-                    parser.parse(inputStream, handler, metadata, context);
-                } catch (Exception parseException) {
-                    if (!isWriteLimitReached(parseException)) {
-                        throw parseException;
-                    }
-                    // 上限保护的是内存与索引体积；已达上限的片段仍可检索，按部分成功完成。
-                    truncated = true;
-                    log.info("文本提取达到写入上限，按已提取片段建立索引: fileNodeId={}, limit={}",
-                            event.fileNodeId(), MAX_CONTENT_LENGTH);
+                parser.parse(inputStream, handler, metadata, context);
+                collector.finish();
+            }
+            List<String> chunks = collector.chunks();
+            int textLength = collector.textLength();
+            boolean truncated = collector.truncated();
+            if (!chunks.isEmpty()) {
+                if (!fileLifecycleGuard.isOwnedProcessable(event.ownerUserId(), event.fileNodeId())) {
+                    log.info("源文件在文本提取期间进入永久删除流程，放弃索引写入: fileNodeId={}",
+                            event.fileNodeId());
+                    taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
+                    channel.basicAck(deliveryTag, false);
+                    return;
                 }
-                String extractedText = handler.toString();
-                if (extractedText != null && !extractedText.isBlank()) {
-                    if (!fileLifecycleGuard.isOwnedProcessable(event.ownerUserId(), event.fileNodeId())) {
-                        log.info("源文件在文本提取期间进入永久删除流程，放弃索引写入: fileNodeId={}",
-                                event.fileNodeId());
-                        taskTracker.complete(tracked.taskId(), Map.of("skipped", true, "reason", "SOURCE_DELETED"));
-                        channel.basicAck(deliveryTag, false);
-                        return;
-                    }
-                    fileSearchIndexService.indexFile(
-                            event.fileNodeId(),
-                            event.ownerUserId(),
-                            event.fileName(),
-                            extractedText
-                    );
-                    textLength = extractedText.length();
-                    log.info("文本提取完成: fileNodeId={}, 文本长度={}, truncated={}",
-                            event.fileNodeId(), textLength, truncated);
-                } else {
-                    log.info("文件无可提取文本: fileNodeId={}", event.fileNodeId());
-                }
+                fileSearchIndexService.indexFileChunks(
+                        event.fileNodeId(),
+                        event.ownerUserId(),
+                        event.fileName(),
+                        chunks,
+                        "PERSONAL"
+                );
+                log.info("文本提取完成: fileNodeId={}, 文本长度={}, chunkCount={}, truncated={}",
+                        event.fileNodeId(), textLength, chunks.size(), truncated);
+            } else {
+                log.info("文件无可提取文本: fileNodeId={}", event.fileNodeId());
             }
             Map<String, Object> result = new LinkedHashMap<>();
             result.put("textLength", textLength);
+            result.put("chunkCount", chunks.size());
             if (truncated) {
                 result.put("truncated", true);
-                result.put("writeLimit", MAX_CONTENT_LENGTH);
+                result.put("chunkSize", CHUNK_SIZE_CHARS);
+                result.put("maxChunks", MAX_CHUNKS);
             }
             taskTracker.complete(tracked.taskId(), result);
             channel.basicAck(deliveryTag, false);
@@ -123,14 +123,80 @@ public class TextExtractionConsumer {
         }
     }
 
-    private boolean isWriteLimitReached(Throwable throwable) {
-        Throwable current = throwable;
-        while (current != null) {
-            if (current instanceof WriteLimitReachedException) {
-                return true;
-            }
-            current = current.getCause();
+    /**
+     * 将 Tika 抽出的正文流式切块，避免把千万字全文同时堆进单个字符串或单条 Lucene 文档。
+     */
+    static final class ChunkingTextCollector extends Writer {
+        private final int chunkSizeChars;
+        private final int maxChunks;
+        private final List<String> chunks = new ArrayList<>();
+        private final StringBuilder buffer;
+        private int textLength;
+        private boolean truncated;
+
+        ChunkingTextCollector(int chunkSizeChars, int maxChunks) {
+            this.chunkSizeChars = chunkSizeChars;
+            this.maxChunks = maxChunks;
+            this.buffer = new StringBuilder(Math.min(chunkSizeChars, 8192));
         }
-        return false;
+
+        @Override
+        public void write(char[] cbuf, int off, int len) {
+            if (truncated || len <= 0) {
+                return;
+            }
+            int remaining = len;
+            int cursor = off;
+            while (remaining > 0 && !truncated) {
+                int space = chunkSizeChars - buffer.length();
+                int take = Math.min(space, remaining);
+                buffer.append(cbuf, cursor, take);
+                cursor += take;
+                remaining -= take;
+                textLength += take;
+                if (buffer.length() >= chunkSizeChars) {
+                    flushBufferedChunk();
+                }
+            }
+        }
+
+        @Override
+        public void flush() {
+        }
+
+        @Override
+        public void close() {
+            finish();
+        }
+
+        void finish() {
+            if (!truncated && !buffer.isEmpty()) {
+                chunks.add(buffer.toString());
+                buffer.setLength(0);
+            }
+        }
+
+        List<String> chunks() {
+            return chunks;
+        }
+
+        int textLength() {
+            return textLength;
+        }
+
+        boolean truncated() {
+            return truncated;
+        }
+
+        private void flushBufferedChunk() {
+            if (chunks.size() >= maxChunks) {
+                truncated = true;
+                buffer.setLength(0);
+                log.warn("文本提取达到最大分块数，后续内容不再索引: maxChunks={}", maxChunks);
+                return;
+            }
+            chunks.add(buffer.toString());
+            buffer.setLength(0);
+        }
     }
 }

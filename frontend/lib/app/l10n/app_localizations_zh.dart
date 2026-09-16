@@ -5531,7 +5531,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String readerConfirmDeleteMsg(Object name) {
-    return '确定要从书库删除「$name」吗？源文件将保留。';
+    return '确定要永久删除「$name」吗？书库记录与源文件都会删除，此操作不可撤销。';
   }
 
   @override

@@ -2378,7 +2378,7 @@
     }
   },
   "readerConfirmDelete": "确认永久删除",
-  "readerConfirmDeleteMsg": "确定要从书库删除「{name}」吗？源文件将保留。",
+  "readerConfirmDeleteMsg": "确定要永久删除「{name}」吗？书库记录与源文件都会删除，此操作不可撤销。",
   "@readerConfirmDeleteMsg": {
     "placeholders": {
       "name": {}

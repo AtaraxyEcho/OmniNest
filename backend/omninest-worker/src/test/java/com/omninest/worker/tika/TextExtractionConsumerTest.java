@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import java.util.zip.CRC32;
 import java.util.zip.ZipEntry;
@@ -67,6 +68,9 @@ class TextExtractionConsumerTest {
     @Captor
     private ArgumentCaptor<String> textCaptor;
 
+    @Captor
+    private ArgumentCaptor<List<String>> chunksCaptor;
+
     @BeforeEach
     void allowFileProcessing() {
         when(fileLifecycleGuard.isOwnedProcessable(any(), any())).thenReturn(true);
@@ -111,35 +115,40 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService).indexFile(
+        verify(fileSearchIndexService).indexFileChunks(
                 eq(event.fileNodeId()),
                 eq(event.ownerUserId()),
                 eq(event.fileName()),
-                textCaptor.capture()
+                chunksCaptor.capture(),
+                eq("PERSONAL")
         );
         // Tika 的 BodyContentHandler 会在末尾追加换行符，使用 trim 比较
-        assertThat(textCaptor.getValue()).startsWith(fileContent);
+        assertThat(chunksCaptor.getValue()).hasSize(1);
+        assertThat(chunksCaptor.getValue().get(0)).contains(fileContent);
         verify(channel).basicAck(1L, false);
     }
 
     @Test
-    @DisplayName("超过写入上限时按已提取片段完成索引而不触发失败重试")
-    void handle_whenWriteLimitReached_shouldIndexPartialTextAndComplete() throws IOException {
+    @DisplayName("千万字级长文按固定块分片索引而不触发失败重试")
+    void handle_whenVeryLongText_shouldIndexInChunksAndComplete() throws IOException {
         FileUploadedEvent event = createEvent("long-novel.epub", "application/epub+zip");
-        // 远超默认上限的纯文本，触发 BodyContentHandler 写入上限。
-        String longText = "长".repeat(2_100_000);
+        // 约 120 万字，应拆成多个 50 万字块。
+        String longText = "长".repeat(1_200_000);
         InputStream inputStream = new ByteArrayInputStream(longText.getBytes(StandardCharsets.UTF_8));
         when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService).indexFile(
+        verify(fileSearchIndexService).indexFileChunks(
                 eq(event.fileNodeId()),
                 eq(event.ownerUserId()),
                 eq(event.fileName()),
-                textCaptor.capture()
+                chunksCaptor.capture(),
+                eq("PERSONAL")
         );
-        assertThat(textCaptor.getValue().length()).isGreaterThan(500_000);
+        assertThat(chunksCaptor.getValue().size()).isGreaterThanOrEqualTo(3);
+        int total = chunksCaptor.getValue().stream().mapToInt(String::length).sum();
+        assertThat(total).isGreaterThan(1_000_000);
         verify(taskTracker).complete(any(), any());
         verify(taskTracker, never()).handleFailure(any(), any(), any(), any(), any());
         verify(channel).basicAck(1L, false);
@@ -154,8 +163,8 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService, never()).indexFile(
-                any(), any(), any(), any()
+        verify(fileSearchIndexService, never()).indexFileChunks(
+                any(), any(), any(), any(), any()
         );
         verify(taskTracker).handleFailure(
                 eq("TEXT_EXTRACTION"),
@@ -177,8 +186,8 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService, never()).indexFile(
-                any(), any(), any(), any()
+        verify(fileSearchIndexService, never()).indexFileChunks(
+                any(), any(), any(), any(), any()
         );
         verify(taskTracker).handleFailure(
                 eq("TEXT_EXTRACTION"),
@@ -200,8 +209,8 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService, never()).indexFile(
-                any(), any(), any(), any()
+        verify(fileSearchIndexService, never()).indexFileChunks(
+                any(), any(), any(), any(), any()
         );
         verify(taskTracker).handleFailure(
                 eq("TEXT_EXTRACTION"),
@@ -248,13 +257,14 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService).indexFile(
+        verify(fileSearchIndexService).indexFileChunks(
                 eq(event.fileNodeId()),
                 eq(event.ownerUserId()),
                 eq(event.fileName()),
-                textCaptor.capture()
+                chunksCaptor.capture(),
+                eq("PERSONAL")
         );
-        assertThat(textCaptor.getValue()).contains("内嵌字体文本提取回归测试内容");
+        assertThat(chunksCaptor.getValue().get(0)).contains("内嵌字体文本提取回归测试内容");
         verify(channel).basicAck(1L, false);
     }
 
@@ -363,14 +373,15 @@ class TextExtractionConsumerTest {
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(fileSearchIndexService).indexFile(
+        verify(fileSearchIndexService).indexFileChunks(
                 eq(fileNodeId),
                 eq(ownerUserId),
                 eq("notes.txt"),
-                textCaptor.capture()
+                chunksCaptor.capture(),
+                eq("PERSONAL")
         );
         // Tika 的 BodyContentHandler 会在末尾追加换行符，使用 trim 比较
-        assertThat(textCaptor.getValue().trim()).isEqualTo("some text content");
+        assertThat(chunksCaptor.getValue().get(0).trim()).isEqualTo("some text content");
         verify(channel).basicAck(1L, false);
     }
 }

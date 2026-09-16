@@ -1028,10 +1028,42 @@ class _PdfDetailContent extends StatelessWidget {
             child: Text(l10n.readerEditMetadata),
           ),
           const SizedBox(height: 8),
-          TextButton(onPressed: onDelete, child: Text(l10n.readerDeleteBook)),
+          TextButton(
+            onPressed: () => _confirmDelete(context),
+            child: Text(l10n.readerDeleteBook),
+          ),
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(l10n.readerConfirmDelete),
+            content: Text(l10n.readerConfirmDeleteMsg(item.title)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(l10n.coreCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                ),
+                child: Text(l10n.filesDelete),
+              ),
+            ],
+          ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    onDelete();
   }
 }
 

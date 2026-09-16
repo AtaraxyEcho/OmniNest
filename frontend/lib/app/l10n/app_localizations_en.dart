@@ -5711,7 +5711,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String readerConfirmDeleteMsg(Object name) {
-    return 'Remove \"$name\" from the library? The source file will be kept.';
+    return 'Permanently delete \"$name\"? Both the library entry and the source file will be removed. This cannot be undone.';
   }
 
   @override

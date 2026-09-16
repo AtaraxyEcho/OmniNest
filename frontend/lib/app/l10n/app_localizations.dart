@@ -10460,7 +10460,7 @@ abstract class AppLocalizations {
   /// No description provided for @readerConfirmDeleteMsg.
   ///
   /// In en, this message translates to:
-  /// **'Remove \"{name}\" from the library? The source file will be kept.'**
+  /// **'Permanently delete \"{name}\"? Both the library entry and the source file will be removed. This cannot be undone.'**
   String readerConfirmDeleteMsg(Object name);
 
   /// No description provided for @readerFieldRequired.

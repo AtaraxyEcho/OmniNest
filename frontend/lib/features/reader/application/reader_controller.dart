@@ -283,10 +283,12 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
     state = AsyncData(current.copyWith(sortBy: sortBy));
   }
 
-  /// 删除阅读条目
+  /// 删除阅读条目。
+  ///
+  /// 默认级联永久删除源文件，与「删除书籍及其源文件」的产品语义一致。
   Future<TaskSubmission> deleteItem(
     String itemId, {
-    bool cascade = false,
+    bool cascade = true,
   }) async {
     try {
       final submission = await _api.deleteItem(itemId, cascade: cascade);

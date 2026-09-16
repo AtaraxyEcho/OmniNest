@@ -2505,7 +2505,7 @@
     }
   },
   "readerConfirmDelete": "Confirm Permanent Deletion",
-  "readerConfirmDeleteMsg": "Remove \"{name}\" from the library? The source file will be kept.",
+  "readerConfirmDeleteMsg": "Permanently delete \"{name}\"? Both the library entry and the source file will be removed. This cannot be undone.",
   "@readerConfirmDeleteMsg": {
     "placeholders": {
       "name": {}

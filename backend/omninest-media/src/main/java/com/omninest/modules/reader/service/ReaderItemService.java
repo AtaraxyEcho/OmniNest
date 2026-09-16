@@ -237,7 +237,7 @@ public class ReaderItemService {
     public UUID deleteItem(UUID ownerUserId, UUID itemId, boolean cascade) {
         ReaderItem item = itemRepository.findByIdAndOwnerUserId(itemId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BOOK_NOT_FOUND, "阅读条目不存在或无权删除"));
-        if (!cascade) {
+        if (!cascade || item.getFileNodeId() == null) {
             return deleteLibraryItem(ownerUserId, item);
         }
         UUID taskId = fileDeletionService.deletePermanently(

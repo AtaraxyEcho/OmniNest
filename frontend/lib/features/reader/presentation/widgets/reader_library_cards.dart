@@ -285,7 +285,7 @@ class ReaderLibraryGridCard extends ConsumerWidget {
                     subtitle: Text(l10n.readerDeleteBookHint),
                     onTap: () {
                       Navigator.pop(sheetContext);
-                      onDelete!();
+                      _confirmDelete(context);
                     },
                   ),
                 const SizedBox(height: 8),
@@ -327,9 +327,42 @@ class ReaderLibraryGridCard extends ConsumerWidget {
           ),
       ],
     ).then((value) {
+      if (!context.mounted) {
+        return;
+      }
       if (value == 'bookshelf') onToggleBookshelf?.call(item);
-      if (value == 'delete') onDelete?.call();
+      if (value == 'delete') _confirmDelete(context);
     });
+  }
+
+  Future<void> _confirmDelete(BuildContext context) async {
+    if (onDelete == null) return;
+    final l10n = AppLocalizations.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(l10n.readerConfirmDelete),
+            content: Text(l10n.readerConfirmDeleteMsg(item.title)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(l10n.coreCancel),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Theme.of(dialogContext).colorScheme.error,
+                ),
+                child: Text(l10n.filesDelete),
+              ),
+            ],
+          ),
+    );
+    if (!context.mounted || confirmed != true) {
+      return;
+    }
+    onDelete!();
   }
 }
 

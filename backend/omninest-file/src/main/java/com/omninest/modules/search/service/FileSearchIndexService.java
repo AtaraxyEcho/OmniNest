@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -259,6 +260,55 @@ public class FileSearchIndexService implements Closeable {
     }
 
     /**
+     * 分块索引超长文本文件。
+     *
+     * <p>千万字级网文无法塞进单条 Lucene 文档；按块写入多个同 fileId 文档，
+     * 删除时按 fileId 整批清除，搜索命中后按文件去重。</p>
+     *
+     * @param fileNodeId 文件节点 ID
+     * @param ownerUserId 拥有者用户 ID
+     * @param title 文件标题
+     * @param chunks 文本分块，按原文顺序
+     * @param spaceType 空间类型
+     */
+    public void indexFileChunks(
+            UUID fileNodeId,
+            UUID ownerUserId,
+            String title,
+            List<String> chunks,
+            String spaceType
+    ) {
+        if (chunks == null || chunks.isEmpty()) {
+            indexFile(fileNodeId, ownerUserId, title, null, spaceType);
+            return;
+        }
+        try {
+            withUserIndexState(ownerUserId, state -> {
+                state.writer.deleteDocuments(new Term(FIELD_FILE_ID, fileNodeId.toString()));
+                for (String chunk : chunks) {
+                    if (chunk == null || chunk.isBlank()) {
+                        continue;
+                    }
+                    Document doc = new Document();
+                    doc.add(new StringField(FIELD_FILE_ID, fileNodeId.toString(), Field.Store.YES));
+                    doc.add(new TextField(FIELD_TITLE, title, Field.Store.YES));
+                    doc.add(new StringField(FIELD_SPACE_TYPE, spaceType, Field.Store.YES));
+                    doc.add(new TextField(FIELD_CONTENT, chunk, Field.Store.NO));
+                    state.writer.addDocument(doc);
+                }
+                state.writer.commit();
+                return null;
+            });
+            log.debug(
+                    "分块索引文件: fileNodeId={}, ownerUserId={}, chunkCount={}, spaceType={}",
+                    fileNodeId, ownerUserId, chunks.size(), spaceType
+            );
+        } catch (Exception e) {
+            log.warn("Lucene 分块索引写入失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
+        }
+    }
+
+    /**
      * 批量索引文档条目。
      *
      * @param fileNodeId 文件节点 ID
@@ -316,12 +366,33 @@ public class FileSearchIndexService implements Closeable {
                                 FIELD_TITLE, escaped, FIELD_CONTENT, escaped);
                     }
                     Query query = parser.parse(fullQuery);
-                    TopDocs topDocs = searcher.search(query, maxResults);
+                    // 超长文件分块后同一 fileId 会命中多条文档，放宽候选后再按文件去重。
+                    int candidateLimit = Math.max(maxResults * 8, maxResults);
+                    TopDocs topDocs = searcher.search(query, candidateLimit);
+                    Map<UUID, Float> bestScores = new LinkedHashMap<>();
+                    Map<UUID, String> titles = new LinkedHashMap<>();
                     for (ScoreDoc scoreDoc : topDocs.scoreDocs) {
                         Document doc = searcher.storedFields().document(scoreDoc.doc);
                         UUID fileId = UUID.fromString(doc.get(FIELD_FILE_ID));
                         String title = doc.get(FIELD_TITLE);
-                        results.add(new SearchResultDto(fileId, title, null, scoreDoc.score));
+                        Float existing = bestScores.get(fileId);
+                        if (existing == null || scoreDoc.score > existing) {
+                            bestScores.put(fileId, scoreDoc.score);
+                            titles.put(fileId, title);
+                        }
+                    }
+                    int added = 0;
+                    for (Map.Entry<UUID, Float> entry : bestScores.entrySet()) {
+                        if (added >= maxResults) {
+                            break;
+                        }
+                        results.add(new SearchResultDto(
+                                entry.getKey(),
+                                titles.get(entry.getKey()),
+                                null,
+                                entry.getValue()
+                        ));
+                        added++;
                     }
                 }
                 return results;
