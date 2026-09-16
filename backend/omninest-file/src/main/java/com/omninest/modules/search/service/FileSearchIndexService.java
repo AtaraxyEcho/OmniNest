@@ -30,9 +30,12 @@ import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
 import org.apache.lucene.index.Term;
 import org.apache.lucene.queryparser.classic.QueryParser;
+import org.apache.lucene.search.BooleanClause;
+import org.apache.lucene.search.BooleanQuery;
 import org.apache.lucene.search.IndexSearcher;
 import org.apache.lucene.search.Query;
 import org.apache.lucene.search.ScoreDoc;
+import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.search.TopDocs;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.MMapDirectory;
@@ -51,6 +54,9 @@ public class FileSearchIndexService implements Closeable {
     private static final String FIELD_TITLE = "title";
     private static final String FIELD_CONTENT = "content";
     private static final String FIELD_SPACE_TYPE = "spaceType";
+    private static final String FIELD_HAS_CONTENT = "hasContent";
+    private static final String HAS_CONTENT_YES = "Y";
+    private static final String HAS_CONTENT_NO = "N";
     private static final long MAX_CACHED_USER_INDEXES = 64;
     private static final Duration USER_INDEX_IDLE_TTL = Duration.ofMinutes(30);
 
@@ -158,14 +164,24 @@ public class FileSearchIndexService implements Closeable {
      * @param spaceType   空间类型（PERSONAL / SHARED）
      */
     public void indexFile(UUID fileNodeId, UUID ownerUserId, String title, String content, String spaceType) {
+        boolean hasContent = content != null && !content.isBlank();
         try {
             withUserIndexState(ownerUserId, state -> {
+                // FILE_INDEX 仅写元数据；若 TEXT_EXTRACTION 已写入正文，不得覆盖清空。
+                if (!hasContent && alreadyHasContent(state, fileNodeId)) {
+                    return null;
+                }
                 Document doc = new Document();
                 // fileId 使用 StringField，确保 Term 精确匹配删除能正确工作。
                 doc.add(new StringField(FIELD_FILE_ID, fileNodeId.toString(), Field.Store.YES));
                 doc.add(new TextField(FIELD_TITLE, title, Field.Store.YES));
                 doc.add(new StringField(FIELD_SPACE_TYPE, spaceType, Field.Store.YES));
-                if (content != null && !content.isBlank()) {
+                doc.add(new StringField(
+                        FIELD_HAS_CONTENT,
+                        hasContent ? HAS_CONTENT_YES : HAS_CONTENT_NO,
+                        Field.Store.YES
+                ));
+                if (hasContent) {
                     doc.add(new TextField(FIELD_CONTENT, content, Field.Store.NO));
                 }
                 // 显式删除后新增，避免 Lucene 软删除使旧文档继续参与搜索。
@@ -180,6 +196,26 @@ public class FileSearchIndexService implements Closeable {
             );
         } catch (Exception e) {
             log.warn("Lucene 索引写入失败: fileNodeId={}, ownerUserId={}", fileNodeId, ownerUserId, e);
+        }
+    }
+
+    /**
+     * 删除指定用户的文件索引。
+     *
+     * @param fileNodeId  文件节点 ID
+     * @param ownerUserId 拥有者用户 ID
+     */
+    private boolean alreadyHasContent(UserIndexState state, UUID fileNodeId) throws IOException {
+        try (DirectoryReader reader = openReaderOrNull(state)) {
+            if (reader == null) {
+                return false;
+            }
+            IndexSearcher searcher = new IndexSearcher(reader);
+            Query query = new BooleanQuery.Builder()
+                    .add(new TermQuery(new Term(FIELD_FILE_ID, fileNodeId.toString())), BooleanClause.Occur.MUST)
+                    .add(new TermQuery(new Term(FIELD_HAS_CONTENT, HAS_CONTENT_YES)), BooleanClause.Occur.MUST)
+                    .build();
+            return searcher.count(query) > 0;
         }
     }
 
@@ -293,6 +329,7 @@ public class FileSearchIndexService implements Closeable {
                     doc.add(new StringField(FIELD_FILE_ID, fileNodeId.toString(), Field.Store.YES));
                     doc.add(new TextField(FIELD_TITLE, title, Field.Store.YES));
                     doc.add(new StringField(FIELD_SPACE_TYPE, spaceType, Field.Store.YES));
+                    doc.add(new StringField(FIELD_HAS_CONTENT, HAS_CONTENT_YES, Field.Store.YES));
                     doc.add(new TextField(FIELD_CONTENT, chunk, Field.Store.NO));
                     state.writer.addDocument(doc);
                 }

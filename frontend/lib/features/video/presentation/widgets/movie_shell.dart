@@ -14,6 +14,7 @@ import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_section_transition.dart';
@@ -351,6 +352,38 @@ class MovieTopBar extends StatelessWidget {
             builder:
                 (context, ref, _) => MediaImportButton(
                   subsystemDirectory: 'Media',
+                  acceptedExtensions: const <String>[
+                    'mp4',
+                    'mkv',
+                    'webm',
+                    'mov',
+                    'm4v',
+                    'avi',
+                    'flv',
+                    'wmv',
+                    'ts',
+                    'm2ts',
+                  ],
+                  onImportCompleteWithResult: (result) async {
+                    final taskApi = ref.read(taskApiProvider);
+                    for (final file in result.imported) {
+                      final taskId = file.mediaAutoImportTaskId;
+                      if (taskId == null || taskId.isEmpty) {
+                        continue;
+                      }
+                      try {
+                        await taskApi.waitForTerminal(
+                          taskId,
+                          timeout: const Duration(minutes: 2),
+                          interval: const Duration(seconds: 2),
+                        );
+                      } on Object {
+                        // 自动导入失败不阻断已完成的上传结果。
+                      }
+                    }
+                    await onRefresh?.call();
+                    return null;
+                  },
                   onImportComplete: onRefresh ?? () async {},
                   style: ImportButtonStyle.iconButton,
                   color: palette.mutedForeground,

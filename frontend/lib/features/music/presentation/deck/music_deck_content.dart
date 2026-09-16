@@ -844,8 +844,7 @@ class _LocalManagementContent extends ConsumerWidget {
                   'ogg',
                   'opus',
                   'wav',
-                  'aiff',
-                  'alac',
+                  'wma',
                 ],
                 onImportComplete: () async {
                   // 上传完成后立即扫描，把新文件导入曲库并刷新列表。
