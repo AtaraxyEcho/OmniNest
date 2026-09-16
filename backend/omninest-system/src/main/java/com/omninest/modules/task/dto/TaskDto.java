@@ -20,6 +20,7 @@ public record TaskDto(
         @Schema(description = "已重试次数", example = "0") int retryCount,
         @Schema(description = "错误摘要") String errorSummary,
         @Schema(description = "失败堆栈摘要，脱敏截断") String stackSummary,
+        @Schema(description = "完成结果 JSON，供调用方读取晋升产物标识") String result,
         @Schema(description = "更新时间") Instant updatedAt
 ) {
 
@@ -38,6 +39,7 @@ public record TaskDto(
                 record.getRetryCount(),
                 record.getErrorMessage(),
                 record.getStackSummary(),
+                record.getResult(),
                 record.getUpdatedAt()
         );
     }

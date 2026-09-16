@@ -254,7 +254,7 @@ class NeteaseMusicProxyTest {
     }
 
     @Test
-    void confirmedQrLoginFallsBackToLoginStatusAndPersistsCookie() throws IOException {
+    void confirmedQrLoginSavesCookieAndDefersProfileFetch() throws IOException {
         MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
         MusicPlatformCredentialService credentialService = mock(MusicPlatformCredentialService.class);
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -297,11 +297,9 @@ class NeteaseMusicProxyTest {
             var status = localProxy.checkQrLogin(ownerUserId, "login-key");
 
             assertThat(status.status()).isEqualTo("confirmed");
-            assertThat(status.userInfo().userId()).isEqualTo("40004");
-            assertThat(profileCookie.get())
-                    .contains("MUSIC_U=test-cookie")
-                    .contains("__csrf=csrf-token")
-                    .doesNotContain("Path", "HttpOnly", "SameSite");
+            // 资料拉取改为确认后的 getUserInfo 异步完成，确认阶段不得串行请求资料接口
+            assertThat(profileCookie.get()).isNull();
+            assertThat(status.userInfo().userId()).isBlank();
             verify(credentialService).save(
                     eq(ownerUserId),
                     eq(MusicPlatform.NETEASE),

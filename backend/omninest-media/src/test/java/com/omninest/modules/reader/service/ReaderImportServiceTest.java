@@ -136,6 +136,8 @@ class ReaderImportServiceTest {
         ReaderItem existingItem = new ReaderItem();
         existingItem.setId(EXISTING_ITEM_ID);
 
+        when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(personalFileNode("book.txt")));
+        when(fileDetector.detectType("book.txt")).thenReturn("TXT");
         when(itemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(Optional.of(existingItem));
         when(bookshelfRepository.existsByOwnerUserIdAndReaderItemId(OWNER_ID, EXISTING_ITEM_ID)).thenReturn(false);
@@ -387,7 +389,6 @@ class ReaderImportServiceTest {
         FileDescriptor otherUserFile = fileDescriptor(
                 FILE_NODE_ID, OTHER_USER_ID, SpaceType.PERSONAL, "secret.txt", null);
 
-        when(itemRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_NODE_ID)).thenReturn(Optional.empty());
         when(fileMetadataQueryService.findById(FILE_NODE_ID)).thenReturn(Optional.of(otherUserFile));
 
         assertThatThrownBy(() -> importService.importFile(OWNER_ID, FILE_NODE_ID))
