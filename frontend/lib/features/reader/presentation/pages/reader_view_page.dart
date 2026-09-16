@@ -165,7 +165,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   bool _showTts = false;
   bool _isHoveringControls = false; // Web 端鼠标是否悬停在控件栏上
   bool _isBookmarked = false;
-  bool _isInBookshelf = false;
+  // null 表示详情尚未加载且用户未切换过书架状态；顶栏按详情初始值派生。
+  bool? _bookshelfOverride;
   bool _bookmarkBusy = false;
   bool _bookshelfBusy = false;
   bool _selectionActive = false;
@@ -436,9 +437,9 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   set isBookmarked(bool v) => _isBookmarked = v;
   @override
-  bool get isInBookshelf => _isInBookshelf;
+  bool get isInBookshelf => _bookshelfOverride ?? false;
   @override
-  set isInBookshelf(bool v) => _isInBookshelf = v;
+  set isInBookshelf(bool v) => _bookshelfOverride = v;
   @override
   bool get bookmarkBusy => _bookmarkBusy;
   @override
@@ -1165,7 +1166,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
               onShowAnnotations:
                   () => _toggleReaderPanel(ReaderPanelType.annotations),
               isBookmarked: _isBookmarked,
-              isInBookshelf: _isInBookshelf,
+              isInBookshelf:
+                  _bookshelfOverride ?? detail.item.addedToBookshelf,
             ),
           ),
         ),
