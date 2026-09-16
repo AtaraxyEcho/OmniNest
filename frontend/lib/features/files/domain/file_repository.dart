@@ -177,19 +177,6 @@ abstract interface class FileRepository {
   /// 获取外部存储空间用量
   Future<ExternalSpaceUsage> getExternalStorageSpace(String accountId);
 
-  /// 创建远程目录
-  Future<void> mkdirExternalStorage(String accountId, String remotePath);
-
-  /// 删除远程文件
-  Future<void> deleteExternalFile(String accountId, String remotePath);
-
-  /// 重命名远程文件
-  Future<void> renameExternalFile(
-    String accountId, {
-    required String oldPath,
-    required String newName,
-  });
-
   // ============================================================
   // 共享空间相关方法
   // ============================================================

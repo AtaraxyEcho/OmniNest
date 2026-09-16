@@ -24,6 +24,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class FileExternalStorageAdministration implements ExternalStorageAdministration {
 
     private final StorageExternalAccountRepository accountRepository;
+    private final ExternalStorageService externalStorageService;
 
     /**
      * 统计全部外部存储账户。
@@ -50,33 +51,6 @@ public class FileExternalStorageAdministration implements ExternalStorageAdminis
     }
 
     /**
-     * 创建启用状态的外部存储账户。
-     *
-     * @param ownerUserId 所有者用户标识
-     * @param provider 存储提供方
-     * @param displayName 显示名称
-     * @param encryptedCredentials 加密凭据
-     * @return 新建账户摘要
-     */
-    @Override
-    @Transactional(rollbackFor = Exception.class)
-    public ExternalStorageAccountSummary createAccount(
-            UUID ownerUserId,
-            String provider,
-            String displayName,
-            String encryptedCredentials
-    ) {
-        StorageExternalAccount account = new StorageExternalAccount();
-        account.setId(UUID.randomUUID());
-        account.setOwnerUserId(ownerUserId);
-        account.setProvider(provider);
-        account.setDisplayName(displayName);
-        account.setEncryptedCredentials(encryptedCredentials);
-        account.setStatus(ExternalStorageStatus.ACTIVE.getValue());
-        return toSummary(accountRepository.saveAndFlush(account));
-    }
-
-    /**
      * 更新外部存储账户状态。
      *
      * @param accountId 账户标识
@@ -89,6 +63,11 @@ public class FileExternalStorageAdministration implements ExternalStorageAdminis
         ExternalStorageStatus resolvedStatus = resolveStatus(status);
         StorageExternalAccount account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
+        boolean wasActive = ExternalStorageStatus.ACTIVE.getValue().equals(account.getStatus());
+        boolean disable = resolvedStatus == ExternalStorageStatus.DISABLED;
+        if (wasActive && disable) {
+            externalStorageService.deactivateRemote(account);
+        }
         account.setStatus(resolvedStatus.getValue());
         return toSummary(accountRepository.saveAndFlush(account));
     }

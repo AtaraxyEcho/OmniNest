@@ -6,7 +6,7 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.rclone.RcloneGateway;
-import com.omninest.common.storage.LocalExternalStorageSettings;
+import com.omninest.modules.file.config.ExternalStorageImportProperties;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
 import com.omninest.modules.file.domain.ImportSourceKind;
 import com.omninest.modules.file.domain.ImportTaskStatus;
@@ -44,11 +44,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ExternalStorageService {
     private final RcloneGateway rcloneGateway;
-    private final LocalExternalStorageSettings localStorageSettings;
     private final StorageExternalAccountRepository accountRepository;
     private final StorageImportTaskRepository importTaskRepository;
     private final TaskDispatchService taskDispatchService;
     private final TaskRecordService taskRecordService;
+    private final ExternalStorageCredentialService externalStorageCredentialService;
+    private final SharedSpaceService sharedSpaceService;
+    private final ExternalStorageImportProperties importProperties;
 
     // ========== Remote 生命周期 ==========
 
@@ -59,27 +61,14 @@ public class ExternalStorageService {
         String remoteName = toRemoteName(account);
         Map<String, String> params = decryptCredentials(account);
         String rcloneType = toRcloneType(account.getProvider());
-
-        if ("LOCAL".equalsIgnoreCase(account.getProvider())) {
-            String path = params.remove("path");
-            if (path != null && !path.isBlank()) {
-                params.put("root", path);
-            }
-        }
-
         rcloneGateway.createRemote(remoteName, rcloneType, params);
         log.info("外部存储 remote 已激活: accountId={}", account.getId());
     }
 
     /**
      * 停用外部存储 remote：rclone config/delete。
-     * <p>
-     * LOCAL provider 使用内联路径，无需删除 remote。
      */
     public void deactivateRemote(StorageExternalAccount account) {
-        if ("LOCAL".equalsIgnoreCase(account.getProvider())) {
-            return;
-        }
         String remoteName = toRemoteName(account);
         try {
             rcloneGateway.deleteRemote(remoteName);
@@ -160,44 +149,6 @@ public class ExternalStorageService {
         return rcloneGateway.queryFileSystemInfo(fs);
     }
 
-    // ========== 文件操作 ==========
-
-    /**
-     * 创建远程目录。
-     */
-    public void mkdir(UUID ownerUserId, UUID accountId, String remotePath) {
-        StorageExternalAccount account = findAccount(ownerUserId, accountId);
-        ensureActive(account);
-        ensureRemoteActivated(account);
-        String fs = resolveFs(account);
-        rcloneGateway.createDirectory(fs, normalizePath(remotePath));
-    }
-
-    /**
-     * 删除远程文件或目录。
-     */
-    public void deleteRemoteFile(UUID ownerUserId, UUID accountId, String remotePath) {
-        StorageExternalAccount account = findAccount(ownerUserId, accountId);
-        ensureActive(account);
-        ensureRemoteActivated(account);
-        String fs = resolveFs(account);
-        String normalized = normalizePath(remotePath);
-        rcloneGateway.deleteFile(fs, normalized);
-    }
-
-    /**
-     * 重命名远程文件。
-     */
-    public void renameRemoteFile(UUID ownerUserId, UUID accountId, String oldPath, String newName) {
-        StorageExternalAccount account = findAccount(ownerUserId, accountId);
-        ensureActive(account);
-        ensureRemoteActivated(account);
-        String fs = resolveFs(account);
-        String parentDir = parentPath(oldPath);
-        String newRemote = parentDir.isEmpty() ? newName : parentDir + "/" + newName;
-        rcloneGateway.moveFile(fs, normalizePath(oldPath), fs, newRemote);
-    }
-
     // ========== 导入任务 ==========
 
     /**
@@ -214,8 +165,11 @@ public class ExternalStorageService {
         ensureActive(account);
 
         String fileName = extractFileName(request.sourcePath());
-        String spaceType = resolveSpaceType(request.spaceType()).getValue();
+        SpaceType resolvedSpace = resolveSpaceType(request.spaceType());
+        String spaceType = resolvedSpace.getValue();
         String sourceKind = resolveSourceKind(request.sourceKind()).getValue();
+        ensureImportTargetAllowed(ownerUserId, resolvedSpace);
+        ensureImportSizeWithinGuard(request);
         UUID systemTaskId = UUID.randomUUID();
         StorageImportTask task = new StorageImportTask();
         task.setId(UUID.randomUUID());
@@ -308,13 +262,8 @@ public class ExternalStorageService {
 
     /**
      * 确保 rclone remote 已创建。如果尚未激活则自动激活。
-     * <p>
-     * LOCAL provider 使用内联路径，无需创建 remote。
      */
     private void ensureRemoteActivated(StorageExternalAccount account) {
-        if ("LOCAL".equalsIgnoreCase(account.getProvider())) {
-            return;
-        }
         String remoteName = toRemoteName(account);
         try {
             List<String> remotes = rcloneGateway.listRemoteNames();
@@ -336,62 +285,19 @@ public class ExternalStorageService {
 
     /**
      * 解析 rclone 文件系统标识。
-     * <p>
-     * LOCAL provider 使用内联路径 {@code :local:<path>}，
-     * 其他 provider 使用 {@code remoteName:}。
      */
     String resolveFs(StorageExternalAccount account) {
-        if ("LOCAL".equalsIgnoreCase(account.getProvider())) {
-            String path = extractLocalPath(account);
-            return ":local:" + path;
-        }
         return toRemoteName(account) + ":";
     }
 
     /**
-     * 从 LOCAL 账户凭据中提取路径。
-     */
-    private String extractLocalPath(StorageExternalAccount account) {
-        Map<String, String> creds = decryptCredentials(account);
-        String path = creds.get("path");
-        if (path == null || path.isBlank()) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "本地目录路径未配置");
-        }
-        return path;
-    }
-
-    /**
-     * 将 LOCAL 账户的 rclone 容器路径转换为宿主机路径。
-     * <p>
-     * rclone 容器中 /mnt/local 对应宿主机的 localHostPath 配置目录。
-     */
-    public String resolveLocalHostPath(StorageExternalAccount account) {
-        String rclonePath = extractLocalPath(account);
-        String localHostPath = localStorageSettings.localHostRoot();
-        if (rclonePath.startsWith("/mnt/local")) {
-            String relative = rclonePath.substring("/mnt/local".length());
-            if (relative.startsWith("/")) {
-                relative = relative.substring(1);
-            }
-            if (relative.isEmpty()) {
-                return localHostPath;
-            }
-            return localHostPath + "/" + relative;
-        }
-        return rclonePath;
-    }
-
-    /**
      * 解密外部存储凭证，返回 rclone 参数 map。
-     * <p>
-     * 当前实现：将 encryptedCredentials 视为 JSON 字符串直接解析。
-     * 生产环境应使用 KEK 解密后再解析 JSON。
      */
     @SuppressWarnings("unchecked")
     private Map<String, String> decryptCredentials(StorageExternalAccount account) {
-        String encrypted = account.getEncryptedCredentials();
+        String plaintextJson = externalStorageCredentialService.decryptToJson(account.getEncryptedCredentials());
         try {
-            JSONObject json = JSON.parseObject(encrypted);
+            JSONObject json = JSON.parseObject(plaintextJson);
             return json.entrySet().stream()
                     .collect(Collectors.toMap(
                             Map.Entry::getKey,
@@ -413,9 +319,44 @@ public class ExternalStorageService {
             case "GDRIVE", "GOOGLE_DRIVE" -> "drive";
             case "ALIYUN_DRIVE" -> "alipan";
             case "DROPBOX" -> "dropbox";
-            case "LOCAL" -> "local";
-            default -> provider.toLowerCase();
+            default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的外部存储类型");
         };
+    }
+
+    private void ensureImportTargetAllowed(UUID ownerUserId, SpaceType spaceType) {
+        if (spaceType == SpaceType.SHARED) {
+            sharedSpaceService.requireSharedWrite(ownerUserId);
+        }
+    }
+
+    private void ensureImportSizeWithinGuard(CreateImportTaskRequest request) {
+        // 体积在 Worker 获知 totalSize 后由 ensureImportBytesAllowed / ensureSingleFileAllowed 校验。
+    }
+
+    /**
+     * 按体积阈值拒绝导入（Worker 侧在获知 totalSize 后调用）。
+     *
+     * @param totalBytes 预估或实际总字节
+     */
+    public void ensureImportBytesAllowed(long totalBytes) {
+        long maxTotal = importProperties.getMaxTotalBytes();
+        if (maxTotal > 0 && totalBytes > maxTotal) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "导入总量超过限制，请改用本地媒体目录或减小导入范围");
+        }
+    }
+
+    /**
+     * 拒绝超大单文件导入。
+     *
+     * @param fileBytes 单文件字节数
+     */
+    public void ensureSingleFileAllowed(long fileBytes) {
+        long maxFile = importProperties.getMaxFileBytes();
+        if (maxFile > 0 && fileBytes > maxFile) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR,
+                    "单文件超过导入大小限制，请将大体积内容放入本地媒体目录");
+        }
     }
 
     private StorageExternalAccount findAccount(UUID ownerUserId, UUID accountId) {
@@ -439,12 +380,6 @@ public class ExternalStorageService {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "路径不允许包含 ..");
         }
         return normalized;
-    }
-
-    private String parentPath(String path) {
-        String normalized = normalizePath(path);
-        int lastSlash = normalized.lastIndexOf('/');
-        return lastSlash <= 0 ? "" : normalized.substring(0, lastSlash);
     }
 
     private String extractFileName(String sourcePath) {

@@ -49,7 +49,6 @@ public final class ExternalStorageCredentialCodec {
             case "WEBDAV" -> List.of("vendor", "url", "user");
             case "ONEDRIVE", "GDRIVE", "GOOGLE_DRIVE", "ALIYUN_DRIVE", "DROPBOX" ->
                     List.of("client_id");
-            case "LOCAL" -> List.of("path");
             default -> List.of();
         };
         Map<String, String> metadata = new LinkedHashMap<>();

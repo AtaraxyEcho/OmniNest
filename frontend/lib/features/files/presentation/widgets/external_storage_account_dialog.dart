@@ -13,7 +13,6 @@ Map<String, String> _providerLabels(AppLocalizations l10n) => {
   'GDRIVE': 'Google Drive',
   'ALIYUN_DRIVE': l10n.filesAliyunDrive,
   'DROPBOX': 'Dropbox',
-  'LOCAL': l10n.filesLocalStorage,
 };
 
 const List<String> _s3ProviderTypes = [
@@ -65,8 +64,6 @@ class _ExternalStorageAccountDialogState
   late final TextEditingController _oauthClientIdCtrl;
   late final TextEditingController _oauthClientSecretCtrl;
   late final TextEditingController _oauthTokenCtrl;
-  // 本地目录
-  late final TextEditingController _localPathCtrl;
 
   @override
   void initState() {
@@ -83,7 +80,6 @@ class _ExternalStorageAccountDialogState
     _oauthClientIdCtrl = TextEditingController();
     _oauthClientSecretCtrl = TextEditingController();
     _oauthTokenCtrl = TextEditingController();
-    _localPathCtrl = TextEditingController();
 
     if (account != null) {
       _provider = account.provider;
@@ -108,8 +104,6 @@ class _ExternalStorageAccountDialogState
       case 'ALIYUN_DRIVE':
       case 'DROPBOX':
         _oauthClientIdCtrl.text = metadata['client_id'] ?? '';
-      case 'LOCAL':
-        _localPathCtrl.text = metadata['path'] ?? '';
     }
   }
 
@@ -126,7 +120,6 @@ class _ExternalStorageAccountDialogState
     _oauthClientIdCtrl.dispose();
     _oauthClientSecretCtrl.dispose();
     _oauthTokenCtrl.dispose();
-    _localPathCtrl.dispose();
     super.dispose();
   }
 
@@ -146,7 +139,6 @@ class _ExternalStorageAccountDialogState
       'GDRIVE' ||
       'ALIYUN_DRIVE' ||
       'DROPBOX' => canKeepSecret || _oauthTokenCtrl.text.trim().isNotEmpty,
-      'LOCAL' => _localPathCtrl.text.trim().isNotEmpty,
       _ => false,
     };
   }
@@ -177,7 +169,6 @@ class _ExternalStorageAccountDialogState
         if (_oauthTokenCtrl.text.trim().isNotEmpty)
           'token': _oauthTokenCtrl.text.trim(),
       },
-      'LOCAL' => {'path': _localPathCtrl.text.trim()},
       _ => <String, String>{},
     };
     return jsonEncode(map);
@@ -411,17 +402,6 @@ class _ExternalStorageAccountDialogState
             isDense: true,
           ),
           maxLines: 4,
-          onChanged: (_) => setState(() {}),
-        ),
-      ],
-      'LOCAL' => [
-        TextField(
-          controller: _localPathCtrl,
-          decoration: InputDecoration(
-            labelText: l10n.filesDirectoryPath,
-            hintText: '/mnt/local',
-            isDense: true,
-          ),
           onChanged: (_) => setState(() {}),
         ),
       ],

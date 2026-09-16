@@ -1522,7 +1522,7 @@
   "adminObjectBucketsSubtitle": "来自后端 MinIO 配置。",
   "adminNoBucketConfig": "当前没有桶配置。",
   "adminExternalStorageIntegration": "外部存储集成",
-  "adminExternalStorageSubtitle": "接入 WebDAV、S3、SMB 和挂载网盘。",
+  "adminExternalStorageSubtitle": "治理远程来源连接状态；连接创建与导入请在文件模块的远程导入中操作。",
   "adminNewConnection": "新增连接",
   "adminNewExternalStorage": "新增外部存储",
   "adminType": "类型",

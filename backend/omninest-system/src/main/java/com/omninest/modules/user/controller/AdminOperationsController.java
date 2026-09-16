@@ -142,17 +142,6 @@ public class AdminOperationsController {
         return ApiResponse.success(adminOperationsService.externalStorage());
     }
 
-    @Operation(summary = "创建外部存储配置")
-    @PostMapping("/api/v1/admin/external-storage")
-    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
-    ApiResponse<AdminOperationsDto.ExternalStorageItem> createExternalStorage(
-            @Valid @RequestBody AdminOperationsDto.CreateExternalStorageRequest request
-    ) {
-        return ApiResponse.success(
-                adminOperationsService.createExternalStorage(currentUserContext.requireCurrentUserId(), request)
-        );
-    }
-
     @Operation(summary = "更新外部存储状态")
     @PatchMapping("/api/v1/admin/external-storage/{id}/status")
     @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")

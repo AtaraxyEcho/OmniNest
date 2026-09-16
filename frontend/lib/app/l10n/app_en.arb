@@ -1649,7 +1649,7 @@
   "adminObjectBucketsSubtitle": "From backend MinIO config.",
   "adminNoBucketConfig": "No bucket config.",
   "adminExternalStorageIntegration": "External Storage Integration",
-  "adminExternalStorageSubtitle": "Connect WebDAV, S3, SMB and mount cloud drives.",
+  "adminExternalStorageSubtitle": "Govern remote connection health; create and import connections under Files → Remote Import.",
   "adminNewConnection": "New Connection",
   "adminNewExternalStorage": "New External Storage",
   "adminType": "Type",

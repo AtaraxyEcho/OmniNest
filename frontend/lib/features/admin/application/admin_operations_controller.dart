@@ -297,19 +297,6 @@ class AdminOperationsActions {
     ref.invalidate(videoLibrarySourcesProvider);
   }
 
-  Future<void> createExternalStorage({
-    required String provider,
-    required String displayName,
-    String? credentials,
-  }) async {
-    await _api.createExternalStorage(
-      provider: provider,
-      displayName: displayName,
-      credentials: credentials,
-    );
-    ref.invalidate(adminExternalStorageProvider);
-  }
-
   Future<void> updateExternalStorageStatus(String id, String status) async {
     await _api.updateExternalStorageStatus(id, status);
     ref.invalidate(adminExternalStorageProvider);

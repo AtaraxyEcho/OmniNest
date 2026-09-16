@@ -75,6 +75,7 @@ public class ExternalImportExecutionService {
     private final FileNodeRepository fileNodeRepository;
     private final FileObjectRepository fileObjectRepository;
     private final StorageQuotaService storageQuotaService;
+    private final SharedSpaceQuotaService sharedSpaceQuotaService;
     private final ObjectStorageClient objectStorageClient;
     private final DomainEventPublisher domainEventPublisher;
     private final FilePostProcessingTaskService postProcessingTaskService;
@@ -120,135 +121,15 @@ public class ExternalImportExecutionService {
                     .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
 
             if ("LOCAL".equalsIgnoreCase(account.getProvider())) {
-                executeLocalImport(task, account);
-            } else {
-                executeRcloneImport(task, account);
+                markFailed(task.getId(), "本地目录导入已停用，请使用存储位置或上传");
+                return;
             }
+            executeRcloneImport(task, account);
         } finally {
             progressThrottle.remove(event.taskId());
         }
     }
 
-    /**
-     * LOCAL provider 直接导入：从宿主机路径读取文件，上传到 MinIO。
-     */
-    private void executeLocalImport(StorageImportTask task, StorageExternalAccount account) {
-        try {
-            Path hostPath = resolveLocalHostPath(task.getSourcePath());
-
-            List<Path> files;
-            boolean sourceIsDirectory = Files.isDirectory(hostPath);
-            if (Files.isRegularFile(hostPath, LinkOption.NOFOLLOW_LINKS)) {
-                files = List.of(hostPath);
-            } else if (sourceIsDirectory) {
-                files = fileTreeScanner.listRegularFiles(hostPath);
-            } else {
-                markFailed(task.getId(), "本地路径不存在: " + hostPath);
-                return;
-            }
-
-            if (files.isEmpty()) {
-                markFailed(task.getId(), "本地目录中没有可导入的文件");
-                return;
-            }
-
-            long totalSize = files.stream().mapToLong(this::fileSize).sum();
-            transactionTemplate.executeWithoutResult(status -> {
-                StorageImportTask t = requireTask(task.getId());
-                if (ImportTaskStatus.CANCELLED.getValue().equals(t.getStatus())) {
-                    return;
-                }
-
-                storageQuotaService.checkQuota(t.getOwnerUserId(), totalSize);
-
-                resolveParent(t, t.getTargetParentId());
-                t.setTotalBytes(totalSize);
-                t.setTransferredBytes(0L);
-                t.setTotalFiles(files.size());
-                t.setCompletedFiles(0);
-                t.setCurrentFileName(null);
-                t.setStatus(ImportTaskStatus.IMPORTING.getValue());
-                importTaskRepository.save(t);
-                taskRecordService.updateProgress(systemTaskId(t), 10);
-            });
-
-            UUID importRootId = sourceIsDirectory ? createImportRoot(task) : task.getTargetParentId();
-            Map<String, UUID> folderCache = new HashMap<>();
-            FileNode lastImported = null;
-            long transferred = 0;
-            int completedFiles = 0;
-            for (Path file : files) {
-                if (isCancelled(task.getId())) {
-                    markCancelled(task.getId());
-                    return;
-                }
-
-                Path relative = sourceIsDirectory
-                        ? hostPath.relativize(file).normalize()
-                        : file.getFileName();
-                UUID destinationParentId = sourceIsDirectory
-                        ? ensureRelativeFolders(task, importRootId, relative.getParent(), folderCache)
-                        : importRootId;
-                updateCurrentFile(task.getId(), relative.toString(), completedFiles);
-                lastImported = importSingleFile(
-                        task,
-                        destinationParentId,
-                        file.getFileName().toString(),
-                        file,
-                        totalSize,
-                        transferred
-                );
-                transferred += fileSize(file);
-                completedFiles++;
-                updateCompletedFile(task.getId(), relative.toString(), transferred, completedFiles);
-            }
-
-            UUID completedNodeId = sourceIsDirectory
-                    ? importRootId
-                    : lastImported == null ? null : lastImported.getId();
-            markCompleted(task.getId(), completedNodeId, totalSize, files.size());
-
-            log.info("LOCAL 导入完成: taskId={}, files={}, totalBytes={}", task.getId(), files.size(), totalSize);
-
-        } catch (Exception e) {
-            log.warn("LOCAL 导入失败: taskId={}, message={}", task.getId(), e.getMessage());
-            markFailed(task.getId(), summarize(e), ThrowableDescriber.describe(e));
-        }
-    }
-
-    /**
-     * 将 rclone 容器路径转换为宿主机路径。
-     * <p>
-     * rclone 容器中 /mnt/local 对应宿主机的 localHostPath 配置目录。
-     * 例如: /mnt/local/movie.mp4 → <localHostPath>/movie.mp4
-     */
-    private Path resolveLocalHostPath(String sourcePath) {
-        String localHostPath = localStorageSettings.localHostRoot();
-        Path hostBase = Path.of(localHostPath).toAbsolutePath().normalize();
-
-        if (sourcePath == null || sourcePath.isBlank() || "/".equals(sourcePath)) {
-            return hostBase;
-        }
-
-        // 移除 /mnt/local 前缀，提取相对路径
-        String relative = sourcePath;
-        if (relative.startsWith("/mnt/local")) {
-            relative = relative.substring("/mnt/local".length());
-        }
-        if (relative.startsWith("/")) {
-            relative = relative.substring(1);
-        }
-        if (relative.isEmpty()) {
-            return hostBase;
-        }
-        return hostBase.resolve(relative).normalize();
-    }
-
-    /**
-     * 导入单个文件到 MinIO 并创建 FileNode/FileObject。
-     * <p>
-     * MinIO 上传在事务外执行，通过 ProgressInputStream 实时追踪上传进度。
-     */
     private FileNode importSingleFile(
             StorageImportTask task,
             UUID destinationParentId,
@@ -265,6 +146,7 @@ public class ExternalImportExecutionService {
         String targetBucket = objectStorageBuckets.userFiles();
         String mimeType = detectMimeType(file);
         long size = fileSize(file);
+        externalStorageService.ensureSingleFileAllowed(size);
 
         // 事务内：准备 objectKey 和 availableName
         var prepResult = transactionTemplate.execute(status -> {
@@ -801,13 +683,18 @@ public class ExternalImportExecutionService {
             if (ImportTaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
                 return;
             }
-            storageQuotaService.reserve(
-                    task.getOwnerUserId(),
-                    "EXTERNAL_IMPORT",
-                    task.getId(),
-                    totalSize,
-                    Instant.now().plus(Duration.ofHours(24))
-            );
+            if (SpaceType.SHARED == resolveSpaceType(task)) {
+                sharedSpaceQuotaService.checkQuota(totalSize);
+            } else {
+                storageQuotaService.reserve(
+                        task.getOwnerUserId(),
+                        "EXTERNAL_IMPORT",
+                        task.getId(),
+                        totalSize,
+                        Instant.now().plus(Duration.ofHours(24))
+                );
+            }
+            externalStorageService.ensureImportBytesAllowed(totalSize);
             resolveParent(task, task.getTargetParentId());
             task.setStatus(ImportTaskStatus.IMPORTING.getValue());
             task.setTotalBytes(totalSize);
@@ -931,7 +818,11 @@ public class ExternalImportExecutionService {
             if (ImportTaskStatus.CANCELLED.getValue().equals(task.getStatus())) {
                 return;
             }
-            storageQuotaService.settleReservation("EXTERNAL_IMPORT", task.getId(), totalSize);
+            if (SpaceType.SHARED == resolveSpaceType(task)) {
+                sharedSpaceQuotaService.increaseUsage(totalSize);
+            } else {
+                storageQuotaService.settleReservation("EXTERNAL_IMPORT", task.getId(), totalSize);
+            }
             task.setStatus(ImportTaskStatus.COMPLETED.getValue());
             task.setTransferredBytes(totalSize);
             task.setSpeedBytes(0L);

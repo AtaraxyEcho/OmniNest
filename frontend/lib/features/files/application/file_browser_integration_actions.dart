@@ -213,43 +213,6 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     }
   }
 
-  /// 创建远程目录
-  Future<void> mkdirExternalStorage(String accountId, String remotePath) async {
-    await _runExternalMutation(
-      operationLabel: FileOperation.mkdirExternalStorage,
-      accountId: accountId,
-      mutation: () => _repository.mkdirExternalStorage(accountId, remotePath),
-    );
-  }
-
-  /// 删除远程文件
-  Future<void> deleteExternalFile(String accountId, String remotePath) async {
-    await _runExternalMutation(
-      operationLabel: FileOperation.deleteExternalFile,
-      accountId: accountId,
-      mutation: () => _repository.deleteExternalFile(accountId, remotePath),
-      loadSpace: true,
-    );
-  }
-
-  /// 重命名远程文件
-  Future<void> renameExternalFile(
-    String accountId, {
-    required String oldPath,
-    required String newName,
-  }) async {
-    await _runExternalMutation(
-      operationLabel: FileOperation.renameExternalFile,
-      accountId: accountId,
-      mutation:
-          () => _repository.renameExternalFile(
-            accountId,
-            oldPath: oldPath,
-            newName: newName,
-          ),
-    );
-  }
-
   Future<void> _runExternalMutation({
     required FileOperation operationLabel,
     required String accountId,

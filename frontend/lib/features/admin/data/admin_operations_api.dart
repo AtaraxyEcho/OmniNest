@@ -288,22 +288,6 @@ class AdminOperationsApi {
     return parseExternalStorageResponse(response.data);
   }
 
-  Future<AdminExternalStorageItem> createExternalStorage({
-    required String provider,
-    required String displayName,
-    String? credentials,
-  }) async {
-    final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/admin/external-storage',
-      data: {
-        'provider': provider,
-        'displayName': displayName,
-        'credentials': credentials,
-      },
-    );
-    return AdminExternalStorageItem.fromJson(parseData(response.data));
-  }
-
   Future<AdminExternalStorageItem> updateExternalStorageStatus(
     String id,
     String status,

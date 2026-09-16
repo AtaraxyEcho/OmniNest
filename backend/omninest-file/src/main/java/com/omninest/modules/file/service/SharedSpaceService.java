@@ -292,6 +292,16 @@ public class SharedSpaceService {
      * 角色信息通过用户查询端口一次性加载。
      */
     @Transactional(readOnly = true)
+    /**
+     * 校验共享空间是否可写入（导入/上传前置）。
+     *
+     * @param operatorId 操作用户
+     */
+    public void requireSharedWrite(UUID operatorId) {
+        ensureSharedSpaceEnabled();
+        validatePermission(operatorId, Action.CAN_UPLOAD);
+    }
+
     public void validatePermission(UUID userId, Action action) {
         UserAccountSummary user = userAccountQuery.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));

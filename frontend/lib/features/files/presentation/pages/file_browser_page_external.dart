@@ -213,21 +213,6 @@ class _ExternalBrowsePanel extends ConsumerWidget {
                   ],
                 ),
               ),
-              // 创建目录按钮
-              IconButton(
-                tooltip: l10n.externalMkdir,
-                onPressed:
-                    enabled
-                        ? () => _showMkdirDialog(
-                          context: context,
-                          l10n: l10n,
-                          controller: controller,
-                          accountId: accountId,
-                          currentPath: browsePath,
-                        )
-                        : null,
-                icon: const Icon(Icons.create_new_folder_outlined, size: 20),
-              ),
               IconButton(
                 tooltip: l10n.filesCloseBrowse,
                 onPressed: controller.closeExternalBrowse,
@@ -329,50 +314,6 @@ class _ExternalBrowsePanel extends ConsumerWidget {
                                 : null,
                         icon: const Icon(Icons.download_rounded, size: 18),
                       ),
-                    // 重命名按钮
-                    IconButton(
-                      tooltip: l10n.externalRenameFile,
-                      onPressed:
-                          enabled
-                              ? () => _showNameDialog(
-                                context: context,
-                                title: l10n.externalRenameFile,
-                                actionLabel: l10n.filesSave,
-                                labelText: l10n.filesFileName,
-                                initialValue: item.name,
-                                onSubmit:
-                                    (newName) => controller.renameExternalFile(
-                                      accountId,
-                                      oldPath: item.path,
-                                      newName: newName,
-                                    ),
-                              )
-                              : null,
-                      icon: const Icon(Icons.edit_outlined, size: 18),
-                    ),
-                    // 删除按钮
-                    IconButton(
-                      tooltip: l10n.externalDeleteFile,
-                      onPressed:
-                          enabled
-                              ? () => _confirmAndRun(
-                                context,
-                                title: l10n.externalDeleteFile,
-                                message: l10n.externalDeleteConfirm,
-                                confirmLabel: l10n.filesDelete,
-                                action:
-                                    () => controller.deleteExternalFile(
-                                      accountId,
-                                      item.path,
-                                    ),
-                              )
-                              : null,
-                      icon: Icon(
-                        Icons.delete_outline_rounded,
-                        size: 18,
-                        color: context.filesColors.error,
-                      ),
-                    ),
                   ],
                 ),
               ),
@@ -410,72 +351,6 @@ class _ExternalBrowsePanel extends ConsumerWidget {
             sourceKind: sourceKind,
             spaceType: spaceType,
           ),
-    );
-  }
-
-  /// 显示创建目录对话框
-  static Future<void> _showMkdirDialog({
-    required BuildContext context,
-    required AppLocalizations l10n,
-    required FileBrowserController controller,
-    required String accountId,
-    required String currentPath,
-  }) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final textController = TextEditingController();
-    final result = await showDialog<String>(
-      context: context,
-      builder:
-          (context) => StatefulBuilder(
-            builder:
-                (context, setDialogState) => AlertDialog(
-                  title: Text(l10n.externalMkdir),
-                  content: TextField(
-                    controller: textController,
-                    autofocus: true,
-                    textInputAction: TextInputAction.done,
-                    decoration: InputDecoration(
-                      labelText: l10n.externalMkdir,
-                      hintText: l10n.externalMkdirHint,
-                    ),
-                    onChanged: (_) => setDialogState(() {}),
-                    onSubmitted: (value) {
-                      if (value.trim().isNotEmpty) {
-                        Navigator.of(context).pop(value);
-                      }
-                    },
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text(l10n.filesCancel),
-                    ),
-                    FilledButton(
-                      onPressed:
-                          textController.text.trim().isEmpty
-                              ? null
-                              : () => Navigator.of(
-                                context,
-                              ).pop(textController.text),
-                      child: Text(l10n.filesCreate),
-                    ),
-                  ],
-                ),
-          ),
-    );
-    textController.dispose();
-    final value = result?.trim();
-    if (value == null || value.isEmpty) {
-      return;
-    }
-    // 拼接完整路径
-    final fullPath =
-        currentPath.endsWith('/')
-            ? '$currentPath$value'
-            : '$currentPath/$value';
-    await _runFileActionWithMessenger(
-      messenger,
-      () => controller.mkdirExternalStorage(accountId, fullPath),
     );
   }
 }

@@ -689,35 +689,6 @@ class FileApi {
     return ExternalSpaceUsage.fromJson(parseData(response.data));
   }
 
-  /// 创建远程目录
-  Future<void> mkdirExternalStorage(String accountId, String remotePath) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
-      '/external-storages/$accountId/mkdir',
-      data: {'remotePath': remotePath},
-    );
-  }
-
-  /// 删除远程文件（Dio 的 delete 不支持 body，使用 request 替代）
-  Future<void> deleteExternalFile(String accountId, String remotePath) async {
-    await apiClient.dio.request<Map<String, dynamic>>(
-      '/external-storages/$accountId/files',
-      options: Options(method: 'DELETE'),
-      data: {'remotePath': remotePath},
-    );
-  }
-
-  /// 重命名远程文件
-  Future<void> renameExternalFile(
-    String accountId, {
-    required String oldPath,
-    required String newName,
-  }) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
-      '/external-storages/$accountId/rename',
-      data: {'oldPath': oldPath, 'newName': newName},
-    );
-  }
-
   FileNodePage parseFilePageResponse(Map<String, dynamic>? body) {
     return _responseParser.parseFilePageResponse(body);
   }

@@ -392,29 +392,6 @@ class FileRepositoryImpl implements FileRepository {
     return fileApi.getExternalStorageSpace(accountId);
   }
 
-  @override
-  Future<void> mkdirExternalStorage(String accountId, String remotePath) {
-    return fileApi.mkdirExternalStorage(accountId, remotePath);
-  }
-
-  @override
-  Future<void> deleteExternalFile(String accountId, String remotePath) {
-    return fileApi.deleteExternalFile(accountId, remotePath);
-  }
-
-  @override
-  Future<void> renameExternalFile(
-    String accountId, {
-    required String oldPath,
-    required String newName,
-  }) {
-    return fileApi.renameExternalFile(
-      accountId,
-      oldPath: oldPath,
-      newName: newName,
-    );
-  }
-
   // ============================================================
   // 共享空间相关方法
   // ============================================================

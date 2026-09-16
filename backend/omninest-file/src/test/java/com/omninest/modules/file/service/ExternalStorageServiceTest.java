@@ -12,7 +12,6 @@ import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.rclone.RcloneGateway;
-import com.omninest.common.storage.LocalExternalStorageSettings;
 import com.omninest.modules.file.domain.ExternalStorageStatus;
 import com.omninest.modules.file.domain.StorageExternalAccount;
 import com.omninest.modules.file.domain.StorageImportTask;
@@ -41,18 +40,29 @@ class ExternalStorageServiceTest {
     private static final UUID ACCOUNT_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
 
     private final RcloneGateway rcloneGateway = mock(RcloneGateway.class);
-    private final LocalExternalStorageSettings localStorageSettings = mock(LocalExternalStorageSettings.class);
     private final StorageExternalAccountRepository accountRepository =
             mock(StorageExternalAccountRepository.class);
     private final StorageImportTaskRepository importTaskRepository =
             mock(StorageImportTaskRepository.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
+    private final ExternalStorageCredentialService credentialService =
+            mock(ExternalStorageCredentialService.class);
+    private final SharedSpaceService sharedSpaceService = mock(SharedSpaceService.class);
+    private final com.omninest.modules.file.config.ExternalStorageImportProperties importProperties =
+            new com.omninest.modules.file.config.ExternalStorageImportProperties();
 
     private final ExternalStorageService service = new ExternalStorageService(
-            rcloneGateway, localStorageSettings, accountRepository,
-            importTaskRepository, taskDispatchService, taskRecordService
+            rcloneGateway, accountRepository,
+            importTaskRepository, taskDispatchService, taskRecordService,
+            credentialService, sharedSpaceService, importProperties
     );
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUpCredentialDecrypt() {
+        when(credentialService.decryptToJson(org.mockito.ArgumentMatchers.anyString()))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
 
     @Test
     void browseExternalStorage_returnsFileList() {
@@ -126,17 +136,6 @@ class ExternalStorageServiceTest {
         assertThat(task.getStatus()).isEqualTo("CANCELLED");
         verify(importTaskRepository).save(task);
         verify(taskRecordService).markCancelled(systemTaskId);
-    }
-
-    @Test
-    void resolveLocalHostPathUsesLocalStorageSettings() {
-        StorageExternalAccount account = buildAccount("LOCAL", ExternalStorageStatus.ACTIVE.getValue());
-        account.setEncryptedCredentials("{\"path\":\"/mnt/local/movies\"}");
-        when(localStorageSettings.localHostRoot()).thenReturn("D:/external-storage");
-
-        String hostPath = service.resolveLocalHostPath(account);
-
-        assertThat(hostPath).isEqualTo("D:/external-storage/movies");
     }
 
     /**

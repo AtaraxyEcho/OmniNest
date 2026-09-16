@@ -88,7 +88,7 @@ class ExternalImportExecutionServiceTest {
 
     private final ExternalImportExecutionService service = new ExternalImportExecutionService(
             importTaskRepository, accountRepository, fileNodeRepository, fileObjectRepository,
-            storageQuotaService, objectStorageClient, domainEventPublisher, postProcessingTaskService,
+            storageQuotaService, mock(SharedSpaceQuotaService.class), objectStorageClient, domainEventPublisher, postProcessingTaskService,
             rcloneGateway, localStorageSettings, externalStorageService,
             objectStorageBuckets, transactionTemplate, notificationService, taskRecordService,
             fileTreeScanner, ingressSafetyService, ingressLifecycleService
@@ -151,8 +151,7 @@ class ExternalImportExecutionServiceTest {
     }
 
     @Test
-    void execute_importsFileFromExternalStorage_localProvider() throws Exception {
-        // 模拟 TransactionTemplate 直接执行回调
+    void execute_rejectsLocalProvider() throws Exception {
         when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
             TransactionCallback<?> callback = invocation.getArgument(0);
             return callback.doInTransaction(null);
@@ -165,60 +164,28 @@ class ExternalImportExecutionServiceTest {
             return null;
         }).when(transactionTemplate).executeWithoutResult(any());
 
-        // 创建临时目录模拟本地文件
-        Path tempDir = Files.createTempDirectory("omni-import-test");
-        Path tempFile = tempDir.resolve("test.mp4");
-        Files.write(tempFile, new byte[]{1, 2, 3, 4});
+        StorageImportTask task = new StorageImportTask();
+        task.setId(TASK_ID);
+        task.setOwnerUserId(OWNER_ID);
+        task.setExternalAccountId(ACCOUNT_ID);
+        task.setSourcePath("movies/a.mkv");
+        task.setFileName("a.mkv");
+        task.setStatus(ImportTaskStatus.QUEUED.getValue());
+        when(importTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
+        when(importTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        try {
-            // 构造 QUEUED 状态的导入任务
-            StorageImportTask task = new StorageImportTask();
-            task.setId(TASK_ID);
-            task.setOwnerUserId(OWNER_ID);
-            task.setExternalAccountId(ACCOUNT_ID);
-            task.setSourcePath(tempFile.toString());
-            task.setFileName("test.mp4");
-            task.setTargetParentId(null);
-            task.setStatus(ImportTaskStatus.QUEUED.getValue());
-            when(importTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
-            when(importTaskRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        StorageExternalAccount account = new StorageExternalAccount();
+        account.setId(ACCOUNT_ID);
+        account.setOwnerUserId(OWNER_ID);
+        account.setProvider("LOCAL");
+        account.setEncryptedCredentials("{\"path\":\"/mnt/local\"}");
+        account.setStatus("ACTIVE");
+        when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
 
-            // 模拟 LOCAL 类型外部存储账户
-            StorageExternalAccount account =
-                    new StorageExternalAccount();
-            account.setId(ACCOUNT_ID);
-            account.setOwnerUserId(OWNER_ID);
-            account.setProvider("LOCAL");
-            account.setDisplayName("本地存储");
-            account.setEncryptedCredentials("{\"path\":\"/mnt/local\"}");
-            account.setStatus("ACTIVE");
-            when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
+        service.execute(new ExternalImportRequestedEvent(TASK_ID));
 
-            // 模拟 rclone 本地路径配置指向临时目录
-            when(localStorageSettings.localHostRoot()).thenReturn(tempDir.toString());
-
-            // 模拟 MinIO 配置
-            when(objectStorageBuckets.userFiles()).thenReturn("user-files");
-            when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
-                FileObject object = invocation.getArgument(0);
-                object.setId(UUID.randomUUID());
-                return object;
-            });
-            when(fileNodeRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-            // 执行导入事件
-            ExternalImportRequestedEvent event = new ExternalImportRequestedEvent(TASK_ID);
-            service.execute(event);
-
-            // 验证账户查询和文件上传被调用
-            verify(accountRepository).findById(ACCOUNT_ID);
-            verify(objectStorageClient).putObject(any(), any(), any(long.class), any());
-            assertThat(task.getStatus()).isEqualTo(ImportTaskStatus.COMPLETED.getValue());
-        } finally {
-            // 清理临时文件
-            Files.deleteIfExists(tempFile);
-            Files.deleteIfExists(tempDir);
-        }
+        verify(objectStorageClient, Mockito.never()).putObject(any(), any(), any(long.class), any());
+        assertThat(task.getStatus()).isEqualTo(ImportTaskStatus.FAILED.getValue());
     }
 
     @Test
@@ -282,76 +249,5 @@ class ExternalImportExecutionServiceTest {
         }
     }
 
-    @Test
-    void execute_preservesDirectoryHierarchyForLocalSource() throws Exception {
-        when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
-            TransactionCallback<?> callback = invocation.getArgument(0);
-            return callback.doInTransaction(null);
-        });
-        Mockito.doAnswer(invocation -> {
-            @SuppressWarnings("unchecked")
-            Consumer<TransactionStatus> callback =
-                    (Consumer<TransactionStatus>) invocation.getArgument(0);
-            callback.accept(null);
-            return null;
-        }).when(transactionTemplate).executeWithoutResult(any());
-
-        Path importRoot = Files.createTempDirectory("omni-directory-import-test");
-        Path series = Files.createDirectories(importRoot.resolve("series").resolve("season-1"));
-        Path episode = series.resolve("episode-01.mkv");
-        Files.write(episode, new byte[]{1, 2, 3, 4});
-        try {
-            StorageImportTask task = new StorageImportTask();
-            task.setId(TASK_ID);
-            task.setOwnerUserId(OWNER_ID);
-            task.setExternalAccountId(ACCOUNT_ID);
-            task.setSourcePath("series");
-            task.setSourceKind(ImportSourceKind.DIRECTORY.getValue());
-            task.setFileName("series");
-            task.setStatus(ImportTaskStatus.QUEUED.getValue());
-            when(importTaskRepository.findById(TASK_ID)).thenReturn(Optional.of(task));
-            when(importTaskRepository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
-
-            StorageExternalAccount account = new StorageExternalAccount();
-            account.setId(ACCOUNT_ID);
-            account.setOwnerUserId(OWNER_ID);
-            account.setProvider("LOCAL");
-            account.setStatus("ACTIVE");
-            when(accountRepository.findById(ACCOUNT_ID)).thenReturn(Optional.of(account));
-            when(localStorageSettings.localHostRoot()).thenReturn(importRoot.toString());
-            when(objectStorageBuckets.userFiles()).thenReturn("user-files");
-            when(fileObjectRepository.save(any())).thenAnswer(invocation -> {
-                FileObject object = invocation.getArgument(0);
-                object.setId(UUID.randomUUID());
-                return object;
-            });
-
-            Map<UUID, FileNode> nodesById = new HashMap<>();
-            List<FileNode> savedNodes = new ArrayList<>();
-            when(fileNodeRepository.save(any())).thenAnswer(invocation -> {
-                FileNode node = invocation.getArgument(0);
-                node.setId(UUID.randomUUID());
-                nodesById.put(node.getId(), node);
-                savedNodes.add(node);
-                return node;
-            });
-            when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(any(), eq(OWNER_ID)))
-                    .thenAnswer(invocation -> Optional.ofNullable(nodesById.get(invocation.getArgument(0))));
-
-            service.execute(new ExternalImportRequestedEvent(TASK_ID));
-
-            assertThat(savedNodes).extracting(FileNode::getName)
-                    .containsExactly("series", "season-1", "episode-01.mkv");
-            FileNode seasonFolder = savedNodes.get(1);
-            FileNode episodeNode = savedNodes.get(2);
-            assertThat(episodeNode.getParentId()).isEqualTo(seasonFolder.getId());
-            assertThat(task.getStatus()).isEqualTo(ImportTaskStatus.COMPLETED.getValue());
-            assertThat(task.getCompletedFiles()).isEqualTo(1);
-        } finally {
-            Files.deleteIfExists(episode);
-            Files.deleteIfExists(series);
-            Files.deleteIfExists(importRoot.resolve("series"));
-            Files.deleteIfExists(importRoot);
-        }
-    }
 }
+

@@ -440,23 +440,6 @@ public class AdminOperationsService {
     }
 
     @Transactional(rollbackFor = Exception.class)
-    public AdminOperationsDto.ExternalStorageItem createExternalStorage(
-            UUID ownerUserId,
-            AdminOperationsDto.CreateExternalStorageRequest request
-    ) {
-        String provider = normalizeText(request.provider(), "外部存储类型不能为空").toUpperCase(Locale.ROOT);
-        String displayName = normalizeText(request.displayName(), "外部存储名称不能为空");
-        String credentials = request.credentials() == null || request.credentials().isBlank()
-                ? "{}"
-                : request.credentials();
-        AdminOperationsDto.ExternalStorageItem storage = toExternalStorageItem(
-                externalStorageAdministration.createAccount(ownerUserId, provider, displayName, credentials)
-        );
-        auditLogService.record(ownerUserId, "ADMIN_EXTERNAL_STORAGE_CREATE", "storage_external_accounts", storage.id());
-        return storage;
-    }
-
-    @Transactional(rollbackFor = Exception.class)
     public AdminOperationsDto.ExternalStorageItem updateExternalStorageStatus(
             UUID actorUserId,
             UUID id,

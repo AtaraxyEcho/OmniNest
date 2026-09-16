@@ -105,6 +105,7 @@ public class FileManagerService {
     private final RateLimitService rateLimitService;
     private final NotificationPublisher notificationService;
     private final ExternalStorageService externalStorageService;
+    private final ExternalStorageCredentialService externalStorageCredentialService;
     private final ReadThroughCache readThroughCache;
     private final UserSyncEventRecorder syncEventRecorder;
     private final ResourceShareLinkService resourceShareLinkService;
@@ -834,9 +835,9 @@ public class FileManagerService {
     public ExternalStorageAccountDto createExternalAccount(UUID ownerUserId, CreateExternalStorageRequest request) {
         StorageExternalAccount account = new StorageExternalAccount();
         account.setOwnerUserId(ownerUserId);
-        account.setProvider(request.provider().trim().toUpperCase(Locale.ROOT));
+        account.setProvider(ExternalStorageProviders.requireAllowed(request.provider()));
         account.setDisplayName(request.displayName().trim());
-        account.setEncryptedCredentials(request.encryptedCredentials());
+        account.setEncryptedCredentials(externalStorageCredentialService.encrypt(request.encryptedCredentials()));
         return toExternalAccountDto(externalAccountRepository.save(account));
     }
 
@@ -854,13 +855,18 @@ public class FileManagerService {
         StorageExternalAccount account = externalAccountRepository.findByIdAndOwnerUserId(accountId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储不存在"));
 
-        String mergedCredentials = ExternalStorageCredentialCodec.mergeForUpdate(
-                account.getEncryptedCredentials(),
+        String existingJson = externalStorageCredentialService.decryptToJson(account.getEncryptedCredentials());
+        String mergedJson = ExternalStorageCredentialCodec.mergeForUpdate(
+                existingJson,
                 request.encryptedCredentials()
         );
-        boolean credentialsChanged = !mergedCredentials.equals(account.getEncryptedCredentials());
+        boolean credentialsChanged = !mergedJson.equals(existingJson);
         account.setDisplayName(request.displayName().trim());
-        account.setEncryptedCredentials(mergedCredentials);
+        if (credentialsChanged) {
+            account.setEncryptedCredentials(externalStorageCredentialService.encrypt(mergedJson));
+        } else if (externalStorageCredentialService.isLegacyPlaintext(account.getEncryptedCredentials())) {
+            account.setEncryptedCredentials(externalStorageCredentialService.encrypt(mergedJson));
+        }
 
         if (credentialsChanged) {
             externalStorageService.deactivateRemote(account);
@@ -967,13 +973,14 @@ public class FileManagerService {
     }
 
     private ExternalStorageAccountDto toExternalAccountDto(StorageExternalAccount account) {
+        String credentialsJson = externalStorageCredentialService.decryptToJson(account.getEncryptedCredentials());
         return new ExternalStorageAccountDto(
                 account.getId(),
                 account.getProvider(),
                 account.getDisplayName(),
                 ExternalStorageCredentialCodec.extractEditableMetadata(
                         account.getProvider(),
-                        account.getEncryptedCredentials()
+                        credentialsJson
                 ),
                 account.getEncryptedCredentials() != null && !account.getEncryptedCredentials().isBlank(),
                 account.getStatus(),

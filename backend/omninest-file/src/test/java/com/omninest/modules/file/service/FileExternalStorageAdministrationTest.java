@@ -2,9 +2,7 @@ package com.omninest.modules.file.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
@@ -31,8 +29,9 @@ class FileExternalStorageAdministrationTest {
 
     private final StorageExternalAccountRepository accountRepository =
             mock(StorageExternalAccountRepository.class);
+    private final ExternalStorageService externalStorageService = mock(ExternalStorageService.class);
     private final FileExternalStorageAdministration administration =
-            new FileExternalStorageAdministration(accountRepository);
+            new FileExternalStorageAdministration(accountRepository, externalStorageService);
 
     @Test
     void listsAccountsAsStableSummaries() {
@@ -44,18 +43,6 @@ class FileExternalStorageAdministrationTest {
         assertThat(summaries).hasSize(1);
         assertThat(summaries.getFirst().id()).isEqualTo(ACCOUNT_ID);
         assertThat(summaries.getFirst().displayName()).isEqualTo("归档存储");
-    }
-
-    @Test
-    void createsActiveAccount() {
-        when(accountRepository.saveAndFlush(any(StorageExternalAccount.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        var summary = administration.createAccount(OWNER_USER_ID, "S3", "归档存储", "encrypted");
-
-        assertThat(summary.id()).isNotNull();
-        assertThat(summary.status()).isEqualTo("ACTIVE");
-        verify(accountRepository).saveAndFlush(any(StorageExternalAccount.class));
     }
 
     @Test

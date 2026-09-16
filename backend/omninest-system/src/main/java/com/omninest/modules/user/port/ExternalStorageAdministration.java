@@ -25,22 +25,6 @@ public interface ExternalStorageAdministration {
     List<ExternalStorageAccountSummary> listAccounts();
 
     /**
-     * 创建外部存储账户。
-     *
-     * @param ownerUserId 所有者用户标识
-     * @param provider 存储提供方
-     * @param displayName 显示名称
-     * @param encryptedCredentials 加密凭据
-     * @return 新建账户摘要
-     */
-    ExternalStorageAccountSummary createAccount(
-            UUID ownerUserId,
-            String provider,
-            String displayName,
-            String encryptedCredentials
-    );
-
-    /**
      * 更新外部存储账户状态。
      *
      * @param accountId 账户标识
