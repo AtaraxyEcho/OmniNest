@@ -2941,6 +2941,9 @@ abstract class AppLocalizations {
   /// **'Import \"{name}\" to current file directory.'**
   String filesImportMessage(Object name);
 
+  /// 超大文件导入提示
+  String get filesImportSizeGuardHint;
+
   /// No description provided for @filesImport.
   ///
   /// In en, this message translates to:

@@ -1511,6 +1511,10 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get filesImportSizeGuardHint =>
+      '超大文件可能被拒绝导入；4K 等重片源请放入本地媒体目录。';
+
+  @override
   String get filesImport => '导入';
 
   @override

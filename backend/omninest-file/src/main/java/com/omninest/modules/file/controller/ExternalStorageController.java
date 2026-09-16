@@ -37,6 +37,23 @@ public class ExternalStorageController {
     private final ExternalStorageService externalStorageService;
     private final CurrentUserContext currentUserContext;
 
+    @Operation(summary = "列出连接器目录", description = "返回可接入的远程存储类型")
+    @GetMapping("/api/v1/external-connectors")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<List<com.omninest.modules.file.dto.ExternalStorageConnectorDto>> listConnectors() {
+        return ApiResponse.success(externalStorageService.listConnectors());
+    }
+
+    @Operation(summary = "测试连接", description = "验证外部存储账户是否可连通")
+    @PostMapping("/api/v1/external-storages/{accountId}/test")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<com.omninest.modules.file.dto.ExternalStorageTestResultDto> testConnection(
+            @PathVariable UUID accountId
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(externalStorageService.testConnection(ownerUserId, accountId));
+    }
+
     @Operation(summary = "浏览外部存储", description = "浏览指定外部存储账户中的文件和目录")
     @GetMapping("/api/v1/external-storages/{accountId}/browse")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")

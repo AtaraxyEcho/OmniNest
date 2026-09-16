@@ -352,6 +352,7 @@ class FileApiResponseParser {
       connectionMetadata: connectionMetadata,
       credentialsConfigured: json['credentialsConfigured'] == true,
       status: json['status']?.toString() ?? 'ACTIVE',
+      lastErrorCode: json['lastErrorCode']?.toString(),
       createdAt:
           DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal(),
       updatedAt:

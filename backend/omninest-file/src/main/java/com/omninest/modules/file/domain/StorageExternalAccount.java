@@ -8,16 +8,22 @@ import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
-import com.omninest.modules.file.domain.ExternalStorageStatus;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
+/**
+ * 用户外部存储连接账户。
+ *
+ * @author OmniNest
+ */
 @Entity
 @Table(name = "storage_external_accounts", schema = "omni")
-@Data
-@AllArgsConstructor
+@Getter
+@Setter
 @NoArgsConstructor
+@AllArgsConstructor
 public class StorageExternalAccount {
     @Id
     private UUID id;
@@ -36,6 +42,12 @@ public class StorageExternalAccount {
 
     @Column(nullable = false, length = 32)
     private String status = ExternalStorageStatus.ACTIVE.getValue();
+
+    @Column(name = "last_error_code", length = 64)
+    private String lastErrorCode;
+
+    @Column(name = "last_checked_at")
+    private Instant lastCheckedAt;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;

@@ -2408,6 +2408,8 @@ CREATE TABLE "omni"."storage_external_accounts" (
   "display_name" varchar(160) NOT NULL,
   "encrypted_credentials" text NOT NULL,
   "status" varchar(32) NOT NULL DEFAULT 'ACTIVE'::character varying,
+  "last_error_code" varchar(64),
+  "last_checked_at" timestamptz(6),
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
   "version" int8 NOT NULL DEFAULT 0
@@ -2419,6 +2421,8 @@ COMMENT ON COLUMN "omni"."storage_external_accounts"."provider" IS '服务提供
 COMMENT ON COLUMN "omni"."storage_external_accounts"."display_name" IS '展示名称';
 COMMENT ON COLUMN "omni"."storage_external_accounts"."encrypted_credentials" IS '加密后的凭据';
 COMMENT ON COLUMN "omni"."storage_external_accounts"."status" IS '状态';
+COMMENT ON COLUMN "omni"."storage_external_accounts"."last_error_code" IS '最近连接错误码';
+COMMENT ON COLUMN "omni"."storage_external_accounts"."last_checked_at" IS '最近连接检查时间';
 COMMENT ON COLUMN "omni"."storage_external_accounts"."created_at" IS '创建时间';
 COMMENT ON COLUMN "omni"."storage_external_accounts"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "omni"."storage_external_accounts"."version" IS '乐观锁版本号';

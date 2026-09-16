@@ -312,6 +312,7 @@ class ExternalStorageAccount {
     this.connectionMetadata = const {},
     this.credentialsConfigured = false,
     required this.status,
+    this.lastErrorCode,
     this.createdAt,
     this.updatedAt,
   });
@@ -322,6 +323,7 @@ class ExternalStorageAccount {
   final Map<String, String> connectionMetadata;
   final bool credentialsConfigured;
   final String status;
+  final String? lastErrorCode;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 }

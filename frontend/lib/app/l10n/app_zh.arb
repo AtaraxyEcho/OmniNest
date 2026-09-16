@@ -538,6 +538,7 @@
   "filesImportFolder": "导入整个文件夹",
   "filesImportConfirm": "导入外部内容？",
   "filesImportMessage": "将 \"{name}\" 导入到当前文件目录。",
+  "filesImportSizeGuardHint": "超大文件可能被拒绝导入；4K 等重片源请放入本地媒体目录。",
   "filesImport": "导入",
   "filesNoImportTasks": "暂无导入任务",
   "filesCancelImportConfirm": "取消导入任务？",

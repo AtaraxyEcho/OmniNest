@@ -1562,6 +1562,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get filesImportSizeGuardHint =>
+      'Very large files may be rejected; put 4K originals in the local media library instead.';
+
+  @override
   String get filesImport => 'Import';
 
   @override

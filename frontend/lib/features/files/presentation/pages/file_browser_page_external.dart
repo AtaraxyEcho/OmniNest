@@ -53,7 +53,10 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
                     (account) => _InfoRow(
                       icon: Icons.cloud_queue_rounded,
                       title: account.displayName,
-                      subtitle: '${account.provider} · ${account.status}',
+                      subtitle:
+                          account.lastErrorCode == null
+                              ? '${account.provider} · ${account.status}'
+                              : '${account.provider} · ${account.status} · ${account.lastErrorCode}',
                       trailingWidget: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -342,7 +345,8 @@ class _ExternalBrowsePanel extends ConsumerWidget {
     await _confirmAndRun(
       context,
       title: l10n.filesImportConfirm,
-      message: l10n.filesImportMessage(fileName),
+      message:
+          '${l10n.filesImportMessage(fileName)}\n${l10n.filesImportSizeGuardHint}',
       confirmLabel: l10n.filesImport,
       action:
           () => controller.createImportTask(

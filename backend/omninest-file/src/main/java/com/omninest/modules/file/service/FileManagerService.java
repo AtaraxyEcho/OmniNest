@@ -984,6 +984,8 @@ public class FileManagerService {
                 ),
                 account.getEncryptedCredentials() != null && !account.getEncryptedCredentials().isBlank(),
                 account.getStatus(),
+                account.getLastErrorCode(),
+                account.getLastCheckedAt(),
                 account.getCreatedAt(),
                 account.getUpdatedAt()
         );

@@ -689,6 +689,18 @@ class FileApi {
     return ExternalSpaceUsage.fromJson(parseData(response.data));
   }
 
+  /// 测试外部存储连通性
+  Future<void> testExternalStorageConnection(String accountId) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/external-storages/$accountId/test',
+      options: Options(receiveTimeout: _externalStorageTimeout),
+    );
+    final data = parseData(response.data);
+    if (data['success'] != true) {
+      throw Exception(data['message']?.toString() ?? '连接测试失败');
+    }
+  }
+
   FileNodePage parseFilePageResponse(Map<String, dynamic>? body) {
     return _responseParser.parseFilePageResponse(body);
   }

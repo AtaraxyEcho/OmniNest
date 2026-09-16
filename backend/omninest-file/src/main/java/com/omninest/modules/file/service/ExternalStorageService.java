@@ -149,6 +149,57 @@ public class ExternalStorageService {
         return rcloneGateway.queryFileSystemInfo(fs);
     }
 
+    // ========== 连接健康 ==========
+
+    /**
+     * 列出连接器目录。
+     *
+     * @return 连接器列表
+     */
+    public List<com.omninest.modules.file.dto.ExternalStorageConnectorDto> listConnectors() {
+        return List.of(
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("WEBDAV", "WebDAV", "PASSWORD", "AVAILABLE"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("S3", "S3", "ACCESS_KEY", "AVAILABLE"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("ONEDRIVE", "OneDrive", "OAUTH2", "TOKEN_PASTE"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("GDRIVE", "Google Drive", "OAUTH2", "TOKEN_PASTE"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("DROPBOX", "Dropbox", "OAUTH2", "TOKEN_PASTE"),
+                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("ALIYUN_DRIVE", "Aliyun Drive", "COOKIE", "TOKEN_PASTE")
+        );
+    }
+
+    /**
+     * 测试外部存储连通性（list 根目录）。
+     *
+     * @param ownerUserId 所有者
+     * @param accountId 账户 ID
+     * @return 测试结果
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public com.omninest.modules.file.dto.ExternalStorageTestResultDto testConnection(
+            UUID ownerUserId,
+            UUID accountId
+    ) {
+        StorageExternalAccount account = findAccount(ownerUserId, accountId);
+        ensureActive(account);
+        try {
+            ensureRemoteActivated(account);
+            rcloneGateway.listDirectory(resolveFs(account), "", false);
+            account.setLastErrorCode(null);
+            account.setLastCheckedAt(java.time.Instant.now());
+            accountRepository.save(account);
+            return new com.omninest.modules.file.dto.ExternalStorageTestResultDto(
+                    true, null, "连接正常", account.getLastCheckedAt());
+        } catch (RuntimeException exception) {
+            String code = "CONNECTION_FAILED";
+            account.setLastErrorCode(code);
+            account.setLastCheckedAt(java.time.Instant.now());
+            accountRepository.save(account);
+            log.warn("外部存储连接测试失败: accountId={}", accountId, exception);
+            return new com.omninest.modules.file.dto.ExternalStorageTestResultDto(
+                    false, code, "无法连接远程存储，请检查地址与凭据", account.getLastCheckedAt());
+        }
+    }
+
     // ========== 导入任务 ==========
 
     /**
