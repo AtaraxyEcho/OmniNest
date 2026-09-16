@@ -70,7 +70,8 @@ class ReaderPageScaffold extends ConsumerStatefulWidget {
 
   final ReaderPageTarget target;
 
-  /// 页面内容（非滚动容器，由骨架负责滚动）
+  /// 页面内容（默认非滚动容器，由骨架负责滚动；自带 ScrollView 的
+  /// 页面直接承接滚动与刷新，由页面自管内边距与物理）。
   final Widget child;
 
   final Future<void> Function()? onRefresh;
@@ -537,13 +538,20 @@ class _ReaderPageScrollArea extends StatelessWidget {
   Widget build(BuildContext context) {
     final rc = context.readerColors;
     final wide = MediaQuery.sizeOf(context).width >= 1024;
-    final scroll = SingleChildScrollView(
-      physics: const AlwaysScrollableScrollPhysics(
-        parent: BouncingScrollPhysics(),
-      ),
-      padding: EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 24, 40),
-      child: child,
-    );
+    // 页面自带滚动体（如详情页 Sliver 虚拟化列表）时直接承接滚动与
+    // 下拉刷新，不再二次包裹，避免嵌套滚动。
+    final Widget scroll;
+    if (child is ScrollView) {
+      scroll = child;
+    } else {
+      scroll = SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
+        padding: EdgeInsets.fromLTRB(wide ? 32 : 24, 24, wide ? 32 : 24, 40),
+        child: child,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

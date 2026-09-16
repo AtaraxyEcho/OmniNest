@@ -8,6 +8,7 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_catalog_tree.dart';
+import 'package:omninest/features/reader/presentation/widgets/comic_source_tile.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
@@ -73,6 +74,52 @@ enum _ComicDetailTab { info, catalog, sources }
 class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
   bool _bookshelfBusy = false;
   _ComicDetailTab _tab = _ComicDetailTab.info;
+  ComicCatalogController? _catalogController;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncCatalogController();
+  }
+
+  @override
+  void didUpdateWidget(covariant ComicDetailPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _syncCatalogController();
+  }
+
+  @override
+  void dispose() {
+    _catalogController?.removeListener(_onCatalogChanged);
+    _catalogController?.dispose();
+    super.dispose();
+  }
+
+  /// 创建或调和目录控制器；数据未变化时内部去重，避免重建循环。
+  void _syncCatalogController() {
+    final existing = _catalogController;
+    if (existing == null) {
+      _catalogController = ComicCatalogController(
+        nodes: widget.chapters,
+        pages: widget.pages,
+        currentNodeId: null,
+        currentPageId: widget.progress?.pageId,
+      )..addListener(_onCatalogChanged);
+      return;
+    }
+    existing.update(
+      nodes: widget.chapters,
+      pages: widget.pages,
+      currentNodeId: null,
+      currentPageId: widget.progress?.pageId,
+    );
+  }
+
+  void _onCatalogChanged() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,16 +127,41 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
     final tabs = _visibleTabs(l10n);
     // 来源删除等操作后当前页签可能已不可见，回退到基本信息页签。
     final selectedTab = tabs.containsKey(_tab) ? _tab : _ComicDetailTab.info;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildHero(context),
-        const SizedBox(height: 32),
-        if (tabs.length > 1) ...[
-          _buildTabBar(context, tabs, selectedTab),
-          const SizedBox(height: 24),
-        ],
-        _buildTabContent(context, selectedTab),
+    final wide = MediaQuery.sizeOf(context).width >= 1024;
+    final pagePadding = EdgeInsets.fromLTRB(
+      wide ? 32 : 24,
+      24,
+      wide ? 32 : 24,
+      0,
+    );
+    // 页面自带滚动体：Hero/页签与短内容为盒式 sliver，目录页签走
+    // SliverList 虚拟化，千章级目录帧成本恒定于可见区域。
+    return CustomScrollView(
+      physics: const AlwaysScrollableScrollPhysics(
+        parent: BouncingScrollPhysics(),
+      ),
+      slivers: [
+        SliverPadding(
+          padding: pagePadding,
+          sliver: SliverToBoxAdapter(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildHero(context),
+                const SizedBox(height: 32),
+                if (tabs.length > 1) ...[
+                  _buildTabBar(context, tabs, selectedTab),
+                  const SizedBox(height: 24),
+                ],
+                if (selectedTab != _ComicDetailTab.catalog)
+                  _buildTabContent(context, selectedTab),
+              ],
+            ),
+          ),
+        ),
+        if (selectedTab == _ComicDetailTab.catalog)
+          ..._buildCatalogSlivers(context),
+        const SliverToBoxAdapter(child: SizedBox(height: 40)),
       ],
     );
   }
@@ -504,7 +576,8 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
       case _ComicDetailTab.info:
         return _buildInfoTab(context);
       case _ComicDetailTab.catalog:
-        return _buildCatalogTab(context);
+        // 目录页签由外层 slivers 承载，不进入盒式内容。
+        return const SizedBox.shrink();
       case _ComicDetailTab.sources:
         return _buildSourcesTab(context);
     }
@@ -615,19 +688,67 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
     );
   }
 
-  /// 目录页签：树随整页滚动内联展开，并高亮当前阅读位置。
-  Widget _buildCatalogTab(BuildContext context) {
-    return ComicCatalogTree(
-      nodes: widget.chapters,
-      pages: widget.pages,
-      currentPageId: widget.progress?.pageId,
-      shrinkWrap: true,
-      onNodeTap: (node) {
-        context.push(
-          '/reader/comics/${widget.item.id}/read?catalogNodeId=${node.id}',
-        );
-      },
-    );
+  /// 目录页签 slivers：计数与展开/收起控制 + SliverList 虚拟化行。
+  ///
+  /// 行自带头部缩进（16+深度×24），此处不再追加水平内边距，与原树视觉一致。
+  List<Widget> _buildCatalogSlivers(BuildContext context) {
+    final controller = _catalogController;
+    if (controller == null || controller.roots.isEmpty) {
+      return const [];
+    }
+    final l10n = AppLocalizations.of(context);
+    final rows = controller.flatRows;
+    return [
+      SliverToBoxAdapter(
+        child: Padding(
+          padding: const EdgeInsetsDirectional.fromSTEB(8, 0, 8, 4),
+          child: Row(
+            children: [
+              Text(
+                l10n.readerComicCatalogItems(
+                  widget.chapters.where((node) => !node.isRoot).length,
+                ),
+                style: TextStyle(
+                  color: context.readerColors.onSurfaceVariant,
+                  fontSize: AppTypography.labelSmall,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: l10n.readerComicExpandAll,
+                onPressed: controller.expandAll,
+                icon: const Icon(Icons.unfold_more_rounded),
+                visualDensity: VisualDensity.compact,
+              ),
+              IconButton(
+                tooltip: l10n.readerComicCollapseAll,
+                onPressed: controller.collapseAll,
+                icon: const Icon(Icons.unfold_less_rounded),
+                visualDensity: VisualDensity.compact,
+              ),
+            ],
+          ),
+        ),
+      ),
+      SliverPadding(
+        padding: const EdgeInsets.only(bottom: 4),
+        sliver: SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, index) => buildComicCatalogRow(
+              context,
+              row: rows[index],
+              controller: controller,
+              onNodeTap: (node) {
+                context.push(
+                  '/reader/comics/${widget.item.id}/read?catalogNodeId=${node.id}',
+                );
+              },
+            ),
+            childCount: rows.length,
+          ),
+        ),
+      ),
+    ];
   }
 
   Widget _buildSourcesTab(BuildContext context) {
@@ -635,7 +756,7 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         for (final source in widget.sources) ...[
-          _ComicSourceTile(
+          ComicSourceTile(
             source: source,
             canDelete: widget.sources.length > 1,
             onRetry: widget.onRetrySource,
@@ -661,191 +782,5 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
     final hh = time.hour.toString().padLeft(2, '0');
     final mm = time.minute.toString().padLeft(2, '0');
     return '$y-$m-$d $hh:$mm';
-  }
-}
-
-class _ComicSourceTile extends StatefulWidget {
-  const _ComicSourceTile({
-    required this.source,
-    required this.canDelete,
-    this.onRetry,
-    this.onDelete,
-  });
-
-  final ComicSource source;
-  final bool canDelete;
-  final Future<bool> Function(ComicSource source)? onRetry;
-  final Future<bool> Function(ComicSource source)? onDelete;
-
-  @override
-  State<_ComicSourceTile> createState() => _ComicSourceTileState();
-}
-
-class _ComicSourceTileState extends State<_ComicSourceTile> {
-  bool _busy = false;
-
-  bool get _failed => widget.source.status == 'FAILED';
-  bool get _parsing =>
-      widget.source.status == 'PENDING' || widget.source.status == 'PARSING';
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _statusColor(context);
-    final l10n = AppLocalizations.of(context);
-    final subtitle = _subtitle(l10n);
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: context.readerColors.surfaceContainerHigh.withValues(
-          alpha: 0.62,
-        ),
-        borderRadius: BorderRadius.circular(2),
-        border: Border.all(
-          color: color.withValues(alpha: _failed ? 0.35 : 0.18),
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(_statusIcon(), color: color, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.source.sourceName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.readerColors.onSurface,
-                    fontSize: AppTypography.bodyMedium,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: context.readerColors.onSurfaceVariant,
-                    fontSize: AppTypography.bodySmall,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          if (_busy)
-            const SizedBox(
-              width: 18,
-              height: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            )
-          else ...[
-            if (_failed && widget.onRetry != null)
-              IconButton(
-                tooltip: l10n.readerRetry,
-                icon: const Icon(Icons.refresh_rounded),
-                color: color,
-                onPressed: () => _runAction(widget.onRetry!),
-              ),
-            if (widget.canDelete && widget.onDelete != null)
-              IconButton(
-                tooltip: AppLocalizations.of(context).readerDeleteSource,
-                icon: const Icon(Icons.delete_outline_rounded),
-                color: context.readerColors.danger,
-                onPressed: _confirmDelete,
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Future<void> _runAction(
-    Future<bool> Function(ComicSource source) action,
-  ) async {
-    setState(() => _busy = true);
-    final ok = await action(widget.source);
-    if (!mounted) {
-      return;
-    }
-    setState(() => _busy = false);
-    final l10n = AppLocalizations.of(context);
-    showReaderSnackBar(
-      context,
-      ok ? l10n.readerOperationSubmitted : l10n.readerOperationFailed,
-    );
-  }
-
-  Future<void> _confirmDelete() async {
-    final l10n = AppLocalizations.of(context);
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder:
-          (dialogContext) => AlertDialog(
-            title: Text(l10n.readerDeleteSource),
-            content: Text(
-              l10n.readerConfirmDeleteSource(widget.source.sourceName),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(false),
-                child: Text(l10n.coreCancel),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(dialogContext).pop(true),
-                child: Text(l10n.readerDeleteSource),
-              ),
-            ],
-          ),
-    );
-    if (!mounted || confirmed != true || widget.onDelete == null) {
-      return;
-    }
-    await _runAction(widget.onDelete!);
-  }
-
-  String _subtitle(AppLocalizations l10n) {
-    final pieces = <String>[
-      widget.source.fileFormat,
-      l10n.readerPageCount(widget.source.pageCount),
-    ];
-    if (widget.source.readingDirection == 'rtl') {
-      pieces.add(l10n.readerRtl);
-    } else if (widget.source.readingDirection == 'ltr') {
-      pieces.add(l10n.readerLtr);
-    }
-    if (_parsing) {
-      pieces.add(l10n.readerComicImportParsing);
-    }
-    if (_failed) {
-      pieces.add(widget.source.errorMessage ?? l10n.readerComicImportFailed);
-    }
-    if (widget.source.retryCount > 0) {
-      pieces.add(l10n.readerComicRetryCount(widget.source.retryCount));
-    }
-    return pieces.join(' · ');
-  }
-
-  IconData _statusIcon() {
-    if (_failed) {
-      return Icons.error_outline_rounded;
-    }
-    if (_parsing) {
-      return Icons.hourglass_top_rounded;
-    }
-    return Icons.check_circle_outline_rounded;
-  }
-
-  Color _statusColor(BuildContext context) {
-    if (_failed) {
-      return context.readerColors.danger;
-    }
-    if (_parsing) {
-      return context.readerColors.tertiary;
-    }
-    return context.readerColors.success;
   }
 }

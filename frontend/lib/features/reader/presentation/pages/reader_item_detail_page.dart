@@ -985,48 +985,52 @@ class _PdfDetailContent extends StatelessWidget {
     final theme = Theme.of(context);
     final percent =
         ((progress?.progressPercent ?? 0) * 100).clamp(0, 100).toDouble();
-    return ListView(
+    // 内容较短，随骨架滚动体滚动；不自带 ListView 以免嵌套滚动。
+    return Padding(
       padding: const EdgeInsets.all(20),
-      children: [
-        Text(item.title, style: theme.textTheme.headlineSmall),
-        const SizedBox(height: 8),
-        Text(
-          '${readerTypeLabel(l10n, item.itemType)}'
-          '${item.authorName == null ? '' : ' · ${item.authorName}'}',
-          style: theme.textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 16),
-        LinearProgressIndicator(value: percent / 100),
-        const SizedBox(height: 8),
-        Text(readerProgressLabelText(l10n, percent)),
-        const SizedBox(height: 24),
-        FilledButton.icon(
-          onPressed: onRead,
-          icon: const Icon(Icons.menu_book_outlined),
-          label: Text(l10n.readerPdfTitle),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: bookshelfBusy ? null : onToggleBookshelf,
-          icon: Icon(
-            item.addedToBookshelf
-                ? Icons.bookmark_rounded
-                : Icons.bookmark_add_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(item.title, style: theme.textTheme.headlineSmall),
+          const SizedBox(height: 8),
+          Text(
+            '${readerTypeLabel(l10n, item.itemType)}'
+            '${item.authorName == null ? '' : ' · ${item.authorName}'}',
+            style: theme.textTheme.bodyMedium,
           ),
-          label: Text(
-            item.addedToBookshelf
-                ? l10n.readerAddedToBookshelf
-                : l10n.readerAddToBookshelf,
+          const SizedBox(height: 16),
+          LinearProgressIndicator(value: percent / 100),
+          const SizedBox(height: 8),
+          Text(readerProgressLabelText(l10n, percent)),
+          const SizedBox(height: 24),
+          FilledButton.icon(
+            onPressed: onRead,
+            icon: const Icon(Icons.menu_book_outlined),
+            label: Text(l10n.readerPdfTitle),
           ),
-        ),
-        const SizedBox(height: 8),
-        OutlinedButton(
-          onPressed: onEditMetadata,
-          child: Text(l10n.readerEditMetadata),
-        ),
-        const SizedBox(height: 8),
-        TextButton(onPressed: onDelete, child: Text(l10n.readerDeleteBook)),
-      ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: bookshelfBusy ? null : onToggleBookshelf,
+            icon: Icon(
+              item.addedToBookshelf
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_add_rounded,
+            ),
+            label: Text(
+              item.addedToBookshelf
+                  ? l10n.readerAddedToBookshelf
+                  : l10n.readerAddToBookshelf,
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: onEditMetadata,
+            child: Text(l10n.readerEditMetadata),
+          ),
+          const SizedBox(height: 8),
+          TextButton(onPressed: onDelete, child: Text(l10n.readerDeleteBook)),
+        ],
+      ),
     );
   }
 }
