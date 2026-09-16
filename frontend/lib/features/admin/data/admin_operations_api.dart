@@ -299,6 +299,44 @@ class AdminOperationsApi {
     return AdminExternalStorageItem.fromJson(parseData(response.data));
   }
 
+  Future<List<AdminConnectorOAuthApp>> listConnectorOAuthApps() async {
+    final response = await apiClient.dio.get<dynamic>(
+      '/admin/external-connectors/oauth-apps',
+    );
+    final envelope = parseEnvelope(
+      response.data is Map<String, dynamic>
+          ? response.data as Map<String, dynamic>
+          : null,
+    );
+    final data = envelope['data'];
+    final items = data is List ? data : const [];
+    return items
+        .whereType<Map<String, dynamic>>()
+        .map(AdminConnectorOAuthApp.fromJson)
+        .toList();
+  }
+
+  Future<AdminConnectorOAuthApp> saveConnectorOAuthApp({
+    required String connectorCode,
+    required String clientId,
+    String? clientSecret,
+    required String redirectUri,
+    required bool enabled,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/admin/external-connectors/oauth-apps',
+      data: {
+        'connectorCode': connectorCode,
+        'clientId': clientId,
+        if (clientSecret != null && clientSecret.isNotEmpty)
+          'clientSecret': clientSecret,
+        'redirectUri': redirectUri,
+        'enabled': enabled,
+      },
+    );
+    return AdminConnectorOAuthApp.fromJson(parseData(response.data));
+  }
+
   // ── 总览汇总 ──────────────────────────────────────────────────────────
 
   Future<AdminConsoleSummary> summary() async {

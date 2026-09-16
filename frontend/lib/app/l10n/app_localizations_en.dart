@@ -3951,7 +3951,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminExternalStorageSubtitle =>
-      'Connect WebDAV, S3, SMB and mount cloud drives.';
+      'Govern remote connection health; create and import connections under Files → Remote Import.';
+
+  @override
+  String get adminOAuthAppsTitle => 'OAuth apps';
+
+  @override
+  String get adminOAuthAppsSubtitle =>
+      'Configure instance-level OAuth apps (BYOA) for OneDrive / Google connectors.';
+
+  @override
+  String get adminNoOAuthApps => 'No OAuth apps configured yet.';
 
   @override
   String get adminNewConnection => 'New Connection';

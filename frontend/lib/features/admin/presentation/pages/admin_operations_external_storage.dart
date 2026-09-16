@@ -61,6 +61,52 @@ class AdminExternalStoragePage extends ConsumerWidget {
         ),
         const SizedBox(height: 24),
         AdminInfoPanel(
+          title: l10n.adminOAuthAppsTitle,
+          subtitle: l10n.adminOAuthAppsSubtitle,
+          trailing: FilledButton.tonalIcon(
+            onPressed: () => _showOAuthAppDialog(context, ref),
+            icon: const Icon(Icons.vpn_key_outlined),
+            label: Text(l10n.adminSave),
+          ),
+          children: [
+            Consumer(
+              builder: (context, ref, _) {
+                final apps = ref.watch(adminConnectorOAuthAppsProvider);
+                return apps.when(
+                  loading: () => const _EmptyText('…'),
+                  error: (error, _) => _EmptyText(error.toString()),
+                  data:
+                      (items) =>
+                          items.isEmpty
+                              ? _EmptyText(l10n.adminNoOAuthApps)
+                              : Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                children: [
+                                  for (final app in items)
+                                    _InfoRow(
+                                      leading: app.connectorCode,
+                                      middle:
+                                          '${app.clientId}\n${app.redirectUri}',
+                                      trailing: AdminStatusPill(
+                                        label:
+                                            app.enabled
+                                                ? l10n.adminEnabled
+                                                : l10n.adminDisabled,
+                                        color:
+                                            app.enabled
+                                                ? adminColors.success
+                                                : adminColors.tertiary,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        AdminInfoPanel(
           title: l10n.adminConnectionList,
           subtitle: l10n.adminConnectionListSubtitle,
           children:
@@ -117,6 +163,93 @@ class AdminExternalStoragePage extends ConsumerWidget {
       ],
     );
   }
+}
+
+Future<void> _showOAuthAppDialog(BuildContext context, WidgetRef ref) async {
+  final l10n = AppLocalizations.of(context);
+  final codeController = TextEditingController(text: 'ONEDRIVE');
+  final clientIdController = TextEditingController();
+  final clientSecretController = TextEditingController();
+  final redirectController = TextEditingController();
+  var enabled = true;
+  await showDialog<void>(
+    context: context,
+    builder:
+        (dialogContext) => StatefulBuilder(
+          builder:
+              (context, setDialogState) => AlertDialog(
+                title: Text(l10n.adminOAuthAppsTitle),
+                content: SizedBox(
+                  width: 480,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: codeController,
+                        decoration: InputDecoration(
+                          labelText: l10n.adminType,
+                          hintText: 'ONEDRIVE',
+                        ),
+                      ),
+                      TextField(
+                        controller: clientIdController,
+                        decoration: const InputDecoration(
+                          labelText: 'Client ID',
+                        ),
+                      ),
+                      TextField(
+                        controller: clientSecretController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Client Secret',
+                        ),
+                      ),
+                      TextField(
+                        controller: redirectController,
+                        decoration: const InputDecoration(
+                          labelText: 'Redirect URI',
+                        ),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(l10n.adminEnabled),
+                        value: enabled,
+                        onChanged:
+                            (value) => setDialogState(() => enabled = value),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: Text(l10n.adminCancel),
+                  ),
+                  FilledButton(
+                    onPressed: () async {
+                      await ref
+                          .read(adminOperationsActionsProvider)
+                          .saveConnectorOAuthApp(
+                            connectorCode: codeController.text.trim(),
+                            clientId: clientIdController.text.trim(),
+                            clientSecret: clientSecretController.text.trim(),
+                            redirectUri: redirectController.text.trim(),
+                            enabled: enabled,
+                          );
+                      if (dialogContext.mounted) {
+                        Navigator.of(dialogContext).pop();
+                      }
+                    },
+                    child: Text(l10n.adminSave),
+                  ),
+                ],
+              ),
+        ),
+  );
+  codeController.dispose();
+  clientIdController.dispose();
+  clientSecretController.dispose();
+  redirectController.dispose();
 }
 
 class _MetricGrid extends StatelessWidget {

@@ -667,6 +667,35 @@ class AdminExternalStorageItem {
   final String updatedAt;
 }
 
+class AdminConnectorOAuthApp {
+  const AdminConnectorOAuthApp({
+    required this.id,
+    required this.connectorCode,
+    required this.clientId,
+    required this.redirectUri,
+    required this.enabled,
+    required this.updatedAt,
+  });
+
+  factory AdminConnectorOAuthApp.fromJson(Map<String, dynamic> json) {
+    return AdminConnectorOAuthApp(
+      id: json['id']?.toString() ?? '',
+      connectorCode: json['connectorCode']?.toString() ?? '',
+      clientId: json['clientId']?.toString() ?? '',
+      redirectUri: json['redirectUri']?.toString() ?? '',
+      enabled: json['enabled'] == true,
+      updatedAt: json['updatedAt']?.toString() ?? '',
+    );
+  }
+
+  final String id;
+  final String connectorCode;
+  final String clientId;
+  final String redirectUri;
+  final bool enabled;
+  final String updatedAt;
+}
+
 // ── 会话管理 ──────────────────────────────────────────────────────────
 
 class AdminSessionManagementView {

@@ -51,11 +51,12 @@ class ExternalStorageServiceTest {
     private final SharedSpaceService sharedSpaceService = mock(SharedSpaceService.class);
     private final com.omninest.modules.file.config.ExternalStorageImportProperties importProperties =
             new com.omninest.modules.file.config.ExternalStorageImportProperties();
+    private final ExternalStorageOAuthService oauthService = mock(ExternalStorageOAuthService.class);
 
     private final ExternalStorageService service = new ExternalStorageService(
             rcloneGateway, accountRepository,
             importTaskRepository, taskDispatchService, taskRecordService,
-            credentialService, sharedSpaceService, importProperties
+            credentialService, sharedSpaceService, importProperties, oauthService
     );
 
     @org.junit.jupiter.api.BeforeEach

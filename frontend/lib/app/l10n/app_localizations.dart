@@ -7303,6 +7303,12 @@ abstract class AppLocalizations {
   /// **'Connect WebDAV, S3, SMB and mount cloud drives.'**
   String get adminExternalStorageSubtitle;
 
+  String get adminOAuthAppsTitle;
+
+  String get adminOAuthAppsSubtitle;
+
+  String get adminNoOAuthApps;
+
   /// No description provided for @adminNewConnection.
   ///
   /// In en, this message translates to:

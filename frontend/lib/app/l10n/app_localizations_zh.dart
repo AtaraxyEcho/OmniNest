@@ -3817,7 +3817,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminExternalStorageIntegration => '外部存储集成';
 
   @override
-  String get adminExternalStorageSubtitle => '接入 WebDAV、S3、SMB 和挂载网盘。';
+  String get adminExternalStorageSubtitle =>
+      '治理远程来源连接状态；连接创建与导入请在文件模块的远程导入中操作。';
+
+  @override
+  String get adminOAuthAppsTitle => 'OAuth 应用';
+
+  @override
+  String get adminOAuthAppsSubtitle =>
+      '为 OneDrive / Google 等连接器配置实例级 OAuth 应用（BYOA）。';
+
+  @override
+  String get adminNoOAuthApps => '尚未配置 OAuth 应用。';
 
   @override
   String get adminNewConnection => '新增连接';

@@ -111,6 +111,12 @@ final adminExternalStorageProvider = FutureProvider<AdminExternalStorageView>((
   return ref.watch(adminOperationsApiProvider).externalStorage();
 });
 
+final adminConnectorOAuthAppsProvider = FutureProvider<List<AdminConnectorOAuthApp>>((
+  ref,
+) {
+  return ref.watch(adminOperationsApiProvider).listConnectorOAuthApps();
+});
+
 final adminSessionsProvider = FutureProvider<AdminSessionManagementView>((ref) {
   return ref.watch(adminOperationsApiProvider).allSessions();
 });
@@ -300,6 +306,27 @@ class AdminOperationsActions {
   Future<void> updateExternalStorageStatus(String id, String status) async {
     await _api.updateExternalStorageStatus(id, status);
     ref.invalidate(adminExternalStorageProvider);
+  }
+
+  Future<List<AdminConnectorOAuthApp>> listConnectorOAuthApps() {
+    return _api.listConnectorOAuthApps();
+  }
+
+  Future<void> saveConnectorOAuthApp({
+    required String connectorCode,
+    required String clientId,
+    String? clientSecret,
+    required String redirectUri,
+    required bool enabled,
+  }) async {
+    await _api.saveConnectorOAuthApp(
+      connectorCode: connectorCode,
+      clientId: clientId,
+      clientSecret: clientSecret,
+      redirectUri: redirectUri,
+      enabled: enabled,
+    );
+    ref.invalidate(adminConnectorOAuthAppsProvider);
   }
 
   Future<void> revokeSession(String sessionId) async {

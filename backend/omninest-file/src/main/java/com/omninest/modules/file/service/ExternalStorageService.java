@@ -51,6 +51,7 @@ public class ExternalStorageService {
     private final ExternalStorageCredentialService externalStorageCredentialService;
     private final SharedSpaceService sharedSpaceService;
     private final ExternalStorageImportProperties importProperties;
+    private final ExternalStorageOAuthService oauthService;
 
     // ========== Remote 生命周期 ==========
 
@@ -87,10 +88,9 @@ public class ExternalStorageService {
     public ExternalFileListDto browse(UUID ownerUserId, UUID accountId, String path) {
         StorageExternalAccount account = findAccount(ownerUserId, accountId);
         ensureActive(account);
+        prepareUsableRemote(account);
         String fs = resolveFs(account);
         String remote = normalizePath(path);
-
-        ensureRemoteActivated(account);
 
         try {
             List<ExternalFileItemDto> items = rcloneGateway.listDirectory(fs, remote, false).stream()
@@ -122,9 +122,8 @@ public class ExternalStorageService {
     public ExternalSpaceDto getSpaceUsage(UUID ownerUserId, UUID accountId) {
         StorageExternalAccount account = findAccount(ownerUserId, accountId);
         ensureActive(account);
+        prepareUsableRemote(account);
         String fs = resolveFs(account);
-
-        ensureRemoteActivated(account);
 
         RcloneGateway.SpaceUsage usage = rcloneGateway.querySpaceUsage(fs);
         return new ExternalSpaceDto(
@@ -142,9 +141,8 @@ public class ExternalStorageService {
     public Map<String, Object> getFsInfo(UUID ownerUserId, UUID accountId) {
         StorageExternalAccount account = findAccount(ownerUserId, accountId);
         ensureActive(account);
+        prepareUsableRemote(account);
         String fs = resolveFs(account);
-
-        ensureRemoteActivated(account);
 
         return rcloneGateway.queryFileSystemInfo(fs);
     }
@@ -182,7 +180,7 @@ public class ExternalStorageService {
         StorageExternalAccount account = findAccount(ownerUserId, accountId);
         ensureActive(account);
         try {
-            ensureRemoteActivated(account);
+            prepareUsableRemote(account);
             rcloneGateway.listDirectory(resolveFs(account), "", false);
             account.setLastErrorCode(null);
             account.setLastCheckedAt(java.time.Instant.now());
@@ -310,6 +308,28 @@ public class ExternalStorageService {
     }
 
     // ========== 内部方法 ==========
+
+    /**
+     * 确保远程可用：OAuth 类先刷新 token，再确保 rclone remote 存在。
+     */
+    private void prepareUsableRemote(StorageExternalAccount account) {
+        maybeRefreshOAuthToken(account);
+        ensureRemoteActivated(account);
+    }
+
+    private void maybeRefreshOAuthToken(StorageExternalAccount account) {
+        String provider = account.getProvider() == null
+                ? ""
+                : account.getProvider().trim().toUpperCase(java.util.Locale.ROOT);
+        boolean oauth = provider.equals("ONEDRIVE")
+                || provider.equals("GDRIVE")
+                || provider.equals("GOOGLE_DRIVE")
+                || provider.equals("DROPBOX");
+        if (!oauth) {
+            return;
+        }
+        oauthService.ensureAccessToken(account);
+    }
 
     /**
      * 确保 rclone remote 已创建。如果尚未激活则自动激活。
