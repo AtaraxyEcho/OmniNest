@@ -2430,6 +2430,28 @@ COMMENT ON COLUMN "omni"."storage_external_accounts"."updated_at" IS '更新时�
 COMMENT ON COLUMN "omni"."storage_external_accounts"."version" IS '乐观锁版本号';
 COMMENT ON TABLE "omni"."storage_external_accounts" IS '外部存储账号表，保存用户绑定的第三方存储配置';
 
+CREATE TABLE "omni"."storage_connector_oauth_apps" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
+  "connector_code" varchar(64) NOT NULL,
+  "client_id" varchar(256) NOT NULL,
+  "client_secret_encrypted" text NOT NULL,
+  "redirect_uri" varchar(512) NOT NULL,
+  "enabled" bool NOT NULL DEFAULT true,
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "version" int8 NOT NULL DEFAULT 0
+)
+;
+COMMENT ON COLUMN "omni"."storage_connector_oauth_apps"."connector_code" IS '连接器编码，如 ONEDRIVE';
+COMMENT ON COLUMN "omni"."storage_connector_oauth_apps"."client_id" IS 'OAuth 应用 Client ID';
+COMMENT ON COLUMN "omni"."storage_connector_oauth_apps"."client_secret_encrypted" IS '加密后的 Client Secret';
+COMMENT ON COLUMN "omni"."storage_connector_oauth_apps"."redirect_uri" IS 'OAuth 回调地址';
+COMMENT ON TABLE "omni"."storage_connector_oauth_apps" IS '实例级 OAuth 应用配置（BYOA）';
+
+CREATE UNIQUE INDEX "uk_storage_connector_oauth_apps_code" ON "omni"."storage_connector_oauth_apps" USING btree (
+  "connector_code"
+);
+
 CREATE TABLE "omni"."storage_import_tasks" (
   "id" uuid NOT NULL,
   "owner_user_id" uuid NOT NULL,

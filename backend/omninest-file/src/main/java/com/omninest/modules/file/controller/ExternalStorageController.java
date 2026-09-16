@@ -36,12 +36,55 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExternalStorageController {
     private final ExternalStorageService externalStorageService;
     private final CurrentUserContext currentUserContext;
+    private final com.omninest.modules.file.service.ExternalStorageOAuthService oauthService;
+    private final com.omninest.modules.file.service.ExternalStorageQrSessionService qrSessionService;
 
     @Operation(summary = "列出连接器目录", description = "返回可接入的远程存储类型")
     @GetMapping("/api/v1/external-connectors")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<List<com.omninest.modules.file.dto.ExternalStorageConnectorDto>> listConnectors() {
         return ApiResponse.success(externalStorageService.listConnectors());
+    }
+
+    @Operation(summary = "开始 OAuth 授权", description = "返回第三方授权 URL")
+    @PostMapping("/api/v1/external-connectors/{code}/oauth/start")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    ApiResponse<com.omninest.modules.file.dto.OAuthStartResponse> oauthStart(
+            @PathVariable String code,
+            @RequestParam UUID accountId
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(oauthService.start(ownerUserId, code, accountId));
+    }
+
+    @Operation(summary = "OAuth 回调", description = "处理授权码并绑定 token")
+    @GetMapping("/api/v1/external-connectors/{code}/oauth/callback")
+    ApiResponse<Void> oauthCallback(
+            @PathVariable String code,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String oauthCode
+    ) {
+        oauthService.handleCallback(state, oauthCode);
+        return ApiResponse.success();
+    }
+
+    @Operation(summary = "发起扫码登录", description = "创建网盘扫码会话")
+    @PostMapping("/api/v1/external-storages/{accountId}/qr/start")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    ApiResponse<com.omninest.modules.file.dto.QrSessionResponse> qrStart(@PathVariable UUID accountId) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(qrSessionService.start(ownerUserId, accountId));
+    }
+
+    @Operation(summary = "查询扫码状态", description = "轮询扫码登录会话状态")
+    @GetMapping("/api/v1/external-storages/{accountId}/qr/status")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<com.omninest.modules.file.dto.QrSessionResponse> qrStatus(
+            @PathVariable UUID accountId,
+            @RequestParam String sessionId
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(qrSessionService.status(ownerUserId, accountId, sessionId));
     }
 
     @Operation(summary = "测试连接", description = "验证外部存储账户是否可连通")
@@ -108,5 +151,21 @@ public class ExternalStorageController {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         externalStorageService.cancelImportTask(ownerUserId, taskId);
         return ApiResponse.success();
+    }
+
+    @Operation(summary = "列出 OAuth 应用", description = "列出实例级连接器 OAuth 应用配置")
+    @GetMapping("/api/v1/admin/external-connectors/oauth-apps")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_READ + "')")
+    ApiResponse<List<com.omninest.modules.file.dto.ConnectorOAuthAppDto>> listOAuthApps() {
+        return ApiResponse.success(oauthService.listApps());
+    }
+
+    @Operation(summary = "保存 OAuth 应用", description = "创建或更新连接器 OAuth 应用")
+    @PostMapping("/api/v1/admin/external-connectors/oauth-apps")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
+    ApiResponse<com.omninest.modules.file.dto.ConnectorOAuthAppDto> saveOAuthApp(
+            @Valid @RequestBody com.omninest.modules.file.dto.SaveConnectorOAuthAppRequest body
+    ) {
+        return ApiResponse.success(oauthService.saveApp(body));
     }
 }
