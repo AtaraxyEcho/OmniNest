@@ -35,7 +35,8 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.text('Sample Comic'), findsOneWidget);
+      // Hero 标题与封面叠字各渲染一次标题。
+      expect(find.text('Sample Comic'), findsNWidgets(2));
       expect(find.text('Continue Reading'), findsOneWidget);
       expect(_visibleText(tester), isNot(matches(RegExp(r'[\u4e00-\u9fff]'))));
       expect(tester.takeException(), isNull);

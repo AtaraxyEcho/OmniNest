@@ -23,7 +23,8 @@ import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.d
 
 /// 阅读条目详情页：Hero（封面/进度/阅读动作）+ 简介/章节/批注/书签页签。
 ///
-/// 文本条目按参考设计重绘；漫画条目延用 ComicDetailPage（来源与目录管理）。
+/// 文本与漫画条目均按参考设计重绘；漫画的目录树与来源管理由
+/// ComicDetailPage 以同构布局承载。
 class ReaderItemDetailPage extends ConsumerStatefulWidget {
   const ReaderItemDetailPage({required this.itemId, super.key});
 
@@ -80,6 +81,11 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
             return _ComicDetailWrapper(
               item: detail.item,
               itemId: widget.itemId,
+              progress: detail.progress,
+              onEditMetadata:
+                  () =>
+                      context.push('/reader/items/${detail.item.id}/metadata'),
+              onDelete: _deleteItem,
             );
           }
 
@@ -1027,10 +1033,19 @@ class _PdfDetailContent extends StatelessWidget {
 
 /// 漫画详情包装器 — 加载清单后将目录节点传递给 ComicDetailPage。
 class _ComicDetailWrapper extends ConsumerWidget {
-  const _ComicDetailWrapper({required this.item, required this.itemId});
+  const _ComicDetailWrapper({
+    required this.item,
+    required this.itemId,
+    this.progress,
+    this.onEditMetadata,
+    this.onDelete,
+  });
 
   final ReaderItem item;
   final String itemId;
+  final ReaderProgress? progress;
+  final VoidCallback? onEditMetadata;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -1064,11 +1079,15 @@ class _ComicDetailWrapper extends ConsumerWidget {
     return ComicDetailPage(
       item: item,
       chapters: manifest.catalog,
+      pages: manifest.pages,
       sources: manifest.sources,
+      progress: progress,
       canRead: manifest.pages.isNotEmpty,
       parseProgress: manifest.parseTask?.progress,
       onRetrySource: (source) => _retryComicSource(context, ref, source),
       onDeleteSource: (source) => _deleteComicSource(context, ref, source),
+      onEditMetadata: onEditMetadata,
+      onDelete: onDelete,
     );
   }
 

@@ -8,33 +8,43 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_catalog_tree.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
-/// 漫画详情页 — 展示封面、信息、目录树、继续阅读。
+/// 漫画详情页 — 与文本详情页同构的 Hero + 页签布局。
 ///
-/// 接收 [ReaderItem] 和可选的 [ComicManifest] 数据，
-/// 渲染漫画专属的详情布局。
+/// Hero 行承载封面、标题、导入/阅读状态与核心动作；页签承载基本信息、
+/// 目录树与来源管理。滚动由外层详情页骨架承担，本页输出无滚动体的 Column。
 class ComicDetailPage extends ConsumerStatefulWidget {
   const ComicDetailPage({
     required this.item,
     this.chapters = const [],
+    this.pages = const [],
     this.sources = const [],
+    this.progress,
     this.onRetrySource,
     this.onDeleteSource,
     this.canRead = true,
     this.parseProgress,
+    this.onEditMetadata,
+    this.onDelete,
     super.key,
   });
 
   /// 漫画条目数据。
   final ReaderItem item;
 
-  /// 章节列表（来自 ComicManifest.catalog 或本地解析）。
+  /// 目录节点列表（来自 ComicManifest.catalog）。
   final List<ComicCatalogNode> chapters;
+
+  /// 页面列表（配合阅读进度高亮当前目录节点）。
+  final List<ComicPage> pages;
 
   /// 来源文件列表（用于展示多源解析状态）。
   final List<ComicSource> sources;
+
+  /// 服务端阅读进度（进度展示与当前页定位）。
+  final ReaderProgress? progress;
 
   /// 重试失败来源。
   final Future<bool> Function(ComicSource source)? onRetrySource;
@@ -45,296 +55,347 @@ class ComicDetailPage extends ConsumerStatefulWidget {
   /// 清单至少包含一个可读页面时允许进入阅读器。
   final bool canRead;
 
-  /// 后台解析任务进度。
+  /// 后台解析任务进度（0-100）。
   final int? parseProgress;
+
+  /// 打开元数据编辑页。
+  final VoidCallback? onEditMetadata;
+
+  /// 确认删除后由宿主执行删除与跳转。
+  final VoidCallback? onDelete;
 
   @override
   ConsumerState<ComicDetailPage> createState() => _ComicDetailPageState();
 }
 
+enum _ComicDetailTab { info, catalog, sources }
+
 class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
   bool _bookshelfBusy = false;
-  bool _showFullDescription = false;
-
-  static const _collapsedMaxLines = 3;
+  _ComicDetailTab _tab = _ComicDetailTab.info;
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.item;
     final l10n = AppLocalizations.of(context);
-    final horizontalPadding =
-        MediaQuery.sizeOf(context).width < 600 ? 16.0 : 24.0;
+    final tabs = _visibleTabs(l10n);
+    // 来源删除等操作后当前页签可能已不可见，回退到基本信息页签。
+    final selectedTab = tabs.containsKey(_tab) ? _tab : _ComicDetailTab.info;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildHero(context),
+        const SizedBox(height: 32),
+        if (tabs.length > 1) ...[
+          _buildTabBar(context, tabs, selectedTab),
+          const SizedBox(height: 24),
+        ],
+        _buildTabContent(context, selectedTab),
+      ],
+    );
+  }
 
-    // 滚动由外层详情页的滚动体承担；本页自身再嵌滚动/Scaffold
-    // 会在无界约束下产生布局错误。
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+  /// 当前可见页签：目录与来源在无数据时隐藏。
+  Map<_ComicDetailTab, String> _visibleTabs(AppLocalizations l10n) {
+    return {
+      _ComicDetailTab.info: l10n.readerDetailInfo,
+      if (widget.chapters.isNotEmpty)
+        _ComicDetailTab.catalog: l10n.readerTableOfContents,
+      if (widget.sources.isNotEmpty)
+        _ComicDetailTab.sources: l10n.readerComicSources,
+    };
+  }
+
+  Widget _buildHero(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final item = widget.item;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 144,
+          height: 216,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: ReaderBookCover(item: item, size: ReaderCoverSize.large),
+          ),
+        ),
+        const SizedBox(width: 24),
+        Expanded(
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 32),
-              // 封面
-              _ComicDetailCover(item: item),
-              const SizedBox(height: 28),
-              // 标题
               Text(
-                item.title,
-                textAlign: TextAlign.center,
+                readerTypeLabel(l10n, item.itemType),
                 style: TextStyle(
-                  color: context.readerColors.onSurface,
-                  fontSize: AppTypography.headlineSmall,
-                  height: 1.3,
-                  fontWeight: FontWeight.w800,
+                  color: rc.onSurfaceVariant,
+                  // ignore: font_size_whitelist
+                  fontSize: 10,
+                  height: 1.2,
+                  letterSpacing: 2.4,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              // 作者
+              const SizedBox(height: 8),
+              Text(
+                item.title,
+                style: TextStyle(
+                  color: rc.onSurface,
+                  fontSize: AppTypography.headlineMedium,
+                  height: 1.25,
+                  fontFamily: kReaderSerifFamily,
+                ),
+              ),
               if (item.authorName?.isNotEmpty == true) ...[
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   item.authorName!,
-                  textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: context.readerColors.onSurface.withValues(
-                      alpha: 0.6,
-                    ),
-                    fontSize: AppTypography.bodyLarge,
-                    height: 1.4,
+                    color: rc.onSurfaceVariant,
+                    fontSize: AppTypography.bodyMedium,
+                    height: 1.3,
                   ),
                 ),
               ],
-              // 导入状态提示
-              if (item.isParsing) ...[
-                const SizedBox(height: 12),
-                _ImportStatusBanner(
-                  icon: Icons.hourglass_top_rounded,
-                  message: l10n.readerComicParsingMessage,
-                  color: context.readerColors.tertiary,
-                ),
-                if (widget.parseProgress != null) ...[
-                  const SizedBox(height: 8),
-                  LinearProgressIndicator(
-                    value: widget.parseProgress!.clamp(0, 100) / 100,
-                  ),
-                ],
-              ] else if (item.isPartialFailed) ...[
-                const SizedBox(height: 12),
-                _ImportStatusBanner(
-                  icon: Icons.warning_amber_rounded,
-                  message: l10n.readerComicPartialFailedMessage,
-                  color: context.readerColors.warning,
-                ),
-              ] else if (item.isFailed) ...[
-                const SizedBox(height: 12),
-                _ImportStatusBanner(
-                  icon: Icons.error_outline_rounded,
-                  message: l10n.readerComicFailedMessage,
-                  color: context.readerColors.danger,
-                ),
-              ],
-              const SizedBox(height: 16),
-              // 数据胶囊行
-              _buildCapsuleRow(item),
-              // 分类标签
-              if (item.genres?.isNotEmpty == true) ...[
-                const SizedBox(height: 10),
-                _buildGenreTags(item.genres!),
-              ],
-              const SizedBox(height: 28),
-              // 阅读按钮
-              _buildActionButtons(context, item),
-              const SizedBox(height: 32),
-              // 简介
-              _buildDescriptionSection(context, item),
-              // 来源解析状态
-              if (widget.sources.isNotEmpty) ...[
-                const SizedBox(height: 28),
-                _buildSourcesSection(context, widget.sources),
-              ],
-              // 目录
-              if (widget.chapters.isNotEmpty) ...[
-                const SizedBox(height: 28),
-                _buildCatalogSection(context, widget.chapters),
-              ],
-              const SizedBox(height: 40),
+              const SizedBox(height: 20),
+              // 状态区文字与按钮同样钳制缩放：常规字号下与书籍详情页
+              // 渲染一致，大字号下不膨胀，避免窄幅信息列横向溢出。
+              MediaQuery.withClampedTextScaling(
+                maxScaleFactor: 1.2,
+                child: _buildStatusArea(context),
+              ),
+              const SizedBox(height: 20),
+              _buildActionRow(context),
             ],
           ),
         ),
-      ),
-    );
-  }
-
-  /// 数据胶囊行
-  Widget _buildCapsuleRow(ReaderItem item) {
-    final capsules = <_CapsuleData>[
-      _CapsuleData(
-        readerTypeLabel(AppLocalizations.of(context), item.itemType),
-        context.readerColors.primary,
-      ),
-      if (item.rating != null && item.rating! > 0)
-        _CapsuleData(
-          '${item.rating!.toStringAsFixed(1)} ★',
-          context.readerColors.success,
-        ),
-      if (item.publisher?.isNotEmpty == true)
-        _CapsuleData(item.publisher!, context.readerColors.tertiary),
-      if (item.serialStatus?.isNotEmpty == true)
-        _CapsuleData(item.serialStatus!, context.readerColors.success),
-    ];
-
-    return Wrap(
-      spacing: 8,
-      runSpacing: 6,
-      alignment: WrapAlignment.center,
-      children: [
-        for (final c in capsules)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-            decoration: BoxDecoration(
-              color: c.color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              c.label,
-              style: TextStyle(
-                color: c.color,
-                fontSize: AppTypography.bodySmall,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
       ],
     );
   }
 
-  /// 分类标签
-  Widget _buildGenreTags(List<String> genres) {
-    return Wrap(
-      spacing: 6,
-      runSpacing: 4,
-      alignment: WrapAlignment.center,
-      children: [
-        for (final genre in genres)
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-              color: context.readerColors.surfaceContainerHighest.withValues(
-                alpha: 0.6,
-              ),
-              borderRadius: BorderRadius.circular(999),
-              border: Border.all(
-                color: context.readerColors.outlineVariant.withValues(
-                  alpha: 0.24,
-                ),
-              ),
-            ),
-            child: Text(
-              genre,
-              style: TextStyle(
-                color: context.readerColors.onSurfaceVariant,
-                fontSize: AppTypography.labelSmall,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  /// 阅读/书架操作按钮
-  Widget _buildActionButtons(BuildContext context, ReaderItem item) {
-    final hasProgress =
-        item.progressPercent != null && item.progressPercent! > 0;
-
+  /// 状态区：解析中/导入异常时展示导入状态，否则展示阅读进度细条。
+  Widget _buildStatusArea(BuildContext context) {
+    final rc = context.readerColors;
     final l10n = AppLocalizations.of(context);
-    final readButton = FilledButton.icon(
-      onPressed:
-          widget.canRead
-              ? () => context.push('/reader/comics/${item.id}/read')
-              : null,
-      icon: Icon(
-        hasProgress ? Icons.play_arrow_rounded : Icons.auto_stories_rounded,
-        size: 20,
-      ),
-      label: Text(
-        hasProgress ? l10n.readerContinueReading : l10n.readerStartReading,
-      ),
-      style: FilledButton.styleFrom(
-        backgroundColor: context.readerColors.primaryContainer,
-        foregroundColor: context.readerColors.onPrimaryContainer,
-      ),
-    );
-    final bookshelfButton = FilledButton.icon(
-      onPressed: _bookshelfBusy ? null : () => _toggleBookshelf(item),
-      icon: Icon(
-        item.addedToBookshelf
-            ? Icons.bookmark_rounded
-            : Icons.bookmark_add_rounded,
-        size: 18,
-      ),
-      label:
-          _bookshelfBusy
-              ? SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: context.readerColors.onSurfaceVariant,
-                ),
-              )
-              : Text(
-                item.addedToBookshelf
-                    ? l10n.readerAddedToBookshelf
-                    : l10n.readerAddToBookshelf,
-              ),
-      style: FilledButton.styleFrom(
-        backgroundColor:
-            item.addedToBookshelf
-                ? context.readerColors.primary.withValues(alpha: 0.12)
-                : context.readerColors.surfaceContainerHigh,
-        foregroundColor:
-            item.addedToBookshelf
-                ? context.readerColors.primary
-                : context.readerColors.onSurfaceVariant,
-      ),
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final stackButtons =
-            constraints.maxWidth < 420 ||
-            MediaQuery.textScalerOf(context).scale(1) > 1.4;
-        if (stackButtons) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [readButton, const SizedBox(height: 8), bookshelfButton],
-          );
-        }
-        return Row(
-          children: [
-            Expanded(child: readButton),
-            const SizedBox(width: 12),
-            Expanded(child: bookshelfButton),
-          ],
+    final item = widget.item;
+    if (item.isParsing) {
+      final parseProgress = widget.parseProgress;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _statusRow(
+            context,
+            icon: Icons.hourglass_top_rounded,
+            message: l10n.readerComicParsingMessage,
+            color: rc.tertiary,
+          ),
+          const SizedBox(height: 6),
+          LinearProgressIndicator(
+            minHeight: 2,
+            value:
+                parseProgress == null
+                    ? null
+                    : parseProgress.clamp(0, 100) / 100,
+            backgroundColor: rc.outlineVariant,
+            color: rc.tertiary,
+          ),
+        ],
+      );
+    }
+    if (item.isPartialFailed) {
+      return _statusRow(
+        context,
+        icon: Icons.warning_amber_rounded,
+        message: l10n.readerComicPartialFailedMessage,
+        color: rc.warning,
+      );
+    }
+    if (item.isFailed) {
+      return _statusRow(
+        context,
+        icon: Icons.error_outline_rounded,
+        message: l10n.readerComicFailedMessage,
+        color: rc.danger,
+      );
+    }
+    final percent =
+        ((widget.progress?.progressPercent ?? item.progressPercent) ?? 0).clamp(
+          0.0,
+          1.0,
         );
-      },
+    final complete = percent >= 1;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              l10n.readerDetailProgress,
+              style: TextStyle(
+                color: rc.onSurfaceVariant,
+                fontSize: AppTypography.bodySmall,
+                height: 1.2,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              complete
+                  ? l10n.readerDetailComplete
+                  : '${(percent * 100).round()}%',
+              style: TextStyle(
+                color: complete ? rc.reading : rc.onSurface,
+                fontSize: AppTypography.bodySmall,
+                height: 1.2,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Container(
+          height: 2,
+          color: rc.outlineVariant,
+          alignment: Alignment.centerLeft,
+          child: FractionallySizedBox(
+            widthFactor: percent,
+            child: Container(height: 2, color: rc.reading),
+          ),
+        ),
+      ],
     );
   }
 
-  /// 切换书架状态
-  Future<void> _toggleBookshelf(ReaderItem item) async {
+  Widget _statusRow(
+    BuildContext context, {
+    required IconData icon,
+    required String message,
+    required Color color,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: TextStyle(
+              color: color,
+              fontSize: AppTypography.bodySmall,
+              height: 1.2,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActionRow(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final item = widget.item;
+    final hasProgress =
+        (widget.progress?.progressPercent ?? item.progressPercent ?? 0) > 0;
+    return Wrap(
+      spacing: 12,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        // 按钮文字缩放钳制在 1.2 内：常规字号下与书籍详情页逐像素一致，
+        // 大字号下按钮不再随系统缩放膨胀，避免窄幅信息列横向溢出。
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.2,
+          child: FilledButton.icon(
+            onPressed:
+                widget.canRead
+                    ? () => context.push('/reader/comics/${item.id}/read')
+                    : null,
+            icon: const Icon(Icons.play_arrow_rounded, size: 18),
+            label: Text(
+              hasProgress
+                  ? l10n.readerContinueReading
+                  : l10n.readerStartReading,
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: rc.primary,
+              foregroundColor: rc.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(2),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            ),
+          ),
+        ),
+        MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.2,
+          child: OutlinedButton.icon(
+            onPressed: _bookshelfBusy ? null : _toggleBookshelf,
+            icon: Icon(
+              item.addedToBookshelf
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_add_rounded,
+              size: 18,
+              color: item.addedToBookshelf ? rc.onSurface : rc.onSurfaceVariant,
+            ),
+            label: Text(
+              item.addedToBookshelf
+                  ? l10n.readerAddedToBookshelf
+                  : l10n.readerAddToBookshelf,
+            ),
+            style: OutlinedButton.styleFrom(
+              side: BorderSide(
+                color: item.addedToBookshelf ? rc.onSurface : rc.outlineVariant,
+              ),
+              foregroundColor:
+                  item.addedToBookshelf ? rc.onSurface : rc.onSurfaceVariant,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(2),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            ),
+          ),
+        ),
+        if (widget.onEditMetadata != null || widget.onDelete != null)
+          PopupMenuButton<String>(
+            tooltip: l10n.coreMore,
+            icon: Icon(Icons.more_horiz_rounded, color: rc.onSurfaceVariant),
+            onSelected: (value) {
+              if (value == 'metadata') widget.onEditMetadata?.call();
+              if (value == 'delete') _confirmDelete(context);
+            },
+            itemBuilder:
+                (context) => [
+                  if (widget.onEditMetadata != null)
+                    PopupMenuItem(
+                      value: 'metadata',
+                      child: Text(l10n.readerDetailEditMeta),
+                    ),
+                  if (widget.onDelete != null)
+                    PopupMenuItem(
+                      value: 'delete',
+                      child: Text(
+                        l10n.readerDeleteBook,
+                        style: TextStyle(color: rc.danger),
+                      ),
+                    ),
+                ],
+          ),
+      ],
+    );
+  }
+
+  /// 切换书架状态。
+  Future<void> _toggleBookshelf() async {
     setState(() => _bookshelfBusy = true);
     try {
       await ref
           .read(readerCenterControllerProvider.notifier)
-          .toggleBookshelf(item.id);
+          .toggleBookshelf(widget.item.id);
       if (mounted) {
         ref.invalidate(readerCenterControllerProvider);
         final l10n = AppLocalizations.of(context);
         showReaderSnackBar(
           context,
-          item.addedToBookshelf
+          widget.item.addedToBookshelf
               ? l10n.readerRemovedFromBookshelf
               : l10n.readerAddedToBookshelf,
         );
@@ -353,145 +414,230 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
     }
   }
 
-  /// 简介区域
-  Widget _buildDescriptionSection(BuildContext context, ReaderItem item) {
+  Future<void> _confirmDelete(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
-    final desc =
-        item.description?.isNotEmpty == true
-            ? item.description!
-            : l10n.readerNoDescription;
-    final hasLongDesc = desc.length > 120;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          l10n.readerDescription,
-          style: TextStyle(
-            color: context.readerColors.onSurface,
-            fontSize: AppTypography.bodyLarge,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 8),
-        GestureDetector(
-          onTap:
-              hasLongDesc
-                  ? () => setState(
-                    () => _showFullDescription = !_showFullDescription,
-                  )
-                  : null,
-          child: Text(
-            desc,
-            maxLines: _showFullDescription ? null : _collapsedMaxLines,
-            overflow: _showFullDescription ? null : TextOverflow.ellipsis,
-            style: TextStyle(
-              color: context.readerColors.onSurfaceVariant,
-              fontSize: AppTypography.bodyMedium,
-              height: 1.7,
-            ),
-          ),
-        ),
-        if (hasLongDesc)
-          GestureDetector(
-            onTap:
-                () => setState(
-                  () => _showFullDescription = !_showFullDescription,
-                ),
-            child: Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _showFullDescription
-                    ? l10n.readerCollapse
-                    : l10n.readerExpandFull,
-                style: TextStyle(
-                  color: context.readerColors.primary,
-                  fontSize: AppTypography.bodySmall,
-                  fontWeight: FontWeight.w600,
-                ),
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder:
+          (dialogContext) => AlertDialog(
+            title: Text(l10n.readerConfirmDelete),
+            content: Text(l10n.readerConfirmDeleteMsg(widget.item.title)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext, false),
+                child: Text(l10n.coreCancel),
               ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  /// 目录区域（树形结构）
-  Widget _buildCatalogSection(
-    BuildContext context,
-    List<ComicCatalogNode> chapters,
-  ) {
-    // 统计可读叶子节点
-    final leafCount =
-        chapters
-            .where(
-              (n) =>
-                  n.nodeType == 'CHAPTER' ||
-                  n.nodeType == 'COLLECTION' ||
-                  n.nodeType == 'EXTRA',
-            )
-            .length;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              AppLocalizations.of(context).readerTableOfContents,
-              style: TextStyle(
-                color: context.readerColors.onSurface,
-                fontSize: AppTypography.bodyLarge,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            if (leafCount > 0) ...[
-              const SizedBox(width: 8),
-              Text(
-                AppLocalizations.of(context).readerTotalChapters(leafCount),
-                style: TextStyle(
-                  color: context.readerColors.onSurfaceVariant,
-                  fontSize: AppTypography.bodySmall,
+              FilledButton(
+                onPressed: () => Navigator.pop(dialogContext, true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: context.readerColors.danger,
                 ),
+                child: Text(l10n.filesDelete),
               ),
             ],
+          ),
+    );
+    if (confirmed == true) {
+      widget.onDelete?.call();
+    }
+  }
+
+  Widget _buildTabBar(
+    BuildContext context,
+    Map<_ComicDetailTab, String> tabs,
+    _ComicDetailTab selectedTab,
+  ) {
+    final rc = context.readerColors;
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: rc.outlineVariant.withValues(alpha: 0.5)),
+        ),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            for (final entry in tabs.entries)
+              InkWell(
+                onTap: () => setState(() => _tab = entry.key),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  height: 40,
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(
+                        color:
+                            selectedTab == entry.key
+                                ? rc.onSurface
+                                : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    entry.value,
+                    style: TextStyle(
+                      fontSize: AppTypography.bodyMedium,
+                      height: 1.2,
+                      fontWeight:
+                          selectedTab == entry.key
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                      color:
+                          selectedTab == entry.key
+                              ? rc.onSurface
+                              : rc.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
           ],
         ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 460,
-          child: ComicCatalogTree(
-            nodes: chapters,
-            shrinkWrap: false,
-            showControls: true,
-            onNodeTap: (node) {
-              context.push(
-                '/reader/comics/${widget.item.id}/read?catalogNodeId=${node.id}',
-              );
-            },
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildSourcesSection(BuildContext context, List<ComicSource> sources) {
+  Widget _buildTabContent(BuildContext context, _ComicDetailTab tab) {
+    switch (tab) {
+      case _ComicDetailTab.info:
+        return _buildInfoTab(context);
+      case _ComicDetailTab.catalog:
+        return _buildCatalogTab(context);
+      case _ComicDetailTab.sources:
+        return _buildSourcesTab(context);
+    }
+  }
+
+  Widget _buildInfoTab(BuildContext context) {
+    final rc = context.readerColors;
+    final l10n = AppLocalizations.of(context);
+    final item = widget.item;
+    final lastReadAt = widget.progress?.updatedAt ?? item.updatedAt;
+    final rows = <(String, String)>[
+      (l10n.readerDetailType, readerTypeLabel(l10n, item.itemType)),
+      if (item.language?.isNotEmpty == true)
+        (l10n.readerDetailLanguage, item.language!.toUpperCase()),
+      if (item.publisher?.isNotEmpty == true)
+        (l10n.readerLabelPublisher, item.publisher!),
+      if (item.serialStatus?.isNotEmpty == true)
+        (l10n.readerLabelSerialStatus, item.serialStatus!),
+      if (item.rating != null && item.rating! > 0)
+        (l10n.readerLabelRating, item.rating!.toStringAsFixed(1)),
+      if (item.releaseDate != null)
+        (l10n.readerLabelReleaseDate, _formatDate(item.releaseDate!)),
+      if (item.createdAt != null)
+        (l10n.readerDetailAdded, _formatDate(item.createdAt!)),
+      if (lastReadAt != null)
+        (l10n.readerDetailLastRead, _formatDateTime(lastReadAt)),
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          AppLocalizations.of(context).readerComicSources,
+          item.description?.isNotEmpty == true
+              ? item.description!
+              : l10n.readerNoDescription,
           style: TextStyle(
-            color: context.readerColors.onSurface,
-            fontSize: AppTypography.bodyLarge,
-            fontWeight: FontWeight.w700,
+            color: rc.onSurface.withValues(alpha: 0.8),
+            fontSize: AppTypography.bodyMedium,
+            height: 1.7,
           ),
         ),
-        const SizedBox(height: 10),
-        for (final source in sources) ...[
+        if (item.genres?.isNotEmpty == true) ...[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: [
+              for (final genre in item.genres!) _genreChip(context, genre),
+            ],
+          ),
+        ],
+        const SizedBox(height: 16),
+        for (final row in rows)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                SizedBox(
+                  width: 110,
+                  child: Text(
+                    row.$1,
+                    style: TextStyle(
+                      color: rc.onSurfaceVariant,
+                      fontSize: AppTypography.labelSmall,
+                      height: 1.2,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    row.$2,
+                    style: TextStyle(
+                      color: rc.onSurface,
+                      fontSize: AppTypography.bodyMedium,
+                      height: 1.3,
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _genreChip(BuildContext context, String genre) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+      decoration: BoxDecoration(
+        color: context.readerColors.surfaceContainerHighest.withValues(
+          alpha: 0.6,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: context.readerColors.outlineVariant.withValues(alpha: 0.24),
+        ),
+      ),
+      child: Text(
+        genre,
+        style: TextStyle(
+          color: context.readerColors.onSurfaceVariant,
+          fontSize: AppTypography.labelSmall,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  /// 目录页签：树随整页滚动内联展开，并高亮当前阅读位置。
+  Widget _buildCatalogTab(BuildContext context) {
+    return ComicCatalogTree(
+      nodes: widget.chapters,
+      pages: widget.pages,
+      currentPageId: widget.progress?.pageId,
+      shrinkWrap: true,
+      onNodeTap: (node) {
+        context.push(
+          '/reader/comics/${widget.item.id}/read?catalogNodeId=${node.id}',
+        );
+      },
+    );
+  }
+
+  Widget _buildSourcesTab(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final source in widget.sources) ...[
           _ComicSourceTile(
             source: source,
-            canDelete: sources.length > 1,
+            canDelete: widget.sources.length > 1,
             onRetry: widget.onRetrySource,
             onDelete: widget.onDeleteSource,
           ),
@@ -499,6 +645,22 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
         ],
       ],
     );
+  }
+
+  String _formatDate(DateTime time) {
+    final y = time.year.toString();
+    final m = time.month.toString().padLeft(2, '0');
+    final d = time.day.toString().padLeft(2, '0');
+    return '$y-$m-$d';
+  }
+
+  String _formatDateTime(DateTime time) {
+    final y = time.year.toString();
+    final m = time.month.toString().padLeft(2, '0');
+    final d = time.day.toString().padLeft(2, '0');
+    final hh = time.hour.toString().padLeft(2, '0');
+    final mm = time.minute.toString().padLeft(2, '0');
+    return '$y-$m-$d $hh:$mm';
   }
 }
 
@@ -537,7 +699,7 @@ class _ComicSourceTileState extends State<_ComicSourceTile> {
         color: context.readerColors.surfaceContainerHigh.withValues(
           alpha: 0.62,
         ),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(2),
         border: Border.all(
           color: color.withValues(alpha: _failed ? 0.35 : 0.18),
         ),
@@ -685,114 +847,5 @@ class _ComicSourceTileState extends State<_ComicSourceTile> {
       return context.readerColors.tertiary;
     }
     return context.readerColors.success;
-  }
-}
-
-/// 漫画详情页封面组件
-class _ComicDetailCover extends StatelessWidget {
-  const _ComicDetailCover({required this.item});
-
-  final ReaderItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        width: 200,
-        height: 280,
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              context.readerColors.comicBg,
-              context.readerColors.comicBg.withValues(alpha: 0.8),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child:
-            item.hasCover
-                ? AuthCoverImage(
-                  itemId: item.id,
-                  fit: BoxFit.cover,
-                  fallback: _buildPlaceholder(context),
-                )
-                : _buildPlaceholder(context),
-      ),
-    );
-  }
-
-  Widget _buildPlaceholder(BuildContext context) {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          item.title.trim().isEmpty
-              ? 'C'
-              : item.title.trim().substring(0, 1).toUpperCase(),
-          style: TextStyle(
-            color: context.readerColors.comicText,
-            fontSize: AppTypography.displayLarge,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        Icon(
-          Icons.auto_stories_rounded,
-          color: context.readerColors.comicMuted,
-          size: 32,
-        ),
-      ],
-    );
-  }
-}
-
-/// 胶囊数据（用于复用样式）
-class _CapsuleData {
-  const _CapsuleData(this.label, this.color);
-
-  final String label;
-  final Color color;
-}
-
-/// 导入状态横幅。
-class _ImportStatusBanner extends StatelessWidget {
-  const _ImportStatusBanner({
-    required this.icon,
-    required this.message,
-    required this.color,
-  });
-
-  final IconData icon;
-  final String message;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 8),
-          Flexible(
-            child: Text(
-              message,
-              style: TextStyle(
-                fontSize: AppTypography.bodyMedium,
-                color: color,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
