@@ -66,6 +66,7 @@ abstract final class FileUploadTaskMessageCode {
   static const paused = 'paused';
   static const resuming = 'resuming';
   static const completed = 'completed';
+  static const scanPending = 'scanPending';
   static const conflict = 'conflict';
   static const partCompleted = 'partCompleted';
   static const retrying = 'retrying';

@@ -1,3 +1,4 @@
+import 'dart:convert' as convert;
 import 'dart:math' as math;
 
 import 'package:file_selector/file_selector.dart';
@@ -6,9 +7,10 @@ import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/features/files/data/file_api.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
-import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 import 'package:omninest/features/files/domain/upload_part_size.dart';
+import 'package:omninest/features/tasks/data/task_api.dart';
 
 /// 媒体导入进度回调。
 typedef ImportProgressCallback =
@@ -96,11 +98,13 @@ class MediaImportCancelledException implements Exception {
 
 /// 轻量媒体导入服务，供各子系统直接上传文件到 FileManager。
 ///
-/// 不依赖 FileBrowserState，直接调用 FileApi 完成上传。
+/// 不依赖 FileBrowserState，直接调用 FileApi 完成上传；
+/// 上传受理后进入安全扫描时，等待扫描任务终态再返回稳定文件节点。
 class MediaImportService {
-  MediaImportService(this._fileApi);
+  MediaImportService(this._fileApi, this._taskApi);
 
   final FileApi _fileApi;
+  final TaskApi _taskApi;
 
   /// 查找或创建子系统默认目录，返回目录 ID。
   ///
@@ -285,7 +289,7 @@ class MediaImportService {
     cancellationToken?.addListener(cancelUpload);
     try {
       cancellationToken?.throwIfCancelled();
-      final node =
+      final result =
           uploadSession.isDirectUpload
               ? await _runDirectUpload(
                 file,
@@ -303,10 +307,11 @@ class MediaImportService {
                 uploadCancellation,
                 cancellationToken,
               );
+      final promoted = await _waitForPromotion(result);
       return ImportedMediaFile(
         fileName: fileName,
-        fileNodeId: node.id,
-        mediaAutoImportTaskId: node.mediaAutoImportTaskId,
+        fileNodeId: promoted.fileNodeId,
+        mediaAutoImportTaskId: promoted.mediaAutoImportTaskId,
       );
     } on Object {
       if (cancellationToken?.isCancelled ?? false) {
@@ -374,7 +379,7 @@ class MediaImportService {
     };
   }
 
-  Future<FileNode> _runDirectUpload(
+  Future<FileUploadCompleteResult> _runDirectUpload(
     XFile file,
     FileUploadSession session,
     int sizeBytes,
@@ -397,15 +402,15 @@ class MediaImportService {
       cancellationToken: cancellationToken,
     );
     mediaCancellationToken?.throwIfCancelled();
-    final node = await _completeUploadSessionWithRetry(
+    final result = await _completeUploadSessionWithRetry(
       sessionId: session.uploadId,
       cancellationToken: mediaCancellationToken,
     );
     onProgress?.call(file.name, sizeBytes, sizeBytes);
-    return node;
+    return result;
   }
 
-  Future<FileNode> _runMultipartUpload(
+  Future<FileUploadCompleteResult> _runMultipartUpload(
     XFile file,
     FileUploadSession session,
     int sizeBytes,
@@ -448,7 +453,7 @@ class MediaImportService {
     );
   }
 
-  Future<FileNode> _completeUploadSessionWithRetry({
+  Future<FileUploadCompleteResult> _completeUploadSessionWithRetry({
     required String sessionId,
     MediaImportCancellationToken? cancellationToken,
   }) async {
@@ -467,6 +472,55 @@ class MediaImportService {
         cancellationToken?.throwIfCancelled();
       }
     }
+  }
+
+  /// 等待安全扫描晋升完成，返回稳定的文件节点与媒体导入任务标识。
+  Future<({String fileNodeId, String? mediaAutoImportTaskId})>
+  _waitForPromotion(FileUploadCompleteResult result) async {
+    if (!result.isScanning) {
+      final fileNodeId = result.fileNodeId;
+      if (fileNodeId == null || fileNodeId.isEmpty) {
+        throw const AppException(
+          code: AppErrorCodes.securityScanFailed,
+          message: AppErrorCodes.securityScanFailed,
+        );
+      }
+      return (fileNodeId: fileNodeId, mediaAutoImportTaskId: null);
+    }
+    final taskId = result.taskId;
+    if (taskId == null || taskId.isEmpty) {
+      throw const AppException(
+        code: AppErrorCodes.securityScanFailed,
+        message: AppErrorCodes.securityScanFailed,
+      );
+    }
+    // 扫描时限护栏 30 分钟 + 重试窗口，超时按扫描失败处理。
+    final task = await _taskApi.waitForTerminal(
+      taskId,
+      timeout: const Duration(minutes: 90),
+      interval: const Duration(seconds: 3),
+    );
+    if (task.status != 'COMPLETED') {
+      throw AppException(
+        code: AppErrorCodes.securityScanFailed,
+        message: task.errorMessage ?? AppErrorCodes.securityScanFailed,
+      );
+    }
+    final payload =
+        task.result == null
+            ? const <String, dynamic>{}
+            : (convert.jsonDecode(task.result!) as Map<String, dynamic>);
+    final fileNodeId = payload['fileNodeId']?.toString();
+    if (fileNodeId == null || fileNodeId.isEmpty) {
+      throw const AppException(
+        code: AppErrorCodes.securityScanFailed,
+        message: AppErrorCodes.securityScanFailed,
+      );
+    }
+    return (
+      fileNodeId: fileNodeId,
+      mediaAutoImportTaskId: payload['mediaAutoImportTaskId']?.toString(),
+    );
   }
 
   Future<void> _cancelUploadSession(String uploadId) async {

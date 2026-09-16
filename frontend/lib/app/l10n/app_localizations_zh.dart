@@ -1617,6 +1617,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesUploadDone => '上传完成';
 
   @override
+  String get filesUploadScanPending => '上传完成，安全扫描中，文件通过后自动显示';
+
+  @override
   String filesUploadedParts(Object current, Object total) {
     return '已上传 $current/$total 分片';
   }

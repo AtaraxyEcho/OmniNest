@@ -47,11 +47,16 @@ public class FileSecurityScanConsumer {
                 return;
             }
             taskRecordService.markRunning(event.taskId(), "SCANNING");
-            promotionService.process(event);
-            taskRecordService.markCompleted(
-                    event.taskId(),
-                    Map.of("ingressItemId", event.ingressItemId().toString())
-            );
+            FileIngressPromotionService.PromotionOutcome outcome = promotionService.process(event);
+            Map<String, Object> result = new java.util.LinkedHashMap<>();
+            result.put("ingressItemId", event.ingressItemId().toString());
+            if (outcome.fileNodeId() != null) {
+                result.put("fileNodeId", outcome.fileNodeId().toString());
+            }
+            if (outcome.mediaAutoImportTaskId() != null) {
+                result.put("mediaAutoImportTaskId", outcome.mediaAutoImportTaskId().toString());
+            }
+            taskRecordService.markCompleted(event.taskId(), result);
             channel.basicAck(deliveryTag, false);
         } catch (RuntimeException executionException) {
             log.error("文件安全扫描执行失败: taskId={}, errorType={}",

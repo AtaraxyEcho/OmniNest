@@ -1669,6 +1669,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesUploadDone => 'Upload complete';
 
   @override
+  String get filesUploadScanPending =>
+      'Upload complete. Security scan in progress; the file will appear once it passes.';
+
+  @override
   String filesUploadedParts(Object current, Object total) {
     return 'Uploaded $current/$total parts';
   }

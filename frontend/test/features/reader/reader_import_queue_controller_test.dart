@@ -14,6 +14,7 @@ import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
+import 'package:omninest/features/tasks/data/task_api.dart';
 
 void main() {
   test('空文件集合不会创建导入任务', () {
@@ -200,7 +201,7 @@ Future<void> _waitUntil(bool Function() condition) async {
 }
 
 class _QueuedMediaImportService extends MediaImportService {
-  _QueuedMediaImportService() : super(_UnusedFileApi());
+  _QueuedMediaImportService() : super(_UnusedFileApi(), _UnusedTaskApi());
 
   final Completer<String?> directory = Completer<String?>();
   final Completer<void> twoUploadsStarted = Completer<void>();
@@ -239,7 +240,7 @@ class _QueuedMediaImportService extends MediaImportService {
 }
 
 class _ImmediateMediaImportService extends MediaImportService {
-  _ImmediateMediaImportService() : super(_UnusedFileApi());
+  _ImmediateMediaImportService() : super(_UnusedFileApi(), _UnusedTaskApi());
 
   @override
   Future<String?> ensureDefaultDirectory({
@@ -371,6 +372,18 @@ class _BlockingReaderApiStub extends _ReaderApiStub {
 
 class _UnusedFileApi extends FileApi {
   _UnusedFileApi() : super(_apiClient());
+}
+
+class _UnusedTaskApi extends TaskApi {
+  _UnusedTaskApi()
+    : super(
+        ApiClient(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      );
 }
 
 ApiClient _apiClient() {

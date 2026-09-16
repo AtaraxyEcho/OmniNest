@@ -8,6 +8,7 @@ import 'package:omninest/core/preferences/user_preferences_api.dart';
 import 'package:omninest/core/preferences/preference_sync_service.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
+import 'package:omninest/features/tasks/data/task_api.dart';
 import 'package:omninest/core/storage/sync_queue.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
@@ -56,7 +57,10 @@ final meApiProvider = Provider<MeApi>((ref) {
 });
 
 final mediaImportServiceProvider = Provider<MediaImportService>((ref) {
-  return MediaImportService(ref.watch(fileApiProvider));
+  return MediaImportService(
+    ref.watch(fileApiProvider),
+    TaskApi(ref.watch(apiClientProvider)),
+  );
 });
 
 final globalMusicApiProvider = Provider<MusicApi>((ref) {

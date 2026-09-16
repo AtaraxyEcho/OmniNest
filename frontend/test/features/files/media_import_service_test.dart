@@ -6,14 +6,55 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/data/file_api.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
+import 'package:omninest/features/tasks/data/task_api.dart';
+import 'package:omninest/features/tasks/domain/task_record.dart';
 
 void main() {
+  test('安全扫描受理后等待任务终态并使用晋升后的文件节点', () async {
+    final fileApi = _ScanningFileApi();
+    final taskApi = _CompletedScanTaskApi();
+    final service = MediaImportService(fileApi, taskApi);
+
+    final imported = await service.importFile(
+      file: await _photoFile(),
+      parentId: 'photos',
+      reuseExistingFiles: false,
+    );
+
+    expect(imported.fileNodeId, 'promoted-id');
+    expect(imported.mediaAutoImportTaskId, 'media-task-1');
+    expect(taskApi.waitCalled, isTrue);
+  });
+
+  test('安全扫描终态拒绝时抛出稳定错误码', () async {
+    final fileApi = _ScanningFileApi();
+    final taskApi = _FailedScanTaskApi();
+    final service = MediaImportService(fileApi, taskApi);
+
+    await expectLater(
+      service.importFile(
+        file: await _photoFile(),
+        parentId: 'photos',
+        reuseExistingFiles: false,
+      ),
+      throwsA(
+        isA<AppException>().having(
+          (error) => error.code,
+          'code',
+          AppErrorCodes.securityScanFailed,
+        ),
+      ),
+    );
+  });
+
   test('单文件复用会返回稳定的文件节点 ID', () async {
     final fileApi = _ConflictFileApi(
       error: const AppException(
@@ -26,7 +67,7 @@ void main() {
         },
       ),
     );
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
 
     final imported = await service.importFile(
       file: await _photoFile(),
@@ -40,7 +81,7 @@ void main() {
 
   test('取消导入会终止传输并清理服务端上传会话', () async {
     final fileApi = _CancellableFileApi();
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
     final cancellationToken = MediaImportCancellationToken();
 
     final future = service.importFile(
@@ -68,7 +109,7 @@ void main() {
         },
       ),
     );
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
 
     final imported = await service.importFiles(
       files: <XFile>[await _photoFile()],
@@ -93,7 +134,7 @@ void main() {
         },
       ),
     );
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
 
     final imported = await service.importFiles(
       files: <XFile>[await _photoFile()],
@@ -118,7 +159,7 @@ void main() {
         },
       ),
     );
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
 
     final imported = await service.importFiles(
       files: <XFile>[await _photoFile()],
@@ -138,7 +179,7 @@ void main() {
         message: '安全扫描服务不可用，文件已隔离',
       ),
     );
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
 
     final result = await service.importFilesDetailed(
       files: <XFile>[await _photoFile()],
@@ -153,7 +194,7 @@ void main() {
 
   test('直接上传完成后取消不会提交完成请求', () async {
     final fileApi = _PostUploadCancellationFileApi();
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
     final cancellationToken = MediaImportCancellationToken();
     fileApi.afterPut = cancellationToken.cancel;
 
@@ -171,7 +212,7 @@ void main() {
 
   test('创建上传会话返回后取消会清理已创建会话', () async {
     final fileApi = _PostUploadCancellationFileApi();
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
     final cancellationToken = MediaImportCancellationToken();
     fileApi.afterCreate = cancellationToken.cancel;
 
@@ -189,7 +230,7 @@ void main() {
 
   test('完成请求开始后取消不会删除已完成会话', () async {
     final fileApi = _PostUploadCancellationFileApi();
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
     final cancellationToken = MediaImportCancellationToken();
     fileApi.duringComplete = cancellationToken.cancel;
 
@@ -207,7 +248,7 @@ void main() {
 
   test('retries upload completion after a transient conflict', () async {
     final fileApi = _RetryingCompleteFileApi();
-    final service = MediaImportService(fileApi);
+    final service = MediaImportService(fileApi, _UnusedTaskApi());
 
     final imported = await service.importFile(
       file: await _photoFile(),
@@ -444,23 +485,17 @@ class _PostUploadCancellationFileApi extends FileApi {
   }
 
   @override
-  Future<FileNode> completeUploadSession({
+  Future<FileUploadCompleteResult> completeUploadSession({
     required String sessionId,
     String? sha256,
     String? asVersionOfFileId,
   }) async {
     completeCalled = true;
     duringComplete?.call();
-    return FileNode(
-      id: 'photo-id',
-      parentId: 'photos',
-      name: 'photo.jpg',
-      isFolder: false,
-      nodeType: 'FILE',
-      normalizedPath: '/Photos/photo.jpg',
-      sizeBytes: 4,
-      updatedAt: null,
-      mimeType: 'image/jpeg',
+    return const FileUploadCompleteResult(
+      uploadId: 'upload-1',
+      status: 'COMPLETED',
+      fileNodeId: 'photo-id',
     );
   }
 
@@ -474,7 +509,7 @@ class _RetryingCompleteFileApi extends _PostUploadCancellationFileApi {
   int completeAttempts = 0;
 
   @override
-  Future<FileNode> completeUploadSession({
+  Future<FileUploadCompleteResult> completeUploadSession({
     required String sessionId,
     String? sha256,
     String? asVersionOfFileId,
@@ -487,16 +522,160 @@ class _RetryingCompleteFileApi extends _PostUploadCancellationFileApi {
         details: <String, Object?>{'retryable': true},
       );
     }
-    return FileNode(
-      id: 'photo-id',
-      parentId: 'photos',
-      name: 'photo.jpg',
-      isFolder: false,
-      nodeType: 'FILE',
-      normalizedPath: '/Photos/photo.jpg',
-      sizeBytes: 4,
-      updatedAt: null,
-      mimeType: 'image/jpeg',
+    return const FileUploadCompleteResult(
+      uploadId: 'upload-1',
+      status: 'COMPLETED',
+      fileNodeId: 'photo-id',
     );
   }
+}
+
+class _UnusedTaskApi extends TaskApi {
+  _UnusedTaskApi()
+    : super(
+        ApiClient(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      );
+}
+
+class _ScanningFileApi extends FileApi {
+  _ScanningFileApi()
+    : super(
+        ApiClient(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      );
+
+  @override
+  Future<FileUploadPolicy> uploadPolicy() async {
+    return const FileUploadPolicy(
+      directUploadMaxBytes: 64 * 1024 * 1024,
+      defaultPartSizeBytes: 10 * 1024 * 1024,
+      maxPartSizeBytes: 100 * 1024 * 1024,
+      maxTotalParts: 1000,
+      maxConcurrentParts: 4,
+    );
+  }
+
+  @override
+  Future<FileUploadSession> createUploadSession({
+    String? parentId,
+    required String fileName,
+    required int sizeBytes,
+    String? mimeType,
+    String? sha256,
+    int? partSizeBytes,
+    String? spaceType,
+    String? asVersionOfFileId,
+  }) async {
+    return FileUploadSession(
+      id: 'session-1',
+      uploadId: 'upload-1',
+      parentId: parentId,
+      fileName: fileName,
+      sizeBytes: sizeBytes,
+      partSizeBytes: sizeBytes,
+      totalParts: 1,
+      mimeType: mimeType ?? 'application/octet-stream',
+      status: 'UPLOADING',
+      bucket: 'private',
+      objectKey: 'photos/photo.jpg',
+      uploadUrl: 'http://localhost/upload-1',
+      parts: const <FileUploadPart>[],
+      expiresAt: null,
+    );
+  }
+
+  @override
+  Future<String> putUploadUrl({
+    required String uploadUrl,
+    required Stream<List<int>> data,
+    required int contentLength,
+    FileUploadCancellationToken? cancellationToken,
+    FileUploadProgressCallback? onProgress,
+  }) async {
+    return 'etag';
+  }
+
+  @override
+  Future<FileUploadCompleteResult> completeUploadSession({
+    required String sessionId,
+    String? sha256,
+    String? asVersionOfFileId,
+  }) async {
+    return const FileUploadCompleteResult(
+      uploadId: 'upload-1',
+      status: 'SCANNING',
+      taskId: 'scan-task-1',
+    );
+  }
+}
+
+class _CompletedScanTaskApi extends TaskApi {
+  _CompletedScanTaskApi()
+    : super(
+        ApiClient(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      );
+
+  bool waitCalled = false;
+
+  @override
+  Future<TaskRecord> waitForTerminal(
+    String taskId, {
+    Duration timeout = const Duration(minutes: 30),
+    Duration interval = const Duration(seconds: 1),
+  }) async {
+    waitCalled = true;
+    return _taskRecord(
+      'COMPLETED',
+      '{"fileNodeId":"promoted-id","mediaAutoImportTaskId":"media-task-1"}',
+    );
+  }
+}
+
+class _FailedScanTaskApi extends TaskApi {
+  _FailedScanTaskApi()
+    : super(
+        ApiClient(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      );
+
+  @override
+  Future<TaskRecord> waitForTerminal(
+    String taskId, {
+    Duration timeout = const Duration(minutes: 30),
+    Duration interval = const Duration(seconds: 1),
+  }) async {
+    return _taskRecord('DLQ', 'Eicar-Signature FOUND');
+  }
+}
+
+TaskRecord _taskRecord(String status, String result) {
+  return TaskRecord(
+    id: 'scan-task-1',
+    taskType: 'FILE_SECURITY_SCAN',
+    status: status,
+    progress: 100,
+    result: result,
+    errorMessage: status == 'COMPLETED' ? null : result,
+    retryCount: 3,
+    maxRetries: 3,
+    createdAt: DateTime.now(),
+  );
 }

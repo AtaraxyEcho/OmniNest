@@ -3133,6 +3133,12 @@ abstract class AppLocalizations {
   /// **'Upload complete'**
   String get filesUploadDone;
 
+  /// No description provided for @filesUploadScanPending.
+  ///
+  /// In en, this message translates to:
+  /// **'Upload complete. Security scan in progress; the file will appear once it passes.'**
+  String get filesUploadScanPending;
+
   /// No description provided for @filesUploadedParts.
   ///
   /// In en, this message translates to:

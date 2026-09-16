@@ -570,6 +570,7 @@
   "filesResumingUpload": "继续上传中",
   "filesUploadRetrying": "清理完成，正在重新上传",
   "filesUploadDone": "上传完成",
+  "filesUploadScanPending": "上传完成，安全扫描中，文件通过后自动显示",
   "filesUploadedParts": "已上传 {current}/{total} 分片",
   "filesCleanupConflict": "清理回收站中的同名文件？",
   "filesCleanupMessage": "回收站中存在同名文件，清理后将自动重新上传。",

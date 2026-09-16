@@ -675,6 +675,8 @@
   "filesResumingUpload": "Resuming upload",
   "filesUploadRetrying": "Cleanup complete. Retrying upload",
   "filesUploadDone": "Upload complete",
+  "filesUploadScanPending":
+      "Upload complete. Security scan in progress; the file will appear once it passes.",
   "filesUploadedParts": "Uploaded {current}/{total} parts",
   "@filesUploadedParts": {
     "placeholders": {

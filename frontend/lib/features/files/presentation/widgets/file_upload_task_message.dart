@@ -14,6 +14,7 @@ String localizedFileUploadTaskMessage(
     FileUploadTaskMessageCode.paused => l10n.filesUploadPausedMsg,
     FileUploadTaskMessageCode.resuming => l10n.filesResumingUpload,
     FileUploadTaskMessageCode.completed => l10n.filesUploadDone,
+    FileUploadTaskMessageCode.scanPending => l10n.filesUploadScanPending,
     FileUploadTaskMessageCode.conflict => l10n.filesConflictMsg(
       task.messageArgument ?? task.fileName,
     ),

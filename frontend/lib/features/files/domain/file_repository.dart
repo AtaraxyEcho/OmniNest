@@ -1,5 +1,6 @@
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -121,7 +122,7 @@ abstract interface class FileRepository {
     FileUploadProgressCallback? onProgress,
   });
 
-  Future<FileNode> completeUploadSession({
+  Future<FileUploadCompleteResult> completeUploadSession({
     required String sessionId,
     String? sha256,
     String? asVersionOfFileId,

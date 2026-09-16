@@ -12,6 +12,7 @@ import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/data/file_api.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart';
+import 'package:omninest/features/tasks/data/task_api.dart';
 
 void main() {
   Widget buildButton(
@@ -268,7 +269,8 @@ void main() {
 void _noop() {}
 
 class _StubMediaImportService extends MediaImportService {
-  _StubMediaImportService({required this.parentId}) : super(_UnusedFileApi());
+  _StubMediaImportService({required this.parentId})
+    : super(_UnusedFileApi(), _UnusedTaskApi());
 
   final String? parentId;
 
@@ -322,8 +324,20 @@ class _UnusedFileApi extends FileApi {
       );
 }
 
+class _UnusedTaskApi extends TaskApi {
+  _UnusedTaskApi()
+    : super(
+        ApiClient(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      );
+}
+
 class _BlockingMediaImportService extends MediaImportService {
-  _BlockingMediaImportService() : super(_UnusedFileApi());
+  _BlockingMediaImportService() : super(_UnusedFileApi(), _UnusedTaskApi());
 
   final Completer<void> started = Completer<void>();
   MediaImportCancellationToken? cancellationToken;

@@ -8,6 +8,7 @@ import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/files/data/file_api_response_parser.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/features/files/domain/file_upload_complete_result.dart';
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -523,7 +524,7 @@ class FileApi {
         .replaceAll('"', '');
   }
 
-  Future<FileNode> completeUploadSession({
+  Future<FileUploadCompleteResult> completeUploadSession({
     required String sessionId,
     String? sha256,
     String? asVersionOfFileId,
@@ -536,7 +537,11 @@ class FileApi {
           'asVersionOfFileId': asVersionOfFileId,
       },
     );
-    return parseFileNodeResponse(response.data);
+    final data = response.data;
+    if (data == null) {
+      throw const FormatException('上传完成受理响应格式不正确');
+    }
+    return FileUploadCompleteResult.fromJson(data);
   }
 
   Future<void> cancelUploadSession(String uploadId) async {

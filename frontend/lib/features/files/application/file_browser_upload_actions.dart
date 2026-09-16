@@ -450,7 +450,7 @@ extension FileBrowserUploadActions on FileBrowserController {
       task.copyWith(
         uploadedBytes: runtime.session.sizeBytes,
         status: 'COMPLETED',
-        messageCode: FileUploadTaskMessageCode.completed,
+        messageCode: FileUploadTaskMessageCode.scanPending,
         uploadId: runtime.session.uploadId,
       ),
     );
@@ -534,7 +534,7 @@ extension FileBrowserUploadActions on FileBrowserController {
       (_findLocalUploadTask(taskId)!).copyWith(
         uploadedBytes: runtime.session.sizeBytes,
         status: 'COMPLETED',
-        messageCode: FileUploadTaskMessageCode.completed,
+        messageCode: FileUploadTaskMessageCode.scanPending,
         uploadId: runtime.session.uploadId,
       ),
     );

@@ -63,17 +63,18 @@ public class FileIngressPromotionService {
      * 处理一条安全扫描任务消息。
      *
      * @param event 扫描任务消息
+     * @return 晋升结果：fileNodeId 为空表示跳过或未晋升
      */
-    public void process(FileSecurityScanRequestedEvent event) {
+    public PromotionOutcome process(FileSecurityScanRequestedEvent event) {
         FileIngressItem item = ingressItemRepository.findById(event.ingressItemId()).orElse(null);
         if (item == null) {
             log.warn("安全扫描任务缺少入库记录，跳过: taskId={}, ingressItemId={}",
                     event.taskId(), event.ingressItemId());
-            return;
+            return PromotionOutcome.skipped();
         }
         if (item.getStatus() == FileIngressStatus.AVAILABLE) {
             log.info("入库记录已晋升，跳过重复扫描: ingressItemId={}", item.getId());
-            return;
+            return PromotionOutcome.skipped();
         }
         String sha256;
         if (item.getStatus() == FileIngressStatus.CLEAN) {
@@ -85,7 +86,19 @@ public class FileIngressPromotionService {
             ingressLifecycleService.markClean(item.getId(), inspection.sha256());
             sha256 = inspection.sha256();
         }
-        promote(item, sha256, event);
+        return promote(item, sha256, event);
+    }
+
+    /**
+     * 晋升执行结果，供任务结果回写与前端等待晋升后消费。
+     *
+     * @param fileNodeId 晋升后的文件节点 ID
+     * @param mediaAutoImportTaskId 媒体自动导入任务 ID
+     */
+    public record PromotionOutcome(UUID fileNodeId, UUID mediaAutoImportTaskId) {
+        public static PromotionOutcome skipped() {
+            return new PromotionOutcome(null, null);
+        }
     }
 
     private InspectionResult scanQuietly(FileIngressItem item) {
@@ -129,11 +142,12 @@ public class FileIngressPromotionService {
         throw new FileIngressRejectedException("服务端计算的文件摘要与客户端声明不一致");
     }
 
-    private void promote(FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
-        transactionTemplate.executeWithoutResult(txStatus -> promoteInTransaction(item, sha256, event));
+    private PromotionOutcome promote(FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
+        return transactionTemplate.execute(txStatus -> promoteInTransaction(item, sha256, event));
     }
 
-    private void promoteInTransaction(FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
+    private PromotionOutcome promoteInTransaction(
+            FileIngressItem item, String sha256, FileSecurityScanRequestedEvent event) {
         FileUploadSession session = item.getUploadSessionId() == null
                 ? null
                 : uploadSessionRepository.findById(item.getUploadSessionId()).orElse(null);
@@ -144,13 +158,15 @@ public class FileIngressPromotionService {
         FileNode promotedNode = event.asVersionOfFileId() != null
                 ? promoteAsVersion(item, event.asVersionOfFileId(), savedObject)
                 : promoteAsNewNode(item, savedObject);
+        UUID mediaAutoImportTaskId = null;
         if (session != null) {
-            applySessionResult(session, item, savedObject, promotedNode);
+            mediaAutoImportTaskId = applySessionResult(session, item, savedObject, promotedNode);
         }
         if (event.asVersionOfFileId() == null) {
             recordFileCreated(item.getOwnerUserId(), promotedNode);
         }
         registerFinalization(item.getId(), quarantineKey, targetKey, promotedNode.getId());
+        return new PromotionOutcome(promotedNode.getId(), mediaAutoImportTaskId);
     }
 
     private FileNode promoteAsVersion(FileIngressItem item, UUID asVersionOfFileId, FileObject savedObject) {
@@ -176,7 +192,7 @@ public class FileIngressPromotionService {
         return fileNodeRepository.save(toFileNode(item, savedObject, parent));
     }
 
-    private void applySessionResult(
+    private UUID applySessionResult(
             FileUploadSession session,
             FileIngressItem item,
             FileObject savedObject,
@@ -192,6 +208,7 @@ public class FileIngressPromotionService {
         session.setStatus(UploadStatus.COMPLETED.getValue());
         session.setCompletionTaskId(mediaAutoImportTaskId);
         uploadSessionRepository.save(session);
+        return mediaAutoImportTaskId;
     }
 
     private void settleTerminalFailure(
