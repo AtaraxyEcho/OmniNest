@@ -1,5 +1,6 @@
 package com.omninest.modules.music.service;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -114,7 +115,8 @@ public class MusicLibraryService {
         Page<MusicTrack> result = trackRepository.findTracksVisibleToUser(
                 ownerUserId,
                 SpaceType.SHARED,
-                PageRequest.of(page, size, resolveSort(sort, TRACK_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "title"))));
+                PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
+                        resolveSort(sort, TRACK_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "title"))));
         return new PageImpl<>(
                 toTrackDtos(ownerUserId, result.getContent()),
                 result.getPageable(),
@@ -126,7 +128,8 @@ public class MusicLibraryService {
         return albumRepository
                 .findActiveByOwnerUserId(
                         ownerUserId,
-                        PageRequest.of(page, size, resolveSort(sort, ALBUM_SORT_FIELDS, Sort.by(Sort.Direction.DESC, "updatedAt"))))
+                        PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
+                                resolveSort(sort, ALBUM_SORT_FIELDS, Sort.by(Sort.Direction.DESC, "updatedAt"))))
                 .map(this::toAlbumDto);
     }
 
@@ -135,7 +138,8 @@ public class MusicLibraryService {
         return artistRepository
                 .findActiveByOwnerUserId(
                         ownerUserId,
-                        PageRequest.of(page, size, resolveSort(sort, ARTIST_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "name"))))
+                        PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
+                                resolveSort(sort, ARTIST_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "name"))))
                 .map(this::toArtistDto);
     }
 
@@ -358,7 +362,7 @@ public class MusicLibraryService {
         var result = playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
                 ownerUserId,
                 cutoff,
-                PageRequest.of(page, size)
+                PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size))
         );
         return result.map(history -> new MusicPlayHistoryDto(
                 history.getPlayableKey(),

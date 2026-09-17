@@ -1,5 +1,6 @@
 package com.omninest.modules.notification.service;
 
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -149,7 +150,9 @@ public class NotificationService implements NotificationPublisher, NotificationR
     @Transactional(readOnly = true)
     public List<NotificationDto> list(UUID userId, int page, int size) {
         return notificationRepository
-                .findByRecipientUserIdOrderByCreatedAtDesc(userId, PageRequest.of(page, size))
+                .findByRecipientUserIdOrderByCreatedAtDesc(
+                        userId,
+                        PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size)))
                 .stream()
                 .map(this::toDto)
                 .toList();

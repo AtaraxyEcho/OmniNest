@@ -26,7 +26,10 @@ public class MediaScrapeConsumer {
     private final TaskRecordService taskRecordService;
     private final MediaScrapeRetryService mediaScrapeRetryService;
 
-    @RabbitListener(queues = QueueNames.MEDIA_QUEUE)
+    @RabbitListener(
+            queues = QueueNames.MEDIA_QUEUE,
+            concurrency = "${omninest.worker.media-concurrency:1}"
+    )
     public void handle(MediaScrapeRequestedEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         try {

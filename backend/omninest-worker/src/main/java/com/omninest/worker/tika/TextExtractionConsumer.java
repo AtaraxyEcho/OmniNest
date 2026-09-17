@@ -54,7 +54,10 @@ public class TextExtractionConsumer {
     private final FileLifecycleGuard fileLifecycleGuard;
     private final FilePostProcessingTaskTracker taskTracker;
 
-    @RabbitListener(queues = QueueNames.TEXT_EXTRACTION_QUEUE)
+    @RabbitListener(
+            queues = QueueNames.TEXT_EXTRACTION_QUEUE,
+            concurrency = "${omninest.worker.text-extraction-concurrency:2}"
+    )
     public void handle(FileUploadedEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         FilePostProcessingTaskTracker.TrackedTask tracked =

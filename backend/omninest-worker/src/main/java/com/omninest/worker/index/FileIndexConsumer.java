@@ -39,7 +39,10 @@ public class FileIndexConsumer {
      * @param channel RabbitMQ 通道
      * @throws IOException ACK 或 NACK 失败时抛出
      */
-    @RabbitListener(queues = QueueNames.FILE_INDEX_QUEUE)
+    @RabbitListener(
+            queues = QueueNames.FILE_INDEX_QUEUE,
+            concurrency = "${omninest.worker.file-index-concurrency:1}"
+    )
     public void handle(FileUploadedEvent event, Message message, Channel channel) throws IOException {
         long deliveryTag = message.getMessageProperties().getDeliveryTag();
         FilePostProcessingTaskTracker.TrackedTask tracked =

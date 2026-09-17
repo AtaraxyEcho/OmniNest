@@ -17,6 +17,12 @@ spring:
     active: ${OMNINEST_PROFILE:dev}
   jpa:
     open-in-view: false
+    properties:
+      hibernate:
+        jdbc.batch_size: 50
+        default_batch_fetch_size: 50
+        order_inserts: true
+        order_updates: true
   jackson:
     time-zone: Asia/Shanghai
   datasource:

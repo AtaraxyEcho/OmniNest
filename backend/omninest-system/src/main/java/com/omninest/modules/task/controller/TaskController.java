@@ -1,6 +1,7 @@
 package com.omninest.modules.task.controller;
 
 import com.omninest.common.api.ApiResponse;
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
@@ -37,9 +38,12 @@ public class TaskController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var result = taskQueryService.listOwned(ownerUserId, status, PageRequest.of(page, size));
+        int safePage = PageClamps.safePage(page);
+        int safeSize = PageClamps.safeSize(size);
+        var result = taskQueryService.listOwned(
+                ownerUserId, status, PageRequest.of(safePage, safeSize));
         return ApiResponse.success(PageResponse.of(
-                result.getContent(), page, size, result.getTotalElements()));
+                result.getContent(), safePage, safeSize, result.getTotalElements()));
     }
 
     /**
@@ -63,7 +67,7 @@ public class TaskController {
     @GetMapping("/api/v1/tasks/dlq")
     @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<List<TaskDto>> listDlq(@RequestParam(defaultValue = "20") int limit) {
-        return ApiResponse.success(taskQueryService.listDlq(limit));
+        return ApiResponse.success(taskQueryService.listDlq(PageClamps.safeLimit(limit, 20)));
     }
 
     /**
