@@ -5601,7 +5601,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerEmptyHint => '这里还没有内容';
 
   @override
-  String get readerEmptyHintDesc => '从文件管理导入书籍后，它们会自动出现在书架里。';
+  String get readerEmptyHintDesc => '支持 EPUB、TXT、CBZ、ZIP、PDF，导入后会自动出现在书架里。';
+
+  @override
+  String get readerImportBooks => '导入书籍';
 
   @override
   String get readerHighlight => '高亮';

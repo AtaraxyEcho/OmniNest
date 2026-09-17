@@ -14,7 +14,7 @@ import 'package:omninest/features/files/application/media_import_file_picker.dar
 import 'package:omninest/features/files/application/media_import_service.dart';
 
 /// 导入按钮样式。
-enum ImportButtonStyle { textButton, iconButton }
+enum ImportButtonStyle { textButton, iconButton, filledButton }
 
 /// 媒体导入使用的文件选择函数。
 typedef MediaImportFilePicker =
@@ -42,6 +42,7 @@ class MediaImportButton extends ConsumerStatefulWidget {
     this.reuseExistingFiles = false,
     this.enableCamera = false,
     this.onFilesPicked,
+    this.label,
     super.key,
   });
 
@@ -83,6 +84,9 @@ class MediaImportButton extends ConsumerStatefulWidget {
   /// 设置后跳过空间选择与阻塞式上传对话框；上传、扫描与入库由调用方异步完成。
   final void Function(List<XFile> files)? onFilesPicked;
 
+  /// 按钮文案；不传则使用通用「导入文件」。
+  final String? label;
+
   @override
   ConsumerState<MediaImportButton> createState() => _MediaImportButtonState();
 }
@@ -94,17 +98,27 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final buttonLabel = widget.label ?? l10n.importFiles;
 
     return switch (widget.style) {
       ImportButtonStyle.textButton => TextButton.icon(
         onPressed: _busy ? null : _handleImport,
         icon: _ImportButtonIcon(busy: _busy, color: widget.color, size: 18),
-        label: Text(l10n.importFiles),
+        label: Text(buttonLabel),
       ),
       ImportButtonStyle.iconButton => IconButton(
         onPressed: _busy ? null : _handleImport,
         icon: _ImportButtonIcon(busy: _busy, color: widget.color, size: 20),
-        tooltip: l10n.importFiles,
+        tooltip: buttonLabel,
+      ),
+      ImportButtonStyle.filledButton => FilledButton.icon(
+        onPressed: _busy ? null : _handleImport,
+        icon: _ImportButtonIcon(
+          busy: _busy,
+          color: widget.color ?? Theme.of(context).colorScheme.onPrimary,
+          size: 18,
+        ),
+        label: Text(buttonLabel),
       ),
     };
   }

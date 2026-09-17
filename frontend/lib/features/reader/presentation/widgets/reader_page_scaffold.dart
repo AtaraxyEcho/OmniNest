@@ -12,12 +12,9 @@ import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
-import 'package:omninest/features/files/media_import_ui.dart'
-    show ImportButtonStyle, MediaImportButton;
 import 'package:omninest/features/notifications/notification_ui.dart';
-import 'package:omninest/features/reader/application/reader_controller.dart';
-import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
 
 /// 阅读模块页面目标，对应模块内一级导航与路由
 enum ReaderPageTarget { library, bookshelf, stats, admin }
@@ -267,23 +264,7 @@ class _ReaderModuleTopBar extends ConsumerWidget {
                 ],
               ),
             ),
-            SizedBox(
-              width: 40,
-              height: 40,
-              child: MediaImportButton(
-                subsystemDirectory: 'Reader',
-                acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
-                reuseExistingFiles: true,
-                onFilesPicked: (files) {
-                  ref.read(readerImportQueueProvider.notifier).enqueue(files);
-                },
-                onImportComplete: () {
-                  ref.read(readerCenterControllerProvider.notifier).refresh();
-                },
-                style: ImportButtonStyle.iconButton,
-                color: rc.onSurfaceVariant,
-              ),
-            ),
+            const ReaderLibraryImportAction(),
             const SizedBox(width: 12),
             FontScaleControl(size: 20, color: rc.onSurfaceVariant),
             const SizedBox(width: 12),

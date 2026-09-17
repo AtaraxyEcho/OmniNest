@@ -9,7 +9,7 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/files/media_import_ui.dart'
-    show ImportButtonStyle, MediaImportButton;
+    show ImportButtonStyle;
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
@@ -18,6 +18,7 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_import_queue_cards.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_cards.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
@@ -139,6 +140,10 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
             title: l10n.readerEmptyHint,
             subtitle: l10n.readerEmptyHintDesc,
             icon: Icons.library_books_outlined,
+            action: ReaderLibraryImportAction(
+              style: ImportButtonStyle.filledButton,
+              label: l10n.readerImportBooks,
+            ),
           )
         else
           _LibraryGrid(
@@ -310,29 +315,12 @@ class _LibraryHeader extends StatelessWidget {
 }
 
 /// 托管态书库页头的导入入口（模块顶栏隐藏后由页头承接）。
-class _LibraryImportButton extends ConsumerWidget {
+class _LibraryImportButton extends StatelessWidget {
   const _LibraryImportButton();
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final rc = context.readerColors;
-    return SizedBox(
-      width: 40,
-      height: 40,
-      child: MediaImportButton(
-        subsystemDirectory: 'Reader',
-        acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
-        reuseExistingFiles: true,
-        onFilesPicked: (files) {
-          ref.read(readerImportQueueProvider.notifier).enqueue(files);
-        },
-        onImportComplete: () {
-          ref.read(readerCenterControllerProvider.notifier).refresh();
-        },
-        style: ImportButtonStyle.iconButton,
-        color: rc.onSurfaceVariant,
-      ),
-    );
+  Widget build(BuildContext context) {
+    return const ReaderLibraryImportAction();
   }
 }
 

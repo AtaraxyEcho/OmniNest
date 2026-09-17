@@ -21,6 +21,8 @@ void main() {
     FutureOr<void> Function() onImportComplete = _noop,
     List<String> acceptedExtensions = const <String>['jpg', 'png'],
     List<String> unsupportedExtensions = const <String>[],
+    ImportButtonStyle style = ImportButtonStyle.iconButton,
+    String? label,
   }) {
     return ProviderScope(
       overrides: [
@@ -43,7 +45,8 @@ void main() {
                         unsupportedExtensions: unsupportedExtensions,
                         onImportComplete: onImportComplete,
                         allowSharedSpace: false,
-                        style: ImportButtonStyle.iconButton,
+                        style: style,
+                        label: label,
                       ),
                     ),
               ),
@@ -51,6 +54,19 @@ void main() {
       ),
     );
   }
+
+  testWidgets('filled 样式支持自定义文案', (tester) async {
+    await tester.pumpWidget(
+      buildButton(
+        (_) async => const <XFile>[],
+        style: ImportButtonStyle.filledButton,
+        label: '导入书籍',
+      ),
+    );
+
+    expect(find.byType(FilledButton), findsOneWidget);
+    expect(find.text('导入书籍'), findsOneWidget);
+  });
 
   testWidgets('文件选择期间禁止重复打开原生选择器', (tester) async {
     final completer = Completer<List<XFile>>();

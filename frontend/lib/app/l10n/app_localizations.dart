@@ -10580,8 +10580,14 @@ abstract class AppLocalizations {
   /// No description provided for @readerEmptyHintDesc.
   ///
   /// In en, this message translates to:
-  /// **'After importing books from the file manager, they will automatically appear on the bookshelf.'**
+  /// **'Supports EPUB, TXT, CBZ, ZIP, and PDF. Imported books appear on the bookshelf automatically.'**
   String get readerEmptyHintDesc;
+
+  /// No description provided for @readerImportBooks.
+  ///
+  /// In en, this message translates to:
+  /// **'Import books'**
+  String get readerImportBooks;
 
   /// No description provided for @readerHighlight.
   ///

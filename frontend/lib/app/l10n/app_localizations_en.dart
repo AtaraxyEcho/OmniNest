@@ -5784,7 +5784,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get readerEmptyHintDesc =>
-      'After importing books from the file manager, they will automatically appear on the bookshelf.';
+      'Supports EPUB, TXT, CBZ, ZIP, and PDF. Imported books appear on the bookshelf automatically.';
+
+  @override
+  String get readerImportBooks => 'Import books';
 
   @override
   String get readerHighlight => 'Highlight';

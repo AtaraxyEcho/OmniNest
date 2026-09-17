@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/responsive_search_field.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
@@ -26,6 +27,7 @@ class FrameTopBar extends ConsumerWidget {
     required this.showTitle,
     this.searchExpanded = false,
     this.showBack = false,
+    this.showImport = true,
     super.key,
   });
 
@@ -41,6 +43,9 @@ class FrameTopBar extends ConsumerWidget {
 
   /// 显示返回 Portal 入口；应用壳托管的移动端由壳层导航承担。
   final bool showBack;
+
+  /// 多选模式隐藏导入，避免与批量操作抢焦点（与 File 的 FAB 策略一致）。
+  final bool showImport;
 
   static const double height = 56;
 
@@ -116,8 +121,10 @@ class FrameTopBar extends ConsumerWidget {
                 const Spacer(),
                 searchField,
                 const SizedBox(width: 12),
-                const FrameImportAction(),
-                const SizedBox(width: 12),
+                if (showImport) ...[
+                  const FrameImportAction(),
+                  const SizedBox(width: 12),
+                ],
                 const FontScaleControl(size: 20),
                 const NotificationIcon(size: 20),
                 const SizedBox(width: 12),
@@ -194,57 +201,66 @@ class _FrameIconButtonState extends State<FrameIconButton> {
 }
 
 /// 照片导入入口：顶栏图标与托管态页签行尾部共用，沿用图库导入完成回调。
+///
+/// 紧凑档提供 44px 触控目标；保持图标入口而非 FAB（浏览优先，单动作导入）。
 class FrameImportAction extends ConsumerWidget {
   const FrameImportAction({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return MediaImportButton(
-      subsystemDirectory: 'Photos',
-      enableCamera: true,
-      acceptedExtensions: const <String>[
-        'jpg',
-        'jpeg',
-        'png',
-        'gif',
-        'heic',
-        'heif',
-        'bmp',
-        'tif',
-        'tiff',
-      ],
-      unsupportedExtensions: const <String>[],
-      onImportComplete: () {},
-      onImportCompleteWithResult: (result) async {
-        if (!context.mounted) return null;
-        final controller = ref.read(photoCenterControllerProvider.notifier);
-        final visible = await controller.refreshAfterImport(
-          expectedFileIds: result.imported.map((file) => file.fileNodeId),
-          taskIds:
-              result.imported
-                  .map((file) => file.mediaAutoImportTaskId)
-                  .whereType<String>(),
-        );
-        if (!context.mounted) return null;
-        final failure = controller.lastImportNotice;
-        if (!visible && failure != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                photoImportNoticeText(AppLocalizations.of(context), failure),
-              ),
-            ),
+    final compact = ResponsiveBreakpoints.isCompact(
+      MediaQuery.sizeOf(context).width,
+    );
+    return SizedBox(
+      width: compact ? 44 : 36,
+      height: compact ? 44 : 36,
+      child: MediaImportButton(
+        subsystemDirectory: 'Photos',
+        enableCamera: true,
+        acceptedExtensions: const <String>[
+          'jpg',
+          'jpeg',
+          'png',
+          'gif',
+          'heic',
+          'heif',
+          'bmp',
+          'tif',
+          'tiff',
+        ],
+        unsupportedExtensions: const <String>[],
+        onImportComplete: () {},
+        onImportCompleteWithResult: (result) async {
+          if (!context.mounted) return null;
+          final controller = ref.read(photoCenterControllerProvider.notifier);
+          final visible = await controller.refreshAfterImport(
+            expectedFileIds: result.imported.map((file) => file.fileNodeId),
+            taskIds:
+                result.imported
+                    .map((file) => file.mediaAutoImportTaskId)
+                    .whereType<String>(),
           );
-          return MediaImportCompletionState.failed;
-        }
-        return visible
-            ? MediaImportCompletionState.completed
-            : MediaImportCompletionState.processing;
-      },
-      allowSharedSpace: false,
-      reuseExistingFiles: true,
-      style: ImportButtonStyle.iconButton,
-      color: context.frameColors.muted,
+          if (!context.mounted) return null;
+          final failure = controller.lastImportNotice;
+          if (!visible && failure != null) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  photoImportNoticeText(AppLocalizations.of(context), failure),
+                ),
+              ),
+            );
+            return MediaImportCompletionState.failed;
+          }
+          return visible
+              ? MediaImportCompletionState.completed
+              : MediaImportCompletionState.processing;
+        },
+        allowSharedSpace: false,
+        reuseExistingFiles: true,
+        style: ImportButtonStyle.iconButton,
+        color: context.frameColors.muted,
+      ),
     );
   }
 }
