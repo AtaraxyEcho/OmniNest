@@ -328,6 +328,37 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
+    case WM_ERASEBKGND: {
+      // 同步用黑色填充客户区再返回，避免 DefWindowProc 的默认擦除与
+      // Flutter 下一帧之间的白闪/花屏；缩放与最大化过程中更干净。
+      auto* hdc = reinterpret_cast<HDC>(wparam);
+      RECT client = {};
+      if (hdc != nullptr && GetClientRect(hwnd, &client)) {
+        HBRUSH brush = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+        FillRect(hdc, &client, brush);
+      }
+      return 1;
+    }
+    case WM_GETMINMAXINFO: {
+      // 无边框窗口最大化：把 max 矩形钉在工作区，避免伸入任务栏后
+      // 再被 NCCALCSIZE/MoveWindow 拉回，产生双重布局与卡顿。
+      if (!window_fullscreen_ && window_frame_hidden_) {
+        auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
+        MONITORINFO monitor_info = {};
+        monitor_info.cbSize = sizeof(MONITORINFO);
+        if (GetMonitorInfo(
+                MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST),
+                &monitor_info)) {
+          const RECT& work = monitor_info.rcWork;
+          const RECT& monitor = monitor_info.rcMonitor;
+          info->ptMaxPosition.x = work.left - monitor.left;
+          info->ptMaxPosition.y = work.top - monitor.top;
+          info->ptMaxSize.x = work.right - work.left;
+          info->ptMaxSize.y = work.bottom - work.top;
+        }
+      }
+      break;
+    }
     case WM_NCCALCSIZE:
       // While fullscreen, pin the client area to the full window rect so no
       // style change (resize border re-added by any code path) can inset the

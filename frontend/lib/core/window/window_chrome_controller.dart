@@ -390,9 +390,9 @@ class WindowChromeController extends Notifier<WindowChromeState> {
   }
 
   Future<void> _settleNativeWindow() async {
-    // 等待扩窗后的首帧布局同步；Windows 侧随后做一次原生几何断言，
-    // 全屏窗口矩形或子视图存在偏差时由原生直接吸附自愈。
-    await Future<void>.delayed(const Duration(milliseconds: 160));
+    // 等待扩窗后的首帧布局同步；80ms 足以覆盖一帧布局与一次平台回包，
+    // 过长会在全屏/退出全屏时造成可感知的停顿。
+    await Future<void>.delayed(const Duration(milliseconds: 80));
     if (defaultTargetPlatform == TargetPlatform.windows) {
       await _verifyNativeWindowFrame();
     }

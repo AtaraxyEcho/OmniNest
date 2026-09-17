@@ -9,7 +9,12 @@ import 'package:omninest/features/photos/presentation/widgets/photo_grid_tile.da
 import 'package:omninest/features/photos/presentation/widgets/photo_masonry_layout.dart';
 
 const double _masonryColumnGap = 10;
-const double _masonryTileGap = 10;
+
+/// 纵向间距相对列宽的固定比例。
+///
+/// 分柱结果只依赖照片列表与列数，列宽变化仅做坐标缩放，避免拖拽缩放
+/// 窗口时每像素重算全表贪心布局导致掉帧。
+const double _masonryGapLogical = 0.05;
 
 /// Frame 瀑布流网格：按设计稿 CSS columns 布局。
 ///
@@ -45,23 +50,25 @@ class FrameMasonryGrid extends ConsumerStatefulWidget {
 class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
   List<PhotoItem>? _layoutPhotos;
   int _layoutColumns = 0;
-  double _layoutColumnWidth = 0;
   bool _hasLayout = false;
   List<MasonryPlacedTile> _placed = const [];
+  double _totalLogicalHeight = 0;
 
-  void _ensureLayout(int columns, double columnWidth) {
+  void _ensureLayout(int columns) {
     if (_hasLayout &&
         identical(_layoutPhotos, widget.photos) &&
-        _layoutColumns == columns &&
-        (_layoutColumnWidth - columnWidth).abs() < 0.01) {
+        _layoutColumns == columns) {
       return;
     }
     _layoutPhotos = widget.photos;
     _layoutColumns = columns;
-    _layoutColumnWidth = columnWidth;
     _hasLayout = true;
-    final gapLogical = columnWidth <= 0 ? 0.0 : _masonryTileGap / columnWidth;
-    _placed = placeMasonryTiles(widget.photos, columns, gapLogical: gapLogical);
+    _placed = placeMasonryTiles(
+      widget.photos,
+      columns,
+      gapLogical: _masonryGapLogical,
+    );
+    _totalLogicalHeight = masonryTotalLogicalHeight(_placed);
   }
 
   int _columnCountFor(double width) {
@@ -130,10 +137,9 @@ class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
                         ? 0.0
                         : (contentWidth - _masonryColumnGap * (columns - 1)) /
                             columns;
-                _ensureLayout(columns, columnWidth);
+                _ensureLayout(columns);
                 final placed = _placed;
-                final totalHeight =
-                    columnWidth * masonryTotalLogicalHeight(placed);
+                final totalHeight = columnWidth * _totalLogicalHeight;
                 // 视口 + 固定预取，滚动时仅构建相交 tile。
                 const cachePad = 600.0;
                 final cacheTop = (constraints.scrollOffset - cachePad).clamp(

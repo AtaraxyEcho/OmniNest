@@ -62,6 +62,22 @@ void main() {
         }
       }
     });
+
+    test('固定 gapLogical 下分柱结果与列宽无关（缩放只做坐标缩放）', () {
+      final photos = [
+        for (var i = 0; i < 20; i++)
+          _photo('p$i', width: 100 + (i % 3) * 40, height: 100 + (i % 5) * 30),
+      ];
+      const gapLogical = 0.05;
+      final placedA = placeMasonryTiles(photos, 3, gapLogical: gapLogical);
+      final placedB = placeMasonryTiles(photos, 3, gapLogical: gapLogical);
+      expect(placedA.length, placedB.length);
+      for (var i = 0; i < placedA.length; i++) {
+        expect(placedA[i].column, placedB[i].column);
+        expect(placedA[i].logicalTop, placedB[i].logicalTop);
+        expect(placedA[i].logicalExtent, placedB[i].logicalExtent);
+      }
+    });
   });
 
   group('masonryTotalLogicalHeight', () {

@@ -84,57 +84,58 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
   Widget build(BuildContext context) {
     final hosted = MobileShellScope.isHosted(context);
     final stateAsync = ref.watch(photoCenterControllerProvider);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide =
-            !hosted && !ResponsiveBreakpoints.isCompact(constraints.maxWidth);
-        return PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, result) {
-            if (didPop) return;
-            final photoState =
-                ref.read(photoCenterControllerProvider).asData?.value;
-            final controller = ref.read(photoCenterControllerProvider.notifier);
-            if (photoState == null) {
-              context.go('/portal');
-              return;
-            }
-            // 返回优先级：退出多选 → 回图库视图 → 清空搜索 → 回门户。
-            if (photoState.isSelectionMode) {
-              controller.toggleSelectionMode();
-              return;
-            }
-            if (photoState.frameView != FrameView.grid) {
-              controller.setFrameView(FrameView.grid);
-              return;
-            }
-            if (photoState.searchQuery.isNotEmpty) {
-              controller.setSearchQuery('');
-              return;
-            }
-            context.go('/portal');
-          },
-          child: Scaffold(
-            backgroundColor:
-                hosted ? Colors.transparent : context.frameColors.bg,
-            body: ColoredBox(
-              color: hosted ? Colors.transparent : context.frameColors.bg,
-              child:
-                  isWide
-                      ? _buildWideLayout(stateAsync, constraints.maxWidth)
-                      : _buildNarrowLayout(stateAsync, hosted: hosted),
-            ),
-          ),
-        );
+    // 断点由宽度派生为布尔值；子树只在跨断点时切换形态，
+    // 逐像素缩放由内容区自行响应约束，避免整页 LayoutBuilder 回调膨胀。
+    final width = MediaQuery.sizeOf(context).width;
+    final isWide = !hosted && !ResponsiveBreakpoints.isCompact(width);
+    final sidebarCollapsed = width < 1024;
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        final photoState =
+            ref.read(photoCenterControllerProvider).asData?.value;
+        final controller = ref.read(photoCenterControllerProvider.notifier);
+        if (photoState == null) {
+          context.go('/portal');
+          return;
+        }
+        // 返回优先级：退出多选 → 回图库视图 → 清空搜索 → 回门户。
+        if (photoState.isSelectionMode) {
+          controller.toggleSelectionMode();
+          return;
+        }
+        if (photoState.frameView != FrameView.grid) {
+          controller.setFrameView(FrameView.grid);
+          return;
+        }
+        if (photoState.searchQuery.isNotEmpty) {
+          controller.setSearchQuery('');
+          return;
+        }
+        context.go('/portal');
       },
+      child: Scaffold(
+        backgroundColor: hosted ? Colors.transparent : context.frameColors.bg,
+        body: ColoredBox(
+          color: hosted ? Colors.transparent : context.frameColors.bg,
+          child:
+              isWide
+                  ? _buildWideLayout(
+                    stateAsync,
+                    sidebarCollapsed: sidebarCollapsed,
+                  )
+                  : _buildNarrowLayout(stateAsync, hosted: hosted),
+        ),
+      ),
     );
   }
 
   /// 桌面宽屏布局：Frame 侧栏 + 顶栏 + 视图内容，宽 1024 以下侧栏折叠。
   Widget _buildWideLayout(
-    AsyncValue<PhotoCenterState> stateAsync,
-    double width,
-  ) {
+    AsyncValue<PhotoCenterState> stateAsync, {
+    required bool sidebarCollapsed,
+  }) {
     return stateAsync.when(
       data: (data) {
         final notifier = ref.read(photoCenterControllerProvider.notifier);
@@ -157,7 +158,7 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                     photoCount: data.visiblePhotoTotalElements,
                     albumCount: data.albums.length,
                     trashCount: data.dashboard.trashCount,
-                    collapsed: width < 1024,
+                    collapsed: sidebarCollapsed,
                   ),
                   Expanded(
                     child: Column(
