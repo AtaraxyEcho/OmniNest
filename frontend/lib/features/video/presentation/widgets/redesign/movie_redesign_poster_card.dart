@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_progress_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_status.dart';
 
@@ -337,18 +338,13 @@ class _PosterImage extends StatelessWidget {
     if (url == null || url.isEmpty) {
       return const SizedBox.expand();
     }
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
+    // 海报卡片逻辑宽约 140–220，按 DPR 解码避免原图进内存。
+    final cacheWidth = MoviePosterImage.decodeWidth(context, 220, cap: 640);
+    return MoviePosterImage(
+      imageUrl: url,
+      cacheWidth: cacheWidth,
       alignment: Alignment.topCenter,
-      filterQuality: FilterQuality.medium,
-      errorBuilder: (context, error, stackTrace) => const SizedBox.expand(),
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return const SizedBox.expand();
-      },
+      fallback: const SizedBox.expand(),
     );
   }
 }

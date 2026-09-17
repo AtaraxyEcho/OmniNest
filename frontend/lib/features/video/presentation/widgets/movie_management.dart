@@ -14,6 +14,7 @@ import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_common_widgets.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_metadata_edit_drawer.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_empty_state.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_filter_sort_bar.dart';

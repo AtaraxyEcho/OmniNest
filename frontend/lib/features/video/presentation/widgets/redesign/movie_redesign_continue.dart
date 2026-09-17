@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_progress_bar.dart';
 
 /// 继续观看卡片的辅助文案与回调。
@@ -246,17 +247,10 @@ class _ContinueImage extends StatelessWidget {
     if (url == null || url.isEmpty) {
       return const SizedBox.expand();
     }
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.medium,
-      errorBuilder: (context, error, stackTrace) => const SizedBox.expand(),
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return const SizedBox.expand();
-      },
+    return MoviePosterImage(
+      imageUrl: url,
+      cacheWidth: MoviePosterImage.decodeWidth(context, 140, cap: 420),
+      fallback: const SizedBox.expand(),
     );
   }
 }

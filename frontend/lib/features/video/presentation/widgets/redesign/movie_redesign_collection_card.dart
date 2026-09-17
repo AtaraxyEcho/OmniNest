@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 
 /// 合集卡片数据。
 class MovieRedesignCollectionCardData {
@@ -131,19 +132,10 @@ class _CollectionImage extends StatelessWidget {
     if (coverUrl == null || coverUrl.isEmpty) {
       return ColoredBox(color: context.movieRedesign.muted);
     }
-    return Image.network(
-      coverUrl,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.medium,
-      errorBuilder:
-          (context, error, stackTrace) =>
-              ColoredBox(color: context.movieRedesign.muted),
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return ColoredBox(color: context.movieRedesign.muted);
-      },
+    return MoviePosterImage(
+      imageUrl: coverUrl,
+      cacheWidth: MoviePosterImage.decodeWidth(context, 180, cap: 480),
+      fallback: ColoredBox(color: context.movieRedesign.muted),
     );
   }
 }

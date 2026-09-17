@@ -399,6 +399,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
   int _moviePageGeneration = 0;
   int _episodePageGeneration = 0;
   final Map<MovieSection, int> _sectionLoadGenerations = {};
+  Timer? _searchDebounce;
 
   /// controller 重建期间（实时刷新触发 invalidate）被点击但未生效的分区。
   MovieSection? _pendingSection;
@@ -410,6 +411,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     final loaded = await _loadState();
     final section = _pendingSection ?? ref.read(movieCenterSectionProvider);
     _pendingSection = null;
+    _searchDebounce?.cancel();
     final restored =
         section == loaded.section ? loaded : loaded.copyWith(section: section);
     // 恢复非电影分区时主动重载分区数据，避免管理页只显示空任务列表。
@@ -485,6 +487,7 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
   }
 
   void selectSection(MovieSection section) {
+    _searchDebounce?.cancel();
     ref.read(movieCenterSectionProvider.notifier).select(section);
     final current = state.asData?.value;
     if (current == null) {
@@ -509,11 +512,19 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
   }
 
   void setSearchQuery(String query) {
-    final current = state.asData?.value;
-    if (current == null) {
-      return;
-    }
-    state = AsyncData(current.copyWith(searchQuery: query));
+    // 防抖：避免每键一次触发全库 filter/sort 与整页重建。
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 300), () {
+      final current = state.asData?.value;
+      if (current == null || current.searchQuery == query) {
+        return;
+      }
+      state = AsyncData(current.copyWith(searchQuery: query));
+    });
+  }
+
+  void cancelSearchDebounce() {
+    _searchDebounce?.cancel();
   }
 
   void setFilter(MovieLibraryFilter filter) {

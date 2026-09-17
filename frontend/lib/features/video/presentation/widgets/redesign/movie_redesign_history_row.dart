@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 
 /// 观看历史行数据：标题、副信息、缩略图与时间文案由调用方组装。
 class MovieRedesignHistoryEntry {
@@ -178,19 +179,10 @@ class _HistoryThumb extends StatelessWidget {
     if (url == null || url.isEmpty) {
       return ColoredBox(color: context.movieRedesign.muted);
     }
-    return Image.network(
-      url,
-      fit: BoxFit.cover,
-      filterQuality: FilterQuality.medium,
-      errorBuilder:
-          (context, error, stackTrace) =>
-              ColoredBox(color: context.movieRedesign.muted),
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return ColoredBox(color: context.movieRedesign.muted);
-      },
+    return MoviePosterImage(
+      imageUrl: url,
+      cacheWidth: MoviePosterImage.decodeWidth(context, 72, cap: 256),
+      fallback: ColoredBox(color: context.movieRedesign.muted),
     );
   }
 }

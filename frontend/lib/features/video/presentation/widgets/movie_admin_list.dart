@@ -637,16 +637,14 @@ class _PosterThumb extends StatelessWidget {
       ),
       child:
           item.posterImageUrl != null
-              ? Image.network(
-                item.posterImageUrl!,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.low,
-                errorBuilder:
-                    (context, error, stackTrace) => Icon(
-                      Icons.movie_rounded,
-                      size: 18,
-                      color: context.movieRedesign.mutedForeground,
-                    ),
+              ? MoviePosterImage(
+                imageUrl: item.posterImageUrl,
+                cacheWidth: MoviePosterImage.decodeWidth(context, 44, cap: 176),
+                fallback: Icon(
+                  Icons.movie_rounded,
+                  size: 18,
+                  color: context.movieRedesign.mutedForeground,
+                ),
               )
               : Icon(
                 Icons.movie_rounded,

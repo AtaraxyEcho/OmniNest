@@ -12,6 +12,7 @@ import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 
 /// 影片详情页：暗色金调整页视图（对应 Movies Module Design/components/Detail.tsx）。
 ///
@@ -375,20 +376,15 @@ class _Backdrop extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (backdropUrl != null && backdropUrl!.isNotEmpty)
-            Image.network(
-              backdropUrl!,
-              fit: BoxFit.cover,
+            MoviePosterImage(
+              imageUrl: backdropUrl,
+              cacheWidth: MoviePosterImage.decodeWidth(
+                context,
+                MediaQuery.sizeOf(context).width,
+                cap: 1600,
+              ),
               alignment: Alignment.topCenter,
-              filterQuality: FilterQuality.medium,
-              errorBuilder:
-                  (context, error, stackTrace) =>
-                      const ColoredBox(color: MovieDetailTheme.surface),
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) {
-                  return child;
-                }
-                return const ColoredBox(color: MovieDetailTheme.surface);
-              },
+              fallback: const ColoredBox(color: MovieDetailTheme.surface),
             )
           else
             const ColoredBox(color: MovieDetailTheme.surface),
@@ -653,20 +649,11 @@ class _CoverImage extends StatelessWidget {
     if (resolved == null || resolved.isEmpty) {
       return const ColoredBox(color: MovieDetailTheme.surface);
     }
-    return Image.network(
-      resolved,
-      fit: BoxFit.cover,
+    return MoviePosterImage(
+      imageUrl: resolved,
+      cacheWidth: MoviePosterImage.decodeWidth(context, 160, cap: 480),
       alignment: Alignment.topCenter,
-      filterQuality: FilterQuality.medium,
-      errorBuilder:
-          (context, error, stackTrace) =>
-              const ColoredBox(color: MovieDetailTheme.surface),
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return const ColoredBox(color: MovieDetailTheme.surface);
-      },
+      fallback: const ColoredBox(color: MovieDetailTheme.surface),
     );
   }
 }
