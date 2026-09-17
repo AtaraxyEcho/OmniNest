@@ -83,7 +83,6 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
 
   // 拖动状态 — 解决进度条跳回起点
   bool _isSeeking = false;
-  double _seekValue = 0;
   // seek 后保留起始位置，防止 _openIfNeeded 重新从头打开
   int _seekStart = 0;
 
