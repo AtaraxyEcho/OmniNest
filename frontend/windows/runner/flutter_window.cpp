@@ -1,4 +1,4 @@
-#include "flutter_window.h"
+﻿#include "flutter_window.h"
 
 #include <flutter/standard_method_codec.h>
 #include <dwmapi.h>
@@ -329,8 +329,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       flutter_controller_->engine()->ReloadSystemFonts();
       break;
     case WM_ERASEBKGND: {
-      // 同步用黑色填充客户区再返回，避免 DefWindowProc 的默认擦除与
-      // Flutter 下一帧之间的白闪/花屏；缩放与最大化过程中更干净。
+      // Fill the client area with black before returning so DefWindowProc
+      // erase does not flash white between frames during resize/maximize.
       auto* hdc = reinterpret_cast<HDC>(wparam);
       RECT client = {};
       if (hdc != nullptr && GetClientRect(hwnd, &client)) {
@@ -340,8 +340,8 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       return 1;
     }
     case WM_GETMINMAXINFO: {
-      // 无边框窗口最大化：把 max 矩形钉在工作区，避免伸入任务栏后
-      // 再被 NCCALCSIZE/MoveWindow 拉回，产生双重布局与卡顿。
+      // Frameless maximized window: pin the max rect to the work area so it
+      // does not grow under the taskbar and get pulled back by NCCALCSIZE.
       if (!window_fullscreen_ && window_frame_hidden_) {
         auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
         MONITORINFO monitor_info = {};
