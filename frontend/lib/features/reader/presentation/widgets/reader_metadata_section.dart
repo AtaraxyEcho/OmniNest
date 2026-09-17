@@ -7,15 +7,17 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
-/// 元数据管理区：标题 + 搜索 + 分页列表。
+/// 元数据管理区：标题 + 搜索 + 限高内滚列表。
 ///
-/// 标题固定在列表上方；列表按 [_pageSize] 客户端分页，支持按书名/作者筛选。
+/// 标题与搜索固定在列表上方；列表在固定高度容器内滚动，
+/// 避免条目过多把页面下方「最近阅读」推得过远。
 class MetadataSection extends StatefulWidget {
   const MetadataSection({required this.items, super.key});
 
   final List<ReaderItem> items;
 
-  static const int _pageSize = 20;
+  /// 列表区最大高度（px）。
+  static const double _listMaxHeight = 560;
 
   @override
   State<MetadataSection> createState() => _MetadataSectionState();
@@ -24,7 +26,6 @@ class MetadataSection extends StatefulWidget {
 class _MetadataSectionState extends State<MetadataSection> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
-  int _visibleCount = MetadataSection._pageSize;
 
   @override
   void dispose() {
@@ -48,8 +49,6 @@ class _MetadataSectionState extends State<MetadataSection> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final filtered = _filtered;
-    final visible = filtered.take(_visibleCount).toList();
-    final hasMore = filtered.length > visible.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -96,12 +95,7 @@ class _MetadataSectionState extends State<MetadataSection> {
         const SizedBox(height: 16),
         TextField(
           controller: _searchController,
-          onChanged: (value) {
-            setState(() {
-              _query = value;
-              _visibleCount = MetadataSection._pageSize;
-            });
-          },
+          onChanged: (value) => setState(() => _query = value),
           style: TextStyle(
             color: context.readerColors.onSurface,
             fontSize: AppTypography.bodyMedium,
@@ -134,10 +128,7 @@ class _MetadataSectionState extends State<MetadataSection> {
                       ),
                       onPressed: () {
                         _searchController.clear();
-                        setState(() {
-                          _query = '';
-                          _visibleCount = MetadataSection._pageSize;
-                        });
+                        setState(() => _query = '');
                       },
                     ),
             filled: true,
@@ -170,37 +161,38 @@ class _MetadataSectionState extends State<MetadataSection> {
         const SizedBox(height: 20),
         if (filtered.isEmpty)
           _buildEmptyState(context)
-        else ...[
-          for (final item in visible) _MetadataRow(item: item),
-          if (hasMore) ...[
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton(
-                onPressed:
-                    () => setState(
-                      () => _visibleCount += MetadataSection._pageSize,
-                    ),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: context.readerColors.onSurfaceVariant,
-                  side: BorderSide(
-                    color: context.readerColors.outlineVariant.withValues(
-                      alpha: 0.5,
-                    ),
+        else
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MetadataSection._listMaxHeight,
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: context.readerColors.outlineVariant.withValues(
+                    alpha: 0.22,
                   ),
-                  padding: EdgeInsets.symmetric(vertical: 12),
                 ),
-                child: Text(
-                  l10n.adminLoadMore(visible.length, filtered.length),
-                  style: TextStyle(
-                    fontSize: AppTypography.bodySmall,
-                    fontWeight: FontWeight.w600,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Scrollbar(
+                  thumbVisibility: true,
+                  child: SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(12, 12, 8, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final item in filtered) _MetadataRow(item: item),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ],
-        ],
+          ),
       ],
     );
   }
