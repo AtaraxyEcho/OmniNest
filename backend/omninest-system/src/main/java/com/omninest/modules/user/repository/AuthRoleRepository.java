@@ -46,10 +46,13 @@ public interface AuthRoleRepository extends JpaRepository<AuthRole, UUID> {
     /**
      * 加载全部角色并初始化权限集合（角色管理页）。
      *
+     * <p>方法名不可被 Spring Data 解析为派生查询，必须显式 {@code @Query}。
+     *
      * @param sort 排序
      * @return 角色列表
      */
     @EntityGraph(attributePaths = "permissions")
+    @Query("select role from AuthRole role")
     List<AuthRole> findAllWithPermissions(Sort sort);
 
     /**
