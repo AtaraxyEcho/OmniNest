@@ -146,17 +146,22 @@ public class Aria2RpcClient implements OfflineDownloadGateway {
                         ? "aria2 RPC 调用失败"
                         : message);
             }
-            JSONObject result = body.getJSONObject("result");
-            if (result == null) {
-                Object rawResult = body.get("result");
-                if (rawResult instanceof String stringResult) {
-                    JSONObject wrapper = new JSONObject();
-                    wrapper.put("result", stringResult);
-                    return wrapper;
-                }
+            Object rawResult = body.get("result");
+            // addUri 等方法返回字符串 GID；tellStatus 等返回对象。不可对字符串调 getJSONObject。
+            if (rawResult instanceof String stringResult) {
+                JSONObject wrapper = new JSONObject();
+                wrapper.put("result", stringResult);
+                return wrapper;
+            }
+            if (rawResult instanceof JSONObject resultObject) {
+                return resultObject;
+            }
+            if (rawResult == null) {
                 throw new IllegalStateException("aria2 RPC 响应缺少结果");
             }
-            return result;
+            JSONObject wrapper = new JSONObject();
+            wrapper.put("result", rawResult);
+            return wrapper;
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("aria2 RPC 调用被中断", exception);

@@ -45,6 +45,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -110,7 +111,7 @@ public class OfflineDownloadExecutionService {
                 .normalize();
         boolean downloadCompleted = false;
         try {
-            Files.createDirectories(taskDirectory);
+            createTaskDirectory(taskDirectory);
             ResolvedSource source = sourceResolver.resolve(task.getSourceUri());
             String gid = submitToAria2(source, taskDirectory);
             updateAria2Gid(task.getId(), gid);
@@ -148,6 +149,27 @@ public class OfflineDownloadExecutionService {
                             return offlineTaskRepository.save(t);
                         })
         );
+    }
+
+    private void createTaskDirectory(Path taskDirectory) throws IOException {
+        Files.createDirectories(taskDirectory);
+        try {
+            // Aria2 容器常以非 root 用户写入同一挂载；目录需对其可写。
+            java.util.Set<java.nio.file.attribute.PosixFilePermission> perms = EnumSet.of(
+                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
+                    java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE,
+                    java.nio.file.attribute.PosixFilePermission.GROUP_READ,
+                    java.nio.file.attribute.PosixFilePermission.GROUP_WRITE,
+                    java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE,
+                    java.nio.file.attribute.PosixFilePermission.OTHERS_READ,
+                    java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE,
+                    java.nio.file.attribute.PosixFilePermission.OTHERS_EXECUTE
+            );
+            Files.setPosixFilePermissions(taskDirectory, perms);
+        } catch (UnsupportedOperationException ignored) {
+            // 非 POSIX 文件系统忽略
+        }
     }
 
     private String submitToAria2(ResolvedSource source, Path taskDirectory) {
