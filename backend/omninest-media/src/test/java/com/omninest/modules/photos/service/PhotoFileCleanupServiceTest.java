@@ -101,7 +101,7 @@ class PhotoFileCleanupServiceTest {
         Mockito.verify(clusterMaintenanceService).onFacesRemoved(OWNER_ID, List.of(removedFace));
         Mockito.verify(albumItemRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
         Mockito.verify(favoriteRepository).deleteByPhotoIdIn(List.of(PHOTO_ID));
-        Mockito.verify(photoSearchIndexService).deletePhoto(PHOTO_ID);
+        Mockito.verify(photoSearchIndexService).deletePhotos(List.of(PHOTO_ID));
         Mockito.verify(readThroughCache).invalidate("omninest:dashboard:photo:" + OWNER_ID);
         Mockito.verify(itemRepository).deleteAllInBatch(List.of(photo));
         Mockito.verify(albumRepository).saveAll(List.of(album));
