@@ -10,10 +10,10 @@ import 'package:omninest/features/photos/presentation/widgets/photo_masonry_layo
 
 const double _masonryColumnGap = 10;
 
-/// 纵向间距相对列宽的固定比例。
+/// Vertical gap as a fixed fraction of column width.
 ///
-/// 分柱结果只依赖照片列表与列数，列宽变化仅做坐标缩放，避免拖拽缩放
-/// 窗口时每像素重算全表贪心布局导致掉帧。
+/// Placement depends only on the photo list and column count so resize
+/// only scales coordinates instead of re-running the greedy layout.
 const double _masonryGapLogical = 0.05;
 
 /// Frame 瀑布流网格：按设计稿 CSS columns 布局。

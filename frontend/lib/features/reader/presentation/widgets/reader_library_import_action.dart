@@ -6,9 +6,9 @@ import 'package:omninest/features/files/media_import_ui.dart'
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 
-/// Reader 书库导入入口：顶栏图标、页头图标与空态主按钮共用同一配置。
+/// Shared Reader library import entry (top bar, header, empty-state CTA).
 ///
-/// 选择文件后进入后台导入队列，不阻塞当前页。
+/// Picked files go to the background import queue and do not block the page.
 class ReaderLibraryImportAction extends ConsumerWidget {
   const ReaderLibraryImportAction({
     this.style = ImportButtonStyle.iconButton,
@@ -18,7 +18,7 @@ class ReaderLibraryImportAction extends ConsumerWidget {
 
   final ImportButtonStyle style;
 
-  /// 按钮文案；不传则使用通用「导入文件」。
+  /// Button label; defaults to the generic "Import files" string.
   final String? label;
 
   @override

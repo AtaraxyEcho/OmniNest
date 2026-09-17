@@ -206,8 +206,8 @@ class AppBackdropVideoSession extends ChangeNotifier {
     _appVisible = visible;
     if (visible) {
       _resumeBaselinePosition = _player?.state.position;
-      // 恢复瞬间不立刻回落海报：宽限期内保持当前纹理，位置未真正推进
-      // 再隐藏，避免「视频→海报→视频」的整段闪烁。
+      // Keep the current texture through a short grace period on resume;
+      // fall back to the poster only if position never advances.
       _resumeCurrentPlayerIfNeeded();
       _scheduleResumeGrace();
       _scheduleResumeRecovery();
@@ -216,12 +216,12 @@ class AppBackdropVideoSession extends ChangeNotifier {
       _resumeRecoveryTimer?.cancel();
       _resumeRecoveryTimer = null;
       _resumeBaselinePosition = null;
-      // 后台不可见，用户看不到画面；保留 renderable 标记，恢复时再探测。
+      // Not visible while backgrounded; keep renderable and probe on resume.
       _pauseCurrentPlayer();
     }
   }
 
-  /// 恢复宽限期：超时后按播放位置是否相对基点推进，决定保持纹理或回落海报。
+  /// Resume grace: keep texture or fall back to poster based on position.
   void _scheduleResumeGrace() {
     _resumeGraceTimer?.cancel();
     _resumeGraceTimer = Timer(const Duration(milliseconds: 320), () {
@@ -229,7 +229,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
         return;
       }
       if (!_layoutUsable || !_sceneActive) {
-        // 场景未挂载或无布局：没有有效播放器时保证回落海报。
+        // No scene/layout: guarantee poster when there is no live player.
         if (_player == null && _renderable) {
           _renderable = false;
           _notifySafely();
@@ -238,7 +238,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
       }
       final baseline = _resumeBaselinePosition;
       final current = _player?.state.position;
-      // 无播放器或无基线时无法判定推进：保持现状，交给 position 流或强制重开。
+      // No player or baseline: leave state to the position stream or reopen.
       final advanced =
           baseline != null &&
           current != null &&

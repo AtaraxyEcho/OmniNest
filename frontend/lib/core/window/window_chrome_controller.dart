@@ -284,15 +284,15 @@ class WindowChromeController extends Notifier<WindowChromeState> {
         return;
       }
     }
-    // 全屏或隐藏 chrome 期间禁止变更窗口样式：window_manager 的 setResizable
-    // 直接写入 WS_THICKFRAME 且无 FRAMECHANGED 修正，中途执行会导致客户区内缩
-    // 露出白边；一次性恢复推迟到回到窗口态后执行。
+    // window_manager setResizable writes WS_THICKFRAME without FRAMECHANGED;
+    // applying it mid-fullscreen insets the client and exposes white edges.
+    // Restore resizable once after returning to windowed chrome.
     if (!target.chromeHidden) {
       await _applyResizableOnce();
     }
   }
 
-  /// Windows：单次原子通道切换边框/全屏，避免多次 FRAMECHANGED 造成黑屏卡顿。
+  /// Windows: single atomic channel call for border/fullscreen chrome.
   Future<void> _applyWindowsChrome(
     WindowChromeState target,
     int revision,
@@ -316,7 +316,8 @@ class WindowChromeController extends Notifier<WindowChromeState> {
     if (revision != _desiredRevision) {
       return;
     }
-    // 全屏几何自检；窗口态无需强制 settle，原生已在同一次调用内 ForceRedraw。
+    // Fullscreen geometry check only; windowed chrome needs no settle sleep
+    // because the native call already ForceRedraws.
     if (target.isFullscreen) {
       await _verifyNativeWindowFrame();
       if (revision != _desiredRevision) {

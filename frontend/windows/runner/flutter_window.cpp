@@ -209,8 +209,9 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
   }
   CaptureNormalStylesIfNecessary();
 
-  // 全屏沉浸：一次写样式 + 一次贴显示器，不再拆成 frameHidden/fullscreen
-  // 两段，避免中间态 caption 回写与双 SetWindowPos。
+  // Immersive fullscreen: one style write and one monitor snap. Do not split
+  // into frameHidden/fullscreen steps, which rewrites caption mid-transition
+  // and double-fires SetWindowPos.
   if (hidden && fullscreen) {
     if (!window_placement_saved_) {
       SaveWindowPlacement();
@@ -242,7 +243,7 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
     return;
   }
 
-  // 窗口态（普通边框或无边框非全屏）。
+  // Windowed chrome (normal frame or frameless non-fullscreen).
   window_fullscreen_ = false;
   window_frame_hidden_ = hidden;
   if (hidden) {

@@ -454,9 +454,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _scheduleIdleHide();
   }
 
-  /// 点击画面切换控件显隐：已显示则立即隐藏，已隐藏则显示并恢复空闲倒计时。
+  /// Toggle chrome on canvas tap: hide when shown, show + resume idle timer when hidden.
   ///
-  /// 暂停时同样允许手动隐藏，便于沉浸观片；再次点击即可唤回。
+  /// Allowed while paused so the user can stay immersive; tap again to restore.
   void _toggleControls() {
     if (!mounted) return;
     _idleTimer?.cancel();

@@ -57,8 +57,8 @@ class AppBackdropSceneController extends Notifier<AppBackdropSceneState> {
     _resolve();
   }
 
-  /// 清空策略时延迟到当前同步/微任务批之后再落到 hidden，给同帧新路由的
-  /// request 留出注册窗口，避免导航切换出现「壁纸隐藏再显示」的整段闪烁。
+  /// Defer empty policy to hidden until after the current microtask batch so
+  /// a same-frame route request can register without a hide/show flash.
   void _scheduleEmptyGrace() {
     final token = ++_emptyGraceToken;
     scheduleMicrotask(() {

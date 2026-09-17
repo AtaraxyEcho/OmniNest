@@ -5,7 +5,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 
-/// 幻灯片顶栏图标按钮：透明底、紧凑密度、跟随控制显隐。
+/// Slideshow top-bar icon button: transparent, compact density.
 class SlideshowIconButton extends StatelessWidget {
   const SlideshowIconButton({
     required this.tooltip,
@@ -36,9 +36,10 @@ class SlideshowIconButton extends StatelessWidget {
   }
 }
 
-/// 幻灯片顶部栏：左关闭+标题、中页码、右操作组。
+/// Slideshow top bar: left close/title, center counter, right actions.
 ///
-/// 三区用 Stack 对齐，避免 Flexible/Spacer 均分剩余宽度导致桌面端挤成一团。
+/// Uses a Stack so Flexible/Spacer do not split free width and crowd
+/// desktop controls together.
 class PhotoSlideshowTopBar extends StatelessWidget {
   const PhotoSlideshowTopBar({
     required this.photo,
@@ -221,10 +222,10 @@ class PhotoSlideshowTopBar extends StatelessWidget {
   }
 }
 
-/// 前景幻灯片单层：直接绘制解码位图（RawImage）。
+/// Foreground slideshow layer: draws a decoded bitmap via RawImage.
 ///
-/// 无状态、无网络——位图引用由页面持有并跨切换稳定，
-/// 层本身只根据调用方给定的 opacity/scale 绘制（合成级操作）。
+/// Stateless and offline; the page owns the image and keeps it stable
+/// across transitions. This layer only applies the given opacity/scale.
 class SlideshowSlideLayer extends StatelessWidget {
   const SlideshowSlideLayer({
     required this.image,
@@ -244,7 +245,7 @@ class SlideshowSlideLayer extends StatelessWidget {
             ? RawImage(
               image: image,
               fit: BoxFit.contain,
-              // 主图 high：缩放动画期间最高采样质量；缩略图/backdrop 仍为 medium。
+              // High quality for the main image during zoom; thumbs/backdrop stay medium.
               filterQuality: FilterQuality.high,
             )
             : const ColoredBox(color: Colors.black);

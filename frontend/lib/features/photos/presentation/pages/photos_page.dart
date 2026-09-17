@@ -84,8 +84,8 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
   Widget build(BuildContext context) {
     final hosted = MobileShellScope.isHosted(context);
     final stateAsync = ref.watch(photoCenterControllerProvider);
-    // 断点由宽度派生为布尔值；子树只在跨断点时切换形态，
-    // 逐像素缩放由内容区自行响应约束，避免整页 LayoutBuilder 回调膨胀。
+    // Derive breakpoint booleans from width; the tree only switches form
+    // across breakpoints, while content responds to constraints itself.
     final width = MediaQuery.sizeOf(context).width;
     final isWide = !hosted && !ResponsiveBreakpoints.isCompact(width);
     final sidebarCollapsed = width < 1024;

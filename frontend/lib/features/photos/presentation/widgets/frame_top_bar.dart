@@ -44,7 +44,7 @@ class FrameTopBar extends ConsumerWidget {
   /// 显示返回 Portal 入口；应用壳托管的移动端由壳层导航承担。
   final bool showBack;
 
-  /// 多选模式隐藏导入，避免与批量操作抢焦点（与 File 的 FAB 策略一致）。
+  /// Hide import during multi-select so it does not compete with batch actions.
   final bool showImport;
 
   static const double height = 56;
@@ -200,9 +200,9 @@ class _FrameIconButtonState extends State<FrameIconButton> {
   }
 }
 
-/// 照片导入入口：顶栏图标与托管态页签行尾部共用，沿用图库导入完成回调。
+/// Photo import entry: shared by top bar and hosted tab strip.
 ///
-/// 紧凑档提供 44px 触控目标；保持图标入口而非 FAB（浏览优先，单动作导入）。
+/// Compact uses a 44px hit target; stays an icon button (browse-first).
 class FrameImportAction extends ConsumerWidget {
   const FrameImportAction({super.key});
 
