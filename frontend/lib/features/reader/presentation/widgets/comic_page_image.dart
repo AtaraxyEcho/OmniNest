@@ -6,6 +6,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/application/reader_comic_image_provider.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 /// 漫画图片在阅读器中的布局类型。
 enum ComicPageImageLayout { paged, continuous }
@@ -80,7 +81,7 @@ class _ComicPageImageState extends ConsumerState<ComicPageImage> {
     } catch (error) {
       if (mounted && generation == _loadGeneration) {
         setState(() {
-          _error = error.toString();
+          _error = describeUserFacingError(error).message;
           _loading = false;
         });
       }

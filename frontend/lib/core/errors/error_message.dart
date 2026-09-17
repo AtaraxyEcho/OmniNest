@@ -50,7 +50,7 @@ UserFacingError _describeAppException(
   final message =
       l10n != null
           ? l10n.messageForErrorCode(error.code, fallback: error.message)
-          : error.code;
+          : (error.message.isNotEmpty ? error.message : error.code);
   return UserFacingError(
     title: l10n?.errorOperationFailed ?? AppErrorCodes.operationFailed,
     message: message,

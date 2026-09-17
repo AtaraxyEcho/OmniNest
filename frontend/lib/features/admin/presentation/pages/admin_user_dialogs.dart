@@ -120,7 +120,12 @@ class _BatchQuotaDialogState extends ConsumerState<_BatchQuotaDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage = error.toString());
+        setState(
+          () => _errorMessage = describeUserFacingError(
+            error,
+            l10n: l10n,
+          ).message,
+        );
       }
     } finally {
       if (mounted) {
@@ -253,7 +258,12 @@ class _EditQuotaDialogState extends ConsumerState<_EditQuotaDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage = error.toString());
+        setState(
+          () => _errorMessage = describeUserFacingError(
+            error,
+            l10n: l10n,
+          ).message,
+        );
       }
     } finally {
       if (mounted) {
@@ -359,7 +369,12 @@ class _EditUserRolesDialogState extends ConsumerState<_EditUserRolesDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage = error.toString());
+        setState(
+          () => _errorMessage = describeUserFacingError(
+            error,
+            l10n: l10n,
+          ).message,
+        );
       }
     } finally {
       if (mounted) {
@@ -513,6 +528,7 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _submitting = true;
       _errorMessage = null;
@@ -534,7 +550,12 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage = error.toString());
+        setState(
+          () => _errorMessage = describeUserFacingError(
+            error,
+            l10n: l10n,
+          ).message,
+        );
       }
     } finally {
       if (mounted) {

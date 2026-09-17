@@ -74,7 +74,7 @@ class AdminExternalStoragePage extends ConsumerWidget {
                 final apps = ref.watch(adminConnectorOAuthAppsProvider);
                 return apps.when(
                   loading: () => const _EmptyText('…'),
-                  error: (error, _) => _EmptyText(error.toString()),
+                  error: (error, _) => _EmptyText(describeUserFacingError(error, l10n: l10n).message),
                   data:
                       (items) =>
                           items.isEmpty

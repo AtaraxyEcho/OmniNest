@@ -16,6 +16,7 @@ import 'package:omninest/features/admin/presentation/pages/admin_operations_page
 import 'package:omninest/features/admin/presentation/pages/admin_overview_page.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_users_page.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_shell.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 class AdminDashboardPage extends ConsumerWidget {
   const AdminDashboardPage({required this.section, super.key});
@@ -109,7 +110,7 @@ class _SummaryStateBuilder extends ConsumerWidget {
       data: builder,
       error:
           (error, stackTrace) => AppErrorView(
-            message: error.toString(),
+            message: describeUserFacingError(error).message,
             onRetry: () => ref.invalidate(adminConsoleControllerProvider),
           ),
       loading: () => const AppLoading(),
@@ -129,7 +130,7 @@ class _UserStateBuilder extends ConsumerWidget {
       data: builder,
       error:
           (error, stackTrace) => AppErrorView(
-            message: error.toString(),
+            message: describeUserFacingError(error).message,
             onRetry: () => ref.invalidate(adminUserControllerProvider),
           ),
       loading: () => const AppLoading(),
@@ -154,7 +155,7 @@ class _AsyncStateBuilder<T> extends StatelessWidget {
       data: builder,
       error:
           (error, stackTrace) =>
-              AppErrorView(message: error.toString(), onRetry: onRetry),
+              AppErrorView(message: describeUserFacingError(error).message, onRetry: onRetry),
       loading: () => const AppLoading(),
     );
   }

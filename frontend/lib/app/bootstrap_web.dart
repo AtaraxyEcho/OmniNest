@@ -2,6 +2,7 @@ import 'dart:developer';
 import 'dart:js_interop';
 
 import 'package:web/web.dart' as web;
+import 'package:omninest/core/errors/error_message.dart';
 
 /// JavaScript 层面抑制 CanvasKit engine 断言错误
 void suppressCanvasKitErrors() {
@@ -37,7 +38,7 @@ Future<void> waitForFonts() async {
 
 /// 判断是否为 Flutter Web engine 层的运行时噪音（无需处理）
 bool isEngineNoise(Object error) {
-  final message = error.toString();
+  final message = describeUserFacingError(error).message;
   if (message.contains('Non-error') && message.contains('null')) return true;
   if (message.contains('LateInitializationError') &&
       message.contains('_handledContextLostEvent')) {

@@ -11,6 +11,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 class MusicMetadataEditPage extends ConsumerWidget {
   const MusicMetadataEditPage({required this.trackId, super.key});
@@ -186,7 +187,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     } catch (error) {
       if (mounted) {
         _showMessage(
-          AppLocalizations.of(context).musicSaveFailed(error.toString()),
+          AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
         );
       }
     } finally {
@@ -290,7 +291,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     } on Object catch (error) {
       if (mounted) {
         _showMessage(
-          AppLocalizations.of(context).musicSaveFailed(error.toString()),
+          AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
         );
       }
     } finally {
@@ -320,7 +321,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
       }
       setState(() => _scrapeCandidates = const <MusicScrapeCandidate>[]);
       _showMessage(
-        AppLocalizations.of(context).musicSaveFailed(error.toString()),
+        AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
       );
     } finally {
       if (mounted && generation == _scrapeGeneration) {
@@ -356,7 +357,7 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     } on Object catch (error) {
       if (mounted) {
         _showMessage(
-          AppLocalizations.of(context).musicSaveFailed(error.toString()),
+          AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
         );
       }
     } finally {

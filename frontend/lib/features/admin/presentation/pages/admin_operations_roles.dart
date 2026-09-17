@@ -206,7 +206,7 @@ class _RolePermissionDialogState extends ConsumerState<_RolePermissionDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = describeUserFacingError(error).message);
       }
     } finally {
       if (mounted) {

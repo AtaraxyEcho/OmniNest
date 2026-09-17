@@ -20,6 +20,7 @@ import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_book_cover.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 /// 阅读条目详情页：Hero（封面/进度/阅读动作）+ 简介/章节/批注/书签页签。
 ///
@@ -128,7 +129,7 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
         },
         error:
             (error, stackTrace) => AppErrorView(
-              message: error.toString(),
+              message: describeUserFacingError(error).message,
               onRetry:
                   () => ref.invalidate(readerItemDetailProvider(widget.itemId)),
             ),

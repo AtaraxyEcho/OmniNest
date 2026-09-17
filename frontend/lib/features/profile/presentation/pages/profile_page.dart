@@ -32,6 +32,7 @@ import 'package:omninest/features/profile/presentation/widgets/profile_two_facto
 import 'package:omninest/features/profile/presentation/widgets/profile_support_panels.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 class ProfilePage extends ConsumerStatefulWidget {
   const ProfilePage({this.initialSection, super.key});
@@ -122,7 +123,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       }
       ref.invalidate(realtimeWeatherProvider);
     } catch (error) {
-      _showMessage(l10n.profileWeatherCitySaveFailed(error.toString()));
+      _showMessage(l10n.profileWeatherCitySaveFailed(describeUserFacingError(error, l10n: l10n).message));
     }
   }
 
@@ -362,7 +363,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               children: [
                 const Icon(Icons.error_outline_rounded),
                 const SizedBox(width: 12),
-                Expanded(child: Text(l10n.profileLoadFailed(error.toString()))),
+                Expanded(child: Text(l10n.profileLoadFailed(describeUserFacingError(error, l10n: l10n).message))),
                 IconButton(
                   onPressed:
                       () => ref.invalidate(notificationPreferencesProvider),

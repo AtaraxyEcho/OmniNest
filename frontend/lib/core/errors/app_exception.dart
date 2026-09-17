@@ -10,5 +10,5 @@ class AppException implements Exception {
   final Map<String, Object?> details;
 
   @override
-  String toString() => 'AppException($code, $message)';
+  String toString() => message;
 }

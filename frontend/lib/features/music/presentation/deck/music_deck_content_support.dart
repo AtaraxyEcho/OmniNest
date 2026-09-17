@@ -489,7 +489,7 @@ Future<void> _showCreatePlaylistDialog(
     if (context.mounted) {
       _showPlaylistMessage(
         context,
-        AppLocalizations.of(context).musicPlaylistSaveFailed(error.toString()),
+        AppLocalizations.of(context).musicPlaylistSaveFailed(describeUserFacingError(error).message),
       );
     }
   }
@@ -527,7 +527,7 @@ Future<void> _showEditPlaylistDialog(
     if (context.mounted) {
       _showPlaylistMessage(
         context,
-        AppLocalizations.of(context).musicPlaylistSaveFailed(error.toString()),
+        AppLocalizations.of(context).musicPlaylistSaveFailed(describeUserFacingError(error).message),
       );
     }
   }
@@ -575,7 +575,7 @@ Future<void> _confirmDeletePlaylist(
         context,
         AppLocalizations.of(
           context,
-        ).musicPlaylistDeleteFailed(error.toString()),
+        ).musicPlaylistDeleteFailed(describeUserFacingError(error).message),
       );
     }
   }

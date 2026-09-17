@@ -15,6 +15,7 @@ import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.d
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/platform/android/reader_volume_key_service.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 /// PDF 阅读页：经 file-ticket 拉取字节后由 pdfrx 渲染。
 ///
@@ -157,7 +158,7 @@ class _PdfReaderPageState extends ConsumerState<PdfReaderPage> {
         return;
       }
       setState(() {
-        _error = error.toString();
+        _error = describeUserFacingError(error).message;
         _loading = false;
       });
     }

@@ -6,6 +6,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 final profileTwoFactorStatusProvider =
     FutureProvider.autoDispose<TwoFactorStatusData>(
@@ -308,7 +309,7 @@ class _TwoFactorEnableDialogState
       await action();
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = describeUserFacingError(error).message);
       }
     } finally {
       if (mounted) {
@@ -421,7 +422,7 @@ class _TwoFactorDisableDialogState
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = describeUserFacingError(error).message);
       }
     } finally {
       if (mounted) {

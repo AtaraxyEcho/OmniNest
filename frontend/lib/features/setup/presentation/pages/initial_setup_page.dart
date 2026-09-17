@@ -16,6 +16,7 @@ import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 class InitialSetupPage extends ConsumerStatefulWidget {
   const InitialSetupPage({super.key});
@@ -103,7 +104,7 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _errorMessage = error.toString());
+      setState(() => _errorMessage = describeUserFacingError(error).message);
     } finally {
       if (mounted) setState(() => _totpLoading = false);
     }

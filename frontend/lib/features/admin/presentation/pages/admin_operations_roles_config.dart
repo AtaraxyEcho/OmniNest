@@ -531,7 +531,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = describeUserFacingError(error, l10n: l10n).message);
       }
     } finally {
       if (mounted) {
@@ -593,7 +593,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = describeUserFacingError(error, l10n: l10n).message);
       }
     } finally {
       if (mounted) {

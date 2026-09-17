@@ -14,6 +14,7 @@ import 'package:omninest/features/video/presentation/widgets/redesign/movie_rede
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_section_header.dart';
 
 import 'movie_feedback.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 class CollectionsSection extends ConsumerWidget {
   const CollectionsSection({
@@ -416,7 +417,9 @@ class _MoviePickerDialogState extends ConsumerState<_MoviePickerDialog> {
                       child: Text(
                         AppLocalizations.of(
                           context,
-                        ).videoLoadFailedWith(snapshot.error.toString()),
+                        ).videoLoadFailedWith(
+                          describeUserFacingError(snapshot.error!).message,
+                        ),
                       ),
                     );
                   }

@@ -10,6 +10,7 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/widgets/music_glass_panel.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 /// 平台登录底部弹出面板
 ///
@@ -149,7 +150,7 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            AppLocalizations.of(context).musicSaveFailed(error.toString()),
+            AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
           ),
         ),
       );

@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 class ProfileSecurityActionsPanel extends StatelessWidget {
   const ProfileSecurityActionsPanel({
@@ -61,7 +62,7 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
       }
     } on Object catch (error) {
       if (mounted) {
-        setState(() => _error = error.toString());
+        setState(() => _error = describeUserFacingError(error).message);
       }
     } finally {
       if (mounted) {

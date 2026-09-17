@@ -6,6 +6,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:omninest/core/errors/error_message.dart';
 
 /// 登录页两步验证面板：已启用用户输入验证码/备份码，强制角色未注册走注册引导向导。
 class LoginTwoFactorPanel extends ConsumerStatefulWidget {
@@ -421,7 +422,7 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _errorMessage = error.toString());
+        setState(() => _errorMessage = describeUserFacingError(error).message);
       }
     } finally {
       if (mounted) {
