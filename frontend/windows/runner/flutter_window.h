@@ -27,9 +27,14 @@ class FlutterWindow : public Win32Window {
  private:
   void SetWindowFrameHidden(bool hidden);
   void SetWindowFullscreen(bool fullscreen);
+  /// 原子切换边框隐藏与全屏：一次写样式、一次 SetWindowPos，避免多次
+  /// FRAMECHANGED/WM_SIZE 导致长黑屏与输入卡顿。
+  void ApplyWindowChrome(bool hidden, bool fullscreen);
+  void CaptureNormalStylesIfNecessary();
   void SaveWindowPlacement();
   void RestoreWindowPlacement();
   bool VerifyWindowFrame();
+  void ForceFlutterRedraw();
 
   // The project to run.
   flutter::DartProject project_;

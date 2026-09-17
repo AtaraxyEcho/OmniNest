@@ -1,4 +1,4 @@
-﻿#include "flutter_window.h"
+#include "flutter_window.h"
 
 #include <flutter/standard_method_codec.h>
 #include <dwmapi.h>
@@ -11,6 +11,7 @@ namespace {
 constexpr const char kWindowFrameChannel[] = "omninest/window_frame";
 constexpr const char kSetFrameHiddenMethod[] = "setFrameHidden";
 constexpr const char kSetWindowFullscreenMethod[] = "setWindowFullscreen";
+constexpr const char kApplyWindowChromeMethod[] = "applyWindowChrome";
 constexpr const char kSaveWindowPlacementMethod[] = "saveWindowPlacement";
 constexpr const char kRestoreWindowPlacementMethod[] = "restoreWindowPlacement";
 constexpr const char kVerifyWindowFrameMethod[] = "verifyWindowFrame";
@@ -50,6 +51,33 @@ bool FlutterWindow::OnCreate() {
       [this](const flutter::MethodCall<flutter::EncodableValue>& call,
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
                  result) {
+        if (call.method_name() == kApplyWindowChromeMethod) {
+          const auto* arguments =
+              std::get_if<flutter::EncodableMap>(call.arguments());
+          if (arguments == nullptr) {
+            result->Error("bad_args", "chrome arguments are required");
+            return;
+          }
+          const auto hidden_entry =
+              arguments->find(flutter::EncodableValue(kHiddenArgument));
+          const auto fullscreen_entry =
+              arguments->find(flutter::EncodableValue(kFullscreenArgument));
+          if (hidden_entry == arguments->end() ||
+              fullscreen_entry == arguments->end()) {
+            result->Error("bad_args", "hidden and fullscreen are required");
+            return;
+          }
+          const auto* hidden = std::get_if<bool>(&hidden_entry->second);
+          const auto* fullscreen =
+              std::get_if<bool>(&fullscreen_entry->second);
+          if (hidden == nullptr || fullscreen == nullptr) {
+            result->Error("bad_args", "hidden and fullscreen must be bool");
+            return;
+          }
+          ApplyWindowChrome(*hidden, *fullscreen);
+          result->Success(flutter::EncodableValue(true));
+          return;
+        }
         if (call.method_name() != kSetFrameHiddenMethod) {
           if (call.method_name() == kShowWindowMethod) {
             // ShowWindowAsync may be silently dropped for a window created
@@ -152,43 +180,38 @@ void FlutterWindow::OnDestroy() {
   Win32Window::OnDestroy();
 }
 
-void FlutterWindow::SetWindowFrameHidden(bool hidden) {
+void FlutterWindow::CaptureNormalStylesIfNecessary() {
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr || normal_window_style_captured_) {
+    return;
+  }
+  normal_window_style_ = GetWindowLongPtr(hwnd, GWL_STYLE);
+  normal_window_ex_style_ = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+  normal_window_style_captured_ = true;
+}
+
+void FlutterWindow::ForceFlutterRedraw() {
+  if (flutter_controller_) {
+    flutter_controller_->ForceRedraw();
+    if (flutter_controller_->view()) {
+      HWND child = flutter_controller_->view()->GetNativeWindow();
+      if (child != nullptr) {
+        ::SetFocus(child);
+      }
+    }
+  }
+}
+
+void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
   HWND hwnd = GetHandle();
   if (hwnd == nullptr) {
     return;
   }
-  if (!normal_window_style_captured_) {
-    normal_window_style_ = GetWindowLongPtr(hwnd, GWL_STYLE);
-    normal_window_ex_style_ = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-    normal_window_style_captured_ = true;
-  }
+  CaptureNormalStylesIfNecessary();
 
-  LONG_PTR style = normal_window_style_;
-  LONG_PTR ex_style = normal_window_ex_style_;
-  if (hidden) {
-    style &= ~(WS_CAPTION | WS_THICKFRAME);
-    ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
-  }
-
-  SetWindowLongPtr(hwnd, GWL_STYLE, style);
-  SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
-  SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
-                   SWP_NOACTIVATE | SWP_FRAMECHANGED);
-  window_frame_hidden_ = hidden;
-}
-
-void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
-  HWND hwnd = GetHandle();
-  if (hwnd == nullptr || window_fullscreen_ == fullscreen) {
-    return;
-  }
-  if (!normal_window_style_captured_) {
-    normal_window_style_ = GetWindowLongPtr(hwnd, GWL_STYLE);
-    normal_window_ex_style_ = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-    normal_window_style_captured_ = true;
-  }
-  if (fullscreen) {
+  // 全屏沉浸：一次写样式 + 一次贴显示器，不再拆成 frameHidden/fullscreen
+  // 两段，避免中间态 caption 回写与双 SetWindowPos。
+  if (hidden && fullscreen) {
     if (!window_placement_saved_) {
       SaveWindowPlacement();
     }
@@ -204,39 +227,51 @@ void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
     style |= WS_POPUP;
     ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE |
                   WS_EX_WINDOWEDGE);
-    // Flag fullscreen before touching styles so the WM_NCCALCSIZE handler
-    // pins client == window rect for this transition and for any style
-    // mutation later plugins perform while fullscreen (e.g. a bare
-    // WS_THICKFRAME write re-adding the resize border would otherwise inset
-    // the client area and expose white edges).
+    // Flag before style writes so WM_NCCALCSIZE pins client == window.
     window_fullscreen_ = true;
     window_frame_hidden_ = true;
     SetWindowLongPtr(hwnd, GWL_STYLE, style);
     SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
-    // Zero the DWM frame margins before snapping to the monitor rect so no
-    // white edges show up during the transition.
     MARGINS margins = {0, 0, 0, 0};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
-    const RECT monitor = monitor_info.rcMonitor;
+    const RECT& monitor = monitor_info.rcMonitor;
     SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
                  monitor.right - monitor.left, monitor.bottom - monitor.top,
                  SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
-    // Snap again to absorb the 1px offset caused by DPI or frame changes.
-    SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
-                 monitor.right - monitor.left, monitor.bottom - monitor.top,
-                 SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    ForceFlutterRedraw();
     return;
   }
-  // Clear the fullscreen flag before restoring windowed styles so the
-  // default WM_NCCALCSIZE applies the caption/frame insets from here on.
+
+  // 窗口态（普通边框或无边框非全屏）。
   window_fullscreen_ = false;
-  window_frame_hidden_ = false;
-  SetWindowLongPtr(hwnd, GWL_STYLE, normal_window_style_);
-  SetWindowLongPtr(hwnd, GWL_EXSTYLE, normal_window_ex_style_);
-  RestoreWindowPlacement();
-  SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
-                   SWP_NOACTIVATE | SWP_FRAMECHANGED);
+  window_frame_hidden_ = hidden;
+  if (hidden) {
+    LONG_PTR style = normal_window_style_;
+    style &= ~(WS_CAPTION | WS_THICKFRAME);
+    LONG_PTR ex_style = normal_window_ex_style_;
+    ex_style &= ~(WS_EX_DLGMODALFRAME | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+    SetWindowLongPtr(hwnd, GWL_STYLE, style);
+    SetWindowLongPtr(hwnd, GWL_EXSTYLE, ex_style);
+  } else {
+    SetWindowLongPtr(hwnd, GWL_STYLE, normal_window_style_);
+    SetWindowLongPtr(hwnd, GWL_EXSTYLE, normal_window_ex_style_);
+  }
+  if (!hidden && window_placement_saved_) {
+    RestoreWindowPlacement();
+  } else {
+    SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
+                     SWP_NOACTIVATE | SWP_FRAMECHANGED);
+  }
+  ForceFlutterRedraw();
+}
+
+void FlutterWindow::SetWindowFrameHidden(bool hidden) {
+  ApplyWindowChrome(hidden, window_fullscreen_);
+}
+
+void FlutterWindow::SetWindowFullscreen(bool fullscreen) {
+  ApplyWindowChrome(window_frame_hidden_ || fullscreen, fullscreen);
 }
 
 bool FlutterWindow::VerifyWindowFrame() {

@@ -95,19 +95,19 @@ void main() {
       debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       addTearDown(() => debugDefaultTargetPlatformOverride = null);
       const channel = MethodChannel('omninest/window_frame');
-      final fullscreenEntered = Completer<void>();
-      final allowFullscreenEnter = Completer<void>();
+      final chromeEntered = Completer<void>();
+      final allowChromeEnter = Completer<void>();
       final calls = <String>[];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-            if (call.method == 'setWindowFullscreen') {
-              final fullscreen =
-                  (call.arguments as Map<Object?, Object?>)['fullscreen']
-                      as bool;
-              calls.add('fullscreen:$fullscreen');
-              if (fullscreen) {
-                fullscreenEntered.complete();
-                await allowFullscreenEnter.future;
+            if (call.method == 'applyWindowChrome') {
+              final args = call.arguments as Map<Object?, Object?>;
+              final hidden = args['hidden'] as bool;
+              final fullscreen = args['fullscreen'] as bool;
+              calls.add('chrome:$hidden:$fullscreen');
+              if (hidden && fullscreen) {
+                chromeEntered.complete();
+                await allowChromeEnter.future;
               }
             } else {
               calls.add(call.method);
@@ -125,17 +125,15 @@ void main() {
       );
 
       final lease = controller.acquireImmersive(owner: 'reader');
-      await fullscreenEntered.future;
+      await chromeEntered.future;
       lease.release();
       await Future<void>.delayed(Duration.zero);
-      allowFullscreenEnter.complete();
+      allowChromeEnter.complete();
       await controller.pendingApply;
 
-      expect(
-        calls.where((call) => call.startsWith('fullscreen:')).last,
-        'fullscreen:false',
-      );
-      expect(calls, contains('restoreWindowPlacement'));
+      expect(calls.last, 'chrome:false:false');
+      // 退出窗口态由原生 applyWindowChrome 内部恢复 placement，Dart 不再二次下发。
+      expect(calls, isNot(contains('restoreWindowPlacement')));
       expect(
         container.read(windowChromeControllerProvider).chromeHidden,
         isFalse,
@@ -180,7 +178,8 @@ void main() {
       await controller.pendingApply;
       // 全屏应用期间禁止写入窗口样式，否则客户区内缩露出白边。
       expect(resizableCalls, isEmpty);
-      // Windows 侧 settle 后必须执行一次原生几何断言。
+      // Windows 走原子 applyWindowChrome，全屏后做一次几何断言。
+      expect(frameCalls, contains('applyWindowChrome'));
       expect(frameCalls, contains('verifyWindowFrame'));
 
       lease.release();

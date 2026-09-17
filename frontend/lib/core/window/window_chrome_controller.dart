@@ -265,6 +265,11 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       _placementSavePending = false;
     }
 
+    if (defaultTargetPlatform == TargetPlatform.windows) {
+      await _applyWindowsChrome(target, revision);
+      return;
+    }
+
     if (target.chromeHidden) {
       await _applyHiddenChrome(revision, target.isFullscreen);
     } else {
@@ -282,6 +287,42 @@ class WindowChromeController extends Notifier<WindowChromeState> {
     // 全屏或隐藏 chrome 期间禁止变更窗口样式：window_manager 的 setResizable
     // 直接写入 WS_THICKFRAME 且无 FRAMECHANGED 修正，中途执行会导致客户区内缩
     // 露出白边；一次性恢复推迟到回到窗口态后执行。
+    if (!target.chromeHidden) {
+      await _applyResizableOnce();
+    }
+  }
+
+  /// Windows：单次原子通道切换边框/全屏，避免多次 FRAMECHANGED 造成黑屏卡顿。
+  Future<void> _applyWindowsChrome(
+    WindowChromeState target,
+    int revision,
+  ) async {
+    try {
+      await _windowFrameChannel.invokeMethod<void>(
+        'applyWindowChrome',
+        <String, dynamic>{
+          'hidden': target.chromeHidden,
+          'fullscreen': target.isFullscreen,
+        },
+      );
+      _appliedChromeHidden = target.chromeHidden;
+      _appliedFullscreen = target.isFullscreen;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Window chrome apply failed: $error');
+      }
+      return;
+    }
+    if (revision != _desiredRevision) {
+      return;
+    }
+    // 全屏几何自检；窗口态无需强制 settle，原生已在同一次调用内 ForceRedraw。
+    if (target.isFullscreen) {
+      await _verifyNativeWindowFrame();
+      if (revision != _desiredRevision) {
+        return;
+      }
+    }
     if (!target.chromeHidden) {
       await _applyResizableOnce();
     }
