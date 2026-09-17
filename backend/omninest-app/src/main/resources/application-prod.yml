@@ -87,7 +87,7 @@ omninest:
     rpc-secret: ${OMNINEST_ARIA2_RPC_SECRET:omninest}
     download-root: ${OMNINEST_ARIA2_DOWNLOAD_ROOT:${user.home}/.omninest/aria2}
   clamav:
-    enabled: ${OMNINEST_CLAMAV_ENABLED:true}
+    enabled: ${OMNINEST_CLAMAV_ENABLED:false}
     host: ${OMNINEST_CLAMAV_HOST:localhost}
     port: ${OMNINEST_CLAMAV_PORT:3310}
   rclone:
@@ -105,3 +105,4 @@ omninest:
     secret-key: ${OMNINEST_MINIO_SECRET_KEY:minioadmin}
   search:
     index-path: ${OMNINEST_SEARCH_INDEX_PATH:${user.home}/.omninest/lucene-index}
+    photo-index-path: ${OMNINEST_SEARCH_PHOTO_INDEX_PATH:${user.home}/.omninest/lucene-photo-index}

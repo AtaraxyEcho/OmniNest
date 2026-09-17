@@ -154,7 +154,8 @@ class ApplicationEnvironmentContractTest {
                 "omninest.minio.docker-endpoint",
                 "omninest.minio.access-key",
                 "omninest.minio.secret-key",
-                "omninest.search.index-path"
+                "omninest.search.index-path",
+                "omninest.search.photo-index-path"
         );
         for (String property : synchronizedProperties) {
             assertThat(prod.getProperty(property))

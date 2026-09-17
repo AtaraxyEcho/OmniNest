@@ -42,7 +42,7 @@ INSERT INTO omni.config_entries (
     ('share.max-bytes', '322122547200', 'NUMBER', 'storage', 'HOT', '共享空间最大容量（字节，0 表示无限制）', false),
     ('upload.rate.enabled', 'true', 'BOOLEAN', 'upload', 'HOT', '是否启用上传签发限速', false),
     ('security.rate-limit', '120', 'NUMBER', 'security', 'HOT', '默认接口限流上限', false),
-    ('clamav.enabled', 'true', 'BOOLEAN', 'security', 'HOT', '是否启用 ClamAV 文件安全扫描', false),
+    ('clamav.enabled', 'false', 'BOOLEAN', 'security', 'HOT', '是否启用 ClamAV 文件安全扫描（公网生产需在配置中心改为 true）', false),
     ('clamav.host', 'localhost', 'STRING', 'security', 'HOT', 'ClamAV 服务主机', false),
     ('clamav.port', '3310', 'NUMBER', 'security', 'HOT', 'ClamAV 服务端口', false),
     ('clamav.timeout-millis', '2000000', 'NUMBER', 'security', 'HOT', '单文件安全扫描时限（毫秒，活性护栏）', false),

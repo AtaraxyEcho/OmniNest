@@ -136,8 +136,8 @@ public final class ConfigDefinitionCatalog {
                 "config.upload.rate", "是否启用上传签发限速"));
         add(values, number("security.rate-limit", "120", "security", ConfigSurface.GENERAL,
                 "config.security.rateLimit", "默认接口限流上限", 1, 1_000_000));
-        add(values, bool("clamav.enabled", true, "security", ConfigSurface.GENERAL,
-                "config.security.clamav.enabled", "是否启用 ClamAV 文件安全扫描"));
+        add(values, bool("clamav.enabled", false, "security", ConfigSurface.GENERAL,
+                "config.security.clamav.enabled", "是否启用 ClamAV 文件安全扫描（公网生产需在配置中心改为 true）"));
         add(values, string("clamav.host", "localhost", "security", ConfigSurface.GENERAL,
                 "config.security.clamav.host", "ClamAV 服务主机", false, 255));
         add(values, number("clamav.port", "3310", "security", ConfigSurface.GENERAL,

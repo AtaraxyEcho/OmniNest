@@ -6,6 +6,10 @@ x-backend-environment: &backend-environment
   OMNINEST_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-omninest}
   OMNINEST_DB_USER: ${POSTGRES_USER:-omninest}
   OMNINEST_DB_PASSWORD: ${POSTGRES_PASSWORD:-omninest}
+  # 小内存机连接池上限（Spring 原生绑定）；API 可在角色环境中覆盖。
+  SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL:-8}
+  SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE: ${HIKARI_MIN_IDLE:-1}
+  SPRING_DATASOURCE_HIKARI_CONNECTION_TIMEOUT: ${HIKARI_CONNECTION_TIMEOUT:-30000}
   OMNINEST_REDIS_HOST: redis
   OMNINEST_REDIS_PASSWORD: ${REDIS_PASSWORD:-}
   OMNINEST_RABBITMQ_HOST: rabbitmq
@@ -29,7 +33,8 @@ x-backend-environment: &backend-environment
   OMNINEST_LOCAL_MEDIA_ENABLED: ${OMNINEST_LOCAL_MEDIA_ENABLED:-true}
   OMNINEST_LOCAL_MEDIA_ROOT: /mnt/local-media
   OMNINEST_LOCAL_MEDIA_PROCESS_ROOT: /mnt/local-media
-  OMNINEST_CLAMAV_ENABLED: ${OMNINEST_CLAMAV_ENABLED:-true}
+  # 4C4G 个人自托管默认关闭 ClamAV；启用扫描时设 true 并 COMPOSE_PROFILES=clamav。
+  OMNINEST_CLAMAV_ENABLED: ${OMNINEST_CLAMAV_ENABLED:-false}
   OMNINEST_CLAMAV_HOST: clamav
   OMNINEST_CLAMAV_PORT: "3310"
   OMNINEST_RCLONE_ENDPOINT: http://rclone:5572
@@ -42,6 +47,7 @@ x-backend-environment: &backend-environment
   OMNINEST_ARIA2_RPC_SECRET: ${RPC_SECRET:-omninest}
   OMNINEST_ARIA2_DOWNLOAD_ROOT: /downloads
   OMNINEST_SEARCH_INDEX_PATH: /var/lib/omninest/lucene
+  OMNINEST_SEARCH_PHOTO_INDEX_PATH: /var/lib/omninest/lucene-photo
   OMNINEST_NETEASE_API_BASE_URL: http://netease-music-api:3000
   OMNINEST_PHOTO_AI_ENDPOINT: http://ai-sidecar:8090
   OMNINEST_PHOTO_AI_TIMEOUT_SECONDS: ${OMNINEST_PHOTO_AI_TIMEOUT_SECONDS:-30}
@@ -51,6 +57,8 @@ x-backend-environment: &backend-environment
   OMNINEST_MUSICBRAINZ_USER_AGENT: ${OMNINEST_MUSICBRAINZ_USER_AGENT:-OmniNest/0.1.0 (contact@example.com)}
   OMNINEST_READER_COMIC_CONSUME_IN_API: "false"
   TZ: Asia/Shanghai
+
+# 4C4G 无 ClamAV：JVM 使用显式堆上限（见各 backend 角色 JAVA_OPTS）。
 
 x-backend-service: &backend-service
   image: ${OMNINEST_BACKEND_IMAGE:-omninest/backend}:${OMNINEST_IMAGE_TAG:-latest}
@@ -67,10 +75,9 @@ x-backend-service: &backend-service
       condition: service_healthy
     minio:
       condition: service_healthy
-    clamav:
-      condition: service_healthy
   volumes:
     - omninest-search:/var/lib/omninest/lucene
+    - omninest-search-photo:/var/lib/omninest/lucene-photo
     - omninest-rclone-local:/mnt/local
     - omninest-rclone-imports:/mnt/imports
     - omninest-aria2:/downloads
@@ -116,10 +123,10 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
+    mem_limit: ${NGINX_MEM_LIMIT:-64m}
     restart: unless-stopped
 
   # 默认不启动。使用 Let's Encrypt 时：COMPOSE_PROFILES=certbot
-  # 使用 Cloudflare 管理证书时保持默认（无该 profile），无需 certbot。
   certbot:
     profiles:
       - certbot
@@ -143,6 +150,7 @@ services:
       - ./certbot/entrypoint.sh:/opt/omninest/entrypoint.sh:ro
       - omninest-certbot-config:/etc/letsencrypt
       - omninest-certbot-challenges:/var/www/certbot
+    mem_limit: 64m
     restart: unless-stopped
 
   backend-api:
@@ -150,20 +158,32 @@ services:
     environment:
       <<: *backend-environment
       OMNINEST_ROLE: api
+      JAVA_OPTS: ${JAVA_OPTS_API:--Xms128m -Xmx384m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_API:-10}
     ports:
       - "127.0.0.1:${OMNINEST_SERVER_PORT:-8080}:8080"
+    mem_limit: ${BACKEND_API_MEM_LIMIT:-512m}
 
   backend-worker:
     <<: *backend-service
     environment:
       <<: *backend-environment
       OMNINEST_ROLE: worker
+      JAVA_OPTS: ${JAVA_OPTS_WORKER:--Xms128m -Xmx384m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_WORKER:-6}
+      OMNINEST_WORKER_FILE_INDEX_CONCURRENCY: "1"
+      OMNINEST_WORKER_TEXT_EXTRACTION_CONCURRENCY: "1"
+      OMNINEST_WORKER_MEDIA_CONCURRENCY: "1"
+    mem_limit: ${BACKEND_WORKER_MEM_LIMIT:-512m}
 
   backend-scheduler:
     <<: *backend-service
     environment:
       <<: *backend-environment
       OMNINEST_ROLE: scheduler
+      JAVA_OPTS: ${JAVA_OPTS_SCHEDULER:--Xms64m -Xmx160m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}
+      SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_SCHEDULER:-4}
+    mem_limit: ${BACKEND_SCHEDULER_MEM_LIMIT:-256m}
 
   postgres:
     image: postgres:18-alpine
@@ -172,6 +192,21 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-omninest}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-omninest}
       TZ: Asia/Shanghai
+    # 4C4G：降低 PG 缓冲与连接数，避免与 JVM 抢内存。
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-256MB}
+      - -c
+      - work_mem=${PG_WORK_MEM:-8MB}
+      - -c
+      - effective_cache_size=${PG_EFFECTIVE_CACHE_SIZE:-1GB}
+      - -c
+      - max_wal_size=${PG_MAX_WAL_SIZE:-512MB}
+      - -c
+      - max_connections=${PG_MAX_CONNECTIONS:-40}
+      - -c
+      - random_page_cost=1.1
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 10s
@@ -179,6 +214,7 @@ services:
       retries: 10
     volumes:
       - omninest-postgres:/var/lib/postgresql
+    mem_limit: ${POSTGRES_MEM_LIMIT:-768m}
     restart: unless-stopped
 
   redis:
@@ -191,9 +227,9 @@ services:
       - -c
       - |
         if [ -n "$$REDIS_PASSWORD" ]; then
-          exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+          exec redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-128mb} --maxmemory-policy volatile-lru --requirepass "$$REDIS_PASSWORD"
         fi
-        exec redis-server --appendonly yes
+        exec redis-server --appendonly yes --maxmemory ${REDIS_MAXMEMORY:-128mb} --maxmemory-policy volatile-lru
     healthcheck:
       test:
         - CMD-SHELL
@@ -208,6 +244,7 @@ services:
       retries: 10
     volumes:
       - omninest-redis:/data
+    mem_limit: ${REDIS_MEM_LIMIT:-192m}
     restart: unless-stopped
 
   rabbitmq:
@@ -226,6 +263,7 @@ services:
       retries: 10
     volumes:
       - omninest-rabbitmq:/var/lib/rabbitmq
+    mem_limit: ${RABBITMQ_MEM_LIMIT:-320m}
     restart: unless-stopped
 
   minio:
@@ -244,9 +282,9 @@ services:
       retries: 10
     volumes:
       - omninest-minio:/data
+    mem_limit: ${MINIO_MEM_LIMIT:-320m}
     restart: unless-stopped
 
-  # 视频探测、背景抽帧与转码共用的 ffmpeg 工具容器（长期空转，供 docker exec 调用）。
   ffmpeg:
     image: jrottenberg/ffmpeg:8-alpine
     container_name: omninest-ffmpeg
@@ -262,6 +300,7 @@ services:
       - omninest-probe-tmp:/tmp/probe
       - omninest-transcode-tmp:/tmp/transcode
       - ${OMNINEST_LOCAL_MEDIA_ROOT:-../../.omninest/local-media}:/mnt/local-media:ro
+    mem_limit: ${FFMPEG_MEM_LIMIT:-128m}
     restart: unless-stopped
 
   aria2:
@@ -276,12 +315,14 @@ services:
       - "${ARIA2_LISTEN_PORT:-6888}:6888/udp"
     volumes:
       - omninest-aria2:/downloads
+    mem_limit: ${ARIA2_MEM_LIMIT:-96m}
     restart: unless-stopped
 
-  # 公网生产环境建议保持 ClamAV 病毒扫描开启，不要注释或移除本服务；
-  # 若确需关闭（不建议），必须同步把后端 OMNINEST_CLAMAV_ENABLED 设为 false，
-  # 否则上传会因扫描不可用被拒绝。资源要求见 deploy/README.md。
+  # 4C4G 默认不启动。启用：COMPOSE_PROFILES=clamav
+  # 且 .env 设 OMNINEST_CLAMAV_ENABLED=true；否则上传会按扫描失败处理。
   clamav:
+    profiles:
+      - clamav
     image: clamav/clamav:stable
     environment:
       CLAMD_CONF_StreamMaxLength: ${CLAMD_CONF_StreamMaxLength:-2047M}
@@ -298,6 +339,7 @@ services:
       retries: 10
     volumes:
       - omninest-clamav-db:/var/lib/clamav
+    mem_limit: ${CLAMAV_MEM_LIMIT:-1536m}
     restart: unless-stopped
 
   netease-music-api:
@@ -317,6 +359,7 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 5
+    mem_limit: ${NETEASE_MEM_LIMIT:-128m}
     restart: unless-stopped
 
   rclone:
@@ -339,19 +382,24 @@ services:
       - omninest-rclone:/config/rclone
       - omninest-rclone-local:/mnt/local
       - omninest-rclone-imports:/mnt/imports
+    mem_limit: ${RCLONE_MEM_LIMIT:-96m}
     restart: unless-stopped
 
+  # 4C4G 默认不启动照片 AI。启用：COMPOSE_PROFILES=photo-ai
   ai-sidecar:
+    profiles:
+      - photo-ai
     build:
       context: ../ai-sidecar
       dockerfile: Dockerfile
     environment:
       INSIGHTFACE_ROOT: /app/models/insightface
       OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:-change-me-ai-sidecar-random-secret}
-      OMP_NUM_THREADS: ${AI_CPU_THREADS:-2}
+      OMP_NUM_THREADS: ${AI_CPU_THREADS:-1}
       TZ: Asia/Shanghai
     volumes:
       - omninest-ai-models:/app/models
+    mem_limit: ${AI_SIDECAR_MEM_LIMIT:-768m}
     restart: unless-stopped
 
 volumes:
@@ -366,6 +414,7 @@ volumes:
   omninest-aria2:
   omninest-ai-models:
   omninest-search:
+  omninest-search-photo:
   omninest-certbot-config:
   omninest-certbot-challenges:
   omninest-probe-tmp:

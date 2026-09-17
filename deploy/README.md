@@ -55,13 +55,31 @@ ClamAV 是可选服务，通过 `.env` 的 `COMPOSE_PROFILES=clamav` 控制：
 
 ### 资源要求与安全扫描
 
-生产编排默认包含 ClamAV 病毒扫描（clamav 服务）。公网生产环境建议保持开启，
-最低配置为 4 核 8GB 内存；4 核 4GB 仅适合关闭病毒扫描的个人自托管场景。
-关闭病毒扫描必须同时停用容器与后端 `OMNINEST_CLAMAV_ENABLED`，且不应在公网
-生产环境这样做；同步规则见[开发环境的 ClamAV 可选开关](#clamav-可选开关)。
+生产 Compose **默认画像为 4 核 4GB 个人自托管**：不启动 ClamAV、不启动照片 AI，
+并为各服务设置了 `mem_limit` 与 JVM/Postgres/Redis 保守参数（见
+`prod/docker-compose.yml` 与 `prod/.env.example`）。
 
-Photos 图像分析侧车使用 CPU 推理，无需 GPU；模型首次启动自动下载，预留最多
-10 分钟启动窗口。
+| 场景 | 建议 |
+|------|------|
+| **4C4G 个人自托管（默认）** | 不启用 ClamAV / photo-ai；`.env` 保持 `OMNINEST_CLAMAV_ENABLED=false` |
+| **公网生产 / 4C8G+** | `COMPOSE_PROFILES=clamav` 且 `OMNINEST_CLAMAV_ENABLED=true`；可按需 `photo-ai` |
+
+关闭病毒扫描时必须同时：不启动 clamav 容器、后端 `OMNINEST_CLAMAV_ENABLED=false`，
+并确认配置中心 `clamav.enabled` 为 false（V002 内置目录默认 true 时会在安装后覆盖环境变量，需在管理端或 SQL 改写）：
+
+```sql
+UPDATE omni.config_entries SET config_value = 'false' WHERE config_key = 'clamav.enabled';
+```
+
+容器与后端开关必须一致：容器未启动而后端仍启用扫描时，安全检查按 fail-closed
+处理，上传会因“ClamAV 安全扫描不可用”被拒绝。
+
+**4C4G 建议内存边界（约）**：Postgres 768M、API/Worker 各 512M（堆 ≤384M）、
+Scheduler 256M、Rabbit/MinIO 各约 320M、Redis ≤192M、其余辅件合计约 400M；
+不要同时开启 ClamAV（约 1.5G）或 InsightFace 侧车（约 768M+）。
+
+Photos 图像分析侧车使用 CPU 推理，无需 GPU；仅在 `COMPOSE_PROFILES=photo-ai`
+时启动。模型首次启动自动下载，预留最多 10 分钟启动窗口。
 
 ### 构建与启动
 
