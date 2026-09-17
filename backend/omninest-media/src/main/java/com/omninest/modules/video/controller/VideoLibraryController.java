@@ -204,7 +204,7 @@ public class VideoLibraryController {
     }
 
     @Operation(summary = "更新剧集元数据", description = "手动更新剧集的标题与简介")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     @PutMapping("/api/v1/admin/video/series/{seriesId}/metadata")
     ApiResponse<MovieSeriesDto> updateSeriesMetadata(
             @PathVariable UUID seriesId,
@@ -461,7 +461,7 @@ public class VideoLibraryController {
 
     @Operation(summary = "更新视频元数据", description = "手动更新视频的标题、年份、简介等元数据")
     @PutMapping("/api/v1/admin/video/items/{videoItemId}/metadata")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     ApiResponse<MovieVideoItemDto> updateMetadata(
             @PathVariable UUID videoItemId,
             @Valid @RequestBody MovieMetadataUpdateRequest request

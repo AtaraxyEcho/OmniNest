@@ -57,6 +57,11 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
                   _configTitle(l10n, item).toLowerCase().contains(query);
             }).toList();
     final sorted = _applySort(searched, l10n);
+    final canManageConfigs =
+        ref.watch(authSessionProvider).asData?.value.user?.permissions.contains(
+              'system:config:manage',
+            ) ??
+            false;
     final totalPages = (sorted.length / _pageSize).ceil();
     final currentPage = totalPages == 0 ? 0 : _page.clamp(0, totalPages - 1);
     final pageItems =
@@ -219,7 +224,7 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
                   ),
                   IconButton(
                     onPressed:
-                        entry.editable
+                        entry.editable && canManageConfigs
                             ? () => showDialog<void>(
                               context: context,
                               builder: (_) => _ConfigEditDialog(entry: entry),

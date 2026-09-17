@@ -29,7 +29,7 @@ public class TaskController {
     /**
      * 分页查询任务列表，支持可选的状态过滤
      */
-    @Operation(summary = "分页查询任务列表", description = "查询系统异步任务列表，支持按状态过滤和分页")
+    @Operation(summary = "分页查询任务列表", description = "查询当前用户拥有的异步任务列表，支持按状态过滤和分页")
     @GetMapping("/api/v1/tasks")
     @PreAuthorize("hasAuthority('" + Permissions.TASK_READ + "')")
     ApiResponse<PageResponse<TaskDto>> list(
