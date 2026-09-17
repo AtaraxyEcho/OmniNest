@@ -94,6 +94,14 @@ UPDATE omni.config_entries SET config_value = 'clamav' WHERE config_key = 'clama
 
 并清除运行时缓存（如 `omninest:config:clamav.host`）或重启 API/Worker。
 
+### 离线下载与 Aria2 路径（Docker）
+
+后端 `OMNINEST_ARIA2_DOWNLOAD_ROOT` 必须是 **Aria2 容器内路径**（如 `/downloads`，
+对应 dev 编排挂载 `../../.omninest/aria2:/downloads`）。在 **Windows 宿主机** 上若
+Java `Path` 把 `/downloads` 归一成 `D:\\downloads`，Aria2 会因权限/路径不存在失败
+（日志：`Failed to make the directory D:\\downloads\\...`）。Linux/macOS 宿主机无此
+问题；Windows 上离线下载与 Docker Aria2 组合需额外映射或改用 Linux 部署路径。
+
 ### 公开入口和 HTTPS
 
 `OMNINEST_HTTPS_ENABLED=false` 时，Nginx 在配置的 HTTP 端口提供 Web/API，在 9000
