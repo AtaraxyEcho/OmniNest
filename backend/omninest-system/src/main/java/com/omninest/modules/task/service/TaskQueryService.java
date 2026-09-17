@@ -120,4 +120,30 @@ public class TaskQueryService {
         taskRedispatchService.redispatch(task);
         log.info("重试死信任务并重新投递: taskId={}, taskType={}", taskId, task.getTaskType());
     }
+
+    /**
+     * 本人任务重试。
+     *
+     * <p>仅允许当前用户对本人 FAILED 任务重新入队；死信（DLQ）仍走管理端
+     * {@link #retryDlqEntry(UUID)}。除重置状态外必须经 Outbox 重新投递。</p>
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param taskId 任务 ID
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void retryOwned(UUID ownerUserId, UUID taskId) {
+        TaskRecord task = taskRecordRepository.findById(taskId)
+                .filter(record -> ownerUserId.equals(record.getOwnerUserId()))
+                .orElseThrow(() -> new BusinessException(ErrorCode.TASK_NOT_FOUND, "任务不存在"));
+        if (!TaskStatus.FAILED.getValue().equals(task.getStatus())) {
+            throw new BusinessException(ErrorCode.TASK_STATUS_ILLEGAL, "仅可重试失败状态的本人任务");
+        }
+        task.setStatus(TaskStatus.QUEUED.getValue());
+        task.setRetryCount(0);
+        task.setErrorMessage(null);
+        task.setStackSummary(null);
+        taskRecordRepository.save(task);
+        taskRedispatchService.redispatch(task);
+        log.info("本人任务重试并重新投递: taskId={}, taskType={}", taskId, task.getTaskType());
+    }
 }

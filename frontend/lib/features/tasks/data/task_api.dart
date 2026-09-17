@@ -53,6 +53,7 @@ class TaskApi {
   }
 
   Future<void> retry(String taskId) async {
-    await _client.dio.post<Map<String, dynamic>>('/tasks/dlq/$taskId/retry');
+    // 本人任务重试；死信队列重试走管理端 /admin/tasks。
+    await _client.dio.post<Map<String, dynamic>>('/tasks/$taskId/retry');
   }
 }

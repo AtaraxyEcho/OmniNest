@@ -62,9 +62,11 @@ class TaskRecord {
   bool get isRunning => status == 'RUNNING';
   bool get isCompleted => status == 'COMPLETED';
   bool get isFailed => status == 'FAILED' || status == 'DLQ';
+
+  /// 本人可重试：仅 FAILED。DLQ 仅管理端可重试。
+  bool get canRetry => status == 'FAILED' && retryCount < maxRetries;
   bool get isCancelled => status == 'CANCELLED';
   bool get isTerminal => isCompleted || isFailed || isCancelled;
-  bool get canRetry => isFailed && retryCount < maxRetries;
 
   static DateTime? _parseDateTime(dynamic value) {
     if (value == null) return null;

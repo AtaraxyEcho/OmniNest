@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
-import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/presentation/widgets/task_card.dart';
@@ -53,15 +52,6 @@ class _TasksPageState extends ConsumerState<TasksPage> {
   @override
   Widget build(BuildContext context) {
     final tasks = ref.watch(taskListProvider);
-    final canRetryTasks =
-        ref
-            .watch(authSessionProvider)
-            .asData
-            ?.value
-            .user
-            ?.permissions
-            .contains('system:config:manage') ??
-        false;
     final filtered =
         _statusFilter == 'ALL'
             ? tasks
@@ -85,7 +75,7 @@ class _TasksPageState extends ConsumerState<TasksPage> {
                         (context, index) => TaskCard(
                           task: filtered[index],
                           onRetry:
-                              canRetryTasks
+                              filtered[index].canRetry
                                   ? () => ref
                                       .read(taskListProvider.notifier)
                                       .retry(filtered[index].id)

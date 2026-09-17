@@ -76,4 +76,16 @@ public class TaskController {
         taskQueryService.retryDlqEntry(taskId);
         return ApiResponse.success();
     }
+
+    /**
+     * 重试当前用户拥有的失败任务。
+     */
+    @Operation(summary = "重试本人任务", description = "将当前用户拥有的 FAILED 任务重新投入队列；DLQ 请使用管理端重试")
+    @PostMapping("/api/v1/tasks/{taskId}/retry")
+    @PreAuthorize("hasAuthority('" + Permissions.TASK_READ + "')")
+    ApiResponse<Void> retryOwned(@PathVariable UUID taskId) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        taskQueryService.retryOwned(ownerUserId, taskId);
+        return ApiResponse.success();
+    }
 }
