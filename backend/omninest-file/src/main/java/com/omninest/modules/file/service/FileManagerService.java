@@ -573,9 +573,13 @@ public class FileManagerService {
             throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象不属于当前用户");
         }
         rejectObjectAliasedToOtherNode(ownerUserId, fileNodeId, newObject.getId());
-        if (uploadSessionRepository
-                .findFirstByOwnerUserIdAndResultObjectId(ownerUserId, newObjectId)
-                .isEmpty()) {
+        // 入口晋升的 asVersion 对象已落到 users/{uid}/...，会话结果可能尚未回写；
+        // 仅对仍处于 uploads/ 暂存前缀的对象强制「必须来自本次上传会话」。
+        String newObjectKey = newObject.getObjectKey() == null ? "" : newObject.getObjectKey();
+        if (newObjectKey.startsWith("uploads/")
+                && uploadSessionRepository
+                        .findFirstByOwnerUserIdAndResultObjectId(ownerUserId, newObjectId)
+                        .isEmpty()) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "文件对象必须来自本次上传会话");
         }
         if (newObjectSizeBytes > 0 && newObjectSizeBytes != newObject.getSizeBytes()) {
@@ -717,7 +721,9 @@ public class FileManagerService {
         if (objectKey == null || objectKey.isBlank()) {
             return false;
         }
-        return objectKey.startsWith("uploads/" + ownerUserId + "/");
+        // 直传暂存键与晋升后的用户受管键均表示归属该用户。
+        return objectKey.startsWith("uploads/" + ownerUserId + "/")
+                || objectKey.startsWith("users/" + ownerUserId + "/");
     }
 
     /**
