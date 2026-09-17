@@ -435,7 +435,7 @@ public class VideoLibraryController {
         return ApiResponse.success(movieNfoService.export(currentUserContext.requireCurrentUserId(), videoItemId));
     }
 
-    @Operation(summary = "获取任务列表", description = "返回用户的视频相关任务列表（转码、刮削等）")
+    @Operation(summary = "获取任务列表", description = "返回当前用户影视相关任务列表（转码、刮削、扫描等）")
     @GetMapping("/api/v1/video/tasks")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     ApiResponse<List<MovieTaskDto>> tasks(@RequestParam(required = false) String type) {

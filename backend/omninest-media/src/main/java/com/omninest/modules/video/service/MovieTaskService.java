@@ -41,6 +41,19 @@ public class MovieTaskService {
     private static final String VIDEO_TRANSCODE = "VIDEO_TRANSCODE";
     private static final String WEB_OPTIMIZE = "WEB_OPTIMIZE";
 
+    /**
+     * 影视模块任务类型白名单：进度列表只展示本模块任务，避免串入文件/相册等其它任务。
+     */
+    static final Set<String> VIDEO_TASK_TYPES = Set.of(
+            VIDEO_TRANSCODE,
+            "AUDIO_EXTRACT",
+            WEB_OPTIMIZE,
+            MEDIA_SCAN,
+            "MEDIA_SCRAPE",
+            "LOCAL_VIDEO_LIBRARY_DISCOVERY",
+            "LOCAL_VIDEO_LIBRARY_APPLY"
+    );
+
     private final MediaTaskRepository mediaTaskRepository;
     private final TaskRecordService taskRecordService;
     private final MediaVideoItemRepository videoItemRepository;
@@ -52,7 +65,14 @@ public class MovieTaskService {
 
     @Transactional(readOnly = true)
     public List<MovieTaskDto> list(UUID ownerUserId, String taskType) {
-        return mediaTaskRepository.listTasks(ownerUserId, normalizeTaskType(taskType));
+        String normalized = normalizeTaskType(taskType);
+        if (normalized == null) {
+            return mediaTaskRepository.listTasksByTypes(ownerUserId, VIDEO_TASK_TYPES);
+        }
+        if (!VIDEO_TASK_TYPES.contains(normalized)) {
+            return List.of();
+        }
+        return mediaTaskRepository.listTasks(ownerUserId, normalized);
     }
 
     @Transactional(rollbackFor = Exception.class)

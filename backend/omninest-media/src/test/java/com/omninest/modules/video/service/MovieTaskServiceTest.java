@@ -133,6 +133,36 @@ class MovieTaskServiceTest {
         assertThat(eventCaptor.getValue().audioOnly()).isFalse();
     }
 
+    @Test
+    void listWithoutTypeUsesVideoTaskWhitelist() {
+        when(mediaTaskRepository.listTasksByTypes(eq(OWNER_ID), eq(MovieTaskService.VIDEO_TASK_TYPES)))
+                .thenReturn(List.of());
+
+        service.list(OWNER_ID, null);
+
+        verify(mediaTaskRepository).listTasksByTypes(OWNER_ID, MovieTaskService.VIDEO_TASK_TYPES);
+        verify(mediaTaskRepository, org.mockito.Mockito.never())
+                .listTasks(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void listWithNonVideoTypeReturnsEmpty() {
+        assertThat(service.list(OWNER_ID, "FILE_INDEX")).isEmpty();
+        verify(mediaTaskRepository, org.mockito.Mockito.never())
+                .listTasks(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+        verify(mediaTaskRepository, org.mockito.Mockito.never())
+                .listTasksByTypes(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void listWithVideoTypeQueriesSingleType() {
+        when(mediaTaskRepository.listTasks(OWNER_ID, "VIDEO_TRANSCODE")).thenReturn(List.of());
+
+        service.list(OWNER_ID, "video_transcode");
+
+        verify(mediaTaskRepository).listTasks(OWNER_ID, "VIDEO_TRANSCODE");
+    }
+
     private MediaVideoItem videoItem() {
         MediaVideoItem videoItem = new MediaVideoItem();
         videoItem.setOwnerUserId(OWNER_ID);

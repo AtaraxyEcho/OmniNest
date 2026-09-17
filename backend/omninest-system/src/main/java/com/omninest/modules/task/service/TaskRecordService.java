@@ -657,6 +657,27 @@ public class TaskRecordService {
     }
 
     /**
+     * 按用户与任务类型白名单查询任务。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param taskTypes 任务类型白名单
+     * @param limit 返回数量上限
+     * @return 任务列表
+     */
+    @Transactional(readOnly = true)
+    public List<TaskRecord> listTasksByTypes(UUID ownerUserId, Collection<String> taskTypes, int limit) {
+        if (taskTypes == null || taskTypes.isEmpty()) {
+            return List.of();
+        }
+        PageRequest pageRequest = PageRequest.of(0, limit);
+        return taskRecordRepository.findByOwnerUserIdAndTaskTypeInOrderByUpdatedAtDesc(
+                ownerUserId,
+                taskTypes,
+                pageRequest
+        );
+    }
+
+    /**
      * 判断是否存在指定任务类型和载荷字段的活跃任务。
      *
      * @param ownerUserId 所属用户 ID

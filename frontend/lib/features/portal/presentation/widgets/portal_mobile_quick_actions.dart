@@ -1,13 +1,14 @@
 part of 'portal_mobile_shell.dart';
 
-class _MobileQuickActions extends StatelessWidget {
+class _MobileQuickActions extends ConsumerWidget {
   const _MobileQuickActions();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final accent = scheme.primary;
+    final canAccessAdmin = ref.watch(canAccessAdminConsoleProvider);
     final actions = [
       _MobileQuickAction(
         icon: Icons.menu_book_rounded,
@@ -34,11 +35,12 @@ class _MobileQuickActions extends StatelessWidget {
         label: l10n.portalDockFiles,
         route: '/files',
       ),
-      _MobileQuickAction(
-        icon: Icons.admin_panel_settings_rounded,
-        label: l10n.portalAdmin,
-        route: '/admin',
-      ),
+      if (canAccessAdmin)
+        _MobileQuickAction(
+          icon: Icons.admin_panel_settings_rounded,
+          label: l10n.portalAdmin,
+          route: '/admin',
+        ),
     ];
 
     return Card(

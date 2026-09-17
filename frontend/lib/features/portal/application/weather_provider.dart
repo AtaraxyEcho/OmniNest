@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:omninest/app/providers.dart';
-import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
 
 /// 天气图标映射（和风图标代码 → emoji）
@@ -233,39 +232,6 @@ class WeatherData {
   String get weatherIcon => weatherIconFromCode(icon);
 }
 
-/// 天气配置
-class WeatherConfig {
-  const WeatherConfig({required this.enabled, required this.defaultLocation});
-
-  final bool enabled;
-  final String defaultLocation;
-}
-
-/// 从配置中心读取天气配置
-final weatherConfigProvider = FutureProvider<WeatherConfig>((ref) async {
-  final adminApi = ref.watch(adminOperationsApiProvider);
-  final configView = await adminApi.configs();
-
-  String getConfig(String key, String defaultValue) {
-    try {
-      final entry = configView.items.firstWhere((c) => c.key == key);
-      return entry.value.isNotEmpty ? entry.value : defaultValue;
-    } catch (_) {
-      return defaultValue;
-    }
-  }
-
-  bool getBoolConfig(String key, bool defaultValue) {
-    final value = getConfig(key, defaultValue.toString());
-    return value.toLowerCase() == 'true';
-  }
-
-  return WeatherConfig(
-    enabled: getBoolConfig('weather.enabled', false),
-    defaultLocation: getConfig('weather.location', '北京'),
-  );
-});
-
 /// 用户 GPS 位置 Provider（请求权限并获取经纬度）
 /// 返回 null 表示无 GPS 数据，由后端走 fallback 链（用户偏好 > 配置中心）
 final userLocationProvider = FutureProvider<String?>((ref) async {
@@ -329,15 +295,10 @@ final userLocationProvider = FutureProvider<String?>((ref) async {
 });
 
 /// 实时天气 Provider（调用后端代理）
-/// 仅在有 GPS 数据时传 location 参数，否则由后端走 fallback 链
+///
+/// 不在前端读取管理端配置：和风凭据与 weather.enabled 均由后端配置中心处理。
+/// 仅在有 GPS 数据时传 location 参数，否则由后端走 fallback 链。
 final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
-  final configAsync = ref.watch(weatherConfigProvider);
-  final enabled = configAsync.whenOrNull(data: (c) => c.enabled) ?? false;
-
-  if (!enabled) {
-    return WeatherData.empty();
-  }
-
   final location = await ref.watch(userLocationProvider.future);
   // 后端可能因 GPS 优先而未回填地区名，这里用用户偏好城市兜底。
   final preferredCity = ref.watch(weatherLocationProvider).asData?.value ?? '';

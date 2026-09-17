@@ -841,7 +841,7 @@ class PortalMetricLine extends StatelessWidget {
 class PortalQuickLinks extends StatelessWidget {
   const PortalQuickLinks({
     required this.palette,
-    this.includeAdmin = true,
+    this.includeAdmin = false,
     super.key,
   });
 

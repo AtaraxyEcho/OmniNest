@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/features/admin/domain/admin_console_access.dart';
 
-class TaskStatusWidget extends StatelessWidget {
+class TaskStatusWidget extends ConsumerWidget {
   const TaskStatusWidget({
     required this.running,
     required this.queued,
@@ -14,14 +16,15 @@ class TaskStatusWidget extends StatelessWidget {
   final int failed;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final canAccessAdmin = ref.watch(canAccessAdminConsoleProvider);
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => context.go('/admin'),
+        onTap: canAccessAdmin ? () => context.go('/admin') : null,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(

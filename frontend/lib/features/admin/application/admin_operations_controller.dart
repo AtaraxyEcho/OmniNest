@@ -5,6 +5,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/admin/data/admin_operations_api.dart';
 import 'package:omninest/features/admin/domain/admin_analytics.dart';
+import 'package:omninest/features/admin/domain/admin_console_access.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
@@ -29,7 +30,12 @@ final adminOperationsApiProvider = Provider<AdminOperationsApi>((ref) {
 });
 
 /// 提供管理模块的系统摘要只读视图。
+///
+/// 无管理台入口权限时不请求后端，直接返回空摘要，避免 MEMBER 在 Portal 产生 403。
 final adminConsoleSummaryProvider = FutureProvider<AdminConsoleSummary>((ref) {
+  if (!ref.watch(canAccessAdminConsoleProvider)) {
+    return AdminConsoleSummary.empty();
+  }
   return ref.watch(adminOperationsApiProvider).summary();
 });
 
@@ -205,8 +211,8 @@ class AdminOperationsActions {
   Future<void> updateConfig(String key, String value, {String? reason}) async {
     await _api.updateConfig(key, value, reason);
     ref.invalidate(adminConfigsProvider);
-    // 天气配置派生自配置中心，任何配置写入后强制重读（配置变更低频）。
-    ref.invalidate(weatherConfigProvider);
+    // 天气由后端代理读取配置中心；配置写入后强制重读实时天气。
+    ref.invalidate(realtimeWeatherProvider);
   }
 
   Future<void> retryTask(String taskId) async {
@@ -244,7 +250,7 @@ class AdminOperationsActions {
     final entry = await _api.rollbackConfig(historyId);
     ref.invalidate(adminConfigsProvider);
     ref.invalidate(adminConfigHistoryProvider(entry.key));
-    ref.invalidate(weatherConfigProvider);
+    ref.invalidate(realtimeWeatherProvider);
     return entry;
   }
 

@@ -6,6 +6,7 @@ import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/login_page.dart';
+import 'package:omninest/features/admin/domain/admin_console_access.dart';
 import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
@@ -434,17 +435,10 @@ String? authRedirectPath({
 
   // 管理页面：具备任一管理端入口权限即可进入；分区细粒度由页面权限校验
   if (isAuthenticated && path.startsWith('/admin')) {
-    final isAdminRole = userRole == 'ADMIN' || userRole == 'SUPER_ADMIN';
-    final hasAdminPermission =
-        userPermissions?.any(
-          (code) =>
-              code.startsWith('system:') ||
-              code == 'task:admin' ||
-              code == 'media:library:manage' ||
-              code == 'photo:admin',
-        ) ??
-        false;
-    if (!isAdminRole && !hasAdminPermission) {
+    if (!canAccessAdminConsole(
+      userRole: userRole,
+      userPermissions: userPermissions,
+    )) {
       return '/portal';
     }
   }

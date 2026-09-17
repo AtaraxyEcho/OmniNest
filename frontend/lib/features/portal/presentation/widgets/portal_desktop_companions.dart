@@ -98,7 +98,7 @@ class _VisualFilmStrip extends StatelessWidget {
   }
 }
 
-class _StatusRail extends StatelessWidget {
+class _StatusRail extends ConsumerWidget {
   const _StatusRail({
     required this.palette,
     required this.data,
@@ -115,7 +115,7 @@ class _StatusRail extends StatelessWidget {
   final bool scrollable;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final now = DateTime.now();
     final l10n = AppLocalizations.of(context);
     // 宽布局下面板拉伸满列高：日期块与指标行均布填充，消除数据空态时
@@ -158,13 +158,15 @@ class _StatusRail extends StatelessWidget {
           onTap: () => _openWeatherDetails(context, data),
         ),
         const SizedBox(height: 12),
-        PortalMetricLine(
-          palette: palette,
-          label: l10n.portalAdmin,
-          value: data.taskSummary,
-          onTap: () => context.go('/admin'),
-        ),
-        const SizedBox(height: 12),
+        if (ref.watch(canAccessAdminConsoleProvider)) ...[
+          PortalMetricLine(
+            palette: palette,
+            label: l10n.portalAdmin,
+            value: data.taskSummary,
+            onTap: () => context.go('/admin'),
+          ),
+          const SizedBox(height: 12),
+        ],
         PortalMetricLine(
           palette: palette,
           label: l10n.portalStorageTitle,
@@ -180,7 +182,7 @@ class _StatusRail extends StatelessWidget {
   }
 }
 
-class _AttentionPanel extends StatelessWidget {
+class _AttentionPanel extends ConsumerWidget {
   const _AttentionPanel({
     required this.palette,
     required this.data,
@@ -194,7 +196,7 @@ class _AttentionPanel extends StatelessWidget {
   final bool lightweight;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return PortalVisualPanel(
       palette: palette,
@@ -242,21 +244,25 @@ class _AttentionPanel extends StatelessWidget {
                     icon: Icons.cloud_outlined,
                     onTap: () => _openWeatherDetails(context, data),
                   ),
-                  _NoticeTile(
-                    palette: palette,
-                    title: l10n.portalAdmin,
-                    subtitle: data.taskSummary,
-                    detail: l10n.portalAdminSubtitle,
-                    icon: Icons.admin_panel_settings_rounded,
-                    onTap: () => context.go('/admin'),
-                  ),
+                  if (ref.watch(canAccessAdminConsoleProvider))
+                    _NoticeTile(
+                      palette: palette,
+                      title: l10n.portalAdmin,
+                      subtitle: data.taskSummary,
+                      detail: l10n.portalAdminSubtitle,
+                      icon: Icons.admin_panel_settings_rounded,
+                      onTap: () => context.go('/admin'),
+                    ),
                   _NoticeTile(
                     palette: palette,
                     title: l10n.portalStorageTitle,
                     subtitle: data.storageSummary(context),
                   ),
                   const SizedBox(height: 20),
-                  PortalQuickLinks(palette: palette),
+                  PortalQuickLinks(
+                    palette: palette,
+                    includeAdmin: ref.watch(canAccessAdminConsoleProvider),
+                  ),
                 ],
               ),
             ),
@@ -364,14 +370,14 @@ class _NoticeTile extends StatelessWidget {
   }
 }
 
-class _StatusDock extends StatelessWidget {
+class _StatusDock extends ConsumerWidget {
   const _StatusDock({required this.palette, required this.data});
 
   final PortalVisualPalette palette;
   final _PortalDesktopData data;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final compactDock = MediaQuery.sizeOf(context).height < 700;
     return _WeatherReactiveDockSurface(
@@ -404,16 +410,18 @@ class _StatusDock extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 14),
-                    SizedBox(
-                      width: 170,
-                      child: PortalMetricLine(
-                        palette: palette,
-                        label: l10n.portalAdmin,
-                        value: data.taskSummary,
-                        onTap: () => context.go('/admin'),
+                    if (ref.watch(canAccessAdminConsoleProvider)) ...[
+                      SizedBox(
+                        width: 170,
+                        child: PortalMetricLine(
+                          palette: palette,
+                          label: l10n.portalAdmin,
+                          value: data.taskSummary,
+                          onTap: () => context.go('/admin'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 14),
+                      const SizedBox(width: 14),
+                    ],
                     SizedBox(
                       width: 170,
                       child: PortalMetricLine(
@@ -438,14 +446,15 @@ class _StatusDock extends StatelessWidget {
                     onTap: () => _openWeatherDetails(context, data),
                   ),
                 ),
-                Expanded(
-                  child: PortalMetricLine(
-                    palette: palette,
-                    label: l10n.portalAdmin,
-                    value: data.taskSummary,
-                    onTap: () => context.go('/admin'),
+                if (ref.watch(canAccessAdminConsoleProvider))
+                  Expanded(
+                    child: PortalMetricLine(
+                      palette: palette,
+                      label: l10n.portalAdmin,
+                      value: data.taskSummary,
+                      onTap: () => context.go('/admin'),
+                    ),
                   ),
-                ),
                 Expanded(
                   child: PortalMetricLine(
                     palette: palette,

@@ -42,6 +42,12 @@ public interface TaskRecordRepository extends JpaRepository<TaskRecord, UUID> {
             Pageable pageable
     );
 
+    List<TaskRecord> findByOwnerUserIdAndTaskTypeInOrderByUpdatedAtDesc(
+            UUID ownerUserId,
+            Collection<String> taskTypes,
+            Pageable pageable
+    );
+
     List<TaskRecord> findByOwnerUserIdAndTaskTypeAndStatusInOrderByUpdatedAtDesc(
             UUID ownerUserId,
             String taskType,

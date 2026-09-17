@@ -8,6 +8,37 @@ class AdminConsoleSummary {
     required this.health,
   });
 
+  /// 无管理台权限时的空摘要，避免前端发起管理端请求。
+  factory AdminConsoleSummary.empty() {
+    return const AdminConsoleSummary(
+      users: AdminUserStats(total: 0, active: 0, disabled: 0, roleCounts: {}),
+      roles: <AdminRoleSummary>[],
+      configs: AdminConfigStats(
+        total: 0,
+        hot: 0,
+        nextTask: 0,
+        restartRequired: 0,
+      ),
+      tasks: AdminTaskStats(
+        total: 0,
+        queued: 0,
+        running: 0,
+        completed: 0,
+        failed: 0,
+        cancelled: 0,
+        dlq: 0,
+      ),
+      storage: AdminStorageStats(
+        fileCount: 0,
+        folderCount: 0,
+        objectCount: 0,
+        usedBytes: 0,
+        externalAccountCount: 0,
+      ),
+      health: <AdminHealthItem>[],
+    );
+  }
+
   factory AdminConsoleSummary.fromJson(Map<String, dynamic> json) {
     return AdminConsoleSummary(
       users: AdminUserStats.fromJson(_map(json['users'])),
