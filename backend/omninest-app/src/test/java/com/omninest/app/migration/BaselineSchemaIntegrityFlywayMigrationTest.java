@@ -127,14 +127,14 @@ class BaselineSchemaIntegrityFlywayMigrationTest {
                 WHERE table_schema = 'omni'
                   AND (
                     (table_name = 'file_nodes' AND column_name IN (
-                      'purge_state', 'purge_task_id', 'purge_requested_at', 'version'
+                      'purge_state', 'purge_task_id', 'purge_requested_at', 'version', 'category'
                     ))
                     OR
                     (table_name = 'sys_tasks' AND column_name IN (
                       'phase', 'resource_type', 'resource_id', 'next_retry_at', 'heartbeat_at'
                     ))
                   )
-                """)).isEqualTo(9);
+                """)).isEqualTo(10);
 
         Assertions.assertThat(countObjects("""
                 SELECT count(*)

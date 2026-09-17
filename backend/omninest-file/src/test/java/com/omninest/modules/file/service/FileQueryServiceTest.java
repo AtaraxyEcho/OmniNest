@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -229,6 +230,43 @@ class FileQueryServiceTest {
         assertThat(novels).extracting("name").containsExactly("book.azw3");
         assertThat(archives).extracting("name").containsExactly("backup.zip");
         assertThat(others).extracting("name").containsExactly("raw.bin");
+    }
+
+    @Test
+    void listFilesPageWithCategoryUsesDatabasePagingForRoot() {
+        FileNode movie = node(OWNER_ID, null, "FILE", "movie.mp4", "/movie.mp4");
+        movie.setMimeType("video/mp4");
+        when(fileNodeRepository.findVisiblePersonalCategoryPage(
+                eq(OWNER_ID), eq(SpaceType.PERSONAL), eq("video"),
+                ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(movie)));
+
+        var page = fileQueryService.listFilesPage(OWNER_ID, null, "video", 0, 100);
+
+        assertThat(page.getContent()).extracting("name").containsExactly("movie.mp4");
+        verify(fileNodeRepository, never())
+                .findByOwnerUserIdAndSpaceTypeAndDeletedFalse(OWNER_ID, SpaceType.PERSONAL);
+    }
+
+    @Test
+    void listFilesPageWithCategoryUsesSubtreeQuery() {
+        UUID folderId = UUID.fromString("30000000-0000-0000-0000-000000000004");
+        FileNode folder = node(OWNER_ID, null, "FOLDER", "Media", "/Media");
+        folder.setId(folderId);
+        FileNode clip = node(OWNER_ID, folderId, "FILE", "clip.mkv", "/Media/clip.mkv");
+        clip.setMimeType("application/octet-stream");
+        when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(folderId, OWNER_ID))
+                .thenReturn(Optional.of(folder));
+        when(fileNodeRepository.findVisibleSubtreeCategoryPage(
+                eq(OWNER_ID), eq("/Media/"), eq("video"),
+                ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(clip)));
+
+        var page = fileQueryService.listFilesPage(OWNER_ID, folderId, "video", 0, 50);
+
+        assertThat(page.getContent()).extracting("name").containsExactly("clip.mkv");
+        verify(fileNodeRepository, never())
+                .findByOwnerUserIdAndNormalizedPathStartingWithAndDeletedFalse(OWNER_ID, "/Media/");
     }
 
     @Test

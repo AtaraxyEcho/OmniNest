@@ -515,6 +515,7 @@ CREATE TABLE "omni"."file_nodes" (
   "name" varchar(255) NOT NULL,
   "normalized_path" text NOT NULL,
   "mime_type" varchar(160),
+  "category" varchar(32),
   "size_bytes" int8 NOT NULL DEFAULT 0,
   "current_object_id" uuid,
   "source_type" varchar(32) NOT NULL DEFAULT 'LOCAL'::character varying,
@@ -540,6 +541,7 @@ COMMENT ON COLUMN "omni"."file_nodes"."node_type" IS '节点类型：FILE / FOLD
 COMMENT ON COLUMN "omni"."file_nodes"."name" IS '名称';
 COMMENT ON COLUMN "omni"."file_nodes"."normalized_path" IS '规范化路径';
 COMMENT ON COLUMN "omni"."file_nodes"."mime_type" IS 'MIME类型';
+COMMENT ON COLUMN "omni"."file_nodes"."category" IS '业务分类：image/video/audio/document/novel/comic/archive/other，仅FILE写入';
 COMMENT ON COLUMN "omni"."file_nodes"."size_bytes" IS '大小字节数';
 COMMENT ON COLUMN "omni"."file_nodes"."current_object_id" IS '当前文件对象ID，关联file_objects';
 COMMENT ON COLUMN "omni"."file_nodes"."source_type" IS '来源类型：LOCAL / EXTERNAL / DERIVED';
@@ -2439,7 +2441,8 @@ CREATE TABLE "omni"."storage_connector_oauth_apps" (
   "enabled" bool NOT NULL DEFAULT true,
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "version" int8 NOT NULL DEFAULT 0
+  "version" int8 NOT NULL DEFAULT 0,
+  CONSTRAINT "storage_connector_oauth_apps_pkey" PRIMARY KEY ("id")
 )
 ;
 COMMENT ON COLUMN "omni"."storage_connector_oauth_apps"."connector_code" IS '连接器编码，如 ONEDRIVE';
@@ -2808,6 +2811,11 @@ CREATE INDEX "idx_file_nodes_owner_parent" ON "omni"."file_nodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "parent_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
 ) WHERE is_deleted = false;
+CREATE INDEX "idx_file_nodes_personal_category" ON "omni"."file_nodes" USING btree (
+  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "category" "pg_catalog"."text_ops" ASC NULLS LAST,
+  "name" "pg_catalog"."text_ops" ASC NULLS LAST
+) WHERE is_deleted = false AND space_type::text = 'PERSONAL'::text AND node_type::text = 'FILE'::text;
 CREATE INDEX "idx_file_nodes_owner_path" ON "omni"."file_nodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "normalized_path" "pg_catalog"."text_ops" ASC NULLS LAST

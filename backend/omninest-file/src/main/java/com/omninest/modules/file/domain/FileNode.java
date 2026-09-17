@@ -46,6 +46,10 @@ public class FileNode {
     @Column(name = "mime_type", length = 160)
     private String mimeType;
 
+    /** 业务分类，仅 FILE 节点写入；列表接口按此在库内过滤分页。 */
+    @Column(length = 32)
+    private String category;
+
     @Column(name = "size_bytes", nullable = false)
     private long sizeBytes;
 
@@ -109,11 +113,17 @@ public class FileNode {
         if (updatedAt == null) {
             updatedAt = now;
         }
+        refreshCategory();
     }
 
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+        refreshCategory();
+    }
+
+    private void refreshCategory() {
+        category = FileTypeCategories.resolve(name, mimeType, nodeType);
     }
 
     @Override

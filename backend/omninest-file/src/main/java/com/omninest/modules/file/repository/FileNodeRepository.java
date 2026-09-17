@@ -43,6 +43,44 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     @Query("""
             SELECT n FROM FileNode n
             WHERE n.ownerUserId = :ownerUserId
+              AND n.spaceType = :spaceType
+              AND n.deleted = false
+              AND n.nodeType = 'FILE'
+              AND n.category = :category
+              AND (n.sourceType IS NULL OR n.sourceType NOT IN ('DERIVED', 'LOCAL_FILESYSTEM'))
+            """)
+    Page<FileNode> findVisiblePersonalCategoryPage(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
+            @Param("category") String category,
+            Pageable pageable);
+
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.ownerUserId = :ownerUserId
+              AND n.deleted = false
+              AND n.nodeType = 'FILE'
+              AND n.category = :category
+              AND (n.sourceType IS NULL OR n.sourceType NOT IN ('DERIVED', 'LOCAL_FILESYSTEM'))
+              AND n.normalizedPath LIKE concat(:pathPrefix, '%')
+            """)
+    Page<FileNode> findVisibleSubtreeCategoryPage(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("pathPrefix") String pathPrefix,
+            @Param("category") String category,
+            Pageable pageable);
+
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.nodeType = :nodeType
+              AND n.category IS NULL
+            ORDER BY n.id
+            """)
+    Slice<FileNode> findMissingCategoryPage(@Param("nodeType") String nodeType, Pageable pageable);
+
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.ownerUserId = :ownerUserId
               AND n.parentId = :parentId
               AND n.deleted = false
               AND (n.sourceType IS NULL OR n.sourceType NOT IN ('DERIVED', 'LOCAL_FILESYSTEM'))

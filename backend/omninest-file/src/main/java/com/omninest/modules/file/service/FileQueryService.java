@@ -8,6 +8,7 @@ import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FilePermission;
+import com.omninest.modules.file.domain.FileTypeCategories;
 import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
@@ -35,7 +36,6 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -95,17 +95,27 @@ public class FileQueryService {
             int size) {
         String normalizedCategory = normalizeCategory(category);
         Pageable pageable = filePageable(page, size);
+        Page<FileNode> nodes;
         if (normalizedCategory == null) {
-            Page<FileNode> nodes = parentId == null
+            nodes = parentId == null
                     ? fileNodeRepository.findVisiblePersonalRoot(ownerUserId, SpaceType.PERSONAL, pageable)
                     : fileNodeRepository.findVisiblePersonalChildren(ownerUserId, parentId, pageable);
-            return nodes.map(this::toDto);
+        } else if (parentId == null) {
+            nodes = fileNodeRepository.findVisiblePersonalCategoryPage(
+                    ownerUserId, SpaceType.PERSONAL, normalizedCategory, pageable);
+        } else {
+            nodes = fileNodeRepository.findVisibleSubtreeCategoryPage(
+                    ownerUserId,
+                    resolveSubtreePrefix(ownerUserId, parentId),
+                    normalizedCategory,
+                    pageable);
         }
+        return nodes.map(this::toDto);
+    }
 
-        List<FileNodeDto> filtered = listFiles(ownerUserId, parentId, normalizedCategory);
-        int fromIndex = Math.min((int) pageable.getOffset(), filtered.size());
-        int toIndex = Math.min(fromIndex + pageable.getPageSize(), filtered.size());
-        return new PageImpl<>(filtered.subList(fromIndex, toIndex), pageable, filtered.size());
+    private String resolveSubtreePrefix(UUID ownerUserId, UUID parentId) {
+        FileNode parent = resolveParent(ownerUserId, parentId);
+        return parent.getNormalizedPath() + "/";
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -693,112 +703,8 @@ public class FileQueryService {
         if (category == null) {
             return true;
         }
-        if (!"FILE".equals(node.getNodeType())) {
-            return false;
-        }
-        return category.equals(resolveCategory(node));
-    }
-
-    private String resolveCategory(FileNode node) {
-        String extension = resolveExtension(node.getName());
-        String mimeType = node.getMimeType() == null
-                ? ""
-                : node.getMimeType().trim().toLowerCase(Locale.ROOT);
-        if (isComicExtension(extension)) {
-            return "comic";
-        }
-        if (isNovelExtension(extension)) {
-            return "novel";
-        }
-        if (mimeType.startsWith("image/") || isImageExtension(extension)) {
-            return "image";
-        }
-        if (mimeType.startsWith("video/") || isVideoExtension(extension)) {
-            return "video";
-        }
-        if (mimeType.startsWith("audio/") || isAudioExtension(extension)) {
-            return "audio";
-        }
-        if (isDocumentExtension(extension) || isDocumentMimeType(mimeType)) {
-            return "document";
-        }
-        if (isArchiveExtension(extension) || isArchiveMimeType(mimeType)) {
-            return "archive";
-        }
-        return "other";
-    }
-
-    private String resolveExtension(String fileName) {
-        if (fileName == null) {
-            return "";
-        }
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex < 0 || dotIndex == fileName.length() - 1) {
-            return "";
-        }
-        return fileName.substring(dotIndex + 1).toLowerCase(Locale.ROOT);
-    }
-
-    private boolean isComicExtension(String extension) {
-        return Set.of("cbz", "cbr", "cb7", "cbt").contains(extension);
-    }
-
-    private boolean isNovelExtension(String extension) {
-        return Set.of("epub", "mobi", "azw3", "azw", "fb2", "txt").contains(extension);
-    }
-
-    private boolean isImageExtension(String extension) {
-        return Set.of("jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "heif", "avif").contains(extension);
-    }
-
-    private boolean isVideoExtension(String extension) {
-        return Set.of("mp4", "m4v", "mov", "mkv", "webm", "avi", "wmv", "flv", "ts", "m2ts", "3gp").contains(extension);
-    }
-
-    private boolean isAudioExtension(String extension) {
-        return Set.of(
-                "mp3", "flac", "aac", "m4a", "ogg", "opus", "wav", "aiff", "aif", "alac", "wma"
-        ).contains(extension);
-    }
-
-    private boolean isDocumentExtension(String extension) {
-        return Set.of(
-                "pdf",
-                "doc",
-                "docx",
-                "xls",
-                "xlsx",
-                "ppt",
-                "pptx",
-                "md",
-                "rtf",
-                "csv"
-        ).contains(extension);
-    }
-
-    private boolean isDocumentMimeType(String mimeType) {
-        return mimeType.equals("application/pdf")
-                || mimeType.equals("text/markdown")
-                || mimeType.equals("text/csv")
-                || mimeType.equals("application/msword")
-                || mimeType.equals("application/vnd.openxmlformats-officedocument.wordprocessingml.document")
-                || mimeType.equals("application/vnd.ms-excel")
-                || mimeType.equals("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-                || mimeType.equals("application/vnd.ms-powerpoint")
-                || mimeType.equals("application/vnd.openxmlformats-officedocument.presentationml.presentation");
-    }
-
-    private boolean isArchiveExtension(String extension) {
-        return Set.of("zip", "rar", "7z", "tar", "gz", "bz2", "xz").contains(extension);
-    }
-
-    private boolean isArchiveMimeType(String mimeType) {
-        return mimeType.equals("application/zip")
-                || mimeType.equals("application/x-rar-compressed")
-                || mimeType.equals("application/x-7z-compressed")
-                || mimeType.equals("application/x-tar")
-                || mimeType.equals("application/gzip")
-                || mimeType.equals("application/x-bzip2");
+        return category.equals(FileTypeCategories.resolve(
+                node.getName(), node.getMimeType(), node.getNodeType()));
     }
 
     private FileNodeDto toDto(FileNode node) {
