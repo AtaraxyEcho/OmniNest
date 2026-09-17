@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/photos/data/photo_api.dart';
 
@@ -419,11 +420,9 @@ void main() {
       expect(
         () => api.getPhoto('missing-id'),
         throwsA(
-          isA<Exception>().having(
-            (e) => e.toString(),
-            'message',
-            contains('404'),
-          ),
+          isA<AppException>()
+              .having((e) => e.code, 'code', '404')
+              .having((e) => e.message, 'message', contains('照片')),
         ),
       );
     });

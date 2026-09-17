@@ -10,7 +10,7 @@ import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/core/widgets/animated_card.dart';
-import 'package:omninest/features/admin/domain/admin_console_access.dart';
+import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';

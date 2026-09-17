@@ -13,12 +13,14 @@ void main() {
     expect(error.toString(), isNot(contains('400')));
   });
 
-  test('describeUserFacingError 无 l10n 时优先 message', () {
+  test('describeUserFacingError 无 l10n 时优先稳定错误码', () {
     const error = AppException(
       code: '400',
       message: '密码不能使用常见弱口令或与用户名相同',
     );
     final described = describeUserFacingError(error);
-    expect(described.message, '密码不能使用常见弱口令或与用户名相同');
+    // application 层写入错误码，展示层再按 l10n 映射为可读文案。
+    expect(described.message, '400');
+    expect(described.code, '400');
   });
 }

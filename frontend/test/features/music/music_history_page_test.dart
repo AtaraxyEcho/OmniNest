@@ -81,7 +81,13 @@ class _MemoryStore implements MusicPlaybackQueueStore {
 
 class _HistoryApiStub implements MusicApi {
   final requestedPages = <int>[];
-  final repeatedAt = DateTime.now().subtract(const Duration(hours: 2));
+  // 固定为「今天中午 / 昨天 / 前天」，避免贴近午夜时 now-2h 落入昨日导致分组与预期不符。
+  late final DateTime todayNoon = () {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day, 12);
+  }();
+  late final DateTime yesterdayNoon = todayNoon.subtract(const Duration(days: 1));
+  late final DateTime dayBeforeNoon = todayNoon.subtract(const Duration(days: 2));
 
   List<MusicPlayHistoryEntry> _page(int page) {
     switch (page) {
@@ -91,13 +97,13 @@ class _HistoryApiStub implements MusicApi {
             playableKey: 'local:track-1',
             title: 'History Local',
             artistName: 'Artist A',
-            playedAt: repeatedAt,
+            playedAt: todayNoon,
           ),
           MusicPlayHistoryEntry(
             playableKey: 'online:netease:888',
             title: 'History Online',
             artistName: 'Artist B',
-            playedAt: DateTime.now().subtract(const Duration(days: 1)),
+            playedAt: yesterdayNoon,
           ),
         ];
       case 1:
@@ -106,14 +112,14 @@ class _HistoryApiStub implements MusicApi {
             playableKey: 'local:track-3',
             title: 'History Page2',
             artistName: 'Artist C',
-            playedAt: DateTime.now().subtract(const Duration(days: 2)),
+            playedAt: dayBeforeNoon,
           ),
           MusicPlayHistoryEntry(
             playableKey: 'local:track-1',
             title: 'History Local',
             artistName: 'Artist A',
             // 与首页重复的条目（同 key 同时间），应被去重
-            playedAt: repeatedAt,
+            playedAt: todayNoon,
           ),
         ];
       default:

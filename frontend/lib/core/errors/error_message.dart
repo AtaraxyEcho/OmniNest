@@ -47,10 +47,11 @@ UserFacingError _describeAppException(
   AppException error,
   AppLocalizations? l10n,
 ) {
+  // 无 l10n 时写入稳定错误码，便于 application 状态存储与展示层再映射。
   final message =
       l10n != null
           ? l10n.messageForErrorCode(error.code, fallback: error.message)
-          : (error.message.isNotEmpty ? error.message : error.code);
+          : (error.code.isNotEmpty ? error.code : error.message);
   return UserFacingError(
     title: l10n?.errorOperationFailed ?? AppErrorCodes.operationFailed,
     message: message,

@@ -109,14 +109,14 @@ void main() {
       expect(result.first.canRetry, isTrue);
     });
 
-    test('retry sends POST to /tasks/dlq/:id/retry', () async {
+    test('retry sends POST to /tasks/:id/retry for owned tasks', () async {
       final adapter = _CapturingHttpClientAdapter();
       final api = TaskApi(_apiClient(adapter));
 
       await api.retry('task-fail');
 
       expect(adapter.lastMethod, 'POST');
-      expect(adapter.lastPath, '/tasks/dlq/task-fail/retry');
+      expect(adapter.lastPath, '/tasks/task-fail/retry');
     });
   });
 }

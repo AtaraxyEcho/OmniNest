@@ -1,5 +1,3 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 
 /// 管理台入口权限码。
@@ -48,9 +46,3 @@ bool canAccessAdminConsoleUser(UserProfile? user) {
     userRoles: user.roles,
   );
 }
-
-/// 当前会话是否可进入系统管理台。
-final canAccessAdminConsoleProvider = Provider<bool>((ref) {
-  final session = ref.watch(authSessionProvider).asData?.value;
-  return canAccessAdminConsoleUser(session?.user);
-});

@@ -10,10 +10,10 @@ void main() {
     );
 
     expect(message.title, 'OPERATION_FAILED');
-    // 未提供 l10n 时优先服务端 message，避免把错误码当主文案。
-    expect(message.message, '存储配额不足');
+    // 未提供 l10n 时写入稳定错误码，展示层用 localizeUserFacing 再翻译。
+    expect(message.message, 'FILE_QUOTA_EXCEEDED');
     expect(message.code, 'FILE_QUOTA_EXCEEDED');
-    expect(message.displayMessage, contains('存储配额不足'));
+    expect(message.displayMessage, contains('FILE_QUOTA_EXCEEDED'));
   });
 
   test('formats dio response message from backend payload', () {

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/features/admin/domain/admin_console_access.dart';
+import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
 
 class TaskStatusWidget extends ConsumerWidget {
   const TaskStatusWidget({

@@ -164,18 +164,26 @@ class MusicHistoryController extends AsyncNotifier<MusicHistoryState> {
       addEntry(entry);
     }
     final now = DateTime.now();
+    final todayLocal = DateTime(now.year, now.month, now.day);
     return [
       for (final key in order)
         MusicHistoryDayGroup(
-          dayKey: DateTime.parse(key),
-          label: _dayLabel(key, now),
+          // dayKey 使用本地日零点，避免 DateTime.parse 按 UTC 解析导致日期标签错位。
+          dayKey: DateTime.parse('${key}T00:00:00').toLocal(),
+          label: _dayLabel(key, todayLocal),
           entries:
               byDay[key]!..sort((a, b) => b.playedAt.compareTo(a.playedAt)),
         ),
     ];
   }
 
-  String _dayLabel(String dayKey, DateTime now) {
+  String _dayLabel(String dayKey, DateTime todayLocal) {
+    final day = DateTime.parse('${dayKey}T00:00:00').toLocal();
+    final diff =
+        todayLocal.difference(DateTime(day.year, day.month, day.day)).inDays;
+    if (diff == 0) {
+      return dayKey;
+    }
     return dayKey;
   }
 
