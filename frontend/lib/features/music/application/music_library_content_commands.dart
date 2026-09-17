@@ -13,7 +13,8 @@ extension MusicLibraryContentCommands on MusicCenterController {
     _replaceState(current.copyWith(tracksLoadingMore: true));
     final generation = _refreshGeneration;
     try {
-      final page = current.tracks.length ~/ MusicCenterController.musicLibraryPageSize;
+      final page =
+          current.tracks.length ~/ MusicCenterController.musicLibraryPageSize;
       final result = await _api.tracks(
         page: page,
         size: MusicCenterController.musicLibraryPageSize,
@@ -27,9 +28,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
       }
       final knownIds = latest.tracks.map((track) => track.id).toSet();
       final merged = List<MusicTrack>.of(latest.tracks)
-        ..addAll(
-          result.items.where((track) => knownIds.add(track.id)),
-        );
+        ..addAll(result.items.where((track) => knownIds.add(track.id)));
       _replaceState(
         latest.copyWith(
           tracks: List<MusicTrack>.unmodifiable(merged),

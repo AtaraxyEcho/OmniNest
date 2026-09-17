@@ -3,14 +3,18 @@ package com.omninest.modules.search.service;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.omninest.modules.search.dto.SearchResultDto;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.CleanupMode;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
@@ -19,7 +23,7 @@ import org.junit.jupiter.api.io.TempDir;
  */
 class FileSearchIndexServiceTest {
 
-    @TempDir
+    @TempDir(cleanup = CleanupMode.NEVER)
     Path tempDir;
 
     private FileSearchIndexService service;
@@ -33,8 +37,45 @@ class FileSearchIndexServiceTest {
     }
 
     @AfterEach
-    void tearDown() {
+    void tearDown() throws Exception {
         service.close();
+        deleteTempDirWithRetry();
+    }
+
+    /**
+     * Windows 上 Lucene 关闭后句柄释放可能略有延迟，JUnit 默认清理会偶发失败。
+     */
+    private void deleteTempDirWithRetry() throws Exception {
+        IOException last = null;
+        for (int attempt = 0; attempt < 20; attempt++) {
+            try {
+                if (!Files.exists(tempDir)) {
+                    return;
+                }
+                try (Stream<Path> walk = Files.walk(tempDir)) {
+                    walk.sorted(Comparator.reverseOrder()).forEach(path -> {
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException e) {
+                            throw new RuntimeException(e);
+                        }
+                    });
+                }
+                return;
+            } catch (RuntimeException e) {
+                if (e.getCause() instanceof IOException io) {
+                    last = io;
+                } else {
+                    throw e;
+                }
+            } catch (IOException e) {
+                last = e;
+            }
+            Thread.sleep(50L);
+        }
+        if (last != null) {
+            throw last;
+        }
     }
 
     @Test

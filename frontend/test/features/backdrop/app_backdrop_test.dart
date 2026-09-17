@@ -199,7 +199,10 @@ void main() {
       expect(settings.alignment, AppBackdropAlignment.center);
       expect(AppBackdropFit.fromValue('fill'), AppBackdropFit.fill);
       expect(AppBackdropAlignment.fromValue('top'), AppBackdropAlignment.top);
-      expect(AppBackdropAlignment.fromValue('unknown'), AppBackdropAlignment.center);
+      expect(
+        AppBackdropAlignment.fromValue('unknown'),
+        AppBackdropAlignment.center,
+      );
     });
 
     test('开启隔离时从共享选择初始化两端槽位', () {

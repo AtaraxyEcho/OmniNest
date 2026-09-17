@@ -515,9 +515,7 @@ class _TextPreview extends ConsumerWidget {
       error:
           (error, stackTrace) => Center(
             child: Text(
-              AppLocalizations.of(
-                context,
-              ).filesLoadFailed(
+              AppLocalizations.of(context).filesLoadFailed(
                 describeUserFacingError(
                   error,
                   l10n: AppLocalizations.of(context),

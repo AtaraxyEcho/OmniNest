@@ -70,9 +70,7 @@ class AppBackdropLocalVideoCache {
         return null;
       }
       final root = await _ensureRoot();
-      final target = File(
-        '${root.path}${Platform.pathSeparator}$assetId.mp4',
-      );
+      final target = File('${root.path}${Platform.pathSeparator}$assetId.mp4');
       if (await target.exists() && await target.length() > 0) {
         if (epoch == _cacheEpoch) {
           _readyById[assetId] = target.path;
@@ -112,9 +110,7 @@ class AppBackdropLocalVideoCache {
     _readyById.remove(assetId);
     try {
       final root = await _ensureRoot();
-      final file = File(
-        '${root.path}${Platform.pathSeparator}$assetId.mp4',
-      );
+      final file = File('${root.path}${Platform.pathSeparator}$assetId.mp4');
       if (await file.exists()) {
         await file.delete();
       }

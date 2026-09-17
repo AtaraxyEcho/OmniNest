@@ -223,10 +223,7 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     required String accountId,
   }) {
     return _repository
-        .startExternalOAuth(
-          connectorCode: connectorCode,
-          accountId: accountId,
-        )
+        .startExternalOAuth(connectorCode: connectorCode, accountId: accountId)
         .timeout(const Duration(seconds: 20));
   }
 

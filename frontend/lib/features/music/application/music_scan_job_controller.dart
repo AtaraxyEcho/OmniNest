@@ -134,7 +134,9 @@ class MusicScanJobController extends Notifier<MusicScanJobState> {
         return;
       }
       // 轮询失败不打断进行中的任务，仅记录最近一次错误。
-      state = current.copyWith(errorMessage: describeUserFacingError(error).message);
+      state = current.copyWith(
+        errorMessage: describeUserFacingError(error).message,
+      );
     }
   }
 

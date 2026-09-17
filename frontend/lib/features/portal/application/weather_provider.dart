@@ -340,8 +340,7 @@ final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
 
   final location = await ref.watch(userLocationProvider.future);
   // 后端可能因 GPS 优先而未回填地区名，这里用用户偏好城市兜底。
-  final preferredCity =
-      ref.watch(weatherLocationProvider).asData?.value ?? '';
+  final preferredCity = ref.watch(weatherLocationProvider).asData?.value ?? '';
 
   try {
     final apiClient = ref.watch(apiClientProvider);

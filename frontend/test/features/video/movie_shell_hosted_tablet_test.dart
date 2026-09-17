@@ -68,10 +68,10 @@ void main() {
           theme: OmniNestTheme.dark(),
           home: MovieShell(
             section: MovieSection.movies,
-              child: const SizedBox(
-                key: Key('movie-desktop-content'),
-                height: 240,
-              ),
+            child: const SizedBox(
+              key: Key('movie-desktop-content'),
+              height: 240,
+            ),
           ),
         ),
       ),

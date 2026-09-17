@@ -19,13 +19,13 @@ final appBackdropRepositoryProvider = Provider<AppBackdropRepository>((ref) {
   return AppBackdropRepository(ref.watch(localDatabaseProvider));
 });
 
-final appBackdropLocalVideoCacheProvider = Provider<AppBackdropLocalVideoCache>((
-  ref,
-) {
-  final cache = AppBackdropLocalVideoCache();
-  ref.onDispose(cache.dispose);
-  return cache;
-});
+final appBackdropLocalVideoCacheProvider = Provider<AppBackdropLocalVideoCache>(
+  (ref) {
+    final cache = AppBackdropLocalVideoCache();
+    ref.onDispose(cache.dispose);
+    return cache;
+  },
+);
 
 final appBackdropApiProvider = Provider<BackdropApi>((ref) {
   return BackdropApi(ref.watch(apiClientProvider));
@@ -128,9 +128,8 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
           );
           await repository.saveSettings(next);
           loaded = await _loadCurrentState(repository);
-          }
-      } else {
         }
+      } else {}
     }
     return loaded;
   }
@@ -295,8 +294,7 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     final after =
         state.asData?.value ??
         await _loadCurrentState(ref.read(appBackdropRepositoryProvider));
-    if (after.settings.selectedBackdropId != id ||
-        !after.hasActiveBackdrop) {
+    if (after.settings.selectedBackdropId != id || !after.hasActiveBackdrop) {
       await _applySettings(updated);
     }
   }
@@ -466,18 +464,15 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     final cache = ref.read(appBackdropLocalVideoCacheProvider);
     final removed = await cache.evictAll();
     _localVideoPaths.clear();
-    final loaded = await ref
-        .read(appBackdropRepositoryProvider)
-        .loadState();
-    final assets =
-        loaded.backdrops
-            .map(
-              (backdrop) =>
-                  backdrop.localVideoPath == null
-                      ? backdrop
-                      : backdrop.copyWith(localVideoPath: null),
-            )
-            .toList(growable: false);
+    final loaded = await ref.read(appBackdropRepositoryProvider).loadState();
+    final assets = loaded.backdrops
+        .map(
+          (backdrop) =>
+              backdrop.localVideoPath == null
+                  ? backdrop
+                  : backdrop.copyWith(localVideoPath: null),
+        )
+        .toList(growable: false);
     state = AsyncData(
       loaded.copyWith(
         backdrops: assets,
@@ -524,11 +519,14 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     AppBackdropRepository repository,
   ) async {
     final loaded = await repository.loadState();
-    final assets =
-        loaded.backdrops.map((backdrop) {
+    final assets = loaded.backdrops
+        .map((backdrop) {
           final local = _localVideoPaths[backdrop.id];
-          return local == null ? backdrop : backdrop.copyWith(localVideoPath: local);
-        }).toList(growable: false);
+          return local == null
+              ? backdrop
+              : backdrop.copyWith(localVideoPath: local);
+        })
+        .toList(growable: false);
     final withLocal = loaded.copyWith(
       backdrops: assets,
       selectionTarget: ref.read(appBackdropSelectionTargetProvider),
@@ -561,12 +559,13 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
         if (current == null) {
           return;
         }
-        final nextAssets =
-            current.backdrops.map((backdrop) {
+        final nextAssets = current.backdrops
+            .map((backdrop) {
               return backdrop.id == assetId
                   ? backdrop.copyWith(localVideoPath: local)
                   : backdrop;
-            }).toList(growable: false);
+            })
+            .toList(growable: false);
         this.state = AsyncData(current.copyWith(backdrops: nextAssets));
       }),
     );

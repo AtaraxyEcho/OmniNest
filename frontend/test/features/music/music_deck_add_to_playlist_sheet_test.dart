@@ -94,16 +94,35 @@ class _StubMusicApi implements MusicApi {
   Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
 
   @override
-  Future<MusicPagedResult<MusicTrack>> tracks({int page = 0, int size = 100, String sort = 'title,asc'}) async =>
-      MusicPagedResult<MusicTrack>(items: const [_track]);
+  Future<MusicPagedResult<MusicTrack>> tracks({
+    int page = 0,
+    int size = 100,
+    String sort = 'title,asc',
+  }) async => MusicPagedResult<MusicTrack>(items: const [_track]);
 
   @override
-  Future<MusicPagedResult<MusicAlbum>> albums({int page = 0, int size = 100, String sort = 'updatedAt,desc'}) async =>
-      const MusicPagedResult<MusicAlbum>(items: <MusicAlbum>[], page: 0, size: 0, totalElements: 0);
+  Future<MusicPagedResult<MusicAlbum>> albums({
+    int page = 0,
+    int size = 100,
+    String sort = 'updatedAt,desc',
+  }) async => const MusicPagedResult<MusicAlbum>(
+    items: <MusicAlbum>[],
+    page: 0,
+    size: 0,
+    totalElements: 0,
+  );
 
   @override
-  Future<MusicPagedResult<MusicArtist>> artists({int page = 0, int size = 100, String sort = 'name,asc'}) async =>
-      const MusicPagedResult<MusicArtist>(items: <MusicArtist>[], page: 0, size: 0, totalElements: 0);
+  Future<MusicPagedResult<MusicArtist>> artists({
+    int page = 0,
+    int size = 100,
+    String sort = 'name,asc',
+  }) async => const MusicPagedResult<MusicArtist>(
+    items: <MusicArtist>[],
+    page: 0,
+    size: 0,
+    totalElements: 0,
+  );
 
   @override
   Future<List<MusicPlaylist>> playlists() async => const [_playlist];

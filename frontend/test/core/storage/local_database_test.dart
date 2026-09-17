@@ -188,7 +188,7 @@ void main() {
   );
 
   test(
-    'schema v12 backdrop tables migrate to device separation without losing data',
+    'schema v12 backdrop tables rename and purge retired local file assets',
     () async {
       await db.close();
       dbOpen = false;
@@ -250,9 +250,8 @@ void main() {
       final settings =
           await migrated.select(migrated.appBackdropSettingsTable).get();
 
-      expect(assets, hasLength(1));
-      expect(assets.single.id, 'asset-1');
-      expect(assets.single.path, 'D:/Media/scene.mp4');
+      // v19 将背景事实来源改为服务端，本机 file/directory 素材行被清理。
+      expect(assets, isEmpty);
       expect(settings, hasLength(1));
       expect(settings.single.id, 'application');
       expect(settings.single.selectedBackdropId, 'asset-1');

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
@@ -59,10 +60,33 @@ class NotificationApi {
   }
 
   Future<void> clearAll() async {
-    final response = await _client.dio.delete<Map<String, dynamic>>(
-      '/notifications',
+    try {
+      final response = await _client.dio.delete<Map<String, dynamic>>(
+        '/notifications',
+      );
+      _requireSuccess(response.data);
+    } on DioException catch (error) {
+      throw _toAppException(error);
+    }
+  }
+
+  AppException _toAppException(DioException error) {
+    final data = error.response?.data;
+    if (data is Map) {
+      final code = data['code'];
+      final message = data['message']?.toString();
+      return AppException(
+        code:
+            code?.toString() ??
+            error.response?.statusCode?.toString() ??
+            'NOTIFICATION_ERROR',
+        message: message?.isNotEmpty == true ? message! : '通知操作失败',
+      );
+    }
+    return AppException(
+      code: error.response?.statusCode?.toString() ?? 'NOTIFICATION_ERROR',
+      message: error.message?.isNotEmpty == true ? error.message! : '通知操作失败',
     );
-    _requireSuccess(response.data);
   }
 
   void _requireSuccess(Map<String, dynamic>? body) {

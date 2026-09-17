@@ -288,11 +288,10 @@ class AppBackdropRepository {
             );
     final hasUsableSelection =
         aligned.separateDeviceBackdrops
-            ? aligned.desktopBackdropId != null || aligned.mobileBackdropId != null
+            ? aligned.desktopBackdropId != null ||
+                aligned.mobileBackdropId != null
             : aligned.selectedBackdropId != null;
-    return aligned.copyWith(
-      enabled: aligned.enabled && hasUsableSelection,
-    );
+    return aligned.copyWith(enabled: aligned.enabled && hasUsableSelection);
   }
 
   String? _availableSelection(String? id, Set<String> availableIds) {

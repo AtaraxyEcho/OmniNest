@@ -13,7 +13,7 @@ void main() {
     expect(web.maximumEntries, 220);
     expect(web.maximumBytes, 96 * 1024 * 1024);
     expect(desktop.maximumEntries, 320);
-    expect(desktop.maximumBytes, 192 * 1024 * 1024);
+    expect(desktop.maximumBytes, 384 * 1024 * 1024);
   });
 
   test('配置会同时更新条目数和字节预算', () {

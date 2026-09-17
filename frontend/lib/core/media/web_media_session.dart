@@ -1,5 +1,6 @@
 import 'web_media_session_stub.dart'
-    if (dart.library.js_interop) 'web_media_session_web.dart' as impl;
+    if (dart.library.js_interop) 'web_media_session_web.dart'
+    as impl;
 
 /// Web Media Session 绑定器：把浏览器/系统媒体控件（媒体键、锁屏面板）
 /// 接入音乐播放命令，并把当前曲目元数据与播放状态同步给浏览器。

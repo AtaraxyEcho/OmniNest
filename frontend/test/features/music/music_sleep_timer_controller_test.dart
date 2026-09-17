@@ -29,9 +29,6 @@ void main() {
     expect(switched.remaining, isNull);
 
     notifier.toggleStopAfterCurrentTrack();
-    expect(
-      container.read(musicSleepTimerControllerProvider).active,
-      isFalse,
-    );
+    expect(container.read(musicSleepTimerControllerProvider).active, isFalse);
   });
 }

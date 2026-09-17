@@ -308,10 +308,9 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
       error:
           (error, stackTrace) => Scaffold(
             body: AppErrorView(
-              message:
-                  AppLocalizations.of(
-                    context,
-                  ).localizeUserFacing(describeUserFacingError(error)),
+              message: AppLocalizations.of(
+                context,
+              ).localizeUserFacing(describeUserFacingError(error)),
               onRetry: () => ref.invalidate(fileBrowserControllerProvider),
             ),
           ),

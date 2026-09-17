@@ -37,8 +37,11 @@ class SystemNotifier {
     );
     try {
       await _plugin.initialize(settings);
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android =
+          _plugin
+              .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin
+              >();
       // Android 13+ 运行时通知权限（清单已声明 POST_NOTIFICATIONS）。
       await android?.requestNotificationsPermission();
       _initialized = true;

@@ -291,9 +291,8 @@ class _OfflineDownloadWorkspace extends ConsumerWidget {
           ),
           onPressed:
               enabled
-                  ? () => unawaited(
-                    _createOfflineDownloadWithSpace(context, ref),
-                  )
+                  ? () =>
+                      unawaited(_createOfflineDownloadWithSpace(context, ref))
                   : null,
           icon: const Icon(Icons.add_link_rounded, size: 18),
           label: Text(l10n.filesNewTask),

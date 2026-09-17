@@ -1,2 +1,10 @@
 # 字号治理基线：每文件允许的裸数字字号违规数（格式：路径 数量）
 # 迁移批次完成后销号递减；白名单行使用 // ignore: font_size_whitelist
+# 0.1.0 发布前登记的存量回归，禁止新增。
+lib/features/music/presentation/player/music_immersive_overlay.dart 1
+lib/features/music/presentation/player/music_visual_color_picker.dart 1
+lib/features/music/presentation/widgets/music_volume_button.dart 1
+lib/features/portal/presentation/widgets/weather_detail_dialog.dart 3
+lib/features/reader/presentation/pages/reader_admin_page.dart 5
+lib/features/reader/presentation/widgets/reader_image_preview.dart 1
+lib/features/reader/presentation/widgets/reader_import_section.dart 8

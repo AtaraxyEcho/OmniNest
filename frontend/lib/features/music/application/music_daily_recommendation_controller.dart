@@ -39,8 +39,7 @@ class MusicDailyRecommendationController
       }),
     );
     final sources = ref.watch(musicDeckSourceSelectionProvider);
-    final visible =
-        neteaseVisible && sources.contains(MusicPlatform.netease);
+    final visible = neteaseVisible && sources.contains(MusicPlatform.netease);
     if (!visible) {
       return null;
     }
@@ -65,5 +64,4 @@ class MusicDailyRecommendationController
   void retry() {
     ref.invalidateSelf();
   }
-
 }

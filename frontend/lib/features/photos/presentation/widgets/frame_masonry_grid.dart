@@ -136,8 +136,10 @@ class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
                     columnWidth * masonryTotalLogicalHeight(placed);
                 // 视口 + 固定预取，滚动时仅构建相交 tile。
                 const cachePad = 600.0;
-                final cacheTop = (constraints.scrollOffset - cachePad)
-                    .clamp(0.0, double.infinity);
+                final cacheTop = (constraints.scrollOffset - cachePad).clamp(
+                  0.0,
+                  double.infinity,
+                );
                 final cacheBottom =
                     constraints.scrollOffset +
                     constraints.remainingPaintExtent +

@@ -557,8 +557,7 @@ class _FakeFileRepository implements FileRepository {
   final deletedSharedFileIds = <String>[];
   final createdSharedFolderNames = <String>[];
   final renamedSharedFileIds = <String>[];
-  final deletedExternalPaths = <String>[];
-  final renamedExternalPaths = <String>[];
+
   final sharedFilesByParent = <String?, List<FileNode>>{};
   final sharedParentRequests = <String?>[];
   final personalFilesByPage = <int, List<FileNode>>{};
@@ -568,7 +567,6 @@ class _FakeFileRepository implements FileRepository {
   final firstUploadResult = Completer<String>();
   final secondUploadResult = Completer<String>();
   Completer<void>? deleteFileCompleter;
-  Completer<void>? deleteExternalFileCompleter;
   Completer<List<ExternalFileItem>>? externalBrowseCompleter;
   Object? deleteFileError;
   Object? externalBrowseError;
@@ -952,28 +950,6 @@ class _FakeFileRepository implements FileRepository {
           trashedBytes: 0,
         ),
       );
-
-  @override
-  Future<void> mkdirExternalStorage(String accountId, String remotePath) =>
-      throw UnimplementedError();
-
-  @override
-  Future<void> deleteExternalFile(String accountId, String remotePath) async {
-    deletedExternalPaths.add(remotePath);
-    final completer = deleteExternalFileCompleter;
-    if (completer != null) {
-      await completer.future;
-    }
-  }
-
-  @override
-  Future<void> renameExternalFile(
-    String accountId, {
-    required String oldPath,
-    required String newName,
-  }) async {
-    renamedExternalPaths.add('$oldPath->$newName');
-  }
 
   // 共享空间相关方法
   @override

@@ -43,8 +43,7 @@ class _ControllableAuthSessionNotifier extends AuthSessionNotifier {
 }
 
 void main() {
-  test('role permission update refreshes session only for own roles',
-      () async {
+  test('role permission update refreshes session only for own roles', () async {
     final api = _MockAdminOperationsApi();
     const roleDetail = AdminRoleDetail(
       code: 'MEMBER',
@@ -90,9 +89,9 @@ void main() {
       quotaBytes: 0,
       usedBytes: 0,
     );
-    when(() => api.updateUserRoles(any(), any())).thenAnswer(
-      (_) async => updatedUser,
-    );
+    when(
+      () => api.updateUserRoles(any(), any()),
+    ).thenAnswer((_) async => updatedUser);
     when(
       () => api.listUsers(page: any(named: 'page'), size: any(named: 'size')),
     ).thenAnswer((_) async => (items: <AdminUser>[], total: 0));

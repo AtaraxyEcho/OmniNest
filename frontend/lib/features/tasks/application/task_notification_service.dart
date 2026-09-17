@@ -105,9 +105,10 @@ final taskSystemNotificationBindingProvider = Provider<void>((ref) {
       unawaited(
         SystemNotifier.instance.show(
           id: event.taskId.hashCode & 0x7fffffff,
-          title: event.failed
-              ? l10n.taskNotifyTitleFailed
-              : l10n.taskNotifyTitleCompleted,
+          title:
+              event.failed
+                  ? l10n.taskNotifyTitleFailed
+                  : l10n.taskNotifyTitleCompleted,
           body:
               '${event.taskType}${event.summary.isEmpty ? '' : ': ${event.summary}'}',
         ),

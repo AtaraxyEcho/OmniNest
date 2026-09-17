@@ -693,10 +693,9 @@ class _PortalRecentPhotoGrid extends ConsumerWidget {
                 return MobilePressable(
                   semanticLabel: photo.title,
                   onTap: () {
-                    ref.read(photoBrowseScopeProvider.notifier).set(
-                      items,
-                      PhotoBrowseSource.library,
-                    );
+                    ref
+                        .read(photoBrowseScopeProvider.notifier)
+                        .set(items, PhotoBrowseSource.library);
                     context.push('/photos/${photo.id}');
                   },
                   child: ClipRRect(

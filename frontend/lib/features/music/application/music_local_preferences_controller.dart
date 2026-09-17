@@ -40,9 +40,6 @@ class MusicLocalPreferencesController extends AsyncNotifier<String> {
 
   Future<void> setPlaybackSpeed(double speed) async {
     await ref.read(musicLocalPreferenceStoreProvider).savePlaybackSpeed(speed);
-    ref
-        .read(musicPlaybackSessionProvider)
-        .player
-        .setRelativePlaySpeed(speed);
+    ref.read(musicPlaybackSessionProvider).player.setRelativePlaySpeed(speed);
   }
 }

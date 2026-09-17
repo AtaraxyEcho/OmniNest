@@ -71,11 +71,8 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    final events = container.listen(
-      userIdEventRecorderProvider,
-      (_, _,
-      ) {},
-    ).read();
+    final events =
+        container.listen(userIdEventRecorderProvider, (_, _) {}).read();
     final auth =
         container.read(authSessionProvider.notifier)
             as _ControllableAuthSessionNotifier;
@@ -95,11 +92,8 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
-    final events = container.listen(
-      userIdEventRecorderProvider,
-      (_, _,
-      ) {},
-    ).read();
+    final events =
+        container.listen(userIdEventRecorderProvider, (_, _) {}).read();
     final auth =
         container.read(authSessionProvider.notifier)
             as _ControllableAuthSessionNotifier;

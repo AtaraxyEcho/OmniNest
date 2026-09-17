@@ -54,6 +54,29 @@ class LocalDatabase extends _$LocalDatabase {
   @override
   int get schemaVersion => 21;
 
+  Future<bool> _tableExists(Migrator migrator, String tableName) async {
+    final rows =
+        await migrator.database
+            .customSelect(
+              'SELECT name FROM sqlite_master WHERE type = \'table\' AND name = ?',
+              variables: [Variable.withString(tableName)],
+            )
+            .get();
+    return rows.isNotEmpty;
+  }
+
+  Future<bool> _columnExists(
+    Migrator migrator,
+    String tableName,
+    String columnName,
+  ) async {
+    final rows =
+        await migrator.database
+            .customSelect('PRAGMA table_info(\'$tableName\')')
+            .get();
+    return rows.any((row) => row.read<String>('name') == columnName);
+  }
+
   @override
   MigrationStrategy get migration {
     return MigrationStrategy(
@@ -134,27 +157,55 @@ class LocalDatabase extends _$LocalDatabase {
         }
         // Schema v13：将 Portal 专属背景表原位迁移为应用级背景表。
         if (from >= 12 && from < 13) {
-          await migrator.database.customStatement(
-            'ALTER TABLE portal_local_backdrops RENAME TO app_backdrop_assets',
-          );
-          await migrator.database.customStatement(
-            'ALTER TABLE portal_local_backdrop_settings RENAME TO app_backdrop_settings',
-          );
-          await migrator.database.customStatement(
-            "UPDATE app_backdrop_settings SET id = 'application' WHERE id = 'digital_gallery'",
-          );
+          if (await _tableExists(migrator, 'portal_local_backdrops') &&
+              !await _tableExists(migrator, 'app_backdrop_assets')) {
+            await migrator.database.customStatement(
+              'ALTER TABLE portal_local_backdrops RENAME TO app_backdrop_assets',
+            );
+          }
+          if (await _tableExists(migrator, 'portal_local_backdrop_settings') &&
+              !await _tableExists(migrator, 'app_backdrop_settings')) {
+            await migrator.database.customStatement(
+              'ALTER TABLE portal_local_backdrop_settings RENAME TO app_backdrop_settings',
+            );
+          }
+          if (await _tableExists(migrator, 'app_backdrop_settings')) {
+            await migrator.database.customStatement(
+              "UPDATE app_backdrop_settings SET id = 'application' WHERE id = 'digital_gallery'",
+            );
+          }
         }
         // Schema v14：背景库增加桌面端与移动端独立选择。
         if (from >= 12 && from < 14) {
-          await migrator.database.customStatement(
-            'ALTER TABLE app_backdrop_settings ADD COLUMN separate_device_backdrops INTEGER NOT NULL DEFAULT 0',
-          );
-          await migrator.database.customStatement(
-            'ALTER TABLE app_backdrop_settings ADD COLUMN desktop_backdrop_id TEXT',
-          );
-          await migrator.database.customStatement(
-            'ALTER TABLE app_backdrop_settings ADD COLUMN mobile_backdrop_id TEXT',
-          );
+          if (await _tableExists(migrator, 'app_backdrop_settings')) {
+            if (!await _columnExists(
+              migrator,
+              'app_backdrop_settings',
+              'separate_device_backdrops',
+            )) {
+              await migrator.database.customStatement(
+                'ALTER TABLE app_backdrop_settings ADD COLUMN separate_device_backdrops INTEGER NOT NULL DEFAULT 0',
+              );
+            }
+            if (!await _columnExists(
+              migrator,
+              'app_backdrop_settings',
+              'desktop_backdrop_id',
+            )) {
+              await migrator.database.customStatement(
+                'ALTER TABLE app_backdrop_settings ADD COLUMN desktop_backdrop_id TEXT',
+              );
+            }
+            if (!await _columnExists(
+              migrator,
+              'app_backdrop_settings',
+              'mobile_backdrop_id',
+            )) {
+              await migrator.database.customStatement(
+                'ALTER TABLE app_backdrop_settings ADD COLUMN mobile_backdrop_id TEXT',
+              );
+            }
+          }
         }
         // Schema v15：新增全平台实时同步游标、失效和事件去重表。
         if (from < 15) {
@@ -203,20 +254,16 @@ class LocalDatabase extends _$LocalDatabase {
         // Schema v19：背景库改为服务端事实来源,清理已退役的本机素材行。
         // 本机路径无法跨端表达,引用它们的选择会由归一化回落到内置壁纸。
         if (from >= 12 && from < 19) {
-          await migrator.database.customStatement(
-            "DELETE FROM app_backdrop_assets WHERE source_type IN ('file', 'directory')",
-          );
+          if (await _tableExists(migrator, 'app_backdrop_assets')) {
+            await migrator.database.customStatement(
+              "DELETE FROM app_backdrop_assets WHERE source_type IN ('file', 'directory')",
+            );
+          }
         }
         // Schema v20：背景素材增加服务端生命周期状态,区分处理中/失效/缺失。
         if (from < 20) {
-          final backdropColumns =
-              await migrator.database
-                  .customSelect("PRAGMA table_info('app_backdrop_assets')")
-                  .get();
-          final hasStatus = backdropColumns.any(
-            (row) => row.read<String>('name') == 'status',
-          );
-          if (backdropColumns.isNotEmpty && !hasStatus) {
+          if (await _tableExists(migrator, 'app_backdrop_assets') &&
+              !await _columnExists(migrator, 'app_backdrop_assets', 'status')) {
             await migrator.database.customStatement(
               "ALTER TABLE app_backdrop_assets ADD COLUMN status TEXT NOT NULL DEFAULT 'READY'",
             );
@@ -224,14 +271,12 @@ class LocalDatabase extends _$LocalDatabase {
         }
         // Schema v21：背景设置增加 cover/fill 对齐锚点。
         if (from < 21) {
-          final settingColumns =
-              await migrator.database
-                  .customSelect("PRAGMA table_info('app_backdrop_settings')")
-                  .get();
-          final hasAlignment = settingColumns.any(
-            (row) => row.read<String>('name') == 'alignment',
-          );
-          if (settingColumns.isNotEmpty && !hasAlignment) {
+          if (await _tableExists(migrator, 'app_backdrop_settings') &&
+              !await _columnExists(
+                migrator,
+                'app_backdrop_settings',
+                'alignment',
+              )) {
             await migrator.database.customStatement(
               "ALTER TABLE app_backdrop_settings ADD COLUMN alignment TEXT NOT NULL DEFAULT 'center'",
             );

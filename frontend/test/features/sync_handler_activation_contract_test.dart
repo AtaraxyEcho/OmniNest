@@ -34,19 +34,21 @@ class _SpyTaskListNotifier extends TaskListNotifier {
 }
 
 void main() {
-  test('task handler consumes invalidation when task module never activated',
-      () async {
-    final container = ProviderContainer.test();
-    addTearDown(container.dispose);
-    final handler = TaskSyncHandler(container.read(refHolderProvider));
+  test(
+    'task handler consumes invalidation when task module never activated',
+    () async {
+      final container = ProviderContainer.test();
+      addTearDown(container.dispose);
+      final handler = TaskSyncHandler(container.read(refHolderProvider));
 
-    final consumed = await handler.refresh([
-      _invalidation(scope: RealtimeScope.tasks),
-    ]);
+      final consumed = await handler.refresh([
+        _invalidation(scope: RealtimeScope.tasks),
+      ]);
 
-    expect(consumed, isTrue);
-    expect(container.exists(taskListProvider), isFalse);
-  });
+      expect(consumed, isTrue);
+      expect(container.exists(taskListProvider), isFalse);
+    },
+  );
 
   test('task handler reloads task list when module activated', () async {
     final container = ProviderContainer.test(
@@ -62,8 +64,7 @@ void main() {
 
     expect(consumed, isTrue);
     expect(
-      (container.read(taskListProvider.notifier) as _SpyTaskListNotifier)
-          .loads,
+      (container.read(taskListProvider.notifier) as _SpyTaskListNotifier).loads,
       1,
     );
   });
@@ -85,19 +86,21 @@ void main() {
     expect(container.exists(fileBrowserControllerProvider), isFalse);
   });
 
-  test('file handler consumes invalidation when files module never activated',
-      () async {
-    final container = ProviderContainer.test();
-    addTearDown(container.dispose);
-    final handler = FileSyncHandler(container.read(refHolderProvider));
+  test(
+    'file handler consumes invalidation when files module never activated',
+    () async {
+      final container = ProviderContainer.test();
+      addTearDown(container.dispose);
+      final handler = FileSyncHandler(container.read(refHolderProvider));
 
-    final consumed = await handler.refresh([
-      _invalidation(scope: RealtimeScope.files),
-    ]);
+      final consumed = await handler.refresh([
+        _invalidation(scope: RealtimeScope.files),
+      ]);
 
-    expect(consumed, isTrue);
-    expect(container.exists(fileBrowserControllerProvider), isFalse);
-  });
+      expect(consumed, isTrue);
+      expect(container.exists(fileBrowserControllerProvider), isFalse);
+    },
+  );
 
   test('video task handler consumes invalidation when video module never '
       'activated', () async {
@@ -116,17 +119,19 @@ void main() {
     expect(container.exists(movieCenterControllerProvider), isFalse);
   });
 
-  test('video handler consumes invalidation when video module never activated',
-      () async {
-    final container = ProviderContainer.test();
-    addTearDown(container.dispose);
-    final handler = VideoSyncHandler(container.read(refHolderProvider));
+  test(
+    'video handler consumes invalidation when video module never activated',
+    () async {
+      final container = ProviderContainer.test();
+      addTearDown(container.dispose);
+      final handler = VideoSyncHandler(container.read(refHolderProvider));
 
-    final consumed = await handler.refresh([
-      _invalidation(scope: RealtimeScope.video),
-    ]);
+      final consumed = await handler.refresh([
+        _invalidation(scope: RealtimeScope.video),
+      ]);
 
-    expect(consumed, isTrue);
-    expect(container.exists(movieCenterControllerProvider), isFalse);
-  });
+      expect(consumed, isTrue);
+      expect(container.exists(movieCenterControllerProvider), isFalse);
+    },
+  );
 }

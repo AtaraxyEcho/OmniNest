@@ -38,7 +38,10 @@ class AppEmptyState extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               subtitle!,
-              style: TextStyle(color: colors.onSurfaceVariant, fontSize: AppTypography.bodyMedium),
+              style: TextStyle(
+                color: colors.onSurfaceVariant,
+                fontSize: AppTypography.bodyMedium,
+              ),
               textAlign: TextAlign.center,
             ),
           ],

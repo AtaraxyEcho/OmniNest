@@ -215,9 +215,7 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
         builder:
             (dialogContext) => AlertDialog(
               title: Text(l10n.filesAuthorizeAccount),
-              content: SelectableText(
-                '${l10n.filesAuthorizeHint}\n\n$url',
-              ),
+              content: SelectableText('${l10n.filesAuthorizeHint}\n\n$url'),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(),

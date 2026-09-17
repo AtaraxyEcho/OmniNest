@@ -9,9 +9,11 @@ void main() {
       const AppException(code: 'FILE_QUOTA_EXCEEDED', message: '存储配额不足'),
     );
 
-    expect(message.title, '操作失败');
-    expect(message.message, '存储配额不足');
+    expect(message.title, 'OPERATION_FAILED');
+    // 未提供 l10n 时返回稳定错误码，由展示层再映射文案。
+    expect(message.message, 'FILE_QUOTA_EXCEEDED');
     expect(message.code, 'FILE_QUOTA_EXCEEDED');
+    expect(message.displayMessage, contains('FILE_QUOTA_EXCEEDED'));
   });
 
   test('formats dio response message from backend payload', () {
@@ -39,7 +41,8 @@ void main() {
       ),
     );
 
-    expect(message.message, contains('无法连接'));
+    // 未提供 l10n 时 message 为稳定错误码 NETWORK_ERROR。
+    expect(message.message, 'NETWORK_ERROR');
     expect(message.code, 'NETWORK_ERROR');
   });
 }

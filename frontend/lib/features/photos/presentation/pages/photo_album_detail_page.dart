@@ -250,8 +250,9 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
                                                       _loadMorePhotos(),
                                                     ),
                                                 child: Text(
-                                                  AppLocalizations.of(context)
-                                                      .photosOperationFailed,
+                                                  AppLocalizations.of(
+                                                    context,
+                                                  ).photosOperationFailed,
                                                 ),
                                               ),
                                     );
@@ -414,10 +415,7 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
       try {
         await ref
             .read(photoCenterControllerProvider.notifier)
-            .removePhotoFromAlbum(
-              albumId: widget.albumId,
-              photoId: photo.id,
-            );
+            .removePhotoFromAlbum(albumId: widget.albumId, photoId: photo.id);
         // 页面可能在等待期间被关闭，ref 失效前先终止。
         if (!context.mounted) return;
         // 刷新相册详情

@@ -111,11 +111,10 @@ final adminExternalStorageProvider = FutureProvider<AdminExternalStorageView>((
   return ref.watch(adminOperationsApiProvider).externalStorage();
 });
 
-final adminConnectorOAuthAppsProvider = FutureProvider<List<AdminConnectorOAuthApp>>((
-  ref,
-) {
-  return ref.watch(adminOperationsApiProvider).listConnectorOAuthApps();
-});
+final adminConnectorOAuthAppsProvider =
+    FutureProvider<List<AdminConnectorOAuthApp>>((ref) {
+      return ref.watch(adminOperationsApiProvider).listConnectorOAuthApps();
+    });
 
 final adminSessionsProvider = FutureProvider<AdminSessionManagementView>((ref) {
   return ref.watch(adminOperationsApiProvider).allSessions();

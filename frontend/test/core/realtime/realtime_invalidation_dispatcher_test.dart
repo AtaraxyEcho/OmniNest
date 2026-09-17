@@ -182,7 +182,8 @@ RealtimeInvalidation _invalidation(
 }) {
   return RealtimeInvalidation(
     key: key,
-    scope: scope ?? (key == 'photo' ? RealtimeScope.photos : RealtimeScope.files),
+    scope:
+        scope ?? (key == 'photo' ? RealtimeScope.photos : RealtimeScope.files),
     resourceType: 'RESOURCE',
     revision: revision,
     createdAt: DateTime.utc(2026, 7, 17),
