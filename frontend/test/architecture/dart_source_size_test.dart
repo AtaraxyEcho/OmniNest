@@ -7,7 +7,6 @@ const _maximumSourceLines = 1200;
 /// 0.1.0 发布前登记的存量超长源码；禁止新增，拆分完成后从清单移除。
 const _allowedOversizedSources = <String>{
   'lib/features/music/presentation/deck/music_deck_content.dart',
-  'lib/features/photos/presentation/pages/photo_slideshow_page.dart',
   'lib/features/reader/presentation/pages/reader_item_detail_page.dart',
   'lib/features/reader/presentation/pages/reader_view_page.dart',
   'lib/features/reader/presentation/widgets/comic_reader_view.dart',

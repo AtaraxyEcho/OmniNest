@@ -15,6 +15,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_image_cache.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
 
 /// mock HTTP 返回的图片字节：由测试引擎现场生成并编码的合法 PNG。
 Uint8List? _servedImageBytes;
@@ -348,13 +349,7 @@ void main() {
       }
       expect(find.text('02 / 02'), findsOneWidget);
       bool transitionDone() =>
-          find
-              .byWidgetPredicate(
-                (widget) => widget.runtimeType.toString() == '_SlideLayer',
-              )
-              .evaluate()
-              .length <=
-          1;
+          find.byType(SlideshowSlideLayer).evaluate().length <= 1;
       for (var i = 0; i < 40 && !transitionDone(); i++) {
         await tester.pump(const Duration(milliseconds: 50));
       }
@@ -363,5 +358,57 @@ void main() {
       expect(transitionDone(), isTrue);
       _expectNoTransparentLayer(tester);
     });
+  });
+
+  testWidgets('桌面顶栏：关闭居左、页码居中、操作组居右', (tester) async {
+    _mockPathProvider();
+    final photos = [_photoWithUrl('photo-1'), _photoWithUrl('photo-2')];
+    await _pumpSlideshow(tester, photos);
+    await tester.pump();
+    await tester.pump();
+
+    final closeDx = tester.getCenter(find.byIcon(Icons.close_rounded)).dx;
+    final counterDx = tester.getCenter(find.text('01 / 02')).dx;
+    final fullscreenDx =
+        tester.getCenter(find.byIcon(Icons.fullscreen_rounded)).dx;
+
+    expect(closeDx, lessThan(counterDx));
+    expect(counterDx, lessThan(fullscreenDx));
+    // 页码应大致落在画面水平中心附近（三区布局）。
+    expect((counterDx - 640).abs(), lessThan(48));
+  });
+
+  testWidgets('点击画面中心切换控件显隐，再次点击恢复显示', (tester) async {
+    _mockPathProvider();
+    final photos = [_photoWithUrl('photo-1'), _photoWithUrl('photo-2')];
+    await _pumpSlideshow(tester, photos);
+    await tester.pump();
+    await tester.pump();
+
+    bool topBarVisible() {
+      final opacity =
+          tester
+              .widgetList<AnimatedOpacity>(
+                find.ancestor(
+                  of: find.byIcon(Icons.close_rounded),
+                  matching: find.byType(AnimatedOpacity),
+                ),
+              )
+              .firstOrNull;
+      return opacity != null && opacity.opacity == 1.0;
+    }
+
+    expect(topBarVisible(), isTrue);
+
+    await tester.tapAt(const Offset(640, 400));
+    // 播放中进度动画常驻，不可 pumpAndSettle；固定时长推进淡出动画。
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(topBarVisible(), isFalse);
+
+    await tester.tapAt(const Offset(640, 400));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(topBarVisible(), isTrue);
   });
 }

@@ -15,7 +15,6 @@ const _allowedViolations = <String>{
   'CROSS_FEATURE_INTERNAL lib/features/profile/presentation/widgets/profile_backup_panel.dart -> package:omninest/features/photos/presentation/widgets/battery_optimization_card.dart',
   'CROSS_FEATURE_INTERNAL lib/features/profile/presentation/widgets/profile_mobile_content.dart -> package:omninest/features/photos/presentation/widgets/battery_optimization_card.dart',
   'OVERSIZED_SOURCE lib/features/music/presentation/deck/music_deck_content.dart lines=1333',
-  'OVERSIZED_SOURCE lib/features/photos/presentation/pages/photo_slideshow_page.dart lines=1304',
   'OVERSIZED_SOURCE lib/features/reader/presentation/pages/reader_item_detail_page.dart lines=1215',
   'OVERSIZED_SOURCE lib/features/reader/presentation/pages/reader_view_page.dart lines=1286',
   'OVERSIZED_SOURCE lib/features/reader/presentation/widgets/comic_reader_view.dart lines=1209',
