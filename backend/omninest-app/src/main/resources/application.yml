@@ -206,7 +206,7 @@ omninest:
     poll-interval-seconds: 5
     rpc-timeout-seconds: 15
   clamav:
-    timeout: 2000s
+    timeout: 120s
   rclone:
     connect-timeout-seconds: 10
     read-timeout-seconds: 300

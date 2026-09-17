@@ -37,6 +37,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,6 +51,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MusicScrapeService {
     private static final int AUTO_APPLY_THRESHOLD = 50;
+    private static final int SCRAPE_BATCH_SIZE = 200;
     private static final String TASK_TYPE = "MUSIC_SCRAPE";
 
     private final MusicTrackRepository trackRepository;
@@ -202,8 +204,8 @@ public class MusicScrapeService {
         if (!taskRecordService.claimForExecution(taskId, "SCRAPING")) {
             return;
         }
-        List<MusicTrack> allTracks = trackRepository.findByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId);
-        log.info("开始批量刮削: jobId={}, userId={}, trackCount={}, force={}", jobId, ownerUserId, allTracks.size(), force);
+        long totalTracks = trackRepository.countVisibleByOwnerUserId(ownerUserId);
+        log.info("开始批量刮削: jobId={}, userId={}, trackCount={}, force={}", jobId, ownerUserId, totalTracks, force);
         job.setStatus(TaskStatus.RUNNING.getValue());
         job.setMessage("MusicBrainz 刮削中");
         job.setDetails(scrapeDetails(force, 0, 0, 0, 0, 0));
@@ -228,39 +230,51 @@ public class MusicScrapeService {
             Set<UUID> affectedArtistIds = new HashSet<>();
             Set<UUID> affectedAlbumIds = new HashSet<>();
 
-            for (MusicTrack track : allTracks) {
-                visited++;
-                if (!force && shouldSkip(track)) {
-                    log.debug("[刮削] 跳过: trackId={}, status={}",
-                            track.getId(), track.getMetadataStatus());
-                    skipped++;
-                    updateScrapeProgress(job, allTracks.size(), visited, force, processed, matched, skipped, unmatched, failed);
-                    continue;
+            UUID cursor = new UUID(0L, 0L);
+            while (true) {
+                List<MusicTrack> batch = trackRepository.findScrapePageAfter(
+                        ownerUserId, cursor, PageRequest.of(0, SCRAPE_BATCH_SIZE));
+                if (batch.isEmpty()) {
+                    break;
                 }
-                processed++;
-                try {
-                    List<MusicScrapeCandidateDto> candidates = searchCandidates(track);
-                    MusicScrapeCandidateDto best = candidates.isEmpty() ? null : candidates.get(0);
-                    if (best == null || (best.score() != null && best.score() < AUTO_APPLY_THRESHOLD)) {
-                        Integer bestScore = best == null ? null : best.score();
-                        log.info("[刮削] 未命中: trackId={}, 候选数={}, 最佳score={} (阈值={})",
-                                track.getId(), candidates.size(), bestScore, AUTO_APPLY_THRESHOLD);
-                        unmatched++;
-                        updateScrapeProgress(job, allTracks.size(), visited, force, processed, matched, skipped, unmatched, failed);
+                for (MusicTrack track : batch) {
+                    visited++;
+                    if (!force && shouldSkip(track)) {
+                        log.debug("[刮削] 跳过: trackId={}, status={}",
+                                track.getId(), track.getMetadataStatus());
+                        skipped++;
+                        updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
                         continue;
                     }
-                    log.info("[刮削] 命中: trackId={}, score={}", track.getId(), best.score());
-                    applyCandidateBatchCached(ownerUserId, track, best,
-                            favoriteTrackIds.contains(track.getId()),
-                            artistCache, albumCache,
-                            affectedArtistIds, affectedAlbumIds);
-                    matched++;
-                } catch (RuntimeException ex) {
-                    log.warn("刮削失败: trackId={}, errorType={}",
-                            track.getId(), ex.getClass().getSimpleName());
-                    failed++;
+                    processed++;
+                    try {
+                        List<MusicScrapeCandidateDto> candidates = searchCandidates(track);
+                        MusicScrapeCandidateDto best = candidates.isEmpty() ? null : candidates.get(0);
+                        if (best == null || (best.score() != null && best.score() < AUTO_APPLY_THRESHOLD)) {
+                            Integer bestScore = best == null ? null : best.score();
+                            log.info("[刮削] 未命中: trackId={}, 候选数={}, 最佳score={} (阈值={})",
+                                    track.getId(), candidates.size(), bestScore, AUTO_APPLY_THRESHOLD);
+                            unmatched++;
+                            updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
+                            continue;
+                        }
+                        log.info("[刮削] 命中: trackId={}, score={}", track.getId(), best.score());
+                        applyCandidateBatchCached(ownerUserId, track, best,
+                                favoriteTrackIds.contains(track.getId()),
+                                artistCache, albumCache,
+                                affectedArtistIds, affectedAlbumIds);
+                        matched++;
+                    } catch (RuntimeException ex) {
+                        log.warn("刮削失败: trackId={}, errorType={}",
+                                track.getId(), ex.getClass().getSimpleName());
+                        failed++;
+                    }
+                    updateScrapeProgress(job, totalTracks, visited, force, processed, matched, skipped, unmatched, failed);
                 }
-                updateScrapeProgress(job, allTracks.size(), visited, force, processed, matched, skipped, unmatched, failed);
+                cursor = batch.getLast().getId();
+                if (batch.size() < SCRAPE_BATCH_SIZE) {
+                    break;
+                }
             }
 
             // 批量刷新统计，每个 artist/album 只刷新一次。
@@ -298,7 +312,7 @@ public class MusicScrapeService {
 
     private void updateScrapeProgress(
             MusicScanJob job,
-            int totalTracks,
+            long totalTracks,
             int visited,
             boolean force,
             int processed,

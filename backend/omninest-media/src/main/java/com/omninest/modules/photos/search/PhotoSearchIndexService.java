@@ -55,7 +55,9 @@ public class PhotoSearchIndexService implements Closeable {
 
     private synchronized IndexWriter getWriter() throws IOException {
         if (writer == null || !writer.isOpen()) {
-            writer = new IndexWriter(directory, new IndexWriterConfig(analyzer));
+            IndexWriterConfig config = new IndexWriterConfig(analyzer);
+            config.setRAMBufferSizeMB(64);
+            writer = new IndexWriter(directory, config);
         }
         return writer;
     }
@@ -108,6 +110,25 @@ public class PhotoSearchIndexService implements Closeable {
             log.debug("删除照片索引: photoId={}", photoId);
         } catch (Exception e) {
             log.warn("Lucene 照片索引删除失败: photoId={}", photoId, e);
+        }
+    }
+
+    /**
+     * 批量删除照片索引后仅提交一次。
+     */
+    public void deletePhotos(List<UUID> photoIds) {
+        if (photoIds == null || photoIds.isEmpty()) {
+            return;
+        }
+        try {
+            IndexWriter w = getWriter();
+            for (UUID photoId : photoIds) {
+                w.deleteDocuments(new Term(FIELD_PHOTO_ID, photoId.toString()));
+            }
+            w.commit();
+            log.debug("批量删除照片索引: count={}", photoIds.size());
+        } catch (Exception e) {
+            log.warn("Lucene 照片索引批量删除失败: count={}", photoIds.size(), e);
         }
     }
 

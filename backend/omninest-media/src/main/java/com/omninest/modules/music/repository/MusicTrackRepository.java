@@ -27,6 +27,26 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     List<MusicTrack> findByOwnerUserIdOrderByUpdatedAtDesc(@Param("ownerUserId") UUID ownerUserId);
 
     @Query("""
+            select count(track) from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.ownerUserId = :ownerUserId and file.deleted = false
+            """)
+    long countVisibleByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+
+    @Query("""
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.ownerUserId = :ownerUserId
+              and file.deleted = false
+              and track.id > :afterId
+            order by track.id
+            """)
+    List<MusicTrack> findScrapePageAfter(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("afterId") UUID afterId,
+            Pageable pageable);
+
+    @Query("""
             select track from MusicTrack track
             join FileNode file on track.fileNodeId = file.id
             where track.ownerUserId = :ownerUserId and file.deleted = false

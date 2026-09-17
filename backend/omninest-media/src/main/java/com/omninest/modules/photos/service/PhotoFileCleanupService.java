@@ -179,9 +179,7 @@ public class PhotoFileCleanupService implements
         List<UUID> affectedAlbumIds = albumItemRepository.findAlbumIdsByPhotoIdIn(photoIds);
         albumItemRepository.deleteByPhotoIdIn(photoIds);
         favoriteRepository.deleteByPhotoIdIn(photoIds);
-        for (UUID photoId : photoIds) {
-            photoSearchIndexService.deletePhoto(photoId);
-        }
+        photoSearchIndexService.deletePhotos(photoIds);
         itemRepository.deleteAllInBatch(photos);
         readThroughCache.invalidate("omninest:dashboard:photo:" + ownerUserId);
         refreshAffectedAlbums(ownerUserId, affectedAlbumIds);

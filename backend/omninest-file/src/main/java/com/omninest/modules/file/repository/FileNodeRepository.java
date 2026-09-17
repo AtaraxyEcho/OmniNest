@@ -269,6 +269,17 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
     List<FileNode> findExpiredDeletedNodes(@Param("cutoff") Instant cutoff);
 
     @Query("""
+            select n from FileNode n
+            where n.deleted = true and n.deletedAt < :cutoff
+              and n.id > :afterId
+            order by n.id
+            """)
+    List<FileNode> findExpiredDeletedNodesAfter(
+            @Param("cutoff") Instant cutoff,
+            @Param("afterId") UUID afterId,
+            Pageable pageable);
+
+    @Query("""
             select count(n)
             from FileNode n
             where n.ownerUserId = :ownerUserId and n.deleted = false and n.nodeType = 'FOLDER'

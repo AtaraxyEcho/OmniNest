@@ -6,6 +6,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -50,6 +51,18 @@ public interface FileUploadSessionRepository extends JpaRepository<FileUploadSes
     );
 
     List<FileUploadSession> findByStatusInAndUpdatedAtBefore(List<String> statuses, Instant updatedAt);
+
+    @Query("""
+            select s from FileUploadSession s
+            where s.status in :statuses and s.updatedAt < :updatedAt
+              and s.id > :afterId
+            order by s.id
+            """)
+    List<FileUploadSession> findExpiredAfter(
+            @Param("statuses") List<String> statuses,
+            @Param("updatedAt") Instant updatedAt,
+            @Param("afterId") UUID afterId,
+            Pageable pageable);
 
     Optional<FileUploadSession> findByIngressItemId(UUID ingressItemId);
 
