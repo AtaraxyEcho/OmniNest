@@ -2802,6 +2802,10 @@ CREATE INDEX "idx_file_nodes_deleted" ON "omni"."file_nodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "deleted_at" "pg_catalog"."timestamptz_ops" ASC NULLS LAST
 ) WHERE is_deleted = true;
+CREATE INDEX "idx_file_nodes_shared_recycle" ON "omni"."file_nodes" USING btree (
+  "deleted_by" "pg_catalog"."uuid_ops" ASC NULLS LAST,
+  "deleted_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
+) WHERE is_deleted = true AND space_type::text = 'SHARED'::text;
 CREATE INDEX "idx_file_nodes_owner_image_created" ON "omni"."file_nodes" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST,

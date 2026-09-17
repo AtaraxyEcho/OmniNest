@@ -69,11 +69,16 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -136,13 +141,100 @@ public class FileManagerService {
     }
 
     @Transactional(readOnly = true)
-    public List<FileNodeDto> listFavoriteFiles(UUID ownerUserId) {
-        return favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId)
+    public Page<FileNodeDto> listFavoriteFilesPage(UUID ownerUserId, int page, int size) {
+        Pageable pageable = FilePageRequests.of(page, size);
+        Page<UUID> favoriteNodeIds = favoriteRepository.findFavoriteNodeIds(ownerUserId, pageable);
+        if (favoriteNodeIds.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, favoriteNodeIds.getTotalElements());
+        }
+        Map<UUID, FileNode> nodesById = fileNodeRepository.findAllById(favoriteNodeIds.getContent())
                 .stream()
-                .map(FileFavorite::getFileNode)
-                .filter(node -> node != null && !node.isDeleted())
+                .filter(node -> !node.isDeleted())
+                .collect(Collectors.toMap(FileNode::getId, node -> node, (left, right) -> left, LinkedHashMap::new));
+        List<FileNodeDto> items = favoriteNodeIds.getContent()
+                .stream()
+                .map(nodesById::get)
+                .filter(Objects::nonNull)
                 .map(this::toNodeDto)
                 .toList();
+        return new PageImpl<>(items, pageable, favoriteNodeIds.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FileSharedItemDto> listSharedWithMePage(UUID ownerUserId, int page, int size) {
+        Pageable pageable = FilePageRequests.of(page, size);
+        Page<FileShareRecipient> recipientPage =
+                shareRecipientRepository.findByRecipientUserIdOrderByCreatedAtDesc(ownerUserId, pageable);
+        if (recipientPage.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, recipientPage.getTotalElements());
+        }
+        List<FileShareRecipient> recipients = recipientPage.getContent();
+        List<UUID> resourceIds = recipients.stream()
+                .map(FileShareRecipient::getShareLink)
+                .filter(Objects::nonNull)
+                .filter(share -> share.getDisabledAt() == null)
+                .filter(share -> NodeType.FILE.getValue().equals(share.getResourceType()))
+                .map(ShareLink::getResourceId)
+                .distinct()
+                .toList();
+        Map<UUID, FileNode> nodesById = resourceIds.isEmpty()
+                ? Map.of()
+                : fileNodeRepository.findAllById(resourceIds)
+                        .stream()
+                        .filter(node -> !node.isDeleted())
+                        .collect(Collectors.toMap(FileNode::getId, node -> node, (l, r) -> l, LinkedHashMap::new));
+        List<FileSharedItemDto> items = recipients.stream()
+                .map(recipient -> toSharedItemDto(recipient, nodesById))
+                .flatMap(List::stream)
+                .toList();
+        return new PageImpl<>(items, pageable, recipientPage.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<FileShareLinkDto> listMySharesPage(UUID ownerUserId, int page, int size) {
+        Pageable pageable = FilePageRequests.of(page, size);
+        Page<ShareLink> sharePage = shareLinkRepository.findActiveByOwnerPage(ownerUserId, pageable);
+        if (sharePage.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, sharePage.getTotalElements());
+        }
+        List<UUID> resourceIds = sharePage.getContent()
+                .stream()
+                .map(ShareLink::getResourceId)
+                .distinct()
+                .toList();
+        Map<UUID, String> namesById = resourceIds.isEmpty()
+                ? Map.of()
+                : fileNodeRepository.findAllById(resourceIds)
+                        .stream()
+                        .collect(Collectors.toMap(FileNode::getId, FileNode::getName, (l, r) -> l, LinkedHashMap::new));
+        List<FileShareLinkDto> items = sharePage.getContent()
+                .stream()
+                .map(share -> toShareDto(share, null, null, namesById))
+                .toList();
+        return new PageImpl<>(items, pageable, sharePage.getTotalElements());
+    }
+
+    @Transactional(readOnly = true)
+    public Page<SharedFileDto> listSharedFilesPage(UUID userId, int page, int size) {
+        Pageable pageable = FilePageRequests.of(page, size);
+        Page<FileNode> sharedPage = fileNodeRepository.findSharedFilesVisiblePage(userId, pageable);
+        if (sharedPage.isEmpty()) {
+            return new PageImpl<>(List.of(), pageable, sharedPage.getTotalElements());
+        }
+        List<FileNode> sharedNodes = sharedPage.getContent();
+        List<UUID> fileIds = sharedNodes.stream().map(FileNode::getId).toList();
+        Map<UUID, FilePermission> perms = filePermissionService.resolvePermissions(fileIds, userId);
+        List<UUID> ownerIds = sharedNodes.stream().map(FileNode::getOwnerUserId).distinct().toList();
+        Map<UUID, String> ownerNames = userAccountQuery.findUsernames(ownerIds);
+        List<SharedFileDto> items = sharedNodes.stream()
+                .filter(n -> perms.getOrDefault(n.getId(), FilePermission.denyAll()).allowView())
+                .map(n -> toSharedFileDto(
+                        n,
+                        perms.get(n.getId()),
+                        ownerNames.getOrDefault(n.getOwnerUserId(), "未知用户")
+                ))
+                .toList();
+        return new PageImpl<>(items, pageable, sharedPage.getTotalElements());
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -203,19 +295,12 @@ public class FileManagerService {
 
     @Transactional(readOnly = true)
     public List<FileSharedItemDto> listSharedWithMe(UUID ownerUserId) {
-        return shareRecipientRepository.findByRecipientUserIdOrderByCreatedAtDesc(ownerUserId)
-                .stream()
-                .map(this::toSharedItemDto)
-                .flatMap(List::stream)
-                .toList();
+        return listSharedWithMePage(ownerUserId, 0, FilePageRequests.MAX_SIZE).getContent();
     }
 
     @Transactional(readOnly = true)
     public List<FileShareLinkDto> listMyShares(UUID ownerUserId) {
-        return shareLinkRepository.findByOwnerUserIdAndDisabledAtIsNullOrderByCreatedAtDesc(ownerUserId)
-                .stream()
-                .map(share -> toShareDto(share, null, null))
-                .toList();
+        return listMySharesPage(ownerUserId, 0, FilePageRequests.MAX_SIZE).getContent();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -922,30 +1007,44 @@ public class FileManagerService {
     }
 
     private List<FileSharedItemDto> toSharedItemDto(FileShareRecipient recipient) {
+        return toSharedItemDto(recipient, Map.of());
+    }
+
+    private List<FileSharedItemDto> toSharedItemDto(
+            FileShareRecipient recipient,
+            Map<UUID, FileNode> nodesById) {
         ShareLink share = recipient.getShareLink();
         if (share == null
                 || share.getDisabledAt() != null
                 || !NodeType.FILE.getValue().equals(share.getResourceType())) {
             return List.of();
         }
-        return fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(
-                        share.getResourceId(),
-                        share.getOwnerUserId()
-                )
-                .map(file -> List.of(new FileSharedItemDto(
-                        share.getId(),
-                        toNodeDto(file),
-                        share.getOwnerUserId(),
-                        recipient.getCreatedAt(),
-                        share.getExpiresAt()
-                )))
-                .orElseGet(List::of);
+        FileNode file = nodesById.get(share.getResourceId());
+        if (file == null || file.isDeleted() || !share.getOwnerUserId().equals(file.getOwnerUserId())) {
+            return List.of();
+        }
+        return List.of(new FileSharedItemDto(
+                share.getId(),
+                toNodeDto(file),
+                share.getOwnerUserId(),
+                recipient.getCreatedAt(),
+                share.getExpiresAt()
+        ));
     }
 
     private FileShareLinkDto toShareDto(ShareLink share, String rawToken, String generatedPassword) {
         String resourceName = fileNodeRepository.findByIdAndOwnerUserId(share.getResourceId(), share.getOwnerUserId())
                 .map(FileNode::getName)
                 .orElse("已删除文件");
+        return toShareDto(share, rawToken, generatedPassword, Map.of(share.getResourceId(), resourceName));
+    }
+
+    private FileShareLinkDto toShareDto(
+            ShareLink share,
+            String rawToken,
+            String generatedPassword,
+            Map<UUID, String> namesById) {
+        String resourceName = namesById.getOrDefault(share.getResourceId(), "已删除文件");
         return new FileShareLinkDto(
                 share.getId(),
                 share.getResourceType(),
@@ -1155,23 +1254,7 @@ public class FileManagerService {
      */
     @Transactional(readOnly = true)
     public List<SharedFileDto> listSharedFiles(UUID userId) {
-        List<FileNode> sharedNodes = fileNodeRepository.findSharedFilesVisibleToUser(userId);
-        if (sharedNodes.isEmpty()) {
-            return List.of();
-        }
-        List<UUID> fileIds = sharedNodes.stream().map(FileNode::getId).toList();
-        Map<UUID, FilePermission> perms = filePermissionService.resolvePermissions(fileIds, userId);
-        // 批量加载文件拥有者用户名，避免 N+1 查询
-        List<UUID> ownerIds = sharedNodes.stream().map(FileNode::getOwnerUserId).distinct().toList();
-        Map<UUID, String> ownerNames = userAccountQuery.findUsernames(ownerIds);
-        return sharedNodes.stream()
-                .filter(n -> perms.getOrDefault(n.getId(), FilePermission.denyAll()).allowView())
-                .map(n -> toSharedFileDto(
-                        n,
-                        perms.get(n.getId()),
-                        ownerNames.getOrDefault(n.getOwnerUserId(), "未知用户")
-                ))
-                .toList();
+        return listSharedFilesPage(userId, 0, FilePageRequests.MAX_SIZE).getContent();
     }
 
     /**

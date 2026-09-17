@@ -4,6 +4,9 @@ import com.omninest.modules.file.domain.FileShareRecipient;
 import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 /**
@@ -13,6 +16,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
  */
 public interface FileShareRecipientRepository extends JpaRepository<FileShareRecipient, UUID> {
     List<FileShareRecipient> findByRecipientUserIdOrderByCreatedAtDesc(UUID recipientUserId);
+
+    @EntityGraph(attributePaths = "shareLink")
+    Page<FileShareRecipient> findByRecipientUserIdOrderByCreatedAtDesc(
+            UUID recipientUserId,
+            Pageable pageable);
 
     /**
      * 查询指定分享的接收人关系。

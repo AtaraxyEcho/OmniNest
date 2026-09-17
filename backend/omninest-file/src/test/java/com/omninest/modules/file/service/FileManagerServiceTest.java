@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -142,12 +143,16 @@ class FileManagerServiceTest {
     @Test
     void listFavoriteFilesOnlyReturnsCurrentUserFavorites() {
         FileNode file = node("starred.pdf", "application/pdf", 1024);
-        when(favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
-                .thenReturn(List.of(favorite(file)));
+        file.setId(FILE_ID);
+        when(favoriteRepository.findFavoriteNodeIds(eq(OWNER_ID), ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(FILE_ID)));
+        when(fileNodeRepository.findAllById(List.of(FILE_ID))).thenReturn(List.of(file));
 
-        var result = fileManagerService.listFavoriteFiles(OWNER_ID);
+        var result = fileManagerService.listFavoriteFilesPage(OWNER_ID, 0, 100);
 
-        assertThat(result).extracting("name").containsExactly("starred.pdf");
+        assertThat(result.getContent()).extracting("name").containsExactly("starred.pdf");
+        verify(fileNodeRepository).findAllById(List.of(FILE_ID));
+        verify(favoriteRepository, never()).findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID);
     }
 
     // ==================== 批量操作测试 ====================

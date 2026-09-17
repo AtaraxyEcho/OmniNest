@@ -419,10 +419,12 @@ class FileQueryServiceTest {
         FileNode deleted = node(OWNER_ID, null, "FILE", "old.txt", "/old.txt");
         deleted.setDeleted(true);
         deleted.setDeletedAt(Instant.parse("2026-05-19T00:00:00Z"));
-        when(fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndDeletedTrueOrderByDeletedAtDesc(
-                OWNER_ID, SpaceType.PERSONAL)).thenReturn(List.of(deleted));
+        when(fileNodeRepository.findPersonalRecyclePage(
+                eq(OWNER_ID), eq(SpaceType.PERSONAL),
+                ArgumentMatchers.any(org.springframework.data.domain.Pageable.class)))
+                .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(deleted)));
 
-        var result = fileQueryService.listRecycleBin(OWNER_ID, SpaceType.PERSONAL);
+        var result = fileQueryService.listRecycleBinPage(OWNER_ID, SpaceType.PERSONAL, 0, 200);
 
         assertThat(result).extracting("name").containsExactly("old.txt");
     }

@@ -544,4 +544,36 @@ public interface FileNodeRepository extends JpaRepository<FileNode, UUID> {
      */
     List<FileNode> findBySpaceTypeAndDeletedFalse(SpaceType spaceType);
 
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.ownerUserId = :ownerUserId
+              AND n.spaceType = :spaceType
+              AND n.deleted = true
+            ORDER BY n.deletedAt DESC
+            """)
+    Page<FileNode> findPersonalRecyclePage(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("spaceType") SpaceType spaceType,
+            Pageable pageable);
+
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.deletedBy = :deletedBy
+              AND n.spaceType = :spaceType
+              AND n.deleted = true
+            ORDER BY n.deletedAt DESC
+            """)
+    Page<FileNode> findSharedRecyclePage(
+            @Param("deletedBy") UUID deletedBy,
+            @Param("spaceType") SpaceType spaceType,
+            Pageable pageable);
+
+    @Query("""
+            SELECT n FROM FileNode n
+            WHERE n.shared = true
+              AND n.ownerUserId != :userId
+              AND n.deleted = false
+            """)
+    Page<FileNode> findSharedFilesVisiblePage(@Param("userId") UUID userId, Pageable pageable);
+
 }

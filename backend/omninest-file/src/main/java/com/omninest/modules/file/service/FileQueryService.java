@@ -223,16 +223,16 @@ public class FileQueryService {
     }
 
     @Transactional(readOnly = true)
-    public List<FileNodeDto> listRecycleBin(UUID ownerUserId, SpaceType spaceType) {
+    public Page<FileNodeDto> listRecycleBinPage(UUID ownerUserId, SpaceType spaceType, int page, int size) {
+        Pageable pageable = FilePageRequests.of(
+                page,
+                size,
+                Sort.by(Sort.Order.desc("deletedAt"), Sort.Order.desc("id")));
         // 个人空间按 ownerUserId 查询，共享空间按 deletedBy 查询（上传者 ≠ 删除者）
-        List<FileNode> nodes = spaceType == SpaceType.SHARED
-                ? fileNodeRepository.findByDeletedByAndSpaceTypeAndDeletedTrueOrderByDeletedAtDesc(
-                        ownerUserId, spaceType)
-                : fileNodeRepository.findByOwnerUserIdAndSpaceTypeAndDeletedTrueOrderByDeletedAtDesc(
-                        ownerUserId, spaceType);
-        return nodes.stream()
-                .map(this::toDto)
-                .toList();
+        Page<FileNode> nodes = spaceType == SpaceType.SHARED
+                ? fileNodeRepository.findSharedRecyclePage(ownerUserId, spaceType, pageable)
+                : fileNodeRepository.findPersonalRecyclePage(ownerUserId, spaceType, pageable);
+        return nodes.map(this::toDto);
     }
 
     @Transactional(rollbackFor = Exception.class)

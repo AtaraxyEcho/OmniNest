@@ -126,8 +126,12 @@ public class FileController {
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         SpaceType type = SpaceType.fromValue(spaceType);
-        var files = fileQueryService.listRecycleBin(ownerUserId, type);
-        return ApiResponse.success(PageResponse.of(files, page, size, files.size()));
+        var files = fileQueryService.listRecycleBinPage(ownerUserId, type, page, size);
+        return ApiResponse.success(PageResponse.of(
+                files.getContent(),
+                files.getNumber(),
+                files.getSize(),
+                files.getTotalElements()));
     }
 
     @Operation(summary = "列出最近文件", description = "列出当前用户最近访问的文件")
@@ -150,8 +154,12 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var files = fileManagerService.listFavoriteFiles(ownerUserId);
-        return ApiResponse.success(PageResponse.of(files, page, size, files.size()));
+        var files = fileManagerService.listFavoriteFilesPage(ownerUserId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                files.getContent(),
+                files.getNumber(),
+                files.getSize(),
+                files.getTotalElements()));
     }
 
     @Operation(summary = "重命名文件", description = "重命名指定的文件或文件夹")
@@ -404,8 +412,12 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var items = fileManagerService.listSharedWithMe(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
+        var items = fileManagerService.listSharedWithMePage(ownerUserId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                items.getContent(),
+                items.getNumber(),
+                items.getSize(),
+                items.getTotalElements()));
     }
 
     @Operation(summary = "列出我的分享链接", description = "列出当前用户创建的所有分享链接")
@@ -416,8 +428,12 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var items = fileManagerService.listMyShares(ownerUserId);
-        return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
+        var items = fileManagerService.listMySharesPage(ownerUserId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                items.getContent(),
+                items.getNumber(),
+                items.getSize(),
+                items.getTotalElements()));
     }
 
     @Operation(summary = "创建分享链接", description = "为指定文件创建分享链接，可设置密码和过期时间")
@@ -684,12 +700,20 @@ public class FileController {
         return ApiResponse.success();
     }
 
-    @Operation(summary = "列出共享文件", description = "列出当前用户已共享的文件列表")
+    @Operation(summary = "列出共享文件", description = "列出当前用户可见的共享文件，支持分页")
     @GetMapping("/api/v1/files/shared")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
-    ApiResponse<List<SharedFileDto>> listSharedFiles() {
+    ApiResponse<PageResponse<SharedFileDto>> listSharedFiles(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "200") int size
+    ) {
         UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.listSharedFiles(userId));
+        var files = fileManagerService.listSharedFilesPage(userId, page, size);
+        return ApiResponse.success(PageResponse.of(
+                files.getContent(),
+                files.getNumber(),
+                files.getSize(),
+                files.getTotalElements()));
     }
 
     // ─── 权限管理 ───

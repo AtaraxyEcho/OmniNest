@@ -6,6 +6,8 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -13,6 +15,15 @@ import org.springframework.data.repository.query.Param;
 
 public interface ShareLinkRepository extends JpaRepository<ShareLink, UUID> {
     List<ShareLink> findByOwnerUserIdAndDisabledAtIsNullOrderByCreatedAtDesc(UUID ownerUserId);
+
+    @Query("""
+            select s from ShareLink s
+            where s.ownerUserId = :ownerUserId and s.disabledAt is null
+            order by s.createdAt desc
+            """)
+    Page<ShareLink> findActiveByOwnerPage(
+            @Param("ownerUserId") UUID ownerUserId,
+            Pageable pageable);
 
     List<ShareLink> findByOwnerUserIdOrderByCreatedAtDesc(UUID ownerUserId);
 
