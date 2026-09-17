@@ -58,7 +58,13 @@ public class SecurityConfig {
             matchIfMissing = true
     )
     SecurityFilterChain publicContentFilterChain(HttpSecurity http) throws Exception {
-        http.securityMatcher("/api/v1/public/**", "/api/v1/s/**", "/share/**")
+        // 分享链接与 OAuth 回调由一次性 state/token 校验，不携带 Bearer。
+        http.securityMatcher(
+                        "/api/v1/public/**",
+                        "/api/v1/s/**",
+                        "/share/**",
+                        "/api/v1/external-connectors/*/oauth/callback"
+                )
                 .csrf(AbstractHttpConfigurer::disable)
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
