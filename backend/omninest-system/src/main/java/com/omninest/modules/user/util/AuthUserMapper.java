@@ -10,9 +10,12 @@ import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.dto.AuthUserDto;
 import java.time.Duration;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
@@ -29,14 +32,36 @@ public final class AuthUserMapper {
     }
 
     /**
-     * 将 AuthUser 转换为 AuthUserDto。
+     * 将 AuthUser 转换为 AuthUserDto（从实体关联读取权限，调用方须已初始化 permissions）。
      *
      * @param user      用户实体
      * @param avatarUrl 已解析的头像 URL，可为 null
      * @return DTO 对象
      */
     public static AuthUserDto toDto(AuthUser user, String avatarUrl) {
+        return toDto(user, avatarUrl, permissionCodesByRoleId(user));
+    }
+
+    /**
+     * 将 AuthUser 转换为 AuthUserDto（权限来自页级批量查询结果）。
+     *
+     * @param user                      用户实体
+     * @param avatarUrl                 已解析的头像 URL，可为 null
+     * @param permissionCodesByRoleId   角色 ID 到权限编码集合的映射
+     * @return DTO 对象
+     */
+    public static AuthUserDto toDto(
+            AuthUser user,
+            String avatarUrl,
+            Map<UUID, Set<String>> permissionCodesByRoleId) {
         Set<String> roles = roleCodes(user);
+        Set<String> permissions = user.getRoles().stream()
+                .filter(AuthRole::isEnabled)
+                .flatMap(role -> permissionCodesByRoleId
+                        .getOrDefault(role.getId(), Set.<String>of())
+                        .stream())
+                .sorted(Comparator.naturalOrder())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
         return new AuthUserDto(
                 user.getId(),
                 user.getUsername(),
@@ -46,7 +71,7 @@ public final class AuthUserMapper {
                 user.getStatus(),
                 primaryRole(roles),
                 roles,
-                permissionCodes(user),
+                permissions,
                 user.getQuotaBytes(),
                 user.getUsedBytes()
         );
@@ -128,12 +153,32 @@ public final class AuthUserMapper {
      * @return 权限代码集合
      */
     public static Set<String> permissionCodes(AuthUser user) {
-        return user.getRoles().stream()
-                .filter(AuthRole::isEnabled)
-                .flatMap(role -> role.getPermissions().stream())
-                .filter(AuthPermission::isEnabled)
-                .map(AuthPermission::getCode)
+        return permissionCodesByRoleId(user).values()
+                .stream()
+                .flatMap(Set::stream)
                 .sorted(Comparator.naturalOrder())
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    /**
+     * 从实体关联构建 roleId -> 权限编码映射（permissions 须已初始化）。
+     *
+     * @param user 用户实体
+     * @return 角色 ID 到权限编码集合
+     */
+    public static Map<UUID, Set<String>> permissionCodesByRoleId(AuthUser user) {
+        Map<UUID, Set<String>> byRoleId = new LinkedHashMap<>();
+        for (AuthRole role : user.getRoles()) {
+            if (!role.isEnabled()) {
+                continue;
+            }
+            Set<String> codes = role.getPermissions().stream()
+                    .filter(AuthPermission::isEnabled)
+                    .map(AuthPermission::getCode)
+                    .sorted(Comparator.naturalOrder())
+                    .collect(Collectors.toCollection(LinkedHashSet::new));
+            byRoleId.put(role.getId(), codes);
+        }
+        return byRoleId;
     }
 }

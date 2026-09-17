@@ -68,7 +68,7 @@ class CurrentUserServiceTest {
         existing.setQuotaBytes(2048L);
         existing.setUsedBytes(128L);
         when(currentUserContext.requireCurrentUserId()).thenReturn(userId);
-        when(authUserRepository.findWithRolesById(userId)).thenReturn(Optional.of(existing));
+        when(authUserRepository.findWithRolesAndPermissionsById(userId)).thenReturn(Optional.of(existing));
 
         var profile = service.currentUser();
 
@@ -91,7 +91,7 @@ class CurrentUserServiceTest {
         existing.setEmail("administrator@example.com");
         existing.getRoles().add(role(Roles.SUPER_ADMIN, Permissions.SYSTEM_USER_MANAGE));
         when(currentUserContext.requireCurrentUserId()).thenReturn(userId);
-        when(authUserRepository.findWithRolesById(userId)).thenReturn(Optional.of(existing));
+        when(authUserRepository.findWithRolesAndPermissionsById(userId)).thenReturn(Optional.of(existing));
 
         var profile = service.currentUser();
 
@@ -120,7 +120,7 @@ class CurrentUserServiceTest {
     void rejectsMissingCurrentUserRecord() {
         UUID userId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         when(currentUserContext.requireCurrentUserId()).thenReturn(userId);
-        when(authUserRepository.findWithRolesById(userId)).thenReturn(Optional.empty());
+        when(authUserRepository.findWithRolesAndPermissionsById(userId)).thenReturn(Optional.empty());
 
         assertThatThrownBy(service::currentUser)
                 .isInstanceOf(BusinessException.class)

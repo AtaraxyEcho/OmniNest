@@ -96,7 +96,8 @@ public class AdminOperationsService {
 
     @Transactional(readOnly = true)
     public AdminOperationsDto.RoleManagementView roles() {
-        List<AdminOperationsDto.RoleDetail> roles = authRoleRepository.findAll(Sort.by(Sort.Direction.ASC, "code"))
+        List<AdminOperationsDto.RoleDetail> roles = authRoleRepository
+                .findAllWithPermissions(Sort.by(Sort.Direction.ASC, "code"))
                 .stream()
                 .map(this::toRoleDetail)
                 .toList();

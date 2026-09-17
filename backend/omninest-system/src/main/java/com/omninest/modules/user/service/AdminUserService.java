@@ -56,15 +56,25 @@ public class AdminUserService {
      */
     @Transactional(readOnly = true)
     public Page<AuthUserDto> listUsers(int page, int size) {
-        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.ASC, "username"));
-        return authUserRepository.findAll(pageable).map(this::toDto);
+        int safePage = Math.max(0, page);
+        int safeSize = Math.min(Math.max(1, size <= 0 ? 50 : size), 100);
+        PageRequest pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.ASC, "username"));
+        Page<AuthUser> users = authUserRepository.findAll(pageable);
+        Set<UUID> roleIds = users.getContent()
+                .stream()
+                .flatMap(user -> user.getRoles().stream())
+                .map(AuthRole::getId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        Map<UUID, Set<String>> permissionCodesByRoleId =
+                authRoleRepository.findPermissionCodesByRoleIds(roleIds);
+        return users.map(user -> AuthUserMapper.toDto(user, null, permissionCodesByRoleId));
     }
 
     /**
      * 创建用户。
      *
      * @param request 创建请求
-     * @return 已创建用户
+     * @return 新创建用户
      */
     @Transactional(rollbackFor = Exception.class)
     public AuthUserDto createUser(AdminCreateUserRequest request) {
@@ -190,6 +200,8 @@ public class AdminUserService {
     }
 
     private AuthUserDto toDto(AuthUser user) {
-        return AuthUserMapper.toDto(user, null);
+        return authUserRepository.findWithRolesAndPermissionsById(user.getId())
+                .map(found -> AuthUserMapper.toDto(found, null))
+                .orElseGet(() -> AuthUserMapper.toDto(user, null));
     }
 }

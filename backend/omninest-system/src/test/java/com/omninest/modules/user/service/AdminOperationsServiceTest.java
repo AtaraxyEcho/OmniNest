@@ -100,7 +100,7 @@ class AdminOperationsServiceTest {
     void rolesReturnsRolePermissionDetails() {
         AuthRole admin = role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system"));
         AuthPermission manageUsers = permission(Permissions.SYSTEM_USER_MANAGE, "system");
-        when(authRoleRepository.findAll(Sort.by(Sort.Direction.ASC, "code"))).thenReturn(List.of(admin));
+        when(authRoleRepository.findAllWithPermissions(Sort.by(Sort.Direction.ASC, "code"))).thenReturn(List.of(admin));
         when(authPermissionRepository.findAll(Sort.by(Sort.Direction.ASC, "module", "code")))
                 .thenReturn(List.of(manageUsers));
 

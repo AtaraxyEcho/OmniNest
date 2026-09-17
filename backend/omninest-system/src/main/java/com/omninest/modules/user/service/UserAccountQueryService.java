@@ -53,7 +53,7 @@ public class UserAccountQueryService implements UserAccountQuery {
     @Override
     @Transactional(readOnly = true)
     public Optional<UserAccountDetails> findDetailsById(UUID userId) {
-        return authUserRepository.findWithRolesById(userId)
+        return authUserRepository.findWithRolesAndPermissionsById(userId)
                 .map(this::toDetails);
     }
 

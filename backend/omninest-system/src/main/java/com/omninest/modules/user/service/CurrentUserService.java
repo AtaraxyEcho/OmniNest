@@ -61,7 +61,7 @@ public class CurrentUserService {
         String cacheKey = "omninest:user:profile:" + userId;
         return readThroughCache.getOrLoad(cacheKey, Duration.ofMinutes(5),
                 () -> {
-                    AuthUser profile = authUserRepository.findWithRolesById(userId)
+                    AuthUser profile = authUserRepository.findWithRolesAndPermissionsById(userId)
                             .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
                     return toDto(profile);
                 },

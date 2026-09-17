@@ -72,7 +72,7 @@ public class AdminConsoleService {
     }
 
     private List<AuthRole> loadRoles() {
-        return authRoleRepository.findAll(Sort.by(Sort.Direction.ASC, "code"));
+        return authRoleRepository.findAllWithPermissions(Sort.by(Sort.Direction.ASC, "code"));
     }
 
     private AdminConsoleSummaryDto.UserStats userStats() {

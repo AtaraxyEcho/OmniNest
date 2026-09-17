@@ -24,6 +24,10 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, UUID> {
     @EntityGraph(attributePaths = "roles")
     Optional<AuthUser> findByUsername(String username);
 
+    @EntityGraph(attributePaths = {"roles", "roles.permissions"})
+    @Query("select user from AuthUser user where user.username = :username")
+    Optional<AuthUser> findByUsernameWithPermissions(@Param("username") String username);
+
     @EntityGraph(attributePaths = "roles")
     Optional<AuthUser> findWithRolesById(UUID id);
 

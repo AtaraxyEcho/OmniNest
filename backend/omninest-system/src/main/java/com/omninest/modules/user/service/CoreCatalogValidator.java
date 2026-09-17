@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -49,7 +50,9 @@ public class CoreCatalogValidator implements ApplicationRunner {
     @Override
     @Transactional(readOnly = true)
     public void run(ApplicationArguments arguments) {
-        Map<String, AuthRole> roles = authRoleRepository.findAll().stream()
+        Map<String, AuthRole> roles = authRoleRepository
+                .findAllWithPermissions(Sort.unsorted())
+                .stream()
                 .collect(Collectors.toMap(AuthRole::getCode, Function.identity()));
         Set<String> missingRoles = REQUIRED_ROLES.stream()
                 .filter(code -> !roles.containsKey(code) || !roles.get(code).isEnabled())

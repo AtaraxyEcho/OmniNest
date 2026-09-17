@@ -71,7 +71,7 @@ class UserAccountQueryServiceTest {
         user.setRoles(Set.of(role));
         user.setQuotaBytes(2048);
         user.setUsedBytes(256);
-        when(authUserRepository.findWithRolesById(USER_ID)).thenReturn(Optional.of(user));
+        when(authUserRepository.findWithRolesAndPermissionsById(USER_ID)).thenReturn(Optional.of(user));
 
         var result = service.findDetailsById(USER_ID).orElseThrow();
 

@@ -66,7 +66,7 @@ class AdminConsoleServiceTest {
                 new Object[]{Roles.ADMIN, 1L},
                 new Object[]{Roles.MEMBER, 1L}
         ));
-        when(authRoleRepository.findAll(Sort.by(Sort.Direction.ASC, "code")))
+        when(authRoleRepository.findAllWithPermissions(Sort.by(Sort.Direction.ASC, "code")))
                 .thenReturn(List.of(adminRole, memberRole, superAdminRole));
         when(configCenterService.list()).thenReturn(List.of(
                 new ConfigEntryDto("rate-limit.default-limit", "120", "NUMBER", "security", "HOT", Instant.now(), null),

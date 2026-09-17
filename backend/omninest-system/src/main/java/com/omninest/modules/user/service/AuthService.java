@@ -273,7 +273,7 @@ public class AuthService {
     }
 
     private AuthUser loadActiveUserWithRoles(UUID userId) {
-        AuthUser profile = authUserRepository.findWithRolesById(userId)
+        AuthUser profile = authUserRepository.findWithRolesAndPermissionsById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
         if (!"ACTIVE".equals(profile.getStatus())) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "账号已被禁用");
@@ -393,7 +393,7 @@ public class AuthService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "刷新凭证无效");
         }
         UUID userId = parseUserId(jwt.getSubject());
-        AuthUser profile = authUserRepository.findWithRolesById(userId)
+        AuthUser profile = authUserRepository.findWithRolesAndPermissionsById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
         if (!"ACTIVE".equals(profile.getStatus())) {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "账号已被禁用");

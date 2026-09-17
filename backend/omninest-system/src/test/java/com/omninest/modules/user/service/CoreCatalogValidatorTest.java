@@ -44,7 +44,7 @@ class CoreCatalogValidatorTest {
         permissions = permissionCatalog();
         roles = roleCatalog(permissions);
         properties.setPersistentStateEnabled(true);
-        Mockito.when(authRoleRepository.findAll()).thenReturn(roles);
+        Mockito.when(authRoleRepository.findAllWithPermissions(org.springframework.data.domain.Sort.unsorted())).thenReturn(roles);
         Mockito.when(authPermissionRepository.findByCodeIn(Permissions.SUPER_ADMIN_PERMISSIONS))
                 .thenReturn(permissions);
         Mockito.when(systemInstanceRepository.existsById(SystemInstance.SINGLETON_ID)).thenReturn(true);

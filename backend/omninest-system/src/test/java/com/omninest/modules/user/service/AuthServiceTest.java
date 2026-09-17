@@ -402,7 +402,7 @@ class AuthServiceTest {
         void completeTwoFactorLoginIssuesTokens() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.getRoles().add(role(Roles.MEMBER, "file:read"));
-            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
 
             var token = service.completeTwoFactorLogin(
@@ -427,7 +427,7 @@ class AuthServiceTest {
         @DisplayName("两步验证第二步：验证码错误记录审计并抛出")
         void completeTwoFactorLoginRejectsInvalidCodeAndAudits() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
-            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
             org.mockito.Mockito.doThrow(new BusinessException(
                     com.omninest.common.enums.ErrorCode.TWO_FACTOR_INVALID_CODE, "两步验证码错误"))
                     .when(twoFactorService).verifyCode(user.getId(), "000000");
@@ -457,7 +457,7 @@ class AuthServiceTest {
         void bootstrapEnableAndCompleteFlowIssuesTokens() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.getRoles().add(role(Roles.ADMIN, Permissions.SYSTEM_CONFIG_MANAGE));
-            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
             when(authUserRepository.save(user)).thenReturn(user);
             when(twoFactorService.enable(user.getId(), "123456"))
                     .thenReturn(List.of("ABCD-2345"));
@@ -494,7 +494,7 @@ class AuthServiceTest {
         void refreshSuccess() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.getRoles().add(role(Roles.MEMBER, "file:read"));
-            when(authUserRepository.findWithRolesById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
+            when(authUserRepository.findWithRolesAndPermissionsById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
                     .thenReturn(Optional.of(user));
             AuthActiveSession session = activeSession(user.getId());
             when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
@@ -511,7 +511,7 @@ class AuthServiceTest {
         @DisplayName("刷新失败：会话已被撤销")
         void refreshFailsWhenSessionRevoked() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
-            when(authUserRepository.findWithRolesById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
+            when(authUserRepository.findWithRolesAndPermissionsById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
                     .thenReturn(Optional.of(user));
             AuthActiveSession session = activeSession(user.getId());
             when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
@@ -527,7 +527,7 @@ class AuthServiceTest {
         @DisplayName("刷新失败：活动会话不存在")
         void refreshFailsWhenSessionIsMissing() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
-            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
             UUID sessionId = UUID.fromString("22222222-2222-2222-2222-222222222222");
             when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
                     .thenReturn(Optional.empty());
@@ -543,7 +543,7 @@ class AuthServiceTest {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             AuthActiveSession session = activeSession(user.getId());
             session.setRevokedAt(Instant.now());
-            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
             when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
                     .thenReturn(Optional.of(session));
 
@@ -558,7 +558,7 @@ class AuthServiceTest {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             AuthActiveSession session = activeSession(user.getId());
             session.setExpiresAt(Instant.now().minusSeconds(1));
-            when(authUserRepository.findWithRolesById(user.getId())).thenReturn(Optional.of(user));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
             when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
                     .thenReturn(Optional.of(session));
 
@@ -580,7 +580,7 @@ class AuthServiceTest {
         void refreshFailsWhenAccountDisabled() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
             user.setStatus("DISABLED");
-            when(authUserRepository.findWithRolesById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
+            when(authUserRepository.findWithRolesAndPermissionsById(UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")))
                     .thenReturn(Optional.of(user));
 
             assertThatThrownBy(() -> service.refresh("refresh-token"))

@@ -40,7 +40,7 @@ public class AuthRole {
     @Column(nullable = false)
     private boolean enabled = true;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             schema = "omni",
             name = "auth_role_permissions",
