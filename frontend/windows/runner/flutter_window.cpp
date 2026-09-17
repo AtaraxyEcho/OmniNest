@@ -289,13 +289,21 @@ bool FlutterWindow::VerifyWindowFrame() {
                       &monitor_info)) {
     return false;
   }
+  // 2px tolerance: an extra SetWindowPos/MoveWindow for a 1px DPI residue
+  // forces another Flutter surface resize and a visible black frame.
+  constexpr LONG kGeometryTolerance = 2;
+  auto differs = [](LONG a, LONG b) {
+    const LONG delta = a > b ? a - b : b - a;
+    return delta > kGeometryTolerance;
+  };
   bool adjusted = false;
   const RECT& monitor = monitor_info.rcMonitor;
   RECT window_rect = {};
   if (GetWindowRect(hwnd, &window_rect) &&
-      (window_rect.left != monitor.left || window_rect.top != monitor.top ||
-       window_rect.right != monitor.right ||
-       window_rect.bottom != monitor.bottom)) {
+      (differs(window_rect.left, monitor.left) ||
+       differs(window_rect.top, monitor.top) ||
+       differs(window_rect.right, monitor.right) ||
+       differs(window_rect.bottom, monitor.bottom))) {
     SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
                  monitor.right - monitor.left, monitor.bottom - monitor.top,
                  SWP_NOOWNERZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -308,10 +316,13 @@ bool FlutterWindow::VerifyWindowFrame() {
       POINT origin = {0, 0};
       ClientToScreen(hwnd, &origin);
       RECT child_rect = {};
+      const LONG expected_right = origin.x + client.right;
+      const LONG expected_bottom = origin.y + client.bottom;
       if (GetWindowRect(child, &child_rect) &&
-          (child_rect.left != origin.x || child_rect.top != origin.y ||
-           child_rect.right != origin.x + client.right ||
-           child_rect.bottom != origin.y + client.bottom)) {
+          (differs(child_rect.left, origin.x) ||
+           differs(child_rect.top, origin.y) ||
+           differs(child_rect.right, expected_right) ||
+           differs(child_rect.bottom, expected_bottom))) {
         MoveWindow(child, 0, 0, client.right, client.bottom, TRUE);
         adjusted = true;
       }

@@ -37,11 +37,12 @@ const _transitionDuration = Duration(milliseconds: 450);
 const _idleHideDuration = Duration(seconds: 3);
 const _transitionCurve = Curves.easeOutCubic;
 
-/// 全屏沉浸幻灯片页（设计稿：Photos Management UI Design）。
+/// Fullscreen immersive slideshow (design: Photos Management UI Design).
 ///
-/// 黑底满屏原图、双层交叉过渡（方向感知）、分段进度条、可折叠缩略图条、
-/// Info 面板、键盘与全屏切换；控制层 3 秒无操作自动隐藏并隐藏光标。
-/// 点击画面中心可在显示/隐藏控制层之间切换。
+/// Black full-bleed photos, dual-layer crossfade, segmented progress, collapsible
+/// thumb strip, info panel, keyboard and fullscreen. Chrome auto-hides after
+/// 3s idle; canvas tap toggles chrome. Native immersive starts only after the
+/// first frame paints to avoid a long black window during the monitor snap.
 class PhotoSlideshowPage extends ConsumerStatefulWidget {
   const PhotoSlideshowPage({
     required this.photos,
@@ -132,17 +133,36 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       parent: _entryController,
       curve: Curves.easeOutCubic,
     );
-    _entryScale = Tween<double>(begin: 0.94, end: 1.0).animate(entryCurve);
-    _entryFade = Tween<double>(begin: 0.0, end: 1.0).animate(entryCurve);
+    // Do not fade from opacity 0: that paints pure black while the native
+    // window snaps to fullscreen. Scale-only polish keeps content visible.
+    _entryScale = Tween<double>(begin: 0.96, end: 1.0).animate(entryCurve);
+    _entryFade = const AlwaysStoppedAnimation<double>(1);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _windowChromeLease = ref
-          .read(windowChromeControllerProvider.notifier)
-          .acquireImmersive(owner: 'photos.slideshow');
-      // 入场扩缩与窗口吸附同步启动，遮蔽原生一步切换的硬切感。
       _entryController.forward();
-      unawaited(_loadInitialImage());
+      unawaited(_enterImmersiveAfterFirstPaint());
     });
+  }
+
+  /// Enter immersive fullscreen only after the first slide (or error) paints.
+  ///
+  /// Acquiring chrome before the first frame lands on a black Scaffold while
+  /// the native window resizes to the monitor, which reads as a multi-second
+  /// black screen on slower machines.
+  Future<void> _enterImmersiveAfterFirstPaint() async {
+    // Load already maps failures to the failed phase; always proceed to
+    // immersive so error UI is also usable full-bleed.
+    await _loadInitialImage();
+    if (!mounted) {
+      return;
+    }
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted) {
+      return;
+    }
+    _windowChromeLease = ref
+        .read(windowChromeControllerProvider.notifier)
+        .acquireImmersive(owner: 'photos.slideshow');
   }
 
   void _onProgressStatus(AnimationStatus status) {
