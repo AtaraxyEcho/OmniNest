@@ -102,8 +102,9 @@ class FileGrid extends StatelessWidget {
                 ? 3
                 : 2;
         return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
+          // 作为滚动主体时参与虚拟化；嵌套在外层滚动体内才使用 shrinkWrap。
+          shrinkWrap: false,
+          physics: const AlwaysScrollableScrollPhysics(),
           itemCount: files.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,

@@ -99,28 +99,30 @@ class _FileNodeWorkspace extends ConsumerWidget {
               _BatchSelectionBar(state: state),
             ],
             const SizedBox(height: 8),
-            AnimatedSwitcher(
-              duration: MotionToken.resolve(context, MotionToken.normal),
-              switchInCurve: Curves.easeOutCubic,
-              switchOutCurve: Curves.easeInCubic,
-              child:
-                  state.isBusy && state.section == FileManagerSection.allFiles
-                      ? KeyedSubtree(
-                        key: const ValueKey('_loading'),
-                        child: _buildLoadingPlaceholder(context),
-                      )
-                      : KeyedSubtree(
-                        key: ValueKey(
-                          '${state.spaceType}_${state.parentId}_${state.viewMode.name}',
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: MotionToken.resolve(context, MotionToken.normal),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child:
+                    state.isBusy && state.section == FileManagerSection.allFiles
+                        ? KeyedSubtree(
+                          key: const ValueKey('_loading'),
+                          child: _buildLoadingPlaceholder(context),
+                        )
+                        : KeyedSubtree(
+                          key: ValueKey(
+                            '${state.spaceType}_${state.parentId}_${state.viewMode.name}',
+                          ),
+                          child: _buildFileView(
+                            context,
+                            controller,
+                            l10n,
+                            recycle,
+                            actionsEnabled,
+                          ),
                         ),
-                        child: _buildFileView(
-                          context,
-                          controller,
-                          l10n,
-                          recycle,
-                          actionsEnabled,
-                        ),
-                      ),
+              ),
             ),
           ],
         ),
@@ -192,52 +194,59 @@ class _FileNodeWorkspace extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 18),
-        FileDropUploadSurface(
-          enabled:
-              state.section == FileManagerSection.allFiles && actionsEnabled,
-          onFilesDropped: (files) => _uploadFiles(context, controller, files),
-          child: WorkbenchPanel(
-            padding: const EdgeInsets.all(20),
-            backgroundColor: context.filesColors.surfaceContainer,
-            child: Column(
-              children: [
-                _FileToolbar(state: state),
-                if (state.section == FileManagerSection.allFiles) ...[
-                  const SizedBox(height: 14),
-                  _Breadcrumbs(state: state),
-                  const SizedBox(height: 14),
-                  _FileCategoryFilter(state: state),
+        Expanded(
+          child: FileDropUploadSurface(
+            enabled:
+                state.section == FileManagerSection.allFiles && actionsEnabled,
+            onFilesDropped: (files) => _uploadFiles(context, controller, files),
+            child: WorkbenchPanel(
+              padding: const EdgeInsets.all(20),
+              backgroundColor: context.filesColors.surfaceContainer,
+              child: Column(
+                children: [
+                  _FileToolbar(state: state),
+                  if (state.section == FileManagerSection.allFiles) ...[
+                    const SizedBox(height: 14),
+                    _Breadcrumbs(state: state),
+                    const SizedBox(height: 14),
+                    _FileCategoryFilter(state: state),
+                  ],
+                  const SizedBox(height: 20),
+                  if (state.hasSelection) ...[
+                    _BatchSelectionBar(state: state),
+                    const SizedBox(height: 14),
+                  ],
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: MotionToken.resolve(
+                        context,
+                        MotionToken.normal,
+                      ),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child:
+                          state.isBusy &&
+                                  state.section == FileManagerSection.allFiles
+                              ? KeyedSubtree(
+                                key: const ValueKey('_loading'),
+                                child: _buildLoadingPlaceholder(context),
+                              )
+                              : KeyedSubtree(
+                                key: ValueKey(
+                                  '${state.spaceType}_${state.parentId}_${state.viewMode.name}',
+                                ),
+                                child: _buildFileView(
+                                  context,
+                                  controller,
+                                  l10n,
+                                  recycle,
+                                  actionsEnabled,
+                                ),
+                              ),
+                    ),
+                  ),
                 ],
-                const SizedBox(height: 20),
-                if (state.hasSelection) ...[
-                  _BatchSelectionBar(state: state),
-                  const SizedBox(height: 14),
-                ],
-                AnimatedSwitcher(
-                  duration: MotionToken.resolve(context, MotionToken.normal),
-                  switchInCurve: Curves.easeOutCubic,
-                  switchOutCurve: Curves.easeInCubic,
-                  child:
-                      state.isBusy &&
-                              state.section == FileManagerSection.allFiles
-                          ? KeyedSubtree(
-                            key: const ValueKey('_loading'),
-                            child: _buildLoadingPlaceholder(context),
-                          )
-                          : KeyedSubtree(
-                            key: ValueKey(
-                              '${state.spaceType}_${state.parentId}_${state.viewMode.name}',
-                            ),
-                            child: _buildFileView(
-                              context,
-                              controller,
-                              l10n,
-                              recycle,
-                              actionsEnabled,
-                            ),
-                          ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -526,7 +535,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     return Column(
       children: [
-        child,
+        Expanded(child: child),
         const SizedBox(height: 14),
         TextButton.icon(
           onPressed:

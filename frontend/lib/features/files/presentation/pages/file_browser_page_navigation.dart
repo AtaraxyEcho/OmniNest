@@ -280,6 +280,17 @@ class _AnimatedSectionBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final child = _FileSectionBody(key: ValueKey(state.section), state: state);
+    // 文件节点工作区自带滚动主体，其它分区需要外层滚动。
+    final virtualizedWorkspace = switch (state.section) {
+      FileManagerSection.allFiles ||
+      FileManagerSection.sharedSpace ||
+      FileManagerSection.recent ||
+      FileManagerSection.favorites ||
+      FileManagerSection.recycleBin ||
+      FileManagerSection.storageStats => true,
+      _ => false,
+    };
     return AnimatedSwitcher(
       duration: MotionToken.normal,
       switchInCurve: MotionToken.curve,
@@ -300,7 +311,13 @@ class _AnimatedSectionBody extends StatelessWidget {
           ),
         );
       },
-      child: _FileSectionBody(key: ValueKey(state.section), state: state),
+      child:
+          virtualizedWorkspace
+              ? child
+              : SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                child: child,
+              ),
     );
   }
 }

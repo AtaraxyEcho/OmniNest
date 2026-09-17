@@ -80,6 +80,9 @@ class FileList extends StatefulWidget {
 
 class _FileListState extends State<FileList>
     with SingleTickerProviderStateMixin {
+  /// 入场 stagger 仅作用于前若干行，避免长列表为动画重建全部行。
+  static const int _staggerVisibleLimit = 12;
+
   late AnimationController _staggerController;
   int _staggerCount = 0;
 
@@ -115,7 +118,10 @@ class _FileListState extends State<FileList>
   }
 
   void _runStagger() {
-    _staggerCount = widget.files.length;
+    _staggerCount =
+        widget.files.length < _staggerVisibleLimit
+            ? widget.files.length
+            : _staggerVisibleLimit;
     // 首次加载 400ms，刷新/切换 600ms（更丝滑的淡入淡出）
     _staggerController.duration = Duration(
       milliseconds: _isRefresh ? 600 : 400,
@@ -167,46 +173,58 @@ class _FileListState extends State<FileList>
       );
     }
 
-    return Column(
-      children: [
-        for (var i = 0; i < widget.files.length; i++) ...[
-          _StaggeredFileRow(
-            index: i,
-            totalCount: _staggerCount,
-            animation: _staggerController,
-            child: _FileRow(
-              file: widget.files[i],
-              showingRecycleBin: widget.showingRecycleBin,
-              enabled: widget.enabled,
-              onRename: widget.onRename,
-              onDelete: widget.onDelete,
-              onPurge: widget.onPurge,
-              onRestore: widget.onRestore,
-              onOpen: widget.onOpen,
-              onCopy: widget.onCopy,
-              onShowVersions: widget.onShowVersions,
-              onMove: widget.onMove,
-              onMoveToSharedSpace: widget.onMoveToSharedSpace,
-              onMoveToPersonalSpace: widget.onMoveToPersonalSpace,
-              onDownload: widget.onDownload,
-              onShare: widget.onShare,
-              onPreview: widget.onPreview,
-              onToggleFavorite: widget.onToggleFavorite,
-              showingFavorites: widget.showingFavorites,
-              selected: widget.selectedFileIds.contains(widget.files[i].id),
-              selectionMode: widget.selectionActive,
-              swipeActionsEnabled:
-                  Theme.of(context).platform == TargetPlatform.android ||
-                  Theme.of(context).platform == TargetPlatform.iOS,
-              onToggleSelection:
-                  widget.onToggleSelection != null
-                      ? () => widget.onToggleSelection!(widget.files[i].id)
-                      : null,
-            ),
-          ),
-          const Divider(height: 1),
-        ],
-      ],
+    final files = widget.files;
+    final mobile =
+        Theme.of(context).platform == TargetPlatform.android ||
+        Theme.of(context).platform == TargetPlatform.iOS;
+    return ListView.builder(
+      itemCount: files.length,
+      itemBuilder: (context, index) {
+        final file = files[index];
+        final animate = index < _staggerCount;
+        final row = _FileRow(
+          file: file,
+          showingRecycleBin: widget.showingRecycleBin,
+          enabled: widget.enabled,
+          onRename: widget.onRename,
+          onDelete: widget.onDelete,
+          onPurge: widget.onPurge,
+          onRestore: widget.onRestore,
+          onOpen: widget.onOpen,
+          onCopy: widget.onCopy,
+          onShowVersions: widget.onShowVersions,
+          onMove: widget.onMove,
+          onMoveToSharedSpace: widget.onMoveToSharedSpace,
+          onMoveToPersonalSpace: widget.onMoveToPersonalSpace,
+          onDownload: widget.onDownload,
+          onShare: widget.onShare,
+          onPreview: widget.onPreview,
+          onToggleFavorite: widget.onToggleFavorite,
+          showingFavorites: widget.showingFavorites,
+          selected: widget.selectedFileIds.contains(file.id),
+          selectionMode: widget.selectionActive,
+          swipeActionsEnabled: mobile,
+          onToggleSelection:
+              widget.onToggleSelection != null
+                  ? () => widget.onToggleSelection!(file.id)
+                  : null,
+        );
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (animate)
+              _StaggeredFileRow(
+                index: index,
+                totalCount: _staggerCount,
+                animation: _staggerController,
+                child: row,
+              )
+            else
+              row,
+            const Divider(height: 1),
+          ],
+        );
+      },
     );
   }
 }

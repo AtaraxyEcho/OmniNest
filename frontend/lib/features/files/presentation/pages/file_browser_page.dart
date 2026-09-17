@@ -411,7 +411,9 @@ class _FileManagerShell extends ConsumerWidget {
                                       ),
                                 ),
                                 Expanded(
-                                  child: SingleChildScrollView(
+                                  // 文件工作区自身提供滚动主体，避免外层
+                                  // SingleChildScrollView 关闭列表虚拟化。
+                                  child: Padding(
                                     padding: const EdgeInsets.fromLTRB(
                                       34,
                                       26,
@@ -455,10 +457,7 @@ class _FileManagerShell extends ConsumerWidget {
                                   const Duration(milliseconds: 200),
                                 );
                               },
-                              child: SingleChildScrollView(
-                                physics: const AlwaysScrollableScrollPhysics(
-                                  parent: BouncingScrollPhysics(),
-                                ),
+                              child: Padding(
                                 // 托管态无自有底栏，仅按 FAB 悬浮净距预留。
                                 padding: EdgeInsets.fromLTRB(
                                   16,
