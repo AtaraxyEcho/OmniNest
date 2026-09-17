@@ -104,19 +104,51 @@ Java `Path` 把 `/downloads` 归一成 `D:\\downloads`，Aria2 会因权限/路�
 
 ### Cloudflare 管理 HTTPS（无 certbot）
 
-若证书由 **Cloudflare** 签发/续期，不要启动 certbot，使用覆盖层：
+`certbot` 服务挂在 Compose profile **`certbot`** 下，**默认不启动**。
 
-```bash
-cd deploy/prod
-cp .env.example .env   # 按需修改
-docker compose -f docker-compose.yml -f docker-compose.cloudflare.yml up -d
+| 场景 | 启动方式 |
+|---|---|
+| Cloudflare / 其他外部证书 | `docker compose up -d`（不要设 `COMPOSE_PROFILES=certbot`） |
+| Let's Encrypt Webroot | `.env` 设 `COMPOSE_PROFILES=certbot` 后 `up -d` |
+
+#### Cloudflare 除「关 certbot」外还需调整
+
+1. **域名与回源**  
+   - `OMNINEST_PUBLIC_HOST=<你的域名>`（nginx `server_name`）  
+   - DNS 指到源站；Flexible 只回源 80，Full/Full strict 回源 443  
+
+2. **SSL 模式**  
+   - **Flexible**：`OMNINEST_HTTPS_ENABLED=false`，源站仅 HTTP  
+   - **Full / Full (strict)**：`OMNINEST_HTTPS_ENABLED=true`，并在 Cloudflare 下载 **Origin Certificate**，按固定路径挂到 nginx（与 Let's Encrypt 布局一致）：  
+     ```
+     ./certs/fullchain.pem → /etc/letsencrypt/live/${CERTBOT_CERT_NAME}/fullchain.pem
+     ./certs/privkey.pem   → /etc/letsencrypt/live/${CERTBOT_CERT_NAME}/privkey.pem
+     ```
+     可用 `docker-compose.override.yml` 只加这两条 `nginx.volumes`，不必整份复制 compose。  
+     Full (strict) 更安全；Flexible 仅适合临时/内网演示。
+
+3. **应用侧公开地址**  
+   - `OMNINEST_MINIO_PUBLIC_ENDPOINT`：客户端可达的 MinIO 地址（常用 `https://<域名或 CDN>:9000` 或经 CF 代理的域名）  
+   - `OMNINEST_SECURITY_ALLOWED_ORIGINS`：`https://<域名>`  
+   - 需要分享/外链时同步核对 `OMNINEST_SETUP_WEB_BASE_URL`  
+
+4. **Cloudflare 面板**  
+   - 开启 **WebSocket**（`/ws` 实时同步）  
+   - 上传大文件注意 CF 上传体积与超时  
+   - 若只挂 CF 不开源站 443，保持 Flexible + 仅 80 回源即可  
+
+5. **配置中心**  
+   - 安装后核对 `clamav.host=clamav`（见上文），与证书方式无关但影响上传扫描。
+
+示例：`docker-compose.override.yml`（Full / Full strict 挂 Origin 证书，文件可放 `deploy/prod/certs/`）：
+
+```yaml
+services:
+  nginx:
+    volumes:
+      - ./certs/fullchain.pem:/etc/letsencrypt/live/${CERTBOT_CERT_NAME:-omninest}/fullchain.pem:ro
+      - ./certs/privkey.pem:/etc/letsencrypt/live/${CERTBOT_CERT_NAME:-omninest}/privkey.pem:ro
 ```
-
-- **Flexible**：Cloudflare 终结 TLS，源站保持 `OMNINEST_HTTPS_ENABLED=false`，仅需 80 回源。
-- **Full / Full (strict)**：在 Cloudflare 下载 Origin Certificate，按
-  `docker-compose.cloudflare.yml` 内注释把 `origin.crt` / `origin.key` 挂入 nginx，并设
-  `OMNINEST_HTTPS_ENABLED=true`。
-- 覆盖层通过 profile 禁用 `certbot`，默认不会拉起续期容器。
 
 ### 公开入口和 HTTPS
 
