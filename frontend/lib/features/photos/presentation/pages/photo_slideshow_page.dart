@@ -470,7 +470,12 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   void _resetIdle() {
     if (!mounted) return;
-    setState(() => _controlsVisible = true);
+    // MouseRegion.onHover fires on every pointer move (Web/desktop). Only
+    // rebuild when chrome was hidden; always setState would repaint the
+    // whole page and stall the segmented progress bar.
+    if (!_controlsVisible) {
+      setState(() => _controlsVisible = true);
+    }
     _scheduleIdleHide();
   }
 

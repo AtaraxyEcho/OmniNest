@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -410,5 +411,39 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(topBarVisible(), isTrue);
+  });
+
+  testWidgets('控件已显示时悬停只刷新空闲计时，不打断进度条', (tester) async {
+    _mockPathProvider();
+    final photos = [_photoWithUrl('photo-1'), _photoWithUrl('photo-2')];
+    await _mockNetworkImages(() async {
+      await _warmImageCache(tester, [
+        (photos[0], ImageQuality.thumbnail, 400),
+        (photos[0], ImageQuality.preview, 1280),
+        (photos[1], ImageQuality.thumbnail, 400),
+        (photos[1], ImageQuality.preview, 1280),
+      ]);
+      await _pumpSlideshow(tester, photos);
+      await tester.pump();
+      await tester.pump();
+
+      final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(gesture.removePointer);
+      await gesture.addPointer(location: const Offset(640, 200));
+      await tester.pump();
+
+      // Repeated hover must not rebuild chrome (was setState on every move).
+      final topBarFinder = find.byType(PhotoSlideshowTopBar);
+      final topBarBefore = tester.widget<PhotoSlideshowTopBar>(topBarFinder);
+      for (var i = 0; i < 20; i++) {
+        await gesture.moveTo(Offset(640.0 + i, 200.0));
+        await tester.pump(const Duration(milliseconds: 8));
+      }
+      final topBarAfter = tester.widget<PhotoSlideshowTopBar>(topBarFinder);
+
+      expect(identical(topBarBefore, topBarAfter), isTrue);
+      expect(tester.takeException(), isNull);
+      expect(find.byType(LinearProgressIndicator), findsWidgets);
+    });
   });
 }
