@@ -68,17 +68,24 @@ void main() {
       container.dispose();
     });
 
-    test('后台隐藏后回落海报，恢复后等待首个解码帧', () {
+    test('后台恢复宽限期内保持纹理，位置未推进再回落海报', () async {
       expect(session.renderable, isTrue, reason: '初始纹理有效');
 
       session.updateLifecycleState(AppLifecycleState.hidden);
-      expect(session.renderable, isFalse, reason: '后台期间纹理内容失效');
+      expect(
+        session.renderable,
+        isTrue,
+        reason: '后台不可见，保留 renderable，避免恢复瞬间先闪海报',
+      );
 
       session.updateLifecycleState(AppLifecycleState.resumed);
+      expect(session.renderable, isTrue, reason: '恢复宽限期内保持当前纹理可见');
+
+      await Future<void>.delayed(const Duration(milliseconds: 400));
       expect(
         session.renderable,
         isFalse,
-        reason: '恢复后等待 position 流推进（首个解码帧）再显示视频',
+        reason: '宽限期结束且无播放位置推进时回落海报，等待解码帧或重开',
       );
     });
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 
@@ -11,6 +13,7 @@ class AppBackdropSceneController extends Notifier<AppBackdropSceneState> {
   final Map<String, _OwnedBackdropPolicy> _policies =
       <String, _OwnedBackdropPolicy>{};
   int _sequence = 0;
+  int _emptyGraceToken = 0;
 
   @override
   AppBackdropSceneState build() => const AppBackdropSceneState();
@@ -26,6 +29,7 @@ class AppBackdropSceneController extends Notifier<AppBackdropSceneState> {
       return 0;
     }
     _sequence++;
+    _emptyGraceToken++;
     _policies[owner] = _OwnedBackdropPolicy(
       policy: policy,
       sequence: _sequence,
@@ -46,7 +50,23 @@ class AppBackdropSceneController extends Notifier<AppBackdropSceneState> {
       return;
     }
     _policies.remove(owner);
+    if (_policies.isEmpty) {
+      _scheduleEmptyGrace();
+      return;
+    }
     _resolve();
+  }
+
+  /// 清空策略时延迟到当前同步/微任务批之后再落到 hidden，给同帧新路由的
+  /// request 留出注册窗口，避免导航切换出现「壁纸隐藏再显示」的整段闪烁。
+  void _scheduleEmptyGrace() {
+    final token = ++_emptyGraceToken;
+    scheduleMicrotask(() {
+      if (!ref.mounted || token != _emptyGraceToken || _policies.isNotEmpty) {
+        return;
+      }
+      _updateState(const AppBackdropSceneState());
+    });
   }
 
   void _resolve() {

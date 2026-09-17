@@ -35,7 +35,7 @@ class _MountProbeState extends State<_MountProbe> {
 
 void main() {
   group('场景租约握手', () {
-    test('整树重挂后新作用域持新租约，旧作用域按旧租约释放不得误删', () {
+    test('整树重挂后新作用域持新租约，旧作用域按旧租约释放不得误删', () async {
       final container = ProviderContainer.test();
       addTearDown(container.dispose);
       final controller = container.read(
@@ -59,10 +59,30 @@ void main() {
       expect(state.policy, AppBackdropPolicy.portalMobile);
 
       controller.release('app.mobile.shell', lease: newLease);
+      // 清空策略延迟一拍落到 hidden，给同帧新注册留出手。
+      await Future<void>.delayed(Duration.zero);
       state = container.read(appBackdropSceneControllerProvider);
       expect(state.owner, isNull);
       expect(state.policy.scene, AppBackdropScene.hidden);
       expect(state.policy.visible, isFalse);
+    });
+
+    test('清空后同微任务内重新注册不会先闪 hidden', () async {
+      final container = ProviderContainer.test();
+      addTearDown(container.dispose);
+      final controller = container.read(
+        appBackdropSceneControllerProvider.notifier,
+      );
+
+      controller.request('a', AppBackdropPolicy.portalMobile);
+      controller.release('a');
+      controller.request('b', AppBackdropPolicy.musicDeck);
+      await Future<void>.delayed(Duration.zero);
+
+      final state = container.read(appBackdropSceneControllerProvider);
+      expect(state.owner, 'b');
+      expect(state.policy, AppBackdropPolicy.musicDeck);
+      expect(state.policy.visible, isTrue);
     });
 
     test('同所有者重复注册相同策略不发布新状态', () {

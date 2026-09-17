@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_surface.dart';
+import 'package:omninest/features/backdrop/presentation/app_backdrop_video_view.dart';
 
 void main() {
   testWidgets('视频背景打开失败或未就绪时保留内置海报兜底', (tester) async {
@@ -44,6 +45,40 @@ void main() {
     // 推进打开超时与重试窗口后,海报仍然存在。
     await tester.pump(const Duration(seconds: 40));
     expect(find.byWidgetPredicate(isPosterImage), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('motionAllowed=false 时视频层仍挂载，避免模块切换重开闪烁', (tester) async {
+    final asset = AppBackdropAsset(
+      id: bundledDefaultWallpaperId,
+      path: 'C:/omninest-test/default_wallpaper_v1.mp4',
+      title: 'OmniNest',
+      mediaType: AppBackdropMediaType.video,
+      sourceType: AppBackdropSourceType.bundled,
+      fileSize: 1,
+      modifiedAt: DateTime(2026),
+      createdAt: DateTime(2026),
+      updatedAt: DateTime(2026),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: AppBackdropSurface(
+              asset: asset,
+              settings: const AppBackdropSettings(),
+              policy: AppBackdropPolicy.work,
+              active: false,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    // 实底模块（Photos/Files 等）策略下不得把 Video 组件从树中拆掉。
+    expect(find.byType(AppBackdropVideoView), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

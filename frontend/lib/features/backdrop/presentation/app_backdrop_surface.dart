@@ -136,9 +136,9 @@ class AppBackdropSurface extends ConsumerWidget {
         ],
       );
     }
-    if (!motionAllowed) {
-      return _videoStaticFallback(context, ref, asset, fit);
-    }
+    // 无论是否允许运动，都保持视频层挂载：模块切换/页面策略把
+    // motionAllowed 翻成 false 时只暂停播放，卸载 Video 会在再次可见时
+    // 重新 open 播放器，表现为壁纸整段黑闪后“重启”。
     // 视频打开失败或未就绪时底部保留静态海报：模拟器软解、低端设备或
     // 网络失败时背景层不整层空白，视频渲染就绪后自然覆盖海报。
     return Stack(
@@ -148,7 +148,7 @@ class AppBackdropSurface extends ConsumerWidget {
         AppBackdropVideoView(
           source: source,
           fit: fit,
-          playing: active,
+          playing: active && motionAllowed,
           muted: settings.videoMuted,
           onSourceStale: onSourceStale,
         ),

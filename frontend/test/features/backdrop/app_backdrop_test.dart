@@ -1157,6 +1157,8 @@ void main() {
         ),
       );
       await tester.pump();
+      // 空策略宽限在 post-frame release 之后再经微任务落到 hidden。
+      await tester.pump();
 
       expect(tester.takeException(), isNull);
       expect(container.read(appBackdropSceneControllerProvider).owner, isNull);

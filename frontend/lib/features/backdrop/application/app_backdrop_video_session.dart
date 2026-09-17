@@ -37,6 +37,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
   StreamSubscription<Duration>? _positionSub;
   Timer? _retryTimer;
   Timer? _resumeRecoveryTimer;
+  Timer? _resumeGraceTimer;
   String _path = '';
   String? _activePath;
   Object? _openError;
@@ -203,23 +204,63 @@ class AppBackdropVideoSession extends ChangeNotifier {
       return;
     }
     _appVisible = visible;
-    // 后台期间纹理内容可能被系统回收：恢复后先回落静态海报，等待
-    // 播放位置真正推进（首个解码帧）再显示视频，避免黑纹理盖住海报形成黑闪。
-    final renderableWasValid = _renderable;
-    _renderable = false;
     if (visible) {
       _resumeBaselinePosition = _player?.state.position;
+      // 恢复瞬间不立刻回落海报：宽限期内保持当前纹理，位置未真正推进
+      // 再隐藏，避免「视频→海报→视频」的整段闪烁。
       _resumeCurrentPlayerIfNeeded();
+      _scheduleResumeGrace();
       _scheduleResumeRecovery();
     } else {
+      _cancelResumeGrace();
       _resumeRecoveryTimer?.cancel();
       _resumeRecoveryTimer = null;
       _resumeBaselinePosition = null;
+      // 后台不可见，用户看不到画面；保留 renderable 标记，恢复时再探测。
       _pauseCurrentPlayer();
     }
-    if (renderableWasValid) {
-      _notifySafely();
-    }
+  }
+
+  /// 恢复宽限期：超时后按播放位置是否相对基点推进，决定保持纹理或回落海报。
+  void _scheduleResumeGrace() {
+    _resumeGraceTimer?.cancel();
+    _resumeGraceTimer = Timer(const Duration(milliseconds: 320), () {
+      if (_disposed || !_appVisible) {
+        return;
+      }
+      if (!_layoutUsable || !_sceneActive) {
+        // 场景未挂载或无布局：没有有效播放器时保证回落海报。
+        if (_player == null && _renderable) {
+          _renderable = false;
+          _notifySafely();
+        }
+        return;
+      }
+      final baseline = _resumeBaselinePosition;
+      final current = _player?.state.position;
+      // 无播放器或无基线时无法判定推进：保持现状，交给 position 流或强制重开。
+      final advanced =
+          baseline != null &&
+          current != null &&
+          current > baseline + const Duration(milliseconds: 50);
+      if (advanced) {
+        _resumeBaselinePosition = null;
+        if (!_renderable) {
+          _renderable = true;
+          _notifySafely();
+        }
+        return;
+      }
+      if (_renderable) {
+        _renderable = false;
+        _notifySafely();
+      }
+    });
+  }
+
+  void _cancelResumeGrace() {
+    _resumeGraceTimer?.cancel();
+    _resumeGraceTimer = null;
   }
 
   /// 恢复后若纹理长期无可渲染帧，强制重开会话。
@@ -573,6 +614,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
     _disposed = true;
     _generation++;
     _cancelRetry();
+    _cancelResumeGrace();
     _cancelResumeRecovery();
     _unregisterPath(_path);
     final detached = _takeCurrentSession();
