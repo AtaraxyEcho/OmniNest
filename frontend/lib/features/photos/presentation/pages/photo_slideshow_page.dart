@@ -140,19 +140,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       _entryController.forward();
-      unawaited(_enterImmersiveAfterFirstPaint());
+      unawaited(_bootstrapSlideshow());
     });
   }
 
-  /// Enter immersive fullscreen only after the first slide (or error) paints.
+  /// Paint cover/spinner first, then enter immersive and decode the bitmap.
   ///
-  /// Acquiring chrome before the first frame lands on a black Scaffold while
-  /// the native window resizes to the monitor, which reads as a multi-second
-  /// black screen on slower machines.
-  Future<void> _enterImmersiveAfterFirstPaint() async {
-    // Load already maps failures to the failed phase; always proceed to
-    // immersive so error UI is also usable full-bleed.
-    await _loadInitialImage();
+  /// Waiting for a network decode before native fullscreen left a long black
+  /// window on entry. Two endOfFrame hops let CachedNetworkImage paint a
+  /// memory-cached cover before the monitor snap.
+  Future<void> _bootstrapSlideshow() async {
+    await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
       return;
     }
@@ -163,6 +161,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _windowChromeLease = ref
         .read(windowChromeControllerProvider.notifier)
         .acquireImmersive(owner: 'photos.slideshow');
+    await _loadInitialImage();
   }
 
   void _onProgressStatus(AnimationStatus status) {
@@ -219,9 +218,27 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       _preloadNeighbors();
       return;
     }
+    final photo = _photos[_current];
+    final peeked = _imageCache.peek(
+      SlideshowImageCache.keyFor(photo.id, ImageQuality.thumbnail),
+    );
+    if (peeked != null) {
+      setState(() {
+        _imageCache.retain(
+          SlideshowImageCache.keyFor(photo.id, ImageQuality.thumbnail),
+          peeked,
+        );
+        _currentFrame = SlideFrame(photo, peeked);
+        _phase = SlideshowPhase.ready;
+      });
+      _progressController.forward(from: 0);
+      _preloadNeighbors();
+      unawaited(_upgradeCurrentImage());
+      return;
+    }
     try {
       final image = await _imageCache.obtain(
-        _photos[_current],
+        photo,
         ImageQuality.thumbnail,
         context,
       );
@@ -625,15 +642,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   fit: StackFit.expand,
                   children: [
                     switch (_phase) {
-                      SlideshowPhase.loading => const Center(
-                        child: SizedBox.square(
-                          dimension: 28,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            color: Color(0x66FFFFFF),
-                          ),
-                        ),
-                      ),
+                      SlideshowPhase.loading => _buildLoadingStage(photo),
                       SlideshowPhase.failed => _buildErrorRetry(context),
                       SlideshowPhase.ready => Stack(
                         fit: StackFit.expand,
@@ -799,6 +808,44 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           ],
         );
       },
+    );
+  }
+
+  /// First paint: memory/disk cover if available, plus a small spinner.
+  Widget _buildLoadingStage(PhotoItem photo) {
+    final cover = photo.coverUrl;
+    final hasCover = cover != null && cover.isNotEmpty;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (hasCover)
+          CachedNetworkImage(
+            imageUrl: cover,
+            cacheKey: photo.coverCacheKey,
+            fit: BoxFit.cover,
+            memCacheWidth: 1280,
+            filterQuality: FilterQuality.medium,
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            placeholder:
+                (context, url) => const ColoredBox(color: Colors.black),
+            errorWidget:
+                (context, url, error) => const ColoredBox(color: Colors.black),
+          )
+        else
+          const ColoredBox(color: Colors.black),
+        // Spinner only when there is no cover to show under it.
+        if (!hasCover)
+          const Center(
+            child: SizedBox.square(
+              dimension: 28,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Color(0x66FFFFFF),
+              ),
+            ),
+          ),
+      ],
     );
   }
 

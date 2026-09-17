@@ -310,12 +310,15 @@ void main() {
     );
 
     // 点击播放：沉浸页打开，顶栏计数可见并自动推进。
+    // Bootstrap paints cover, waits two frames, enters immersive, then decodes.
     await tester.tap(find.byIcon(Icons.play_arrow_rounded));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('01 / 03'), findsOneWidget);
     await tester.pump(const Duration(seconds: 5));
-    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pump(const Duration(milliseconds: 800));
     expect(find.text('02 / 03'), findsOneWidget);
 
     // 清场：推时钟消化自动播放的后续切换 Timer 与 idle 计时器，

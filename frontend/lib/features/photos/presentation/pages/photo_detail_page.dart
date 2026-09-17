@@ -621,11 +621,25 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
                       imageUrl != null && imageUrl.isNotEmpty
                           ? Hero(
                             tag: 'photo-cover-${photo.id}',
-                            child: InteractiveViewer(
-                              minScale: 1,
-                              maxScale: 5,
-                              child: SizedBox.expand(
-                                child: _ProgressivePhotoImage(photo: photo),
+                            // Default Material flight + InteractiveViewer
+                            // Transform can leave a diagonal white seam.
+                            // Fly the destination child without extra chrome.
+                            flightShuttleBuilder:
+                                (
+                                  flightContext,
+                                  animation,
+                                  flightDirection,
+                                  fromHeroContext,
+                                  toHeroContext,
+                                ) => (toHeroContext.widget as Hero).child,
+                            child: ClipRect(
+                              child: InteractiveViewer(
+                                minScale: 1,
+                                maxScale: 5,
+                                clipBehavior: Clip.hardEdge,
+                                child: SizedBox.expand(
+                                  child: _ProgressivePhotoImage(photo: photo),
+                                ),
                               ),
                             ),
                           )
