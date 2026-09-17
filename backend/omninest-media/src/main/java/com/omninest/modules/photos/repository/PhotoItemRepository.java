@@ -752,7 +752,8 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
             """)
     List<PhotoItem> searchByOwnerUserIdAndKeyword(
             @Param("ownerUserId") UUID ownerUserId,
-            @Param("keyword") String keyword);
+            @Param("keyword") String keyword,
+            Pageable pageable);
 
     /**
      * 按拍摄时间范围查询用户照片

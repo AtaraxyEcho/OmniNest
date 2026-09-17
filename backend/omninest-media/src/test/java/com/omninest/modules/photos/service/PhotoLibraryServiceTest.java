@@ -197,14 +197,18 @@ class PhotoLibraryServiceTest {
 
         when(photoItemRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
                 .thenReturn(List.of(photo1, photo2));
-        when(favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(
+                OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
                 .thenReturn(List.of());
-        when(photoTagRepository.findByOwnerUserIdAndPhotoId(any(), any()))
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(
+                OWNER_ID, List.of(PHOTO_ID_1, PHOTO_ID_2)))
                 .thenReturn(List.of());
-        when(fileQueryService.createDownloadUrl(OWNER_ID, COVER_FILE_ID_1))
-                .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"));
-        when(fileQueryService.createDownloadUrl(OWNER_ID, COVER_FILE_ID_2))
-                .thenReturn(downloadUrl(COVER_FILE_ID_2, "photo2.jpg", "http://minio/photo2"));
+        when(fileQueryService.createDownloadUrls(eq(OWNER_ID), any()))
+                .thenReturn(Map.of(
+                        COVER_FILE_ID_1,
+                        downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"),
+                        COVER_FILE_ID_2,
+                        downloadUrl(COVER_FILE_ID_2, "photo2.jpg", "http://minio/photo2")));
 
         List<PhotoItemDto> result = service.listPhotos(OWNER_ID);
 
@@ -249,9 +253,9 @@ class PhotoLibraryServiceTest {
                 .thenReturn(List.of(PHOTO_ID_1));
         when(photoItemRepository.findActiveByOwnerUserIdAndIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of(photo1));
-        when(favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(OWNER_ID))
+        when(favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
-        when(photoTagRepository.findByOwnerUserIdAndPhotoId(any(), any()))
+        when(photoTagRepository.findByOwnerUserIdAndPhotoIdIn(OWNER_ID, List.of(PHOTO_ID_1)))
                 .thenReturn(List.of());
         when(fileQueryService.createDownloadUrl(OWNER_ID, COVER_FILE_ID_1))
                 .thenReturn(downloadUrl(COVER_FILE_ID_1, "photo1.jpg", "http://minio/photo1"));
@@ -263,7 +267,7 @@ class PhotoLibraryServiceTest {
 
         // 验证 SQL 模糊搜索未被调用（Lucene 已返回结果）
         verify(photoItemRepository, Mockito.never())
-                .searchByOwnerUserIdAndKeyword(any(), any());
+                .searchByOwnerUserIdAndKeyword(any(), any(), any(Pageable.class));
 
         // 验证返回 Lucene 命中的照片
         assertThat(result).hasSize(1);

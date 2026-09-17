@@ -131,13 +131,16 @@ public class PhotoLibraryService {
                 .filter(Objects::nonNull)
                 .toList();
 
+        Set<UUID> favoriteItemIds = favorites.stream()
+                .map(PhotoItem::getId)
+                .collect(Collectors.toSet());
         return new PhotoDashboardDto(
                 totalPhotos,
                 totalAlbums,
                 totalFavorites,
                 trashCount,
-                recent.stream().map(p -> toDto(p, recentFavoriteIds.contains(p.getId()))).toList(),
-                favorites.stream().map(p -> toDto(p, true)).toList()
+                mapPhotoItemDtos(ownerUserId, recent, recentFavoriteIds),
+                mapPhotoItemDtos(ownerUserId, favorites, favoriteItemIds)
         );
     }
 
@@ -146,11 +149,8 @@ public class PhotoLibraryService {
      */
     @Transactional(readOnly = true)
     public List<PhotoItemDto> listPhotos(UUID ownerUserId) {
-        Set<UUID> favoriteIds = favoriteIds(ownerUserId);
-        return photoItemRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId)
-                .stream()
-                .map(p -> toDto(p, favoriteIds.contains(p.getId())))
-                .toList();
+        List<PhotoItem> photos = photoItemRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId);
+        return mapPhotoItemDtos(ownerUserId, photos, favoriteIdsFor(ownerUserId, photoIds(photos)));
     }
 
     /**
@@ -210,22 +210,17 @@ public class PhotoLibraryService {
      */
     @Transactional(readOnly = true)
     public List<PhotoItemDto> searchPhotos(UUID ownerUserId, String query) {
-        Set<UUID> favoriteIds = favoriteIds(ownerUserId);
         List<UUID> luceneIds = photoSearchIndexService.search(ownerUserId, query, 200);
         if (!luceneIds.isEmpty()) {
-            Map<UUID, PhotoItem> itemMap = photoItemRepository
+            List<PhotoItem> items = photoItemRepository
                     .findActiveByOwnerUserIdAndIdIn(ownerUserId, luceneIds).stream()
-                    .collect(Collectors.toMap(PhotoItem::getId, p -> p));
-            return luceneIds.stream()
-                    .map(itemMap::get)
                     .filter(Objects::nonNull)
-                    .map(p -> toDto(p, favoriteIds.contains(p.getId())))
                     .toList();
+            return mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));
         }
-        return photoItemRepository.searchByOwnerUserIdAndKeyword(ownerUserId, query)
-                .stream()
-                .map(p -> toDto(p, favoriteIds.contains(p.getId())))
-                .toList();
+        List<PhotoItem> fallback = photoItemRepository.searchByOwnerUserIdAndKeyword(
+                ownerUserId, query, PageRequest.of(0, MAX_PAGE_SIZE));
+        return mapPhotoItemDtos(ownerUserId, fallback, favoriteIdsFor(ownerUserId, photoIds(fallback)));
     }
 
     /**
@@ -503,7 +498,8 @@ public class PhotoLibraryService {
     @Transactional(readOnly = true)
     public List<PhotoItemDto> listFavorites(UUID ownerUserId) {
         List<PhotoItem> photos = findFavoritePhotos(ownerUserId, 0);
-        return photos.stream().map(p -> toDto(p, true)).toList();
+        Set<UUID> favoriteIds = photos.stream().map(PhotoItem::getId).collect(Collectors.toSet());
+        return mapPhotoItemDtos(ownerUserId, photos, favoriteIds);
     }
 
     /**
@@ -524,12 +520,50 @@ public class PhotoLibraryService {
         return limited.stream().map(items::get).filter(Objects::nonNull).toList();
     }
 
+    private Set<UUID> favoriteIdsFor(UUID ownerUserId, List<UUID> photoIds) {
+        if (photoIds == null || photoIds.isEmpty()) {
+            return Set.of();
+        }
+        return Set.copyOf(
+                favoriteRepository.findPhotoIdsByOwnerUserIdAndPhotoIdIn(ownerUserId, photoIds));
+    }
+
+    private List<UUID> photoIds(List<PhotoItem> items) {
+        return items.stream().map(PhotoItem::getId).toList();
+    }
+
     /**
-     * 获取用户收藏的照片ID集合
+     * 批量映射照片实体为完整 DTO，避免循环查询标签与封面 URL。
      */
-    private Set<UUID> favoriteIds(UUID ownerUserId) {
-        return favoriteRepository.findByOwnerUserIdOrderByCreatedAtDesc(ownerUserId)
-                .stream().map(PhotoFavorite::getPhotoId).collect(Collectors.toSet());
+    private List<PhotoItemDto> mapPhotoItemDtos(
+            UUID ownerUserId,
+            List<PhotoItem> items,
+            Set<UUID> favoriteIds) {
+        if (items == null || items.isEmpty()) {
+            return List.of();
+        }
+        List<UUID> ids = items.stream().map(PhotoItem::getId).toList();
+        Map<UUID, List<String>> tagsByPhoto = photoTagRepository
+                .findByOwnerUserIdAndPhotoIdIn(ownerUserId, ids)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        PhotoTag::getPhotoId,
+                        Collectors.mapping(PhotoTag::getTag, Collectors.toList())
+                ));
+        Map<UUID, String> coverUrls = resolveCoverUrls(
+                ownerUserId,
+                items.stream()
+                        .map(PhotoItem::getCoverFileId)
+                        .filter(Objects::nonNull)
+                        .toList());
+        return items.stream()
+                .map(item -> PhotoItemDto.fromEntity(
+                        item,
+                        coverUrls.get(item.getCoverFileId()),
+                        favoriteIds.contains(item.getId()),
+                        tagsByPhoto.getOrDefault(item.getId(), List.of())
+                ))
+                .toList();
     }
 
     /**
@@ -706,7 +740,6 @@ public class PhotoLibraryService {
      */
     @Transactional(readOnly = true)
     public List<PhotoItemDto> listByTag(UUID ownerUserId, String tag) {
-        Set<UUID> favoriteIds = favoriteIds(ownerUserId);
         List<UUID> photoIds = photoTagRepository.findByOwnerUserIdAndTagOrderByCreatedAtDesc(ownerUserId, tag)
                 .stream()
                 .map(PhotoTag::getPhotoId)
@@ -714,14 +747,11 @@ public class PhotoLibraryService {
         if (photoIds.isEmpty()) {
             return List.of();
         }
-        Map<UUID, PhotoItem> itemMap = photoItemRepository
+        List<PhotoItem> items = photoItemRepository
                 .findActiveByOwnerUserIdAndIdIn(ownerUserId, photoIds).stream()
-                .collect(Collectors.toMap(PhotoItem::getId, p -> p));
-        return photoIds.stream()
-                .map(itemMap::get)
                 .filter(Objects::nonNull)
-                .map(p -> toDto(p, favoriteIds.contains(p.getId())))
                 .toList();
+        return mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));
     }
 
     /**
