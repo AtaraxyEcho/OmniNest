@@ -81,6 +81,19 @@ docker compose up -d
 图片分析侧车凭据，以及公开地址。模板保留默认值用于单机 HTTP 验证，不会通过
 Compose 的 required 语法阻止启动。
 
+### Docker 部署下的 ClamAV 主机
+
+配置中心键 `clamav.host`（默认 `localhost`）**优先于** 环境变量
+`OMNINEST_CLAMAV_HOST`。在 Compose 中扫描服务名为 `clamav` 时，必须在首次
+安装后于管理端或 SQL 将配置改为服务名，否则上传会因「扫描不可用」被隔离
+（fail-closed）：
+
+```sql
+UPDATE omni.config_entries SET config_value = 'clamav' WHERE config_key = 'clamav.host';
+```
+
+并清除运行时缓存（如 `omninest:config:clamav.host`）或重启 API/Worker。
+
 ### 公开入口和 HTTPS
 
 `OMNINEST_HTTPS_ENABLED=false` 时，Nginx 在配置的 HTTP 端口提供 Web/API，在 9000
