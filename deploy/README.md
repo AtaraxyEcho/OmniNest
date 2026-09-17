@@ -102,6 +102,22 @@ Java `Path` 把 `/downloads` 归一成 `D:\\downloads`，Aria2 会因权限/路�
 （日志：`Failed to make the directory D:\\downloads\\...`）。Linux/macOS 宿主机无此
 问题；Windows 上离线下载与 Docker Aria2 组合需额外映射或改用 Linux 部署路径。
 
+### Cloudflare 管理 HTTPS（无 certbot）
+
+若证书由 **Cloudflare** 签发/续期，不要启动 certbot，使用覆盖层：
+
+```bash
+cd deploy/prod
+cp .env.example .env   # 按需修改
+docker compose -f docker-compose.yml -f docker-compose.cloudflare.yml up -d
+```
+
+- **Flexible**：Cloudflare 终结 TLS，源站保持 `OMNINEST_HTTPS_ENABLED=false`，仅需 80 回源。
+- **Full / Full (strict)**：在 Cloudflare 下载 Origin Certificate，按
+  `docker-compose.cloudflare.yml` 内注释把 `origin.crt` / `origin.key` 挂入 nginx，并设
+  `OMNINEST_HTTPS_ENABLED=true`。
+- 覆盖层通过 profile 禁用 `certbot`，默认不会拉起续期容器。
+
 ### 公开入口和 HTTPS
 
 `OMNINEST_HTTPS_ENABLED=false` 时，Nginx 在配置的 HTTP 端口提供 Web/API，在 9000
