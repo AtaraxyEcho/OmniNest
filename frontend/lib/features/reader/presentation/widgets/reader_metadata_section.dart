@@ -7,10 +7,10 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
-/// 元数据管理区：标题 + 搜索 + 限高内滚列表。
+/// 元数据管理区：标题 + 搜索 + 限高懒加载列表。
 ///
-/// 标题与搜索固定在列表上方；列表在固定高度容器内滚动，
-/// 避免条目过多把页面下方「最近阅读」推得过远。
+/// 标题与搜索固定在列表上方；列表在固定高度容器内用 [ListView.builder]
+/// 懒构建，避免大书库一次实例化全部行，同时不把「最近阅读」推得过远。
 class MetadataSection extends StatefulWidget {
   const MetadataSection({required this.items, super.key});
 
@@ -179,15 +179,13 @@ class _MetadataSectionState extends State<MetadataSection> {
                 borderRadius: BorderRadius.circular(14),
                 child: Scrollbar(
                   thumbVisibility: true,
-                  child: SingleChildScrollView(
+                  // builder 懒构建：大书库只创建视口内行，避免一次实例化全部条目。
+                  child: ListView.builder(
                     physics: const ClampingScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(12, 12, 8, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final item in filtered) _MetadataRow(item: item),
-                      ],
-                    ),
+                    itemCount: filtered.length,
+                    itemBuilder:
+                        (context, index) => _MetadataRow(item: filtered[index]),
                   ),
                 ),
               ),
