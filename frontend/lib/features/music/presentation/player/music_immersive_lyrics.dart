@@ -386,15 +386,17 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     if (!widget.active || !widget.settings.breathingEnabled) {
       return _buildLine(0);
     }
-    return AnimatedBuilder(
-      animation: _breathingController,
-      builder: (context, _) {
-        final breathing =
-            _motionDisabled
-                ? 0.5
-                : Curves.easeInOutSine.transform(_breathingController.value);
-        return _buildLine(breathing);
-      },
+    return RepaintBoundary(
+      child: AnimatedBuilder(
+        animation: _breathingController,
+        builder: (context, _) {
+          final breathing =
+              _motionDisabled
+                  ? 0.5
+                  : Curves.easeInOutSine.transform(_breathingController.value);
+          return _buildLine(breathing);
+        },
+      ),
     );
   }
 

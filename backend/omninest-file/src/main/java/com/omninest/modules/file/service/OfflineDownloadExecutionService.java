@@ -253,7 +253,13 @@ public class OfflineDownloadExecutionService {
         int pollSeconds = Math.max(1, offlineDownloadGateway.pollIntervalSeconds());
         int consecutiveFailures = 0;
         Instant lastProgressAt = Instant.now();
+        // 消费线程轮询硬上限，避免下载挂起时永久占用 worker。
+        Instant deadline = Instant.now().plusSeconds(Math.max(pollSeconds, 30) * 240L);
         while (true) {
+            if (Instant.now().isAfter(deadline)) {
+                markFailed(taskId, "离线下载等待超时");
+                return null;
+            }
             if (isCancelled(taskId)) {
                 offlineDownloadGateway.remove(gid);
                 markCancelled(taskId);

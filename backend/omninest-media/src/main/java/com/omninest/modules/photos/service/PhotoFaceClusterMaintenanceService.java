@@ -4,6 +4,7 @@ import com.omninest.modules.photos.domain.PhotoFace;
 import com.omninest.modules.photos.domain.PhotoFaceCluster;
 import com.omninest.modules.photos.repository.PhotoFaceClusterRepository;
 import com.omninest.modules.photos.repository.PhotoFaceRepository;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -46,18 +47,20 @@ public class PhotoFaceClusterMaintenanceService {
      */
     @Transactional(rollbackFor = Exception.class)
     public int replaceClusters(UUID ownerUserId, List<PhotoFace> allFaces, Map<Integer, List<UUID>> clusterMap) {
-        for (PhotoFace face : allFaces) {
-            face.setClusterId(null);
-        }
-        faceRepository.saveAll(allFaces);
+        // 先用批量 UPDATE 清空归属，避免对全部人脸做一次实体级 saveAll。
+        faceRepository.clearClusterIdsByOwnerUserId(ownerUserId);
 
         List<PhotoFaceCluster> oldClusters = clusterRepository.findByOwnerUserIdOrderByFaceCountDesc(ownerUserId);
-        clusterRepository.deleteAll(oldClusters);
+        if (!oldClusters.isEmpty()) {
+            clusterRepository.deleteAll(oldClusters);
+        }
 
         Map<UUID, PhotoFace> facesById = new HashMap<>();
         for (PhotoFace face : allFaces) {
+            face.setClusterId(null);
             facesById.put(face.getId(), face);
         }
+        List<PhotoFace> assignedFaces = new ArrayList<>();
         int createdClusterCount = 0;
         for (Map.Entry<Integer, List<UUID>> entry : clusterMap.entrySet()) {
             List<UUID> clusterFaceIds = entry.getValue();
@@ -73,11 +76,14 @@ public class PhotoFaceClusterMaintenanceService {
                 PhotoFace face = facesById.get(faceId);
                 if (face != null) {
                     face.setClusterId(cluster.getId());
+                    assignedFaces.add(face);
                 }
             }
             createdClusterCount++;
         }
-        faceRepository.saveAll(allFaces);
+        if (!assignedFaces.isEmpty()) {
+            faceRepository.saveAll(assignedFaces);
+        }
         log.info("人脸聚类重建完成: ownerUserId={}, 聚类数={}", ownerUserId, createdClusterCount);
         return createdClusterCount;
     }

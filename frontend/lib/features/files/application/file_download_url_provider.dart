@@ -1,10 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 
-/// 缓存 presigned download URL，按文件 ID 在会话内复用。
-/// 文件夹或获取失败时返回 null。
+/// 会话内复用 presigned download URL。
+///
+/// 使用 keepAlive + TTL，避免列表滚动导致 tile 销毁后立刻失效并重复签 URL。
 final fileDownloadUrlProvider = FutureProvider.autoDispose
     .family<String?, String>((ref, fileId) async {
+      final link = ref.keepAlive();
+      final timer = Timer(const Duration(minutes: 10), link.close);
+      ref.onDispose(timer.cancel);
       final repository = ref.read(fileRepositoryProvider);
       try {
         return await repository.downloadUrl(fileId);
@@ -16,5 +22,8 @@ final fileDownloadUrlProvider = FutureProvider.autoDispose
 /// 按文件 ID 加载有界文本预览。
 final fileTextPreviewProvider = FutureProvider.autoDispose
     .family<String, String>((ref, fileId) async {
+      final link = ref.keepAlive();
+      final timer = Timer(const Duration(minutes: 5), link.close);
+      ref.onDispose(timer.cancel);
       return ref.read(fileRepositoryProvider).loadTextPreview(fileId);
     });

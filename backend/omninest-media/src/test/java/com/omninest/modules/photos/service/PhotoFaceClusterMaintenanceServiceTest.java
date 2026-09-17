@@ -65,7 +65,13 @@ class PhotoFaceClusterMaintenanceServiceTest {
         assertThat(second.getClusterId()).isEqualTo(first.getClusterId());
         assertThat(noise.getClusterId()).isNull();
         Mockito.verify(clusterRepository).deleteAll(List.of(oldCluster));
-        Mockito.verify(faceRepository, Mockito.times(2)).saveAll(List.of(first, second, noise));
+        Mockito.verify(faceRepository).clearClusterIdsByOwnerUserId(ownerUserId);
+        Mockito.verify(faceRepository).saveAll(Mockito.argThat(faces -> {
+            List<PhotoFace> assigned = new java.util.ArrayList<>();
+            faces.forEach(assigned::add);
+            return assigned.size() == 2
+                    && assigned.stream().allMatch(face -> face.getClusterId() != null);
+        }));
         Mockito.verify(clusterRepository).save(Mockito.argThat(cluster ->
                 cluster.getFaceCount() == 2
                         && cluster.getCoverFaceId().equals(first.getId())));

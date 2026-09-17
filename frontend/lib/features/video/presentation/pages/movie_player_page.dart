@@ -91,6 +91,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
   double _volume = 100;
   bool _isMuted = false;
   double _volumeBeforeMute = 100;
+  final ValueNotifier<double> _volumeListenable = ValueNotifier<double>(100);
+  final ValueNotifier<double> _seekListenable = ValueNotifier<double>(0);
 
   // 缓冲状态
   bool _isBuffering = false;
@@ -168,6 +170,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
     _subtitlePositionSub?.cancel();
     _activeCueIndex.dispose();
     _polledPosition.dispose();
+    _volumeListenable.dispose();
+    _seekListenable.dispose();
     unawaited(_syncCurrentProgress());
     unawaited(PipService.instance().setVideoPlaybackActive(active: false));
     _pipListenerDisposer?.call();
@@ -366,69 +370,88 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
                                 ? () => _showSettingsPanel(plan)
                                 : () => _showInfoPanel(plan),
                       ),
-                      MoviePlayerBottomBar(
-                        plan: plan,
-                        polledPosition: _polledPosition,
-                        playerDuration: _player.state.duration,
-                        bufferProgress: _bufferProgress,
-                        isSeeking: _isSeeking,
-                        seekValue: _seekValue,
-                        onSeekStart: (v) {
-                          setState(() {
-                            _isSeeking = true;
-                            _seekValue = v;
-                          });
-                        },
-                        onSeeking: (v) {
-                          _seekValue = v;
-                          setState(() {});
-                        },
-                        onSeekEnd: (v) {
-                          final dur =
-                              plan.durationSeconds > 0
-                                  ? Duration(seconds: plan.durationSeconds)
-                                  : _player.state.duration;
-                          final target = Duration(
-                            milliseconds: (v * dur.inMilliseconds).round(),
+                      ValueListenableBuilder<double>(
+                        valueListenable: _seekListenable,
+                        builder: (context, seekValue, _) {
+                          return ValueListenableBuilder<double>(
+                            valueListenable: _volumeListenable,
+                            builder: (context, volume, _) {
+                              return MoviePlayerBottomBar(
+                                plan: plan,
+                                polledPosition: _polledPosition,
+                                playerDuration: _player.state.duration,
+                                bufferProgress: _bufferProgress,
+                                isSeeking: _isSeeking,
+                                seekValue: seekValue,
+                                onSeekStart: (v) {
+                                  setState(() {
+                                    _isSeeking = true;
+                                  });
+                                  _seekListenable.value = v;
+                                },
+                                onSeeking: (v) {
+                                  _seekListenable.value = v;
+                                },
+                                onSeekEnd: (v) {
+                                  final dur =
+                                      plan.durationSeconds > 0
+                                          ? Duration(
+                                            seconds: plan.durationSeconds,
+                                          )
+                                          : _player.state.duration;
+                                  final target = Duration(
+                                    milliseconds:
+                                        (v * dur.inMilliseconds).round(),
+                                  );
+                                  _seekToPosition(target).then((_) {
+                                    if (mounted) {
+                                      setState(() => _isSeeking = false);
+                                    }
+                                  });
+                                },
+                                onMouseActivity: _onMouseActivity,
+                                volume: volume,
+                                isMuted: _isMuted,
+                                onToggleMute: _toggleMute,
+                                onVolumeChanged: (v) {
+                                  _volume = v;
+                                  _isMuted = v <= 0;
+                                  _volumeListenable.value = v;
+                                  setState(() {});
+                                },
+                                setPlayerVolume: _player.setVolume,
+                                playbackSpeed: _playbackSpeed,
+                                activeSubtitleId: _activeSubtitleId,
+                                onAudioTap:
+                                    _hasAudioControls(plan)
+                                        ? () => _showAudioPanel(plan)
+                                        : null,
+                                onSubtitleTap: () => _showSubtitlePanel(plan),
+                                onSpeedTap: _showSpeedPanel,
+                                onSettingsTap: () => _showSettingsPanel(plan),
+                                onFullscreenTap: _toggleFullscreen,
+                                isFullscreen: isFullscreen,
+                                formatDuration: formatMoviePlayerDuration,
+                                playing: _player.stream.playing,
+                                onPlayPause:
+                                    () => unawaited(_requestPlayPause()),
+                                isMobile: isMobilePlatform,
+                                onPreviousEpisode:
+                                    previousEpisode == null
+                                        ? null
+                                        : () => unawaited(
+                                          _playEpisode(previousEpisode),
+                                        ),
+                                onNextEpisode:
+                                    nextEpisode == null
+                                        ? null
+                                        : () => unawaited(
+                                          _playEpisode(nextEpisode),
+                                        ),
+                              );
+                            },
                           );
-                          _seekToPosition(target).then((_) {
-                            if (mounted) setState(() => _isSeeking = false);
-                          });
                         },
-                        onMouseActivity: _onMouseActivity,
-                        volume: _volume,
-                        isMuted: _isMuted,
-                        onToggleMute: _toggleMute,
-                        onVolumeChanged: (v) {
-                          _volume = v;
-                          _isMuted = v <= 0;
-                          setState(() {});
-                        },
-                        setPlayerVolume: _player.setVolume,
-                        playbackSpeed: _playbackSpeed,
-                        activeSubtitleId: _activeSubtitleId,
-                        onAudioTap:
-                            _hasAudioControls(plan)
-                                ? () => _showAudioPanel(plan)
-                                : null,
-                        onSubtitleTap: () => _showSubtitlePanel(plan),
-                        onSpeedTap: _showSpeedPanel,
-                        onSettingsTap: () => _showSettingsPanel(plan),
-                        onFullscreenTap: _toggleFullscreen,
-                        isFullscreen: isFullscreen,
-                        formatDuration: formatMoviePlayerDuration,
-                        playing: _player.stream.playing,
-                        onPlayPause: () => unawaited(_requestPlayPause()),
-                        isMobile: isMobilePlatform,
-                        onPreviousEpisode:
-                            previousEpisode == null
-                                ? null
-                                : () =>
-                                    unawaited(_playEpisode(previousEpisode)),
-                        onNextEpisode:
-                            nextEpisode == null
-                                ? null
-                                : () => unawaited(_playEpisode(nextEpisode)),
                       ),
                       if (!_isBuffering)
                         MoviePlayerCenterControls(

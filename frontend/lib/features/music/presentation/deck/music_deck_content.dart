@@ -53,7 +53,10 @@ class MusicDeckContent extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final center = ref.watch(musicCenterControllerProvider).asData?.value;
+    // 仅订阅本分区会用到的中心状态切片，降低播放/收藏等无关变更的重建面。
+    final center = ref.watch(
+      musicCenterControllerProvider.select((async) => async.asData?.value),
+    );
     final platform =
         ref.watch(musicPlatformLibraryProvider).asData?.value ??
         const MusicPlatformLibraryState();

@@ -5,6 +5,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 /**
@@ -28,4 +31,14 @@ public interface PhotoFaceRepository extends JpaRepository<PhotoFace, UUID> {
      * @return 人脸检测数据
      */
     List<PhotoFace> findByPhotoIdIn(Collection<UUID> photoIds);
+
+    /**
+     * 批量清空用户人脸的聚类归属，避免重建时 saveAll 全表。
+     *
+     * @param ownerUserId 用户标识
+     * @return 影响行数
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("update PhotoFace face set face.clusterId = null where face.ownerUserId = :ownerUserId")
+    int clearClusterIdsByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
 }

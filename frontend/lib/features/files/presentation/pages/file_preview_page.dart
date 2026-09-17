@@ -104,6 +104,12 @@ class _ImagePreview extends ConsumerWidget {
             child: CachedNetworkImage(
               imageUrl: url,
               fit: BoxFit.contain,
+              // 预览按屏宽解码，避免原图整幅进内存。
+              memCacheWidth: (MediaQuery.sizeOf(context).width *
+                      MediaQuery.devicePixelRatioOf(context) *
+                      5)
+                  .round()
+                  .clamp(800, 8192),
               placeholder: (context, url) => const AppLoading.simple(),
               errorWidget:
                   (context, url, error) => Center(

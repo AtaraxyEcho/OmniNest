@@ -637,6 +637,9 @@ class _AdaptiveCoverImage extends StatelessWidget {
         fit: BoxFit.cover,
         alignment: Alignment.center,
         filterQuality: FilterQuality.medium,
+        memCacheWidth: (200 * MediaQuery.devicePixelRatioOf(context))
+            .round()
+            .clamp(128, 800),
         placeholder: (context, url) => fallback,
         errorWidget: (context, url, error) => fallback,
       );

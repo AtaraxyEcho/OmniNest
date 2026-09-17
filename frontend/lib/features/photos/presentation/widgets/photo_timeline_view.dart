@@ -286,43 +286,40 @@ class _MonthPhotoGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (photos.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
-    return SliverToBoxAdapter(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final columns =
-              constraints.maxWidth >= 1200
-                  ? 6
-                  : constraints.maxWidth >= 900
-                  ? 5
-                  : constraints.maxWidth >= 600
-                  ? 4
-                  : 3;
-          final displayPhotos =
-              photos.length > columns * 2
-                  ? photos.sublist(0, columns * 2)
-                  : photos;
-          return GridView.builder(
-            itemCount: displayPhotos.length,
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 24),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns =
+            constraints.maxWidth >= 1200
+                ? 6
+                : constraints.maxWidth >= 900
+                ? 5
+                : constraints.maxWidth >= 600
+                ? 4
+                : 3;
+        final displayPhotos =
+            photos.length > columns * 2
+                ? photos.sublist(0, columns * 2)
+                : photos;
+        return SliverPadding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          sliver: SliverGrid(
             gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
               crossAxisCount: columns,
               crossAxisSpacing: 6,
               mainAxisSpacing: 6,
               childAspectRatio: 1,
             ),
-            itemBuilder: (context, index) {
+            delegate: SliverChildBuilderDelegate((context, index) {
               final photo = displayPhotos[index];
               return PhotoGridTile(
                 key: ValueKey(photo.id),
                 photo: photo,
                 onTap: () => onOpenPhoto(photo),
               );
-            },
-          );
-        },
-      ),
+            }, childCount: displayPhotos.length),
+          ),
+        );
+      },
     );
   }
 }
