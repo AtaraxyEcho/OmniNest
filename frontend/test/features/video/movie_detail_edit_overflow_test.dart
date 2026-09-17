@@ -44,7 +44,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('EDIT'));
+      await tester.tap(find.text('编辑'));
       await tester.pump();
 
       expect(find.byType(TextField), findsWidgets);

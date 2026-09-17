@@ -53,14 +53,14 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('EDIT'), findsOneWidget);
+    expect(find.text('编辑'), findsOneWidget);
 
-    await tester.tap(find.text('EDIT'));
+    await tester.tap(find.text('编辑'));
     await tester.pump();
     expect(find.byType(TextField), findsNWidgets(2));
 
     await tester.enterText(find.byType(TextField).first, '新标题');
-    await tester.tap(find.text('SAVE'));
+    await tester.tap(find.text('保存'));
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump(const Duration(milliseconds: 100));

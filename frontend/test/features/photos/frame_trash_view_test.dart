@@ -72,7 +72,7 @@ void main() {
     expect(deleted, isFalse);
   });
 
-  testWidgets('操作面板选择永久删除后进入二次确认', (tester) async {
+  testWidgets('操作面板选择永久删除后回调页面层确认', (tester) async {
     var deleted = false;
     await _pumpTrashView(
       tester,
@@ -85,10 +85,7 @@ void main() {
     await tester.tap(find.text('永久删除').last);
     await tester.pumpAndSettle();
 
-    expect(find.text('永久删除？'), findsOneWidget);
-    await tester.tap(find.text('永久删除').last);
-    await tester.pumpAndSettle();
-
+    // 二次确认已上移到页面层 confirmAndRunFilePurge，视图内不再弹窗。
     expect(deleted, isTrue);
   });
 }
