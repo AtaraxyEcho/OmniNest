@@ -54,8 +54,7 @@ class ReaderAdminPage extends ConsumerWidget {
                   ),
               ],
               const _AdminDivider(),
-              const _AdminSectionHeader(labelKey: 'readerPendingImport'),
-              const SizedBox(height: 16),
+              // ImportSection 自带「待导入文件」标题，此处不再重复
               ImportSection(
                 onImported:
                     () =>
@@ -64,11 +63,7 @@ class ReaderAdminPage extends ConsumerWidget {
                             .refresh(),
               ),
               const _AdminDivider(),
-              _AdminSectionHeader(
-                labelKey: 'readerMetadataManagement',
-                count: items.length,
-              ),
-              const SizedBox(height: 16),
+              // MetadataSection 自带「元数据管理」标题与搜索，此处不再重复
               MetadataSection(items: items),
               const _AdminDivider(),
               _AdminSectionHeader(

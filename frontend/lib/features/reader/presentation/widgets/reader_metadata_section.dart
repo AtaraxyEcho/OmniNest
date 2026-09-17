@@ -7,14 +7,50 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
-class MetadataSection extends StatelessWidget {
+/// 元数据管理区：标题 + 搜索 + 分页列表。
+///
+/// 标题固定在列表上方；列表按 [_pageSize] 客户端分页，支持按书名/作者筛选。
+class MetadataSection extends StatefulWidget {
   const MetadataSection({required this.items, super.key});
 
   final List<ReaderItem> items;
 
+  static const int _pageSize = 20;
+
+  @override
+  State<MetadataSection> createState() => _MetadataSectionState();
+}
+
+class _MetadataSectionState extends State<MetadataSection> {
+  final TextEditingController _searchController = TextEditingController();
+  String _query = '';
+  int _visibleCount = MetadataSection._pageSize;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<ReaderItem> get _filtered {
+    final q = _query.trim().toLowerCase();
+    if (q.isEmpty) {
+      return widget.items;
+    }
+    return widget.items.where((item) {
+      final title = item.title.toLowerCase();
+      final author = (item.authorName ?? '').toLowerCase();
+      return title.contains(q) || author.contains(q);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final filtered = _filtered;
+    final visible = filtered.take(_visibleCount).toList();
+    final hasMore = filtered.length > visible.length;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -37,7 +73,7 @@ class MetadataSection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(999),
               ),
               child: Text(
-                l10n.readerBookCount(items.length),
+                l10n.readerBookCount(filtered.length),
                 style: TextStyle(
                   color: context.readerColors.onSurfaceVariant,
                   fontSize: AppTypography.labelSmall,
@@ -57,11 +93,114 @@ class MetadataSection extends StatelessWidget {
             height: 18 / 13,
           ),
         ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _searchController,
+          onChanged: (value) {
+            setState(() {
+              _query = value;
+              _visibleCount = MetadataSection._pageSize;
+            });
+          },
+          style: TextStyle(
+            color: context.readerColors.onSurface,
+            fontSize: AppTypography.bodyMedium,
+          ),
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: l10n.readerSearchBooksHint,
+            hintStyle: TextStyle(
+              color: context.readerColors.onSurfaceVariant.withValues(
+                alpha: 0.65,
+              ),
+              fontSize: AppTypography.bodyMedium,
+            ),
+            prefixIcon: Icon(
+              Icons.search_rounded,
+              size: 18,
+              color: context.readerColors.onSurfaceVariant.withValues(
+                alpha: 0.7,
+              ),
+            ),
+            suffixIcon:
+                _query.isEmpty
+                    ? null
+                    : IconButton(
+                      tooltip: l10n.readerSearch,
+                      icon: Icon(
+                        Icons.clear_rounded,
+                        size: 18,
+                        color: context.readerColors.onSurfaceVariant,
+                      ),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() {
+                          _query = '';
+                          _visibleCount = MetadataSection._pageSize;
+                        });
+                      },
+                    ),
+            filled: true,
+            fillColor: context.readerColors.surfaceContainer.withValues(
+              alpha: 0.55,
+            ),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: context.readerColors.outlineVariant.withValues(
+                  alpha: 0.35,
+                ),
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(
+                color: context.readerColors.outlineVariant.withValues(
+                  alpha: 0.35,
+                ),
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: context.readerColors.reading),
+            ),
+          ),
+        ),
         const SizedBox(height: 20),
-        if (items.isEmpty)
+        if (filtered.isEmpty)
           _buildEmptyState(context)
-        else
-          for (final item in items) _MetadataRow(item: item),
+        else ...[
+          for (final item in visible) _MetadataRow(item: item),
+          if (hasMore) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed:
+                    () => setState(
+                      () => _visibleCount += MetadataSection._pageSize,
+                    ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: context.readerColors.onSurfaceVariant,
+                  side: BorderSide(
+                    color: context.readerColors.outlineVariant.withValues(
+                      alpha: 0.5,
+                    ),
+                  ),
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Text(
+                  l10n.adminLoadMore(visible.length, filtered.length),
+                  style: TextStyle(
+                    fontSize: AppTypography.bodySmall,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
       ],
     );
   }
@@ -82,13 +221,13 @@ class MetadataSection extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.edit_note_rounded,
+            _query.isEmpty ? Icons.edit_note_rounded : Icons.search_off_rounded,
             size: 36,
             color: context.readerColors.onSurfaceVariant.withValues(alpha: 0.4),
           ),
           SizedBox(height: 12),
           Text(
-            l10n.readerNoBookEntries,
+            _query.isEmpty ? l10n.readerNoBookEntries : l10n.searchEmptyResult,
             style: TextStyle(
               color: context.readerColors.onSurfaceVariant,
               fontSize: AppTypography.bodyLarge,
@@ -97,7 +236,8 @@ class MetadataSection extends StatelessWidget {
           ),
           SizedBox(height: 4),
           Text(
-            l10n.readerNoBookEntriesHint,
+            _query.isEmpty ? l10n.readerNoBookEntriesHint : l10n.searchFailed,
+            textAlign: TextAlign.center,
             style: TextStyle(
               color: context.readerColors.onSurfaceVariant.withValues(
                 alpha: 0.7,
