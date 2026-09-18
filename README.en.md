@@ -40,7 +40,7 @@ Please read this section before using OmniNest. **Using this software means you 
 
 - Officially recommended and verified clients: **Web, Android, Windows**.
 - The Flutter tree contains iOS / macOS directories and adapters, but they have **not** received full testing equivalent to those three platforms. They are **not recommended** for production or critical use without your own validation.
-- Optional components such as virus scanning (ClamAV) and photo AI are **deployment choices** based on hardware and exposure. Typical 4C4G personal setups may disable scanning; public internet deployments should evaluate enabling it.
+- Optional components such as virus scanning (ClamAV) and image analysis are **deployment choices** based on hardware and exposure. Typical 4C4G personal setups may disable scanning; public internet deployments should evaluate enabling it.
 
 ### Privacy and data
 
@@ -117,7 +117,7 @@ Per-platform screenshot folders (fill in locally as needed): [imgs/web](imgs/web
 | [backend](backend/README.md) | Server modules and tests |
 | [frontend](frontend/README.md) | Flutter clients and tests |
 | [deploy](deploy/README.md) | Dev/prod Compose and deployment |
-| [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | Photo AI sidecar |
+| [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | Image analysis sidecar |
 | [imgs](imgs) | Documentation screenshots |
 
 ---
@@ -138,7 +138,7 @@ Per-platform screenshot folders (fill in locally as needed): [imgs/web](imgs/web
 | Personal / private network | **4C 4GB** | Usually off |
 | Public internet production | **4C 8GB+** | Evaluate enabling |
 
-Production Compose defaults to a **4C4G personal profile without ClamAV / photo AI**. Enabling scanning is an operator decision. See [deploy/README.md](deploy/README.md).
+Production Compose defaults to a **4C4G personal profile without ClamAV / image analysis**. Enabling scanning is an operator decision. See [deploy/README.md](deploy/README.md).
 
 ---
 

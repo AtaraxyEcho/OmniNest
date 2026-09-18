@@ -55,7 +55,7 @@ ClamAV 是可选服务，通过 `.env` 的 `COMPOSE_PROFILES=clamav` 控制：
 
 ### 资源要求与安全扫描
 
-生产 Compose **默认画像为 4 核 4GB 个人自托管**：不启动 ClamAV、不启动照片 AI，
+生产 Compose **默认画像为 4 核 4GB 个人自托管**：不启动 ClamAV、不启动图像分析，
 并为各服务设置了 `mem_limit` 与 JVM/Postgres/Redis 保守参数（见
 `prod/docker-compose.yml` 与 `prod/.env.example`）。
 

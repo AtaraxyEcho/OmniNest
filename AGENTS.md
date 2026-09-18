@@ -178,7 +178,7 @@ showReaderSnackBar(context, l10n.readerImportSuccess(fileName));
 
 - 不默认引入 Elasticsearch、FUSE/rclone mount、Spring Cloud、React/Vue、原生 Android/Desktop 主客户端、Whisper、Rasa 或其他与当前范围不符的大型框架。
 - 搜索默认 Lucene，PostgreSQL 全文搜索仅作为降级；转码可选且默认关闭；外部存储优先 Rclone RC 或受控 Storage Adapter。
-- AI 当前仅保留已接入的照片 AI Sidecar 能力。新增模型、服务或大体积依赖前必须评估部署体积、内存、模型缓存、安全和回退路径。
+- AI 当前仅保留已接入的图像分析 Sidecar 能力（侧车以人脸检测/嵌入/聚类为主）。新增模型、服务或大体积依赖前必须评估部署体积、内存、模型缓存、安全和回退路径。
 - 不得将密钥、密码、Token、外部 API Key、KEK、MinIO Secret 或生产数据库凭据写入代码或提交版本控制。
 
 ## 最终回复要求

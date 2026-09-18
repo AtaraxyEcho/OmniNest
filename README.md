@@ -40,7 +40,7 @@ OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心�
 
 - 当前**官方推荐并验证**的客户端为 **Web、Android、Windows**。
 - Flutter 工程内含 iOS / macOS 相关目录与适配代码，但**未完成与上述三端同级的全量测试**，**不推荐**在生产或重要场景使用；如需使用，请自行充分验证。
-- 是否启用病毒扫描（ClamAV）、照片 AI 等可选组件，由部署方按机器资源与暴露面自行决定；个人 4C4G 场景通常可关闭扫描，公网生产建议评估后开启。
+- 是否启用病毒扫描（ClamAV）、图像分析等可选组件，由部署方按机器资源与暴露面自行决定；个人 4C4G 场景通常可关闭扫描，公网生产建议评估后开启。
 
 ### 隐私与数据
 
@@ -123,7 +123,7 @@ OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心�
 | [backend](backend/README.md) | 后端服务、模块与测试 |
 | [frontend](frontend/README.md) | Flutter 客户端与测试 |
 | [deploy](deploy/README.md) | 开发/生产 Docker 编排与部署说明 |
-| [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | 照片图像分析侧车 |
+| [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | 图像分析侧车 |
 | [imgs](imgs) | 文档用截图资源 |
 
 ---
@@ -144,7 +144,7 @@ OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心�
 | 个人 / 内网 | **4 核 4GB** | 默认可关闭 |
 | 公网生产 | **4 核 8GB+** | 建议评估后开启 |
 
-生产 Compose 默认面向 **4C4G、不启动 ClamAV / 照片 AI** 的个人自托管画像；是否开启扫描由部署者决定。详见 [deploy/README.md](deploy/README.md)。
+生产 Compose 默认面向 **4C4G、不启动 ClamAV / 图像分析** 的个人自托管画像；是否开启扫描由部署者决定。详见 [deploy/README.md](deploy/README.md)。
 
 ---
 
