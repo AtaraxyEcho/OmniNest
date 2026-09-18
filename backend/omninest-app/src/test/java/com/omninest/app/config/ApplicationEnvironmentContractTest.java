@@ -109,7 +109,11 @@ class ApplicationEnvironmentContractTest {
         assertThat(dev.getProperty("omninest.runtime.embedded-worker-enabled")).isEqualTo(true);
         assertThat(dev.getProperty("photo.geo.import.dir")).isEqualTo("../data/geonames");
         assertThat(prod.getProperty("spring.config.activate.on-profile")).isEqualTo("prod");
-        assertThat(prod.getProperty("omninest.runtime.embedded-worker-enabled")).isEqualTo(false);
+        Object prodEmbeddedWorker = prod.getProperty("omninest.runtime.embedded-worker-enabled");
+        assertThat(prodEmbeddedWorker).isEqualTo("${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:false}");
+        StandardEnvironment embeddedDefaultEnvironment = new StandardEnvironment();
+        assertThat(embeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(prodEmbeddedWorker)))
+                .isEqualTo("false");
 
         List<String> synchronizedProperties = List.of(
                 "spring.datasource.url",

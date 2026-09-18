@@ -1,0 +1,22 @@
+# 4C4G / 个人单实例覆盖文件。默认生产形态仍是三角色（仅用 docker-compose.yml）。
+#
+# 单实例启动（同一镜像只跑 API，内嵌 worker；不启动独立 worker/scheduler）：
+#   docker compose -f docker-compose.yml -f docker-compose.single.yml up -d
+# 恢复三角色：
+#   docker compose -f docker-compose.yml up -d
+#
+# 说明：profiles 名仅用于让默认 COMPOSE_PROFILES 下这两个服务不被启动，无需再配置 profile。
+services:
+  backend-worker:
+    profiles:
+      - single-disabled
+  backend-scheduler:
+    profiles:
+      - single-disabled
+  backend-api:
+    environment:
+      # SpEL 条件：role==api 且 embedded-worker-enabled 时加载任务执行组件
+      OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED: "true"
+      # 单实例需同时承担后台任务，堆与 mem_limit 略高于纯 API
+      JAVA_OPTS: ${JAVA_OPTS_API_SINGLE:--Xms128m -Xmx384m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError}
+    mem_limit: ${BACKEND_API_MEM_LIMIT_SINGLE:-896m}

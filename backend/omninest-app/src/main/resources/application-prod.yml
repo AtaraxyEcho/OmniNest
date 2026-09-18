@@ -73,7 +73,8 @@ omninest:
     persistent-state-enabled: ${OMNINEST_SETUP_PERSISTENT_STATE_ENABLED:true}
     web-base-url: ${OMNINEST_SETUP_WEB_BASE_URL:}
   runtime:
-    embedded-worker-enabled: false
+    # 默认三角色拆分；4C4G 单实例可用 OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED=true 在 API 进程内嵌 worker
+    embedded-worker-enabled: ${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:false}
   security:
     jwt-secret: ${OMNINEST_SECURITY_JWT_SECRET:change-me-omninest-local-jwt-secret-at-least-32-bytes}
     credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}

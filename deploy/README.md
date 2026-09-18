@@ -82,6 +82,9 @@ API/Worker 各 768M（堆 ≤320M，**不要设置 MaxMetaspaceSize**）、Sched
 类加载触发 cgroup OOM。小内存机上不要在 Compose 默认 JAVA_OPTS 里设置过小的
 `MaxMetaspaceSize`（Boot4 启动期 Metaspace 峰值明显高于 Boot3）。
 
+**单实例覆盖**见下文「4C4G 单实例」：只起 API + 内嵌 worker 时，API 建议
+`mem_limit` 约 896m、堆 ≤384m；仍不要设置过小的 `MaxMetaspaceSize`。
+
 Photos 图像分析侧车使用 CPU 推理，无需 GPU；仅在 `COMPOSE_PROFILES=photo-ai`
 时启动。模型首次启动自动下载，预留最多 10 分钟启动窗口。
 
@@ -102,6 +105,32 @@ docker compose up -d
 生产部署前必须重点修改 `.env` 中的数据库、RabbitMQ、MinIO、Rclone、JWT、
 图片分析侧车凭据，以及公开地址。模板保留默认值用于单机 HTTP 验证，不会通过
 Compose 的 required 语法阻止启动。
+
+### 4C4G 单实例（可选覆盖）
+
+默认仍是 **三角色**（API / Worker / Scheduler 各一进程），适合多人使用与故障隔离。
+
+内存紧张的个人自托管（4C4G）可叠加 `docker-compose.single.yml`：同一镜像只跑
+一个 `backend-api`，并设置 `OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED=true` 在 API
+进程内嵌 worker；独立 worker/scheduler 不会启动。
+
+```bash
+cd deploy/prod
+docker compose -f docker-compose.yml -f docker-compose.single.yml up -d
+# 恢复三角色
+docker compose -f docker-compose.yml up -d
+```
+
+| 形态 | Java 进程 | 适用 |
+|------|-----------|------|
+| 默认三角色 | 3 | 多用户、后台任务较重 |
+| single.yml 单实例 | 1 | 4C4G 个人、任务很少 |
+
+单实例时 API 需同时承担后台任务，override 默认将 API `mem_limit` 提到约 896m
+（可用 `BACKEND_API_MEM_LIMIT_SINGLE` 覆盖）。重扫描/转码仍建议三角色或升配。
+
+VM 实测（仅 OmniNest、关闭 ClamAV）：三角色 available 约 1.2Gi；单实例 available
+约 2.0Gi，探针 `/api/v1/setup/status`、`/health`、`/actuator/health` 均为 200。
 
 ### Docker 部署下的 ClamAV 主机
 
