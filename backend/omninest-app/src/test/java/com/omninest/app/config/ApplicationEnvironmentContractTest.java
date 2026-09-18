@@ -155,7 +155,8 @@ class ApplicationEnvironmentContractTest {
                 "omninest.minio.access-key",
                 "omninest.minio.secret-key",
                 "omninest.search.index-path",
-                "omninest.search.photo-index-path"
+                "omninest.search.photo-index-path",
+                "logging.file.name"
         );
         for (String property : synchronizedProperties) {
             assertThat(prod.getProperty(property))
