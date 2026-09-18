@@ -22,6 +22,8 @@ class AppBackdropImage extends StatefulWidget {
     this.onUrlFailed,
     this.blurPad = false,
     this.maxDecodeWidth,
+    this.previewUrl,
+    this.previewCacheKey,
     super.key,
   });
 
@@ -51,6 +53,13 @@ class AppBackdropImage extends StatefulWidget {
 
   /// 强制解码上限(物理像素);模糊背景等场景用低分辨率即可。
   final int? maxDecodeWidth;
+
+  /// 低清先行层地址(瓦片缩略图,磁盘已缓存);主图就绪前立即垫底显示,
+  /// 主图加载完成后无缝淡入覆盖,消除首切壁纸的空白等待。
+  final String? previewUrl;
+
+  /// 低清层缓存键;与背景库瓦片预览同键可复用磁盘缓存。
+  final String? previewCacheKey;
 
   @override
   State<AppBackdropImage> createState() => _AppBackdropImageState();
@@ -121,6 +130,10 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
 
   bool get _useBlurPad => widget.fit == BoxFit.contain && widget.blurPad;
 
+  /// 主图加载期间可用低清先行层垫底(有主地址且提供了预览地址)。
+  bool get _hasPreview =>
+      _nonEmpty(widget.previewUrl) != null && widget.url?.isNotEmpty == true;
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -139,6 +152,7 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
           return Stack(
             fit: StackFit.expand,
             children: [
+              if (_hasPreview) _buildPreviewLayer(),
               ImageFiltered(
                 imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                 child: CachedNetworkImage(
@@ -174,22 +188,53 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
             ],
           );
         }
-        return CachedNetworkImage(
-          imageUrl: primary,
-          cacheKey: widget.cacheKey,
-          fit: widget.fit,
-          alignment: widget.alignment,
-          filterQuality: FilterQuality.medium,
-          memCacheWidth: cacheWidth,
-          memCacheHeight: cacheHeight,
-          // 加载中绝不能显示默认壁纸海报,否则全屏尺寸切换会闪一帧错误壁纸。
-          placeholder: (context, url) => const ColoredBox(color: _loadingColor),
-          // 失败兜底必须是纯展示:地址切换与回调在 [_handleLoadError] 中
-          // 于 build 之外完成,禁止在 build 期产生副作用。
-          errorWidget: (context, url, error) => _buildAssetFallback(),
-          errorListener: (_) => _handleLoadError(primary),
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            if (_hasPreview) _buildPreviewLayer(),
+            CachedNetworkImage(
+              imageUrl: primary,
+              cacheKey: widget.cacheKey,
+              fit: widget.fit,
+              alignment: widget.alignment,
+              filterQuality: FilterQuality.medium,
+              memCacheWidth: cacheWidth,
+              memCacheHeight: cacheHeight,
+              // 加载中绝不能显示默认壁纸海报,否则全屏尺寸切换会闪一帧错误壁纸;
+              // 有低清先行层时占位与失败态保持透明,让先行层持续可见,
+              // 主图由 OctoImage 自带淡入无缝覆盖。
+              placeholder:
+                  (context, url) =>
+                      _hasPreview
+                          ? const ColoredBox(color: _transparent)
+                          : const ColoredBox(color: _loadingColor),
+              // 失败兜底必须是纯展示:地址切换与回调在 [_handleLoadError] 中
+              // 于 build 之外完成,禁止在 build 期产生副作用。
+              errorWidget:
+                  (context, url, error) =>
+                      _hasPreview
+                          ? const ColoredBox(color: _transparent)
+                          : _buildAssetFallback(),
+              errorListener: (_) => _handleLoadError(primary),
+            ),
+          ],
         );
       },
+    );
+  }
+
+  /// 低清先行层:缩略图按 cover 铺满垫底,失败时静默回深色底。
+  Widget _buildPreviewLayer() {
+    return CachedNetworkImage(
+      imageUrl: widget.previewUrl!,
+      cacheKey:
+          _nonEmpty(widget.previewCacheKey) ?? 'preview:${widget.cacheKey}',
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
+      memCacheWidth: _tiered(1440),
+      placeholder: (context, url) => const ColoredBox(color: _loadingColor),
+      errorWidget:
+          (context, url, error) => const ColoredBox(color: _loadingColor),
     );
   }
 

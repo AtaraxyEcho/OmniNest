@@ -65,4 +65,44 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('提供预览地址时低清先行层与主图同栈渲染', (tester) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SizedBox(
+            width: 400,
+            height: 300,
+            child: AppBackdropImage(
+              url: 'https://example.com/full.jpg',
+              cacheKey: 'backdrop:preview-test',
+              fit: BoxFit.cover,
+              previewUrl: 'https://example.com/thumb.jpg',
+              previewCacheKey: 'backdrop-preview:preview-test',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    final images = tester
+        .widgetList<CachedNetworkImage>(find.byType(CachedNetworkImage))
+        .toList(growable: false);
+    // 先行层 + 主图两层,先行层使用预览缓存键与 cover 铺满。
+    expect(images, hasLength(2));
+    expect(
+      images.any((image) => image.cacheKey == 'backdrop-preview:preview-test'),
+      isTrue,
+    );
+    expect(
+      images.any((image) => image.cacheKey == 'backdrop:preview-test'),
+      isTrue,
+    );
+  });
+
+  testWidgets('无预览地址时保持单层主图', (tester) async {
+    await pumpBackdrop(tester, url: 'https://example.com/single.jpg');
+    expect(find.byType(CachedNetworkImage), findsOneWidget);
+  });
 }

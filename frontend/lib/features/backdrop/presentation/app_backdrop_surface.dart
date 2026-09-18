@@ -166,6 +166,8 @@ class AppBackdropSurface extends ConsumerWidget {
   ) {
     if (asset.sourceType == AppBackdropSourceType.server) {
       final blurActive = settings.blurAmount > 0.05;
+      final thumbnail =
+          asset.thumbnailPath?.isNotEmpty == true ? asset.thumbnailPath : null;
       return AppBackdropImage(
         // 稳定 Key:父级重建时不重挂 State,避免加载态闪帧。
         key: ValueKey<String>('backdrop-image:${asset.id}'),
@@ -179,6 +181,10 @@ class AppBackdropSurface extends ConsumerWidget {
         // 仅在 URL 彻底失败且无备用地址时由组件内部显示深色底。
         fallbackAsset: null,
         maxDecodeWidth: blurActive ? 1440 : null,
+        // 首切即时反馈:瓦片缩略图(与瓦片预览同缓存键,磁盘已缓存)
+        // 先行垫底,主图签名 URL 取回解码后无缝淡入覆盖。
+        previewUrl: thumbnail,
+        previewCacheKey: 'backdrop-preview:${asset.id}',
         onUrlFailed:
             () => Future<void>.microtask(() async {
               await ref
