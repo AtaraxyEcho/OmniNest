@@ -1,29 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 
-/// 为页面范围绑定 F11 全屏快捷键。
-class AppFullscreenShortcutScope extends StatelessWidget {
-  const AppFullscreenShortcutScope({
-    required this.onToggle,
-    required this.child,
-    super.key,
-  });
-
-  final VoidCallback onToggle;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return CallbackShortcuts(
-      bindings: <ShortcutActivator, VoidCallback>{
-        const SingleActivator(LogicalKeyboardKey.f11): onToggle,
-      },
-      child: child,
-    );
-  }
-}
+// F11 不再提供页面级绑定组件：硬件层全局 handler（app.dart）与焦点树
+// CallbackShortcuts 在 Windows 上无条件先后执行，页面级 F11 绑定必然
+// 双重触发。全页面 F11 均由全局入口分发。
 
 /// 顶部栏统一使用的全屏切换按钮。
 class AppFullscreenButton extends StatelessWidget {

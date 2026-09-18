@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -28,7 +30,6 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
   bool _topBarHovered = false;
   bool _webFullscreen = false;
   late final WindowChromeController _windowChromeController;
-  WindowChromeLease? _fullscreenLease;
 
   @override
   void initState() {
@@ -56,7 +57,6 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
         fs.toggleFullscreen();
       }
     }
-    _fullscreenLease?.release();
     super.dispose();
   }
 
@@ -71,41 +71,40 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
       policy: AppBackdropPolicy.musicImmersive,
       child: Material(
         type: MaterialType.transparency,
-        child: AppFullscreenShortcutScope(
-          onToggle: kIsWeb ? _noopFullscreenShortcut : _toggleFullscreen,
-          child: Focus(
-            autofocus: true,
-            onKeyEvent: (node, event) {
-              if (event is KeyDownEvent &&
-                  event.logicalKey == LogicalKeyboardKey.escape) {
-                widget.onClose();
-                return KeyEventResult.handled;
-              }
-              return KeyEventResult.ignored;
-            },
-            // 移动端与桌面同语言：不叠自有色层，动态壁纸由应用背景宿主
-            // 透出，可读性由宿主 immersive 渐变与播放页自身轻量渐变承担，
-            // 回切 Music 页时两侧同底无缝衔接。
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (fullVisual)
-                  MusicImmersivePlayer(reservedTopInset: safeTop + 58)
-                else
-                  MusicMobileNowPlaying(onClose: widget.onClose),
-                if (fullVisual)
-                  Positioned(
-                    top: safeTop + 14,
-                    left: 12,
-                    right: 12,
-                    child: _buildDesktopTopBar(
-                      context,
-                      isFullscreen:
-                          kIsWeb ? _webFullscreen : windowChrome.isFullscreen,
-                    ),
+        // F11 由 app.dart 全局按键处理器分发，本层不得再绑 F11
+        //（硬件层与焦点树双重派发）；全屏走手动全屏，不设页面租约。
+        child: Focus(
+          autofocus: true,
+          onKeyEvent: (node, event) {
+            if (event is KeyDownEvent &&
+                event.logicalKey == LogicalKeyboardKey.escape) {
+              widget.onClose();
+              return KeyEventResult.handled;
+            }
+            return KeyEventResult.ignored;
+          },
+          // 移动端与桌面同语言：不叠自有色层，动态壁纸由应用背景宿主
+          // 透出，可读性由宿主 immersive 渐变与播放页自身轻量渐变承担，
+          // 回切 Music 页时两侧同底无缝衔接。
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (fullVisual)
+                MusicImmersivePlayer(reservedTopInset: safeTop + 58)
+              else
+                MusicMobileNowPlaying(onClose: widget.onClose),
+              if (fullVisual)
+                Positioned(
+                  top: safeTop + 14,
+                  left: 12,
+                  right: 12,
+                  child: _buildDesktopTopBar(
+                    context,
+                    isFullscreen:
+                        kIsWeb ? _webFullscreen : windowChrome.isFullscreen,
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       ),
@@ -177,18 +176,9 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
       fs.toggleFullscreen();
       return;
     }
-    final lease = _fullscreenLease;
-    if (lease == null) {
-      _fullscreenLease = _windowChromeController.acquireFullscreen(
-        owner: 'music.immersive.overlay',
-      );
-      return;
-    }
-    lease.release();
-    _fullscreenLease = null;
+    // 手动全屏统一入口：无沉浸租约时切换全屏，有则先退出沉浸页。
+    unawaited(_windowChromeController.toggleFullscreen());
   }
-
-  static void _noopFullscreenShortcut() {}
 
   void _setTopBarHovered(bool hovered) {
     if (_topBarHovered == hovered) {

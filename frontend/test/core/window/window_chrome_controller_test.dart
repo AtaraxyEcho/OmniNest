@@ -75,11 +75,12 @@ void main() {
     addTearDown(container.dispose);
     final controller = container.read(windowChromeControllerProvider.notifier);
     await controller.setFullscreen(true);
-    final lease = controller.acquireFullscreen(owner: 'movie');
+    final lease = controller.acquireImmersive(owner: 'movie');
 
     lease
       ..release()
       ..release();
+    await Future<void>.delayed(Duration.zero);
 
     expect(container.read(windowChromeControllerProvider).isFullscreen, isTrue);
     await controller.setFullscreen(false);

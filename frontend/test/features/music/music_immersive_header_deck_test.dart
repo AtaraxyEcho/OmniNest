@@ -8,7 +8,7 @@ import 'package:omninest/features/music/presentation/player/music_immersive_play
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 
 void main() {
-  test('Music 沉浸顶部栏保留 F11 作用域，Portal 不得绑定 F11', () {
+  test('沉浸全屏走手动全屏入口，页面不再绑定 F11 作用域', () {
     final musicSource =
         File(
           'lib/features/music/presentation/player/music_immersive_overlay.dart',
@@ -18,11 +18,11 @@ void main() {
           'lib/features/portal/presentation/widgets/portal_desktop_visual_shells.dart',
         ).readAsStringSync();
 
-    expect(musicSource, contains('AppFullscreenShortcutScope'));
+    expect(musicSource, isNot(contains('AppFullscreenShortcutScope')));
     expect(musicSource, contains('AppFullscreenButton'));
     expect(musicSource, contains('reservedTopInset: safeTop + 58'));
-    // F11 由 app.dart 全局处理器统一分发为无边框全屏；portal 壳层若再绑定
-    // F11 会与全局处理器同一按键双重触发（全屏与沉浸模式同时翻转）。
+    // F11 由 app.dart 全局处理器统一分发为无边框全屏；任何页面级 F11 绑定
+    // 都会与全局处理器同一按键双重触发（硬件层与焦点树无条件先后执行）。
     expect(portalSource, isNot(contains('AppFullscreenShortcutScope')));
     expect(portalSource, contains('AppFullscreenButton'));
     expect(portalSource, isNot(contains('_PortalImmersiveButton')));

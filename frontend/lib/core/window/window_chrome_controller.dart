@@ -35,8 +35,6 @@ class WindowChromeState {
   static const _sentinel = Object();
 }
 
-enum WindowChromeRequestMode { fullscreen, immersive }
-
 /// 页面级窗口状态租约。释放操作幂等，且只撤销创建该租约的请求。
 class WindowChromeLease {
   WindowChromeLease._(this._requestId, this._releaseRequest);
@@ -63,6 +61,11 @@ final windowChromeControllerProvider =
 
 const _windowFrameChannel = MethodChannel('omninest/window_frame');
 
+/// 页面级沉浸窗口状态控制器。
+///
+/// 租约只表达"页面正在占用无边框沉浸态"（进入即整窗无边框全屏，退出恢复
+/// 原窗口摆放）；窗口全屏不设租约，统一由手动全屏（[setFullscreen] /
+/// [toggleFullscreen]，F11 与各页全屏按钮）承担，避免双轨状态打架。
 class WindowChromeController extends Notifier<WindowChromeState> {
   final Map<int, _WindowChromeRequest> _requests = {};
   int _nextRequestId = 0;
@@ -82,16 +85,11 @@ class WindowChromeController extends Notifier<WindowChromeState> {
 
   WindowChromeLease acquire({
     required String owner,
-    required WindowChromeRequestMode mode,
     FutureOr<void> Function()? onExit,
   }) {
     final requestId = ++_nextRequestId;
     final shouldSavePlacement = _requests.isEmpty && !_manualFullscreen;
-    _requests[requestId] = _WindowChromeRequest(
-      owner: owner,
-      mode: mode,
-      onExit: onExit,
-    );
+    _requests[requestId] = _WindowChromeRequest(owner: owner, onExit: onExit);
     if (shouldSavePlacement) {
       _placementSavePending = true;
     }
@@ -99,19 +97,11 @@ class WindowChromeController extends Notifier<WindowChromeState> {
     return WindowChromeLease._(requestId, _releaseRequest);
   }
 
-  WindowChromeLease acquireFullscreen({required String owner}) {
-    return acquire(owner: owner, mode: WindowChromeRequestMode.fullscreen);
-  }
-
   WindowChromeLease acquireImmersive({
     required String owner,
     FutureOr<void> Function()? onExit,
   }) {
-    return acquire(
-      owner: owner,
-      mode: WindowChromeRequestMode.immersive,
-      onExit: onExit,
-    );
+    return acquire(owner: owner, onExit: onExit);
   }
 
   Future<void> requestImmersive({
@@ -119,9 +109,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
     FutureOr<void> Function()? onExit,
   }) async {
     final existing = _requests.entries.where(
-      (entry) =>
-          entry.value.owner == owner &&
-          entry.value.mode == WindowChromeRequestMode.immersive,
+      (entry) => entry.value.owner == owner,
     );
     if (existing.isNotEmpty) {
       existing.last.value.onExit = onExit;
@@ -132,11 +120,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
 
   Future<void> clearImmersive(String owner) async {
     final requestIds = _requests.entries
-        .where(
-          (entry) =>
-              entry.value.owner == owner &&
-              entry.value.mode == WindowChromeRequestMode.immersive,
-        )
+        .where((entry) => entry.value.owner == owner)
         .map((entry) => entry.key)
         .toList(growable: false);
     for (final requestId in requestIds) {
@@ -146,14 +130,11 @@ class WindowChromeController extends Notifier<WindowChromeState> {
   }
 
   Future<void> exitImmersive() async {
-    final immersiveEntries = _requests.entries
-        .where((entry) => entry.value.mode == WindowChromeRequestMode.immersive)
-        .toList(growable: false);
-    if (immersiveEntries.isEmpty) {
+    if (_requests.isEmpty) {
       _refreshState();
       return;
     }
-    final entry = immersiveEntries.last;
+    final entry = _requests.entries.last;
     final exit = entry.value.onExit;
     if (exit != null) {
       await exit();
@@ -169,9 +150,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
   }
 
   Future<void> toggleFullscreen() async {
-    if (_requests.values.any(
-      (request) => request.mode == WindowChromeRequestMode.immersive,
-    )) {
+    if (_requests.isNotEmpty) {
       await exitImmersive();
       return;
     }
@@ -487,9 +466,8 @@ class WindowChromeController extends Notifier<WindowChromeState> {
 }
 
 class _WindowChromeRequest {
-  _WindowChromeRequest({required this.owner, required this.mode, this.onExit});
+  _WindowChromeRequest({required this.owner, this.onExit});
 
   final String owner;
-  final WindowChromeRequestMode mode;
   FutureOr<void> Function()? onExit;
 }

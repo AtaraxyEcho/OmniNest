@@ -1,44 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/app_fullscreen_control.dart';
 
 void main() {
-  testWidgets('F11 触发页面范围的全屏切换', (tester) async {
-    var toggleCount = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AppFullscreenShortcutScope(
-          onToggle: () => toggleCount += 1,
-          child: const Focus(autofocus: true, child: SizedBox.expand()),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.f11);
-
-    expect(toggleCount, 1);
-  });
-
-  testWidgets('输入框获得焦点时 F11 仍触发全屏切换', (tester) async {
-    var toggleCount = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: AppFullscreenShortcutScope(
-          onToggle: () => toggleCount += 1,
-          child: const Scaffold(body: TextField(autofocus: true)),
-        ),
-      ),
-    );
-    await tester.pump();
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.f11);
-
-    expect(toggleCount, 1);
-  });
-
   testWidgets('全屏按钮同步图标、提示和点击状态', (tester) async {
     var isFullscreen = false;
     await tester.pumpWidget(

@@ -756,15 +756,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
 
   void _toggleFullscreen() {
     if (isDesktopPlatform) {
-      final lease = _windowChromeLease;
-      if (lease == null) {
-        _windowChromeLease = _windowChromeController.acquireFullscreen(
-          owner: 'video.player.${widget.videoItemId}',
-        );
-      } else {
-        lease.release();
-        _windowChromeLease = null;
-      }
+      // 桌面全屏走手动全屏统一入口；本页租约仅移动端表达沉浸态。
+      unawaited(_windowChromeController.toggleFullscreen());
       return;
     }
     fs.toggleFullscreen();
