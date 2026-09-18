@@ -168,6 +168,8 @@ docker compose --env-file deploy/dev/.env -f deploy/dev/docker-compose.yml up -d
 
 若本机为 `docker-compose`（旧插件）而非 `docker compose`，请改用对应命令。
 
+各 `.env.example` 模板在同目录提供英文版 `.env.en.example`（变量一致，仅注释语言不同）。
+
 ### 3. 启动后端
 
 ```bash

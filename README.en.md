@@ -158,6 +158,8 @@ cp deploy/dev/.env.example deploy/dev/.env
 docker compose --env-file deploy/dev/.env -f deploy/dev/docker-compose.yml up -d
 ```
 
+Each `.env.example` template has an English counterpart `.env.en.example` in the same directory (identical variables, comments in English).
+
 ### 3. Backend
 
 ```bash

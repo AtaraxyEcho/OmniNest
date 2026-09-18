@@ -91,7 +91,7 @@ x-backend-service: &backend-service
     - omninest-rclone-local:/mnt/local
     - omninest-rclone-imports:/mnt/imports
     - omninest-aria2:/downloads
-    - ${OMNINEST_LOCAL_MEDIA_ROOT:-../../.omninest/local-media}:/mnt/local-media:ro
+    - ${OMNINEST_LOCAL_MEDIA_ROOT:-../.omninest/local-media}:/mnt/local-media:ro
   restart: unless-stopped
   stop_grace_period: 30s
   healthcheck:
@@ -323,7 +323,7 @@ services:
     volumes:
       - omninest-probe-tmp:/tmp/probe
       - omninest-transcode-tmp:/tmp/transcode
-      - ${OMNINEST_LOCAL_MEDIA_ROOT:-../../.omninest/local-media}:/mnt/local-media:ro
+      - ${OMNINEST_LOCAL_MEDIA_ROOT:-../.omninest/local-media}:/mnt/local-media:ro
     mem_limit: ${FFMPEG_MEM_LIMIT:-128m}
     restart: unless-stopped
     logging: *default-logging
