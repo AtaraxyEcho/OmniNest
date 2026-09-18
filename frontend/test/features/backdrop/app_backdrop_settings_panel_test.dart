@@ -97,6 +97,88 @@ void main() {
     expect(state.settings.separateDeviceBackdrops, isTrue);
     expect(state.selectionTarget, AppBackdropSelectionTarget.mobile);
   });
+
+  testWidgets('浅色主题下瓦片标题压遮罩恒为白色', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    final database = LocalDatabase(NativeDatabase.memory());
+    final repository = AppBackdropRepository(database);
+    final api = _MockBackdropApi();
+    when(() => api.list()).thenAnswer((_) async => []);
+    await repository.upsertServerAssets([
+      const BackdropServerAsset(
+        id: 'srv-1',
+        title: '浅色可读性测试壁纸',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 1024,
+        contentUrl: 'https://example.com/a.jpg',
+        thumbUrl: 'https://example.com/a-thumb.jpg',
+      ),
+    ]);
+    final container = ProviderContainer.test(
+      overrides: [
+        appBackdropRepositoryProvider.overrideWithValue(repository),
+        appBackdropBundledAssetInstallerProvider.overrideWithValue(
+          _NoopBundledAssetInstaller(),
+        ),
+        authSessionProvider.overrideWith(
+          () => _MutableSessionNotifier(
+            AuthSessionState(
+              user: UserProfile(
+                id: 'owner-user',
+                username: 'owner',
+                role: 'MEMBER',
+              ),
+            ),
+          ),
+        ),
+        appBackdropApiProvider.overrideWithValue(api),
+        backdropPreferencesProvider.overrideWith(
+          () => _NoopBackdropPreferencesController(repository),
+        ),
+      ],
+    );
+    addTearDown(() async {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      container.dispose();
+      await database.close();
+    });
+    await container.read(appBackdropControllerProvider.future);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder:
+                (context) => Scaffold(
+                  body: Center(
+                    child: TextButton(
+                      onPressed: () {
+                        unawaited(showAppBackdropSettings(context));
+                      },
+                      child: const Text('打开背景设置'),
+                    ),
+                  ),
+                ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('打开背景设置'));
+    await tester.pumpAndSettle();
+
+    final labelFinder = find.text('浅色可读性测试壁纸');
+    expect(labelFinder, findsOneWidget);
+    expect(Theme.of(tester.element(labelFinder)).brightness, Brightness.light);
+    expect(tester.widget<Text>(labelFinder).style?.color, Colors.white);
+  });
 }
 
 class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {

@@ -664,7 +664,9 @@ class _BackdropTile extends StatelessWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: palette.text,
+                    // 文字压在黑色渐变遮罩上,恒定白色与主题无关;
+                    // 浅色主题的 palette.text(近黑)在遮罩上不可读。
+                    color: Colors.white,
                     fontSize: AppTypography.bodySmall,
                     fontWeight: FontWeight.w700,
                   ),
