@@ -106,13 +106,16 @@ class AppBackdropLocalVideoCache {
   }
 
   /// 删除素材对应的本地缓存。
+  ///
+  /// Windows 上 media_kit 可能仍持有文件句柄导致直接删除失败:先改名断开
+  /// 后续重开路径再尝试删除,仍失败的改名残留由 [evictAll] 兜底清理。
   Future<void> evict(String assetId) async {
     _readyById.remove(assetId);
     try {
       final root = await _ensureRoot();
       final file = File('${root.path}${Platform.pathSeparator}$assetId.mp4');
       if (await file.exists()) {
-        await file.delete();
+        await _deleteWithRenameFallback(file);
       }
     } on Object catch (error) {
       if (kDebugMode) {
@@ -121,7 +124,23 @@ class AppBackdropLocalVideoCache {
     }
   }
 
+  Future<void> _deleteWithRenameFallback(File file) async {
+    try {
+      await file.delete();
+    } on FileSystemException {
+      final trash = File('${file.path}.trash');
+      await file.rename(trash.path);
+      try {
+        await trash.delete();
+      } on FileSystemException {
+        // 句柄仍被占用:保留改名残留,由 evictAll 兜底。
+      }
+    }
+  }
+
   /// 清空全部服务端视频壁纸本地缓存;返回删除的文件数。
+  ///
+  /// 同时清理 evict 改名失败留下的 `.trash` 残留。
   Future<int> evictAll() async {
     _cacheEpoch++;
     _readyById.clear();
@@ -132,9 +151,14 @@ class AppBackdropLocalVideoCache {
       }
       var removed = 0;
       await for (final entity in root.list(followLinks: false)) {
-        if (entity is File && entity.path.endsWith('.mp4')) {
-          await entity.delete();
-          removed++;
+        if (entity is File &&
+            (entity.path.endsWith('.mp4') || entity.path.endsWith('.trash'))) {
+          try {
+            await entity.delete();
+            removed++;
+          } on FileSystemException {
+            // 个别文件仍被占用:跳过,下次清空再试。
+          }
         }
       }
       return removed;

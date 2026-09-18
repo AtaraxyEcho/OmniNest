@@ -58,6 +58,9 @@ const _nonTransientUploadCodes = {
   '429',
 };
 
+/// 后端 ErrorCode.BACKDROP_NOT_FOUND:删除时视为"服务端已删除"幂等通过。
+const _backdropNotFoundCode = '8001';
+
 final appBackdropControllerProvider =
     AsyncNotifierProvider<AppBackdropController, AppBackdropState>(
       AppBackdropController.new,
@@ -380,6 +383,9 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   }
 
   /// 移除背景素材;服务端素材先调删除接口,失败则保持本地现状。
+  ///
+  /// 服务端返回"素材不存在"(BACKDROP_NOT_FOUND, 8001, 常见于上次删除的
+  /// 响应丢失)时按已删除幂等处理,继续清理本地;否则重试会永远失败。
   Future<void> removeBackdrop(String id) async {
     final current =
         state.asData?.value ??
@@ -397,16 +403,16 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     if (isServer) {
       try {
         await ref.read(appBackdropApiProvider).delete(id);
+      } on AppException catch (error) {
+        if (error.code != _backdropNotFoundCode) {
+          await _markDeleteFailed();
+          return;
+        }
       } on Exception catch (error) {
         if (kDebugMode) {
           debugPrint('背景素材删除失败,保留本地缓存: $error');
         }
-        final failed = await _loadCurrentState(
-          ref.read(appBackdropRepositoryProvider),
-        );
-        state = AsyncData(
-          failed.copyWith(message: AppBackdropMessage.deleteFailed),
-        );
+        await _markDeleteFailed();
         return;
       }
       _urlExpiresAt.remove(id);
@@ -416,6 +422,15 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     _localVideoPaths.remove(id);
     state = AsyncData(
       await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+    );
+  }
+
+  Future<void> _markDeleteFailed() async {
+    final failed = await _loadCurrentState(
+      ref.read(appBackdropRepositoryProvider),
+    );
+    state = AsyncData(
+      failed.copyWith(message: AppBackdropMessage.deleteFailed),
     );
   }
 

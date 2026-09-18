@@ -721,6 +721,120 @@ void main() {
       expect(state.message, AppBackdropMessage.deleteFailed);
     });
 
+    test('删除返回素材不存在时按已删除幂等清理本地', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final serverAsset = BackdropServerAsset(
+        id: 'server-del',
+        title: 'del',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
+      );
+      await repository.upsertServerAssets([serverAsset]);
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => [serverAsset]);
+      when(
+        () => api.delete(any()),
+      ).thenThrow(const AppException(code: '8001', message: '背景素材不存在'));
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      await notifier.removeBackdrop('server-del');
+
+      final state = container.read(appBackdropControllerProvider).requireValue;
+      expect(
+        state.backdrops.where((backdrop) => backdrop.id == 'server-del'),
+        isEmpty,
+      );
+      expect(state.message, isNot(AppBackdropMessage.deleteFailed));
+    });
+
+    test('删除其他错误仍保留本地并提示失败', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final serverAsset = BackdropServerAsset(
+        id: 'server-keep-2',
+        title: 'keep2',
+        mediaType: 'image',
+        status: 'READY',
+        fileSize: 2048,
+        updatedAt: DateTime(2026),
+      );
+      await repository.upsertServerAssets([serverAsset]);
+      final api = _MockBackdropApi();
+      when(() => api.list()).thenAnswer((_) async => [serverAsset]);
+      when(
+        () => api.delete(any()),
+      ).thenThrow(const AppException(code: '500', message: 'boom'));
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      await notifier.removeBackdrop('server-keep-2');
+
+      final state = container.read(appBackdropControllerProvider).requireValue;
+      expect(
+        state.backdrops.where((backdrop) => backdrop.id == 'server-keep-2'),
+        isNotEmpty,
+      );
+      expect(state.message, AppBackdropMessage.deleteFailed);
+    });
+
     test('桌面端改选隔离壁纸不会覆盖移动端槽位', () async {
       final database = LocalDatabase(NativeDatabase.memory());
       final repository = AppBackdropRepository(database);
