@@ -66,6 +66,13 @@ class AppBackdropRepository {
   /// 注册安装包内置背景;首次使用时建立默认设置,已有设置但无可用选中时回落内置壁纸。
   Future<void> ensureBundledBackdrop(AppBackdropAsset backdrop) async {
     await _db.transaction(() async {
+      // 清理旧版本内置壁纸行(如 v1→v2 升级残留),保持"内置素材唯一"
+      // 不变式;否则按 sourceType 的唯一性查询会命中多行。
+      await (_db.delete(_db.appBackdropAssets)..where(
+        (table) =>
+            table.sourceType.equals(AppBackdropSourceType.bundled.value) &
+            table.id.isNotValue(backdrop.id),
+      )).go();
       await _db
           .into(_db.appBackdropAssets)
           .insertOnConflictUpdate(_toBackdropCompanion(backdrop));
@@ -182,11 +189,14 @@ class AppBackdropRepository {
         (table) =>
             table.sourceType.isNotValue(AppBackdropSourceType.bundled.value),
       )).go();
-      final bundled =
+      // 防御式读取:历史升级库中可能短暂存在多行内置素材(注册器会清理),
+      // 不得因多行抛 StateError 阻断清空。
+      final bundledRows =
           await (_db.select(_db.appBackdropAssets)..where(
             (table) =>
                 table.sourceType.equals(AppBackdropSourceType.bundled.value),
-          )).getSingleOrNull();
+          )).get();
+      final bundled = bundledRows.isEmpty ? null : bundledRows.first;
       final settingsRow =
           await (_db.select(_db.appBackdropSettingsTable)
             ..where((table) => table.id.equals(settingsId))).getSingleOrNull();

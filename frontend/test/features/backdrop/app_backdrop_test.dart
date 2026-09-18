@@ -395,6 +395,63 @@ void main() {
       expect(cleared.settings.selectedBackdropId, bundled.id);
     });
 
+    test('注册新内置壁纸时清理旧版本行,多行内置不阻断清空', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      addTearDown(database.close);
+      AppBackdropAsset bundledAsset(String id) => AppBackdropAsset(
+        id: id,
+        path: 'assets/backdrops/default_wallpaper.jpg',
+        title: 'OmniNest',
+        mediaType: AppBackdropMediaType.image,
+        sourceType: AppBackdropSourceType.bundled,
+        fileSize: 0,
+        modifiedAt: DateTime(2026),
+        createdAt: DateTime(2026),
+        updatedAt: DateTime(2026),
+      );
+      // 模拟升级库:v1 旧内置行仍在,注册 v2 后应只剩 v2 一行。
+      await repository.upsertBackdrops([
+        bundledAsset('bundled-default-wallpaper-v1'),
+        bundledAsset(bundledDefaultWallpaperId),
+        _backdrop('custom'),
+      ]);
+      await repository.saveSettings(
+        const AppBackdropSettings(enabled: true, selectedBackdropId: 'custom'),
+      );
+
+      await repository.ensureBundledBackdrop(
+        bundledAsset(bundledDefaultWallpaperId),
+      );
+      final state = await repository.loadState();
+      final bundledIds = state.backdrops
+          .where(
+            (backdrop) => backdrop.sourceType == AppBackdropSourceType.bundled,
+          )
+          .map((backdrop) => backdrop.id)
+          .toList(growable: false);
+      expect(bundledIds, [bundledDefaultWallpaperId]);
+
+      // 即使防御式路径下出现多行内置(如清理未跑),clearBackdrops 也不得抛
+      // "Too many elements",并把选择回落到内置素材。
+      await repository.upsertBackdrops([
+        bundledAsset('bundled-default-wallpaper-v1'),
+      ]);
+      await repository.clearBackdrops();
+      final cleared = await repository.loadState();
+      expect(cleared.backdrops, isNotEmpty);
+      expect(
+        cleared.backdrops.any(
+          (backdrop) => backdrop.id == bundledDefaultWallpaperId,
+        ),
+        isTrue,
+      );
+      expect(
+        cleared.settings.selectedBackdropId,
+        anyOf(bundledDefaultWallpaperId, 'bundled-default-wallpaper-v1'),
+      );
+    });
+
     test('服务端素材写入缓存且非 READY 状态不可选', () async {
       final database = LocalDatabase(NativeDatabase.memory());
       final repository = AppBackdropRepository(database);
