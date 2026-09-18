@@ -20,13 +20,11 @@ import 'package:omninest/features/reader/domain/comic_reader_display_settings.da
 import 'package:omninest/features/reader/presentation/widgets/comic_page_image.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_reader_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_reader_overlays.dart';
-import 'package:omninest/features/reader/presentation/widgets/comic_reader_settings_panel.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_adaptive_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_panel_coordinator.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
-import 'package:omninest/features/reader/presentation/widgets/reader_shortcut_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shortcuts.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_tap_detector.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/platform/android/reader_volume_key_service.dart';
@@ -100,8 +98,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
   bool _suppressScrollProgress = false;
   ComicAnchor? _pendingScrollRestoreAnchor;
   bool _scrollRestoreScheduled = false;
-  Offset? _tapStartPosition;
-  DateTime? _tapStartAt;
   bool _imageZoomed = false;
   bool _exitRequested = false;
   late ReaderProgressSyncService _progressSync;
@@ -846,50 +842,26 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
               ),
             if (_panelCoordinator.active != null)
               Positioned.fill(
-                child: _buildPanelOverlay(layout, controlSettings),
+                child: ComicReaderPanelOverlay(
+                  active: _panelCoordinator.active!,
+                  layout: layout,
+                  settings: controlSettings,
+                  manifest: _manifest,
+                  currentPageIndex: _anchor.pageIndex,
+                  displaySettings: _displaySettings,
+                  volumeKeyPaging: _settings.volumeKeyPaging,
+                  onClose: _closePanel,
+                  onCatalogNodeTap: (node) {
+                    _closePanel();
+                    _jumpToCatalogNode(node);
+                  },
+                  onDisplaySettingsChanged: _applyDisplaySettings,
+                  onVolumeKeyPagingChanged: _updateVolumeKeyPaging,
+                ),
               ),
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildPanelOverlay(
-    ReaderControlLayout layout,
-    ReaderViewSettings controlSettings,
-  ) {
-    final l10n = AppLocalizations.of(context);
-    final active = _panelCoordinator.active;
-    final title = switch (active) {
-      ReaderPanelType.contents => l10n.readerTableOfContents,
-      ReaderPanelType.settings => l10n.readerSettingsTitle,
-      _ => l10n.readerShortcutsTitle,
-    };
-    final child = switch (active) {
-      ReaderPanelType.contents => ComicCatalogPanel(
-        manifest: _manifest,
-        currentPageIndex: _anchor.pageIndex,
-        settings: controlSettings,
-        onNodeTap: (node) {
-          _closePanel();
-          _jumpToCatalogNode(node);
-        },
-      ),
-      ReaderPanelType.settings => ComicReaderSettingsPanel(
-        displaySettings: _displaySettings,
-        themeSettings: controlSettings,
-        onChanged: _applyDisplaySettings,
-        volumeKeyPaging: _settings.volumeKeyPaging,
-        onVolumeKeyPagingChanged: _updateVolumeKeyPaging,
-      ),
-      _ => ReaderShortcutPanel(settings: controlSettings, isComic: true),
-    };
-    return ReaderAdaptivePanelOverlay(
-      title: title,
-      settings: controlSettings,
-      layout: layout,
-      onClose: _closePanel,
-      child: child,
     );
   }
 
@@ -1092,38 +1064,12 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
       );
     }
     if (_readingMode == ComicReadingMode.scroll) {
-      return _buildTapAwareContent(_buildScrollMode());
+      return ReaderTapDetector(
+        onTap: _handleContentTap,
+        child: _buildScrollMode(),
+      );
     }
-    return _buildTapAwareContent(_buildPageMode());
-  }
-
-  Widget _buildTapAwareContent(Widget child) {
-    return Listener(
-      behavior: HitTestBehavior.translucent,
-      onPointerDown: (event) {
-        _tapStartPosition = event.localPosition;
-        _tapStartAt = DateTime.now();
-      },
-      onPointerUp: (event) {
-        final start = _tapStartPosition;
-        final startedAt = _tapStartAt;
-        _tapStartPosition = null;
-        _tapStartAt = null;
-        if (start == null || startedAt == null) {
-          return;
-        }
-        final duration = DateTime.now().difference(startedAt);
-        final distance = (event.localPosition - start).distance;
-        if (duration <= const Duration(milliseconds: 260) && distance <= 12) {
-          _handleContentTap(event.localPosition);
-        }
-      },
-      onPointerCancel: (_) {
-        _tapStartPosition = null;
-        _tapStartAt = null;
-      },
-      child: child,
-    );
+    return ReaderTapDetector(onTap: _handleContentTap, child: _buildPageMode());
   }
 
   /// 竖向连续滚动模式。

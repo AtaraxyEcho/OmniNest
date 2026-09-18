@@ -3,8 +3,13 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/reader/domain/comic_models.dart';
+import 'package:omninest/features/reader/domain/comic_reader_display_settings.dart';
 import 'package:omninest/features/reader/presentation/widgets/comic_catalog_tree.dart';
+import 'package:omninest/features/reader/presentation/widgets/comic_reader_settings_panel.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_adaptive_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_panel_coordinator.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_shortcut_panel.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_view_settings.dart';
 
 /// 漫画阅读器的响应式顶部控制栏。
@@ -499,6 +504,69 @@ class _ComicControlButton extends StatelessWidget {
       color: settings.onSurfaceColor,
       disabledColor: settings.onSurfaceVariantColor.withValues(alpha: 0.45),
       icon: Icon(icon, size: 22),
+    );
+  }
+}
+
+/// 漫画阅读器面板浮层：按当前激活面板类型组装目录/设置/快捷键内容。
+class ComicReaderPanelOverlay extends StatelessWidget {
+  const ComicReaderPanelOverlay({
+    required this.active,
+    required this.layout,
+    required this.settings,
+    required this.manifest,
+    required this.currentPageIndex,
+    required this.displaySettings,
+    required this.volumeKeyPaging,
+    required this.onClose,
+    required this.onCatalogNodeTap,
+    required this.onDisplaySettingsChanged,
+    required this.onVolumeKeyPagingChanged,
+    super.key,
+  });
+
+  final ReaderPanelType active;
+  final ReaderControlLayout layout;
+  final ReaderViewSettings settings;
+  final ComicManifest manifest;
+  final int currentPageIndex;
+  final ComicReaderDisplaySettings displaySettings;
+  final bool volumeKeyPaging;
+  final VoidCallback onClose;
+  final ValueChanged<ComicCatalogNode> onCatalogNodeTap;
+  final ValueChanged<ComicReaderDisplaySettings> onDisplaySettingsChanged;
+  final ValueChanged<bool> onVolumeKeyPagingChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final title = switch (active) {
+      ReaderPanelType.contents => l10n.readerTableOfContents,
+      ReaderPanelType.settings => l10n.readerSettingsTitle,
+      _ => l10n.readerShortcutsTitle,
+    };
+    final child = switch (active) {
+      ReaderPanelType.contents => ComicCatalogPanel(
+        manifest: manifest,
+        currentPageIndex: currentPageIndex,
+        settings: settings,
+        onNodeTap: onCatalogNodeTap,
+      ),
+      ReaderPanelType.settings => ComicReaderSettingsPanel(
+        displaySettings: displaySettings,
+        themeSettings: settings,
+        onChanged: onDisplaySettingsChanged,
+        volumeKeyPaging: volumeKeyPaging,
+        onVolumeKeyPagingChanged: onVolumeKeyPagingChanged,
+      ),
+      _ => ReaderShortcutPanel(settings: settings, isComic: true),
+    };
+    return ReaderAdaptivePanelOverlay(
+      title: title,
+      settings: settings,
+      layout: layout,
+      onClose: onClose,
+      child: child,
     );
   }
 }

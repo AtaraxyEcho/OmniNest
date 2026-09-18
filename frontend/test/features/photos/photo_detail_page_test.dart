@@ -310,13 +310,17 @@ void main() {
     );
 
     // 点击播放：沉浸页打开，顶栏计数可见并自动推进。
-    // Bootstrap paints cover, waits two frames, enters immersive, then decodes.
+    // Bootstrap 依次等三次 endOfFrame（封面绘制 → 租约全屏 → surface 对齐）
+    // 后加载首图；进度条 ticker 从下一帧的帧时间戳才开始计时。
     await tester.tap(find.byIcon(Icons.play_arrow_rounded));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 50));
     await tester.pump(const Duration(milliseconds: 600));
     expect(find.text('01 / 03'), findsOneWidget);
+    // 先推一帧让进度 ticker 记下起点，再推满 5s 间隔触发完成回调，
+    // 最后消化 450ms 切换动画；否则完成点会落在测试时钟之外（差一帧）。
+    await tester.pump();
     await tester.pump(const Duration(seconds: 5));
     await tester.pump(const Duration(milliseconds: 800));
     expect(find.text('02 / 03'), findsOneWidget);

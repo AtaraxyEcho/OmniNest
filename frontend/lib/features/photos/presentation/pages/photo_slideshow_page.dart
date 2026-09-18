@@ -1,13 +1,10 @@
 import 'dart:async';
-import 'dart:ui' as ui show Image, ImageFilter;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
@@ -18,16 +15,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_info_panel.d
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
-
-/// 幻灯片帧：页面上的一层画面（照片 + 已解码位图）。
-///
-/// 背景模糊层直接使用 [photo] 的 coverUrl，前景用 [image] 的解码位图。
-class SlideFrame {
-  const SlideFrame(this.photo, this.image);
-
-  final PhotoItem photo;
-  final ui.Image? image;
-}
+import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
 
 /// 幻灯片页面阶段：首图解码中 / 可播放 / 首图加载失败。
 enum SlideshowPhase { loading, ready, failed }
@@ -666,14 +654,31 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                   fit: StackFit.expand,
                   children: [
                     switch (_phase) {
-                      SlideshowPhase.loading => _buildLoadingStage(photo),
-                      SlideshowPhase.failed => _buildErrorRetry(context),
+                      SlideshowPhase.loading => SlideshowLoadingStage(
+                        photo: photo,
+                      ),
+                      SlideshowPhase.failed => SlideshowErrorRetry(
+                        onRetry: () => unawaited(_retryInitialLoad()),
+                      ),
                       SlideshowPhase.ready => Stack(
                         fit: StackFit.expand,
-                        children: [_buildBackdropLayers(), _buildSlideLayers()],
+                        children: [
+                          SlideshowBackdropLayers(
+                            transition: _transitionFade,
+                            transitioning: _transitioning,
+                            leavingFrame: _leavingFrame,
+                            enteringFrame: _currentFrame,
+                          ),
+                          SlideshowSlideLayers(
+                            transition: _transitionFade,
+                            transitioning: _transitioning,
+                            leavingFrame: _leavingFrame,
+                            enteringFrame: _currentFrame,
+                          ),
+                        ],
                       ),
                     },
-                    _buildGradients(showControls),
+                    SlideshowGradients(visible: showControls),
                     PhotoSlideshowTopBar(
                       photo: photo,
                       current: _current,
@@ -694,10 +699,40 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                       onFullscreen: _toggleFullscreen,
                     ),
                     if (_photos.length > 1) ...[
-                      _buildArrow(context, right: false, visible: showControls),
-                      _buildArrow(context, right: true, visible: showControls),
+                      SlideshowArrow(
+                        right: false,
+                        visible: showControls,
+                        onTap: _goPrev,
+                      ),
+                      SlideshowArrow(
+                        right: true,
+                        visible: showControls,
+                        onTap: _goNext,
+                      ),
                     ],
-                    _buildBottomArea(context, photo, showControls),
+                    SlideshowBottomArea(
+                      photo: photo,
+                      visible: showControls,
+                      isPlaying: _isPlaying,
+                      thumbnailsVisible: _thumbnailsVisible,
+                      onTogglePlay: _togglePlay,
+                      onToggleThumbnails:
+                          () => setState(
+                            () => _thumbnailsVisible = !_thumbnailsVisible,
+                          ),
+                      segments: SlideshowSegments(
+                        count: _photos.length,
+                        current: _current,
+                        isPlaying: _isPlaying,
+                        progress: _progressController,
+                        onTap: (index) => unawaited(_goTo(index)),
+                      ),
+                      thumbnailStrip: SlideshowThumbnailStrip(
+                        photos: _photos,
+                        current: _current,
+                        onTap: (index) => unawaited(_goTo(index)),
+                      ),
+                    ),
                     // 面板 scrim 在侧栏之下（zIndex 语义），点击空白处同时收起。
                     if (_showInfo || _showShare)
                       Positioned.fill(
@@ -729,494 +764,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     );
   }
 
-  // ─── 幻灯片层（静态模糊背景 + 离场/入场前景交叉过渡） ───
-
-  /// 背景双层模糊：与前景同一过渡控制器同步交叉（Apple Photos 式氛围同步）。
-  Widget _buildBackdropLayers() {
-    return AnimatedBuilder(
-      animation: _transitionFade,
-      builder: (context, _) {
-        final t = _transitionFade.value;
-        final leaving = _transitioning ? _leavingFrame : null;
-        final entering = _currentFrame;
-        if (entering == null) return const SizedBox.shrink();
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (leaving != null)
-              Positioned.fill(
-                child: Opacity(
-                  opacity: (1 - t).clamp(0.0, 1.0),
-                  child: _buildBlurredCover(leaving.photo),
-                ),
-              ),
-            Positioned.fill(
-              child: Opacity(
-                // 过渡控制器在静止态停在 0，入场层不透明度必须按过渡态门控，
-                // 否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
-                opacity: _transitioning ? t.clamp(0.0, 1.0) : 1.0,
-                child: _buildBlurredCover(entering.photo),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// 单张模糊背景：96px 超低分辨率缩略图放大拉伸（放大即强模糊）+ 压暗。
-  ///
-  /// 返回纯内容（不含 Positioned）——定位由调用层的 Stack 负责，
-  /// Positioned 穿越 Opacity 会导致 ParentData 失配异常。
-  Widget _buildBlurredCover(PhotoItem photo) {
-    final thumb = photo.coverUrl;
-    if (thumb == null || thumb.isEmpty) {
-      return const ColoredBox(color: Colors.black);
-    }
-    return RepaintBoundary(
-      child: Transform.scale(
-        scale: 1.12,
-        child: ImageFiltered(
-          imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CachedNetworkImage(
-                imageUrl: thumb,
-                cacheKey: photo.coverCacheKey,
-                memCacheWidth: 96,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.medium,
-                fadeInDuration: Duration.zero,
-                errorWidget:
-                    (context, url, error) =>
-                        const ColoredBox(color: Colors.black),
-              ),
-              ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// 前景双层：离场位图淡出 + 当前位图淡入（微缩放，摄影应用式 motion）。
-  Widget _buildSlideLayers() {
-    return AnimatedBuilder(
-      animation: _transitionFade,
-      builder: (context, _) {
-        final t = _transitionFade.value;
-        final leaving = _transitioning ? _leavingFrame : null;
-        final entering = _currentFrame;
-        if (entering == null) return const SizedBox.shrink();
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            if (leaving != null && leaving.image != null)
-              Positioned.fill(
-                child: SlideshowSlideLayer(
-                  image: leaving.image,
-                  opacity: (1 - t).clamp(0.0, 1.0),
-                  scale: 1.0 - 0.005 * t,
-                ),
-              ),
-            Positioned.fill(
-              child: SlideshowSlideLayer(
-                image: entering.image,
-                // 过渡控制器在静止态停在 0：入场层不透明度与缩放必须按
-                // 过渡态门控，否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
-                opacity: _transitioning ? t.clamp(0.0, 1.0) : 1.0,
-                scale: _transitioning ? 1.015 - 0.015 * t : 1.0,
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  /// First paint: memory/disk cover if available, plus a small spinner.
-  Widget _buildLoadingStage(PhotoItem photo) {
-    final cover = photo.coverUrl;
-    final hasCover = cover != null && cover.isNotEmpty;
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (hasCover)
-          CachedNetworkImage(
-            imageUrl: cover,
-            cacheKey: photo.coverCacheKey,
-            fit: BoxFit.cover,
-            memCacheWidth: 1280,
-            filterQuality: FilterQuality.medium,
-            fadeInDuration: Duration.zero,
-            fadeOutDuration: Duration.zero,
-            placeholder:
-                (context, url) => const ColoredBox(color: Colors.black),
-            errorWidget:
-                (context, url, error) => const ColoredBox(color: Colors.black),
-          )
-        else
-          const ColoredBox(color: Colors.black),
-        // Spinner only when there is no cover to show under it.
-        if (!hasCover)
-          const Center(
-            child: SizedBox.square(
-              dimension: 28,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: Color(0x66FFFFFF),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  // ─── 渐变遮罩 ───
-
-  Widget _buildGradients(bool visible) {
-    return IgnorePointer(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          AnimatedOpacity(
-            opacity: visible ? 1 : 0.4,
-            duration: const Duration(milliseconds: 500),
-            child: const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.bottomCenter,
-                  end: Alignment(0, -0.4),
-                  colors: [
-                    Color(0xB8000000),
-                    Color(0x2E000000),
-                    Colors.transparent,
-                  ],
-                  stops: [0, 0.35, 0.6],
-                ),
-              ),
-            ),
-          ),
-          AnimatedOpacity(
-            opacity: visible ? 1 : 0,
-            duration: const Duration(milliseconds: 500),
-            child: const DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment(0, 0.3),
-                  colors: [Color(0x80000000), Colors.transparent],
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── 左右箭头 ───
-
-  Widget _buildArrow(
-    BuildContext context, {
-    required bool right,
-    required bool visible,
-  }) {
-    final l10n = AppLocalizations.of(context);
-    return Positioned(
-      left: right ? null : 20,
-      right: right ? 20 : null,
-      top: 0,
-      bottom: 0,
-      child: Center(
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: AnimatedOpacity(
-            opacity: visible ? 1 : 0,
-            duration: const Duration(milliseconds: 400),
-            child: AnimatedSlide(
-              offset: visible ? Offset.zero : Offset(right ? 0.08 : -0.08, 0),
-              duration: const Duration(milliseconds: 400),
-              curve: Curves.ease,
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(999),
-                  onTap: right ? _goNext : _goPrev,
-                  child: Tooltip(
-                    message:
-                        right ? l10n.photosNextPhoto : l10n.photosPrevPhoto,
-                    child: Container(
-                      width: 44,
-                      height: 44,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withValues(alpha: 0),
-                      ),
-                      child: Icon(
-                        right
-                            ? Icons.chevron_right_rounded
-                            : Icons.chevron_left_rounded,
-                        size: 28,
-                        color: Colors.white.withValues(alpha: 0.70),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ─── 底部区（元信息 + 播放/暂停 + 分段进度 + 缩略图条开关 + 缩略图条） ───
-
-  Widget _buildBottomArea(BuildContext context, PhotoItem photo, bool visible) {
-    final preferZh = Localizations.localeOf(context).languageCode == 'zh';
-    return Positioned(
-      bottom: 0,
-      left: 0,
-      right: 0,
-      child: IgnorePointer(
-        ignoring: !visible,
-        child: AnimatedOpacity(
-          opacity: visible ? 1 : 0,
-          duration: const Duration(milliseconds: 400),
-          child: AnimatedSlide(
-            offset: visible ? Offset.zero : const Offset(0, 0.12),
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.ease,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                0,
-                24,
-                24 + MediaQuery.paddingOf(context).bottom,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    photo.title,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: AppTypography.headlineSmall,
-                      fontWeight: FontWeight.w300,
-                      letterSpacing: -0.01,
-                    ),
-                  ),
-                  Text(
-                    _metaLine(photo, preferZh),
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.45),
-                      fontSize: AppTypography.bodySmall,
-                      letterSpacing: 0.06,
-                      fontWeight: FontWeight.w300,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Row(
-                    children: [
-                      IconButton(
-                        tooltip:
-                            _isPlaying
-                                ? AppLocalizations.of(context).photosPause
-                                : AppLocalizations.of(context).photosPlay,
-                        onPressed: _togglePlay,
-                        icon: Icon(
-                          _isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                          color: Colors.white.withValues(alpha: 0.80),
-                          size: 22,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(child: _buildSegments()),
-                      const SizedBox(width: 12),
-                      TextButton(
-                        onPressed:
-                            () => setState(
-                              () => _thumbnailsVisible = !_thumbnailsVisible,
-                            ),
-                        child: Text(
-                          _thumbnailsVisible
-                              ? AppLocalizations.of(context).photosStripHide
-                              : AppLocalizations.of(context).photosStripShow,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.50),
-                            fontSize: AppTypography.labelSmall,
-                            letterSpacing: 0.08,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  AnimatedSize(
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeOutCubic,
-                    alignment: Alignment.bottomCenter,
-                    child:
-                        _thumbnailsVisible
-                            ? _buildThumbnailStrip()
-                            : const SizedBox.shrink(),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildErrorRetry(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.error_outline_rounded,
-            size: 44,
-            color: Color(0x66FFFFFF),
-          ),
-          const SizedBox(height: 12),
-          Text(
-            l10n.photosImageLoadFailed,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.65),
-              fontSize: AppTypography.bodyLarge,
-            ),
-          ),
-          const SizedBox(height: 16),
-          OutlinedButton.icon(
-            onPressed: () => unawaited(_retryInitialLoad()),
-            icon: const Icon(Icons.refresh_rounded, size: 18),
-            label: Text(l10n.coreRetry),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: Colors.white.withValues(alpha: 0.85),
-              side: BorderSide(color: Colors.white.withValues(alpha: 0.20)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── 分段进度条 ───
-
-  Widget _buildSegments() {
-    return SizedBox(
-      height: 2,
-      child: Row(
-        children: [
-          for (var i = 0; i < _photos.length; i++)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => unawaited(_goTo(i)),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: RepaintBoundary(
-                    // 隔离绘制：进度 tick 的重绘不传播到页面根。
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      // 仅当前段跟随进度逐帧刷新；其余段为静态，避免照片多时每 30ms 重建全部段。
-                      child:
-                          i == _current
-                              ? ValueListenableBuilder<double>(
-                                valueListenable: _progressController,
-                                builder:
-                                    (context, progress, _) => _buildSegmentBar(
-                                      _progressValueFor(i, progress),
-                                    ),
-                              )
-                              : _buildSegmentBar(_progressValueFor(i, 0)),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSegmentBar(double value) {
-    return LinearProgressIndicator(
-      value: value,
-      minHeight: 2,
-      backgroundColor: Colors.white.withValues(alpha: 0.20),
-      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xE6FFFFFF)),
-    );
-  }
-
-  double _progressValueFor(int index, double progress) {
-    if (index < _current) return 1;
-    if (index > _current) return 0;
-    return _isPlaying ? progress : 0;
-  }
-
-  // ─── 缩略图条 ───
-
-  Widget _buildThumbnailStrip() {
-    return SizedBox(
-      height: 64,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: _photos.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final selected = index == _current;
-          final thumb = _photos[index].coverUrl;
-          return Opacity(
-            opacity: selected ? 1 : 0.45,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => unawaited(_goTo(index)),
-              child: Container(
-                width: 72,
-                height: 48,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
-                  border: Border.all(
-                    color:
-                        selected
-                            ? Colors.white.withValues(alpha: 0.90)
-                            : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(2),
-                  child:
-                      thumb != null && thumb.isNotEmpty
-                          ? CachedNetworkImage(
-                            imageUrl: thumb,
-                            fit: BoxFit.cover,
-                            fadeInDuration: Duration.zero,
-                            errorWidget:
-                                (context, url, error) => ColoredBox(
-                                  color: Colors.white.withValues(alpha: 0.08),
-                                ),
-                          )
-                          : ColoredBox(
-                            color: Colors.white.withValues(alpha: 0.08),
-                          ),
-                ),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
   // ─── Info 面板 ───
 
   Widget _buildInfoPanel(BuildContext context, PhotoItem photo) {
@@ -1232,18 +779,5 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             }),
       ),
     );
-  }
-
-  // ─── 辅助方法 ───
-
-  String _metaLine(PhotoItem photo, bool preferZh) {
-    final location = photo.locationDisplay(preferZh: preferZh);
-    final date = photo.dateTaken ?? photo.createdAt;
-    final dateText =
-        date == null
-            ? null
-            : '${date.year}-${date.month.toString().padLeft(2, '0')}-'
-                '${date.day.toString().padLeft(2, '0')}';
-    return [location, dateText].whereType<String>().join(' · ');
   }
 }
