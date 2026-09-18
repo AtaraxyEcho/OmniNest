@@ -28,11 +28,8 @@ spring:
         order_updates: true
   jackson:
     time-zone: Asia/Shanghai
-  datasource:
-    hikari:
-      maximum-pool-size: 10
-      minimum-idle: 2
-      pool-name: OmniNestHikariPool
+  # datasource.url/username/password 在 profile 文件中配置；
+  # Hikari 参数由环境变量 SPRING_DATASOURCE_HIKARI_* 注入，避免 Boot4 池启动后再绑定 pool-name。
   flyway:
     enabled: true
     locations: classpath:db/migration

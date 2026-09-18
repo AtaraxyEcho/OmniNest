@@ -72,9 +72,15 @@ UPDATE omni.config_entries SET config_value = 'false' WHERE config_key = 'clamav
 容器与后端开关必须一致：容器未启动而后端仍启用扫描时，安全检查按 fail-closed
 处理，上传会因“ClamAV 安全扫描不可用”被拒绝。
 
-**4C4G 建议内存边界（约）**：Postgres 768M、API/Worker 各 512M（堆 ≤384M）、
-Scheduler 256M、Rabbit/MinIO 各约 320M、Redis ≤192M、其余辅件合计约 400M；
+**4C4G 建议内存边界（约，Spring Boot 4 + Hibernate 7 实测）**：Postgres 768M、
+API/Worker 各 768M（堆 ≤320M，**不要设置 MaxMetaspaceSize**）、Scheduler 512M
+（堆 ≤192M）、Rabbit/MinIO 各约 320M、Redis ≤192M、其余辅件合计约 400M。
 不要同时开启 ClamAV（约 1.5G）或 InsightFace 侧车（约 768M+）。
+
+**首次启动建议串行**：先 `docker compose up -d backend-api`，待
+`/api/v1/setup/status` 返回 200 后再启动 worker、scheduler，避免三角色同时
+类加载触发 cgroup OOM。小内存机上不要在 Compose 默认 JAVA_OPTS 里设置过小的
+`MaxMetaspaceSize`（Boot4 启动期 Metaspace 峰值明显高于 Boot3）。
 
 Photos 图像分析侧车使用 CPU 推理，无需 GPU；仅在 `COMPOSE_PROFILES=photo-ai`
 时启动。模型首次启动自动下载，预留最多 10 分钟启动窗口。

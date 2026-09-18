@@ -57,7 +57,7 @@ x-backend-environment: &backend-environment
   OMNINEST_MUSICBRAINZ_USER_AGENT: ${OMNINEST_MUSICBRAINZ_USER_AGENT:-OmniNest/0.1.0 (contact@example.com)}
   OMNINEST_READER_COMIC_CONSUME_IN_API: "false"
   # 容器内应用日志路径（相对工作目录 /app）
-  OMNINEST_LOG_PATH: ${OMNINEST_LOG_PATH:logs/omninest.log}
+  OMNINEST_LOG_PATH: ${OMNINEST_LOG_PATH:-logs/omninest.log}
   TZ: Asia/Shanghai
 
 # 4C4G 无 ClamAV：JVM 使用显式堆上限（见各 backend 角色 JAVA_OPTS）。
@@ -160,32 +160,33 @@ services:
     environment:
       <<: *backend-environment
       OMNINEST_ROLE: api
-      JAVA_OPTS: ${JAVA_OPTS_API:--Xms128m -Xmx384m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}
+      # 4C4G：显式堆上限；不设 MaxMetaspaceSize，由 mem_limit 约束，避免 Boot4 启动期 Metaspace OOM。
+      JAVA_OPTS: ${JAVA_OPTS_API:--Xms128m -Xmx320m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_API:-10}
     ports:
       - "127.0.0.1:${OMNINEST_SERVER_PORT:-8080}:8080"
-    mem_limit: ${BACKEND_API_MEM_LIMIT:-512m}
+    mem_limit: ${BACKEND_API_MEM_LIMIT:-768m}
 
   backend-worker:
     <<: *backend-service
     environment:
       <<: *backend-environment
       OMNINEST_ROLE: worker
-      JAVA_OPTS: ${JAVA_OPTS_WORKER:--Xms128m -Xmx384m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}
+      JAVA_OPTS: ${JAVA_OPTS_WORKER:--Xms128m -Xmx320m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_WORKER:-6}
       OMNINEST_WORKER_FILE_INDEX_CONCURRENCY: "1"
       OMNINEST_WORKER_TEXT_EXTRACTION_CONCURRENCY: "1"
       OMNINEST_WORKER_MEDIA_CONCURRENCY: "1"
-    mem_limit: ${BACKEND_WORKER_MEM_LIMIT:-512m}
+    mem_limit: ${BACKEND_WORKER_MEM_LIMIT:-768m}
 
   backend-scheduler:
     <<: *backend-service
     environment:
       <<: *backend-environment
       OMNINEST_ROLE: scheduler
-      JAVA_OPTS: ${JAVA_OPTS_SCHEDULER:--Xms64m -Xmx160m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}
+      JAVA_OPTS: ${JAVA_OPTS_SCHEDULER:--Xms64m -Xmx192m -XX:+UseContainerSupport -XX:+ExitOnOutOfMemoryError}
       SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE: ${HIKARI_MAX_POOL_SCHEDULER:-4}
-    mem_limit: ${BACKEND_SCHEDULER_MEM_LIMIT:-256m}
+    mem_limit: ${BACKEND_SCHEDULER_MEM_LIMIT:-512m}
 
   postgres:
     image: postgres:18-alpine
@@ -345,6 +346,7 @@ services:
     restart: unless-stopped
 
   netease-music-api:
+    image: omninest-netease-music-api:latest
     build: ../netease-api
     environment:
       TZ: Asia/Shanghai

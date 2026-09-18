@@ -1,0 +1,16 @@
+FROM nginx:1.28-alpine
+
+RUN apk add --no-cache gettext
+
+COPY web /usr/share/nginx/html
+COPY deploy/prod/nginx/templates/ /opt/omninest/templates/
+COPY deploy/prod/nginx/validate-config.sh /opt/omninest/validate-config.sh
+COPY deploy/prod/nginx/render-config.sh /opt/omninest/render-config.sh
+COPY deploy/prod/nginx/watch-certificates.sh /opt/omninest/watch-certificates.sh
+COPY deploy/prod/nginx/entrypoint.sh /opt/omninest/entrypoint.sh
+
+RUN chmod 0755 /opt/omninest/*.sh \
+    && rm -f /etc/nginx/conf.d/default.conf
+
+ENTRYPOINT ["/opt/omninest/entrypoint.sh"]
+CMD ["nginx", "-g", "daemon off;"]

@@ -1,5 +1,8 @@
 **
 
+!web/
+!web/**
+
 !frontend/
 frontend/*
 !frontend/lib/
