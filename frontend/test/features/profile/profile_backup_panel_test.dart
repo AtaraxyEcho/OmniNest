@@ -121,14 +121,30 @@ void main() {
     });
     await _pumpPanel(tester);
 
-    await tester.tap(find.byType(Switch));
+    // 开启后出现「仅 Wi-Fi」策略行；点第一行开关关闭备份。
+    expect(find.text('仅 Wi-Fi 网络时备份'), findsOneWidget);
+    await tester.tap(find.byType(Switch).first);
     await tester.pumpAndSettle();
 
     expect(find.text('开启自动备份？'), findsNothing);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool(photoBackupBackgroundEnabledKey), isFalse);
-    // 范围偏好保留。
+    // 范围偏好保留；策略行随关闭隐藏。
     expect(prefs.getString(photoBackupScopeKey), 'selected');
+    expect(find.text('仅 Wi-Fi 网络时备份'), findsNothing);
+  }, variant: TargetPlatformVariant.only(TargetPlatform.android));
+
+  testWidgets('仅 Wi-Fi 策略开关持久化网络策略', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      photoBackupBackgroundEnabledKey: true,
+    });
+    await _pumpPanel(tester);
+
+    await tester.tap(find.text('仅 Wi-Fi 网络时备份'));
+    await tester.pumpAndSettle();
+
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(photoBackupNetworkPolicyKey), 'any');
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
   testWidgets('非 Android 平台开关禁用', (tester) async {

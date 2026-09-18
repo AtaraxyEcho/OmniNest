@@ -35,10 +35,18 @@ class AndroidPhotoBackupService {
     required String deviceId,
     PhotoBackupScope scope = PhotoBackupScope.all,
     Set<String> selectedAlbumIds = const <String>{},
+    PhotoBackupNetworkPolicy networkPolicy = PhotoBackupNetworkPolicy.wifiOnly,
   }) async {
-    // 检查网络：仅 WiFi 时备份
+    // 网络门控：仅 Wi-Fi 策略要求不限流量网络；any 策略只要求有网络。
     final connectivity = await Connectivity().checkConnectivity();
-    if (!connectivity.contains(ConnectivityResult.wifi)) {
+    final hasNetwork =
+        connectivity.isNotEmpty &&
+        !connectivity.contains(ConnectivityResult.none);
+    final allowed =
+        networkPolicy == PhotoBackupNetworkPolicy.any
+            ? hasNetwork
+            : connectivity.contains(ConnectivityResult.wifi);
+    if (!allowed) {
       return BackupResult.skipped(l10n.backupSkipNonWifi);
     }
 

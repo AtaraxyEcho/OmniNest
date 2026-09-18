@@ -1109,7 +1109,7 @@ abstract class AppLocalizations {
   /// No description provided for @photoBackupBackgroundSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Automatically uploads all photos in your device gallery to your OmniNest server (Android only, Wi-Fi only)'**
+  /// **'Automatically uploads all photos in your device gallery to your OmniNest server (Android only)'**
   String get photoBackupBackgroundSubtitle;
 
   /// No description provided for @photoBackupConfirmTitle.
@@ -1121,20 +1121,32 @@ abstract class AppLocalizations {
   /// No description provided for @photoBackupConfirmBody.
   ///
   /// In en, this message translates to:
-  /// **'Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only, Wi-Fi only).'**
+  /// **'Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only).'**
   String get photoBackupConfirmBody;
 
   /// No description provided for @photoBackupConfirmBodyScoped.
   ///
   /// In en, this message translates to:
-  /// **'Only photos in the albums checked below will be uploaded to your OmniNest server (Android only, Wi-Fi only).'**
+  /// **'Only photos in the albums checked below will be uploaded to your OmniNest server (Android only).'**
   String get photoBackupConfirmBodyScoped;
 
   /// No description provided for @photoBackupBackgroundSubtitleScoped.
   ///
   /// In en, this message translates to:
-  /// **'Automatically uploads photos in the selected scope to your OmniNest server (Android only, Wi-Fi only)'**
+  /// **'Automatically uploads photos in the selected scope to your OmniNest server (Android only)'**
   String get photoBackupBackgroundSubtitleScoped;
+
+  /// No description provided for @photoBackupWifiOnlyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Back up on Wi-Fi only'**
+  String get photoBackupWifiOnlyTitle;
+
+  /// No description provided for @photoBackupWifiOnlySubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off to also upload over mobile data'**
+  String get photoBackupWifiOnlySubtitle;
 
   /// No description provided for @photoBackupScopeSelectedCount.
   ///

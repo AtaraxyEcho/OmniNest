@@ -80,4 +80,25 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool(photoBackupBackgroundEnabledKey), isFalse);
   });
+
+  test('网络策略缺省仅 Wi-Fi，可切换为含移动网络并持久化', () async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+
+    final initial = await container.read(
+      photoBackupPreferencesControllerProvider.future,
+    );
+    expect(initial.networkPolicy, PhotoBackupNetworkPolicy.wifiOnly);
+
+    await container
+        .read(photoBackupPreferencesControllerProvider.notifier)
+        .setNetworkPolicy(PhotoBackupNetworkPolicy.any);
+
+    final updated = await container.read(
+      photoBackupPreferencesControllerProvider.future,
+    );
+    expect(updated.networkPolicy, PhotoBackupNetworkPolicy.any);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getString(photoBackupNetworkPolicyKey), 'any');
+  });
 }

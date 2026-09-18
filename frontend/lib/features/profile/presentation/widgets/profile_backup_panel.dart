@@ -65,6 +65,25 @@ class ProfileBackupPanel extends ConsumerWidget {
                     : (value) =>
                         showPhotoBackupEnableFlow(context, ref, enable: value),
           ),
+          if (settings?.enabled ?? false)
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.photoBackupWifiOnlyTitle),
+              subtitle: Text(l10n.photoBackupWifiOnlySubtitle),
+              value: settings?.networkPolicy != PhotoBackupNetworkPolicy.any,
+              onChanged:
+                  backupAsync.isLoading || !isAndroidPlatform
+                      ? null
+                      : (value) => ref
+                          .read(
+                            photoBackupPreferencesControllerProvider.notifier,
+                          )
+                          .setNetworkPolicy(
+                            value
+                                ? PhotoBackupNetworkPolicy.wifiOnly
+                                : PhotoBackupNetworkPolicy.any,
+                          ),
+            ),
           const SizedBox(height: 12),
           const BatteryOptimizationCard(),
         ],

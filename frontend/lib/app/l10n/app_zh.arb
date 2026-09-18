@@ -209,11 +209,13 @@
   "profileSectionBackup": "备份",
   "profileSectionAbout": "关于",
   "photoBackupBackgroundTitle": "自动备份本机相册",
-  "photoBackupBackgroundSubtitle": "开启后将本机相册的全部照片自动上传到你的 OmniNest 服务器（仅 Android，仅 Wi-Fi 时执行）",
+  "photoBackupBackgroundSubtitle": "开启后将本机相册的全部照片自动上传到你的 OmniNest 服务器（仅 Android）",
   "photoBackupConfirmTitle": "开启自动备份？",
-  "photoBackupConfirmBody": "将按所选范围自动上传照片到你的 OmniNest 服务器（仅 Wi-Fi、仅 Android）。",
-  "photoBackupConfirmBodyScoped": "仅上传下方勾选相册中的照片到你的 OmniNest 服务器（仅 Wi-Fi、仅 Android）。",
-  "photoBackupBackgroundSubtitleScoped": "开启后将自动上传所选范围的照片到你的 OmniNest 服务器（仅 Android，仅 Wi-Fi 时执行）",
+  "photoBackupConfirmBody": "将按所选范围自动上传照片到你的 OmniNest 服务器（仅 Android）。",
+  "photoBackupConfirmBodyScoped": "仅上传下方勾选相册中的照片到你的 OmniNest 服务器（仅 Android）。",
+  "photoBackupBackgroundSubtitleScoped": "开启后将自动上传所选范围的照片到你的 OmniNest 服务器（仅 Android）",
+  "photoBackupWifiOnlyTitle": "仅 Wi-Fi 网络时备份",
+  "photoBackupWifiOnlySubtitle": "关闭后在移动网络下也会消耗流量上传",
   "photoBackupScopeSelectedCount": "已选 {count} 个相册",
   "@photoBackupScopeSelectedCount": {
     "placeholders": {

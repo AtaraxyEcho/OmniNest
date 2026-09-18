@@ -96,6 +96,7 @@ void callbackDispatcher() {
         deviceId: deviceId,
         scope: backupSettings.scope,
         selectedAlbumIds: backupSettings.selectedAlbumIds,
+        networkPolicy: backupSettings.networkPolicy,
       );
       return result.status != BackupStatus.failure;
     } catch (e) {
