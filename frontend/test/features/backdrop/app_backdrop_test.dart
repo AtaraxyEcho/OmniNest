@@ -47,9 +47,9 @@ class _FakeBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
     final now = DateTime(2026);
     return AppBackdropAsset(
       id: bundledDefaultWallpaperId,
-      path: 'assets/backdrops/default_wallpaper.mp4',
+      path: 'assets/backdrops/default_wallpaper.jpg',
       title: 'OmniNest',
-      mediaType: AppBackdropMediaType.video,
+      mediaType: AppBackdropMediaType.image,
       sourceType: AppBackdropSourceType.bundled,
       fileSize: 100,
       modifiedAt: now,
@@ -323,12 +323,12 @@ void main() {
   });
 
   group('AppBackdropRepository', () {
-    test('默认动态壁纸已打包进 Flutter 资源', () async {
+    test('默认壁纸已打包进 Flutter 资源', () async {
       final data = await rootBundle.load(
-        'assets/backdrops/default_wallpaper.mp4',
+        'assets/backdrops/default_wallpaper.jpg',
       );
 
-      expect(data.lengthInBytes, 5950165);
+      expect(data.lengthInBytes, greaterThan(100 * 1024));
     });
 
     test('首次安装内置壁纸时默认启用且后续安装不覆盖用户设置', () async {

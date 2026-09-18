@@ -784,8 +784,9 @@ class _BackdropTilePreview extends StatelessWidget {
       }
       return const _BackdropVideoPlaceholder();
     }
-    if (backdrop.isVideo) {
-      return Image.asset(bundledDefaultWallpaperPosterAsset, fit: BoxFit.cover);
+    if (backdrop.sourceType == AppBackdropSourceType.bundled) {
+      // v2 起内置默认壁纸为打包静态图,瓦片直接渲染资产。
+      return Image.asset(bundledDefaultWallpaperAssetPath, fit: BoxFit.cover);
     }
     return const _BackdropVideoPlaceholder();
   }

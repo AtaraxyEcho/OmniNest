@@ -124,6 +124,7 @@ class AppBackdropSurface extends ConsumerWidget {
     if (isWebPlatform) {
       // HTML video 在首帧就绪或加载失败前不绘制内容；与 IO 端一致在
       // 底层保留静态海报（平台视图之下的画布内容仍按层级合成），避免黑闪。
+      // v2 起无内置动态壁纸,自定义视频失败不再回退默认视频。
       return Stack(
         fit: StackFit.expand,
         children: [
@@ -133,7 +134,6 @@ class AppBackdropSurface extends ConsumerWidget {
             fit: fit,
             playing: active && motionAllowed,
             muted: settings.videoMuted,
-            fallbackSource: bundledDefaultWallpaperWebAsset,
             onSourceStale: onSourceStale,
           ),
         ],
@@ -193,7 +193,16 @@ class AppBackdropSurface extends ConsumerWidget {
             }),
       );
     }
-    // 内置素材当前为视频;非 server 图片不在此分支渲染。
+    if (asset.sourceType == AppBackdropSourceType.bundled) {
+      // v2 起内置默认壁纸为打包静态图(GPT 生成,CC0),三端统一
+      // 直接渲染打包资产,无需网络与本机文件。
+      return Image.asset(
+        bundledDefaultWallpaperAssetPath,
+        key: const ValueKey<String>('backdrop-bundled-image'),
+        fit: fit,
+        alignment: alignment,
+      );
+    }
     return const SizedBox.shrink();
   }
 
@@ -220,14 +229,6 @@ class AppBackdropSurface extends ConsumerWidget {
                   .read(appBackdropControllerProvider.notifier)
                   .ensureFreshServerUrls(force: true);
             }),
-      );
-    }
-    if (asset.sourceType == AppBackdropSourceType.bundled) {
-      // 仅内置默认壁纸自身使用其海报帧作静态垫底。
-      return Image.asset(
-        bundledDefaultWallpaperPosterAsset,
-        key: const ValueKey<String>('backdrop-bundled-poster'),
-        fit: fit,
       );
     }
     return const _AppBackdropFallback(icon: Icons.movie_creation_outlined);
