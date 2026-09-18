@@ -60,11 +60,6 @@ class ProfileMobileContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    // 网络策略行仅在备份开启后展示。
-    final backupWifiOnlyVisible =
-        ref.watch(photoBackupPreferencesControllerProvider).asData?.value
-            .enabled ??
-        false;
     return MobilePageSurface(
       exposeBackdrop: true,
       child: ListView(
@@ -227,39 +222,6 @@ class ProfileMobileContent extends ConsumerWidget {
                   );
                 },
               ),
-              if (backupWifiOnlyVisible)
-                Consumer(
-                  builder: (context, wifiRef, _) {
-                    final settings =
-                        wifiRef
-                            .watch(photoBackupPreferencesControllerProvider)
-                            .asData
-                            ?.value;
-                    return MobileSettingsTile(
-                      icon: Icons.wifi_rounded,
-                      title: l10n.photoBackupWifiOnlyTitle,
-                      subtitle: l10n.photoBackupWifiOnlySubtitle,
-                      trailing: Switch(
-                        value:
-                            settings?.networkPolicy !=
-                            PhotoBackupNetworkPolicy.any,
-                        onChanged:
-                            isAndroidPlatform
-                                ? (value) => wifiRef
-                                    .read(
-                                      photoBackupPreferencesControllerProvider
-                                          .notifier,
-                                    )
-                                    .setNetworkPolicy(
-                                      value
-                                          ? PhotoBackupNetworkPolicy.wifiOnly
-                                          : PhotoBackupNetworkPolicy.any,
-                                    )
-                                : null,
-                      ),
-                    );
-                  },
-                ),
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
                 child: BatteryOptimizationCard(),

@@ -214,8 +214,8 @@
   "photoBackupConfirmBody": "将按所选范围自动上传照片到你的 OmniNest 服务器（仅 Android）。",
   "photoBackupConfirmBodyScoped": "仅上传下方勾选相册中的照片到你的 OmniNest 服务器（仅 Android）。",
   "photoBackupBackgroundSubtitleScoped": "开启后将自动上传所选范围的照片到你的 OmniNest 服务器（仅 Android）",
-  "photoBackupWifiOnlyTitle": "仅 Wi-Fi 网络时备份",
-  "photoBackupWifiOnlySubtitle": "关闭后在移动网络下也会消耗流量上传",
+  "photoBackupAllowMobileData": "无 Wi-Fi 时也使用移动数据备份",
+  "photoBackupAllowMobileDataHint": "勾选后在移动网络下也会消耗流量上传",
   "photoBackupScopeSelectedCount": "已选 {count} 个相册",
   "@photoBackupScopeSelectedCount": {
     "placeholders": {

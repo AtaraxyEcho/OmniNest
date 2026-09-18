@@ -10,7 +10,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_backup_enabl
 
 /// 备份设置分区：照片后台备份开关与 Android 电池优化引导。
 ///
-/// 开关交互（二次确认 + 范围选择）统一走 [showPhotoBackupEnableFlow]。
+/// 开关交互（二次确认 + 范围选择 + 网络策略）统一走 [showPhotoBackupEnableFlow]。
 class ProfileBackupPanel extends ConsumerWidget {
   const ProfileBackupPanel({super.key});
 
@@ -65,25 +65,6 @@ class ProfileBackupPanel extends ConsumerWidget {
                     : (value) =>
                         showPhotoBackupEnableFlow(context, ref, enable: value),
           ),
-          if (settings?.enabled ?? false)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l10n.photoBackupWifiOnlyTitle),
-              subtitle: Text(l10n.photoBackupWifiOnlySubtitle),
-              value: settings?.networkPolicy != PhotoBackupNetworkPolicy.any,
-              onChanged:
-                  backupAsync.isLoading || !isAndroidPlatform
-                      ? null
-                      : (value) => ref
-                          .read(
-                            photoBackupPreferencesControllerProvider.notifier,
-                          )
-                          .setNetworkPolicy(
-                            value
-                                ? PhotoBackupNetworkPolicy.wifiOnly
-                                : PhotoBackupNetworkPolicy.any,
-                          ),
-            ),
           const SizedBox(height: 12),
           const BatteryOptimizationCard(),
         ],

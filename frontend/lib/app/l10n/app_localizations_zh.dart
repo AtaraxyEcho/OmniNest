@@ -552,10 +552,10 @@ class AppLocalizationsZh extends AppLocalizations {
       '开启后将自动上传所选范围的照片到你的 OmniNest 服务器（仅 Android）';
 
   @override
-  String get photoBackupWifiOnlyTitle => '仅 Wi-Fi 网络时备份';
+  String get photoBackupAllowMobileData => '无 Wi-Fi 时也使用移动数据备份';
 
   @override
-  String get photoBackupWifiOnlySubtitle => '关闭后在移动网络下也会消耗流量上传';
+  String get photoBackupAllowMobileDataHint => '勾选后在移动网络下也会消耗流量上传';
 
   @override
   String photoBackupScopeSelectedCount(int count) {

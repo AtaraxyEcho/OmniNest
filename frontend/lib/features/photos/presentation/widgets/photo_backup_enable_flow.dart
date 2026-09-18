@@ -6,9 +6,9 @@ import 'package:omninest/features/photos/application/photo_backup_preferences.da
 
 /// 备份开关统一交互流（桌面面板与移动设置页共用）。
 ///
-/// 关闭直接生效；开启弹单个确认弹窗：说明上传去向并选择范围
-/// （全部相册 / 自选相册，自选时内联展开相册清单）。「开启」按钮在
-/// 自选范围为空时置灰，天然阻止空集；取消流程时开关由偏好驱动回弹。
+/// 关闭直接生效；开启弹单个确认弹窗：上传去向 + 范围选择 + 网络策略
+/// （全部相册 / 自选相册，自选时内联展开相册清单；「无 Wi-Fi 时也使用
+/// 移动数据」默认不勾选）。「开启」在自选范围为空时置灰。
 Future<void> showPhotoBackupEnableFlow(
   BuildContext context,
   WidgetRef ref, {
@@ -26,6 +26,8 @@ Future<void> showPhotoBackupEnableFlow(
         (_) => _BackupEnableDialog(
           initialScope: current?.scope ?? PhotoBackupScope.all,
           initialSelection: current?.selectedAlbumIds ?? const <String>{},
+          initialAllowMobileData:
+              current?.networkPolicy == PhotoBackupNetworkPolicy.any,
         ),
   );
   if (decision == null) {
@@ -33,26 +35,40 @@ Future<void> showPhotoBackupEnableFlow(
   }
   await ref
       .read(photoBackupPreferencesControllerProvider.notifier)
-      .enable(scope: decision.scope, selectedAlbumIds: decision.albumIds);
+      .enable(
+        scope: decision.scope,
+        selectedAlbumIds: decision.albumIds,
+        networkPolicy:
+            decision.allowMobileData
+                ? PhotoBackupNetworkPolicy.any
+                : PhotoBackupNetworkPolicy.wifiOnly,
+      );
 }
 
 /// 弹窗确认结果。
 class _BackupEnableDecision {
-  const _BackupEnableDecision({required this.scope, required this.albumIds});
+  const _BackupEnableDecision({
+    required this.scope,
+    required this.albumIds,
+    required this.allowMobileData,
+  });
 
   final PhotoBackupScope scope;
   final Set<String> albumIds;
+  final bool allowMobileData;
 }
 
-/// 开启确认弹窗：范围单选 + 自选时内联相册清单，「开启」空集置灰。
+/// 开启确认弹窗：范围单选 + 自选时内联相册清单 + 网络策略勾选。
 class _BackupEnableDialog extends StatefulWidget {
   const _BackupEnableDialog({
     required this.initialScope,
     required this.initialSelection,
+    required this.initialAllowMobileData,
   });
 
   final PhotoBackupScope initialScope;
   final Set<String> initialSelection;
+  final bool initialAllowMobileData;
 
   @override
   State<_BackupEnableDialog> createState() => _BackupEnableDialogState();
@@ -61,6 +77,7 @@ class _BackupEnableDialog extends StatefulWidget {
 class _BackupEnableDialogState extends State<_BackupEnableDialog> {
   late PhotoBackupScope _scope = widget.initialScope;
   late Set<String> _selected = Set<String>.of(widget.initialSelection);
+  late bool _allowMobileData = widget.initialAllowMobileData;
   List<PhotoBackupAlbumOption>? _albums;
   String? _albumsError;
   bool _albumsRequested = false;
@@ -110,6 +127,17 @@ class _BackupEnableDialogState extends State<_BackupEnableDialog> {
             ),
             if (_scope == PhotoBackupScope.selected)
               Flexible(child: _buildAlbumSection(l10n)),
+            CheckboxListTile(
+              value: _allowMobileData,
+              onChanged:
+                  (checked) =>
+                      setState(() => _allowMobileData = checked ?? false),
+              title: Text(l10n.photoBackupAllowMobileData),
+              subtitle: Text(l10n.photoBackupAllowMobileDataHint),
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              dense: true,
+            ),
           ],
         ),
       ),
@@ -122,7 +150,11 @@ class _BackupEnableDialogState extends State<_BackupEnableDialog> {
           onPressed:
               canEnable
                   ? () => Navigator.of(context).pop(
-                    _BackupEnableDecision(scope: _scope, albumIds: _selected),
+                    _BackupEnableDecision(
+                      scope: _scope,
+                      albumIds: _selected,
+                      allowMobileData: _allowMobileData,
+                    ),
                   )
                   : null,
           child: Text(l10n.photoBackupConfirmEnable),

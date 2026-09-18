@@ -1136,17 +1136,17 @@ abstract class AppLocalizations {
   /// **'Automatically uploads photos in the selected scope to your OmniNest server (Android only)'**
   String get photoBackupBackgroundSubtitleScoped;
 
-  /// No description provided for @photoBackupWifiOnlyTitle.
+  /// No description provided for @photoBackupAllowMobileData.
   ///
   /// In en, this message translates to:
-  /// **'Back up on Wi-Fi only'**
-  String get photoBackupWifiOnlyTitle;
+  /// **'Also back up over mobile data when no Wi-Fi'**
+  String get photoBackupAllowMobileData;
 
-  /// No description provided for @photoBackupWifiOnlySubtitle.
+  /// No description provided for @photoBackupAllowMobileDataHint.
   ///
   /// In en, this message translates to:
-  /// **'Turn off to also upload over mobile data'**
-  String get photoBackupWifiOnlySubtitle;
+  /// **'Unchecking means Wi-Fi only'**
+  String get photoBackupAllowMobileDataHint;
 
   /// No description provided for @photoBackupScopeSelectedCount.
   ///

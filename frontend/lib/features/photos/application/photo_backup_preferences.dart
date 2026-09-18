@@ -52,10 +52,11 @@ class PhotoBackupPreferencesController
     return readPhotoBackupSettingsFrom(prefs);
   }
 
-  /// 开启备份并记录范围；自选范围至少含一个相册由调用方 UI 校验。
+  /// 开启备份并记录范围与网络策略；自选范围至少含一个相册由 UI 校验。
   Future<void> enable({
     required PhotoBackupScope scope,
     required Set<String> selectedAlbumIds,
+    PhotoBackupNetworkPolicy networkPolicy = PhotoBackupNetworkPolicy.wifiOnly,
   }) async {
     state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
@@ -66,6 +67,7 @@ class PhotoBackupPreferencesController
         photoBackupSelectedAlbumIdsKey,
         selectedAlbumIds.toList(),
       );
+      await prefs.setString(photoBackupNetworkPolicyKey, networkPolicy.name);
       await syncPhotoBackupScheduling(true);
       return readPhotoBackupSettingsFrom(prefs);
     });

@@ -568,11 +568,11 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatically uploads photos in the selected scope to your OmniNest server (Android only)';
 
   @override
-  String get photoBackupWifiOnlyTitle => 'Back up on Wi-Fi only';
+  String get photoBackupAllowMobileData =>
+      'Also back up over mobile data when no Wi-Fi';
 
   @override
-  String get photoBackupWifiOnlySubtitle =>
-      'Turn off to also upload over mobile data';
+  String get photoBackupAllowMobileDataHint => 'Unchecking means Wi-Fi only';
 
   @override
   String photoBackupScopeSelectedCount(int count) {
