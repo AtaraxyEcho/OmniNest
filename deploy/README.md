@@ -55,9 +55,7 @@ ClamAV 是可选服务，通过 `.env` 的 `COMPOSE_PROFILES=clamav` 控制：
 
 ### 资源要求与安全扫描
 
-**日志路径**：后端应用日志默认写在容器内 `logs/omninest.log`（`OMNINEST_LOG_PATH`，相对工作目录 `/app`）。本地开发对应 `backend/logs/`。测试与构建日志请写在各模块自己的 `logs/` 目录，不要落在源码根目录。
-
-**日志路径**：后端应用日志默认写在容器内 `logs/omninest.log`（`OMNINEST_LOG_PATH`，相对工作目录 `/app`）。本地开发对应 `backend/logs/`。测试与构建日志请写在各模块自己的 `logs/` 目录，不要落在源码根目录。
+**日志路径**：后端应用日志默认写在容器内 `logs/omninest.log`（`OMNINEST_LOG_PATH`，相对 `/app`）。本地开发对应 `backend/logs/`；测试与构建日志请写入各模块自己的 `logs/`，勿放在源码根目录。
 
 | 场景 | 建议 |
 |------|------|
@@ -65,7 +63,7 @@ ClamAV 是可选服务，通过 `.env` 的 `COMPOSE_PROFILES=clamav` 控制：
 | **公网生产 / 4C8G+** | `COMPOSE_PROFILES=clamav` 且 `OMNINEST_CLAMAV_ENABLED=true`；可按需 `photo-ai` |
 
 关闭病毒扫描时必须同时：不启动 clamav 容器、后端 `OMNINEST_CLAMAV_ENABLED=false`，
-并确认配置中心 `clamav.enabled` 为 false（V002 内置目录默认 true 时会在安装后覆盖环境变量，需在管理端或 SQL 改写）：
+并确认配置中心 `clamav.enabled` 为 false（安装向导后若仍为 true 会在配置中心覆盖环境变量，需在管理端或 SQL 改写）：
 
 ```sql
 UPDATE omni.config_entries SET config_value = 'false' WHERE config_key = 'clamav.enabled';
