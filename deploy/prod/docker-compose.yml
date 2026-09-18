@@ -377,7 +377,7 @@ services:
     logging: *default-logging
 
   netease-music-api:
-    image: omninest-netease-music-api:latest
+    image: ${OMNINEST_NETEASE_IMAGE:-omninest-netease-music-api}:${OMNINEST_IMAGE_TAG:-0.1.0}
     build: ../netease-api
     environment:
       TZ: Asia/Shanghai
