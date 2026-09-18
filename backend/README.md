@@ -45,7 +45,7 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 | `worker` | 消费 RabbitMQ 后台任务，执行索引、导入、解析、缩略图、媒体和安全处理 |
 | `scheduler` | 执行清理、恢复、重试、保留策略和定时调度 |
 
-通过 `OMNINEST_ROLE` 或 Spring Profile 选择运行配置。开发环境可以使用 API 进程承载部分 Reader 漫画消费逻辑；生产环境按部署编排拆分运行角色，但仍使用同一个应用镜像。
+通过 `OMNINEST_ROLE` 选择运行角色（api/worker/scheduler），Spring Profile（`OMNINEST_PROFILE`）只决定 dev/prod 配置集。开发环境可以使用 API 进程承载部分 Reader 漫画消费逻辑；生产环境按部署编排拆分运行角色，但仍使用同一个应用镜像。裸机直跑生产时必须设置 `OMNINEST_PROFILE=prod`——默认 dev 配置集会开放 Swagger 与 actuator 细节端点。
 
 ## 模块结构
 

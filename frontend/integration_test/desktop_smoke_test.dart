@@ -5,7 +5,11 @@ import 'package:omninest/main.dart' as app;
 
 /// 0.1.0 Windows/桌面业务冒烟：登录 → Portal → 模块入口 → 退出。
 ///
-/// 需后端可达（dart-define API）且账号 admin / TestAdmin!2026。
+/// 需后端可达（dart-define API）与冒烟账号；账号不再硬编码，
+/// 通过 --dart-define=OMNINEST_SMOKE_USERNAME / OMNINEST_SMOKE_PASSWORD 注入。
+const _smokeUsername = String.fromEnvironment('OMNINEST_SMOKE_USERNAME');
+const _smokePassword = String.fromEnvironment('OMNINEST_SMOKE_PASSWORD');
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -13,14 +17,21 @@ void main() {
     app.main();
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
+    if (_smokeUsername.isEmpty || _smokePassword.isEmpty) {
+      fail(
+        '缺少冒烟账号：请通过 --dart-define=OMNINEST_SMOKE_USERNAME 与 '
+        'OMNINEST_SMOKE_PASSWORD 注入测试账号后重跑',
+      );
+    }
+
     // 冷启动可能已有会话，先等一帧；若在登录页则登录。
     final usernameField = find.widgetWithText(TextFormField, '用户名');
     final passwordField = find.widgetWithText(TextFormField, '密码');
 
     if (usernameField.evaluate().isNotEmpty &&
         passwordField.evaluate().isNotEmpty) {
-      await tester.enterText(usernameField, 'admin');
-      await tester.enterText(passwordField, 'TestAdmin!2026');
+      await tester.enterText(usernameField, _smokeUsername);
+      await tester.enterText(passwordField, _smokePassword);
       final loginBtn = find.widgetWithText(FilledButton, '登录');
       if (loginBtn.evaluate().isEmpty) {
         final btns = find.byType(FilledButton);

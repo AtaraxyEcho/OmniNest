@@ -305,3 +305,18 @@ sh ../prod/scripts/restore.sh ./backups/omninest-<时间戳>
 - Redis、RabbitMQ、Lucene 索引均为可重建数据，不在备份范围。
 - 跨版本恢复前先阅读根仓库发布说明，确认 Flyway 基线兼容。
 
+## 运维备忘
+
+- **ClamAV 扫描时限口径**：代码默认 10s / yml 护栏 120s 仅是回退，权威值是配置中心
+  `clamav.timeout-millis`（基线 2,000,000ms 活性护栏）；调整时以后者为准。
+- **Prometheus 抓取**：`/actuator/prometheus` 需要 `TOKEN_ACCESS` 权限的 JWT，
+  抓取器需带登录令牌访问；该端点不经 Nginx 转发，仅内网可达。
+- **裸机部署 profile**：直跑 jar 的生产部署必须设置 `OMNINEST_PROFILE=prod`。
+- **RabbitMQ 旧队列清理**：2026-09 队列改名前部署过的环境会残留旧
+  `omninest.tasks.*` 交换机/队列，升级后执行一次
+  `docker compose exec rabbitmq rabbitmqctl stop_app && rabbitmqctl reset && start_app`
+  或在管理界面手动删除旧条目（会清空消息，仅在停机窗口执行）。
+- **Aria2 端口**：6888 tcp/udp 是 BT/DHT 监听口（功能必需、默认映射到宿主机），
+  公网部署建议用防火墙限制来源网段。
+- **备份脚本**：见上文「备份与恢复」章节，宿主 crontab 每日执行。
+

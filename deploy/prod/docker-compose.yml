@@ -70,7 +70,7 @@ x-default-logging: &default-logging
     max-file: "3"
 
 x-backend-service: &backend-service
-  image: ${OMNINEST_BACKEND_IMAGE:-omninest/backend}:${OMNINEST_IMAGE_TAG:-latest}
+  image: ${OMNINEST_BACKEND_IMAGE:-omninest/backend}:${OMNINEST_IMAGE_TAG:-0.1.0}
   build:
     context: ../../backend
     dockerfile: ../deploy/backend/Dockerfile
@@ -103,7 +103,7 @@ x-backend-service: &backend-service
 
 services:
   nginx:
-    image: ${OMNINEST_NGINX_IMAGE:-omninest/nginx}:${OMNINEST_IMAGE_TAG:-latest}
+    image: ${OMNINEST_NGINX_IMAGE:-omninest/nginx}:${OMNINEST_IMAGE_TAG:-0.1.0}
     build:
       context: ../..
       dockerfile: deploy/prod/nginx/Dockerfile

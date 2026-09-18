@@ -8808,9 +8808,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get readerRestoreThisVersion => 'Restore this version';
 
   @override
-  String get readerFeatureComingSoon => 'This feature is coming soon';
-
-  @override
   String get videoImportSubtitle => 'Import subtitle file';
 
   @override

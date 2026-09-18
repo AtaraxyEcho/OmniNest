@@ -3859,7 +3859,6 @@
   "readerNoVersionHistory": "No version history",
   "readerVersionHistoryHint": "Versions are automatically recorded when reading progress changes",
   "readerRestoreThisVersion": "Restore this version",
-  "readerFeatureComingSoon": "This feature is coming soon",
   "videoImportSubtitle": "Import subtitle file",
   "videoImportedSubtitle": "Imported subtitle",
   "videoLocalSubtitle": "Local subtitle",

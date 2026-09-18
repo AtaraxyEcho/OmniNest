@@ -16152,12 +16152,6 @@ abstract class AppLocalizations {
   /// **'Restore this version'**
   String get readerRestoreThisVersion;
 
-  /// No description provided for @readerFeatureComingSoon.
-  ///
-  /// In en, this message translates to:
-  /// **'This feature is coming soon'**
-  String get readerFeatureComingSoon;
-
   /// No description provided for @videoImportSubtitle.
   ///
   /// In en, this message translates to:

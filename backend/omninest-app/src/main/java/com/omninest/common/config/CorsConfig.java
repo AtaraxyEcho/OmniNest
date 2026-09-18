@@ -30,7 +30,6 @@ public class CorsConfig {
                 "X-Client-Platform",
                 "X-Device-Id",
                 "X-Device-Name",
-                "X-Internal-Token",
                 "X-Request-Id",
                 "X-Requested-With",
                 "X-Setup-Token"

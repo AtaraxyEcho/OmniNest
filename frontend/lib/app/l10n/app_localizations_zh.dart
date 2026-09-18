@@ -8552,9 +8552,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get readerRestoreThisVersion => '恢复此版本';
 
   @override
-  String get readerFeatureComingSoon => '此功能即将上线';
-
-  @override
   String get videoImportSubtitle => '导入字幕文件';
 
   @override
