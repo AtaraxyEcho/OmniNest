@@ -168,6 +168,7 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
                   errorWidget:
                       (context, url, error) =>
                           const ColoredBox(color: _transparent),
+                  errorListener: (_) => _handleLoadError(primary),
                 ),
               ),
             ],
@@ -183,7 +184,10 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
           memCacheHeight: cacheHeight,
           // 加载中绝不能显示默认壁纸海报,否则全屏尺寸切换会闪一帧错误壁纸。
           placeholder: (context, url) => const ColoredBox(color: _loadingColor),
-          errorWidget: (context, url, error) => _buildFallback(url),
+          // 失败兜底必须是纯展示:地址切换与回调在 [_handleLoadError] 中
+          // 于 build 之外完成,禁止在 build 期产生副作用。
+          errorWidget: (context, url, error) => _buildAssetFallback(),
+          errorListener: (_) => _handleLoadError(primary),
         );
       },
     );
@@ -201,31 +205,20 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
     return url;
   }
 
-  Widget _buildFallback(String failedUrl) {
-    _notifyUrlFailedOnce();
-    if (_failedUrl == null) {
-      _failedUrl = failedUrl;
-      final next = _resolveUrl();
-      if (next != null && next != failedUrl) {
-        return CachedNetworkImage(
-          imageUrl: next,
-          cacheKey: widget.cacheKey,
-          fit: widget.fit,
-          filterQuality: FilterQuality.medium,
-          placeholder: (context, url) => const ColoredBox(color: _loadingColor),
-          errorWidget: (context, url, error) => _buildAssetFallback(),
-        );
-      }
-    }
-    return _buildAssetFallback();
-  }
-
-  void _notifyUrlFailedOnce() {
-    if (_urlFailedNotified) {
+  /// 图片流错误回调(发生在 build 之外):先通知一次上层刷新签名 URL,
+  /// 存在备用地址且尚未切换时切换到备用地址重建,否则维持失败兜底。
+  void _handleLoadError(String failedUrl) {
+    if (!mounted) {
       return;
     }
-    _urlFailedNotified = true;
-    widget.onUrlFailed?.call();
+    if (!_urlFailedNotified) {
+      _urlFailedNotified = true;
+      widget.onUrlFailed?.call();
+    }
+    final fallback = _nonEmpty(widget.fallbackUrl);
+    if (_failedUrl == null && fallback != null && fallback != failedUrl) {
+      setState(() => _failedUrl = failedUrl);
+    }
   }
 
   Widget _buildAssetFallback() {
