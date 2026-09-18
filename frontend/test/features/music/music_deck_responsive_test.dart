@@ -257,7 +257,8 @@ void main() {
     expect(ultraWide.mainContentWidth, greaterThan(2800));
     expect(ultraWide.widePanelWidth, 380);
     expect(ultraWide.playerMaxWidth, 1480);
-    expect(ultraWide.searchMaxWidth, AppControlTokens.searchFieldWidth + 80);
+    // 搜索框上限与其他模块顶栏搜索令牌一致,不再随视口放宽。
+    expect(ultraWide.searchMaxWidth, AppControlTokens.searchFieldWidth);
   });
 
   test('桌面布局在最小桌面宽度下仍保留有效主内容区', () {

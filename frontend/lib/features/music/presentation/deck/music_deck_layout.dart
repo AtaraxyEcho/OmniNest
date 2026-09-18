@@ -34,10 +34,10 @@ class MusicDeckDesktopLayout {
       widePanelWidth:
           showWidePanel ? (viewportWidth * 0.145).clamp(270.0, 380.0) : 0,
       playerMaxWidth: (viewportWidth * 0.52).clamp(920.0, 1480.0),
-      // 与其他模块顶栏搜索对齐：不再按视口放大到 480–760。
-      searchMaxWidth: (availableWidth * 0.18).clamp(
+      // 搜索框与其他模块顶栏搜索对齐:上限取统一搜索框令牌宽,不再随视口放大。
+      searchMaxWidth: (availableWidth * 0.14).clamp(
+        AppControlTokens.searchFieldWidth * 0.8,
         AppControlTokens.searchFieldWidth,
-        AppControlTokens.searchFieldWidth + 80,
       ),
     );
   }

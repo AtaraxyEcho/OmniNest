@@ -30,7 +30,7 @@ Future<void> _ensureServedImageBytes() async {
     Paint()..color = const Color(0xFFC07840),
   );
   final picture = recorder.endRecording();
-  // 源图宽于 preview 解码目标 1280，保证两档解码都是降采样（引擎不放大小图）。
+  // 源图宽于 preview 解码目标（≥1280 档），保证两档解码都是降采样（引擎不放大小图）。
   final image = await picture.toImage(1300, 800);
   final data = await image.toByteData(format: ui.ImageByteFormat.png);
   _servedImageBytes = data!.buffer.asUint8List();
@@ -303,11 +303,17 @@ void _expectNoTransparentLayer(WidgetTester tester) {
   );
 }
 
-/// 屏宽物理像素宽的 preview 档位图（1280×dpr1）是否已渲染。
+/// 与页面一致的 preview 档解码宽(dpr1、窗口宽回退 1280;绑定显示器尺寸)。
+int get _previewDecodeWidth =>
+    SlideshowImageCache.previewDecodeWidthFor(dpr: 1, fallbackWidth: 1280);
+
+/// preview 档位图是否已渲染:引擎不放大解码,实际宽为 min(目标宽, 源图 1300)。
 bool _hasPreviewTierImage(WidgetTester tester) {
+  final expectedWidth =
+      _previewDecodeWidth >= 1300 ? 1300 : _previewDecodeWidth;
   return tester
       .widgetList<RawImage>(find.byType(RawImage))
-      .any((widget) => widget.image?.width == 1280);
+      .any((widget) => widget.image?.width == expectedWidth);
 }
 
 void main() {
@@ -317,9 +323,9 @@ void main() {
     await _mockNetworkImages(() async {
       await _warmImageCache(tester, [
         (photos[0], ImageQuality.thumbnail, 400),
-        (photos[0], ImageQuality.preview, 1280),
+        (photos[0], ImageQuality.preview, _previewDecodeWidth),
         (photos[1], ImageQuality.thumbnail, 400),
-        (photos[1], ImageQuality.preview, 1280),
+        (photos[1], ImageQuality.preview, _previewDecodeWidth),
       ]);
       await _pumpSlideshow(tester, photos);
       await tester.pump();
@@ -336,9 +342,9 @@ void main() {
     await _mockNetworkImages(() async {
       await _warmImageCache(tester, [
         (photos[0], ImageQuality.thumbnail, 400),
-        (photos[0], ImageQuality.preview, 1280),
+        (photos[0], ImageQuality.preview, _previewDecodeWidth),
         (photos[1], ImageQuality.thumbnail, 400),
-        (photos[1], ImageQuality.preview, 1280),
+        (photos[1], ImageQuality.preview, _previewDecodeWidth),
       ]);
       await _pumpSlideshow(tester, photos);
       await tester.pump();
@@ -421,9 +427,9 @@ void main() {
     await _mockNetworkImages(() async {
       await _warmImageCache(tester, [
         (photos[0], ImageQuality.thumbnail, 400),
-        (photos[0], ImageQuality.preview, 1280),
+        (photos[0], ImageQuality.preview, _previewDecodeWidth),
         (photos[1], ImageQuality.thumbnail, 400),
-        (photos[1], ImageQuality.preview, 1280),
+        (photos[1], ImageQuality.preview, _previewDecodeWidth),
       ]);
       await _pumpSlideshow(tester, photos);
       await tester.pump();

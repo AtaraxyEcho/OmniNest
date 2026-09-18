@@ -150,6 +150,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 两次 endOfFrame 让 CachedNetworkImage 有机会先用内存缓存封面
   /// 绘制一帧，再触发窗口吸附到显示器。
   Future<void> _bootstrapSlideshow() async {
+    // 进场即预热首图两档:取图/解码与原生全屏吸附并行。preview 档解码宽
+    // 绑定显示器物理尺寸(见 SlideshowImageCache),预解码即终档,吸附完成
+    // 时缩略图大概率已就绪、高清档已在途,消除进场后"等全宽重解码"的空窗。
+    unawaited(_prewarmInitialImage());
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
       return;
@@ -168,6 +172,20 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       return;
     }
     await _loadInitialImage();
+  }
+
+  Future<void> _prewarmInitialImage() async {
+    if (!mounted) {
+      return;
+    }
+    final photo = _photos[_current];
+    if (!_hasImage(photo)) {
+      return;
+    }
+    await _imageCache.obtain(photo, ImageQuality.thumbnail, context);
+    if (mounted) {
+      await _imageCache.obtain(photo, ImageQuality.preview, context);
+    }
   }
 
   void _onProgressStatus(AnimationStatus status) {

@@ -26,6 +26,28 @@ class SlideshowImageCache {
   /// 解码窗口半径（保留 current ± radius）。
   final int radius;
 
+  /// 显示器物理像素宽;窗口 maximize/全屏不改变该值。
+  static double? _displayPhysicalWidth() {
+    final views = ui.PlatformDispatcher.instance.views;
+    if (views.isEmpty) {
+      return null;
+    }
+    final width = views.first.display.size.width;
+    return width.isFinite && width > 0 ? width : null;
+  }
+
+  /// preview 档解码宽:绑定显示器物理像素而非窗口尺寸——全屏切换/窗口缩放
+  /// 不更换解码键,且可在进入全屏吸附前预解码出最终档位,首屏不再等
+  /// "窗口宽→全屏宽"的二次解码。上限 4096 覆盖 4K 全宽且不超常规纹理上限。
+  @visibleForTesting
+  static int previewDecodeWidthFor({
+    required double dpr,
+    required double fallbackWidth,
+  }) {
+    final displayWidth = _displayPhysicalWidth() ?? fallbackWidth;
+    return (displayWidth * dpr).round().clamp(1, 4096);
+  }
+
   /// 单张解码兜底超时：超时进入 failed（页面提供重试），避免无限 spinner。
   static const _obtainTimeout = Duration(seconds: 15);
 
@@ -87,11 +109,12 @@ class SlideshowImageCache {
         quality == ImageQuality.thumbnail ? item.coverUrl : item.sourceUrl;
     if (url == null || url.isEmpty) return null;
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final screenSize = MediaQuery.sizeOf(context);
     final memCacheWidth = switch (quality) {
       ImageQuality.thumbnail => 400,
-      // preview 档按物理像素宽解码，上限 4096 覆盖 4K 全宽显示且不超常规纹理上限。
-      ImageQuality.preview => (screenSize.width * dpr).round().clamp(1, 4096),
+      ImageQuality.preview => previewDecodeWidthFor(
+        dpr: dpr,
+        fallbackWidth: MediaQuery.sizeOf(context).width,
+      ),
     };
     final cacheKey =
         quality == ImageQuality.thumbnail

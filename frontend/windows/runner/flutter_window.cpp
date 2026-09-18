@@ -264,12 +264,26 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
     MARGINS margins = {0, 0, 0, 0};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
     const RECT& monitor = monitor_info.rcMonitor;
-    // SWP_NOCOPYBITS: do not blit stale pre-fullscreen bits into the new
-    // surface (classic black/white flash source on size-preserving copies).
-    SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
-                 monitor.right - monitor.left, monitor.bottom - monitor.top,
-                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW |
-                     SWP_NOCOPYBITS);
+    RECT current = {};
+    const bool geometry_matches =
+        GetWindowRect(hwnd, &current) && current.left == monitor.left &&
+        current.top == monitor.top && current.right == monitor.right &&
+        current.bottom == monitor.bottom;
+    if (geometry_matches) {
+      // Already snapped to the monitor rect (e.g. re-entering fullscreen while
+      // fullscreen): replay only the frame change. Skipping the size move
+      // avoids a Flutter surface rebuild and its black-frame gap.
+      SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0,
+                   SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER |
+                       SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOCOPYBITS);
+    } else {
+      // SWP_NOCOPYBITS: do not blit stale pre-fullscreen bits into the new
+      // surface (classic black/white flash source on size-preserving copies).
+      SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
+                   monitor.right - monitor.left, monitor.bottom - monitor.top,
+                   SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW |
+                       SWP_NOCOPYBITS);
+    }
     SyncFlutterViewChild();
     DwmFlush();
     ForceFlutterRedraw();
