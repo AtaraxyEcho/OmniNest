@@ -5,12 +5,14 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:crypto/crypto.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/features/photos/application/photo_backup_preferences.dart';
 import 'package:omninest/features/photos/data/photo_api.dart';
 import 'package:photo_manager/photo_manager.dart';
 
 /// Android 设备照片自动备份服务
 ///
-/// 枚举设备照片 → 计算哈希 → 跳过已备份 → 上传新照片 → 通知进度
+/// 枚举设备照片 → 计算哈希 → 跳过已备份 → 上传新照片 → 通知进度。
+/// 范围由偏好决定：全部相册（聚合桶）或仅用户自选的相册集合。
 class AndroidPhotoBackupService {
   AndroidPhotoBackupService({
     required this.photoApi,
@@ -29,7 +31,11 @@ class AndroidPhotoBackupService {
   static const int _batchSize = 20;
 
   /// 执行备份流程
-  Future<BackupResult> runBackup({required String deviceId}) async {
+  Future<BackupResult> runBackup({
+    required String deviceId,
+    PhotoBackupScope scope = PhotoBackupScope.all,
+    Set<String> selectedAlbumIds = const <String>{},
+  }) async {
     // 检查网络：仅 WiFi 时备份
     final connectivity = await Connectivity().checkConnectivity();
     if (!connectivity.contains(ConnectivityResult.wifi)) {
@@ -54,8 +60,26 @@ class AndroidPhotoBackupService {
       return BackupResult.skipped(l10n.backupSkipNoAlbums);
     }
 
-    final AssetPathEntity allPhotos = albums.first;
-    final int totalCount = await allPhotos.assetCountAsync;
+    // 范围过滤：自选仅枚举勾选相册；全部沿用「全部照片」聚合桶。
+    final List<AssetPathEntity> targets;
+    if (scope == PhotoBackupScope.selected) {
+      targets =
+          albums
+              .where(
+                (album) => !album.isAll && selectedAlbumIds.contains(album.id),
+              )
+              .toList();
+      if (targets.isEmpty) {
+        return BackupResult.skipped(l10n.backupSkipNoAlbums);
+      }
+    } else {
+      targets = [albums.first];
+    }
+
+    int totalCount = 0;
+    for (final album in targets) {
+      totalCount += await album.assetCountAsync;
+    }
     if (totalCount == 0) {
       return BackupResult.skipped(l10n.backupSkipNoPhotos);
     }
@@ -64,58 +88,62 @@ class AndroidPhotoBackupService {
     int uploaded = 0;
     int skipped = 0;
     int failed = 0;
+    int processed = 0;
 
-    for (int offset = 0; offset < totalCount; offset += _batchSize) {
-      final List<AssetEntity> assets = await allPhotos.getAssetListPaged(
-        page: offset ~/ _batchSize,
-        size: _batchSize,
-      );
+    for (final album in targets) {
+      final int albumCount = await album.assetCountAsync;
+      for (int offset = 0; offset < albumCount; offset += _batchSize) {
+        final List<AssetEntity> assets = await album.getAssetListPaged(
+          page: offset ~/ _batchSize,
+          size: _batchSize,
+        );
 
-      // 计算哈希
-      final Map<String, AssetEntity> hashMap = {};
-      for (final asset in assets) {
-        try {
-          final File? file = await asset.file;
-          if (file == null) continue;
-          final String hash = await _computeHash(file);
-          hashMap[hash] = asset;
-        } catch (_) {
-          failed++;
-        }
-      }
-
-      // 查询已备份的哈希
-      final List<String> existingHashes = await photoApi.checkDuplicate(
-        hashMap.keys.toList(),
-      );
-      final Set<String> existingSet = existingHashes.toSet();
-
-      // 上传新照片
-      for (final entry in hashMap.entries) {
-        if (existingSet.contains(entry.key)) {
-          skipped++;
-          continue;
-        }
-        try {
-          final File? file = await entry.value.file;
-          if (file == null) {
+        // 计算哈希
+        final Map<String, AssetEntity> hashMap = {};
+        for (final asset in assets) {
+          try {
+            final File? file = await asset.file;
+            if (file == null) continue;
+            final String hash = await _computeHash(file);
+            hashMap[hash] = asset;
+          } catch (_) {
             failed++;
+          }
+        }
+
+        // 查询已备份的哈希
+        final List<String> existingHashes = await photoApi.checkDuplicate(
+          hashMap.keys.toList(),
+        );
+        final Set<String> existingSet = existingHashes.toSet();
+
+        // 上传新照片
+        for (final entry in hashMap.entries) {
+          if (existingSet.contains(entry.key)) {
+            skipped++;
             continue;
           }
-          await onUpload(file.path);
-          uploaded++;
-        } catch (_) {
-          failed++;
+          try {
+            final File? file = await entry.value.file;
+            if (file == null) {
+              failed++;
+              continue;
+            }
+            await onUpload(file.path);
+            uploaded++;
+          } catch (_) {
+            failed++;
+          }
         }
-      }
 
-      // 更新通知进度
-      final int processed = offset + assets.length;
-      await _showProgress(
-        current: processed,
-        total: totalCount,
-        uploaded: uploaded,
-      );
+        // 更新通知进度
+        processed += assets.length;
+        await _showProgress(
+          current: processed,
+          total: totalCount,
+          uploaded: uploaded,
+        );
+      }
     }
 
     // 上报备份状态

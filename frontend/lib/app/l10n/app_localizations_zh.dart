@@ -537,6 +537,39 @@ class AppLocalizationsZh extends AppLocalizations {
       '开启后将本机相册的全部照片自动上传到你的 OmniNest 服务器（仅 Android，仅 Wi-Fi 时执行）';
 
   @override
+  String get photoBackupConfirmTitle => '开启自动备份？';
+
+  @override
+  String get photoBackupConfirmBody =>
+      '将按所选范围自动上传照片到你的 OmniNest 服务器（仅 Wi-Fi、仅 Android）。';
+
+  @override
+  String get photoBackupScopeOptionAll => '全部相册';
+
+  @override
+  String get photoBackupScopeOptionSelected => '自选相册';
+
+  @override
+  String get photoBackupConfirmEnable => '开启';
+
+  @override
+  String get photoBackupAlbumPickerTitle => '选择要备份的相册';
+
+  @override
+  String get photoBackupAlbumPickerEmpty => '未获取到相册，请检查相册访问权限';
+
+  @override
+  String get photoBackupNeedSelectAlbum => '请至少选择一个相册';
+
+  @override
+  String get photoBackupScopeSummaryAll => '当前范围：全部相册';
+
+  @override
+  String photoBackupScopeSummarySelected(int count) {
+    return '当前范围：已选 $count 个相册';
+  }
+
+  @override
   String get profileManageBackdrop => '管理背景';
 
   @override

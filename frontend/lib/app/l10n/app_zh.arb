@@ -210,6 +210,21 @@
   "profileSectionAbout": "关于",
   "photoBackupBackgroundTitle": "自动备份本机相册",
   "photoBackupBackgroundSubtitle": "开启后将本机相册的全部照片自动上传到你的 OmniNest 服务器（仅 Android，仅 Wi-Fi 时执行）",
+  "photoBackupConfirmTitle": "开启自动备份？",
+  "photoBackupConfirmBody": "将按所选范围自动上传照片到你的 OmniNest 服务器（仅 Wi-Fi、仅 Android）。",
+  "photoBackupScopeOptionAll": "全部相册",
+  "photoBackupScopeOptionSelected": "自选相册",
+  "photoBackupConfirmEnable": "开启",
+  "photoBackupAlbumPickerTitle": "选择要备份的相册",
+  "photoBackupAlbumPickerEmpty": "未获取到相册，请检查相册访问权限",
+  "photoBackupNeedSelectAlbum": "请至少选择一个相册",
+  "photoBackupScopeSummaryAll": "当前范围：全部相册",
+  "photoBackupScopeSummarySelected": "当前范围：已选 {count} 个相册",
+  "@photoBackupScopeSummarySelected": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "profileManageBackdrop": "管理背景",
   "profileUsername": "用户名",
   "profileEmail": "邮箱",

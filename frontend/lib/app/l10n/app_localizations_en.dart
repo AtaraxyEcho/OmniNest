@@ -553,6 +553,40 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatically uploads all photos in your device gallery to your OmniNest server (Android only, Wi-Fi only)';
 
   @override
+  String get photoBackupConfirmTitle => 'Enable auto backup?';
+
+  @override
+  String get photoBackupConfirmBody =>
+      'Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only, Wi-Fi only).';
+
+  @override
+  String get photoBackupScopeOptionAll => 'All albums';
+
+  @override
+  String get photoBackupScopeOptionSelected => 'Selected albums';
+
+  @override
+  String get photoBackupConfirmEnable => 'Enable';
+
+  @override
+  String get photoBackupAlbumPickerTitle => 'Choose albums to back up';
+
+  @override
+  String get photoBackupAlbumPickerEmpty =>
+      'No albums found. Check photo access permission.';
+
+  @override
+  String get photoBackupNeedSelectAlbum => 'Select at least one album';
+
+  @override
+  String get photoBackupScopeSummaryAll => 'Scope: all albums';
+
+  @override
+  String photoBackupScopeSummarySelected(int count) {
+    return 'Scope: $count albums selected';
+  }
+
+  @override
   String get profileManageBackdrop => 'Manage background';
 
   @override

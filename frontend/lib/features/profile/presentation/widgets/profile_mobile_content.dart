@@ -9,10 +9,12 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/photos/application/photo_backup_preferences.dart';
 import 'package:omninest/features/photos/presentation/widgets/battery_optimization_card.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_backup_enable_flow.dart';
 import 'package:omninest/features/profile/presentation/widgets/change_password_dialog.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
 
@@ -168,30 +170,37 @@ class ProfileMobileContent extends ConsumerWidget {
           MobileSettingsGroup(
             title: l10n.profileSectionBackup,
             children: [
-              MobileSettingsTile(
-                icon: Icons.cloud_sync_outlined,
-                title: l10n.photoBackupBackgroundTitle,
-                subtitle: l10n.photoBackupBackgroundSubtitle,
-                trailing: Consumer(
-                  builder: (context, tileRef, _) {
-                    final enabled =
-                        tileRef
-                            .watch(photoBackupPreferencesControllerProvider)
-                            .asData
-                            ?.value ??
-                        false;
-                    return Switch(
-                      value: enabled,
-                      onChanged: (value) {
-                        tileRef
-                            .read(
-                              photoBackupPreferencesControllerProvider.notifier,
-                            )
-                            .setEnabled(value);
-                      },
-                    );
-                  },
-                ),
+              Consumer(
+                builder: (context, tileRef, _) {
+                  final settings =
+                      tileRef
+                          .watch(photoBackupPreferencesControllerProvider)
+                          .asData
+                          ?.value;
+                  final scopeLabel =
+                      settings == null || settings.scope == PhotoBackupScope.all
+                          ? l10n.photoBackupScopeSummaryAll
+                          : l10n.photoBackupScopeSummarySelected(
+                            settings.selectedAlbumIds.length,
+                          );
+                  return MobileSettingsTile(
+                    icon: Icons.cloud_sync_outlined,
+                    title: l10n.photoBackupBackgroundTitle,
+                    subtitle:
+                        '${l10n.photoBackupBackgroundSubtitle}\n$scopeLabel',
+                    trailing: Switch(
+                      value: settings?.enabled ?? false,
+                      onChanged:
+                          isAndroidPlatform
+                              ? (value) => showPhotoBackupEnableFlow(
+                                context,
+                                tileRef,
+                                enable: value,
+                              )
+                              : null,
+                    ),
+                  );
+                },
               ),
               const Padding(
                 padding: EdgeInsets.fromLTRB(16, 0, 16, 12),

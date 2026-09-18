@@ -1112,6 +1112,66 @@ abstract class AppLocalizations {
   /// **'Automatically uploads all photos in your device gallery to your OmniNest server (Android only, Wi-Fi only)'**
   String get photoBackupBackgroundSubtitle;
 
+  /// No description provided for @photoBackupConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable auto backup?'**
+  String get photoBackupConfirmTitle;
+
+  /// No description provided for @photoBackupConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only, Wi-Fi only).'**
+  String get photoBackupConfirmBody;
+
+  /// No description provided for @photoBackupScopeOptionAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All albums'**
+  String get photoBackupScopeOptionAll;
+
+  /// No description provided for @photoBackupScopeOptionSelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Selected albums'**
+  String get photoBackupScopeOptionSelected;
+
+  /// No description provided for @photoBackupConfirmEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable'**
+  String get photoBackupConfirmEnable;
+
+  /// No description provided for @photoBackupAlbumPickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose albums to back up'**
+  String get photoBackupAlbumPickerTitle;
+
+  /// No description provided for @photoBackupAlbumPickerEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No albums found. Check photo access permission.'**
+  String get photoBackupAlbumPickerEmpty;
+
+  /// No description provided for @photoBackupNeedSelectAlbum.
+  ///
+  /// In en, this message translates to:
+  /// **'Select at least one album'**
+  String get photoBackupNeedSelectAlbum;
+
+  /// No description provided for @photoBackupScopeSummaryAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Scope: all albums'**
+  String get photoBackupScopeSummaryAll;
+
+  /// No description provided for @photoBackupScopeSummarySelected.
+  ///
+  /// In en, this message translates to:
+  /// **'Scope: {count} albums selected'**
+  String photoBackupScopeSummarySelected(int count);
+
   /// No description provided for @profileManageBackdrop.
   ///
   /// In en, this message translates to:

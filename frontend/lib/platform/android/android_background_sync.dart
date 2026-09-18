@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
 import 'package:omninest/features/files/domain/file_repository.dart';
+import 'package:omninest/features/photos/application/photo_backup_preferences.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/platform/android/android_photo_backup.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -83,6 +84,7 @@ void callbackDispatcher() {
       container = ProviderContainer();
       final l10n = await _loadAppLocalizations();
       final deviceId = await AndroidBackgroundSync.getDeviceId();
+      final backupSettings = await readPhotoBackupSettings();
       final photoApi = container.read(photoApiProvider);
       final fileRepository = container.read(fileRepositoryProvider);
       final backupService = AndroidPhotoBackupService(
@@ -90,7 +92,11 @@ void callbackDispatcher() {
         onUpload: (filePath) => _uploadFile(fileRepository, filePath),
         l10n: l10n,
       );
-      final result = await backupService.runBackup(deviceId: deviceId);
+      final result = await backupService.runBackup(
+        deviceId: deviceId,
+        scope: backupSettings.scope,
+        selectedAlbumIds: backupSettings.selectedAlbumIds,
+      );
       return result.status != BackupStatus.failure;
     } catch (e) {
       return false;

@@ -16,6 +16,9 @@ const _allowedViolations = <String>{
   'CROSS_FEATURE_INTERNAL lib/features/portal/presentation/widgets/reading_progress_widget.dart -> package:omninest/features/reader/presentation/widgets/reader_cover_image.dart',
   'CROSS_FEATURE_INTERNAL lib/features/profile/presentation/widgets/profile_backup_panel.dart -> package:omninest/features/photos/presentation/widgets/battery_optimization_card.dart',
   'CROSS_FEATURE_INTERNAL lib/features/profile/presentation/widgets/profile_mobile_content.dart -> package:omninest/features/photos/presentation/widgets/battery_optimization_card.dart',
+  // 个人中心承载照片备份开关；二次确认与相册选择交互流归 photos 域，跨 feature 表现层复用为受控例外。
+  'CROSS_FEATURE_INTERNAL lib/features/profile/presentation/widgets/profile_backup_panel.dart -> package:omninest/features/photos/presentation/widgets/photo_backup_enable_flow.dart',
+  'CROSS_FEATURE_INTERNAL lib/features/profile/presentation/widgets/profile_mobile_content.dart -> package:omninest/features/photos/presentation/widgets/photo_backup_enable_flow.dart',
   'OVERSIZED_SOURCE lib/features/music/presentation/deck/music_deck_content.dart lines=1337',
   'OVERSIZED_SOURCE lib/features/reader/presentation/pages/reader_item_detail_page.dart lines=1216',
   'OVERSIZED_SOURCE lib/features/reader/presentation/pages/reader_view_page.dart lines=1286',

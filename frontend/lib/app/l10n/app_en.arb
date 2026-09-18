@@ -210,6 +210,21 @@
   "profileSectionAbout": "About",
   "photoBackupBackgroundTitle": "Auto-upload device photos",
   "photoBackupBackgroundSubtitle": "Automatically uploads all photos in your device gallery to your OmniNest server (Android only, Wi-Fi only)",
+  "photoBackupConfirmTitle": "Enable auto backup?",
+  "photoBackupConfirmBody": "Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only, Wi-Fi only).",
+  "photoBackupScopeOptionAll": "All albums",
+  "photoBackupScopeOptionSelected": "Selected albums",
+  "photoBackupConfirmEnable": "Enable",
+  "photoBackupAlbumPickerTitle": "Choose albums to back up",
+  "photoBackupAlbumPickerEmpty": "No albums found. Check photo access permission.",
+  "photoBackupNeedSelectAlbum": "Select at least one album",
+  "photoBackupScopeSummaryAll": "Scope: all albums",
+  "photoBackupScopeSummarySelected": "Scope: {count} albums selected",
+  "@photoBackupScopeSummarySelected": {
+    "placeholders": {
+      "count": {"type": "int"}
+    }
+  },
   "profileManageBackdrop": "Manage background",
   "profileUsername": "Username",
   "profileEmail": "Email",
