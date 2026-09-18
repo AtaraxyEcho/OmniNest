@@ -82,38 +82,31 @@ void main() {
     expect(prefs.getString(photoBackupScopeKey), 'all');
   }, variant: TargetPlatformVariant.only(TargetPlatform.android));
 
-  testWidgets('自选相册空集确认被拦截，勾选后按集合开启', (tester) async {
+  testWidgets('单弹窗内自选：空集时开启置灰，勾选后按集合开启', (tester) async {
     await _pumpPanel(tester);
 
-    // 第一步：确认弹窗选择自选相册。
+    // 打开开关 → 单个确认弹窗；切到自选后内联展开相册清单。
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     await tester.tap(find.text('自选相册'));
-    await tester.pump();
-    await tester.tap(find.text('开启'));
     await tester.pumpAndSettle();
 
-    // 相册选择器出现；未勾选直接确认 → 拦截提示并关闭流程，不开启。
-    expect(find.text('选择要备份的相册'), findsOneWidget);
-    await tester.tap(find.text('确认'));
-    await tester.pump();
-    expect(find.text('请至少选择一个相册'), findsOneWidget);
-    final prefs = await SharedPreferences.getInstance();
-    expect(prefs.getBool(photoBackupBackgroundEnabledKey), isNull);
-    await tester.pump(const Duration(seconds: 4));
+    expect(find.text('相机'), findsOneWidget);
+    expect(find.text('截图'), findsOneWidget);
 
-    // 第二轮：重新开启并勾选「相机」后确认 → 按自选集合开启。
-    await tester.tap(find.byType(Switch));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('自选相册'));
-    await tester.pump();
-    await tester.tap(find.text('开启'));
-    await tester.pumpAndSettle();
+    // 未勾选任何相册：「开启」按钮置灰，无法确认。
+    FilledButton enableButton() =>
+        tester.widget<FilledButton>(find.byType(FilledButton));
+    expect(enableButton().onPressed, isNull);
+
+    // 勾选「相机」→ 按钮激活 → 确认后按自选集合开启。
     await tester.tap(find.text('相机'));
     await tester.pump();
-    await tester.tap(find.text('确认'));
+    expect(enableButton().onPressed, isNotNull);
+    await tester.tap(find.byType(FilledButton));
     await tester.pumpAndSettle();
 
+    final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool(photoBackupBackgroundEnabledKey), isTrue);
     expect(prefs.getString(photoBackupScopeKey), 'selected');
     expect(prefs.getStringList(photoBackupSelectedAlbumIdsKey), ['album-1']);

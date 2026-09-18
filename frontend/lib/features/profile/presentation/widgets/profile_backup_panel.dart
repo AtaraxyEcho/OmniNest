@@ -20,12 +20,18 @@ class ProfileBackupPanel extends ConsumerWidget {
     final theme = Theme.of(context);
     final backupAsync = ref.watch(photoBackupPreferencesControllerProvider);
     final settings = backupAsync.asData?.value;
+    final isAllScope =
+        settings == null || settings.scope == PhotoBackupScope.all;
     final scopeLabel =
-        settings == null || settings.scope == PhotoBackupScope.all
+        isAllScope
             ? l10n.photoBackupScopeSummaryAll
             : l10n.photoBackupScopeSummarySelected(
               settings.selectedAlbumIds.length,
             );
+    final subtitleText =
+        isAllScope
+            ? l10n.photoBackupBackgroundSubtitle
+            : l10n.photoBackupBackgroundSubtitleScoped;
 
     return WorkbenchPanel(
       child: Column(
@@ -39,7 +45,7 @@ class ProfileBackupPanel extends ConsumerWidget {
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(l10n.photoBackupBackgroundSubtitle),
+                Text(subtitleText),
                 const SizedBox(height: 2),
                 Text(
                   scopeLabel,

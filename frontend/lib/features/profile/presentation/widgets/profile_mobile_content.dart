@@ -177,27 +177,47 @@ class ProfileMobileContent extends ConsumerWidget {
                           .watch(photoBackupPreferencesControllerProvider)
                           .asData
                           ?.value;
-                  final scopeLabel =
-                      settings == null || settings.scope == PhotoBackupScope.all
-                          ? l10n.photoBackupScopeSummaryAll
-                          : l10n.photoBackupScopeSummarySelected(
+                  final isAllScope =
+                      settings == null ||
+                      settings.scope == PhotoBackupScope.all;
+                  // 副标题受 tile maxLines 截断，范围改走 trailing 短标签。
+                  final subtitleText =
+                      isAllScope
+                          ? l10n.photoBackupBackgroundSubtitle
+                          : l10n.photoBackupBackgroundSubtitleScoped;
+                  final scopeChip =
+                      isAllScope
+                          ? l10n.photoBackupScopeOptionAll
+                          : l10n.photoBackupScopeSelectedCount(
                             settings.selectedAlbumIds.length,
                           );
                   return MobileSettingsTile(
                     icon: Icons.cloud_sync_outlined,
                     title: l10n.photoBackupBackgroundTitle,
-                    subtitle:
-                        '${l10n.photoBackupBackgroundSubtitle}\n$scopeLabel',
-                    trailing: Switch(
-                      value: settings?.enabled ?? false,
-                      onChanged:
-                          isAndroidPlatform
-                              ? (value) => showPhotoBackupEnableFlow(
-                                context,
-                                tileRef,
-                                enable: value,
-                              )
-                              : null,
+                    subtitle: subtitleText,
+                    trailing: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Text(
+                          scopeChip,
+                          style: TextStyle(
+                            color: context.mobileColors.textSecondary,
+                            fontSize: AppTypography.labelSmall,
+                          ),
+                        ),
+                        Switch(
+                          value: settings?.enabled ?? false,
+                          onChanged:
+                              isAndroidPlatform
+                                  ? (value) => showPhotoBackupEnableFlow(
+                                    context,
+                                    tileRef,
+                                    enable: value,
+                                  )
+                                  : null,
+                        ),
+                      ],
                     ),
                   );
                 },

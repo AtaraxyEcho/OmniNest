@@ -6,9 +6,9 @@ import 'package:omninest/features/photos/application/photo_backup_preferences.da
 
 /// 备份开关统一交互流（桌面面板与移动设置页共用）。
 ///
-/// 关闭直接生效；开启必须经二次确认弹窗选择范围（全部相册/自选相册），
-/// 自选范围至少勾选一个相册，否则拦截提示且不开启。取消流程时开关
-/// 由偏好驱动回弹。
+/// 关闭直接生效；开启弹单个确认弹窗：说明上传去向并选择范围
+/// （全部相册 / 自选相册，自选时内联展开相册清单）。「开启」按钮在
+/// 自选范围为空时置灰，天然阻止空集；取消流程时开关由偏好驱动回弹。
 Future<void> showPhotoBackupEnableFlow(
   BuildContext context,
   WidgetRef ref, {
@@ -18,88 +18,100 @@ Future<void> showPhotoBackupEnableFlow(
     await ref.read(photoBackupPreferencesControllerProvider.notifier).disable();
     return;
   }
-  final scope = await showDialog<PhotoBackupScope>(
+  final current =
+      ref.read(photoBackupPreferencesControllerProvider).asData?.value;
+  final decision = await showDialog<_BackupEnableDecision>(
     context: context,
-    builder: (_) => const _BackupEnableConfirmDialog(),
-  );
-  if (scope == null || !context.mounted) {
-    return;
-  }
-  if (scope == PhotoBackupScope.selected) {
-    final current =
-        ref.read(photoBackupPreferencesControllerProvider).asData?.value;
-    final selected = await showDialog<Set<String>>(
-      context: context,
-      builder:
-          (_) => _BackupAlbumPickerDialog(
-            initialSelection: current?.selectedAlbumIds ?? const <String>{},
-          ),
-    );
-    if (selected == null || !context.mounted) {
-      return;
-    }
-    if (selected.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context).photoBackupNeedSelectAlbum,
-          ),
+    builder:
+        (_) => _BackupEnableDialog(
+          initialScope: current?.scope ?? PhotoBackupScope.all,
+          initialSelection: current?.selectedAlbumIds ?? const <String>{},
         ),
-      );
-      return;
-    }
-    await ref
-        .read(photoBackupPreferencesControllerProvider.notifier)
-        .enable(scope: scope, selectedAlbumIds: selected);
+  );
+  if (decision == null) {
     return;
   }
   await ref
       .read(photoBackupPreferencesControllerProvider.notifier)
-      .enable(scope: scope, selectedAlbumIds: const <String>{});
+      .enable(scope: decision.scope, selectedAlbumIds: decision.albumIds);
 }
 
-/// 开启前的二次确认：说明上传去向，并让用户选择全部或自选相册。
-class _BackupEnableConfirmDialog extends StatefulWidget {
-  const _BackupEnableConfirmDialog();
+/// 弹窗确认结果。
+class _BackupEnableDecision {
+  const _BackupEnableDecision({required this.scope, required this.albumIds});
+
+  final PhotoBackupScope scope;
+  final Set<String> albumIds;
+}
+
+/// 开启确认弹窗：范围单选 + 自选时内联相册清单，「开启」空集置灰。
+class _BackupEnableDialog extends StatefulWidget {
+  const _BackupEnableDialog({
+    required this.initialScope,
+    required this.initialSelection,
+  });
+
+  final PhotoBackupScope initialScope;
+  final Set<String> initialSelection;
 
   @override
-  State<_BackupEnableConfirmDialog> createState() =>
-      _BackupEnableConfirmDialogState();
+  State<_BackupEnableDialog> createState() => _BackupEnableDialogState();
 }
 
-class _BackupEnableConfirmDialogState
-    extends State<_BackupEnableConfirmDialog> {
-  PhotoBackupScope _scope = PhotoBackupScope.all;
+class _BackupEnableDialogState extends State<_BackupEnableDialog> {
+  late PhotoBackupScope _scope = widget.initialScope;
+  late Set<String> _selected = Set<String>.of(widget.initialSelection);
+  List<PhotoBackupAlbumOption>? _albums;
+  String? _albumsError;
+  bool _albumsRequested = false;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final canEnable = _scope == PhotoBackupScope.all || _selected.isNotEmpty;
     return AlertDialog(
       title: Text(l10n.photoBackupConfirmTitle),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.photoBackupConfirmBody),
-          RadioGroup<PhotoBackupScope>(
-            groupValue: _scope,
-            onChanged: (value) => setState(() => _scope = value!),
-            child: Column(
-              children: [
-                RadioListTile<PhotoBackupScope>(
-                  value: PhotoBackupScope.all,
-                  title: Text(l10n.photoBackupScopeOptionAll),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                RadioListTile<PhotoBackupScope>(
-                  value: PhotoBackupScope.selected,
-                  title: Text(l10n.photoBackupScopeOptionSelected),
-                  contentPadding: EdgeInsets.zero,
-                ),
-              ],
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _scope == PhotoBackupScope.all
+                  ? l10n.photoBackupConfirmBody
+                  : l10n.photoBackupConfirmBodyScoped,
             ),
-          ),
-        ],
+            RadioGroup<PhotoBackupScope>(
+              groupValue: _scope,
+              onChanged: (value) {
+                setState(() => _scope = value!);
+                // 首次切到自选才拉相册清单：选「全部」的用户不必提前
+                // 触发系统相册权限弹窗（运行时备份仍会按需请求）。
+                if (_scope == PhotoBackupScope.selected && !_albumsRequested) {
+                  _albumsRequested = true;
+                  _loadAlbums();
+                }
+              },
+              child: Column(
+                children: [
+                  RadioListTile<PhotoBackupScope>(
+                    value: PhotoBackupScope.all,
+                    title: Text(l10n.photoBackupScopeOptionAll),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                  RadioListTile<PhotoBackupScope>(
+                    value: PhotoBackupScope.selected,
+                    title: Text(l10n.photoBackupScopeOptionSelected),
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ],
+              ),
+            ),
+            if (_scope == PhotoBackupScope.selected)
+              Flexible(child: _buildAlbumSection(l10n)),
+          ],
+        ),
       ),
       actions: [
         TextButton(
@@ -107,35 +119,64 @@ class _BackupEnableConfirmDialogState
           child: Text(l10n.coreCancel),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(_scope),
+          onPressed:
+              canEnable
+                  ? () => Navigator.of(context).pop(
+                    _BackupEnableDecision(scope: _scope, albumIds: _selected),
+                  )
+                  : null,
           child: Text(l10n.photoBackupConfirmEnable),
         ),
       ],
     );
   }
-}
 
-/// 自选相册选择器：多选相册，确认返回选中集合（空集由调用方拦截）。
-class _BackupAlbumPickerDialog extends StatefulWidget {
-  const _BackupAlbumPickerDialog({required this.initialSelection});
-
-  final Set<String> initialSelection;
-
-  @override
-  State<_BackupAlbumPickerDialog> createState() =>
-      _BackupAlbumPickerDialogState();
-}
-
-class _BackupAlbumPickerDialogState extends State<_BackupAlbumPickerDialog> {
-  Set<String> _selected = const {};
-  List<PhotoBackupAlbumOption>? _albums;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _selected = Set<String>.of(widget.initialSelection);
-    _loadAlbums();
+  Widget _buildAlbumSection(AppLocalizations l10n) {
+    if (_albumsError != null) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(_albumsError!),
+      );
+    }
+    final albums = _albums;
+    if (albums == null) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 16),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (albums.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Text(l10n.photoBackupAlbumPickerEmpty),
+      );
+    }
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxHeight: 264),
+      child: ListView(
+        shrinkWrap: true,
+        children: [
+          for (final album in albums)
+            CheckboxListTile(
+              value: _selected.contains(album.id),
+              onChanged: (checked) {
+                setState(() {
+                  final next = Set<String>.of(_selected);
+                  if (checked == true) {
+                    next.add(album.id);
+                  } else {
+                    next.remove(album.id);
+                  }
+                  _selected = next;
+                });
+              },
+              title: Text(album.name),
+              subtitle: Text('${album.assetCount}'),
+              contentPadding: EdgeInsets.zero,
+            ),
+        ],
+      ),
+    );
   }
 
   Future<void> _loadAlbums() async {
@@ -149,59 +190,7 @@ class _BackupAlbumPickerDialogState extends State<_BackupAlbumPickerDialog> {
       if (!mounted) {
         return;
       }
-      setState(() => _error = error.toString());
+      setState(() => _albumsError = error.toString());
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final albums = _albums;
-    return AlertDialog(
-      title: Text(l10n.photoBackupAlbumPickerTitle),
-      content: SizedBox(
-        width: 360,
-        child:
-            _error != null
-                ? Text(_error!)
-                : albums == null
-                ? const Center(child: CircularProgressIndicator())
-                : albums.isEmpty
-                ? Text(l10n.photoBackupAlbumPickerEmpty)
-                : ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final album in albums)
-                      CheckboxListTile(
-                        value: _selected.contains(album.id),
-                        onChanged: (checked) {
-                          setState(() {
-                            final next = Set<String>.of(_selected);
-                            if (checked == true) {
-                              next.add(album.id);
-                            } else {
-                              next.remove(album.id);
-                            }
-                            _selected = next;
-                          });
-                        },
-                        title: Text(album.name),
-                        subtitle: Text('${album.assetCount}'),
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                  ],
-                ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.coreCancel),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_selected),
-          child: Text(l10n.coreConfirm),
-        ),
-      ],
-    );
   }
 }

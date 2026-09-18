@@ -1124,6 +1124,24 @@ abstract class AppLocalizations {
   /// **'Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only, Wi-Fi only).'**
   String get photoBackupConfirmBody;
 
+  /// No description provided for @photoBackupConfirmBodyScoped.
+  ///
+  /// In en, this message translates to:
+  /// **'Only photos in the albums checked below will be uploaded to your OmniNest server (Android only, Wi-Fi only).'**
+  String get photoBackupConfirmBodyScoped;
+
+  /// No description provided for @photoBackupBackgroundSubtitleScoped.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically uploads photos in the selected scope to your OmniNest server (Android only, Wi-Fi only)'**
+  String get photoBackupBackgroundSubtitleScoped;
+
+  /// No description provided for @photoBackupScopeSelectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} albums selected'**
+  String photoBackupScopeSelectedCount(int count);
+
   /// No description provided for @photoBackupScopeOptionAll.
   ///
   /// In en, this message translates to:
