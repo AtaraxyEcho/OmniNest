@@ -28,7 +28,7 @@ Please read this section before using OmniNest. **Using this software means you 
 - You may only store, manage, or play content you **legally own** or are **lawfully allowed** to use.
 - Before uploading, importing, or sharing copyrighted material, you must ensure you have the necessary rights. Any copyright or legal disputes arising from content sources or usage are **the sole responsibility of the user**, not the authors or contributors.
 - This project **does not encourage or support** piracy, infringement, or illegal content distribution.
-- Demo UI images and media used in documentation must be **public-domain / CC0** (or equivalent). **Do not commit or publish copyrighted media** into this repository or public demos.
+- UI illustrations and demo media in this repository’s documentation **are** public-domain / CC0 (or equivalent) assets. **Do not commit or publish copyrighted media** into this repository or public demos.
 
 ### Software
 
@@ -80,7 +80,7 @@ Per-platform screenshot folders (fill in locally as needed): [imgs/web](imgs/web
 | --- | --- |
 | Portal | Unified workspace, backdrops, recent content, notifications, module entry points |
 | File Manager | Uploads, folders, search, preview, downloads, recycle bin, storage lifecycle |
-| Photos | Albums and timeline, thumbnails, metadata, location, optional image analysis |
+| Photos | Albums and timeline, thumbnails, metadata, location, optional image analysis (sidecar currently focused on face detect / embed / cluster) |
 | Movies | Library, posters and details, playback, subtitles, progress, local read-only sources |
 | Music | Local library, external platforms, queue, covers/lyrics, playback progress |
 | Reader | EPUB and more, catalogs, text/comic reading, bookmarks, annotations, progress |
@@ -188,7 +188,7 @@ flutter run -d windows --dart-define-from-file=env/dev.json
 
 Set API/WebSocket hosts in `env/dev.json` to addresses the client can reach.
 
-**Demo media**: use **CC0 / public domain** assets only (see Disclaimer).
+**Demo media**: UI illustrations and demo media in this repo’s docs **are CC0 / public domain** (see Disclaimer). Do not use copyrighted material.
 
 ---
 
