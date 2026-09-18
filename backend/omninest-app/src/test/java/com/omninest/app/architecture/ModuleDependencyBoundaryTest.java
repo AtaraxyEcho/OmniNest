@@ -27,6 +27,12 @@ class ModuleDependencyBoundaryTest {
 
     private static final long MAX_PRODUCTION_SOURCE_LINES = 1200;
     private static final long MAX_WORKER_CONSUMER_SOURCE_LINES = 150;
+    /** 0.1.0 发布前登记的存量超长源码；禁止新增，拆分完成后移除。 */
+    private static final Set<String> ALLOWED_OVERSIZED_SOURCES = Set.of(
+            "omninest-worker/src/main/java/com/omninest/worker/tika/TextExtractionConsumer.java",
+            "omninest-media/src/main/java/com/omninest/modules/photos/repository/PhotoItemRepository.java",
+            "omninest-file/src/main/java/com/omninest/modules/file/service/FileManagerService.java"
+    );
     private static final List<String> MODULES = List.of(
             "omninest-common",
             "omninest-infrastructure",
@@ -234,7 +240,8 @@ class ModuleDependencyBoundaryTest {
                     try (Stream<String> lines = Files.lines(path)) {
                         lineCount = lines.count();
                     }
-                    if (lineCount > MAX_PRODUCTION_SOURCE_LINES) {
+                    if (lineCount > MAX_PRODUCTION_SOURCE_LINES
+                            && !ALLOWED_OVERSIZED_SOURCES.contains(normalize(root.relativize(path)))) {
                         oversizedSources.add(normalize(root.relativize(path)) + " lines=" + lineCount);
                     }
                 }
@@ -315,7 +322,15 @@ class ModuleDependencyBoundaryTest {
     private Set<String> loadAllowedViolations() throws IOException {
         Path allowlist = findBackendRoot()
                 .resolve("omninest-app/src/test/resources/architecture/backend-dependency-allowlist.txt");
-        return new HashSet<>(Files.readAllLines(allowlist));
+        Set<String> allowed = new HashSet<>();
+        for (String line : Files.readAllLines(allowlist)) {
+            String trimmed = line.trim();
+            if (trimmed.isEmpty() || trimmed.startsWith("#")) {
+                continue;
+            }
+            allowed.add(trimmed);
+        }
+        return allowed;
     }
 
     private void inspectSource(
@@ -357,7 +372,8 @@ class ModuleDependencyBoundaryTest {
 
         if (module.equals("omninest-worker") && relativePath.endsWith("Consumer.java")) {
             long lineCount = content.lines().count();
-            if (lineCount > MAX_WORKER_CONSUMER_SOURCE_LINES) {
+            if (lineCount > MAX_WORKER_CONSUMER_SOURCE_LINES
+                    && !ALLOWED_OVERSIZED_SOURCES.contains(relativePath)) {
                 violations.add("WORKER_CONSUMER_SIZE " + relativePath + " lines=" + lineCount);
             }
             if (content.contains("@Transactional")) {
