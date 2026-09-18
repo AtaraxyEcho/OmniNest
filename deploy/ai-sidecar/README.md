@@ -1,4 +1,6 @@
-# OmniNest AI Sidecar
+# OmniNest 图像分析侧车（Image Analysis Sidecar）
+
+> 目录名与代码 ID 仍为 `ai-sidecar`；产品文案统一使用「图像分析 / Image Analysis」，不使用「照片 AI」。
 
 图片分析侧车仅提供照片人脸识别能力：人脸检测、512 维人脸嵌入和基于嵌入的聚类。镜像使用 InsightFace `buffalo_l` 与 CPU 版 ONNX Runtime，不再安装 PyTorch、torchvision、Places365 或 COCO 主体检测模型。
 

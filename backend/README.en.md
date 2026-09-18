@@ -90,7 +90,8 @@ Changes involving databases, permissions, tasks, storage, or security boundaries
 
 ## Related entry points
 
-- [Root project overview](../README.md)
+- [Root project overview (English)](../README.en.md)
 - [Chinese backend guide](README.md)
+- [Frontend (English)](../frontend/README.en.md)
 - [Deployment guide](../deploy/README.md)
 - [Image-analysis Sidecar](../deploy/ai-sidecar/README.md)

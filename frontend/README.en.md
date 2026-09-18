@@ -1,6 +1,18 @@
 # OmniNest Frontend
 
-The frontend is a unified Flutter client targeting Web, Android, Windows, and macOS. Platforms share the same information architecture while adapting layout, navigation, and interaction density to window size and input method.
+OmniNest Frontend is the unified Flutter client.
+
+**Currently recommended and verified platforms: Web, Android, Windows.**
+
+**iOS / macOS**: The tree contains platform folders and adapters, but they have **not** received full testing equivalent to those three platforms. They are **not recommended** for production or daily reliance; validate fully on your own if you need them.
+
+All platforms share one product information architecture and business state; layout and interaction density adapt to window size, touch, mouse, and keyboard.
+
+**Demo media**: UI illustrations and demo media in product docs **are CC0 / public domain** (or equivalent). Do not use copyrighted material in screenshots or imports. See the root [Disclaimer](../README.md#免责声明disclaimer).
+
+Build, test, and debug logs go under `frontend/logs/` (gitignored), not the frontend source root.
+
+Root overview: [../README.en.md](../README.en.md) · Chinese guide: [README.md](README.md) · Backend: [../backend/README.en.md](../backend/README.en.md) · Deploy: [../deploy/README.md](../deploy/README.md).
 
 ## Feature modules
 
@@ -78,7 +90,7 @@ Changes involving imports, uploads, deletes, the reader, the player, routing, or
 
 ## Related entry points
 
-- [Root project overview](../README.md)
+- [Root project overview (English)](../README.en.md)
 - [Chinese frontend guide](README.md)
-- [Backend guide](../backend/README.md)
+- [Backend guide (English)](../backend/README.en.md)
 - [Deployment guide](../deploy/README.md)

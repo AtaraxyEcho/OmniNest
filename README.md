@@ -112,7 +112,7 @@ OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心�
 | --- | --- |
 | 客户端 | Flutter / Dart（Web · Android · Windows） |
 | 后端 | Java 21 · Spring Boot，模块化单体（API / Worker / Scheduler） |
-| 数据与存储 | PostgreSQL · MinIO · RabbitMQ · Redis · Lucene · 可选 AI Sidecar |
+| 数据与存储 | PostgreSQL · MinIO · RabbitMQ · Redis · Lucene · 可选图像分析侧车 |
 
 ---
 

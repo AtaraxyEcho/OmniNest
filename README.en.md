@@ -12,7 +12,7 @@
 
 OmniNest is a **self-hosted** digital life center for personal and family use. It organizes file management, movies, music, photos, and reading under one account, permission, object-storage, and async-task system. You deploy it; you keep the data.
 
-This repository is a **modular monolith**: Spring Boot for API / Worker / Scheduler, and Flutter for clients. See [backend/README.md](backend/README.md), [frontend/README.md](frontend/README.md), and [deploy/README.md](deploy/README.md).
+This repository is a **modular monolith**: Spring Boot for API / Worker / Scheduler, and Flutter for clients. See [backend/README.en.md](backend/README.en.md), [frontend/README.en.md](frontend/README.en.md), and [deploy/README.md](deploy/README.md). Chinese editions: [README.md](README.md).
 
 > **Status**: Under active development. This document covers capabilities, platform support, **disclaimer**, and the shortest path to run the stack.
 
@@ -106,7 +106,7 @@ Per-platform screenshot folders (fill in locally as needed): [imgs/web](imgs/web
 | --- | --- |
 | Client | Flutter / Dart (Web · Android · Windows) |
 | Server | Java 21 · Spring Boot modular monolith (API / Worker / Scheduler) |
-| Data | PostgreSQL · MinIO · RabbitMQ · Redis · Lucene · optional AI sidecar |
+| Data | PostgreSQL · MinIO · RabbitMQ · Redis · Lucene · optional image analysis sidecar |
 
 ---
 
@@ -114,8 +114,8 @@ Per-platform screenshot folders (fill in locally as needed): [imgs/web](imgs/web
 
 | Path | Description |
 | --- | --- |
-| [backend](backend/README.md) | Server modules and tests; runtime logs under `backend/logs/` |
-| [frontend](frontend/README.md) | Flutter clients and tests; build/test logs under `frontend/logs/` |
+| [backend](backend/README.en.md) | Server modules and tests; runtime logs under `backend/logs/` |
+| [frontend](frontend/README.en.md) | Flutter clients and tests; build/test logs under `frontend/logs/` |
 | [deploy](deploy/README.md) | Dev/prod Compose and deployment |
 | [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | Image analysis sidecar |
 | [imgs](imgs) | Documentation screenshots |
@@ -206,8 +206,8 @@ Some Testcontainers/migration cases skip when Docker is unavailable. Full E2E on
 
 ## Documentation
 
-- [Backend](backend/README.md)
-- [Frontend](frontend/README.md)
+- [Backend](backend/README.en.md)
+- [Frontend](frontend/README.en.md)
 - [Deploy](deploy/README.md)
 - Product notes: [PRODUCT.md](PRODUCT.md) (if present)
 

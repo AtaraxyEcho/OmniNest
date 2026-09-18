@@ -8,9 +8,9 @@ OmniNest Frontend 是基于 Flutter 的统一客户端。
 
 各平台共享同一套产品信息架构和业务状态，根据窗口尺寸、触控、鼠标和键盘输入调整布局与交互密度。
 
-**演示素材**：导入与截图用的影音/图片/电子书请使用 CC0/公有领域资源（例如 `D:\Development\Resource\CC0`），不要使用受版权保护的内容。
+**演示素材**：本仓库文档中的界面示意图与演示素材**均为 CC0 / 公有领域**资源（见根目录免责声明）。导入与截图请使用同类资源（例如 `D:\Development\Resource\CC0`），**请勿**使用受版权保护的内容。
 
-根目录产品概览见 [../README.md](../README.md)，后端服务、API 和存储边界见 [../backend/README.md](../backend/README.md)。
+根目录产品概览见 [../README.md](../README.md)，英文版见 [../README.en.md](../README.en.md)，后端服务、API 和存储边界见 [../backend/README.md](../backend/README.md)。
 
 ## 日志目录
 

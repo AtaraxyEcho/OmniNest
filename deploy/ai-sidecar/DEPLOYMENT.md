@@ -1,4 +1,4 @@
-# AI Sidecar 部署说明
+# 图像分析侧车（Image Analysis Sidecar）部署说明
 
 本文档覆盖图片识别侧车的镜像构建、Compose 启动、模型缓存和运行参数。接口契约与能力边界见 [README.md](README.md)。
 

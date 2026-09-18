@@ -2,7 +2,7 @@
 
 OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、权限校验、文件能力、影视/音乐/相册/阅读业务、后台任务和系统管理。它采用模块化单体结构，同一套代码按 API、Worker、Scheduler 运行角色承担不同职责，不将业务模块拆成相互独立的微服务。
 
-根目录产品概览见 [../README.md](../README.md)，Flutter 客户端见 [../frontend/README.md](../frontend/README.md)。
+根目录产品概览见 [../README.md](../README.md)，英文版见 [../README.en.md](../README.en.md)，Flutter 客户端见 [../frontend/README.md](../frontend/README.md)。
 
 ## 服务职责
 
