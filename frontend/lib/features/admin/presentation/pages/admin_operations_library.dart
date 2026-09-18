@@ -115,7 +115,13 @@ class _LibrarySourcesSectionState
     } on Exception catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.adminLoadFailed(describeUserFacingError(error, l10n: l10n).message))),
+          SnackBar(
+            content: Text(
+              l10n.adminLoadFailed(
+                describeUserFacingError(error, l10n: l10n).message,
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -151,7 +157,13 @@ class _LibrarySourcesSectionState
     } on Exception catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.adminLoadFailed(describeUserFacingError(error, l10n: l10n).message))),
+          SnackBar(
+            content: Text(
+              l10n.adminLoadFailed(
+                describeUserFacingError(error, l10n: l10n).message,
+              ),
+            ),
+          ),
         );
       }
       return;
@@ -202,7 +214,13 @@ class _LibrarySourcesSectionState
     } on Exception catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.adminLoadFailed(describeUserFacingError(error, l10n: l10n).message))),
+          SnackBar(
+            content: Text(
+              l10n.adminLoadFailed(
+                describeUserFacingError(error, l10n: l10n).message,
+              ),
+            ),
+          ),
         );
       }
     }

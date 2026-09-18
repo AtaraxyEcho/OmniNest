@@ -29,9 +29,7 @@ void main() {
       expect(find.byType(TextFormField), findsAtLeast(2));
     });
 
-    testWidgets('login form has username and password fields', (
-      tester,
-    ) async {
+    testWidgets('login form has username and password fields', (tester) async {
       app.main();
       await tester.pumpAndSettle();
 
@@ -42,6 +40,5 @@ void main() {
       // 验证登录按钮存在
       expect(find.byType(FilledButton), findsOneWidget);
     });
-
   });
 }

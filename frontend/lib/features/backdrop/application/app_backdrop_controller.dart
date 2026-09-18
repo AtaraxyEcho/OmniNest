@@ -14,6 +14,7 @@ import 'package:omninest/features/backdrop/data/app_backdrop_file_picker.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_local_cache.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 final appBackdropRepositoryProvider = Provider<AppBackdropRepository>((ref) {
   return AppBackdropRepository(ref.watch(localDatabaseProvider));
@@ -157,7 +158,7 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
       await repository.upsertServerAssets(assets);
     } on Exception catch (error) {
       if (kDebugMode) {
-        debugPrint('背景库服务端列表同步失败(可能离线): $error');
+        devLog('背景库服务端列表同步失败(可能离线): $error');
       }
     }
   }
@@ -249,12 +250,12 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
         ]);
       } on AppException catch (error) {
         if (kDebugMode) {
-          debugPrint('背景素材上传失败: ${file.name} code=${error.code}');
+          devLog('背景素材上传失败: ${file.name} code=${error.code}');
         }
         failures.add(BackdropUploadFailure(title: file.name, code: error.code));
       } on Exception catch (error) {
         if (kDebugMode) {
-          debugPrint('背景素材上传异常: ${file.name} $error');
+          devLog('背景素材上传异常: ${file.name} $error');
         }
         failures.add(BackdropUploadFailure(title: file.name, code: 'UNKNOWN'));
       }
@@ -410,7 +411,7 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
         }
       } on Exception catch (error) {
         if (kDebugMode) {
-          debugPrint('背景素材删除失败,保留本地缓存: $error');
+          devLog('背景素材删除失败,保留本地缓存: $error');
         }
         await _markDeleteFailed();
         return;
@@ -452,7 +453,7 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
         }
       } on Exception catch (error) {
         if (kDebugMode) {
-          debugPrint('背景库服务端清空失败,保留本地现状: $error');
+          devLog('背景库服务端清空失败,保留本地现状: $error');
         }
         final current = await _loadCurrentState(
           ref.read(appBackdropRepositoryProvider),
@@ -486,8 +487,8 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
       }
     } on Object catch (error, stackTrace) {
       if (kDebugMode) {
-        debugPrint('应用内置背景注册失败: $error');
-        debugPrintStack(stackTrace: stackTrace);
+        devLog('应用内置背景注册失败: $error');
+        devLogStack(stackTrace: stackTrace);
       }
     }
   }

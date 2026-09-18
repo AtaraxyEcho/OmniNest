@@ -187,7 +187,9 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     } catch (error) {
       if (mounted) {
         _showMessage(
-          AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
+          AppLocalizations.of(
+            context,
+          ).musicSaveFailed(describeUserFacingError(error).message),
         );
       }
     } finally {
@@ -291,7 +293,9 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     } on Object catch (error) {
       if (mounted) {
         _showMessage(
-          AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
+          AppLocalizations.of(
+            context,
+          ).musicSaveFailed(describeUserFacingError(error).message),
         );
       }
     } finally {
@@ -321,7 +325,9 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
       }
       setState(() => _scrapeCandidates = const <MusicScrapeCandidate>[]);
       _showMessage(
-        AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
+        AppLocalizations.of(
+          context,
+        ).musicSaveFailed(describeUserFacingError(error).message),
       );
     } finally {
       if (mounted && generation == _scrapeGeneration) {
@@ -357,7 +363,9 @@ class _MetadataEditFormState extends ConsumerState<_MetadataEditForm> {
     } on Object catch (error) {
       if (mounted) {
         _showMessage(
-          AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
+          AppLocalizations.of(
+            context,
+          ).musicSaveFailed(describeUserFacingError(error).message),
         );
       }
     } finally {

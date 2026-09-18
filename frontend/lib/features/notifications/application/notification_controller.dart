@@ -7,6 +7,7 @@ import 'package:omninest/app/realtime_providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/notifications/data/notification_api.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 final notificationApiProvider = Provider<NotificationApi>((ref) {
   return NotificationApi(ref.watch(apiClientProvider));
@@ -61,7 +62,7 @@ class UnreadCountNotifier extends Notifier<int> {
       }
     } on Exception catch (error) {
       if (kDebugMode) {
-        debugPrint('通知未读数初始化失败: ${error.runtimeType}');
+        devLog('通知未读数初始化失败: ${error.runtimeType}');
       }
     }
   }

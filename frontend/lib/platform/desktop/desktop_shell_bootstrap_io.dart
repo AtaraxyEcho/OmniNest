@@ -2,13 +2,13 @@ import 'dart:async';
 
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:omninest/core/window/desktop_close_flow.dart';
 import 'package:omninest/platform/desktop/desktop_single_instance.dart';
 import 'package:omninest/platform/desktop/desktop_tray_service.dart';
 import 'package:omninest/platform/desktop/desktop_hotkey_service.dart';
 import 'package:omninest/platform/platform_capabilities.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 桌面壳层引导：单实例锁 + 系统托盘 + 关闭确认流程（退出或最小化到托盘）。
 ///
@@ -33,7 +33,7 @@ Future<void> bootstrapDesktopShell() async {
   // E1：系统级媒体键（播放/暂停、上一首、下一首），命令由音乐播放会话层桥接。
   await DesktopHotkeyService().registerMediaKeys();
   unawaited(_registerWindowsProtocol());
-  debugPrint('桌面壳层初始化完成：托盘与关闭确认流程已启用');
+  devLog('桌面壳层初始化完成：托盘与关闭确认流程已启用');
 }
 
 /// Windows 注册 omninest:// 协议到当前用户注册表（无需管理员）。

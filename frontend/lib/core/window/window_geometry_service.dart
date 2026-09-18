@@ -9,6 +9,7 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:screen_retriever/screen_retriever.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 桌面窗口默认尺寸：三端统一，与原生 runner 兜底值保持一致。
 const Size kDefaultWindowSize = Size(1280, 800);
@@ -204,13 +205,13 @@ class WindowGeometryService with WindowListener {
       await _revealWindow();
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('Window geometry startup failed: $error');
+        devLog('Window geometry startup failed: $error');
       }
       try {
         await _revealWindow();
       } on Object catch (showError) {
         if (kDebugMode) {
-          debugPrint('Window show fallback failed: $showError');
+          devLog('Window show fallback failed: $showError');
         }
       }
     }
@@ -290,7 +291,7 @@ class WindowGeometryService with WindowListener {
       );
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('Window geometry persist failed: $error');
+        devLog('Window geometry persist failed: $error');
       }
     }
   }

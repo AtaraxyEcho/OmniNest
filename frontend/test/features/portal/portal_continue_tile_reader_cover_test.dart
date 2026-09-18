@@ -8,9 +8,7 @@ import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
 void main() {
-  testWidgets('继续使用阅读进度卡走 AuthCoverImage，不用接口路径当图片地址', (
-    tester,
-  ) async {
+  testWidgets('继续使用阅读进度卡走 AuthCoverImage，不用接口路径当图片地址', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

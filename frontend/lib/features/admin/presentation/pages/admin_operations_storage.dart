@@ -210,7 +210,13 @@ Future<void> _toggleStorageLocation(
   } on Exception catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.adminLoadFailed(describeUserFacingError(error, l10n: l10n).message))),
+        SnackBar(
+          content: Text(
+            l10n.adminLoadFailed(
+              describeUserFacingError(error, l10n: l10n).message,
+            ),
+          ),
+        ),
       );
     }
   }
@@ -233,7 +239,13 @@ Future<void> _deleteStorageLocation(
   } on Exception catch (error) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.adminLoadFailed(describeUserFacingError(error, l10n: l10n).message))),
+        SnackBar(
+          content: Text(
+            l10n.adminLoadFailed(
+              describeUserFacingError(error, l10n: l10n).message,
+            ),
+          ),
+        ),
       );
     }
   }
@@ -645,7 +657,13 @@ class _StorageLocationWizardState
       if (!mounted) return;
       setState(() => _saving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.adminLoadFailed(describeUserFacingError(error, l10n: l10n).message))),
+        SnackBar(
+          content: Text(
+            l10n.adminLoadFailed(
+              describeUserFacingError(error, l10n: l10n).message,
+            ),
+          ),
+        ),
       );
     }
   }
@@ -794,7 +812,14 @@ class _StorageLocationWizardState
                           ),
                       error:
                           (error, _) => Center(
-                            child: Text(l10n.adminLoadFailed(describeUserFacingError(error, l10n: l10n).message)),
+                            child: Text(
+                              l10n.adminLoadFailed(
+                                describeUserFacingError(
+                                  error,
+                                  l10n: l10n,
+                                ).message,
+                              ),
+                            ),
                           ),
                       data:
                           (directories) =>

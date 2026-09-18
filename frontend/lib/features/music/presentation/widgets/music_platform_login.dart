@@ -150,7 +150,9 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            AppLocalizations.of(context).musicSaveFailed(describeUserFacingError(error).message),
+            AppLocalizations.of(
+              context,
+            ).musicSaveFailed(describeUserFacingError(error).message),
           ),
         ),
       );

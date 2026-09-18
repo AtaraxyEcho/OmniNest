@@ -252,7 +252,7 @@ class _MusicQueuePersistenceCoordinator {
 
   void _logFailure(String message, Object error) {
     if (kDebugMode) {
-      debugPrint('[MusicQueue] $message: $error');
+      devLog('[MusicQueue] $message: $error');
     }
   }
 }

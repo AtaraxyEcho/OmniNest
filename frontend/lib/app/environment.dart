@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:omninest/app/platform_origin_stub.dart'
     if (dart.library.js_interop) 'package:omninest/app/platform_origin_web.dart'
     as platform;
@@ -17,6 +18,17 @@ class AppEnvironment {
     const configuredWebBaseUrl = String.fromEnvironment(
       'OMNINEST_WEB_BASE_URL',
     );
+    // 桌面/移动 release 构建必须显式指定服务地址：静默回落 localhost 只会
+    // 表现为“连不上服务器”，fail-fast 让漏配在启动瞬间暴露。
+    // Web 端有同源推导（browserOrigin 非空），不受此约束。
+    if (kReleaseMode &&
+        configuredApiBaseUrl.isEmpty &&
+        _normalizeHttpOrigin(platform.getBrowserOrigin()) == null) {
+      throw StateError(
+        '缺少 OMNINEST_API_BASE_URL：桌面/移动 release 构建必须通过 '
+        '--dart-define=OMNINEST_API_BASE_URL=<服务端地址> 指定 API 基地址',
+      );
+    }
     return AppEnvironment.resolve(
       configuredApiBaseUrl: configuredApiBaseUrl,
       configuredWsBaseUrl: configuredWsBaseUrl,
@@ -38,15 +50,21 @@ class AppEnvironment {
             : normalizedOrigin == null
             ? 'http://localhost:8080/api/v1'
             : _replaceOriginPath(normalizedOrigin, '/api/v1');
+    // WS 回退链：显式配置 > 浏览器同源 > 从 API 基地址同域推导
+    // （release 脚本只传 API 时 WS 自动跟随；调试无配置时 localhost 行为不变）。
     final wsBaseUrl =
         configuredWsBaseUrl.isNotEmpty
             ? configuredWsBaseUrl
-            : normalizedOrigin == null
-            ? 'ws://localhost:8080/ws'
-            : _replaceOriginPath(
+            : normalizedOrigin != null
+            ? _replaceOriginPath(
               normalizedOrigin,
               '/ws',
               scheme: normalizedOrigin.scheme == 'https' ? 'wss' : 'ws',
+            )
+            : _replaceOriginPath(
+              Uri.parse(apiBaseUrl),
+              '/ws',
+              scheme: Uri.parse(apiBaseUrl).scheme == 'https' ? 'wss' : 'ws',
             );
     final webBaseUrl =
         configuredWebBaseUrl.isNotEmpty ? configuredWebBaseUrl : null;

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
 import 'package:omninest/core/network/retry_interceptor.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 typedef AccessTokenReader = String? Function();
 typedef SessionRefresher = Future<bool> Function();
@@ -132,7 +133,7 @@ class ApiClient {
         onError: (error, handler) {
           // 全局错误日志（避免未捕获异常导致 UI 崩溃）
           if (kDebugMode) {
-            debugPrint(
+            devLog(
               'DioError: ${error.type} - ${error.message} '
               '[${error.requestOptions.method} ${error.requestOptions.path}]',
             );

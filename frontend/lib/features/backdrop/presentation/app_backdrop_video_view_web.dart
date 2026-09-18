@@ -3,6 +3,7 @@ import 'dart:js_interop';
 
 import 'package:flutter/material.dart';
 import 'package:web/web.dart' as web;
+import 'package:omninest/core/log/dev_log.dart';
 
 /// Web 平台的背景视频视图。
 /// 基于原生 HTML video 元素(平台视图):强制 muted + autoplay + loop + playsinline
@@ -137,7 +138,7 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
     if (_appliedSource != null &&
         fallback != null &&
         _appliedSource != fallback) {
-      debugPrint('背景视频播放失败,回退内置壁纸');
+      devLog('背景视频播放失败,回退内置壁纸');
       _notifySourceStaleOnce();
       _appliedSource = fallback;
       final el = _element;
@@ -167,7 +168,7 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
     }
     if (!_failed) {
       setState(() => _failed = true);
-      debugPrint('背景视频多次播放失败,收敛为空背景等待对账或用户操作');
+      devLog('背景视频多次播放失败,收敛为空背景等待对账或用户操作');
     }
   }
 

@@ -67,6 +67,20 @@ public class OfflineDownloadRequestService {
     }
 
     /**
+     * 按 ID 查询当前用户的离线下载任务。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param taskId 任务 ID
+     * @return 任务详情
+     */
+    @Transactional(readOnly = true)
+    public OfflineDownloadTaskDto getTask(UUID ownerUserId, UUID taskId) {
+        return offlineTaskRepository.findByIdAndOwnerUserId(taskId, ownerUserId)
+                .map(this::toDto)
+                .orElseThrow(() -> new BusinessException(ErrorCode.TASK_NOT_FOUND, "离线下载任务不存在"));
+    }
+
+    /**
      * 创建离线下载任务并在事务提交后发布执行消息。
      *
      * @param ownerUserId 所有者用户 ID

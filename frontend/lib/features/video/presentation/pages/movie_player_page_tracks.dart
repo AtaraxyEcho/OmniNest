@@ -56,7 +56,7 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
     }
     // Web 端有 streamUrl 时使用转码流，否则使用原始 URL
     final playbackUrl = _resolvePlaybackUrl(plan);
-    debugPrint(
+    devLog(
       '[_openIfNeeded] mode=${plan.mode}, '
       'hasStreamUrl=${plan.streamUrl?.isNotEmpty == true}, '
       'audioMode=$_audioMode, '
@@ -87,7 +87,7 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
         return;
       }
       try {
-        debugPrint('[_openIfNeeded] 正在打开播放器... resumeSeconds=$resumeSeconds');
+        devLog('[_openIfNeeded] 正在打开播放器... resumeSeconds=$resumeSeconds');
         await _player.open(
           Media(
             playbackUrl,
@@ -98,12 +98,12 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
         if (!mounted || generation != _openGeneration) {
           return;
         }
-        debugPrint('[_openIfNeeded] 播放器已打开');
+        devLog('[_openIfNeeded] 播放器已打开');
         if (mounted && plan.hasAudioCache && isWebPlatform) {
           await _showAudioCacheNotice();
         }
       } catch (e) {
-        debugPrint('[_openIfNeeded] 播放器打开失败: $e');
+        devLog('[_openIfNeeded] 播放器打开失败: $e');
       }
       if (!mounted || generation != _openGeneration) {
         return;

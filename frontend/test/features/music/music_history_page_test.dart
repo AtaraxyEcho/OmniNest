@@ -86,8 +86,12 @@ class _HistoryApiStub implements MusicApi {
     final n = DateTime.now();
     return DateTime(n.year, n.month, n.day, 12);
   }();
-  late final DateTime yesterdayNoon = todayNoon.subtract(const Duration(days: 1));
-  late final DateTime dayBeforeNoon = todayNoon.subtract(const Duration(days: 2));
+  late final DateTime yesterdayNoon = todayNoon.subtract(
+    const Duration(days: 1),
+  );
+  late final DateTime dayBeforeNoon = todayNoon.subtract(
+    const Duration(days: 2),
+  );
 
   List<MusicPlayHistoryEntry> _page(int page) {
     switch (page) {

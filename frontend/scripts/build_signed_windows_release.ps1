@@ -8,6 +8,10 @@ param(
     [ValidatePattern('^https?://')]
     [string]$TimestampUrl,
 
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^https?://')]
+    [string]$ApiBaseUrl,
+
     [string]$FlutterCommand = '',
     [string]$SignToolPath = ''
 )
@@ -90,7 +94,11 @@ $manifestPath = Join-Path $manifestDirectory 'windows-release.json'
 
 Push-Location $projectRoot
 try {
-    Invoke-CheckedCommand -Command $flutter -Arguments @('build', 'windows', '--release', '--no-pub')
+    # release 构建必须显式指定 API 基地址（environment.fromDefines 会 fail-fast）。
+    Invoke-CheckedCommand -Command $flutter -Arguments @(
+        'build', 'windows', '--release', '--no-pub',
+        "--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl"
+    )
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
         throw "Windows Release executable was not found: $executable"
     }

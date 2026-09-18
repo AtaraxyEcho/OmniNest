@@ -11,6 +11,7 @@ import 'package:omninest/features/files/domain/file_upload_complete_result.dart'
 import 'package:omninest/features/files/domain/file_upload_session.dart';
 import 'package:omninest/features/files/domain/upload_part_size.dart';
 import 'package:omninest/features/tasks/data/task_api.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 媒体导入进度回调。
 typedef ImportProgressCallback =
@@ -207,7 +208,7 @@ class MediaImportService {
       } on Object catch (error) {
         failures.add(MediaImportFailure(fileName: file.name, error: error));
         if (kDebugMode) {
-          debugPrint('媒体文件导入失败: file=${file.name}, error=$error');
+          devLog('媒体文件导入失败: file=${file.name}, error=$error');
         }
       }
     }
@@ -526,7 +527,7 @@ class MediaImportService {
       interval: const Duration(seconds: 3),
     );
     if (kDebugMode) {
-      debugPrint(
+      devLog(
         'MediaImport: scan task terminal — taskId=$taskId, '
         'status=${task.status}, hasResult=${task.result != null}',
       );
@@ -562,7 +563,7 @@ class MediaImportService {
     }
     // 旧版本后端的任务结果不含晋升产物标识，按文件名回退解析。
     if (kDebugMode) {
-      debugPrint(
+      devLog(
         'MediaImport: scan task result missing fileNodeId, '
         'falling back to directory lookup for $fileName',
       );
@@ -574,7 +575,7 @@ class MediaImportService {
     );
     if (resolved == null) {
       if (kDebugMode) {
-        debugPrint(
+        devLog(
           'MediaImport: promoted node not found in parent directory — '
           'fileName=$fileName, parentId=$parentId',
         );
@@ -594,7 +595,7 @@ class MediaImportService {
     required Duration timeout,
   }) async {
     if (kDebugMode) {
-      debugPrint(
+      devLog(
         'MediaImport: scan result incomplete, recovering by name — '
         'fileName=$fileName, parentId=$parentId, timeout=${timeout.inSeconds}s',
       );
@@ -641,7 +642,7 @@ class MediaImportService {
       await _fileApi.cancelUploadSession(uploadId);
     } on Exception catch (error) {
       if (kDebugMode) {
-        debugPrint('取消媒体上传会话失败: uploadId=$uploadId, error=$error');
+        devLog('取消媒体上传会话失败: uploadId=$uploadId, error=$error');
       }
     }
   }

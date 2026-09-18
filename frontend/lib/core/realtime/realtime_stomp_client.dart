@@ -5,6 +5,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
 import 'package:stomp_dart_client/stomp_dart_client.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// STOMP 传输层连接状态。
 enum RealtimeTransportState { disconnected, connecting, connected }
@@ -145,7 +146,7 @@ class RealtimeStompClient implements RealtimeTransport {
       _syncEvents.add(RealtimeSyncEvent.fromJson(json));
     } on FormatException catch (error) {
       if (kDebugMode) {
-        debugPrint('实时同步事件格式无效: $error');
+        devLog('实时同步事件格式无效: $error');
       }
     }
   }
@@ -166,7 +167,7 @@ class RealtimeStompClient implements RealtimeTransport {
       return decoded is Map ? Map<String, dynamic>.from(decoded) : null;
     } on FormatException catch (error) {
       if (kDebugMode) {
-        debugPrint('实时消息 JSON 无效: $error');
+        devLog('实时消息 JSON 无效: $error');
       }
       return null;
     }
@@ -191,7 +192,7 @@ class RealtimeStompClient implements RealtimeTransport {
     client?.deactivate();
     _setState(RealtimeTransportState.disconnected);
     if (kDebugMode) {
-      debugPrint(message);
+      devLog(message);
     }
     _scheduleReconnect();
   }

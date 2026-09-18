@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/router.dart';
 import 'package:omninest/platform/desktop/desktop_deep_link_bridge.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// OmniNest 自定义协议深链白名单前缀。
 ///
@@ -71,7 +72,7 @@ class DeepLinkService {
       _handle,
       onError: (Object error) {
         if (kDebugMode) {
-          debugPrint('[DeepLink] 链接流错误: $error');
+          devLog('[DeepLink] 链接流错误: $error');
         }
       },
     );
@@ -86,7 +87,7 @@ class DeepLinkService {
     final route = resolveDeepLinkPath(uri);
     if (route == null) {
       if (kDebugMode) {
-        debugPrint('[DeepLink] 拒绝非白名单深链: $uri');
+        devLog('[DeepLink] 拒绝非白名单深链: $uri');
       }
       return;
     }

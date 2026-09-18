@@ -10,7 +10,10 @@ void main() {
     expect(source, contains(r"[ValidatePattern('^[0-9A-Fa-f]{40}$')]"));
     expect(source, contains(r'$CertificateThumbprint'));
     expect(source, contains(r'$TimestampUrl'));
-    expect(source, contains("@('build', 'windows', '--release', '--no-pub')"));
+    // release 必须显式携带 API 基地址（environment.fromDefines fail-fast 契约）。
+    expect(source, contains(r'[string]$ApiBaseUrl'));
+    expect(source, contains("'build', 'windows', '--release', '--no-pub'"));
+    expect(source, contains(r'--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl'));
     expect(source, contains("'/fd', 'SHA256'"));
     expect(source, contains("'/tr', \$TimestampUrl"));
     expect(source, contains("'/td', 'SHA256'"));

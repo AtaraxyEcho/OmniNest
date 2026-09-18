@@ -154,8 +154,10 @@ class _AsyncStateBuilder<T> extends StatelessWidget {
     return state.when(
       data: builder,
       error:
-          (error, stackTrace) =>
-              AppErrorView(message: describeUserFacingError(error).message, onRetry: onRetry),
+          (error, stackTrace) => AppErrorView(
+            message: describeUserFacingError(error).message,
+            onRetry: onRetry,
+          ),
       loading: () => const AppLoading(),
     );
   }

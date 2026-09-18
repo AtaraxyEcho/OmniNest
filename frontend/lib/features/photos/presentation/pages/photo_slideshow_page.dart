@@ -16,6 +16,7 @@ import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.d
 import 'package:omninest/features/photos/presentation/widgets/photo_share_panel.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 幻灯片页面阶段：首图解码中 / 可播放 / 首图加载失败。
 enum SlideshowPhase { loading, ready, failed }
@@ -277,8 +278,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         unawaited(_upgradeCurrentImage());
       }
     } catch (error, stackTrace) {
-      debugPrint('Initial slideshow image failed: $error');
-      debugPrintStack(stackTrace: stackTrace);
+      devLog('Initial slideshow image failed: $error');
+      devLogStack(stackTrace: stackTrace);
 
       if (!mounted) return;
       setState(() => _phase = SlideshowPhase.failed);
@@ -452,8 +453,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       }
       unawaited(_transitionController.forward(from: 0));
     } catch (error, stackTrace) {
-      debugPrint('Slideshow transition failed: $error');
-      debugPrintStack(stackTrace: stackTrace);
+      devLog('Slideshow transition failed: $error');
+      devLogStack(stackTrace: stackTrace);
 
       if (!mounted) return;
 

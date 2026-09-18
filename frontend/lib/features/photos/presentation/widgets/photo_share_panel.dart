@@ -15,6 +15,7 @@ import 'package:omninest/features/photos/platform/photo_share_channel.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 照片分享侧栏：SHARE 眉题 + 预览卡 + LINK 复制 + 分享渠道宫格 + OPTIONS 开关。
 ///
@@ -561,7 +562,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       case PhotoShareChannelSuccess():
         return;
       case PhotoShareChannelUnsupported(:final reason):
-        debugPrint('系统分享不可用，降级复制链接：$reason');
+        devLog('系统分享不可用，降级复制链接：$reason');
         await _copyToClipboard();
         if (!mounted) {
           return;

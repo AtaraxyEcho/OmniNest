@@ -121,10 +121,9 @@ class _BatchQuotaDialogState extends ConsumerState<_BatchQuotaDialog> {
     } catch (error) {
       if (mounted) {
         setState(
-          () => _errorMessage = describeUserFacingError(
-            error,
-            l10n: l10n,
-          ).message,
+          () =>
+              _errorMessage =
+                  describeUserFacingError(error, l10n: l10n).message,
         );
       }
     } finally {
@@ -259,10 +258,9 @@ class _EditQuotaDialogState extends ConsumerState<_EditQuotaDialog> {
     } catch (error) {
       if (mounted) {
         setState(
-          () => _errorMessage = describeUserFacingError(
-            error,
-            l10n: l10n,
-          ).message,
+          () =>
+              _errorMessage =
+                  describeUserFacingError(error, l10n: l10n).message,
         );
       }
     } finally {
@@ -370,10 +368,9 @@ class _EditUserRolesDialogState extends ConsumerState<_EditUserRolesDialog> {
     } catch (error) {
       if (mounted) {
         setState(
-          () => _errorMessage = describeUserFacingError(
-            error,
-            l10n: l10n,
-          ).message,
+          () =>
+              _errorMessage =
+                  describeUserFacingError(error, l10n: l10n).message,
         );
       }
     } finally {
@@ -551,10 +548,9 @@ class _CreateUserDialogState extends ConsumerState<_CreateUserDialog> {
     } catch (error) {
       if (mounted) {
         setState(
-          () => _errorMessage = describeUserFacingError(
-            error,
-            l10n: l10n,
-          ).message,
+          () =>
+              _errorMessage =
+                  describeUserFacingError(error, l10n: l10n).message,
         );
       }
     } finally {

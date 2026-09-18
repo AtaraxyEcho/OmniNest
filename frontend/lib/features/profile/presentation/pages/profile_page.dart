@@ -123,7 +123,11 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       }
       ref.invalidate(realtimeWeatherProvider);
     } catch (error) {
-      _showMessage(l10n.profileWeatherCitySaveFailed(describeUserFacingError(error, l10n: l10n).message));
+      _showMessage(
+        l10n.profileWeatherCitySaveFailed(
+          describeUserFacingError(error, l10n: l10n).message,
+        ),
+      );
     }
   }
 
@@ -363,7 +367,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               children: [
                 const Icon(Icons.error_outline_rounded),
                 const SizedBox(width: 12),
-                Expanded(child: Text(l10n.profileLoadFailed(describeUserFacingError(error, l10n: l10n).message))),
+                Expanded(
+                  child: Text(
+                    l10n.profileLoadFailed(
+                      describeUserFacingError(error, l10n: l10n).message,
+                    ),
+                  ),
+                ),
                 IconButton(
                   onPressed:
                       () => ref.invalidate(notificationPreferencesProvider),

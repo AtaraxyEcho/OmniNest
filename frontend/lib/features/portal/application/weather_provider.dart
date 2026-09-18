@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 天气图标映射（和风图标代码 → emoji）
 String weatherIconFromCode(String icon) {
@@ -284,12 +285,12 @@ final userLocationProvider = FutureProvider<String?>((ref) async {
         },
       );
     } catch (e) {
-      debugPrint('上报位置失败: $e');
+      devLog('上报位置失败: $e');
     }
 
     return location;
   } catch (e) {
-    debugPrint('获取位置失败: $e');
+    devLog('获取位置失败: $e');
     return null;
   }
 });
@@ -351,7 +352,7 @@ final realtimeWeatherProvider = FutureProvider<WeatherData>((ref) async {
     }
     return WeatherData.empty();
   } catch (e) {
-    debugPrint('获取天气失败: $e');
+    devLog('获取天气失败: $e');
     return WeatherData.empty();
   }
 });

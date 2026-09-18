@@ -14,6 +14,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 part 'music_center_state.dart';
 part 'music_center_mapping.dart';
@@ -712,7 +713,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
 
   void _reportQueuePersistenceFailure(Object error) {
     if (kDebugMode) {
-      debugPrint('[MusicQueue] 同步远端播放队列失败: $error');
+      devLog('[MusicQueue] 同步远端播放队列失败: $error');
     }
     if (_controllerDisposed) {
       return;

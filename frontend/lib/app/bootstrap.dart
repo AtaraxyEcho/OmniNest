@@ -12,6 +12,7 @@ import 'package:omninest/core/services/app_image_cache_policy.dart';
 import 'package:omninest/core/window/window_geometry_service.dart';
 import 'package:omninest/features/photos/application/photo_backup_preferences.dart';
 import 'package:omninest/platform/desktop/desktop_shell_bootstrap.dart';
+import 'package:omninest/core/log/dev_log.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:omninest/app/bootstrap_stub.dart'
@@ -148,7 +149,7 @@ class _AppBootstrapGateState extends State<AppBootstrapGate> {
         return;
       }
       if (kDebugMode) {
-        debugPrint('应用运行依赖初始化失败: $error');
+        devLog('应用运行依赖初始化失败: $error');
       }
       setState(() => _error = error);
     }

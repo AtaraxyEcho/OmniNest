@@ -6,7 +6,6 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/core/errors/app_exception.dart';
-import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 

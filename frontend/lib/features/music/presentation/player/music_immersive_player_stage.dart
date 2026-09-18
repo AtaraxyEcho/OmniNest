@@ -366,7 +366,7 @@ class _MusicImmersivePlayerStageState
       } on Exception catch (error) {
         if (kDebugMode) {
           final message = describeUserFacingError(error).message;
-          debugPrint('Music 沉浸播放命令失败: $message');
+          devLog('Music 沉浸播放命令失败: $message');
         }
       }
     }());

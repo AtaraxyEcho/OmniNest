@@ -12,6 +12,7 @@ import 'package:omninest/features/music/application/music_local_preferences_cont
 import 'package:omninest/features/music/application/music_media_session.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 音乐播放会话。
 class MusicPlaybackSession {
@@ -347,7 +348,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       _loadedUrl = null;
       _loadedItem = null;
       if (kDebugMode) {
-        debugPrint('[_syncPlayback] 音频打开失败: $error');
+        devLog('[_syncPlayback] 音频打开失败: $error');
       }
       state = state.copyWith(lastError: error.toString());
     }
@@ -405,7 +406,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       completer.complete();
     } on Exception catch (error) {
       if (kDebugMode) {
-        debugPrint('[MusicPlaybackProgress] 本地进度保存失败: $error');
+        devLog('[MusicPlaybackProgress] 本地进度保存失败: $error');
       }
       completer.complete();
     } finally {
@@ -421,7 +422,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       return;
     }
     if (kDebugMode) {
-      debugPrint('[_logSub] 音频播放错误: ${log.text}');
+      devLog('[_logSub] 音频播放错误: ${log.text}');
     }
     state = state.copyWith(lastError: log.text);
   }

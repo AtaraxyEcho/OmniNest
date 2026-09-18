@@ -24,6 +24,7 @@ import 'package:omninest/features/reader/data/reader_image_repository.dart';
 import 'package:omninest/features/reader/data/reader_image_repository_base.dart';
 import 'package:omninest/features/reader/data/reader_local_progress.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 final appEnvironmentProvider = Provider<AppEnvironment>(
   (ref) => AppEnvironment.fromDefines(),
@@ -137,11 +138,11 @@ Future<void> _autoCleanExpiredCache(
     await localStorage.cleanOldChapters(maxAgeDays: 30);
     await imageRepository.cleanOld(maxAgeDays: 30);
     if (kDebugMode) {
-      debugPrint('CacheCleanup: expired cache cleaned');
+      devLog('CacheCleanup: expired cache cleaned');
     }
   } on Exception catch (e) {
     if (kDebugMode) {
-      debugPrint('CacheCleanup: auto-clean failed: $e');
+      devLog('CacheCleanup: auto-clean failed: $e');
     }
   }
 }

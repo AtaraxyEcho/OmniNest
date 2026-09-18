@@ -4,6 +4,10 @@ param(
     [ValidatePattern('^([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{64}$')]
     [string]$ExpectedCertificateSha256,
 
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^https?://')]
+    [string]$ApiBaseUrl,
+
     [string]$FlutterCommand = '',
     [string]$JarsignerPath = '',
     [string]$KeytoolPath = ''
@@ -94,7 +98,11 @@ $expectedFingerprint = $ExpectedCertificateSha256.Replace(':', '').ToUpperInvari
 
 Push-Location $projectRoot
 try {
-    Invoke-CheckedCommand -Command $flutter -Arguments @('build', 'appbundle', '--release', '--no-pub')
+    # release 构建必须显式指定 API 基地址（environment.fromDefines 会 fail-fast）。
+    Invoke-CheckedCommand -Command $flutter -Arguments @(
+        'build', 'appbundle', '--release', '--no-pub',
+        "--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl"
+    )
     if (-not (Test-Path -LiteralPath $bundle -PathType Leaf)) {
         throw "Android App Bundle was not found: $bundle"
     }

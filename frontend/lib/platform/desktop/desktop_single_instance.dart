@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:omninest/platform/desktop/desktop_deep_link_bridge.dart';
+import 'package:omninest/core/log/dev_log.dart';
 import 'package:window_manager/window_manager.dart';
 
 export 'package:omninest/platform/desktop/desktop_deep_link_bridge.dart';
@@ -32,10 +32,10 @@ Future<void> ensureSingleDesktopInstance({
     });
   } on SocketException {
     if (await _forwardToRunningInstance(port, arguments)) {
-      debugPrint('检测到已运行的 OmniNest 实例，已激活主窗口并退出');
+      devLog('检测到已运行的 OmniNest 实例，已激活主窗口并退出');
       exit(0);
     }
-    debugPrint('单实例端口被其他进程占用，跳过单实例保护');
+    devLog('单实例端口被其他进程占用，跳过单实例保护');
   }
 }
 
@@ -60,7 +60,7 @@ Future<void> _activateMainWindow() async {
     await windowManager.show();
     await windowManager.focus();
   } on Object catch (error) {
-    debugPrint('激活主窗口失败: $error');
+    devLog('激活主窗口失败: $error');
   }
 }
 

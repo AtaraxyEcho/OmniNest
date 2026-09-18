@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 class WindowChromeState {
   const WindowChromeState({
@@ -184,7 +185,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       (_) => _applyChrome(target, revision),
       onError: (Object error, StackTrace stackTrace) {
         if (kDebugMode) {
-          debugPrint('Previous window chrome update failed: $error');
+          devLog('Previous window chrome update failed: $error');
         }
         return _applyChrome(target, revision);
       },
@@ -226,7 +227,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
         );
       } catch (error) {
         if (kDebugMode && revision == _desiredRevision) {
-          debugPrint('System UI update failed: $error');
+          devLog('System UI update failed: $error');
         }
       }
       return;
@@ -288,7 +289,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       _appliedFullscreen = target.isFullscreen;
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('Window chrome apply failed: $error');
+        devLog('Window chrome apply failed: $error');
       }
       return;
     }
@@ -349,7 +350,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       _appliedFullscreen = fullscreen;
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('Window fullscreen update failed: $error');
+        devLog('Window fullscreen update failed: $error');
       }
     }
   }
@@ -391,7 +392,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       _appliedChromeHidden = hidden;
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('Window title bar update failed: $error');
+        devLog('Window title bar update failed: $error');
       }
     }
   }
@@ -405,7 +406,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       _resizableApplied = true;
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('Window resizable update failed: $error');
+        devLog('Window resizable update failed: $error');
       }
     }
   }
@@ -426,7 +427,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       await _windowFrameChannel.invokeMethod<bool>('verifyWindowFrame');
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('Window frame verify failed: $error');
+        devLog('Window frame verify failed: $error');
       }
     }
   }
@@ -440,7 +441,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       _immersivePlacementSaved = true;
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('Window placement save failed: $error');
+        devLog('Window placement save failed: $error');
       }
     }
   }
@@ -454,7 +455,7 @@ class WindowChromeController extends Notifier<WindowChromeState> {
       await _windowFrameChannel.invokeMethod<void>('restoreWindowPlacement');
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('Window placement restore failed: $error');
+        devLog('Window placement restore failed: $error');
       }
     } finally {
       _immersivePlacementSaved = false;

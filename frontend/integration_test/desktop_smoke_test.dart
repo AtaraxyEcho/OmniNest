@@ -16,8 +16,6 @@ void main() {
     // 冷启动可能已有会话，先等一帧；若在登录页则登录。
     final usernameField = find.widgetWithText(TextFormField, '用户名');
     final passwordField = find.widgetWithText(TextFormField, '密码');
-    // 兜底：按顺序取前两个文本框
-    final fields = find.byType(TextFormField);
 
     if (usernameField.evaluate().isNotEmpty &&
         passwordField.evaluate().isNotEmpty) {

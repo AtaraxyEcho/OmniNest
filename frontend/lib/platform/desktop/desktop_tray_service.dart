@@ -12,6 +12,7 @@ import 'package:omninest/core/window/desktop_close_flow.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 桌面系统托盘服务。
 ///
@@ -65,7 +66,7 @@ class DesktopTrayService with TrayListener, WindowListener {
     try {
       await trayManager.setToolTip('OmniNest');
     } on Object catch (error) {
-      debugPrint('托盘提示文案设置失败: $error');
+      devLog('托盘提示文案设置失败: $error');
     }
 
     await _applyContextMenu();
@@ -89,7 +90,7 @@ class DesktopTrayService with TrayListener, WindowListener {
     try {
       await trayManager.setIcon(iconPath, isTemplate: false);
     } on Object catch (error) {
-      debugPrint('托盘图标设置失败: $error');
+      devLog('托盘图标设置失败: $error');
     }
   }
 
@@ -121,7 +122,7 @@ class DesktopTrayService with TrayListener, WindowListener {
         ),
       );
     } on Object catch (error) {
-      debugPrint('托盘菜单设置失败: $error');
+      devLog('托盘菜单设置失败: $error');
     }
   }
 
@@ -146,13 +147,13 @@ class DesktopTrayService with TrayListener, WindowListener {
       return;
     }
     _quitting = true;
-    debugPrint('托盘退出流程开始');
+    devLog('托盘退出流程开始');
     windowManager.removeListener(this);
     await Future.any([
       _cleanupBeforeExit(),
       Future<void>.delayed(quitCleanupBudget),
     ]);
-    debugPrint('托盘退出：结束进程');
+    devLog('托盘退出：结束进程');
     exit(0);
   }
 
@@ -160,12 +161,12 @@ class DesktopTrayService with TrayListener, WindowListener {
     try {
       await trayManager.destroy();
     } on Object catch (error) {
-      debugPrint('托盘销毁失败（忽略继续退出）: $error');
+      devLog('托盘销毁失败（忽略继续退出）: $error');
     }
     try {
       await windowManager.setPreventClose(false);
     } on Object catch (error) {
-      debugPrint('解除关闭拦截失败: $error');
+      devLog('解除关闭拦截失败: $error');
     }
   }
 
@@ -193,13 +194,13 @@ class DesktopTrayService with TrayListener, WindowListener {
         bringAppToFront: true,
       );
     } on Object catch (error) {
-      debugPrint('托盘右键菜单弹出失败: $error');
+      devLog('托盘右键菜单弹出失败: $error');
       return;
     }
     try {
       await _windowFrameChannel.invokeMethod<void>('finishTrayMenuPopup');
     } on Object catch (error) {
-      debugPrint('托盘菜单收尾消息发送失败: $error');
+      devLog('托盘菜单收尾消息发送失败: $error');
     }
   }
 

@@ -1,14 +1,17 @@
 package com.omninest.modules.file.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.download.OfflineDownloadSourceResolver;
 import com.omninest.common.download.OfflineDownloadSourceResolver.ResolvedSource;
 import com.omninest.common.download.OfflineDownloadSourceResolver.SourceKind;
+import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.DownloadOfflineTask;
 import com.omninest.modules.file.dto.CreateOfflineDownloadRequest;
@@ -58,7 +61,8 @@ class OfflineDownloadRequestServiceTest {
 
     @BeforeEach
     void setUp() {
-        when(offlineTaskRepository.save(any(DownloadOfflineTask.class)))
+        // lenient：getTask 等只读用例不触发 save 桩。
+        lenient().when(offlineTaskRepository.save(any(DownloadOfflineTask.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
     }
 
@@ -129,5 +133,31 @@ class OfflineDownloadRequestServiceTest {
         assertThat(task.getStatus()).isEqualTo("CANCELLED");
         verify(offlineTaskRepository).save(task);
         verify(taskRecordService).markCancelled(TASK_ID);
+    }
+
+    @Test
+    void getTaskReturnsOwnedTask() {
+        DownloadOfflineTask task = new DownloadOfflineTask();
+        task.setId(TASK_ID);
+        task.setOwnerUserId(OWNER_ID);
+        task.setSourceUri("https://example.com/file.zip");
+        task.setFileName("file.zip");
+        when(offlineTaskRepository.findByIdAndOwnerUserId(TASK_ID, OWNER_ID))
+                .thenReturn(Optional.of(task));
+
+        var dto = service.getTask(OWNER_ID, TASK_ID);
+
+        assertThat(dto.id()).isEqualTo(TASK_ID);
+        assertThat(dto.fileName()).isEqualTo("file.zip");
+    }
+
+    @Test
+    void getTaskRejectsForeignOrMissingTask() {
+        when(offlineTaskRepository.findByIdAndOwnerUserId(TASK_ID, OWNER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getTask(OWNER_ID, TASK_ID))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("离线下载任务不存在");
     }
 }

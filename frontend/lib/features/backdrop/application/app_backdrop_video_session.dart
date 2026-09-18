@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 final appBackdropVideoSessionProvider = Provider<AppBackdropVideoSession>((
   ref,
@@ -571,14 +572,14 @@ class AppBackdropVideoSession extends ChangeNotifier {
       await player.stop().timeout(_stopTimeout);
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('应用背景：释放前停止播放器失败：$error');
+        devLog('应用背景：释放前停止播放器失败：$error');
       }
     }
     try {
       await player.dispose().timeout(_disposeTimeout);
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('应用背景：释放播放器失败：$error');
+        devLog('应用背景：释放播放器失败：$error');
       }
     }
   }

@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 桌面/移动：把服务端视频壁纸缓存到本机后播放，降低网络抖动。
 ///
@@ -99,7 +100,7 @@ class AppBackdropLocalVideoCache {
       return target.path;
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('背景视频本地缓存失败: assetId=$assetId $error');
+        devLog('背景视频本地缓存失败: assetId=$assetId $error');
       }
       return null;
     }
@@ -119,7 +120,7 @@ class AppBackdropLocalVideoCache {
       }
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('背景视频本地缓存清理失败: assetId=$assetId $error');
+        devLog('背景视频本地缓存清理失败: assetId=$assetId $error');
       }
     }
   }
@@ -164,7 +165,7 @@ class AppBackdropLocalVideoCache {
       return removed;
     } on Object catch (error) {
       if (kDebugMode) {
-        debugPrint('背景视频本地缓存批量清理失败: $error');
+        devLog('背景视频本地缓存批量清理失败: $error');
       }
       return 0;
     }

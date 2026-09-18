@@ -9,6 +9,7 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
 import 'package:omninest/core/security/offline_data_lifecycle.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 final authSessionStoreProvider = Provider<AuthSessionStore>((ref) {
   return createAuthSessionStore();
@@ -152,7 +153,7 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
         await ref.read(offlineDataLifecycleProvider).clearUser(userId);
       } catch (error) {
         if (kDebugMode) {
-          debugPrint('离线数据清理失败: ${error.runtimeType}');
+          devLog('离线数据清理失败: ${error.runtimeType}');
         }
       }
     }

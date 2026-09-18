@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// IO 平台(桌面/移动)的背景视频视图,基于 media_kit 播放会话。
 /// source 可以是本机文件路径(内置壁纸)或服务端签名 URL;
@@ -154,7 +155,7 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
       return;
     }
     _fallbackLogged = true;
-    debugPrint('背景视频主源打开失败,回退内置壁纸');
+    devLog('背景视频主源打开失败,回退内置壁纸');
   }
 
   void _notifySourceStaleOnce() {

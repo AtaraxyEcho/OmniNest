@@ -31,6 +31,7 @@ import 'package:omninest/features/video/presentation/widgets/movie_player_subtit
 import 'package:omninest/features/video/presentation/widgets/movie_player_top_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/subtitle_file_decoder.dart';
 import 'package:omninest/features/video/presentation/widgets/subtitle_parser.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 part 'movie_player_page_interactions.dart';
 part 'movie_player_page_tracks.dart';
@@ -199,7 +200,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
           .read(movieCenterControllerProvider.notifier)
           .refreshForRealtime();
     } on Exception catch (error) {
-      debugPrint('[_syncAndRefreshHistory] 静默刷新失败: $error');
+      devLog('[_syncAndRefreshHistory] 静默刷新失败: $error');
     }
   }
 
@@ -244,7 +245,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
                 );
               },
               error: (error, stackTrace) {
-                debugPrint('[_build] 播放计划加载失败: $error');
+                devLog('[_build] 播放计划加载失败: $error');
                 return AppErrorView(
                   message: movieErrorMessage(
                     error,
@@ -496,7 +497,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
         completed: isMoviePlaybackCompleted(position, duration),
       );
     } catch (_) {
-      debugPrint('播放进度同步失败');
+      devLog('播放进度同步失败');
     }
   }
 
@@ -518,7 +519,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
           completed: isMoviePlaybackCompleted(position, duration),
         );
       } catch (_) {
-        debugPrint('周期性进度同步失败');
+        devLog('周期性进度同步失败');
       }
     });
   }
@@ -565,7 +566,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
       return;
     }
     // 原生 seek 未生效，重新打开流从目标位置开始
-    debugPrint(
+    devLog(
       '[_seekToPosition] 原生 seek 未生效，回退到流重开: targetSeconds=$targetSeconds',
     );
     _polledPosition.value = Duration(seconds: targetSeconds);
@@ -703,12 +704,12 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
     try {
       final subtitleContent = await _playbackService.loadSubtitle(url);
       if (!mounted || generation != _subtitleGeneration) return;
-      debugPrint('字幕内容长度: ${subtitleContent.length}');
+      devLog('字幕内容长度: ${subtitleContent.length}');
       final cues = parseSubtitleContent(subtitleContent);
-      debugPrint('字幕解析完成: ${cues.length} 条字幕');
+      devLog('字幕解析完成: ${cues.length} 条字幕');
       _displaySubtitleCues(cues, generation);
     } catch (_) {
-      debugPrint('WebVTT 获取失败');
+      devLog('WebVTT 获取失败');
     }
   }
 

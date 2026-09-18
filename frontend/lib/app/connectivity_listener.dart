@@ -10,6 +10,7 @@ import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/data/reader_sync_queue.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 网络状态监听器：网络恢复时触发同步队列重放。
 class ConnectivityListener {
@@ -92,7 +93,7 @@ class ConnectivityListener {
       _onConnectivityChanged(await Connectivity().checkConnectivity());
     } on Exception catch (error) {
       if (kDebugMode) {
-        debugPrint('网络状态初始化失败: $error');
+        devLog('网络状态初始化失败: $error');
       }
     }
   }
@@ -114,7 +115,7 @@ class ConnectivityListener {
           await _syncQueue.markCompleted(op.id);
         } on Exception catch (e) {
           if (kDebugMode) {
-            debugPrint('同步操作失败: id=${op.id}, type=${op.type}, error=$e');
+            devLog('同步操作失败: id=${op.id}, type=${op.type}, error=$e');
           }
           await _syncQueue.markFailed(op.id);
         }
@@ -132,7 +133,7 @@ class ConnectivityListener {
       await ReaderSyncQueue.flush(api: api);
     } on Exception catch (e) {
       if (kDebugMode) {
-        debugPrint('阅读同步队列重放失败: $e');
+        devLog('阅读同步队列重放失败: $e');
       }
     }
   }

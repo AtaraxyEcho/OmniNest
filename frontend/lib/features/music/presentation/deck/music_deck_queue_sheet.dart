@@ -7,6 +7,7 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 显示当前播放队列的响应式抽屉。
 Future<void> showMusicDeckQueue(BuildContext context) {
@@ -149,7 +150,7 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                             padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
                             buildDefaultDragHandles: false,
                             onReorderItem: (oldIndex, adjustedIndex) {
-                              debugPrint(
+                              devLog(
                                 '[QueueSheet] onReorderItem($oldIndex,$adjustedIndex)',
                               );
                               // reorderQueue 沿用旧版 onReorder 的原始索引约定，

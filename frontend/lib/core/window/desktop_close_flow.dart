@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/core/window/desktop_close_confirm_dialog.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 桌面端主窗口关闭流程：确认弹窗、记住偏好与托盘动作的统一入口。
 ///
@@ -82,7 +83,7 @@ class DesktopCloseFlow {
       }
       await _apply(decision.action);
     } on Object catch (error) {
-      debugPrint('关闭确认流程失败，回退为隐藏到托盘: $error');
+      devLog('关闭确认流程失败，回退为隐藏到托盘: $error');
       await _apply(DesktopCloseAction.minimizeToTray);
     } finally {
       _handling = false;

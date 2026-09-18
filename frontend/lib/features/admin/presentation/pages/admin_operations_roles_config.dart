@@ -58,10 +58,14 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
             }).toList();
     final sorted = _applySort(searched, l10n);
     final canManageConfigs =
-        ref.watch(authSessionProvider).asData?.value.user?.permissions.contains(
-              'system:config:manage',
-            ) ??
-            false;
+        ref
+            .watch(authSessionProvider)
+            .asData
+            ?.value
+            .user
+            ?.permissions
+            .contains('system:config:manage') ??
+        false;
     final totalPages = (sorted.length / _pageSize).ceil();
     final currentPage = totalPages == 0 ? 0 : _page.clamp(0, totalPages - 1);
     final pageItems =
@@ -531,7 +535,9 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = describeUserFacingError(error, l10n: l10n).message);
+        setState(
+          () => _error = describeUserFacingError(error, l10n: l10n).message,
+        );
       }
     } finally {
       if (mounted) {
@@ -593,7 +599,9 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = describeUserFacingError(error, l10n: l10n).message);
+        setState(
+          () => _error = describeUserFacingError(error, l10n: l10n).message,
+        );
       }
     } finally {
       if (mounted) {

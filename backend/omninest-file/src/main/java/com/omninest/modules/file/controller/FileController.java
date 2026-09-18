@@ -607,6 +607,14 @@ public class FileController {
         return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
     }
 
+    @Operation(summary = "查询离线下载任务", description = "按 ID 查询单个离线下载任务")
+    @GetMapping("/api/v1/offline-downloads/{taskId}")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<OfflineDownloadTaskDto> getOfflineDownload(@PathVariable UUID taskId) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(offlineDownloadRequestService.getTask(ownerUserId, taskId));
+    }
+
     @Operation(summary = "创建离线下载任务", description = "提交离线下载任务，服务端异步下载文件")
     @PostMapping("/api/v1/offline-downloads")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")

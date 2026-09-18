@@ -6,6 +6,7 @@ import 'package:flutter_soloud/flutter_soloud.dart';
 import 'package:omninest/features/music/application/music_realtime_spectrum_mapper.dart';
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// 音乐播放状态。
 class MusicAudioPlayerState {
@@ -487,7 +488,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _logController.add(MusicAudioLog(text, playbackFailure: playbackFailure));
     }
     if (kDebugMode) {
-      debugPrint('[MusicAudio] $text');
+      devLog('[MusicAudio] $text');
     }
   }
 }

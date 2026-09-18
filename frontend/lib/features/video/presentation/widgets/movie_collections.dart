@@ -415,9 +415,7 @@ class _MoviePickerDialogState extends ConsumerState<_MoviePickerDialog> {
                   if (snapshot.hasError) {
                     return Center(
                       child: Text(
-                        AppLocalizations.of(
-                          context,
-                        ).videoLoadFailedWith(
+                        AppLocalizations.of(context).videoLoadFailedWith(
                           describeUserFacingError(snapshot.error!).message,
                         ),
                       ),

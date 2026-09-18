@@ -13,10 +13,13 @@ void main() {
     expect(source, contains('OMNINEST_ANDROID_KEY_ALIAS'));
     expect(source, contains('OMNINEST_ANDROID_KEY_PASSWORD'));
     expect(source, contains('OMNINEST_ALLOW_DEBUG_RELEASE_SIGNING'));
+    // release 必须显式携带 API 基地址（environment.fromDefines fail-fast 契约）。
+    expect(source, contains(r'[string]$ApiBaseUrl'));
     expect(
       source,
-      contains("@('build', 'appbundle', '--release', '--no-pub')"),
+      contains("'build', 'appbundle', '--release', '--no-pub'"),
     );
+    expect(source, contains(r'--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl'));
     expect(source, contains("@('-verify', \$bundle)"));
     expect(source, contains("'-printcert'"));
     expect(source, contains("'-jarfile' \$bundle"));

@@ -15,6 +15,7 @@ import 'package:omninest/features/music/presentation/deck/music_deck_primitives.
 import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
+import 'package:omninest/core/log/dev_log.dart';
 
 /// Mini Player 可注入配色。
 class MusicMiniPlayerPalette {
@@ -522,7 +523,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
       }
     } on Exception catch (error) {
       if (kDebugMode) {
-        debugPrint('Music Mini Player 播放命令失败: $error');
+        devLog('Music Mini Player 播放命令失败: $error');
       }
       if (!mounted) {
         return;
