@@ -2701,6 +2701,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalLocalBackdropProcessing => '处理中';
 
   @override
+  String get portalLocalBackdropProcessingVideo => '处理中（视频约需 1-2 分钟）';
+
+  @override
   String get portalLocalBackdropFailed => '已失效';
 
   @override

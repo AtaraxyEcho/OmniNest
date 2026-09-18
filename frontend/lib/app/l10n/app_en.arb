@@ -1166,6 +1166,7 @@
   "portalLocalBackdropScanFailed": "Scan failed. Check folder permissions.",
   "portalLocalBackdropMissing": "File missing",
   "portalLocalBackdropProcessing": "Processing",
+  "portalLocalBackdropProcessingVideo": "Processing (videos take 1-2 minutes)",
   "portalLocalBackdropFailed": "Unavailable",
   "portalLocalBackdropRemoveConfirmTitle": "Remove this backdrop?",
   "portalLocalBackdropRemoveConfirmMessage": "It will be deleted from the server library and disappear on all devices.",

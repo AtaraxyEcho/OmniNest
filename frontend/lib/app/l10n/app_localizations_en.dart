@@ -2778,6 +2778,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropProcessing => 'Processing';
 
   @override
+  String get portalLocalBackdropProcessingVideo =>
+      'Processing (videos take 1-2 minutes)';
+
+  @override
   String get portalLocalBackdropFailed => 'Unavailable';
 
   @override

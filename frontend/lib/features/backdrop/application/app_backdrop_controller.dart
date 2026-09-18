@@ -159,6 +159,25 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     }
   }
 
+  /// 无条件从服务端同步列表并刷新当前 state。
+  ///
+  /// 面板打开与"处理中"素材轮询使用:上传受理后素材要在服务端完成安全扫描
+  /// (视频还叠加缩略图/转码)才转 READY,必须周期性回读才能看到状态流转;
+  /// 离线或失败时静默保留上次已加载内容。
+  Future<void> syncFromServer() async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return;
+    }
+    await refreshServerAssets();
+    if (!ref.mounted) {
+      return;
+    }
+    state = AsyncData(
+      await _loadCurrentState(ref.read(appBackdropRepositoryProvider)),
+    );
+  }
+
   /// 签名 URL 可能已过期或即将过期时刷新服务端列表。
   ///
   /// [force] 为 true 时无条件刷新(如视频打开失败后的补偿)。

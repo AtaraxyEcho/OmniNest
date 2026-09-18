@@ -5179,6 +5179,12 @@ abstract class AppLocalizations {
   /// **'Processing'**
   String get portalLocalBackdropProcessing;
 
+  /// No description provided for @portalLocalBackdropProcessingVideo.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing (videos take 1-2 minutes)'**
+  String get portalLocalBackdropProcessingVideo;
+
   /// No description provided for @portalLocalBackdropFailed.
   ///
   /// In en, this message translates to:

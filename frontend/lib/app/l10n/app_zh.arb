@@ -1039,6 +1039,7 @@
   "portalLocalBackdropScanFailed": "扫描失败，请检查目录权限",
   "portalLocalBackdropMissing": "文件已缺失",
   "portalLocalBackdropProcessing": "处理中",
+  "portalLocalBackdropProcessingVideo": "处理中（视频约需 1-2 分钟）",
   "portalLocalBackdropFailed": "已失效",
   "portalLocalBackdropRemoveConfirmTitle": "移除该背景？",
   "portalLocalBackdropRemoveConfirmMessage": "素材将从服务端背景库删除，并在所有设备上消失。",
