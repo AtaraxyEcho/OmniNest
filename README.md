@@ -1,95 +1,158 @@
-# OmniNest
+<p align="center">
+  <strong>OmniNest</strong>
+</p>
 
-OmniNest 是一个面向个人和家庭场景的自托管数字生活中心。它将文件管理、影视、音乐、相册和阅读组织在统一的账户、权限、存储和后台任务体系中，支持 Web、Android、Windows 和 macOS。
+<h3 align="center">自托管个人数字生活中心</h3>
 
-项目仍在持续开发中。本文件说明产品定位、核心能力、整体结构和最短启动路径；后端实现与 API 见 [backend/README.md](backend/README.md)，Flutter 客户端实现与构建方式见 [frontend/README.md](frontend/README.md)。
+<p align="center">
+  文件 · 影视 · 音乐 · 相册 · 阅读 —— 统一账户、权限、存储与后台任务
+</p>
+
+---
+
+OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心。它把文件管理、影视、音乐、相册和阅读组织在同一套账户、权限、对象存储与异步任务体系中，由你自己部署、自己持有数据。
+
+本仓库为**模块化单体**：Spring Boot 提供 API / Worker / Scheduler，Flutter 提供客户端。后端与 API 见 [backend/README.md](backend/README.md)，客户端见 [frontend/README.md](frontend/README.md)，部署见 [deploy/README.md](deploy/README.md)。
+
+> **状态**：项目持续开发中。下文说明产品能力、平台支持、免责声明与最短启动路径。
+
+---
+
+## 免责声明（Disclaimer）
+
+请在使用 OmniNest 前仔细阅读本节。**使用本软件即表示你已理解并接受下列条款。**
+
+### 内容与版权
+
+- OmniNest **不提供、不分发、不附带**任何影视、音乐、电子书、图片等媒体内容。
+- 你**仅可**通过本系统存储、管理、播放你**合法拥有**或**依法有权使用**的媒体与文件。
+- 上传、导入或共享受版权保护的内容前，你必须自行确保具备相应权利。因内容来源、传播方式或使用方式引发的任何版权或法律纠纷，**由使用者自行承担全部责任**，与本项目开发者、贡献者无关。
+- 本项目**不鼓励、不支持**任何形式的盗版、侵权或非法内容传播。
+- 文档中的界面示意图与演示素材，应使用**公有领域 / CC0** 等无版权风险的资源（例如本地测试目录中的 CC0 素材）。**请勿将受版权保护的内容写入本仓库或用于公开演示。**
+
+### 软件本身
+
+- 本软件按 **「现状」（AS IS）** 提供，**不附带任何明示或默示的担保**，包括但不限于适销性、特定用途适用性与不侵权。
+- 在适用法律允许的最大范围内，作者与贡献者**不对**因使用或无法使用本软件而导致的任何直接、间接、附带或后果性损失负责，包括数据丢失、服务中断、设备损坏或业务损失。
+- 自托管环境的安全、备份、密钥管理、公网暴露面与访问控制，**由部署者自行负责**。默认配置面向个人/内网场景，**不等于**可直接用于未加固的公网生产。
+
+### 平台支持
+
+- 当前**官方推荐并验证**的客户端为 **Web、Android、Windows**。
+- Flutter 工程内含 iOS / macOS 相关目录与适配代码，但**未完成与上述三端同级的全量测试**，**不推荐**在生产或重要场景使用；如需使用，请自行充分验证。
+- 是否启用病毒扫描（ClamAV）、照片 AI 等可选组件，由部署方按机器资源与暴露面自行决定；个人 4C4G 场景通常可关闭扫描，公网生产建议评估后开启。
+
+### 隐私与数据
+
+- 数据默认保存在**你自己的**服务器与存储中。开发者**不会**通过本软件收集你的媒体库内容。
+- 你需自行遵守所在地关于个人信息、网络服务与数据存储的法律法规。
+
+---
 
 ## 界面预览
+
 <table>
   <tr>
     <th>Portal 工作台</th>
     <th>音乐播放</th>
   </tr>
   <tr>
-    <td><img src="imgs/portal_page.png" alt="OmniNest Portal 工作台页面" width="600"></td>
-    <td><img src="imgs/music_player_page.png" alt="OmniNest 音乐播放器页面" width="600"></td>
+    <td><img src="imgs/portal_page.png" alt="Portal 工作台" width="600"></td>
+    <td><img src="imgs/music_player_page.png" alt="音乐播放器" width="600"></td>
   </tr>
   <tr>
     <th>阅读器</th>
     <th>安装向导</th>
   </tr>
   <tr>
-    <td><img src="imgs/reader_view_page.png" alt="OmniNest 阅读器页面" width="600"></td>
-    <td><img src="imgs/setup_page.png" alt="OmniNest 安装向导页面" width="600"></td>
+    <td><img src="imgs/reader_view_page.png" alt="阅读器" width="600"></td>
+    <td><img src="imgs/setup_page.png" alt="安装向导" width="600"></td>
   </tr>
 </table>
 
+三端截图目录（可自行补全）：
 
-## 核心功能
-
-| 模块 | 主要能力 |
+| 平台 | 目录 |
 | --- | --- |
-| Portal | 统一工作台、动态背景、最近内容、通知和跨模块入口 |
-| File Manager | 文件上传、目录管理、搜索、预览、下载、回收站及存储生命周期管理 |
-| Photos | 图片导入、相册浏览、缩略图、元数据、位置和图像分析结果查看 |
-| Movies | 影视库、海报与详情、视频播放、字幕、播放进度和本地媒体来源 |
-| Music | 本地音乐库、外部音乐平台、播放队列、歌词/封面和播放进度 |
-| Reader | EPUB 等书籍导入、目录、文本阅读、漫画页面阅读、书签、批注和阅读进度 |
-| Admin | 用户、角色权限、系统配置、后台任务、操作审计、通知和运行状态管理 |
-| Profile | 个人资料、主题切换、账号安全和个人偏好 |
+| Web | [imgs/web](imgs/web) |
+| Android | [imgs/android](imgs/android) |
+| Windows | [imgs/win](imgs/win) |
 
-## 核心业务链路
+目录为空仅表示该平台截图尚未放入仓库，不影响代码与文档其余部分。
 
-1. 首次部署后打开安装向导，创建实例首个超级管理员并完成基础初始化。
-2. 登录后由 Portal 提供最近内容、任务状态、通知和业务模块入口。
-3. File Manager 负责文件内容、目录、权限、版本、回收站和存储生命周期；Photos、Movies、Music、Reader 通过统一文件能力读取内容并保存各自的业务元数据。
-4. 导入、解析、缩略图、索引、媒体探测和安全扫描等需要持续运行的流程进入后台任务，页面可以查询进度和失败原因。
-5. 个人中心统一提供浅色、深色和跟随系统主题等偏好，并在不同窗口尺寸下保持一致的信息架构。
+---
+
+## 核心能力
+
+| 模块 | 说明 |
+| --- | --- |
+| **Portal** | 统一工作台、动态背景、最近内容、通知与模块入口 |
+| **File Manager** | 上传、目录、搜索、预览、下载、回收站与存储生命周期 |
+| **Photos** | 相册与时间线、缩略图、元数据、位置与可选图像分析 |
+| **Movies** | 影视库、海报与详情、播放、字幕、进度与本地只读媒体源 |
+| **Music** | 本地曲库、外部平台、队列、封面/歌词与播放进度 |
+| **Reader** | EPUB 等导入、目录、文本/漫画阅读、书签、批注与进度 |
+| **Admin** | 用户与角色权限、配置、任务、日志、审计与运行状态 |
+| **Profile** | 主题、偏好与账号安全 |
+
+---
+
+## 平台支持
+
+| 平台 | 支持级别 | 说明 |
+| --- | --- | --- |
+| **Web** | ✅ 推荐 / 已验证 | 现代桌面浏览器（开发基线：Chrome） |
+| **Android** | ✅ 推荐 / 已验证 | 紧凑导航与触控布局 |
+| **Windows** | ✅ 推荐 / 已验证 | 桌面窗口、键鼠操作 |
+| **iOS / macOS** | ⚠️ 不推荐 | 有 Flutter 工程适配，**未全量测试**，请自行验证后再用 |
+
+---
 
 ## 技术栈
 
-| 层次 | 技术与职责 |
+| 层次 | 说明 |
 | --- | --- |
-| 客户端 | Flutter、Dart，统一实现 Web、Android、Windows 和 macOS |
-| 后端 | Java 21、Spring Boot 4.0.x，模块化单体并支持 API、Worker、Scheduler 运行角色 |
-| 业务数据 | PostgreSQL，保存用户、权限、配置、任务、通知、媒体元数据和派生状态 |
-| 内容存储 | MinIO 作为默认托管存储；File 模块通过受控 Storage Provider 统一读取和写入 |
-| 本地媒体 | 管理员登记的 `LOCAL_FILESYSTEM` 只读影视来源，使用部署白名单和路径边界校验 |
-| 异步基础设施 | RabbitMQ 处理可追踪、可重试、可恢复或需要调度的后台任务 |
-| 缓存与并发 | Redis 提供缓存、短期状态、限流和并发控制 |
-| 搜索与识别 | Lucene 默认负责嵌入式搜索，Apache Tika 负责内容识别和文本提取；Photos 图像分析可选使用 Sidecar |
+| 客户端 | Flutter / Dart（Web · Android · Windows） |
+| 后端 | Java 21 · Spring Boot，模块化单体（API / Worker / Scheduler） |
+| 数据与存储 | PostgreSQL · MinIO · RabbitMQ · Redis · Lucene · 可选 AI Sidecar |
 
-## 项目结构
+---
 
-| 目录 | 内容 | 入口文档 |
-| --- | --- | --- |
-| [backend](backend/README.md) | Spring Boot API、Worker、Scheduler 和后端测试 | [后端开发指南](backend/README.md) |
-| [frontend](frontend/README.md) | Flutter Web、Android、Windows、macOS 客户端与测试 | [前端开发指南](frontend/README.md) |
-| [ai-sidecar](deploy/ai-sidecar/README.md) | Photos 图像分析侧车、模型适配和容器定义 | Sidecar README |
-| [deploy](deploy/README.md) | dev/prod Docker 编排、镜像构建和运行配置 | 部署 README |
+## 仓库结构
+
+| 目录 | 说明 |
+| --- | --- |
+| [backend](backend/README.md) | 后端服务、模块与测试 |
+| [frontend](frontend/README.md) | Flutter 客户端与测试 |
+| [deploy](deploy/README.md) | 开发/生产 Docker 编排与部署说明 |
+| [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | 照片图像分析侧车 |
+| [imgs](imgs) | 文档用截图资源 |
+
+---
 
 ## 环境要求
 
-- Git 和 Git Bash。
-- Docker Desktop 与 Docker Compose v2，用于 PostgreSQL、Redis、RabbitMQ、MinIO 及可选辅助服务。
-- JDK 21 和 Maven，用于运行后端。
-- Flutter stable。当前项目验证基线为 Flutter 3.44.8、Dart 3.12.2。
-- Chrome，用于 Web 开发；Android Studio 与 Android SDK 用于 Android 开发；Windows 或 macOS 对应桌面工具链用于桌面构建。
+- Git；Docker Desktop 与 Docker Compose（基础设施）
+- JDK 21 与 Maven（后端）
+- Flutter stable（验证基线：Flutter 3.44.8 / Dart 3.12.2）
+- Chrome（Web）；Android Studio / SDK（Android）；Windows 工具链（桌面端）
 
-## 服务器配置与安全扫描建议
+---
 
-| 部署场景 | 建议配置 | 病毒扫描 |
+## 资源建议（个人自托管）
+
+| 场景 | 建议 | 病毒扫描（ClamAV） |
 | --- | --- | --- |
-| 个人自托管 / 本地开发 | 4 核 4GB | 可选关闭以降低常驻内存 |
-| 公网生产环境 | 4 核 8GB | 建议保持开启 |
+| 个人 / 内网 | **4 核 4GB** | 默认可关闭 |
+| 公网生产 | **4 核 8GB+** | 建议评估后开启 |
 
-- 全栈包含 PostgreSQL、Redis、RabbitMQ、MinIO、后端运行角色进程和图像分析侧车等常驻服务。4GB 内存适合个人自托管或开发场景（此时建议关闭 ClamAV）；公网生产环境同时承载病毒扫描时内存偏紧，建议 8GB。
-- ClamAV 为上传文件提供安全扫描，属于可选服务。开发编排通过 `COMPOSE_PROFILES=clamav` 控制是否启动，关闭容器时必须同步把后端 `OMNINEST_CLAMAV_ENABLED` 改为 `false`，否则上传会因扫描不可用被拒绝，详见[部署指南](deploy/README.md)。公网生产环境应保持开启。
-- Photos 图像分析侧车使用 CPU 推理（InsightFace），无需 GPU；模型在首次启动时自动下载，需预留最多 10 分钟的启动窗口。
+生产 Compose 默认面向 **4C4G、不启动 ClamAV / 照片 AI** 的个人自托管画像；是否开启扫描由部署者决定。详见 [deploy/README.md](deploy/README.md)。
+
+---
 
 ## 快速开始
 
-以下命令均从项目根目录执行。后端和前端需要使用两个 Git Bash 终端。
+以下命令在项目根目录执行；后端与前端建议使用两个终端。
 
 ### 1. 获取代码
 
@@ -105,47 +168,75 @@ cp deploy/dev/.env.example deploy/dev/.env
 docker compose --env-file deploy/dev/.env -f deploy/dev/docker-compose.yml up -d
 ```
 
-开发编排主要启动基础设施和可选辅助服务，后端与 Flutter 客户端仍以本地进程运行。Compose 的 `.env` 不会自动注入后端进程。
+若本机为 `docker-compose`（旧插件）而非 `docker compose`，请改用对应命令。
 
 ### 3. 启动后端
 
-在第二个终端执行：
-
 ```bash
-cd omni-nest
 cp backend/.env.example backend/.env
 cd backend
 mvn -pl omninest-app spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-后端默认 API 地址为 `http://localhost:8080/api/v1`，OpenAPI 文档地址为 `http://localhost:8080/api-docs`，Swagger UI 地址为 `http://localhost:8080/swagger-ui.html`。
+默认 API：`http://localhost:8080/api/v1`（或以 `backend/.env` 中端口为准，例如 `9090`）。
 
 ### 4. 启动 Flutter Web
 
-在第一个终端或新的终端执行：
-
 ```bash
-cd omni-nest/frontend
+cd frontend
 test -f env/dev.json || cp env/dev.example.json env/dev.json
 flutter pub get
 flutter run -d chrome --web-port=3000 --dart-define-from-file=env/dev.json
 ```
 
-浏览器打开 `http://localhost:3000`。首次安装使用 `http://localhost:3000/setup`，完成后进入登录页和 Portal。
+浏览器打开 `http://localhost:3000`；首次安装访问 `http://localhost:3000/setup`。
 
-`frontend/env/dev.json` 是本地编译期配置，不会被 Flutter 自动读取；启动或构建时必须通过 `--dart-define-from-file` 或单独的 `--dart-define` 传入。Android、Windows 和 macOS 使用同一配置时，必须把 API 和 WebSocket 地址改成客户端可以访问的后端地址。
+`env/dev.json` 必须通过 `--dart-define-from-file` 或 `--dart-define` 传入。Android / Windows 将 API、WebSocket 改为设备可访问的后端地址后，同样使用该配置启动。
 
-### 5. 其他平台
+### 5. Android / Windows
 
-前端设备查询、Android、Windows、macOS 的启动与构建命令见 [frontend/README.md](frontend/README.md)。生产环境的容器编排和 HTTPS 入口见[部署指南](deploy/README.md)。
+```bash
+flutter run -d <android-device-id> --dart-define-from-file=env/dev.json
+flutter run -d windows --dart-define-from-file=env/dev.json
+```
 
+### 6. 生产部署
+
+参见 [deploy/README.md](deploy/README.md)。
+
+**媒体素材**：演示、导入与截图请使用 **CC0 / 公有领域** 资源，勿使用受版权保护的内容（见上方免责声明）。
+
+---
+
+## 测试与质量
+
+| 范围 | 命令 |
+| --- | --- |
+| 后端 | `cd backend && mvn test` |
+| 前端 | `cd frontend && flutter test` |
+| 前端静态检查 | `cd frontend && flutter analyze lib` |
+
+自动化覆盖业务查询与关键页面行为；**Docker 不可用时**，部分 Testcontainers / 迁移用例会 Skipped。**三端端到端 UI、Android 原生层、iOS/macOS** 未纳入当前全量自动化验收。
+
+---
 
 ## 相关文档
 
-- [后端 README](backend/README.md)：服务职责、模块、API、存储、环境变量、启动和测试。
-- [前端 README](frontend/README.md)：页面结构、后端交互、环境配置、启动、构建和 Flutter 开发规范。
-- [部署指南](deploy/README.md)：开发依赖编排、生产容器、Nginx、HTTPS 和证书配置。
+- [后端](backend/README.md)
+- [前端](frontend/README.md)
+- [部署](deploy/README.md)
+- 产品说明亦可参考 [PRODUCT.md](PRODUCT.md)（若存在）
 
-## 项目状态
+---
 
-项目处于持续开发阶段。生产部署前应按实际环境检查公开地址、CORS、JWT 密钥、数据库与消息服务凭据、MinIO 私有存储、日志和 HTTPS 配置；不要将真实密码、Token、密钥或生产配置提交到仓库。
+## 许可证
+
+本项目以仓库根目录 [LICENSE](LICENSE) 为准。使用、修改与分发前请阅读该文件全文。
+
+---
+
+<p align="center">
+  <sub>
+    OmniNest 为自托管软件。请合法使用媒体内容，并对自身部署与数据安全负责。
+  </sub>
+</p>
