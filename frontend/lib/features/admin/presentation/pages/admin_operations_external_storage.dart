@@ -74,7 +74,10 @@ class AdminExternalStoragePage extends ConsumerWidget {
                 final apps = ref.watch(adminConnectorOAuthAppsProvider);
                 return apps.when(
                   loading: () => const _EmptyText('…'),
-                  error: (error, _) => _EmptyText(describeUserFacingError(error, l10n: l10n).message),
+                  error:
+                      (error, _) => _EmptyText(
+                        describeUserFacingError(error, l10n: l10n).message,
+                      ),
                   data:
                       (items) =>
                           items.isEmpty
@@ -193,21 +196,21 @@ Future<void> _showOAuthAppDialog(BuildContext context, WidgetRef ref) async {
                       ),
                       TextField(
                         controller: clientIdController,
-                        decoration: const InputDecoration(
-                          labelText: 'Client ID',
+                        decoration: InputDecoration(
+                          labelText: l10n.adminExternalStorageClientId,
                         ),
                       ),
                       TextField(
                         controller: clientSecretController,
                         obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Client Secret',
+                        decoration: InputDecoration(
+                          labelText: l10n.adminExternalStorageClientSecret,
                         ),
                       ),
                       TextField(
                         controller: redirectController,
-                        decoration: const InputDecoration(
-                          labelText: 'Redirect URI',
+                        decoration: InputDecoration(
+                          labelText: l10n.adminExternalStorageRedirectUri,
                         ),
                       ),
                       SwitchListTile(

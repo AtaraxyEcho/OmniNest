@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
@@ -17,8 +18,9 @@ import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.d
 
 /// 照片分享侧栏：SHARE 眉题 + 预览卡 + LINK 复制 + 分享渠道宫格 + OPTIONS 开关。
 ///
-/// 打开时撤销该照片旧有效链并新建；链接创建后自动复制。渠道：微信走
-/// [photoShareChannel]（未接 SDK 时降级复制），复制/更多复制链接，二维码展示说明。
+/// 打开时撤销该照片旧有效链并新建；链接创建后自动复制。渠道按平台取用：
+/// 移动端「微信」按钮走 [photoShareChannel] 系统分享（不可用降级复制），
+/// 桌面/Web 展示二维码扫码进手机；复制全平台可用。
 class PhotoSharePanel extends ConsumerStatefulWidget {
   const PhotoSharePanel({
     required this.visible,
@@ -487,32 +489,29 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   }
 
   Widget _buildShareToGrid(AppLocalizations l10n) {
-    final canWeChat = photoShareChannel.supportsWeChat;
+    // 移动端：系统分享入口（可选微信）+ 复制；桌面/Web：二维码 + 复制。
+    final showSystemShare = photoShareChannel.supportsSystemShare;
     final targets = <(Color, IconData, String, VoidCallback)>[
-      (
-        const Color(0xFF07C160),
-        Icons.chat_bubble_rounded,
-        l10n.photosShareToWeChat,
-        () => unawaited(_shareToWeChat(l10n)),
-      ),
+      if (showSystemShare)
+        (
+          const Color(0xFF07C160),
+          Icons.chat_bubble_rounded,
+          l10n.photosShareToWeChat,
+          () => unawaited(_shareViaSystem(l10n)),
+        ),
       (
         const Color(0xFF007AFF),
         Icons.link_rounded,
         l10n.photosShareCopy,
         () => unawaited(_copyToClipboard()),
       ),
-      (
-        const Color(0xFF8E8E93),
-        Icons.qr_code_2_rounded,
-        l10n.photosShareToQr,
-        () => _showQrHint(l10n),
-      ),
-      (
-        const Color(0xFF8E8E93),
-        Icons.more_horiz_rounded,
-        l10n.photosShareToMore,
-        () => unawaited(_copyToClipboard()),
-      ),
+      if (!showSystemShare)
+        (
+          const Color(0xFF8E8E93),
+          Icons.qr_code_2_rounded,
+          l10n.photosShareToQr,
+          () => _showQrCode(l10n),
+        ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -536,7 +535,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                   targets[i].$2,
                   targets[i].$3,
                   targets[i].$4,
-                  enabled: i != 0 || canWeChat || _shareUrl != null,
+                  enabled: _shareUrl != null,
                 ),
               ),
             ],
@@ -546,15 +545,14 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     );
   }
 
-  Future<void> _shareToWeChat(AppLocalizations l10n) async {
+  Future<void> _shareViaSystem(AppLocalizations l10n) async {
     final url = _shareUrl;
     if (url == null || url.isEmpty) {
       return;
     }
-    final result = await photoShareChannel.shareLinkToWeChat(
+    final result = await photoShareChannel.shareLink(
       title: widget.photo.title,
-      webUrl: url,
-      thumbUrl: widget.photo.coverUrl,
+      url: url,
     );
     if (!mounted) {
       return;
@@ -563,7 +561,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       case PhotoShareChannelSuccess():
         return;
       case PhotoShareChannelUnsupported(:final reason):
-        debugPrint('微信分享未接入，降级复制链接：$reason');
+        debugPrint('系统分享不可用，降级复制链接：$reason');
         await _copyToClipboard();
         if (!mounted) {
           return;
@@ -578,7 +576,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     }
   }
 
-  void _showQrHint(AppLocalizations l10n) {
+  void _showQrCode(AppLocalizations l10n) {
     final url = _shareUrl;
     if (!mounted) {
       return;
@@ -588,11 +586,32 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       builder:
           (dialogContext) => AlertDialog(
             title: Text(l10n.photosShareToQr),
-            content: Text(
-              url == null || url.isEmpty
-                  ? l10n.photosShareLinkFailed
-                  : l10n.photosShareQrHint(url),
-            ),
+            content:
+                url == null || url.isEmpty
+                    ? Text(l10n.photosShareLinkFailed)
+                    // 固定宽度：QrImageView 内部 LayoutBuilder 不支持
+                    // AlertDialog 的固有尺寸测量。
+                    : SizedBox(
+                      width: 260,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            color: Colors.white,
+                            child: QrImageView(data: url, size: 192),
+                          ),
+                          const SizedBox(height: 12),
+                          SelectableText(
+                            url,
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: 0.55),
+                              fontSize: AppTypography.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(dialogContext).pop(),
@@ -682,14 +701,22 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           label: l10n.photosShareOptionLocation,
           sublabel: location ?? '—',
           value: _includeLocation,
-          onChanged: (v) => setState(() => _includeLocation = v),
+          onChanged: (v) {
+            if (v == _includeLocation) return;
+            setState(() => _includeLocation = v);
+            unawaited(_recreateLink());
+          },
         ),
         const SizedBox(height: 8),
         _ShareToggleRow(
           label: l10n.photosShareOptionOriginal,
-          sublabel: 'Full resolution',
+          sublabel: l10n.photosShareOptionOriginalFull,
           value: _originalQuality,
-          onChanged: (v) => setState(() => _originalQuality = v),
+          onChanged: (v) {
+            if (v == _originalQuality) return;
+            setState(() => _originalQuality = v);
+            unawaited(_recreateLink());
+          },
         ),
       ],
     );

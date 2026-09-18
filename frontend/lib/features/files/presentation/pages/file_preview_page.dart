@@ -574,7 +574,7 @@ class _PdfPreview extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  AppLocalizations.of(context).filesPdfUnsupported,
+                  AppLocalizations.of(context).filesPdfDownloadHint,
                   style: TextStyle(
                     fontSize: AppTypography.bodyMedium,
                     color: context.filesColors.onSurfaceVariant,

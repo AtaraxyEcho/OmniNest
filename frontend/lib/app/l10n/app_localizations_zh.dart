@@ -1836,7 +1836,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesCannotGetFileUrl => '无法获取文件地址';
 
   @override
-  String get filesPdfUnsupported => 'PDF 预览暂不支持此平台，请下载后查看';
+  String get filesPdfDownloadHint => '暂不支持 PDF 在线预览，请下载后查看';
+
+  @override
+  String get filesAccessKeyId => '访问密钥 ID';
+
+  @override
+  String get filesSecretAccessKey => '访问密钥';
+
+  @override
+  String get filesOauthTokenJson => 'OAuth 令牌 JSON';
 
   @override
   String get filesType => '类型';
@@ -3853,6 +3862,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminType => '类型';
+
+  @override
+  String get adminExternalStorageClientId => '客户端 ID';
+
+  @override
+  String get adminExternalStorageClientSecret => '客户端密钥';
+
+  @override
+  String get adminExternalStorageRedirectUri => '重定向 URI';
 
   @override
   String get adminLocalMount => '本地(rclone) 账号';
@@ -7271,9 +7289,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosShareToInstagram => 'Instagram';
 
   @override
-  String get photosShareToMore => '更多';
-
-  @override
   String get photosShareToWeChat => '微信';
 
   @override
@@ -7283,15 +7298,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosShareWeChatCopiedFallback => '已复制链接，请粘贴到微信发送';
 
   @override
-  String photosShareQrHint(String url) {
-    return '请在手机微信中打开：\n$url';
-  }
-
-  @override
   String get photosShareOptionLocation => '包含位置信息';
 
   @override
   String get photosShareOptionOriginal => '原图画质';
+
+  @override
+  String get photosShareOptionOriginalFull => '原始分辨率';
 
   @override
   String get photosShareManage => '管理已有链接';

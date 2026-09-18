@@ -14,6 +14,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   media_kit_libs_windows_video
   media_kit_video
   screen_retriever_windows
+  share_plus
   sqlite3_flutter_libs
   tray_manager
   url_launcher_windows

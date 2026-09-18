@@ -1896,8 +1896,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesCannotGetFileUrl => 'Cannot get file URL';
 
   @override
-  String get filesPdfUnsupported =>
-      'PDF preview is not supported on this platform. Please download to view.';
+  String get filesPdfDownloadHint =>
+      'PDF preview is not available yet. Download the file to view it.';
+
+  @override
+  String get filesAccessKeyId => 'Access Key ID';
+
+  @override
+  String get filesSecretAccessKey => 'Secret Access Key';
+
+  @override
+  String get filesOauthTokenJson => 'OAuth Token JSON';
 
   @override
   String get filesType => 'Type';
@@ -3988,6 +3997,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminType => 'Type';
+
+  @override
+  String get adminExternalStorageClientId => 'Client ID';
+
+  @override
+  String get adminExternalStorageClientSecret => 'Client Secret';
+
+  @override
+  String get adminExternalStorageRedirectUri => 'Redirect URI';
 
   @override
   String get adminLocalMount => 'Local (rclone) account';
@@ -7490,9 +7508,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosShareToInstagram => 'Instagram';
 
   @override
-  String get photosShareToMore => 'More';
-
-  @override
   String get photosShareToWeChat => 'WeChat';
 
   @override
@@ -7503,15 +7518,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Link copied. Paste it into WeChat to send.';
 
   @override
-  String photosShareQrHint(String url) {
-    return 'Open this link on your phone in WeChat:\n$url';
-  }
-
-  @override
   String get photosShareOptionLocation => 'Include location';
 
   @override
   String get photosShareOptionOriginal => 'Original quality';
+
+  @override
+  String get photosShareOptionOriginalFull => 'Full resolution';
 
   @override
   String get photosShareManage => 'Manage existing links';

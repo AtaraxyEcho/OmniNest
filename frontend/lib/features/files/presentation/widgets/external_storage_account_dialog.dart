@@ -295,8 +295,8 @@ class _ExternalStorageAccountDialogState
         const SizedBox(height: 10),
         TextField(
           controller: _s3AccessKeyCtrl,
-          decoration: const InputDecoration(
-            labelText: 'Access Key ID',
+          decoration: InputDecoration(
+            labelText: l10n.filesAccessKeyId,
             isDense: true,
           ),
           onChanged: (_) => setState(() {}),
@@ -305,7 +305,7 @@ class _ExternalStorageAccountDialogState
         TextField(
           controller: _s3SecretKeyCtrl,
           decoration: InputDecoration(
-            labelText: 'Secret Access Key',
+            labelText: l10n.filesSecretAccessKey,
             hintText:
                 widget.account == null
                     ? null
@@ -408,7 +408,7 @@ class _ExternalStorageAccountDialogState
         TextField(
           controller: _oauthTokenCtrl,
           decoration: InputDecoration(
-            labelText: 'OAuth Token JSON',
+            labelText: l10n.filesOauthTokenJson,
             hintText:
                 widget.account == null
                     ? '{"access_token":"...","refresh_token":"...","expiry":"..."}'

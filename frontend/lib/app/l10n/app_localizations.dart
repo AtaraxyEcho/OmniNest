@@ -3559,11 +3559,29 @@ abstract class AppLocalizations {
   /// **'Cannot get file URL'**
   String get filesCannotGetFileUrl;
 
-  /// No description provided for @filesPdfUnsupported.
+  /// No description provided for @filesPdfDownloadHint.
   ///
   /// In en, this message translates to:
-  /// **'PDF preview is not supported on this platform. Please download to view.'**
-  String get filesPdfUnsupported;
+  /// **'PDF preview is not available yet. Download the file to view it.'**
+  String get filesPdfDownloadHint;
+
+  /// No description provided for @filesAccessKeyId.
+  ///
+  /// In en, this message translates to:
+  /// **'Access Key ID'**
+  String get filesAccessKeyId;
+
+  /// No description provided for @filesSecretAccessKey.
+  ///
+  /// In en, this message translates to:
+  /// **'Secret Access Key'**
+  String get filesSecretAccessKey;
+
+  /// No description provided for @filesOauthTokenJson.
+  ///
+  /// In en, this message translates to:
+  /// **'OAuth Token JSON'**
+  String get filesOauthTokenJson;
 
   /// No description provided for @filesType.
   ///
@@ -7374,6 +7392,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Type'**
   String get adminType;
+
+  /// No description provided for @adminExternalStorageClientId.
+  ///
+  /// In en, this message translates to:
+  /// **'Client ID'**
+  String get adminExternalStorageClientId;
+
+  /// No description provided for @adminExternalStorageClientSecret.
+  ///
+  /// In en, this message translates to:
+  /// **'Client Secret'**
+  String get adminExternalStorageClientSecret;
+
+  /// No description provided for @adminExternalStorageRedirectUri.
+  ///
+  /// In en, this message translates to:
+  /// **'Redirect URI'**
+  String get adminExternalStorageRedirectUri;
 
   /// No description provided for @adminLocalMount.
   ///
@@ -13757,12 +13793,6 @@ abstract class AppLocalizations {
   /// **'Instagram'**
   String get photosShareToInstagram;
 
-  /// No description provided for @photosShareToMore.
-  ///
-  /// In en, this message translates to:
-  /// **'More'**
-  String get photosShareToMore;
-
   /// No description provided for @photosShareToWeChat.
   ///
   /// In en, this message translates to:
@@ -13781,12 +13811,6 @@ abstract class AppLocalizations {
   /// **'Link copied. Paste it into WeChat to send.'**
   String get photosShareWeChatCopiedFallback;
 
-  /// No description provided for @photosShareQrHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Open this link on your phone in WeChat:\n{url}'**
-  String photosShareQrHint(String url);
-
   /// No description provided for @photosShareOptionLocation.
   ///
   /// In en, this message translates to:
@@ -13798,6 +13822,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Original quality'**
   String get photosShareOptionOriginal;
+
+  /// No description provided for @photosShareOptionOriginalFull.
+  ///
+  /// In en, this message translates to:
+  /// **'Full resolution'**
+  String get photosShareOptionOriginalFull;
 
   /// No description provided for @photosShareManage.
   ///
