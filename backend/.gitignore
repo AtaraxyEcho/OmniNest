@@ -6,6 +6,7 @@ target/
 .env
 .env.*
 !.env.example
+!.env.*.example
 
 # Logs and runtime dumps
 logs/*
