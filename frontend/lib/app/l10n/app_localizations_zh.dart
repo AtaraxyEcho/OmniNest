@@ -530,10 +530,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileSectionAbout => '关于';
 
   @override
-  String get photoBackupBackgroundTitle => '照片后台备份';
+  String get photoBackupBackgroundTitle => '自动备份本机相册';
 
   @override
-  String get photoBackupBackgroundSubtitle => '按计划在后台备份相册新增照片（仅 Android）';
+  String get photoBackupBackgroundSubtitle =>
+      '开启后将本机相册的全部照片自动上传到你的 OmniNest 服务器（仅 Android，仅 Wi-Fi 时执行）';
 
   @override
   String get profileManageBackdrop => '管理背景';

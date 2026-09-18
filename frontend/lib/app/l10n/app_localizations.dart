@@ -1103,13 +1103,13 @@ abstract class AppLocalizations {
   /// No description provided for @photoBackupBackgroundTitle.
   ///
   /// In en, this message translates to:
-  /// **'Photo background backup'**
+  /// **'Auto-upload device photos'**
   String get photoBackupBackgroundTitle;
 
   /// No description provided for @photoBackupBackgroundSubtitle.
   ///
   /// In en, this message translates to:
-  /// **'Back up newly added photos in the background (Android only)'**
+  /// **'Automatically uploads all photos in your device gallery to your OmniNest server (Android only, Wi-Fi only)'**
   String get photoBackupBackgroundSubtitle;
 
   /// No description provided for @profileManageBackdrop.

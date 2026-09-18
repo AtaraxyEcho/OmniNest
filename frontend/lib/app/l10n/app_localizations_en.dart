@@ -546,11 +546,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileSectionAbout => 'About';
 
   @override
-  String get photoBackupBackgroundTitle => 'Photo background backup';
+  String get photoBackupBackgroundTitle => 'Auto-upload device photos';
 
   @override
   String get photoBackupBackgroundSubtitle =>
-      'Back up newly added photos in the background (Android only)';
+      'Automatically uploads all photos in your device gallery to your OmniNest server (Android only, Wi-Fi only)';
 
   @override
   String get profileManageBackdrop => 'Manage background';
