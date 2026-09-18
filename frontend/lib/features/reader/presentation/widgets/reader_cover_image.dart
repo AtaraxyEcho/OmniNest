@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/reader/application/reader_image_provider.dart';
 
 /// 认证封面图片组件
@@ -88,6 +89,7 @@ class AuthCoverImage extends ConsumerWidget {
   }
 
   /// 封面解码尺寸：以设备像素比放大显示宽度，避免大封面原图全分辨率解码。
+  /// 按 128px 档位量化，窗口尺寸变动时不反复重解码。
   int? _resolveCacheWidth(double? logicalWidth) {
     if (logicalWidth == null || !logicalWidth.isFinite || logicalWidth <= 0) {
       return null;
@@ -96,10 +98,13 @@ class AuthCoverImage extends ConsumerWidget {
     final reportedRatio = views.isEmpty ? 1.0 : views.first.devicePixelRatio;
     final devicePixelRatio =
         reportedRatio.isFinite && reportedRatio > 0 ? reportedRatio : 1.0;
-    final decodeWidth = logicalWidth * devicePixelRatio * 2;
-    if (!decodeWidth.isFinite || decodeWidth <= 0) {
-      return null;
-    }
-    return decodeWidth.round().clamp(1, 2048);
+    return quantizedDecodeWidth(
+      logicalWidth: logicalWidth,
+      devicePixelRatio: devicePixelRatio,
+      step: 128,
+      min: 128,
+      max: 2048,
+      scale: 2,
+    );
   }
 }

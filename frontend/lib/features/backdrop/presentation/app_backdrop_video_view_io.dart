@@ -113,19 +113,22 @@ class _AppBackdropVideoViewState extends ConsumerState<AppBackdropVideoView>
               active: widget.playing && hasUsableLayout,
               layoutUsable: hasUsableLayout,
             );
-            // 视频层保持挂载：仅用透明度门控。拆卸 Video 会在 Android 后台
-            // 纹理回收后重新创建纹理，表现为恢复瞬间黑屏再“重启”。
+            // 视频层保持挂载:仅用透明度门控。拆卸 Video 会在 Android 后台
+            // 纹理回收后重新创建纹理,表现为恢复瞬间黑屏再“重启”。
+            // 全屏/尺寸切换时若短暂 !renderable,仍保持已有 controller
+            // 的透明度 1,避免露出垫底层造成默认壁纸/黑屏闪帧。
+            final hasController = session.controller != null;
             final visible =
-                session.ready &&
-                session.renderable &&
-                session.controller != null;
-            if (session.controller == null) {
+                hasController && session.ready && session.renderable;
+            final keepMountedOpacity =
+                hasController && (visible || session.ready);
+            if (!hasController) {
               return const SizedBox.shrink();
             }
             return RepaintBoundary(
               child: AnimatedOpacity(
-                opacity: visible ? 1 : 0,
-                duration: const Duration(milliseconds: 120),
+                opacity: keepMountedOpacity ? 1 : 0,
+                duration: const Duration(milliseconds: 80),
                 curve: Curves.easeOut,
                 child: Video(
                   key: ValueKey(session.controller),

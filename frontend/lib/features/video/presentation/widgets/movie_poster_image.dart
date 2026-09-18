@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 
 /// 影视模块海报/缩略图，按显示尺寸限制解码并启用磁盘缓存。
 class MoviePosterImage extends StatelessWidget {
@@ -20,7 +21,7 @@ class MoviePosterImage extends StatelessWidget {
   final int? cacheWidth;
   final int? cacheHeight;
 
-  /// 按逻辑像素与设备像素比估算解码宽度。
+  /// 按逻辑像素与设备像素比估算解码宽度；64px 档位量化，减少 resize 重解码。
   static int? decodeWidth(
     BuildContext context,
     double logicalWidth, {
@@ -30,7 +31,13 @@ class MoviePosterImage extends StatelessWidget {
       return null;
     }
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    return (logicalWidth * dpr).round().clamp(64, cap.toInt());
+    return quantizedDecodeWidth(
+      logicalWidth: logicalWidth,
+      devicePixelRatio: dpr,
+      step: 64,
+      min: 64,
+      max: cap.toInt(),
+    );
   }
 
   @override

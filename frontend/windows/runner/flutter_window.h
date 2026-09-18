@@ -35,6 +35,9 @@ class FlutterWindow : public Win32Window {
   void RestoreWindowPlacement();
   bool VerifyWindowFrame();
   void ForceFlutterRedraw();
+  // Align the Flutter child view to the current client rect after frameless
+  // or fullscreen chrome switches, so no black bands remain.
+  void SyncFlutterViewChild();
 
   // The project to run.
   flutter::DartProject project_;

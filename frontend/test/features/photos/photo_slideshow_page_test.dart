@@ -276,6 +276,10 @@ Future<void> _pumpSlideshow(WidgetTester tester, List<PhotoItem> photos) async {
       ),
     ),
   );
+  // bootstrap：两帧等待封面绘制 → 租约进入全屏 → 再等一帧对齐 surface →
+  // 才加载首图。与生产路径 endOfFrame 次数保持一致。
+  await tester.pump();
+  await tester.pump();
   await tester.pump();
 }
 
@@ -319,7 +323,6 @@ void main() {
       ]);
       await _pumpSlideshow(tester, photos);
       await tester.pump();
-      await tester.pump();
 
       expect(find.byType(RawImage), findsWidgets);
       _expectNoTransparentLayer(tester);
@@ -338,7 +341,6 @@ void main() {
         (photos[1], ImageQuality.preview, 1280),
       ]);
       await _pumpSlideshow(tester, photos);
-      await tester.pump();
       await tester.pump();
       _expectNoTransparentLayer(tester);
 

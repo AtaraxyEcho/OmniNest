@@ -316,9 +316,9 @@ class WindowChromeController extends Notifier<WindowChromeState> {
     if (revision != _desiredRevision) {
       return;
     }
-    // Fullscreen geometry check only; windowed chrome needs no settle sleep
-    // because the native call already ForceRedraws.
-    if (target.isFullscreen) {
+    // 无边框/全屏切换后客户区可能与 Flutter 视图短暂不一致（黑屏/黑边），
+    // 统一做一次原生几何自愈；窗口态 chrome 已 ForceRedraw，无需 settle。
+    if (target.isFullscreen || target.chromeHidden) {
       await _verifyNativeWindowFrame();
       if (revision != _desiredRevision) {
         return;

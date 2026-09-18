@@ -68,7 +68,7 @@ class AppBackdropHost extends ConsumerWidget {
           ),
         Positioned.fill(
           key: const ValueKey<String>('omninest.backdrop.content'),
-          child: child,
+          child: RepaintBoundary(child: child),
         ),
       ],
     );
