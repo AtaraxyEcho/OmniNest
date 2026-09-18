@@ -8,7 +8,7 @@
 | `android/` | Android 客户端 |
 | `win/` | Windows 桌面客户端 |
 
-根目录下的 `portal_page.png`、`music_player_page.png` 等为功能界面示意，不区分运行平台。
+根目录下的 `portal_page.png`、`music_player_page.png` 等为功能界面示意，不区分运行平台。`omninest-logo.webp` 为项目标识（README 头图），属项目自有品牌素材，不适用下述 CC0 口径。
 
 **素材与版权**
 

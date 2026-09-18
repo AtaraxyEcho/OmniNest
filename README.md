@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="imgs/omninest-logo.webp" alt="OmniNest logo" width="360">
+</p>
+
+<p align="center">
   <strong>OmniNest</strong>
 </p>
 
