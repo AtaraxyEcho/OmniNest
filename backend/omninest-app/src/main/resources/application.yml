@@ -2,6 +2,13 @@ logging:
   # 日志写入各服务工作目录下的 logs/（本地开发为 backend/logs/），避免与源码根目录混杂。
   file:
     name: ${OMNINEST_LOG_PATH:logs/omninest.log}
+  # 滚动主闸：单文件 50MB、保留 14 天、归档总量 512MB；
+  # 定时清理任务（LogRetentionService）仅作非 logback 文件的兜底。
+  logback:
+    rollingpolicy:
+      max-file-size: 50MB
+      max-history: 14
+      total-size-cap: 512MB
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%X{requestId}] %-5level %logger{36} - %msg%n"
 

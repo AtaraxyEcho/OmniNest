@@ -19,9 +19,13 @@ ENV INSIGHTFACE_ROOT=/app/models/insightface \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
-RUN mkdir -p /app/models/insightface
+RUN mkdir -p /app/models/insightface && \
+    useradd --system --create-home --home-dir /home/sidecar --shell /usr/sbin/nologin sidecar && \
+    chown -R sidecar:sidecar /app
 
 EXPOSE 8090
+
+USER sidecar
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10m --retries=3 \
     CMD ["python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/ready', timeout=5)"]

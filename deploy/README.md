@@ -285,3 +285,23 @@ Lucene 使用命名卷在容器间共享所需内容；PostgreSQL、Redis、Rabb
 Nginx 使用固定内部地址作为后端可信代理身份。`OMNINEST_DOCKER_DYNAMIC_IP_RANGE`
 必须位于 `OMNINEST_DOCKER_SUBNET` 内，并且不能包含 `OMNINEST_NGINX_INTERNAL_IP`；
 默认动态地址池为 `172.30.0.128/25`，因此不会与默认 Nginx 地址 `172.30.0.10` 冲突。
+
+## 备份与恢复
+
+生产数据的备份恢复由脚本承载（在 `deploy/prod` 目录执行）：
+
+```bash
+# 备份：PostgreSQL 逻辑备份（custom 格式）+ MinIO 数据卷打包
+sh ../prod/scripts/backup.sh            # 产物在 ./backups/omninest-<时间戳>/
+# 恢复：先 docker compose down 停止全部服务，再执行
+sh ../prod/scripts/restore.sh ./backups/omninest-<时间戳>
+```
+
+要点：
+
+- 建议宿主 crontab 每日执行 `backup.sh`，并将备份目录同步到异地存储。
+- MinIO 卷为运行中快照（crash-consistent）；恢复后以数据库记录为准核对
+  派生资产，缺失的缩略图等可重建资产会由系统自动补齐。
+- Redis、RabbitMQ、Lucene 索引均为可重建数据，不在备份范围。
+- 跨版本恢复前先阅读根仓库发布说明，确认 Flyway 基线兼容。
+

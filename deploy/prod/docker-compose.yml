@@ -62,6 +62,13 @@ x-backend-environment: &backend-environment
 
 # 4C4G 无 ClamAV：JVM 使用显式堆上限（见各 backend 角色 JAVA_OPTS）。
 
+# 容器 stdout 日志轮转上限；应用文件日志由 logback rollingpolicy（50MB/14天/512MB）治理。
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 x-backend-service: &backend-service
   image: ${OMNINEST_BACKEND_IMAGE:-omninest/backend}:${OMNINEST_IMAGE_TAG:-latest}
   build:
@@ -86,6 +93,13 @@ x-backend-service: &backend-service
     - ${OMNINEST_LOCAL_MEDIA_ROOT:-../../.omninest/local-media}:/mnt/local-media:ro
   restart: unless-stopped
   stop_grace_period: 30s
+  healthcheck:
+    test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/actuator/health >/dev/null"]
+    interval: 30s
+    timeout: 5s
+    retries: 5
+    start_period: 60s
+  logging: *default-logging
 
 services:
   nginx:
@@ -107,7 +121,7 @@ services:
       TZ: Asia/Shanghai
     depends_on:
       backend-api:
-        condition: service_started
+        condition: service_healthy
       minio:
         condition: service_healthy
     ports:
@@ -127,6 +141,7 @@ services:
       retries: 5
     mem_limit: ${NGINX_MEM_LIMIT:-64m}
     restart: unless-stopped
+    logging: *default-logging
 
   # 默认不启动。使用 Let's Encrypt 时：COMPOSE_PROFILES=certbot
   certbot:
@@ -154,6 +169,7 @@ services:
       - omninest-certbot-challenges:/var/www/certbot
     mem_limit: 64m
     restart: unless-stopped
+    logging: *default-logging
 
   backend-api:
     <<: *backend-service
@@ -219,6 +235,7 @@ services:
       - omninest-postgres:/var/lib/postgresql
     mem_limit: ${POSTGRES_MEM_LIMIT:-768m}
     restart: unless-stopped
+    logging: *default-logging
 
   redis:
     image: redis:8
@@ -249,6 +266,7 @@ services:
       - omninest-redis:/data
     mem_limit: ${REDIS_MEM_LIMIT:-192m}
     restart: unless-stopped
+    logging: *default-logging
 
   rabbitmq:
     image: rabbitmq:4.3-management-alpine
@@ -268,6 +286,7 @@ services:
       - omninest-rabbitmq:/var/lib/rabbitmq
     mem_limit: ${RABBITMQ_MEM_LIMIT:-320m}
     restart: unless-stopped
+    logging: *default-logging
 
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
@@ -287,6 +306,7 @@ services:
       - omninest-minio:/data
     mem_limit: ${MINIO_MEM_LIMIT:-320m}
     restart: unless-stopped
+    logging: *default-logging
 
   ffmpeg:
     image: jrottenberg/ffmpeg:8-alpine
@@ -305,9 +325,11 @@ services:
       - ${OMNINEST_LOCAL_MEDIA_ROOT:-../../.omninest/local-media}:/mnt/local-media:ro
     mem_limit: ${FFMPEG_MEM_LIMIT:-128m}
     restart: unless-stopped
+    logging: *default-logging
 
   aria2:
-    image: p3terx/aria2-pro:latest
+    # 以 digest 固定（上游只发布 latest 标签）；升级时重新解析并替换。
+    image: p3terx/aria2-pro@sha256:086d1a37c586edb07ec0fb956bf9edd89d1d38d138ad5309ff96d510c8c9a011
     environment:
       RPC_SECRET: ${RPC_SECRET:-omninest}
       RPC_PORT: 6800
@@ -318,15 +340,22 @@ services:
       - "${ARIA2_LISTEN_PORT:-6888}:6888/udp"
     volumes:
       - omninest-aria2:/downloads
+    healthcheck:
+      test: ["CMD-SHELL", "curl --silent --show-error --output /dev/null http://127.0.0.1:$${RPC_PORT}/jsonrpc"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
     mem_limit: ${ARIA2_MEM_LIMIT:-96m}
     restart: unless-stopped
+    logging: *default-logging
 
   # 4C4G 默认不启动。启用：COMPOSE_PROFILES=clamav
   # 且 .env 设 OMNINEST_CLAMAV_ENABLED=true；否则上传会按扫描失败处理。
   clamav:
     profiles:
       - clamav
-    image: clamav/clamav:stable
+    # 以 digest 固定 stable 标签；升级时重新解析并替换。
+    image: clamav/clamav@sha256:f0954d679017eb6d48221e2b2be3ac5457bf278a844f39b672376f55a085f591
     environment:
       CLAMD_CONF_StreamMaxLength: ${CLAMD_CONF_StreamMaxLength:-2047M}
       CLAMD_CONF_MaxScanSize: ${CLAMD_CONF_MaxScanSize:-2047M}
@@ -344,6 +373,7 @@ services:
       - omninest-clamav-db:/var/lib/clamav
     mem_limit: ${CLAMAV_MEM_LIMIT:-1536m}
     restart: unless-stopped
+    logging: *default-logging
 
   netease-music-api:
     image: omninest-netease-music-api:latest
@@ -365,6 +395,7 @@ services:
       retries: 5
     mem_limit: ${NETEASE_MEM_LIMIT:-128m}
     restart: unless-stopped
+    logging: *default-logging
 
   rclone:
     image: rclone/rclone:1.74.2
@@ -386,8 +417,14 @@ services:
       - omninest-rclone:/config/rclone
       - omninest-rclone-local:/mnt/local
       - omninest-rclone-imports:/mnt/imports
+    healthcheck:
+      test: ["CMD-SHELL", "rclone rc rc/noop --rc-addr 127.0.0.1:5572 --rc-user \"$$RCLONE_RC_USER\" --rc-pass \"$$RCLONE_RC_PASS\" >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     mem_limit: ${RCLONE_MEM_LIMIT:-96m}
     restart: unless-stopped
+    logging: *default-logging
 
   # 4C4G 默认不启动照片 AI。启用：COMPOSE_PROFILES=photo-ai
   ai-sidecar:
@@ -405,6 +442,7 @@ services:
       - omninest-ai-models:/app/models
     mem_limit: ${AI_SIDECAR_MEM_LIMIT:-768m}
     restart: unless-stopped
+    logging: *default-logging
 
 volumes:
   omninest-postgres:

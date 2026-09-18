@@ -6631,6 +6631,24 @@ abstract class AppLocalizations {
   /// **'Unknown setting'**
   String get adminConfigUnknownItem;
 
+  /// No description provided for @adminConfigLogRetentionEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Log retention cleanup'**
+  String get adminConfigLogRetentionEnabled;
+
+  /// No description provided for @adminConfigLogRetentionDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Log retention days'**
+  String get adminConfigLogRetentionDays;
+
+  /// No description provided for @adminConfigLogRetentionPaths.
+  ///
+  /// In en, this message translates to:
+  /// **'Log retention scan paths'**
+  String get adminConfigLogRetentionPaths;
+
   /// No description provided for @adminConfigMediaAutoImportDescription.
   ///
   /// In en, this message translates to:

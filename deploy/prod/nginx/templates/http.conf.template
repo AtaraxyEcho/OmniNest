@@ -47,7 +47,24 @@ server {
         proxy_read_timeout 3600s;
     }
 
+    # 压缩与缓存：Flutter Web 产物文件名不带内容哈希，入口与 Service Worker
+    # 必须每次校验，其余静态资源给 1 小时有界缓存避免发版后陈旧。
+    gzip on;
+    gzip_vary on;
+    gzip_min_length 1024;
+    gzip_comp_level 5;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    location = /index.html {
+        add_header Cache-Control "no-cache";
+    }
+
+    location = /flutter_service_worker.js {
+        add_header Cache-Control "no-cache";
+    }
+
     location / {
+        add_header Cache-Control "public, max-age=3600";
         try_files $uri $uri/ /index.html;
     }
 }

@@ -10,11 +10,11 @@ class ConfigDefinitionCatalogTest {
     void catalogContainsOnlyTheApprovedRuntimeSettings() {
         var definitions = ConfigDefinitionCatalog.definitions();
 
-        assertThat(definitions).hasSize(69);
+        assertThat(definitions).hasSize(72);
         assertThat(definitions).extracting(ConfigDefinition::key).doesNotHaveDuplicates();
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.GENERAL)
-                .hasSize(30);
+                .hasSize(33);
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.INTEGRATION)
                 .hasSize(39);

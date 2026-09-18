@@ -173,7 +173,7 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteRuntimeConfigurationDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(69);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(72);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -184,6 +184,9 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('auth.two-factor.required-roles'),
                         ('clamav.timeout-millis'),
                         ('security.quarantine.retention-days'),
+                        ('log-retention.enabled'),
+                        ('log-retention.retention-days'),
+                        ('log-retention.scan-paths'),
                         ('media.transcode.enabled'),
                         ('media.import.enabled'),
                         ('reader.import.enabled'),

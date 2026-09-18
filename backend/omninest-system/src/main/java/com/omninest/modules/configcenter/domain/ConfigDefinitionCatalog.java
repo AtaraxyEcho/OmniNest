@@ -146,6 +146,12 @@ public final class ConfigDefinitionCatalog {
                 "config.security.clamav.timeout", "单文件安全扫描时限（毫秒，活性护栏）", 1_000, 3_600_000));
         add(values, number("security.quarantine.retention-days", "7", "security", ConfigSurface.GENERAL,
                 "config.security.quarantine.retentionDays", "隔离滞留对象保留天数", 1, 90));
+        add(values, bool("log-retention.enabled", true, "general", ConfigSurface.GENERAL,
+                "config.logRetention.enabled", "是否启用日志与临时文件保留清理任务"));
+        add(values, number("log-retention.retention-days", "14", "general", ConfigSurface.GENERAL,
+                "config.logRetention.retentionDays", "日志归档与临时文件保留天数", 1, 365));
+        add(values, string("log-retention.scan-paths", "logs", "general", ConfigSurface.GENERAL,
+                "config.logRetention.scanPaths", "保留清理扫描目录（逗号分隔的运行目录相对路径）", false, 500));
         add(values, string("auth.two-factor.required-roles", "SUPER_ADMIN,ADMIN", "auth", ConfigSurface.GENERAL,
                 "config.auth.twoFactorRequiredRoles", "强制开启两步验证的角色编码列表（逗号分隔，留空表示全员自愿）", false, 200));
         add(values, bool("weather.enabled", true, "weather", ConfigSurface.INTEGRATION,

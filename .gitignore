@@ -62,6 +62,8 @@ replay_pid*
 /backups/
 **/backups/
 *.dump
+# 误执行的 git 命令产物（如 "et --hard <sha>" 落盘的 reflog 转储）
+/et --hard*
 *.dump.gz
 *.backup
 *.bak

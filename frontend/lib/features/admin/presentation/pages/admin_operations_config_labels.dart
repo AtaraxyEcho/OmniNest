@@ -268,6 +268,9 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
   return switch (entry.displayCode) {
     'config.media.autoImport' => l10n.adminConfigMediaAutoImport,
     'config.photo.backup' => l10n.adminConfigPhotoBackup,
+    'config.logRetention.enabled' => l10n.adminConfigLogRetentionEnabled,
+    'config.logRetention.retentionDays' => l10n.adminConfigLogRetentionDays,
+    'config.logRetention.scanPaths' => l10n.adminConfigLogRetentionPaths,
     'config.storage.defaultQuota' => l10n.adminConfigDefaultQuota,
     'config.storage.warningPercent' => l10n.adminConfigQuotaWarning,
     'config.storage.sharedSpace' => l10n.adminConfigSharedSpace,

@@ -3577,6 +3577,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigUnknownItem => 'Unknown setting';
 
   @override
+  String get adminConfigLogRetentionEnabled => 'Log retention cleanup';
+
+  @override
+  String get adminConfigLogRetentionDays => 'Log retention days';
+
+  @override
+  String get adminConfigLogRetentionPaths => 'Log retention scan paths';
+
+  @override
   String get adminConfigMediaAutoImportDescription =>
       'Allows discovered titles to enter the media import flow according to Media rules.';
 

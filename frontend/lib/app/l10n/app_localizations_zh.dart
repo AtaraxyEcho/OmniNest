@@ -3471,6 +3471,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminConfigUnknownItem => '未知配置项';
 
   @override
+  String get adminConfigLogRetentionEnabled => '日志保留清理';
+
+  @override
+  String get adminConfigLogRetentionDays => '日志保留天数';
+
+  @override
+  String get adminConfigLogRetentionPaths => '日志清理扫描目录';
+
+  @override
   String get adminConfigMediaAutoImportDescription => '启用后可按媒体模块规则自动接收已发现的影片。';
 
   @override
