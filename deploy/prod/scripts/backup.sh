@@ -1,6 +1,6 @@
 #!/bin/sh
 # OmniNest 生产数据备份：PostgreSQL 逻辑备份 + MinIO 数据卷打包。
-# 用法：在 deploy/prod 目录执行 sh ../prod/scripts/backup.sh [备份目录]
+# 用法：在 deploy/prod 目录执行 sh scripts/backup.sh [备份目录]
 # 建议 crontab 每日运行；产物为 omninest-<时间戳>/ 目录。
 set -eu
 

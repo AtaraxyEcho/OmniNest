@@ -1,6 +1,6 @@
 #!/bin/sh
 # OmniNest 生产数据恢复：将 backup.sh 的产物恢复到当前部署。
-# 用法：sh ../prod/scripts/restore.sh <备份目录（含 postgres.dump 与 minio-data.tar.gz）>
+# 用法：sh scripts/restore.sh <备份目录（含 postgres.dump 与 minio-data.tar.gz）>
 # 前置：先 docker compose down 停止全部服务，恢复后 up -d。
 set -eu
 

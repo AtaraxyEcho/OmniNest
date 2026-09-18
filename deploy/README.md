@@ -292,9 +292,9 @@ Nginx 使用固定内部地址作为后端可信代理身份。`OMNINEST_DOCKER_
 
 ```bash
 # 备份：PostgreSQL 逻辑备份（custom 格式）+ MinIO 数据卷打包
-sh ../prod/scripts/backup.sh            # 产物在 ./backups/omninest-<时间戳>/
+sh scripts/backup.sh              # 产物在 ./backups/omninest-<时间戳>/
 # 恢复：先 docker compose down 停止全部服务，再执行
-sh ../prod/scripts/restore.sh ./backups/omninest-<时间戳>
+sh scripts/restore.sh ./backups/omninest-<时间戳>
 ```
 
 要点：
@@ -313,9 +313,9 @@ sh ../prod/scripts/restore.sh ./backups/omninest-<时间戳>
   抓取器需带登录令牌访问；该端点不经 Nginx 转发，仅内网可达。
 - **裸机部署 profile**：直跑 jar 的生产部署必须设置 `OMNINEST_PROFILE=prod`。
 - **RabbitMQ 旧队列清理**：2026-09 队列改名前部署过的环境会残留旧
-  `omninest.tasks.*` 交换机/队列，升级后执行一次
-  `docker compose exec rabbitmq rabbitmqctl stop_app && rabbitmqctl reset && start_app`
-  或在管理界面手动删除旧条目（会清空消息，仅在停机窗口执行）。
+  `omninest.tasks.*` 交换机/队列。优先在管理界面（127.0.0.1:15672）逐个删除旧条目；
+  仅在确认无保留价值时才考虑 `rabbitmqctl` 重置——重置会清空**全部**队列、
+  用户与 vhost 定义，属于破坏性操作，必须在停机窗口执行。
 - **Aria2 端口**：6888 tcp/udp 是 BT/DHT 监听口（功能必需、默认映射到宿主机），
   公网部署建议用防火墙限制来源网段。
 - **备份脚本**：见上文「备份与恢复」章节，宿主 crontab 每日执行。
