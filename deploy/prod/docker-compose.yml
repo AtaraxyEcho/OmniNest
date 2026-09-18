@@ -56,6 +56,8 @@ x-backend-environment: &backend-environment
   OMNINEST_AI_SIDECAR_SECRET: ${OMNINEST_AI_SIDECAR_SECRET:-change-me-ai-sidecar-random-secret}
   OMNINEST_MUSICBRAINZ_USER_AGENT: ${OMNINEST_MUSICBRAINZ_USER_AGENT:-OmniNest/0.1.0 (contact@example.com)}
   OMNINEST_READER_COMIC_CONSUME_IN_API: "false"
+  # 容器内应用日志路径（相对工作目录 /app）
+  OMNINEST_LOG_PATH: ${OMNINEST_LOG_PATH:logs/omninest.log}
   TZ: Asia/Shanghai
 
 # 4C4G 无 ClamAV：JVM 使用显式堆上限（见各 backend 角色 JAVA_OPTS）。

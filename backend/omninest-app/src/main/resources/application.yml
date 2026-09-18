@@ -1,4 +1,7 @@
 logging:
+  # 日志写入各服务工作目录下的 logs/（本地开发为 backend/logs/），避免与源码根目录混杂。
+  file:
+    name: ${OMNINEST_LOG_PATH:logs/omninest.log}
   pattern:
     console: "%d{yyyy-MM-dd HH:mm:ss} [%X{requestId}] %-5level %logger{36} - %msg%n"
 

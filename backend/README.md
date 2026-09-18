@@ -6,12 +6,24 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 
 ## 服务职责
 
-- 为 Web、Android、Windows 和 macOS 客户端提供统一 REST API 与实时连接。
+- 为 Web、Android、Windows 客户端提供统一 REST API 与实时连接。
 - 从 JWT `sub` 映射当前用户，并执行资源所有权、分享权限、角色和权限编码校验。
 - 通过 File 模块统一处理内容 Provider、上传下载、Range 读取、版本、回收站和物理存储生命周期。
 - 为 Movies、Music、Photos 和 Reader 提供媒体元数据、播放/阅读进度、导入和解析能力。
 - 将索引、缩略图、内容解析、媒体探测、安全扫描等可持续任务落库后投递到 RabbitMQ，支持状态查询、重试和死信记录。
 - 提供配置、通知、操作审计、会话、监控和管理接口。
+
+## 日志目录
+
+后端应用日志**统一写入模块根目录下的 `logs/`**，不要落在 `backend/` 源码根或其他随意路径：
+
+| 项 | 说明 |
+| --- | --- |
+| 默认路径 | `backend/logs/omninest.log`（相对启动时的工作目录） |
+| 环境变量 | `OMNINEST_LOG_PATH`（见 `backend/.env` / `.env.example`） |
+| 容器部署 | Compose 可通过 `OMNINEST_LOG_PATH` 指到容器内固定路径 |
+
+本地 Maven / 测试产生的 `*.log`、`boot-*.out/err` 等也应放到 `backend/logs/`。该目录已在 `.gitignore` 中忽略，不会提交到仓库。
 
 ## 技术基线
 

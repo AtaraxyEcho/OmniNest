@@ -1,8 +1,28 @@
 # OmniNest Frontend
 
-OmniNest Frontend 是基于 Flutter 的统一客户端，目标平台包括 Web、Android、Windows 和 macOS。各平台共享同一套产品信息架构和业务状态，根据窗口尺寸、触控、鼠标和键盘输入调整布局与交互密度。
+OmniNest Frontend 是基于 Flutter 的统一客户端。
+
+**当前推荐并完成验证的平台：Web、Android、Windows。**
+
+**iOS / macOS**：工程内已有对应目录与适配代码，但**未做与上述三端同级的全量测试**，**不推荐**在生产或日常依赖中使用；如需使用请自行完整验证。
+
+各平台共享同一套产品信息架构和业务状态，根据窗口尺寸、触控、鼠标和键盘输入调整布局与交互密度。
+
+**演示素材**：导入与截图用的影音/图片/电子书请使用 CC0/公有领域资源（例如 `D:\Development\Resource\CC0`），不要使用受版权保护的内容。
 
 根目录产品概览见 [../README.md](../README.md)，后端服务、API 和存储边界见 [../backend/README.md](../backend/README.md)。
+
+## 日志目录
+
+前端构建、测试与调试输出**统一放到模块根目录 `frontend/logs/`**，不要散落在 `frontend/` 源码根：
+
+```bash
+# 示例：测试与构建日志
+flutter test --reporter compact 2>&1 | tee logs/flutter-test.log
+flutter build web --dart-define-from-file=env/dev.json 2>&1 | tee logs/flutter-build-web.log
+```
+
+`frontend/logs/` 已在 `.gitignore` 中忽略，不会提交到仓库。运行时调试仍优先使用 IDE 控制台；若需落盘请写到 `logs/`。
 
 ## 应用职责
 

@@ -120,8 +120,8 @@ OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心�
 
 | 目录 | 说明 |
 | --- | --- |
-| [backend](backend/README.md) | 后端服务、模块与测试 |
-| [frontend](frontend/README.md) | Flutter 客户端与测试 |
+| [backend](backend/README.md) | 后端服务、模块与测试（日志：`backend/logs/`） |
+| [frontend](frontend/README.md) | Flutter 客户端与测试（日志：`frontend/logs/`） |
 | [deploy](deploy/README.md) | 开发/生产 Docker 编排与部署说明 |
 | [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | 图像分析侧车 |
 | [imgs](imgs) | 文档用截图资源 |

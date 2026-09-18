@@ -13,6 +13,7 @@ ehthumbs.db
 *.iml
 *.ipr
 *.iws
+.playwright-cli/
 
 # Agent 和本机工具状态
 /.agents/
@@ -42,11 +43,16 @@ ehthumbs.db
 /.omninest/
 **/.omninest/
 /data/
+# 应用与测试日志：统一落在 backend/logs、frontend/logs 等模块目录，不入库
 /logs/
+**/logs/*
+!**/logs/.gitkeep
 /tmp/
 /temp/
 /db/
 *.log
+*.out
+*.err
 *.pid
 *.hprof
 hs_err_pid*

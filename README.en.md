@@ -114,8 +114,8 @@ Per-platform screenshot folders (fill in locally as needed): [imgs/web](imgs/web
 
 | Path | Description |
 | --- | --- |
-| [backend](backend/README.md) | Server modules and tests |
-| [frontend](frontend/README.md) | Flutter clients and tests |
+| [backend](backend/README.md) | Server modules and tests; runtime logs under `backend/logs/` |
+| [frontend](frontend/README.md) | Flutter clients and tests; build/test logs under `frontend/logs/` |
 | [deploy](deploy/README.md) | Dev/prod Compose and deployment |
 | [deploy/ai-sidecar](deploy/ai-sidecar/README.md) | Image analysis sidecar |
 | [imgs](imgs) | Documentation screenshots |

@@ -8,7 +8,8 @@ target/
 !.env.example
 
 # Logs and runtime dumps
-logs/
+logs/*
+!logs/.gitkeep
 *.log
 *.pid
 *.hprof

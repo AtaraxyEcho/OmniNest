@@ -1,0 +1,2 @@
+# backend/logs — 运行与测试日志目录（gitignore 忽略内容，仅保留本占位文件）
+# Spring 默认输出：logs/omninest.log（可用 OMNINEST_LOG_PATH 覆盖）

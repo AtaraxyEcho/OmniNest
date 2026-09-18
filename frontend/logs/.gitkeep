@@ -1,0 +1,2 @@
+# frontend/logs — 构建、测试与调试日志目录（gitignore 忽略内容，仅保留本占位文件）
+# 示例：flutter test 2>&1 | tee logs/flutter-test.log
