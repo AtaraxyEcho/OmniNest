@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/reader/reader_cover_ui.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 
@@ -283,9 +282,6 @@ class PortalVisualPanel extends StatelessWidget {
               ? (lightweight ? 0.10 : 0.20)
               : (lightweight ? 0.04 : 0.08),
     );
-    // 阴影 blur 半径收敛：最大化后多面板大半径阴影在 GPU 合成成本高，
-    // 且 22/36 与视觉层次差异有限。
-    final shadowBlur = lightweight ? 10.0 : (light ? 16.0 : 22.0);
     final content = DecoratedBox(
       decoration: BoxDecoration(
         color: surfaceColor,
@@ -294,8 +290,8 @@ class PortalVisualPanel extends StatelessWidget {
         boxShadow: [
           BoxShadow(
             color: shadowColor,
-            blurRadius: shadowBlur,
-            offset: Offset(0, lightweight ? 4 : (light ? 8 : 12)),
+            blurRadius: lightweight ? 10 : (light ? 22 : 36),
+            offset: Offset(0, lightweight ? 4 : (light ? 8 : 18)),
           ),
         ],
       ),
@@ -641,13 +637,9 @@ class _AdaptiveCoverImage extends StatelessWidget {
         fit: BoxFit.cover,
         alignment: Alignment.center,
         filterQuality: FilterQuality.medium,
-        memCacheWidth: quantizedDecodeWidth(
-          logicalWidth: 200,
-          devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
-          step: 64,
-          min: 128,
-          max: 800,
-        ),
+        memCacheWidth: (200 * MediaQuery.devicePixelRatioOf(context))
+            .round()
+            .clamp(128, 800),
         placeholder: (context, url) => fallback,
         errorWidget: (context, url, error) => fallback,
       );

@@ -133,9 +133,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       parent: _entryController,
       curve: Curves.easeOutCubic,
     );
-    // 不从 opacity 0 淡入：原生窗口切到全屏时会露出纯黑窗口。
-    // 仅做轻微 scale，保证切换过程中画面始终可见。
-    _entryScale = Tween<double>(begin: 0.96, end: 1).animate(entryCurve);
+    // Do not fade from opacity 0: that paints pure black while the native
+    // window snaps to fullscreen. Scale-only polish keeps content visible.
+    _entryScale = Tween<double>(begin: 0.96, end: 1.0).animate(entryCurve);
     _entryFade = const AlwaysStoppedAnimation<double>(1);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -144,11 +144,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     });
   }
 
-  /// 先画封面/加载态，再进沉浸全屏，最后解码位图。
+  /// Paint cover/spinner first, then enter immersive and decode the bitmap.
   ///
-  /// 若等网络解码完成再切原生全屏，进入阶段会出现长时间黑窗；
-  /// 两次 endOfFrame 让 CachedNetworkImage 有机会先用内存缓存封面
-  /// 绘制一帧，再触发窗口吸附到显示器。
+  /// Waiting for a network decode before native fullscreen left a long black
+  /// window on entry. Two endOfFrame hops let CachedNetworkImage paint a
+  /// memory-cached cover before the monitor snap.
   Future<void> _bootstrapSlideshow() async {
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
@@ -161,12 +161,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _windowChromeLease = ref
         .read(windowChromeControllerProvider.notifier)
         .acquireImmersive(owner: 'photos.slideshow');
-    // 租约触发原生 applyWindowChrome（style + SetWindowPos）后，
-    // 再等一帧让 Flutter surface 按新客户区完成首帧，避免全屏黑屏。
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
-      return;
-    }
     await _loadInitialImage();
   }
 

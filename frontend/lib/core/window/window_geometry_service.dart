@@ -323,9 +323,7 @@ class WindowGeometryService with WindowListener {
 
   @override
   void onWindowMaximize() {
-    // 最大化当帧与 Flutter 大尺寸首帧 layout 抢 platform channel，
-    // 与 resize 同样 debounce；关闭路径仍走 onWindowClose 立即持久化。
-    _schedulePersist();
+    unawaited(_persistNow());
   }
 
   @override

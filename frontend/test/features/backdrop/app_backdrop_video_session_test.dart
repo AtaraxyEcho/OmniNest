@@ -97,10 +97,8 @@ void main() {
       expect(source, contains('AnimatedOpacity'));
       expect(source, contains('session.renderable'));
       expect(source, contains('SizedBox.shrink'));
-      // controller 已就绪时不得因短暂 !renderable 整层拆掉 Video;
-      // keepMountedOpacity 在 ready 时保持 1,避免全屏闪垫底/默认壁纸。
-      expect(source, contains('opacity: keepMountedOpacity ? 1 : 0'));
-      expect(source, contains('session.ready'));
+      // controller 存在时不得因 !renderable 整层拆掉 Video。
+      expect(source, contains('opacity: visible ? 1 : 0'));
     });
   });
 }

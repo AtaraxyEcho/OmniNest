@@ -1,16 +1,16 @@
-import 'dart:math' as math;
-import 'dart:ui' as ui;
-import 'dart:ui' show ImageFilter;
+import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:omninest/core/utils/image_decode_width.dart';
 
 /// 背景素材图片视图:三端统一渲染服务端网络素材。
 ///
-/// 解码尺寸绑定**显示器物理像素**而非窗口约束,最大化/全屏不改
-/// memCache 键,避免重复解码。加载中不使用内置默认壁纸作占位,
-/// 仅在地址彻底失败时才回落 [fallbackAsset]。
+/// 缓存键基于素材 ID,签名 URL 轮换不会击穿缓存。加载顺序:
+/// 主 URL → 失败时回落 [fallbackUrl] → 再失败回落 [fallbackAsset](内置海报),
+/// 加载中与失败均不透出白底。全部网络地址失败时回调 [onUrlFailed] 供上层刷新签名 URL。
+///
+/// [BoxFit.cover] 等比放大裁切,不产生拉伸变形;
+/// [BoxFit.contain] 完整显示,可选 [blurPad] 用同图模糊铺底填满留白。
 class AppBackdropImage extends StatefulWidget {
   const AppBackdropImage({
     required this.url,
@@ -21,7 +21,6 @@ class AppBackdropImage extends StatefulWidget {
     this.fallbackAsset,
     this.onUrlFailed,
     this.blurPad = false,
-    this.maxDecodeWidth,
     super.key,
   });
 
@@ -42,15 +41,11 @@ class AppBackdropImage extends StatefulWidget {
   /// 主地址加载失败时的备用地址(如原图回退缩略图)。
   final String? fallbackUrl;
 
-  /// 全部地址失败时的内置海报兜底;null 表示失败时只显示深色底,
-  /// 不展示其他壁纸(自定义壁纸场景禁止闪默认壁纸)。
+  /// 全部地址失败时的内置海报兜底。
   final String? fallbackAsset;
 
   /// 主/备用网络地址均失败时回调一次。
   final VoidCallback? onUrlFailed;
-
-  /// 强制解码上限(物理像素);模糊背景等场景用低分辨率即可。
-  final int? maxDecodeWidth;
 
   @override
   State<AppBackdropImage> createState() => _AppBackdropImageState();
@@ -60,63 +55,12 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
   String? _failedUrl;
   bool _urlFailedNotified = false;
 
-  static const List<int> _decodeTiers = <int>[
-    720,
-    1080,
-    1440,
-    1920,
-    2560,
-    3840,
-    4096,
-  ];
-
-  static const Color _loadingColor = Color(0xFF0A1821);
-  static const Color _transparent = Color(0x00000000);
-
-  /// 显示器物理像素尺寸;窗口 maximize 不改变该值,解码键保持稳定。
-  static ui.Size? _displayPhysicalSize() {
-    final views = ui.PlatformDispatcher.instance.views;
-    if (views.isEmpty) {
+  int? _resolveCacheExtent(double extent, double devicePixelRatio) {
+    if (!extent.isFinite || extent <= 0 || !devicePixelRatio.isFinite) {
       return null;
     }
-    final size = views.first.display.size;
-    if (size.isEmpty || !size.width.isFinite || !size.height.isFinite) {
-      return null;
-    }
-    return size;
-  }
-
-  int? _tiered(int value, {int? cap}) {
-    var tiered = quantizeDecodeTier(value, _decodeTiers);
-    if (cap != null && cap > 0 && tiered > cap) {
-      tiered = quantizeDecodeTier(cap, _decodeTiers);
-    }
-    return tiered;
-  }
-
-  int? _resolveDecodeWidth() {
-    final display = _displayPhysicalSize();
-    if (display == null) {
-      return null;
-    }
-    final physical = math.max(display.width, display.height);
-    return _tiered(physical.round(), cap: widget.maxDecodeWidth);
-  }
-
-  int? _resolveDecodeHeight() {
-    final display = _displayPhysicalSize();
-    if (display == null) {
-      return null;
-    }
-    return _tiered(display.height.round());
-  }
-
-  int? _resolveConstraintWidth(double constraintsWidth, double dpr) {
-    if (!constraintsWidth.isFinite || constraintsWidth <= 0 || dpr <= 0) {
-      return null;
-    }
-    final raw = (constraintsWidth * dpr).round();
-    return _tiered(raw, cap: widget.maxDecodeWidth);
+    final value = (extent * devicePixelRatio).round();
+    return value.clamp(1, 8192);
   }
 
   bool get _useBlurPad => widget.fit == BoxFit.contain && widget.blurPad;
@@ -125,32 +69,35 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final dpr = MediaQuery.devicePixelRatioOf(context);
+        final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
         final primary = _resolveUrl();
         if (primary == null) {
           return _buildAssetFallback();
         }
-        final cacheWidth =
-            _resolveDecodeWidth() ??
-            _resolveConstraintWidth(constraints.maxWidth, dpr);
-        final cacheHeight = _resolveDecodeHeight();
+        final cacheWidth = _resolveCacheExtent(
+          constraints.maxWidth,
+          devicePixelRatio,
+        );
+        final cacheHeight = _resolveCacheExtent(
+          constraints.maxHeight,
+          devicePixelRatio,
+        );
         if (_useBlurPad) {
-          // 模糊铺底只需色彩关系,固定低档解码,避免全屏双图高分辨率解码。
           return Stack(
             fit: StackFit.expand,
             children: [
               ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+                imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28),
                 child: CachedNetworkImage(
                   imageUrl: primary,
                   cacheKey: widget.cacheKey,
                   fit: BoxFit.cover,
                   alignment: Alignment.center,
                   filterQuality: FilterQuality.medium,
-                  memCacheWidth: _tiered(720, cap: widget.maxDecodeWidth),
-                  placeholder:
-                      (context, url) => const ColoredBox(color: _loadingColor),
-                  errorWidget: (context, url, error) => _buildAssetFallback(),
+                  memCacheWidth: cacheWidth,
+                  memCacheHeight: cacheHeight,
+                  placeholder: (context, url) => _buildAssetFallback(),
+                  errorWidget: (context, url, error) => _buildFallback(url),
                 ),
               ),
               ColoredBox(
@@ -160,14 +107,11 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
                   cacheKey: widget.cacheKey,
                   fit: BoxFit.contain,
                   alignment: Alignment.center,
-                  filterQuality: FilterQuality.medium,
+                  filterQuality: FilterQuality.high,
                   memCacheWidth: cacheWidth,
                   memCacheHeight: cacheHeight,
-                  placeholder:
-                      (context, url) => const ColoredBox(color: _transparent),
-                  errorWidget:
-                      (context, url, error) =>
-                          const ColoredBox(color: _transparent),
+                  placeholder: (context, url) => const SizedBox.shrink(),
+                  errorWidget: (context, url, error) => const SizedBox.shrink(),
                 ),
               ),
             ],
@@ -178,11 +122,10 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
           cacheKey: widget.cacheKey,
           fit: widget.fit,
           alignment: widget.alignment,
-          filterQuality: FilterQuality.medium,
+          filterQuality: FilterQuality.high,
           memCacheWidth: cacheWidth,
           memCacheHeight: cacheHeight,
-          // 加载中绝不能显示默认壁纸海报,否则全屏尺寸切换会闪一帧错误壁纸。
-          placeholder: (context, url) => const ColoredBox(color: _loadingColor),
+          placeholder: (context, url) => _buildAssetFallback(),
           errorWidget: (context, url, error) => _buildFallback(url),
         );
       },
@@ -211,8 +154,8 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
           imageUrl: next,
           cacheKey: widget.cacheKey,
           fit: widget.fit,
-          filterQuality: FilterQuality.medium,
-          placeholder: (context, url) => const ColoredBox(color: _loadingColor),
+          filterQuality: FilterQuality.high,
+          placeholder: (context, url) => _buildAssetFallback(),
           errorWidget: (context, url, error) => _buildAssetFallback(),
         );
       }
@@ -230,16 +173,13 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
 
   Widget _buildAssetFallback() {
     final asset = widget.fallbackAsset;
-    if (asset == null || asset.isEmpty) {
-      return const ColoredBox(color: _loadingColor);
+    if (asset == null) {
+      return const SizedBox.shrink();
     }
     return Image.asset(asset, fit: widget.fit);
   }
 
   String? _nonEmpty(String? value) {
-    if (value == null || value.isEmpty) {
-      return null;
-    }
-    return value;
+    return value == null || value.isEmpty ? null : value;
   }
 }

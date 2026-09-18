@@ -50,15 +50,12 @@ class AppBackdropSurface extends ConsumerWidget {
       motionAllowed,
     );
     final shouldBlur = settings.blurAmount > 0.05 && asset?.isVideo != true;
-    // 全屏 ImageFilter.blur 随窗口面积线性变贵;壁纸模糊上限收敛,
-    // 观感差异有限,可明显降低最大化/全屏时的 GPU 合成压力。
-    final blurSigma = shouldBlur ? settings.blurAmount.clamp(0.0, 12.0) : 0.0;
     final mediaLayer =
         shouldBlur
             ? ImageFiltered(
               imageFilter: ImageFilter.blur(
-                sigmaX: blurSigma,
-                sigmaY: blurSigma,
+                sigmaX: settings.blurAmount,
+                sigmaY: settings.blurAmount,
               ),
               child: media,
             )
@@ -165,20 +162,14 @@ class AppBackdropSurface extends ConsumerWidget {
     Alignment alignment,
   ) {
     if (asset.sourceType == AppBackdropSourceType.server) {
-      final blurActive = settings.blurAmount > 0.05;
       return AppBackdropImage(
-        // 稳定 Key:父级重建时不重挂 State,避免加载态闪帧。
-        key: ValueKey<String>('backdrop-image:${asset.id}'),
         url: asset.path,
         cacheKey: 'backdrop:${asset.id}',
         fit: fit,
         alignment: alignment,
         // contain 时用模糊同图铺底,避免非 16:9 图出现大面积空白/“被拉伸”观感。
         blurPad: true,
-        // 自定义壁纸禁止用默认壁纸海报做加载占位,否则全屏会闪错误壁纸。
-        // 仅在 URL 彻底失败且无备用地址时由组件内部显示深色底。
-        fallbackAsset: null,
-        maxDecodeWidth: blurActive ? 1440 : null,
+        fallbackAsset: bundledDefaultWallpaperPosterAsset,
         onUrlFailed:
             () => Future<void>.microtask(() async {
               await ref
@@ -202,12 +193,10 @@ class AppBackdropSurface extends ConsumerWidget {
         thumbnail != null &&
         thumbnail.isNotEmpty) {
       return AppBackdropImage(
-        key: ValueKey<String>('backdrop-thumb:${asset.id}'),
         url: thumbnail,
         cacheKey: 'backdrop-thumb:${asset.id}',
         fit: fit,
-        // 自定义视频壁纸:海报垫底也不得闪默认壁纸。
-        fallbackAsset: null,
+        fallbackAsset: bundledDefaultWallpaperPosterAsset,
         onUrlFailed:
             () => Future<void>.microtask(() async {
               await ref
@@ -217,12 +206,7 @@ class AppBackdropSurface extends ConsumerWidget {
       );
     }
     if (asset.sourceType == AppBackdropSourceType.bundled) {
-      // 仅内置默认壁纸自身使用其海报帧作静态垫底。
-      return Image.asset(
-        bundledDefaultWallpaperPosterAsset,
-        key: const ValueKey<String>('backdrop-bundled-poster'),
-        fit: fit,
-      );
+      return Image.asset(bundledDefaultWallpaperPosterAsset, fit: fit);
     }
     return const _AppBackdropFallback(icon: Icons.movie_creation_outlined);
   }
