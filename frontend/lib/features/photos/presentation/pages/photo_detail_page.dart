@@ -19,6 +19,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/photos/platform/photo_batch_web_download.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
@@ -730,7 +731,21 @@ class _ProgressivePhotoImage extends StatelessWidget {
     final sourceUrl = photo.sourceUrl;
     final size = MediaQuery.sizeOf(context);
     final dpr = MediaQuery.devicePixelRatioOf(context);
-    final sourceDecodeWidth = (size.width * dpr).round().clamp(512, 4096);
+    // 256px 档位：最大化/还原时不因屏宽连续变化而反复重解码。
+    final sourceDecodeWidth = quantizedDecodeWidth(
+      logicalWidth: size.width,
+      devicePixelRatio: dpr,
+      step: 256,
+      min: 512,
+      max: 4096,
+    );
+    final coverDecodeWidth = quantizedDecodeWidth(
+      logicalWidth: size.width,
+      devicePixelRatio: dpr,
+      step: 128,
+      min: 400,
+      max: 1024,
+    );
 
     if (sourceUrl == null || sourceUrl.isEmpty) {
       if (coverUrl == null || coverUrl.isEmpty) {
@@ -751,7 +766,7 @@ class _ProgressivePhotoImage extends StatelessWidget {
           _ViewerNetworkImage(
             imageUrl: coverUrl,
             cacheKey: photo.coverCacheKey,
-            memCacheWidth: (size.width * dpr).round().clamp(400, 1024),
+            memCacheWidth: coverDecodeWidth,
           ),
         _ViewerNetworkImage(
           imageUrl: sourceUrl,

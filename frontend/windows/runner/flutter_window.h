@@ -35,6 +35,8 @@ class FlutterWindow : public Win32Window {
   void RestoreWindowPlacement();
   bool VerifyWindowFrame();
   void ForceFlutterRedraw();
+  /// 将 Flutter 子视图对齐到当前客户区，消除无边框/全屏切换后的黑边。
+  void SyncFlutterViewChild();
 
   // The project to run.
   flutter::DartProject project_;

@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 
 /// 背景素材图片视图:三端统一渲染服务端网络素材。
 ///
@@ -55,12 +56,22 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
   String? _failedUrl;
   bool _urlFailedNotified = false;
 
+  static const List<int> _decodeTiers = <int>[
+    720,
+    1080,
+    1440,
+    1920,
+    2560,
+    3840,
+    4096,
+  ];
+
   int? _resolveCacheExtent(double extent, double devicePixelRatio) {
     if (!extent.isFinite || extent <= 0 || !devicePixelRatio.isFinite) {
       return null;
     }
     final value = (extent * devicePixelRatio).round();
-    return value.clamp(1, 8192);
+    return quantizeDecodeTier(value, _decodeTiers);
   }
 
   bool get _useBlurPad => widget.fit == BoxFit.contain && widget.blurPad;

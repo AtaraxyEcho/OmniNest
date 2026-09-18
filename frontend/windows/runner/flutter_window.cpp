@@ -202,6 +202,34 @@ void FlutterWindow::ForceFlutterRedraw() {
   }
 }
 
+void FlutterWindow::SyncFlutterViewChild() {
+  HWND hwnd = GetHandle();
+  if (hwnd == nullptr || !flutter_controller_ || !flutter_controller_->view()) {
+    return;
+  }
+  HWND child = flutter_controller_->view()->GetNativeWindow();
+  if (child == nullptr) {
+    return;
+  }
+  RECT client = {};
+  if (!GetClientRect(hwnd, &client)) {
+    return;
+  }
+  const int width = client.right - client.left;
+  const int height = client.bottom - client.top;
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+  RECT child_rect = {};
+  if (!GetWindowRect(child, &child_rect)) {
+    return;
+  }
+  if (child_rect.right - child_rect.left != width ||
+      child_rect.bottom - child_rect.top != height) {
+    MoveWindow(child, 0, 0, width, height, TRUE);
+  }
+}
+
 void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
   HWND hwnd = GetHandle();
   if (hwnd == nullptr) {
@@ -236,9 +264,14 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
     MARGINS margins = {0, 0, 0, 0};
     DwmExtendFrameIntoClientArea(hwnd, &margins);
     const RECT& monitor = monitor_info.rcMonitor;
+    // SWP_NOCOPYBITS: do not blit stale pre-fullscreen bits into the new
+    // surface (classic black/white flash source on size-preserving copies).
     SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
                  monitor.right - monitor.left, monitor.bottom - monitor.top,
-                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+                 SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW |
+                     SWP_NOCOPYBITS);
+    SyncFlutterViewChild();
+    DwmFlush();
     ForceFlutterRedraw();
     return;
   }
@@ -262,8 +295,10 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
   } else {
     SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
-                     SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                     SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOCOPYBITS);
   }
+  SyncFlutterViewChild();
+  DwmFlush();
   ForceFlutterRedraw();
 }
 
@@ -328,6 +363,10 @@ bool FlutterWindow::VerifyWindowFrame() {
       }
     }
   }
+  if (adjusted) {
+    DwmFlush();
+    ForceFlutterRedraw();
+  }
   return adjusted;
 }
 
@@ -353,7 +392,7 @@ void FlutterWindow::RestoreWindowPlacement() {
   SetWindowPlacement(hwnd, &saved_window_placement_);
   SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER |
-                   SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                   SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOCOPYBITS);
   window_placement_saved_ = false;
 }
 
@@ -386,10 +425,21 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       }
       return 1;
     }
+    case WM_SIZE: {
+      // Parent MoveWindow keeps child_content_ in place; then re-assert the
+      // Flutter view fills the client after maximize/restore/frameless snaps.
+      const LRESULT size_result =
+          Win32Window::MessageHandler(hwnd, message, wparam, lparam);
+      if (window_frame_hidden_ || wparam == SIZE_MAXIMIZED ||
+          wparam == SIZE_RESTORED) {
+        SyncFlutterViewChild();
+      }
+      return size_result;
+    }
     case WM_GETMINMAXINFO: {
       // Frameless maximized window: pin the max rect to the work area so it
       // does not grow under the taskbar and get pulled back by NCCALCSIZE.
-      if (!window_fullscreen_ && window_frame_hidden_) {
+      if (window_frame_hidden_ && !window_fullscreen_) {
         auto* info = reinterpret_cast<MINMAXINFO*>(lparam);
         MONITORINFO monitor_info = {};
         monitor_info.cbSize = sizeof(MONITORINFO);
@@ -407,10 +457,10 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
       break;
     }
     case WM_NCCALCSIZE:
-      // While fullscreen, pin the client area to the full window rect so no
-      // style change (resize border re-added by any code path) can inset the
-      // client area and expose white edges around the Flutter view.
-      if (window_fullscreen_ && wparam) {
+      // Frameless (fullscreen or immersive windowed): pin the client area to
+      // the full window rect. Without this, maximize/style switches can inset
+      // the client and leave black/white bands around the Flutter view.
+      if (window_frame_hidden_ && wparam) {
         return 0;
       }
       break;

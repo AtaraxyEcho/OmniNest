@@ -11,6 +11,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -104,12 +105,15 @@ class _ImagePreview extends ConsumerWidget {
             child: CachedNetworkImage(
               imageUrl: url,
               fit: BoxFit.contain,
-              // 预览按屏宽解码，避免原图整幅进内存。
-              memCacheWidth: (MediaQuery.sizeOf(context).width *
-                      MediaQuery.devicePixelRatioOf(context) *
-                      5)
-                  .round()
-                  .clamp(800, 8192),
+              // 预览按屏宽解码并量化档位，最大化时不反复重解码。
+              memCacheWidth: quantizedDecodeWidth(
+                logicalWidth: MediaQuery.sizeOf(context).width,
+                devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+                step: 512,
+                min: 800,
+                max: 8192,
+                scale: 5,
+              ),
               placeholder: (context, url) => const AppLoading.simple(),
               errorWidget:
                   (context, url, error) => Center(
