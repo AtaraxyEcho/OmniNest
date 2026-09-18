@@ -10,6 +10,8 @@
   "mobileOfflineBanner": "当前处于离线状态，部分操作暂不可用",
   "fullscreenEnterShortcut": "全屏（F11）",
   "fullscreenExitShortcut": "退出全屏（F11）",
+  "portalImmersiveModeEnter": "沉浸模式",
+  "portalImmersiveModeExit": "退出沉浸模式",
   "searchTitle": "搜索",
   "searchHint": "搜索文件、书籍、视频…",
   "searchEmptyQuery": "输入关键词开始搜索",

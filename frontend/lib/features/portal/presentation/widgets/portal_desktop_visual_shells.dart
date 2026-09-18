@@ -234,104 +234,101 @@ class _PortalDesktopVisualHostState
       context,
       backdropActive: localBackdropActive,
     );
-    return AppFullscreenShortcutScope(
-      onToggle:
-          () => ref
+    // F11 由 app.dart 全局按键处理器统一分发为无边框全屏；此处不得再绑定
+    // F11 切换沉浸模式，否则同一按键会双重触发（硬件层 handler 与焦点树
+    // CallbackShortcuts 无条件先后执行），表现为全屏与音乐沉浸模式同时翻转。
+    return Focus(
+      focusNode: _immersiveFocusNode,
+      autofocus: true,
+      canRequestFocus: true,
+      onKeyEvent: (node, event) {
+        if (!immersivePlaybackVisible || event is! KeyDownEvent) {
+          return KeyEventResult.ignored;
+        }
+        if (event.logicalKey != LogicalKeyboardKey.escape) {
+          return KeyEventResult.ignored;
+        }
+        if (_immersivePlaybackEnabled) {
+          setState(() => _immersivePlaybackEnabled = false);
+        } else {
+          ref
               .read(portalPreferencesProvider.notifier)
-              .updateImmersiveMode(!resolved.immersiveModeEnabled),
-      child: Focus(
-        focusNode: _immersiveFocusNode,
-        autofocus: true,
-        canRequestFocus: true,
-        onKeyEvent: (node, event) {
-          if (!immersivePlaybackVisible || event is! KeyDownEvent) {
-            return KeyEventResult.ignored;
-          }
-          if (event.logicalKey != LogicalKeyboardKey.escape) {
-            return KeyEventResult.ignored;
-          }
-          if (_immersivePlaybackEnabled) {
-            setState(() => _immersivePlaybackEnabled = false);
-          } else {
-            ref
-                .read(portalPreferencesProvider.notifier)
-                .updateImmersiveMode(false);
-          }
-          return KeyEventResult.handled;
-        },
-        child: Stack(
-          children: [
-            SafeArea(
-              top: !hosted,
-              bottom: !hosted,
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(32, hosted ? 12 : 0, 32, 28),
-                child: Column(
-                  children: [
-                    if (!hosted && !resolved.immersiveModeEnabled)
-                      _buildTopBar(palette: palette, resolved: resolved),
-                    Expanded(
-                      child: IgnorePointer(
-                        ignoring: immersivePlaybackVisible,
-                        child: AnimatedOpacity(
-                          opacity: immersivePlaybackVisible ? 0 : 1,
+              .updateImmersiveMode(false);
+        }
+        return KeyEventResult.handled;
+      },
+      child: Stack(
+        children: [
+          SafeArea(
+            top: !hosted,
+            bottom: !hosted,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(32, hosted ? 12 : 0, 32, 28),
+              child: Column(
+                children: [
+                  if (!hosted && !resolved.immersiveModeEnabled)
+                    _buildTopBar(palette: palette, resolved: resolved),
+                  Expanded(
+                    child: IgnorePointer(
+                      ignoring: immersivePlaybackVisible,
+                      child: AnimatedOpacity(
+                        opacity: immersivePlaybackVisible ? 0 : 1,
+                        duration: PortalMotion.duration(
+                          context,
+                          const Duration(milliseconds: 240),
+                        ),
+                        curve: Curves.easeOutCubic,
+                        child: AnimatedSlide(
+                          offset:
+                              immersivePlaybackVisible
+                                  ? const Offset(0, 0.035)
+                                  : Offset.zero,
                           duration: PortalMotion.duration(
                             context,
                             const Duration(milliseconds: 240),
                           ),
                           curve: Curves.easeOutCubic,
-                          child: AnimatedSlide(
-                            offset:
-                                immersivePlaybackVisible
-                                    ? const Offset(0, 0.035)
-                                    : Offset.zero,
-                            duration: PortalMotion.duration(
-                              context,
-                              const Duration(milliseconds: 240),
-                            ),
-                            curve: Curves.easeOutCubic,
-                            child: _BackdropLibraryPortal(
-                              palette: palette,
-                              weatherOverride: weather,
-                              localBackdropActive: localBackdropActive,
-                              onOpenImmersivePlayback: _openImmersivePlayback,
-                            ),
+                          child: _BackdropLibraryPortal(
+                            palette: palette,
+                            weatherOverride: weather,
+                            localBackdropActive: localBackdropActive,
+                            onOpenImmersivePlayback: _openImmersivePlayback,
                           ),
                         ),
                       ),
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
-            if (immersivePlaybackVisible)
-              Positioned.fill(
-                top:
-                    hosted
-                        ? 0
-                        : resolved.immersiveModeEnabled
-                        ? 0
-                        : MediaQuery.paddingOf(context).top + 58,
-                child: MusicImmersivePlayer(
-                  palette: _musicImmersivePalette(palette),
-                  reservedTopInset:
-                      !hosted && resolved.immersiveModeEnabled
-                          ? MediaQuery.paddingOf(context).top + 58
-                          : 0,
-                ),
+          ),
+          if (immersivePlaybackVisible)
+            Positioned.fill(
+              top:
+                  hosted
+                      ? 0
+                      : resolved.immersiveModeEnabled
+                      ? 0
+                      : MediaQuery.paddingOf(context).top + 58,
+              child: MusicImmersivePlayer(
+                palette: _musicImmersivePalette(palette),
+                reservedTopInset:
+                    !hosted && resolved.immersiveModeEnabled
+                        ? MediaQuery.paddingOf(context).top + 58
+                        : 0,
               ),
-            if (!hosted && resolved.immersiveModeEnabled)
-              Positioned(
-                left: 32,
-                right: 32,
-                top: 0,
-                child: SafeArea(
-                  bottom: false,
-                  child: _buildTopBar(palette: palette, resolved: resolved),
-                ),
+            ),
+          if (!hosted && resolved.immersiveModeEnabled)
+            Positioned(
+              left: 32,
+              right: 32,
+              top: 0,
+              child: SafeArea(
+                bottom: false,
+                child: _buildTopBar(palette: palette, resolved: resolved),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -341,6 +338,7 @@ class _PortalDesktopVisualHostState
     required PortalPreferences resolved,
   }) {
     final immersive = resolved.immersiveModeEnabled;
+    final l10n = AppLocalizations.of(context);
     return PortalImmersiveTopBarReveal(
       immersive: immersive,
       child: PortalVisualTopBar(
@@ -353,6 +351,10 @@ class _PortalDesktopVisualHostState
             isFullscreen: resolved.immersiveModeEnabled,
             foregroundColor: palette.text,
             accentColor: palette.accent,
+            // 此按钮切换的是门户沉浸模式偏好（整屏音乐沉浸视觉），
+            // 不是 F11 无边框全屏，提示文案不得借用全屏快捷键。
+            enterTooltip: l10n.portalImmersiveModeEnter,
+            exitTooltip: l10n.portalImmersiveModeExit,
             onPressed:
                 () => ref
                     .read(portalPreferencesProvider.notifier)

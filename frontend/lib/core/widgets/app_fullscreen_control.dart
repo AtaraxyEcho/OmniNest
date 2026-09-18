@@ -32,6 +32,8 @@ class AppFullscreenButton extends StatelessWidget {
     required this.foregroundColor,
     required this.accentColor,
     required this.onPressed,
+    this.enterTooltip,
+    this.exitTooltip,
     super.key,
   });
 
@@ -40,13 +42,19 @@ class AppFullscreenButton extends StatelessWidget {
   final Color accentColor;
   final VoidCallback onPressed;
 
+  /// 自定义非全屏态提示；缺省使用 F11 全屏文案。
+  final String? enterTooltip;
+
+  /// 自定义全屏态提示；缺省使用 F11 退出全屏文案。
+  final String? exitTooltip;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final tooltip =
         isFullscreen
-            ? l10n.fullscreenExitShortcut
-            : l10n.fullscreenEnterShortcut;
+            ? (exitTooltip ?? l10n.fullscreenExitShortcut)
+            : (enterTooltip ?? l10n.fullscreenEnterShortcut);
     final animationDuration =
         MediaQuery.maybeOf(context)?.disableAnimations ?? false
             ? Duration.zero

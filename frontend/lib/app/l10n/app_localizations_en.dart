@@ -40,6 +40,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fullscreenExitShortcut => 'Exit full screen (F11)';
 
   @override
+  String get portalImmersiveModeEnter => 'Immersive mode';
+
+  @override
+  String get portalImmersiveModeExit => 'Exit immersive mode';
+
+  @override
   String get searchTitle => 'Search';
 
   @override

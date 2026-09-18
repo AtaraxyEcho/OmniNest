@@ -87,21 +87,20 @@ void main() {
     );
   });
 
-  test('web leaves F11 to the browser', () {
+  test('F11 不映射阅读器命令，交由 app 级全局无边框全屏', () {
     expect(
       resolver.resolve(
         key: LogicalKeyboardKey.f11,
         mode: ReaderShortcutMode.textPage,
-        isWeb: true,
       ),
       isNull,
     );
     expect(
       resolver.resolve(
         key: LogicalKeyboardKey.f11,
-        mode: ReaderShortcutMode.textPage,
+        mode: ReaderShortcutMode.comicPage,
       ),
-      ReaderCommand.toggleFullscreen,
+      isNull,
     );
   });
 

@@ -933,7 +933,6 @@ class _ComicReaderViewState extends ConsumerState<ComicReaderView> {
       isRtl: _isRtl,
       textInputFocused: textInputFocused,
       imageZoomed: _imageZoomed,
-      isWeb: kIsWeb,
     );
     if (command == null) {
       return KeyEventResult.ignored;

@@ -10,6 +10,8 @@
   "mobileOfflineBanner": "You are offline. Some actions are unavailable.",
   "fullscreenEnterShortcut": "Full screen (F11)",
   "fullscreenExitShortcut": "Exit full screen (F11)",
+  "portalImmersiveModeEnter": "Immersive mode",
+  "portalImmersiveModeExit": "Exit immersive mode",
   "searchTitle": "Search",
   "searchHint": "Search files, books, videos…",
   "searchEmptyQuery": "Enter keywords to start searching",

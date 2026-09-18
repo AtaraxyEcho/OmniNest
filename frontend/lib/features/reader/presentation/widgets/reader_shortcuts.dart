@@ -41,7 +41,6 @@ class ReaderShortcutResolver {
     bool isRtl = false,
     bool textInputFocused = false,
     bool imageZoomed = false,
-    bool isWeb = false,
   }) {
     final isTextMode =
         mode == ReaderShortcutMode.textScroll ||
@@ -67,9 +66,8 @@ class ReaderShortcutResolver {
     if (key == LogicalKeyboardKey.keyF) {
       return ReaderCommand.toggleImmersive;
     }
-    if (!isWeb && key == LogicalKeyboardKey.f11) {
-      return ReaderCommand.toggleFullscreen;
-    }
+    // F11 不在此映射：app.dart 全局按键处理器统一分发无边框全屏，
+    // 页面级再绑定会在同一按键上双重触发（焦点树与硬件层先后执行）。
     if (shiftPressed && key == LogicalKeyboardKey.slash) {
       return ReaderCommand.showShortcuts;
     }

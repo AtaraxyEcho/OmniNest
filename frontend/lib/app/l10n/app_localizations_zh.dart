@@ -39,6 +39,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get fullscreenExitShortcut => '退出全屏（F11）';
 
   @override
+  String get portalImmersiveModeEnter => '沉浸模式';
+
+  @override
+  String get portalImmersiveModeExit => '退出沉浸模式';
+
+  @override
   String get searchTitle => '搜索';
 
   @override

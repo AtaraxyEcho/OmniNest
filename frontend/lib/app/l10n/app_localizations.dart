@@ -158,6 +158,18 @@ abstract class AppLocalizations {
   /// **'Exit full screen (F11)'**
   String get fullscreenExitShortcut;
 
+  /// No description provided for @portalImmersiveModeEnter.
+  ///
+  /// In en, this message translates to:
+  /// **'Immersive mode'**
+  String get portalImmersiveModeEnter;
+
+  /// No description provided for @portalImmersiveModeExit.
+  ///
+  /// In en, this message translates to:
+  /// **'Exit immersive mode'**
+  String get portalImmersiveModeExit;
+
   /// No description provided for @searchTitle.
   ///
   /// In en, this message translates to:

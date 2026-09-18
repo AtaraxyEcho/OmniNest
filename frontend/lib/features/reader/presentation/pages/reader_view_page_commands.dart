@@ -23,7 +23,6 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
       shiftPressed: hardware.isShiftPressed,
       controlPressed: hardware.isControlPressed || hardware.isMetaPressed,
       textInputFocused: inputFocused,
-      isWeb: kIsWeb,
     );
     if (command == null) {
       return KeyEventResult.ignored;
