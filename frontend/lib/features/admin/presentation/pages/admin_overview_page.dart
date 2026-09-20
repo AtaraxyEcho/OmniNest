@@ -9,9 +9,9 @@ import 'package:omninest/features/admin/application/admin_operations_controller.
 import 'package:omninest/features/admin/domain/admin_analytics.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_user.dart';
-import 'package:omninest/features/admin/presentation/pages/admin_analytics_page.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_redesign_components.dart';
+import 'package:omninest/features/admin/presentation/widgets/admin_trend_charts.dart';
 
 /// 管理控制台概览页面 — sparkline 指标卡 + 趋势 + 服务健康网格。
 class AdminOverviewPage extends ConsumerWidget {

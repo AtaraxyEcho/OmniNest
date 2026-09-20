@@ -435,46 +435,6 @@ class AdminTrendBadge extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 时间范围选择器（图表页）
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// 时间范围分段选择器。
-class AdminTimeRangeSelector extends StatelessWidget {
-  const AdminTimeRangeSelector({
-    required this.selected,
-    required this.onChanged,
-    super.key,
-  });
-
-  final int selected; // 天数：7 / 30 / 90
-  final ValueChanged<int> onChanged;
-
-  static const ranges = [7, 30, 90];
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.adminColors;
-    return SegmentedButton<int>(
-      segments: [
-        for (final d in ranges) ButtonSegment(value: d, label: Text('${d}d')),
-      ],
-      selected: {selected},
-      onSelectionChanged: (set) => onChanged(set.first),
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        textStyle: WidgetStatePropertyAll(
-          TextStyle(fontSize: AppTypography.labelSmall),
-        ),
-        foregroundColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return c.primary;
-          return c.onSurfaceVariant;
-        }),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // 服务状态网格瓦片（系统监控）
 // ─────────────────────────────────────────────────────────────────────────────
 

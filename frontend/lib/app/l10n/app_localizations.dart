@@ -5599,30 +5599,6 @@ abstract class AppLocalizations {
   /// **'{count} tasks'**
   String adminOverviewTasksTotal(Object count);
 
-  /// No description provided for @adminAnalyticsDays.
-  ///
-  /// In en, this message translates to:
-  /// **'{days}d'**
-  String adminAnalyticsDays(Object days);
-
-  /// No description provided for @adminAnalyticsLive.
-  ///
-  /// In en, this message translates to:
-  /// **'LIVE'**
-  String get adminAnalyticsLive;
-
-  /// No description provided for @adminTaskThroughputTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'{completed} done · {failed} err'**
-  String adminTaskThroughputTooltip(Object completed, Object failed);
-
-  /// No description provided for @adminLoadCpu.
-  ///
-  /// In en, this message translates to:
-  /// **'CPU'**
-  String get adminLoadCpu;
-
   /// No description provided for @adminLoadMemory.
   ///
   /// In en, this message translates to:
@@ -5796,18 +5772,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No trend data.'**
   String get adminNoTrendData;
-
-  /// No description provided for @adminAnalyticsDataHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Data will be collected automatically once the system is running.'**
-  String get adminAnalyticsDataHint;
-
-  /// No description provided for @adminRealtime.
-  ///
-  /// In en, this message translates to:
-  /// **'Realtime'**
-  String get adminRealtime;
 
   /// No description provided for @adminLogCenter.
   ///
@@ -8777,48 +8741,6 @@ abstract class AppLocalizations {
   /// **'Storage'**
   String get adminStorageLabel;
 
-  /// No description provided for @adminAnalyticsPage.
-  ///
-  /// In en, this message translates to:
-  /// **'Analytics'**
-  String get adminAnalyticsPage;
-
-  /// No description provided for @adminAnalyticsPageSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Centralized view of account growth, capacity trends, task throughput and system load.'**
-  String get adminAnalyticsPageSubtitle;
-
-  /// No description provided for @adminAccountGrowth.
-  ///
-  /// In en, this message translates to:
-  /// **'Account Growth'**
-  String get adminAccountGrowth;
-
-  /// No description provided for @adminTaskThroughput.
-  ///
-  /// In en, this message translates to:
-  /// **'Task Throughput'**
-  String get adminTaskThroughput;
-
-  /// No description provided for @adminCompletedLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'completed'**
-  String get adminCompletedLabel;
-
-  /// No description provided for @adminExceptions.
-  ///
-  /// In en, this message translates to:
-  /// **'exceptions'**
-  String get adminExceptions;
-
-  /// No description provided for @adminStorageOccupancy.
-  ///
-  /// In en, this message translates to:
-  /// **'Storage Occupancy'**
-  String get adminStorageOccupancy;
-
   /// No description provided for @adminObjectsLabel.
   ///
   /// In en, this message translates to:
@@ -8891,12 +8813,6 @@ abstract class AppLocalizations {
   /// **'Console Home'**
   String get adminNavOverview;
 
-  /// No description provided for @adminNavAnalytics.
-  ///
-  /// In en, this message translates to:
-  /// **'Analytics'**
-  String get adminNavAnalytics;
-
   /// No description provided for @adminNavMonitoring.
   ///
   /// In en, this message translates to:
@@ -8962,18 +8878,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Key metrics of users, permissions, runtime status and storage capacity.'**
   String get adminOverviewSubtitle;
-
-  /// No description provided for @adminAnalyticsTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Analytics'**
-  String get adminAnalyticsTitle;
-
-  /// No description provided for @adminAnalyticsSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Centralized view of account growth, capacity trends, task throughput and system load.'**
-  String get adminAnalyticsSubtitle;
 
   /// No description provided for @adminMonitoringTitle.
   ///

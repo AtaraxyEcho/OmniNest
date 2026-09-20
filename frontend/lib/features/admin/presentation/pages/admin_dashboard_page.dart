@@ -8,11 +8,9 @@ import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/admin/application/admin_console_controller.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/application/admin_user_controller.dart';
-import 'package:omninest/features/admin/domain/admin_analytics.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_section.dart';
-import 'package:omninest/features/admin/presentation/pages/admin_analytics_page.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_overview_page.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_users_page.dart';
@@ -104,11 +102,6 @@ class _AdminSectionBody extends ConsumerWidget {
     return switch (section) {
       AdminSection.overview => _SummaryStateBuilder(
         builder: (summary) => AdminOverviewPage(summary: summary),
-      ),
-      AdminSection.analytics => _AsyncStateBuilder<AdminAnalytics>(
-        state: ref.watch(adminAnalyticsProvider(7)),
-        onRetry: () => ref.invalidate(adminAnalyticsProvider(7)),
-        builder: (analytics) => AdminAnalyticsPage(analytics: analytics),
       ),
       AdminSection.users => _UserStateBuilder(
         builder: (state) => AdminUsersPage(state: state),

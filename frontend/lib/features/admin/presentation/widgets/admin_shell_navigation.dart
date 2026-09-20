@@ -151,7 +151,6 @@ class _SidebarStorageStatus extends ConsumerWidget {
 IconData _iconFor(AdminSection section) {
   return switch (section) {
     AdminSection.overview => Icons.dashboard_customize_outlined,
-    AdminSection.analytics => Icons.bar_chart_rounded,
     AdminSection.monitoring => Icons.monitor_heart_outlined,
     AdminSection.logs => Icons.receipt_long_outlined,
     AdminSection.tasks => Icons.pending_actions_outlined,
@@ -167,7 +166,6 @@ IconData _iconFor(AdminSection section) {
 String _sectionLabel(AppLocalizations l10n, AdminSection section) {
   return switch (section) {
     AdminSection.overview => l10n.adminNavOverview,
-    AdminSection.analytics => l10n.adminNavAnalytics,
     AdminSection.monitoring => l10n.adminNavMonitoring,
     AdminSection.logs => l10n.adminNavLogs,
     AdminSection.tasks => l10n.adminNavTasks,
@@ -183,7 +181,6 @@ String _sectionLabel(AppLocalizations l10n, AdminSection section) {
 String _sectionTitle(AppLocalizations l10n, AdminSection section) {
   return switch (section) {
     AdminSection.overview => l10n.adminOverviewTitle,
-    AdminSection.analytics => l10n.adminAnalyticsTitle,
     AdminSection.monitoring => l10n.adminMonitoringTitle,
     AdminSection.logs => l10n.adminLogsTitle,
     AdminSection.tasks => l10n.adminTasksTitle,
@@ -208,7 +205,7 @@ String _sectionGroupLabel(AppLocalizations l10n, AdminSectionGroup group) {
 
 int _adminDockIndex(AdminSection section) {
   return switch (section) {
-    AdminSection.overview || AdminSection.analytics => 0,
+    AdminSection.overview => 0,
     AdminSection.users || AdminSection.roles => 1,
     AdminSection.tasks || AdminSection.sessions || AdminSection.monitoring => 2,
     AdminSection.logs => 3,

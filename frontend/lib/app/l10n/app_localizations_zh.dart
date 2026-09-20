@@ -2932,22 +2932,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String adminAnalyticsDays(Object days) {
-    return '$days 天';
-  }
-
-  @override
-  String get adminAnalyticsLive => '实时';
-
-  @override
-  String adminTaskThroughputTooltip(Object completed, Object failed) {
-    return '$completed 完成 · $failed 失败';
-  }
-
-  @override
-  String get adminLoadCpu => 'CPU';
-
-  @override
   String get adminLoadMemory => '内存';
 
   @override
@@ -3040,12 +3024,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminNoTrendData => '当前没有趋势数据。';
-
-  @override
-  String get adminAnalyticsDataHint => '系统运行后将自动采集数据。';
-
-  @override
-  String get adminRealtime => '实时';
 
   @override
   String get adminLogCenter => '日志中心';
@@ -4617,27 +4595,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminStorageLabel => '存储';
 
   @override
-  String get adminAnalyticsPage => '可视化图表';
-
-  @override
-  String get adminAnalyticsPageSubtitle => '集中查看账号增长、容量趋势、任务吞吐和系统负载。';
-
-  @override
-  String get adminAccountGrowth => '账号增长';
-
-  @override
-  String get adminTaskThroughput => '任务吞吐';
-
-  @override
-  String get adminCompletedLabel => '完成';
-
-  @override
-  String get adminExceptions => '异常';
-
-  @override
-  String get adminStorageOccupancy => '存储占用';
-
-  @override
   String get adminObjectsLabel => '对象';
 
   @override
@@ -4674,9 +4631,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminNavOverview => '控制台首页';
 
   @override
-  String get adminNavAnalytics => '可视化图表';
-
-  @override
   String get adminNavMonitoring => '系统监控';
 
   @override
@@ -4708,12 +4662,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminOverviewSubtitle => '汇总用户、权限、运行状态和存储能力的关键指标。';
-
-  @override
-  String get adminAnalyticsTitle => '可视化图表';
-
-  @override
-  String get adminAnalyticsSubtitle => '集中查看账号增长、容量趋势、任务吞吐和系统负载。';
 
   @override
   String get adminMonitoringTitle => '系统监控';

@@ -8,7 +8,6 @@ enum AdminSectionGroup {
 
 enum AdminSection {
   overview(group: AdminSectionGroup.overview, pathSegment: 'overview'),
-  analytics(group: AdminSectionGroup.overview, pathSegment: 'analytics'),
   monitoring(group: AdminSectionGroup.operations, pathSegment: 'monitoring'),
   logs(group: AdminSectionGroup.operations, pathSegment: 'logs'),
   tasks(group: AdminSectionGroup.operations, pathSegment: 'tasks'),
@@ -34,8 +33,7 @@ enum AdminSection {
   /// 与后端管理端接口的 @PreAuthorize 对齐；后端仍做最终校验。
   Set<String> get requiredAnyPermissions {
     return switch (this) {
-      AdminSection.overview ||
-      AdminSection.analytics => {'system:config:read', 'system:user:read'},
+      AdminSection.overview => {'system:config:read', 'system:user:read'},
       AdminSection.monitoring ||
       AdminSection.logs ||
       AdminSection.sessions ||

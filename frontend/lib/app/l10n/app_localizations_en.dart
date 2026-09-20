@@ -3016,22 +3016,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String adminAnalyticsDays(Object days) {
-    return '${days}d';
-  }
-
-  @override
-  String get adminAnalyticsLive => 'LIVE';
-
-  @override
-  String adminTaskThroughputTooltip(Object completed, Object failed) {
-    return '$completed done · $failed err';
-  }
-
-  @override
-  String get adminLoadCpu => 'CPU';
-
-  @override
   String get adminLoadMemory => 'MEM';
 
   @override
@@ -3128,13 +3112,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminNoTrendData => 'No trend data.';
-
-  @override
-  String get adminAnalyticsDataHint =>
-      'Data will be collected automatically once the system is running.';
-
-  @override
-  String get adminRealtime => 'Realtime';
 
   @override
   String get adminLogCenter => 'Log Center';
@@ -4771,28 +4748,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminStorageLabel => 'Storage';
 
   @override
-  String get adminAnalyticsPage => 'Analytics';
-
-  @override
-  String get adminAnalyticsPageSubtitle =>
-      'Centralized view of account growth, capacity trends, task throughput and system load.';
-
-  @override
-  String get adminAccountGrowth => 'Account Growth';
-
-  @override
-  String get adminTaskThroughput => 'Task Throughput';
-
-  @override
-  String get adminCompletedLabel => 'completed';
-
-  @override
-  String get adminExceptions => 'exceptions';
-
-  @override
-  String get adminStorageOccupancy => 'Storage Occupancy';
-
-  @override
   String get adminObjectsLabel => 'objects';
 
   @override
@@ -4829,9 +4784,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminNavOverview => 'Console Home';
 
   @override
-  String get adminNavAnalytics => 'Analytics';
-
-  @override
   String get adminNavMonitoring => 'System Monitor';
 
   @override
@@ -4864,13 +4816,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminOverviewSubtitle =>
       'Key metrics of users, permissions, runtime status and storage capacity.';
-
-  @override
-  String get adminAnalyticsTitle => 'Analytics';
-
-  @override
-  String get adminAnalyticsSubtitle =>
-      'Centralized view of account growth, capacity trends, task throughput and system load.';
 
   @override
   String get adminMonitoringTitle => 'System Monitor';

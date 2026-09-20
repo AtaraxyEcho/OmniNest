@@ -1279,21 +1279,6 @@
       "count": {}
     }
   },
-  "adminAnalyticsDays": "{days}d",
-  "@adminAnalyticsDays": {
-    "placeholders": {
-      "days": {}
-    }
-  },
-  "adminAnalyticsLive": "LIVE",
-  "adminTaskThroughputTooltip": "{completed} done · {failed} err",
-  "@adminTaskThroughputTooltip": {
-    "placeholders": {
-      "completed": {},
-      "failed": {}
-    }
-  },
-  "adminLoadCpu": "CPU",
   "adminLoadMemory": "MEM",
   "adminLoadDisk": "DISK",
   "adminLoadJvm": "JVM",
@@ -1338,8 +1323,6 @@
   "adminTrendCharts": "Real-time Trend Charts",
   "adminTrendChartsSubtitle": "Currently showing 55-minute sampling trends, can be replaced with real time-series storage later.",
   "adminNoTrendData": "No trend data.",
-  "adminAnalyticsDataHint": "Data will be collected automatically once the system is running.",
-  "adminRealtime": "Realtime",
   "adminLogCenter": "Log Center",
   "adminLogCenterSubtitle": "Unified view of operation audit and login logs.",
   "adminAuditCount": "{count} audit records",
@@ -2012,13 +1995,6 @@
   "adminUserLabel": "Users",
   "adminTaskLabel": "Tasks",
   "adminStorageLabel": "Storage",
-  "adminAnalyticsPage": "Analytics",
-  "adminAnalyticsPageSubtitle": "Centralized view of account growth, capacity trends, task throughput and system load.",
-  "adminAccountGrowth": "Account Growth",
-  "adminTaskThroughput": "Task Throughput",
-  "adminCompletedLabel": "completed",
-  "adminExceptions": "exceptions",
-  "adminStorageOccupancy": "Storage Occupancy",
   "adminObjectsLabel": "objects",
   "adminSystemLoad": "System Load",
   "adminHotConfig": "Hot Config",
@@ -2031,7 +2007,6 @@
   "adminGroupConfiguration": "System Config",
   "adminGroupStorage": "Storage",
   "adminNavOverview": "Console Home",
-  "adminNavAnalytics": "Analytics",
   "adminNavMonitoring": "System Monitor",
   "adminNavLogs": "Log Center",
   "adminNavTasks": "Background Tasks",
@@ -2043,8 +2018,6 @@
   "adminNavExternalStorage": "External Storage",
   "adminOverviewTitle": "Admin Console",
   "adminOverviewSubtitle": "Key metrics of users, permissions, runtime status and storage capacity.",
-  "adminAnalyticsTitle": "Analytics",
-  "adminAnalyticsSubtitle": "Centralized view of account growth, capacity trends, task throughput and system load.",
   "adminMonitoringTitle": "System Monitor",
   "adminMonitoringSubtitle2": "View health checks, service metrics, node status and alerts.",
   "adminLogsTitle": "Log Center",

@@ -1153,21 +1153,6 @@
       "count": {}
     }
   },
-  "adminAnalyticsDays": "{days} 天",
-  "@adminAnalyticsDays": {
-    "placeholders": {
-      "days": {}
-    }
-  },
-  "adminAnalyticsLive": "实时",
-  "adminTaskThroughputTooltip": "{completed} 完成 · {failed} 失败",
-  "@adminTaskThroughputTooltip": {
-    "placeholders": {
-      "completed": {},
-      "failed": {}
-    }
-  },
-  "adminLoadCpu": "CPU",
   "adminLoadMemory": "内存",
   "adminLoadDisk": "磁盘",
   "adminLoadJvm": "JVM",
@@ -1212,8 +1197,6 @@
   "adminTrendCharts": "实时趋势图",
   "adminTrendChartsSubtitle": "当前阶段展示过去 55 分钟的采样趋势，后续可替换为真实时序存储。",
   "adminNoTrendData": "当前没有趋势数据。",
-  "adminAnalyticsDataHint": "系统运行后将自动采集数据。",
-  "adminRealtime": "实时",
   "adminLogCenter": "日志中心",
   "adminLogCenterSubtitle": "统一查看操作审计和登录日志。",
   "adminAuditCount": "{count} 条审计",
@@ -1886,13 +1869,6 @@
   "adminUserLabel": "用户",
   "adminTaskLabel": "任务",
   "adminStorageLabel": "存储",
-  "adminAnalyticsPage": "可视化图表",
-  "adminAnalyticsPageSubtitle": "集中查看账号增长、容量趋势、任务吞吐和系统负载。",
-  "adminAccountGrowth": "账号增长",
-  "adminTaskThroughput": "任务吞吐",
-  "adminCompletedLabel": "完成",
-  "adminExceptions": "异常",
-  "adminStorageOccupancy": "存储占用",
   "adminObjectsLabel": "对象",
   "adminSystemLoad": "系统负载",
   "adminHotConfig": "热配置",
@@ -1905,7 +1881,6 @@
   "adminGroupConfiguration": "系统配置",
   "adminGroupStorage": "存储",
   "adminNavOverview": "控制台首页",
-  "adminNavAnalytics": "可视化图表",
   "adminNavMonitoring": "系统监控",
   "adminNavLogs": "日志中心",
   "adminNavTasks": "后台任务",
@@ -1917,8 +1892,6 @@
   "adminNavExternalStorage": "外部存储",
   "adminOverviewTitle": "管理控制台",
   "adminOverviewSubtitle": "汇总用户、权限、运行状态和存储能力的关键指标。",
-  "adminAnalyticsTitle": "可视化图表",
-  "adminAnalyticsSubtitle": "集中查看账号增长、容量趋势、任务吞吐和系统负载。",
   "adminMonitoringTitle": "系统监控",
   "adminMonitoringSubtitle2": "查看健康检查、服务指标、节点状态和告警。",
   "adminLogsTitle": "日志中心",
