@@ -688,6 +688,8 @@ class _AdaptiveCoverImage extends StatelessWidget {
       fallbackColors: fallbackColors,
       foregroundFit: foregroundFit,
       foregroundPadding: foregroundPadding,
+      cacheKey: coverCacheKey,
+      onCoverError: onCoverError,
     );
   }
 }
@@ -742,26 +744,41 @@ class _NetworkAdaptiveCoverImage extends StatelessWidget {
     required this.fallbackColors,
     required this.foregroundFit,
     required this.foregroundPadding,
+    this.cacheKey,
+    this.onCoverError,
   });
 
   final String imageUrl;
   final List<Color> fallbackColors;
   final BoxFit foregroundFit;
   final EdgeInsetsGeometry foregroundPadding;
+  final String? cacheKey;
+  final VoidCallback? onCoverError;
 
   @override
   Widget build(BuildContext context) {
     final fallback = _CoverImageFallback(colors: fallbackColors);
+    void notifyCoverError() {
+      // 签名 URL 失效是 hero 封面失败主因：post-frame 通知上层重签，
+      // 避免在图片流回调（可发生于 build 期）中直接触发状态改写。
+      final callback = onCoverError;
+      if (callback != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => callback());
+      }
+    }
+
     return Stack(
       fit: StackFit.expand,
       children: [
         _AmbientCoverBackdrop(
           child: CachedNetworkImage(
             imageUrl: imageUrl,
+            cacheKey: cacheKey,
             fit: BoxFit.cover,
             alignment: Alignment.center,
             filterQuality: FilterQuality.medium,
             memCacheWidth: _ambientBackdropCacheWidth,
+            errorListener: (_) => notifyCoverError(),
             placeholder: (context, url) => fallback,
             errorWidget: (context, url, error) => fallback,
           ),
@@ -775,9 +792,20 @@ class _NetworkAdaptiveCoverImage extends StatelessWidget {
           padding: foregroundPadding,
           child: CachedNetworkImage(
             imageUrl: imageUrl,
+            cacheKey: cacheKey,
             fit: foregroundFit,
             alignment: Alignment.center,
             filterQuality: FilterQuality.high,
+            // hero 封面卡最宽 400 逻辑像素：量化解码覆盖 DPR 放大，
+            // 同时避免整图分辨率的解码开销。
+            memCacheWidth: quantizedDecodeWidth(
+              logicalWidth: 400,
+              devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+              step: 128,
+              min: 256,
+              max: 1280,
+            ),
+            errorListener: (_) => notifyCoverError(),
             placeholder: (context, url) => const SizedBox.shrink(),
             errorWidget: (context, url, error) => const SizedBox.shrink(),
           ),

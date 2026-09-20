@@ -648,14 +648,38 @@ class _PortalContinueTile extends StatelessWidget {
   }
 }
 
-class _PortalRecentPhotoGrid extends ConsumerWidget {
+class _PortalRecentPhotoGrid extends ConsumerStatefulWidget {
   const _PortalRecentPhotoGrid({required this.photos, required this.onRetry});
 
   final AsyncValue<PhotoDashboard> photos;
   final VoidCallback onRetry;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_PortalRecentPhotoGrid> createState() =>
+      _PortalRecentPhotoGridState();
+}
+
+class _PortalRecentPhotoGridState
+    extends ConsumerState<_PortalRecentPhotoGrid> {
+  // 缩略图自愈上限：重签后仍失败则保持降级态，避免无限重试循环。
+  static const int _maxRecoverAttempts = 2;
+  int _recoverAttempts = 0;
+
+  void _handleCoverError() {
+    if (_recoverAttempts >= _maxRecoverAttempts) {
+      return;
+    }
+    _recoverAttempts++;
+    unawaited(
+      ref
+          .read(portalDashboardActionsProvider)
+          .retry(PortalDashboardSection.photos),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final photos = widget.photos;
     return photos.when(
       data: (dashboard) {
         final items = dashboard.recentPhotos.take(6).toList();
@@ -696,6 +720,8 @@ class _PortalRecentPhotoGrid extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(6),
                     child: PortalMediaThumbnail(
                       imageUrl: photo.coverUrl,
+                      cacheKey: 'portal-preview:photos:${photo.id}',
+                      onLoadError: _handleCoverError,
                       cacheWidth: cacheWidth,
                       borderRadius: BorderRadius.zero,
                       fallback: ColoredBox(
@@ -717,7 +743,7 @@ class _PortalRecentPhotoGrid extends ConsumerWidget {
       error:
           (_, _) => _ErrorCard(
             message: AppLocalizations.of(context).portalLoadPhotoFailed,
-            onRetry: onRetry,
+            onRetry: widget.onRetry,
           ),
     );
   }

@@ -1,31 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/music/music_portal.dart';
-import 'package:omninest/features/portal/domain/portal_preferences.dart';
 
 void main() {
-  group('PortalPreferences', () {
-    test('旧视觉偏好不再参与 Portal 状态', () {
-      final preferences = PortalPreferences.fromJson(const <String, dynamic>{
-        'visualFamily': 'atmosphericGallery',
-        'desktopStyle': 'cinematicGallery',
-        'weatherEffectsEnabled': true,
-      });
-
-      expect(preferences.toJson(), isNot(contains('visualFamily')));
-      expect(preferences.toJson(), isNot(contains('desktopStyle')));
-      expect(preferences.toJson(), isNot(contains('weatherEffectsEnabled')));
-    });
-
-    test('沉浸模式默认关闭并支持序列化', () {
-      const preferences = PortalPreferences();
-      expect(preferences.immersiveModeEnabled, isFalse);
-      expect(
-        preferences.copyWith(immersiveModeEnabled: true).toJson(),
-        containsPair('immersiveModeEnabled', true),
-      );
-    });
-  });
-
   group('PortalMusicVisualizerPreferences', () {
     test('默认使用单一视觉设置并开启播放器与音频条', () {
       const preferences = PortalMusicVisualizerPreferences();

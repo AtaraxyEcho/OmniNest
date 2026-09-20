@@ -60,7 +60,9 @@ class _PortalFocusQuickActions extends ConsumerWidget {
           title: track.title,
           subtitle: track.artistName,
           route: '/music',
+          module: PortalFocusModule.music,
           imageUrl: track.coverUrl,
+          cacheKey: 'portal-preview:music:${track.id}',
         ),
       );
     }
@@ -245,6 +247,7 @@ class _PortalFocusPreviewPanel extends StatelessWidget {
               readerItem.isComic
                   ? '/reader/comics/${readerItem.id}/read'
                   : '/reader/items/${readerItem.id}',
+          module: PortalFocusModule.reader,
           imageUrl: readerItem.coverUrl,
           readerItemId: readerItem.hasCover ? readerItem.id : null,
         ),
@@ -273,10 +276,12 @@ class _PortalFocusPreviewPanel extends StatelessWidget {
           subtitle:
               '${watching.progressPercent.clamp(0, 100).round()}% · ${AppLocalizations.of(context).portalContinueWatching}',
           route: '/video/${watching.id}/play',
+          module: PortalFocusModule.video,
           imageUrl:
               watching.posterUrl ??
               matchedMovie?.posterImageUrl ??
               matchedMovie?.backdropImageUrl,
+          cacheKey: 'portal-preview:video:${watching.id}',
         ),
       );
       if (entries.length >= 6) {
@@ -293,7 +298,9 @@ class _PortalFocusPreviewPanel extends StatelessWidget {
           title: movie.title,
           subtitle: movie.year,
           route: '/video/${movie.id}',
+          module: PortalFocusModule.video,
           imageUrl: movie.posterImageUrl ?? movie.backdropImageUrl,
+          cacheKey: 'portal-preview:video:${movie.id}',
         ),
       );
       if (entries.length >= 6) {
@@ -315,7 +322,9 @@ class _PortalFocusPreviewPanel extends StatelessWidget {
           title: photo.title,
           subtitle: photo.format.toUpperCase(),
           route: '/photos/${photo.id}',
+          module: PortalFocusModule.photos,
           imageUrl: photo.coverUrl,
+          cacheKey: 'portal-preview:photos:${photo.id}',
         ),
     ];
   }
@@ -327,16 +336,22 @@ class _PortalFocusPreviewEntry {
     required this.title,
     required this.subtitle,
     required this.route,
+    required this.module,
     this.imageUrl,
     this.readerItemId,
+    this.cacheKey,
   });
 
   final IconData icon;
   final String title;
   final String subtitle;
   final String route;
+  final PortalFocusModule module;
   final String? imageUrl;
   final String? readerItemId;
+
+  /// 稳定缓存键（内容标识构造），与签名 URL 解耦。
+  final String? cacheKey;
 }
 
 class _PortalModulePreviewShell extends StatelessWidget {
@@ -500,14 +515,39 @@ class _PortalFocusPreviewWaterfall extends StatelessWidget {
   }
 }
 
-class _PortalFocusPreviewImage extends StatelessWidget {
+class _PortalFocusPreviewImage extends ConsumerStatefulWidget {
   const _PortalFocusPreviewImage({required this.palette, required this.entry});
 
   final PortalVisualPalette palette;
   final _PortalFocusPreviewEntry entry;
 
   @override
+  ConsumerState<_PortalFocusPreviewImage> createState() =>
+      _PortalFocusPreviewImageState();
+}
+
+class _PortalFocusPreviewImageState
+    extends ConsumerState<_PortalFocusPreviewImage> {
+  // 预览封面自愈上限：重签后仍失败则保持降级态，避免无限重试循环。
+  static const int _maxRecoverAttempts = 2;
+  int _recoverAttempts = 0;
+
+  void _handleCoverError() {
+    if (_recoverAttempts >= _maxRecoverAttempts) {
+      return;
+    }
+    final section = PortalDashboardActions.sectionFor(widget.entry.module);
+    if (section == null) {
+      return;
+    }
+    _recoverAttempts++;
+    unawaited(ref.read(portalDashboardActionsProvider).retry(section));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final entry = widget.entry;
+    final palette = widget.palette;
     final fallback = Container(
       alignment: Alignment.center,
       decoration: BoxDecoration(
@@ -529,6 +569,8 @@ class _PortalFocusPreviewImage extends StatelessWidget {
     }
     return PortalMediaThumbnail(
       imageUrl: entry.imageUrl,
+      cacheKey: entry.cacheKey,
+      onLoadError: _handleCoverError,
       fit: BoxFit.cover,
       width: double.infinity,
       height: double.infinity,

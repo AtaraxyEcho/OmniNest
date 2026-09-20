@@ -6,19 +6,19 @@ import 'package:omninest/core/realtime/realtime_models.dart';
 import 'package:omninest/core/realtime/realtime_scope_handler.dart';
 import 'package:omninest/features/music/application/music_visualizer_preset_controller.dart';
 import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
-import 'package:omninest/features/portal/application/portal_preferences_controller.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
 import 'package:omninest/features/reader/application/reader_preferences_controller.dart';
 
 /// 用户偏好作用域实时失效刷新处理器。
+///
+/// 门户 scope 曾承载沉浸模式偏好并跨端同步，现沉浸已改为本机会话
+/// （portalImmersiveSessionProvider），portal scope 不再注册刷新目标。
 class PreferenceSyncHandler implements RealtimeScopeHandler {
   PreferenceSyncHandler(this.ref);
 
-  static const _portalPreferenceScope = 'portal';
   static const _targets = <String>{
     appearancePreferenceScope,
     localePreferenceScope,
-    _portalPreferenceScope,
     weatherPreferenceScope,
     readerPreferenceScope,
     notificationPreferenceScope,
@@ -81,11 +81,6 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
         return true;
       case localePreferenceScope:
         await ref.read(localeControllerProvider.notifier).refreshFromRemote();
-        return true;
-      case _portalPreferenceScope:
-        if (!ref.exists(portalPreferencesProvider)) return false;
-        await ref.read(portalPreferencesProvider.future);
-        await ref.read(portalPreferencesProvider.notifier).refreshFromRemote();
         return true;
       case weatherPreferenceScope:
         if (!ref.exists(weatherLocationProvider)) return false;

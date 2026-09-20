@@ -500,14 +500,38 @@ class _HeroCopy extends StatelessWidget {
   }
 }
 
-class _PortalHeroCoverDisplay extends StatelessWidget {
+class _PortalHeroCoverDisplay extends ConsumerStatefulWidget {
   const _PortalHeroCoverDisplay({required this.palette, required this.item});
 
   final PortalVisualPalette palette;
   final PortalFocusItem item;
 
   @override
+  ConsumerState<_PortalHeroCoverDisplay> createState() =>
+      _PortalHeroCoverDisplayState();
+}
+
+class _PortalHeroCoverDisplayState
+    extends ConsumerState<_PortalHeroCoverDisplay> {
+  // hero 封面自愈上限：重签后仍失败则保持降级态，避免无限重试循环。
+  static const int _maxRecoverAttempts = 2;
+  int _recoverAttempts = 0;
+
+  void _handleCoverError() {
+    if (_recoverAttempts >= _maxRecoverAttempts) {
+      return;
+    }
+    final section = PortalDashboardActions.sectionFor(widget.item.module);
+    if (section == null) {
+      return;
+    }
+    _recoverAttempts++;
+    unawaited(ref.read(portalDashboardActionsProvider).retry(section));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
     return LayoutBuilder(
       builder: (context, constraints) {
         final availableHeight =
@@ -532,13 +556,15 @@ class _PortalHeroCoverDisplay extends StatelessWidget {
             width: coverWidth,
             height: coverHeight,
             child: PortalGradientCover(
-              palette: palette,
+              palette: widget.palette,
               title: item.title,
               subtitle: item.subtitle,
               variant: item.variant,
               height: coverHeight,
               imageUrl: item.imageUrl,
               readerItemId: item.readerItemId,
+              coverCacheKey: item.coverCacheKey,
+              onCoverError: _handleCoverError,
               fallbackIcon: item.icon.iconData,
               maxCoverWidth: coverWidth,
               maxCoverHeight: coverHeight,

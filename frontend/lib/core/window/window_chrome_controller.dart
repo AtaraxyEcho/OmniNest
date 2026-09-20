@@ -151,13 +151,21 @@ class WindowChromeController extends Notifier<WindowChromeState> {
   }
 
   Future<void> toggleFullscreen() async {
-    // 沉浸租约会把 state.isFullscreen 顶成 true；先退出沉浸，再以
-    // 「手动全屏意图」为准切换窗口全屏，避免 F11 在无边框态只退出沉浸
-    // 或被双重 toggle 后看起来毫无反应。
+    // F11 以「窗口当前是否已处于全屏（手动意图或页面沉浸租约）」为基准
+    // 切换：全屏中按一次即退出（先逐层释放沉浸租约，再撤销手动全屏），
+    // 窗口态按一次进入全屏。避免旧行为"先退沉浸又强行保持手动全屏"
+    // 造成的一次按键毫无反应或需两次才退出。
+    final effectiveFullscreen = _manualFullscreen || _requests.isNotEmpty;
+    if (!effectiveFullscreen) {
+      await setFullscreen(true);
+      return;
+    }
     if (_requests.isNotEmpty) {
       await exitImmersive();
     }
-    await setFullscreen(!_manualFullscreen);
+    if (_manualFullscreen) {
+      await setFullscreen(false);
+    }
   }
 
   Future<void> minimize() async {

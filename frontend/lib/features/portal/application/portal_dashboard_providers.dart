@@ -8,6 +8,7 @@ import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
 import 'package:omninest/features/portal/portal_weather.dart';
+import 'package:omninest/features/portal/domain/portal_focus_models.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
 
@@ -60,6 +61,19 @@ class PortalDashboardActions {
     this.fullRefreshInterval = const Duration(seconds: 30),
   }) : _refreshers = Map.unmodifiable(refreshers),
        _hasCachedData = hasCachedData;
+
+  /// 焦点模块到封面数据分区的映射；封面加载失败时据此触发对应分区
+  /// 重签刷新。仅封面数据来自可重签分区的模块返回非空；files 等模块
+  /// 无封面语义，返回 null。
+  static PortalDashboardSection? sectionFor(PortalFocusModule module) {
+    return switch (module) {
+      PortalFocusModule.video => PortalDashboardSection.video,
+      PortalFocusModule.photos => PortalDashboardSection.photos,
+      PortalFocusModule.music => PortalDashboardSection.music,
+      PortalFocusModule.reader => PortalDashboardSection.reader,
+      _ => null,
+    };
+  }
 
   final Map<PortalDashboardSection, Future<void> Function()> _refreshers;
   final bool Function()? _hasCachedData;

@@ -27,13 +27,7 @@ class _VisualFilmStripState extends ConsumerState<_VisualFilmStrip> {
 
   PortalDashboardSection? _sectionFor(PortalFocusModule module) {
     // 仅封面数据来自可重签分区的模块参与自愈；files 等模块无封面。
-    return switch (module) {
-      PortalFocusModule.video => PortalDashboardSection.video,
-      PortalFocusModule.photos => PortalDashboardSection.photos,
-      PortalFocusModule.music => PortalDashboardSection.music,
-      PortalFocusModule.reader => PortalDashboardSection.reader,
-      _ => null,
-    };
+    return PortalDashboardActions.sectionFor(module);
   }
 
   void _handleCoverError(PortalFocusModule module) {
