@@ -9,16 +9,17 @@ import 'package:omninest/core/log/dev_log.dart';
 ///
 /// v2 起内置壁纸为打包静态图,渲染直接走 [Image.asset],不再复制本机
 /// 文件;此处仅登记素材元数据并清理 v1 动态壁纸遗留的本机拷贝。
+/// 桌面与移动使用不同内置默认图,路径随 [AppBackdropSelectionTarget] 解析。
 class AppBackdropBundledAssetInstaller {
   static const String _legacyFileName = 'default_wallpaper_v1.mp4';
 
   /// 登记内置默认壁纸并返回背景库素材。
-  Future<AppBackdropAsset?> install() async {
+  Future<AppBackdropAsset?> install(AppBackdropSelectionTarget target) async {
     await _cleanUpLegacyVideoFile();
     final now = DateTime.now();
     return AppBackdropAsset(
       id: bundledDefaultWallpaperId,
-      path: bundledDefaultWallpaperAssetPath,
+      path: bundledWallpaperAssetPathFor(target),
       title: 'OmniNest',
       mediaType: AppBackdropMediaType.image,
       sourceType: AppBackdropSourceType.bundled,

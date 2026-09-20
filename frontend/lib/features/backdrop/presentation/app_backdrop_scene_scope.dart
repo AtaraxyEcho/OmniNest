@@ -9,11 +9,16 @@ class AppBackdropSceneScope extends ConsumerStatefulWidget {
     required this.owner,
     required this.policy,
     required this.child,
+    this.pathPrefix,
     super.key,
   });
 
   final String owner;
   final AppBackdropPolicy policy;
+
+  /// 注册者所属路由分支前缀（如 `/video`）；宿主路由不在前缀下时该
+  /// 注册不参与生效，用于 IndexedStack 常驻分支的可见性过滤。
+  final String? pathPrefix;
   final Widget child;
 
   @override
@@ -41,7 +46,9 @@ class _AppBackdropSceneScopeState extends ConsumerState<AppBackdropSceneScope> {
       _lease = null;
       _scheduleRelease(oldWidget.owner, oldLease);
     }
-    if (oldWidget.owner != widget.owner || oldWidget.policy != widget.policy) {
+    if (oldWidget.owner != widget.owner ||
+        oldWidget.policy != widget.policy ||
+        oldWidget.pathPrefix != widget.pathPrefix) {
       _scheduleSync();
     }
   }
@@ -60,11 +67,12 @@ class _AppBackdropSceneScopeState extends ConsumerState<AppBackdropSceneScope> {
     final generation = ++_syncGeneration;
     final owner = widget.owner;
     final policy = widget.policy;
+    final pathPrefix = widget.pathPrefix;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || generation != _syncGeneration) {
         return;
       }
-      _lease = _sceneController.request(owner, policy);
+      _lease = _sceneController.request(owner, policy, pathPrefix: pathPrefix);
     });
   }
 

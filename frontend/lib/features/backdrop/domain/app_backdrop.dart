@@ -20,10 +20,22 @@ enum AppBackdropMediaType {
 /// 内置默认壁纸的稳定素材 ID,三端一致且不受服务端素材库影响。
 const String bundledDefaultWallpaperId = 'bundled-default-wallpaper-v2';
 
-/// 内置默认壁纸(GPT 生成图,CC0 无版权问题)的打包资产地址;三端一致,
-/// 渲染层直接经 [Image.asset] 使用,IO 端不再落本机文件。
-const String bundledDefaultWallpaperAssetPath =
-    'assets/backdrops/default_wallpaper.jpg';
+/// 桌面端内置默认壁纸(GPT 生成图,CC0 无版权问题)的打包资产地址;
+/// Web 跟随 [AppBackdropSelectionTarget] 的桌面档语义同样使用该素材。
+const String bundledDesktopWallpaperAssetPath =
+    'assets/backdrops/default_desktop.jpg';
+
+/// 移动端内置默认壁纸的打包资产地址。
+const String bundledMobileWallpaperAssetPath =
+    'assets/backdrops/default_mobile.png';
+
+/// 按设备类别返回内置默认壁纸的打包资产地址;渲染层直接经 [Image.asset] 使用。
+String bundledWallpaperAssetPathFor(AppBackdropSelectionTarget target) {
+  return switch (target) {
+    AppBackdropSelectionTarget.desktop => bundledDesktopWallpaperAssetPath,
+    AppBackdropSelectionTarget.mobile => bundledMobileWallpaperAssetPath,
+  };
+}
 
 /// 应用背景来源类型。
 enum AppBackdropSourceType {

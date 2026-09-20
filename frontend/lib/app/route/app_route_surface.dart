@@ -10,11 +10,15 @@ class AppRouteSurface extends StatelessWidget {
     required this.owner,
     required this.policy,
     required this.child,
+    this.routePath,
     super.key,
   });
 
   final String owner;
   final AppBackdropPolicy policy;
+
+  /// 注册路由的完整路径，用于派生分支前缀；路径不可知时省略。
+  final String? routePath;
   final Widget child;
 
   @override
@@ -39,6 +43,21 @@ class AppRouteSurface extends StatelessWidget {
         child: content,
       );
     }
-    return AppBackdropSceneScope(owner: owner, policy: policy, child: content);
+    final pathPrefix = _branchPrefixOf(routePath);
+    return AppBackdropSceneScope(
+      owner: owner,
+      policy: policy,
+      pathPrefix: pathPrefix,
+      child: content,
+    );
+  }
+
+  /// 取路径首段作为分支前缀（`/photos/albums/1` → `/photos`）。
+  static String? _branchPrefixOf(String? path) {
+    if (path == null || !path.startsWith('/')) {
+      return null;
+    }
+    final firstSlash = path.indexOf('/', 1);
+    return firstSlash < 0 ? path : path.substring(0, firstSlash);
   }
 }

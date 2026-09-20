@@ -12,7 +12,7 @@ import 'package:omninest/features/backdrop/presentation/app_backdrop_video_view.
 /// 应用级背景渲染层。
 ///
 /// 图片素材三端统一走网络渲染;视频桌面/移动走 media_kit,Web 走 HTML video 适配器;
-/// 内置壁纸在桌面/移动为本机文件、在 Web 为打包资产地址。
+/// 内置壁纸为打包静态图,桌面(含 Web)与移动分别使用不同素材。
 class AppBackdropSurface extends ConsumerWidget {
   const AppBackdropSurface({
     required this.asset,
@@ -194,10 +194,11 @@ class AppBackdropSurface extends ConsumerWidget {
       );
     }
     if (asset.sourceType == AppBackdropSourceType.bundled) {
-      // v2 起内置默认壁纸为打包静态图(GPT 生成,CC0),三端统一
-      // 直接渲染打包资产,无需网络与本机文件。
+      // 内置默认壁纸为打包静态图(CC0),桌面(含 Web)与移动分别使用
+      // 不同素材;按当前设备档位直接解析打包资产,不依赖本机素材行。
+      final target = ref.watch(appBackdropSelectionTargetProvider);
       return Image.asset(
-        bundledDefaultWallpaperAssetPath,
+        bundledWallpaperAssetPathFor(target),
         key: const ValueKey<String>('backdrop-bundled-image'),
         fit: fit,
         alignment: alignment,

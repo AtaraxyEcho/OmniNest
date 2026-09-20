@@ -36,16 +36,17 @@ class _MockBackdropFilePicker extends Mock implements BackdropFilePicker {}
 
 class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   @override
-  Future<AppBackdropAsset?> install() async => null;
+  Future<AppBackdropAsset?> install(AppBackdropSelectionTarget target) async =>
+      null;
 }
 
 class _FakeBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   @override
-  Future<AppBackdropAsset?> install() async {
+  Future<AppBackdropAsset?> install(AppBackdropSelectionTarget target) async {
     final now = DateTime(2026);
     return AppBackdropAsset(
       id: bundledDefaultWallpaperId,
-      path: 'assets/backdrops/default_wallpaper.jpg',
+      path: bundledWallpaperAssetPathFor(target),
       title: 'OmniNest',
       mediaType: AppBackdropMediaType.image,
       sourceType: AppBackdropSourceType.bundled,

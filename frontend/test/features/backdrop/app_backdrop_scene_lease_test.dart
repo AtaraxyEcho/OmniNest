@@ -102,6 +102,58 @@ void main() {
 
       expect(publishes, 0);
     });
+
+    test('宿主路径不在常驻分支前缀内时其隐藏注册不压制可见分支', () {
+      final container = ProviderContainer.test();
+      addTearDown(container.dispose);
+      final controller = container.read(
+        appBackdropSceneControllerProvider.notifier,
+      );
+
+      // 进入 Movies 分支：MovieShell 声明 /video 前缀的隐藏策略。
+      controller.setActivePath('/video');
+      controller.request(
+        'video.movie.shell',
+        AppBackdropPolicy.work,
+        pathPrefix: '/video',
+      );
+      expect(
+        container.read(appBackdropSceneControllerProvider).owner,
+        'video.movie.shell',
+      );
+
+      // 返回门户：MovieShell 因 IndexedStack 常驻未释放，但其注册
+      // 不匹配 /portal，门户自己的注册恢复生效。
+      controller.setActivePath('/portal');
+      controller.request(
+        'portal',
+        AppBackdropPolicy.portal,
+        pathPrefix: '/portal',
+      );
+      final state = container.read(appBackdropSceneControllerProvider);
+      expect(state.owner, 'portal');
+      expect(state.policy, AppBackdropPolicy.portal);
+      expect(state.policy.visible, isTrue);
+    });
+
+    test('无匹配前缀时回退最高 sequence 注册', () {
+      final container = ProviderContainer.test();
+      addTearDown(container.dispose);
+      final controller = container.read(
+        appBackdropSceneControllerProvider.notifier,
+      );
+
+      controller.setActivePath('/nowhere');
+      controller.request(
+        'video.movie.shell',
+        AppBackdropPolicy.work,
+        pathPrefix: '/video',
+      );
+      controller.request('app.mobile.shell', AppBackdropPolicy.portalMobile);
+
+      final state = container.read(appBackdropSceneControllerProvider);
+      expect(state.owner, 'app.mobile.shell');
+    });
   });
 
   group('AppBackdropHost 场景翻转稳定性', () {

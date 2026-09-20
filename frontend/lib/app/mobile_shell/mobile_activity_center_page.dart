@@ -18,6 +18,7 @@ class MobileActivityCenterPage extends StatelessWidget {
     return AppBackdropSceneScope(
       owner: 'app.mobile.activity',
       policy: AppBackdropPolicy.work,
+      pathPrefix: '/activity',
       child: DefaultTabController(
         length: 2,
         initialIndex: initialIndex.clamp(0, 1),

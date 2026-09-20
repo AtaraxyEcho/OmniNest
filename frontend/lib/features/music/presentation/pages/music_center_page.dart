@@ -100,6 +100,7 @@ class _MusicCenterPageState extends ConsumerState<MusicCenterPage> {
     return AppBackdropSceneScope(
       owner: 'music.center',
       policy: AppBackdropPolicy.musicDeck,
+      pathPrefix: '/music',
       child: content,
     );
   }

@@ -480,8 +480,9 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     AppBackdropRepository repository,
   ) async {
     try {
-      final bundledAsset =
-          await ref.read(appBackdropBundledAssetInstallerProvider).install();
+      final bundledAsset = await ref
+          .read(appBackdropBundledAssetInstallerProvider)
+          .install(ref.read(appBackdropSelectionTargetProvider));
       if (bundledAsset != null) {
         await repository.ensureBundledBackdrop(bundledAsset);
       }

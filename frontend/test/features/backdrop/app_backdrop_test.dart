@@ -244,12 +244,12 @@ void main() {
   });
 
   group('AppBackdropRepository', () {
-    test('默认壁纸已打包进 Flutter 资源', () async {
-      final data = await rootBundle.load(
-        'assets/backdrops/default_wallpaper.jpg',
-      );
+    test('默认壁纸已按设备档位打包进 Flutter 资源', () async {
+      final desktop = await rootBundle.load(bundledDesktopWallpaperAssetPath);
+      final mobile = await rootBundle.load(bundledMobileWallpaperAssetPath);
 
-      expect(data.lengthInBytes, greaterThan(100 * 1024));
+      expect(desktop.lengthInBytes, greaterThan(100 * 1024));
+      expect(mobile.lengthInBytes, greaterThan(100 * 1024));
     });
 
     test('首次安装内置壁纸时默认启用且后续安装不覆盖用户设置', () async {
@@ -322,7 +322,7 @@ void main() {
       addTearDown(database.close);
       AppBackdropAsset bundledAsset(String id) => AppBackdropAsset(
         id: id,
-        path: 'assets/backdrops/default_wallpaper.jpg',
+        path: bundledDesktopWallpaperAssetPath,
         title: 'OmniNest',
         mediaType: AppBackdropMediaType.image,
         sourceType: AppBackdropSourceType.bundled,

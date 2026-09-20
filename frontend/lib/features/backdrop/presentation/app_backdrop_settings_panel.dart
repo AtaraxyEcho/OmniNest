@@ -672,84 +672,91 @@ class _BackdropTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: backdrop.missing ? null : onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: palette.surfaceContainer.withValues(
-              alpha: selected ? 1.0 : 0.72,
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: _tileLabel(l10n),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: backdrop.missing ? null : onTap,
+          child: Container(
+            decoration: BoxDecoration(
+              color: palette.surfaceContainer.withValues(
+                alpha: selected ? 1.0 : 0.72,
+              ),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: selected ? palette.accent : palette.outline,
+              ),
             ),
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(
-              color: selected ? palette.accent : palette.outline,
-            ),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Stack(
-            children: [
-              Positioned.fill(child: _BackdropTilePreview(backdrop: backdrop)),
-              Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        Colors.transparent,
-                        Colors.black.withValues(alpha: 0.64),
-                      ],
+            clipBehavior: Clip.antiAlias,
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: _BackdropTilePreview(backdrop: backdrop),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black.withValues(alpha: 0.64),
+                        ],
+                      ),
                     ),
                   ),
                 ),
-              ),
-              Positioned(
-                left: 10,
-                right: onRemove == null ? 10 : 34,
-                bottom: 9,
-                child: Text(
-                  _tileLabel(l10n),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    // 文字压在黑色渐变遮罩上,恒定白色与主题无关;
-                    // 浅色主题的 palette.text(近黑)在遮罩上不可读。
-                    color: Colors.white,
-                    fontSize: AppTypography.bodySmall,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-              if (onRemove != null)
                 Positioned(
-                  right: 4,
-                  top: 4,
-                  child: IconButton(
-                    tooltip: l10n.portalLocalBackdropRemove,
-                    onPressed: () => _confirmRemove(context, l10n),
-                    icon: const Icon(Icons.close_rounded, size: 16),
-                    color: palette.text,
-                    style: IconButton.styleFrom(
-                      backgroundColor: palette.surfaceContainer,
-                      minimumSize: const Size(28, 28),
-                      fixedSize: const Size(28, 28),
-                      padding: EdgeInsets.zero,
+                  left: 10,
+                  right: onRemove == null ? 10 : 34,
+                  bottom: 9,
+                  child: Text(
+                    _tileLabel(l10n),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      // 文字压在黑色渐变遮罩上,恒定白色与主题无关;
+                      // 浅色主题的 palette.text(近黑)在遮罩上不可读。
+                      color: Colors.white,
+                      fontSize: AppTypography.bodySmall,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
                 ),
-              if (selected)
-                Positioned(
-                  left: 8,
-                  top: 8,
-                  child: Icon(
-                    Icons.check_circle_rounded,
-                    color: palette.accent,
-                    size: 20,
+                if (onRemove != null)
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: IconButton(
+                      tooltip: l10n.portalLocalBackdropRemove,
+                      onPressed: () => _confirmRemove(context, l10n),
+                      icon: const Icon(Icons.close_rounded, size: 16),
+                      color: palette.text,
+                      style: IconButton.styleFrom(
+                        backgroundColor: palette.surfaceContainer,
+                        minimumSize: const Size(28, 28),
+                        fixedSize: const Size(28, 28),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
                   ),
-                ),
-            ],
+                if (selected)
+                  Positioned(
+                    left: 8,
+                    top: 8,
+                    child: Icon(
+                      Icons.check_circle_rounded,
+                      color: palette.accent,
+                      size: 20,
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -785,8 +792,9 @@ class _BackdropTilePreview extends StatelessWidget {
       return const _BackdropVideoPlaceholder();
     }
     if (backdrop.sourceType == AppBackdropSourceType.bundled) {
-      // v2 起内置默认壁纸为打包静态图,瓦片直接渲染资产。
-      return Image.asset(bundledDefaultWallpaperAssetPath, fit: BoxFit.cover);
+      // 内置默认壁纸为打包静态图,路径由安装器按设备类别写入本机素材行,
+      // 瓦片直接渲染行内路径。
+      return Image.asset(backdrop.path, fit: BoxFit.cover);
     }
     return const _BackdropVideoPlaceholder();
   }

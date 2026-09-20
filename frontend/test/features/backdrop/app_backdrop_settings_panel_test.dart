@@ -274,7 +274,8 @@ void main() {
 
 class _NoopBundledAssetInstaller extends AppBackdropBundledAssetInstaller {
   @override
-  Future<AppBackdropAsset?> install() async => null;
+  Future<AppBackdropAsset?> install(AppBackdropSelectionTarget target) async =>
+      null;
 }
 
 class _MutableSessionNotifier extends AuthSessionNotifier {

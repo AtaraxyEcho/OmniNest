@@ -15,6 +15,7 @@ import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/features/admin/domain/admin_console_access.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
+import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
 import 'package:omninest/features/files/presentation/pages/file_share_preview_page.dart';
 import 'package:omninest/features/music/presentation/pages/music_center_page.dart';
@@ -220,6 +221,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             AppRouteSurface(
               owner: 'route:photos-slideshow',
               policy: AppBackdropPolicy.staticContent,
+              routePath: '/photos/slideshow',
               child: PhotoSlideshowPage(
                 photos: photos,
                 source: source,
@@ -262,6 +264,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             AppRouteSurface(
               owner: 'route:file-share',
               policy: AppBackdropPolicy.work,
+              routePath: '/s',
               child: FileSharePreviewPage(token: token),
             ),
           );
@@ -324,6 +327,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     router.dispose();
     authRefreshListenable.dispose();
   });
+  // 宿主路由路径驱动背景场景可见性过滤：IndexedStack 常驻分支声明的
+  // pathPrefix 不匹配当前路径时不参与生效，portal 等可见分支得以恢复。
+  void updateBackdropScenePath() {
+    ref
+        .read(appBackdropSceneControllerProvider.notifier)
+        .setActivePath(router.routeInformationProvider.value.uri.path);
+  }
+
+  updateBackdropScenePath();
+  router.routeInformationProvider.addListener(updateBackdropScenePath);
+  ref.onDispose(() {
+    router.routeInformationProvider.removeListener(updateBackdropScenePath);
+  });
   return router;
 });
 
@@ -370,7 +386,12 @@ Widget _routeSurface(String path, Widget child) {
   } else {
     policy = AppBackdropPolicy.work;
   }
-  return AppRouteSurface(owner: 'route:$path', policy: policy, child: child);
+  return AppRouteSurface(
+    owner: 'route:$path',
+    policy: policy,
+    routePath: path,
+    child: child,
+  );
 }
 
 const Set<String> _shellOwnedPaths = <String>{

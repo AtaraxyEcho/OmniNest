@@ -183,6 +183,7 @@ class _MovieShellState extends ConsumerState<MovieShell> {
       // 避免 Portal 浅色壁纸与深色内容在 Impeller 合成时露出对角线亮缝。
       owner: 'video.movie.shell',
       policy: AppBackdropPolicy.work,
+      pathPrefix: '/video',
       child: Builder(
         builder: (context) {
           return LayoutBuilder(

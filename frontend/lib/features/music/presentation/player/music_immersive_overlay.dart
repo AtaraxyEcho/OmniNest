@@ -81,6 +81,7 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
     return AppBackdropSceneScope(
       owner: 'music.immersive',
       policy: AppBackdropPolicy.musicImmersive,
+      pathPrefix: '/music',
       child: Material(
         type: MaterialType.transparency,
         // F11 由 app.dart 全局按键处理器分发，本层不得再绑 F11
