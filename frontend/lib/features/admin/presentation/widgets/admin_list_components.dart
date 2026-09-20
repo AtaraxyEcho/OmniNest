@@ -113,6 +113,67 @@ class AdminListColumn {
   final bool numeric;
 }
 
+/// 单行省略文本单元格：内容被列宽截断时，悬停以 Tooltip 展示完整内容；
+/// 未截断时不挂 Tooltip，避免完整可见的行也弹重复提示。
+class AdminCellText extends StatefulWidget {
+  const AdminCellText(this.text, {this.style, this.tooltipMessage, super.key});
+
+  final String text;
+  final TextStyle? style;
+
+  /// 悬停展示的完整文案；缺省为 [text] 本身。需要附带额外信息
+  /// （如堆栈摘要）时传入，此时不要再在外层包 Tooltip，避免嵌套双气泡。
+  final String? tooltipMessage;
+
+  @override
+  State<AdminCellText> createState() => _AdminCellTextState();
+}
+
+class _AdminCellTextState extends State<AdminCellText> {
+  @override
+  Widget build(BuildContext context) {
+    final text = Text(
+      widget.text,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: widget.style,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final defaultStyle = DefaultTextStyle.of(context).style;
+        final painter = TextPainter(
+          text: TextSpan(
+            text: widget.text,
+            style:
+                widget.style == null
+                    ? defaultStyle
+                    : defaultStyle.merge(widget.style),
+          ),
+          textScaler:
+              MediaQuery.maybeTextScalerOf(context) ?? TextScaler.noScaling,
+          textDirection: Directionality.of(context),
+          maxLines: 1,
+        )..layout(maxWidth: constraints.maxWidth);
+        final overflowed = painter.didExceedMaxLines;
+        painter.dispose();
+        // 富文案（如附带堆栈）包含单元格之外的信息，无论是否截断都保持可悬停；
+        // 普通单元格仅在截断时挂 Tooltip。
+        final richMessage =
+            widget.tooltipMessage != null &&
+            widget.tooltipMessage != widget.text;
+        if (!overflowed && !richMessage) {
+          return text;
+        }
+        return Tooltip(
+          message: widget.tooltipMessage ?? widget.text,
+          waitDuration: const Duration(milliseconds: 300),
+          child: text,
+        );
+      },
+    );
+  }
+}
+
 /// 服务端排序状态。
 class AdminListSort {
   const AdminListSort({required this.columnKey, required this.ascending});
@@ -209,6 +270,7 @@ class AdminDataTable extends StatelessWidget {
     this.showIndex = false,
     this.indexBase = 0,
     this.minTableWidth = 860,
+    this.maxTableWidth,
     this.actionColumnWidth = 168,
     this.rowHeight = 48,
     this.emptyState,
@@ -248,6 +310,9 @@ class AdminDataTable extends StatelessWidget {
 
   /// 主表最小宽度（低于该宽度表格内部出现横向滚动条）。
   final double minTableWidth;
+
+  /// 主表最大宽度；超出时表格居中收窄，避免宽屏下唯一弹性列被拉得过长。
+  final double? maxTableWidth;
   final double actionColumnWidth;
   final double rowHeight;
   final Widget? emptyState;
@@ -400,7 +465,7 @@ class AdminDataTable extends StatelessWidget {
     }
     // 边框放在 foregroundDecoration：行背景为不透明色，若用 decoration
     // 绘制边框会被行背景盖住，导致边线与圆角显示不全。
-    return Container(
+    Widget result = Container(
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(10)),
       clipBehavior: Clip.antiAlias,
       foregroundDecoration: BoxDecoration(
@@ -409,6 +474,15 @@ class AdminDataTable extends StatelessWidget {
       ),
       child: tableArea,
     );
+    if (maxTableWidth != null) {
+      result = Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxTableWidth!),
+          child: result,
+        ),
+      );
+    }
+    return result;
   }
 
   /// flex 数值映射到 DataTable2 的 S/M/L 档位；配合 smRatio 0.5、

@@ -6229,11 +6229,29 @@ abstract class AppLocalizations {
   /// **'Security'**
   String get adminConfigGroupSecurity;
 
+  /// No description provided for @adminConfigGroupAuth.
+  ///
+  /// In en, this message translates to:
+  /// **'Authentication'**
+  String get adminConfigGroupAuth;
+
   /// No description provided for @adminConfigGroupWeather.
   ///
   /// In en, this message translates to:
   /// **'Weather'**
   String get adminConfigGroupWeather;
+
+  /// No description provided for @adminConfigGroupBackdrop.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop Library'**
+  String get adminConfigGroupBackdrop;
+
+  /// No description provided for @adminConfigGroupSystem.
+  ///
+  /// In en, this message translates to:
+  /// **'System'**
+  String get adminConfigGroupSystem;
 
   /// No description provided for @adminConfigGroupOther.
   ///
@@ -6738,6 +6756,204 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Log retention scan paths'**
   String get adminConfigLogRetentionPaths;
+
+  /// No description provided for @adminConfigLogRetentionEnabledDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Automatically cleans archived logs and temporary files based on retention days.'**
+  String get adminConfigLogRetentionEnabledDescription;
+
+  /// No description provided for @adminConfigLogRetentionDaysDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum number of days archived logs and temporary files are kept.'**
+  String get adminConfigLogRetentionDaysDescription;
+
+  /// No description provided for @adminConfigLogRetentionPathsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated paths relative to the runtime directory included in retention cleanup.'**
+  String get adminConfigLogRetentionPathsDescription;
+
+  /// No description provided for @adminConfigPhotoGeoOffline.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline reverse geocoding'**
+  String get adminConfigPhotoGeoOffline;
+
+  /// No description provided for @adminConfigPhotoGeoOfflineDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolve photo coordinates into place names using the local GeoNames dataset.'**
+  String get adminConfigPhotoGeoOfflineDescription;
+
+  /// No description provided for @adminConfigPhotoGeoNominatim.
+  ///
+  /// In en, this message translates to:
+  /// **'Online geocoding fallback'**
+  String get adminConfigPhotoGeoNominatim;
+
+  /// No description provided for @adminConfigPhotoGeoNominatimDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Fall back to the Nominatim online service when offline matching misses.'**
+  String get adminConfigPhotoGeoNominatimDescription;
+
+  /// No description provided for @adminConfigPhotoGeoMaxDistance.
+  ///
+  /// In en, this message translates to:
+  /// **'Nearest-city max distance'**
+  String get adminConfigPhotoGeoMaxDistance;
+
+  /// No description provided for @adminConfigPhotoGeoMaxDistanceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum trusted distance in km to the nearest city (0 disables the limit).'**
+  String get adminConfigPhotoGeoMaxDistanceDescription;
+
+  /// No description provided for @adminConfigPhotoGeoImportBatchSize.
+  ///
+  /// In en, this message translates to:
+  /// **'GeoNames import batch size'**
+  String get adminConfigPhotoGeoImportBatchSize;
+
+  /// No description provided for @adminConfigPhotoGeoImportBatchSizeDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Number of rows written per batch while importing GeoNames data.'**
+  String get adminConfigPhotoGeoImportBatchSizeDescription;
+
+  /// No description provided for @adminConfigPhotoGeoImportAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto GeoNames import'**
+  String get adminConfigPhotoGeoImportAuto;
+
+  /// No description provided for @adminConfigPhotoGeoImportAutoDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Trigger the GeoNames import automatically at startup when no dataset is published and files are present.'**
+  String get adminConfigPhotoGeoImportAutoDescription;
+
+  /// No description provided for @adminConfigQuarantineRetentionDays.
+  ///
+  /// In en, this message translates to:
+  /// **'Quarantine retention days'**
+  String get adminConfigQuarantineRetentionDays;
+
+  /// No description provided for @adminConfigQuarantineRetentionDaysDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Days quarantined objects are kept before automatic cleanup.'**
+  String get adminConfigQuarantineRetentionDaysDescription;
+
+  /// No description provided for @adminConfigClamavTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Scan timeout'**
+  String get adminConfigClamavTimeout;
+
+  /// No description provided for @adminConfigClamavTimeoutDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Per-file virus scan time limit in milliseconds; exceeding it is reported as incomplete.'**
+  String get adminConfigClamavTimeoutDescription;
+
+  /// No description provided for @adminConfigTwoFactorRequiredRoles.
+  ///
+  /// In en, this message translates to:
+  /// **'Mandatory 2FA roles'**
+  String get adminConfigTwoFactorRequiredRoles;
+
+  /// No description provided for @adminConfigTwoFactorRequiredRolesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Comma-separated role codes required to enable two-factor authentication; empty means optional for everyone.'**
+  String get adminConfigTwoFactorRequiredRolesDescription;
+
+  /// No description provided for @adminConfigBackdropMaxImageBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop image size limit'**
+  String get adminConfigBackdropMaxImageBytes;
+
+  /// No description provided for @adminConfigBackdropMaxImageBytesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum size in bytes of a single backdrop image.'**
+  String get adminConfigBackdropMaxImageBytesDescription;
+
+  /// No description provided for @adminConfigBackdropMaxVideoBytes.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop video size limit'**
+  String get adminConfigBackdropMaxVideoBytes;
+
+  /// No description provided for @adminConfigBackdropMaxVideoBytesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum size in bytes of a single backdrop video.'**
+  String get adminConfigBackdropMaxVideoBytesDescription;
+
+  /// No description provided for @adminConfigBackdropMaxAssets.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop asset count limit'**
+  String get adminConfigBackdropMaxAssets;
+
+  /// No description provided for @adminConfigBackdropMaxAssetsDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Maximum number of backdrop assets kept per user.'**
+  String get adminConfigBackdropMaxAssetsDescription;
+
+  /// No description provided for @adminConfigBackdropUploadRate.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop upload rate limit'**
+  String get adminConfigBackdropUploadRate;
+
+  /// No description provided for @adminConfigBackdropUploadRateDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Backdrop uploads allowed per user each hour.'**
+  String get adminConfigBackdropUploadRateDescription;
+
+  /// No description provided for @adminConfigAppVersionLatest.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest client version'**
+  String get adminConfigAppVersionLatest;
+
+  /// No description provided for @adminConfigAppVersionLatestDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Latest client version number; empty means every client is up to date.'**
+  String get adminConfigAppVersionLatestDescription;
+
+  /// No description provided for @adminConfigAppVersionReleaseNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Release notes URL'**
+  String get adminConfigAppVersionReleaseNotes;
+
+  /// No description provided for @adminConfigAppVersionReleaseNotesDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Link to the release notes of the current version.'**
+  String get adminConfigAppVersionReleaseNotesDescription;
+
+  /// No description provided for @adminConfigAppVersionDownloadUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Installer download URL'**
+  String get adminConfigAppVersionDownloadUrl;
+
+  /// No description provided for @adminConfigAppVersionDownloadUrlDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Link to the client installer download page.'**
+  String get adminConfigAppVersionDownloadUrlDescription;
 
   /// No description provided for @adminConfigMediaAutoImportDescription.
   ///

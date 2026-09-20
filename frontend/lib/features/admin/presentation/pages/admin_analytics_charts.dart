@@ -1,5 +1,11 @@
 part of 'admin_analytics_page.dart';
 
+// ═══════════════════════════════════════════════════════════════════════
+// fl_chart 工具函数
+// ═══════════════════════════════════════════════════════════════════════
+
+const _chartAnimDuration = Duration(milliseconds: 400);
+
 FlLine _gridLine(Color c) => FlLine(
   color: c.withValues(alpha: 0.08),
   strokeWidth: 0.5,
@@ -17,6 +23,7 @@ String _fmt(double v) {
   if (v < 0) return '-${_fmt(-v)}';
   if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
   if (v >= 1000) return '${(v / 1000).toStringAsFixed(0)}K';
+  if (v > 0 && v < 1) return v.toStringAsFixed(1);
   return v.toInt().toString();
 }
 
@@ -43,7 +50,6 @@ double _safeMaxY(List<double> values, {double fallback = 10}) {
   return finite.reduce((a, b) => a > b ? a : b) * 1.1;
 }
 
-/// 面积渐变（ECharts 风格 3-stop）。
 LinearGradient _areaGradient(Color color) => LinearGradient(
   colors: [
     color.withValues(alpha: 0.30),
@@ -55,8 +61,98 @@ LinearGradient _areaGradient(Color color) => LinearGradient(
   end: Alignment.bottomCenter,
 );
 
+FlTitlesData _axisTitles(
+  AdminColors c,
+  List<DailyMetric> data, {
+  required bool showGb,
+}) {
+  return FlTitlesData(
+    leftTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: showGb ? 48 : 38,
+        getTitlesWidget:
+            (v, _) => Text(showGb ? _fmtGb(v) : _fmt(v), style: _labelStyle(c)),
+      ),
+    ),
+    bottomTitles: AxisTitles(
+      sideTitles: SideTitles(
+        showTitles: true,
+        reservedSize: 24,
+        interval: data.length > 14 ? (data.length / 7).ceilToDouble() : 1,
+        getTitlesWidget: (v, _) {
+          final i = v.toInt();
+          if (i < 0 || i >= data.length) return const SizedBox();
+          final d = data[i].date;
+          return Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              d.length >= 5 ? d.substring(5) : d,
+              style: _labelStyle(c),
+            ),
+          );
+        },
+      ),
+    ),
+    topTitles: const AxisTitles(),
+    rightTitles: const AxisTitles(),
+  );
+}
+
+LineTouchData _touchData(
+  Color color,
+  AdminColors c, {
+  required List<DailyMetric> data,
+  bool showGb = false,
+}) => LineTouchData(
+  touchSpotThreshold: 20,
+  handleBuiltInTouches: true,
+  getTouchedSpotIndicator:
+      (_, indices) =>
+          indices
+              .map(
+                (_) => TouchedSpotIndicatorData(
+                  FlLine(
+                    color: color.withValues(alpha: 0.15),
+                    strokeWidth: 1,
+                    dashArray: [4, 4],
+                  ),
+                  FlDotData(
+                    show: true,
+                    getDotPainter:
+                        (_, _, _, _) => FlDotCirclePainter(
+                          radius: 4.5,
+                          color: color,
+                          strokeWidth: 2,
+                          strokeColor: c.surfaceContainerLow,
+                        ),
+                  ),
+                ),
+              )
+              .toList(),
+  touchTooltipData: LineTouchTooltipData(
+    getTooltipColor: (_) => c.surfaceContainerHighest,
+    tooltipRoundedRadius: 6,
+    tooltipPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+    getTooltipItems:
+        (spots) =>
+            spots.map((spot) {
+              final index = spot.x.round().clamp(0, data.length - 1);
+              final value = showGb ? _fmtGb(spot.y) : _fmt(spot.y);
+              return LineTooltipItem(
+                '${data[index].date}\n$value',
+                TextStyle(
+                  color: c.onSurface,
+                  fontSize: AppTypography.labelSmall,
+                  fontWeight: FontWeight.w600,
+                ),
+              );
+            }).toList(),
+  ),
+);
+
 // ═══════════════════════════════════════════════════════════════════════
-// 通用曲线图（用户增长 / 概览页复用）
+// 曲线图（用户增长）
 // ═══════════════════════════════════════════════════════════════════════
 
 class CurveChart extends StatelessWidget {
@@ -113,7 +209,7 @@ class CurveChart extends StatelessWidget {
         ],
         lineTouchData: _touchData(color, c, data: data),
       ),
-      duration: Duration.zero,
+      duration: _chartAnimDuration,
     );
   }
 }
@@ -135,7 +231,6 @@ class StepChart extends StatelessWidget {
     final iv = _interval(values);
     final maxY = _safeMaxY(values);
     final showDots = data.length <= 14;
-    // 构造阶梯点：每个值复制为 (i, v) 和 (i+1, v) 形成直角转折。
     final stepSpots = <FlSpot>[];
     for (int i = 0; i < data.length; i++) {
       final v = data[i].value.toDouble();
@@ -166,7 +261,6 @@ class StepChart extends StatelessWidget {
             dotData: FlDotData(
               show: showDots,
               getDotPainter: (spot, _, _, _) {
-                // 只在原始数据点（整数 x）显示圆点。
                 final isOriginal = spot.x == spot.x.roundToDouble();
                 if (!isOriginal || !showDots) {
                   return FlDotCirclePainter(
@@ -192,118 +286,25 @@ class StepChart extends StatelessWidget {
         ],
         lineTouchData: _touchData(color, c, data: data, showGb: true),
       ),
-      duration: Duration.zero,
+      duration: _chartAnimDuration,
     );
   }
 }
 
-/// 通用坐标轴配置。
-FlTitlesData _axisTitles(
-  AdminColors c,
-  List<DailyMetric> data, {
-  required bool showGb,
-}) {
-  return FlTitlesData(
-    leftTitles: AxisTitles(
-      sideTitles: SideTitles(
-        showTitles: true,
-        reservedSize: showGb ? 48 : 38,
-        getTitlesWidget:
-            (v, _) => Text(showGb ? _fmtGb(v) : _fmt(v), style: _labelStyle(c)),
-      ),
-    ),
-    bottomTitles: AxisTitles(
-      sideTitles: SideTitles(
-        showTitles: true,
-        reservedSize: 24,
-        interval: data.length > 14 ? (data.length / 7).ceilToDouble() : 1,
-        getTitlesWidget: (v, _) {
-          final i = v.toInt();
-          if (i < 0 || i >= data.length) return const SizedBox();
-          final d = data[i].date;
-          return Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              d.length >= 5 ? d.substring(5) : d,
-              style: _labelStyle(c),
-            ),
-          );
-        },
-      ),
-    ),
-    topTitles: const AxisTitles(),
-    rightTitles: const AxisTitles(),
-  );
-}
-
-/// 通用触摸交互。
-LineTouchData _touchData(
-  Color color,
-  AdminColors c, {
-  required List<DailyMetric> data,
-  bool showGb = false,
-}) => LineTouchData(
-  touchSpotThreshold: 20,
-  handleBuiltInTouches: true,
-  getTouchedSpotIndicator:
-      (_, indices) =>
-          indices
-              .map(
-                (_) => TouchedSpotIndicatorData(
-                  FlLine(
-                    color: color.withValues(alpha: 0.15),
-                    strokeWidth: 1,
-                    dashArray: [4, 4],
-                  ),
-                  FlDotData(
-                    show: true,
-                    getDotPainter:
-                        (_, _, _, _) => FlDotCirclePainter(
-                          radius: 4.5,
-                          color: color,
-                          strokeWidth: 2,
-                          strokeColor: c.surfaceContainerLow,
-                        ),
-                  ),
-                ),
-              )
-              .toList(),
-  touchTooltipData: LineTouchTooltipData(
-    getTooltipColor: (_) => c.surfaceContainerHighest,
-    tooltipRoundedRadius: 6,
-    tooltipPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-    getTooltipItems:
-        (spots) =>
-            spots.map((spot) {
-              final index = spot.x.round().clamp(0, data.length - 1);
-              final value = showGb ? _fmtGb(spot.y) : _fmt(spot.y);
-              return LineTooltipItem(
-                '${data[index].date}\n$value',
-                TextStyle(
-                  color: c.onSurface,
-                  fontSize: AppTypography.labelSmall,
-                  fontWeight: FontWeight.w600,
-                ),
-              );
-            }).toList(),
-  ),
-);
-
 // ═══════════════════════════════════════════════════════════════════════
-// 用户增长（曲线图 + 填充）
+// 任务吞吐（堆叠柱状图）
 // ═══════════════════════════════════════════════════════════════════════
 
-class _TaskBarChart extends StatelessWidget {
-  const _TaskBarChart({required this.data});
+class TaskThroughputChart extends StatelessWidget {
+  const TaskThroughputChart({super.key, required this.data});
   final List<DailyTaskMetric> data;
 
   @override
   Widget build(BuildContext context) {
     final c = context.adminColors;
+    final l10n = AppLocalizations.of(context);
     final totals =
-        data
-            .map((d) => (d.completed + d.failed + d.running).toDouble())
-            .toList();
+        data.map((d) => (d.completed + d.failed + d.running).toDouble()).toList();
     final maxY = _safeMaxY(totals);
     final iv = (maxY / 4).ceilToDouble().clamp(1.0, double.infinity);
     final barW = data.length > 14 ? 8.0 : 14.0;
@@ -366,7 +367,8 @@ class _TaskBarChart extends StatelessWidget {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 24,
-              interval: data.length > 14 ? (data.length / 7).ceilToDouble() : 1,
+              interval:
+                  data.length > 14 ? (data.length / 7).ceilToDouble() : 1,
               getTitlesWidget: (v, _) {
                 final i = v.toInt();
                 if (i < 0 || i >= data.length) return const SizedBox();
@@ -387,17 +389,17 @@ class _TaskBarChart extends StatelessWidget {
         borderData: FlBorderData(show: false),
         barTouchData: BarTouchData(
           touchTooltipData: BarTouchTooltipData(
-            getTooltipColor: (_) => c.onSurface.withValues(alpha: 0.92),
-            tooltipRoundedRadius: 8,
+            getTooltipColor: (_) => c.surfaceContainerHighest,
+            tooltipRoundedRadius: 6,
             getTooltipItem: (group, _, rod, _) {
               final d = data[group.x.toInt()];
-              final hasData = d.completed > 0 || d.failed > 0 || d.running > 0;
+              final hasData =
+                  d.completed > 0 || d.failed > 0 || d.running > 0;
               if (!hasData) return null;
-              final l10n = AppLocalizations.of(context);
               return BarTooltipItem(
                 l10n.adminTaskThroughputTooltip(d.completed, d.failed),
                 TextStyle(
-                  color: c.surface,
+                  color: c.onSurface,
                   fontSize: AppTypography.labelSmall,
                   fontWeight: FontWeight.w600,
                 ),
@@ -406,88 +408,7 @@ class _TaskBarChart extends StatelessWidget {
           ),
         ),
       ),
-      duration: Duration.zero,
+      duration: _chartAnimDuration,
     );
   }
-}
-
-// ═══════════════════════════════════════════════════════════════════════
-// 存储占用（阶梯折线图）
-// ═══════════════════════════════════════════════════════════════════════
-
-class _SystemLoadBars extends StatelessWidget {
-  const _SystemLoadBars({required this.load});
-  final SystemLoadSnapshot load;
-
-  @override
-  Widget build(BuildContext context) {
-    final c = context.adminColors;
-    final l10n = AppLocalizations.of(context);
-    final items = [
-      (label: l10n.adminLoadCpu, value: load.cpuUsage),
-      (label: l10n.adminLoadMemory, value: load.memoryUsage),
-      (label: l10n.adminLoadDisk, value: load.diskUsage),
-      (label: l10n.adminLoadJvm, value: load.jvmHeapUsage),
-    ];
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            for (final item in items) ...[
-              Row(
-                children: [
-                  SizedBox(
-                    width: 48,
-                    child: Text(
-                      item.label,
-                      style: TextStyle(
-                        fontSize: AppTypography.bodySmall,
-                        fontWeight: FontWeight.w700,
-                        color: c.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      child: LinearProgressIndicator(
-                        value: (item.value / 100).clamp(0, 1),
-                        minHeight: 10,
-                        backgroundColor: c.outlineVariant.withValues(
-                          alpha: 0.16,
-                        ),
-                        color: _ringColor(item.value, c),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  SizedBox(
-                    width: 46,
-                    child: Text(
-                      '${item.value.toStringAsFixed(0)}%',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontSize: AppTypography.bodySmall,
-                        fontWeight: FontWeight.w800,
-                        color: _ringColor(item.value, c),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (item != items.last) const SizedBox(height: 22),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-Color _ringColor(double value, AdminColors c) {
-  if (value >= 85) return c.error;
-  if (value >= 70) return c.tertiary;
-  return c.success;
 }

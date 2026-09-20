@@ -398,6 +398,7 @@ class _AuditLogTab extends StatelessWidget {
             showIndex: true,
             indexBase: result.page * pageSize,
             minTableWidth: 960,
+            maxTableWidth: 1060,
             columns: [
               AdminListColumn(
                 key: 'action',
@@ -434,32 +435,20 @@ class _AuditLogTab extends StatelessWidget {
             rowCellsBuilder: (context, index) {
               final item = result.items[index];
               return [
-                Text(
+                AdminCellText(
                   item.action,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
-                Text(
+                AdminCellText(
                   item.description.isEmpty ? item.action : item.description,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                 ),
-                Text(
-                  item.resourceType,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
+                AdminCellText(item.resourceType),
+                AdminCellText(
                   item.ipAddress,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-                Text(
+                AdminCellText(
                   item.createdAt,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ];
@@ -524,11 +513,12 @@ class _LoginAuditLogTab extends StatelessWidget {
             showIndex: true,
             indexBase: result.page * pageSize,
             minTableWidth: 960,
+            maxTableWidth: 1060,
             columns: [
+              // 用户名改为 S 档：与失败原因按 1:2 分配剩余宽度，避免长屏下过宽。
               AdminListColumn(
                 key: 'username',
                 label: l10n.adminUsername,
-                flex: 2,
                 sortable: true,
               ),
               AdminListColumn(
@@ -566,10 +556,8 @@ class _LoginAuditLogTab extends StatelessWidget {
               final item = result.items[index];
               final success = item.loginResult == 'SUCCESS';
               return [
-                Text(
+                AdminCellText(
                   item.username,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 AdminStatusTag(
@@ -577,27 +565,17 @@ class _LoginAuditLogTab extends StatelessWidget {
                       success ? l10n.adminLoginSuccess : l10n.adminLoginFailed,
                   tone: success ? AdminTagTone.success : AdminTagTone.error,
                 ),
-                Text(
-                  item.clientPlatform,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                Text(
+                AdminCellText(item.clientPlatform),
+                AdminCellText(
                   item.ipAddress,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-                Text(
+                AdminCellText(
                   item.failureReason ?? '-',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-                Text(
+                AdminCellText(
                   item.createdAt,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ];

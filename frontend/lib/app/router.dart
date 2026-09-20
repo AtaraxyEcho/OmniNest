@@ -11,7 +11,6 @@ import 'package:omninest/core/auth/login_page.dart';
 import 'package:omninest/core/server/presentation/server_setup_page.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/features/admin/domain/admin_console_access.dart';
-import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/files/presentation/pages/file_browser_page.dart';
@@ -300,16 +299,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/reader/pdfs/:itemId/read',
         (state) => PdfReaderPage(itemId: state.pathParameters['itemId']!),
       ),
-      GoRoute(
-        path: '/admin',
-        redirect: (context, state) => AdminSection.overview.location,
-      ),
+      // Admin 作为 Portal 之上的独立路由节点（push 进入、pop 返回）。
+      // 分区深链使用 /admin/:section（与 AdminSection.location 对齐）；
+      // 路径段非法时 AdminSection.fromPathSegment 回落到 overview。
+      _animatedRoute('/admin', (state) => const AdminDashboardPage()),
       _animatedRoute(
         '/admin/:section',
         (state) => AdminDashboardPage(
-          section: AdminSection.fromPathSegment(
-            state.pathParameters['section'],
-          ),
+          initialSectionSegment: state.pathParameters['section'],
         ),
       ),
     ],

@@ -69,9 +69,10 @@ void main() {
 
     await tester.pumpWidget(
       _testApp(
-        const AdminShell(
+        AdminShell(
           section: AdminSection.overview,
-          child: Text('Admin content'),
+          onSectionChanged: (_) {},
+          child: const Text('Admin content'),
         ),
       ),
     );

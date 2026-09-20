@@ -24,9 +24,15 @@ import 'package:omninest/core/auth/auth_controller.dart';
 part 'admin_shell_navigation.dart';
 
 class AdminShell extends ConsumerWidget {
-  const AdminShell({required this.section, required this.child, super.key});
+  const AdminShell({
+    required this.section,
+    required this.onSectionChanged,
+    required this.child,
+    super.key,
+  });
 
   final AdminSection section;
+  final ValueChanged<AdminSection> onSectionChanged;
   final Widget child;
 
   @override
@@ -50,6 +56,7 @@ class AdminShell extends ConsumerWidget {
                             ? AdminSidebar(
                               selectedSection: section,
                               closeOnSelect: false,
+                              onSectionChanged: onSectionChanged,
                             )
                             : const SizedBox.shrink(),
                   ),
@@ -67,11 +74,7 @@ class AdminShell extends ConsumerWidget {
           ],
         );
         return PopScope(
-          canPop: false,
-          onPopInvokedWithResult: (didPop, result) {
-            if (didPop) return;
-            context.go('/portal');
-          },
+          canPop: true,
           child: Scaffold(
             extendBody: true,
             bottomNavigationBar:
@@ -84,7 +87,9 @@ class AdminShell extends ConsumerWidget {
                       selectedIndex: _adminDockIndex(section),
                       onDestinationSelected: (i) {
                         final target = _adminDockSection(i);
-                        if (target != null) context.go(target.location);
+                        if (target != null && target != section) {
+                          onSectionChanged(target);
+                        }
                       },
                       destinations: [
                         NavigationDestination(
@@ -194,15 +199,26 @@ class _AdminShellBody extends StatelessWidget {
   }
 }
 
+/// 返回 Portal：优先 pop（保留 Portal shell 状态），无栈可弹时兜底 go。
+void _backToPortal(BuildContext context) {
+  if (context.canPop()) {
+    context.pop();
+  } else {
+    context.go('/portal');
+  }
+}
+
 class AdminSidebar extends ConsumerStatefulWidget {
   const AdminSidebar({
     required this.selectedSection,
     required this.closeOnSelect,
+    required this.onSectionChanged,
     super.key,
   });
 
   final AdminSection selectedSection;
   final bool closeOnSelect;
+  final ValueChanged<AdminSection> onSectionChanged;
 
   @override
   ConsumerState<AdminSidebar> createState() => _AdminSidebarState();
@@ -353,6 +369,7 @@ class _AdminSidebarState extends ConsumerState<AdminSidebar>
       section: section,
       selected: selected,
       closeOnSelect: widget.closeOnSelect,
+      onSectionChanged: widget.onSectionChanged,
     );
     if (_reducedMotion) return item;
     final anim = _itemAnimation(index);
@@ -393,7 +410,9 @@ class _AdminTopBar extends ConsumerWidget {
         child: Row(
           children: [
             if (isWide) ...[
-              _TopBarPortalButton(onPressed: () => context.go('/portal')),
+              _TopBarPortalButton(
+                onPressed: () => _backToPortal(context),
+              ),
               const SizedBox(width: 12),
               AdminStatusPill(
                 label: l10n.adminRolePillLabel,
@@ -402,7 +421,7 @@ class _AdminTopBar extends ConsumerWidget {
               const SizedBox(width: 12),
             ] else
               IconButton(
-                onPressed: () => context.go('/portal'),
+                onPressed: () => _backToPortal(context),
                 icon: Icon(Icons.arrow_back_rounded),
                 tooltip: AppLocalizations.of(context).profileBackTooltip,
               ),
@@ -565,6 +584,7 @@ class _MobileAdminSectionSheet extends ConsumerWidget {
                   ),
                   onTap: () {
                     Navigator.pop(context);
+                    // 分区深链：/admin/:section，由 AdminDashboardPage 解析。
                     context.go(item.location);
                   },
                 ),

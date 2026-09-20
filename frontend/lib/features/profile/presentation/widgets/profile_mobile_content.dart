@@ -57,8 +57,6 @@ class ProfileMobileContent extends ConsumerWidget {
   final ValueChanged<String> onLanguageChanged;
   final ValueChanged<FontScalePreset> onFontScaleChanged;
 
-  bool get _isAdmin => role == 'SUPER_ADMIN' || role == 'ADMIN';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -249,21 +247,7 @@ class ProfileMobileContent extends ConsumerWidget {
               ),
             ],
           ),
-          if (_isAdmin) ...[
-            const SizedBox(height: MobileLayoutTokens.sectionGap),
-            MobileSettingsGroup(
-              title: l10n.coreAdmin,
-              children: [
-                MobileSettingsTile(
-                  icon: Icons.admin_panel_settings_outlined,
-                  title: l10n.coreAdmin,
-                  subtitle: l10n.portalAdminSubtitle,
-                  iconColor: context.mobileColors.warmAccent,
-                  onTap: () => context.push('/admin'),
-                ),
-              ],
-            ),
-          ],
+          // Admin 仅桌面端开放；移动端个人中心不提供管理台入口。
           const SizedBox(height: MobileLayoutTokens.sectionGap),
           MobileSettingsGroup(
             title: l10n.settingsAbout,

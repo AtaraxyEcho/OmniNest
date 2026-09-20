@@ -210,7 +210,7 @@ class _LibrarySourcesSectionState
       await ref
           .read(adminOperationsActionsProvider)
           .deleteStorageLocation(location.id);
-      ref.invalidate(adminStorageProvider);
+      // deleteStorageLocation 已安排合并失效，此处不再重复 invalidate。
     } on Exception catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -356,31 +356,21 @@ class _LibrarySourcesSectionState
           rowCellsBuilder: (context, index) {
             final source = filtered[index];
             return [
-              Text(
+              AdminCellText(
                 source.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              Text(
+              AdminCellText(
                 '${locationName(source)} · ${source.relativeRoot}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              Text(
-                _libraryTypeLabel(l10n, source.libraryType),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
+              AdminCellText(_libraryTypeLabel(l10n, source.libraryType)),
               AdminStatusTag(
                 label: _scanStatusLabel(l10n, source.scanStatus),
                 tone: _scanStatusTone(source.scanStatus),
               ),
-              Text(
+              AdminCellText(
                 _lastScanSummary(l10n, source),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               AdminStatusTag(

@@ -8,7 +8,6 @@ class _MobileQuickActions extends ConsumerWidget {
     final l10n = AppLocalizations.of(context);
     final scheme = Theme.of(context).colorScheme;
     final accent = scheme.primary;
-    final canAccessAdmin = ref.watch(canAccessAdminConsoleProvider);
     final actions = [
       _MobileQuickAction(
         icon: Icons.menu_book_rounded,
@@ -35,12 +34,7 @@ class _MobileQuickActions extends ConsumerWidget {
         label: l10n.portalDockFiles,
         route: '/files',
       ),
-      if (canAccessAdmin)
-        _MobileQuickAction(
-          icon: Icons.admin_panel_settings_rounded,
-          label: l10n.portalAdmin,
-          route: '/admin',
-        ),
+      // Admin 仅桌面端开放；移动端不提供管理台入口。
     ];
 
     return Card(
@@ -105,7 +99,14 @@ class _MobileQuickActionChip extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(10),
-        onTap: () => context.go(action.route),
+        onTap: () {
+          // Admin 用 push 保留 Portal shell 状态（返回时 pop）。
+          if (action.route == '/admin') {
+            context.push(action.route);
+          } else {
+            context.go(action.route);
+          }
+        },
         child: Container(
           height: 38,
           constraints: const BoxConstraints(minWidth: 86),

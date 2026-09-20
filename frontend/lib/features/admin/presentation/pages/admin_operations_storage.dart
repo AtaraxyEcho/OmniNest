@@ -280,10 +280,23 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    // 库源变化（含挂载直达新建/删除）可能新增或移除挂载位置引用，
-    // 同步刷新存储管理视图，避免非 autoDispose 的 adminStorageProvider 陈旧。
+    // 库源增删可能改变挂载位置引用关系。禁止在 build/layout 同帧直接
+    // invalidate（Riverpod 3 会报同帧多次 rebuild）；仅在列表长度变化时
+    // 推迟到帧末，再走合并刷新。
     ref.listen(videoLibrarySourcesProvider, (previous, next) {
-      ref.invalidate(adminStorageProvider);
+      final prevCount = previous?.asData?.value.length;
+      final nextCount = next.asData?.value.length;
+      if (prevCount == null || nextCount == null || prevCount == nextCount) {
+        return;
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        ref
+            .read(adminOperationsActionsProvider)
+            .scheduleStorageRelatedRefresh();
+      });
     });
     final canManageStorage =
         ref
@@ -386,28 +399,20 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
             final location = locations[index];
             final healthy = _storageHealthy(location);
             return [
-              Text(
+              AdminCellText(
                 location.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
-              Text(
+              AdminCellText(
                 providerTypeLabel(l10n, location.providerType),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              Text(
+              AdminCellText(
                 location.mountKey,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              Text(
+              AdminCellText(
                 location.relativeRoot,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               AdminStatusTag(
@@ -486,9 +491,9 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
             children: [
               IconButton.filledTonal(
                 onPressed: () {
-                  ref.invalidate(adminStorageProvider);
-                  ref.invalidate(videoStorageLocationsProvider);
-                  ref.invalidate(videoLibrarySourcesProvider);
+                  ref
+                      .read(adminOperationsActionsProvider)
+                      .scheduleStorageRelatedRefresh();
                 },
                 icon: const Icon(Icons.refresh_rounded),
                 tooltip: l10n.adminRefresh,
@@ -648,9 +653,9 @@ class _StorageLocationWizardState
             );
       }
       if (!mounted) return;
-      ref.invalidate(adminStorageProvider);
-      ref.invalidate(videoStorageLocationsProvider);
-      ref.invalidate(videoLibrarySourcesProvider);
+      // createStorageLocation / library source create 已安排合并失效；
+      // 此处再触发一次同一 epoch，确保离开对话框后视图最新且不双重建。
+      ref.read(adminOperationsActionsProvider).scheduleStorageRelatedRefresh();
       if (!mounted) return;
       Navigator.of(context).pop();
     } on Exception catch (error) {

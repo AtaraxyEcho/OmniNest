@@ -291,10 +291,8 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
               rowCellsBuilder: (context, index) {
                 final session = page.items[index];
                 return [
-                  Text(
+                  AdminCellText(
                     session.username ?? '-',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
                       decoration:
@@ -303,29 +301,21 @@ class _AdminSessionsPageState extends ConsumerState<AdminSessionsPage> {
                               : null,
                     ),
                   ),
-                  Text(
+                  AdminCellText(
                     session.deviceName ??
                         session.deviceId ??
                         session.clientPlatform,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
-                  Text(
+                  AdminCellText(
                     session.ipAddress,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  Text(
+                  AdminCellText(
                     session.issuedAt,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  Text(
+                  AdminCellText(
                     session.lastActiveAt,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   _sessionStatusTag(context, session),

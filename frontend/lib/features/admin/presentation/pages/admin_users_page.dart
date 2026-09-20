@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/features/admin/application/admin_user_controller.dart';
 import 'package:omninest/features/admin/domain/admin_user.dart';
 import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
+import 'package:omninest/features/admin/presentation/widgets/admin_list_components.dart';
 import 'package:omninest/core/errors/error_message.dart';
 
 part 'admin_user_dialogs.dart';
@@ -299,9 +300,8 @@ class _UserRow extends ConsumerWidget {
                     Row(
                       children: [
                         Flexible(
-                          child: Text(
+                          child: AdminCellText(
                             user.title,
-                            overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodyMedium
                                 ?.copyWith(fontWeight: FontWeight.w700),
                           ),
@@ -322,9 +322,8 @@ class _UserRow extends ConsumerWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
+                    AdminCellText(
                       '@${user.username}',
-                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
                         color: adminColors.onSurfaceVariant,
                       ),
@@ -376,9 +375,8 @@ class _UserRow extends ConsumerWidget {
                       user.isActive ? adminColors.success : adminColors.error,
                 ),
                 const SizedBox(height: 12),
-                Text(
+                AdminCellText(
                   user.email ?? l10n.adminNotSetEmail,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: adminColors.onSurfaceVariant,
                   ),
@@ -400,9 +398,8 @@ class _UserRow extends ConsumerWidget {
               const SizedBox(width: 12),
               Expanded(
                 flex: 2,
-                child: Text(
+                child: AdminCellText(
                   user.email ?? l10n.adminNotSetEmail,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: adminColors.onSurfaceVariant,
                   ),

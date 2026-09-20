@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -18,19 +19,62 @@ import 'package:omninest/features/admin/presentation/pages/admin_users_page.dart
 import 'package:omninest/features/admin/presentation/widgets/admin_shell.dart';
 import 'package:omninest/core/errors/error_message.dart';
 
-class AdminDashboardPage extends ConsumerWidget {
-  const AdminDashboardPage({required this.section, super.key});
+/// 管理控制台主页面。
+///
+/// 深链分区：`/admin/:section`（section 对应 [AdminSection.pathSegment]）。
+/// 侧栏切换分区时同步 URL；外部导航为 push/pop。
+class AdminDashboardPage extends ConsumerStatefulWidget {
+  const AdminDashboardPage({this.initialSectionSegment, super.key});
 
-  final AdminSection section;
+  /// 路由路径段，如 `storage`、`monitoring`；空或非法时回落 overview。
+  final String? initialSectionSegment;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AdminDashboardPage> createState() => _AdminDashboardPageState();
+}
+
+class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
+  late AdminSection _section;
+
+  @override
+  void initState() {
+    super.initState();
+    _section = AdminSection.fromPathSegment(widget.initialSectionSegment);
+  }
+
+  @override
+  void didUpdateWidget(covariant AdminDashboardPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialSectionSegment != widget.initialSectionSegment) {
+      final next = AdminSection.fromPathSegment(widget.initialSectionSegment);
+      if (next != _section) {
+        setState(() => _section = next);
+      }
+    }
+  }
+
+  void _onSectionChanged(AdminSection section) {
+    if (section == _section) {
+      return;
+    }
+    setState(() => _section = section);
+    // 同步 URL，便于刷新/分享保持分区。
+    final target = section.location;
+    final uri = GoRouterState.of(context).uri.toString();
+    if (uri != target) {
+      context.go(target);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final permissions =
         ref.watch(authSessionProvider).asData?.value.user?.permissions ??
         const <String>{};
-    if (!section.isVisibleTo(permissions)) {
+    if (!_section.isVisibleTo(permissions)) {
       return AdminShell(
-        section: section,
+        section: _section,
+        onSectionChanged: _onSectionChanged,
         child: Center(
           child: Padding(
             padding: const EdgeInsets.all(24),
@@ -42,12 +86,16 @@ class AdminDashboardPage extends ConsumerWidget {
         ),
       );
     }
-    return AdminShell(section: section, child: _AdminSectionBody(section));
+    return AdminShell(
+      section: _section,
+      onSectionChanged: _onSectionChanged,
+      child: _AdminSectionBody(section: _section),
+    );
   }
 }
 
 class _AdminSectionBody extends ConsumerWidget {
-  const _AdminSectionBody(this.section);
+  const _AdminSectionBody({required this.section});
 
   final AdminSection section;
 

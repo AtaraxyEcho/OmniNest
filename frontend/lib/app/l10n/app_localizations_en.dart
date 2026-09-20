@@ -3372,7 +3372,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigGroupSecurity => 'Security';
 
   @override
+  String get adminConfigGroupAuth => 'Authentication';
+
+  @override
   String get adminConfigGroupWeather => 'Weather';
+
+  @override
+  String get adminConfigGroupBackdrop => 'Backdrop Library';
+
+  @override
+  String get adminConfigGroupSystem => 'System';
 
   @override
   String get adminConfigGroupOther => 'Other Settings';
@@ -3638,6 +3647,123 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminConfigLogRetentionPaths => 'Log retention scan paths';
+
+  @override
+  String get adminConfigLogRetentionEnabledDescription =>
+      'Automatically cleans archived logs and temporary files based on retention days.';
+
+  @override
+  String get adminConfigLogRetentionDaysDescription =>
+      'Maximum number of days archived logs and temporary files are kept.';
+
+  @override
+  String get adminConfigLogRetentionPathsDescription =>
+      'Comma-separated paths relative to the runtime directory included in retention cleanup.';
+
+  @override
+  String get adminConfigPhotoGeoOffline => 'Offline reverse geocoding';
+
+  @override
+  String get adminConfigPhotoGeoOfflineDescription =>
+      'Resolve photo coordinates into place names using the local GeoNames dataset.';
+
+  @override
+  String get adminConfigPhotoGeoNominatim => 'Online geocoding fallback';
+
+  @override
+  String get adminConfigPhotoGeoNominatimDescription =>
+      'Fall back to the Nominatim online service when offline matching misses.';
+
+  @override
+  String get adminConfigPhotoGeoMaxDistance => 'Nearest-city max distance';
+
+  @override
+  String get adminConfigPhotoGeoMaxDistanceDescription =>
+      'Maximum trusted distance in km to the nearest city (0 disables the limit).';
+
+  @override
+  String get adminConfigPhotoGeoImportBatchSize => 'GeoNames import batch size';
+
+  @override
+  String get adminConfigPhotoGeoImportBatchSizeDescription =>
+      'Number of rows written per batch while importing GeoNames data.';
+
+  @override
+  String get adminConfigPhotoGeoImportAuto => 'Auto GeoNames import';
+
+  @override
+  String get adminConfigPhotoGeoImportAutoDescription =>
+      'Trigger the GeoNames import automatically at startup when no dataset is published and files are present.';
+
+  @override
+  String get adminConfigQuarantineRetentionDays => 'Quarantine retention days';
+
+  @override
+  String get adminConfigQuarantineRetentionDaysDescription =>
+      'Days quarantined objects are kept before automatic cleanup.';
+
+  @override
+  String get adminConfigClamavTimeout => 'Scan timeout';
+
+  @override
+  String get adminConfigClamavTimeoutDescription =>
+      'Per-file virus scan time limit in milliseconds; exceeding it is reported as incomplete.';
+
+  @override
+  String get adminConfigTwoFactorRequiredRoles => 'Mandatory 2FA roles';
+
+  @override
+  String get adminConfigTwoFactorRequiredRolesDescription =>
+      'Comma-separated role codes required to enable two-factor authentication; empty means optional for everyone.';
+
+  @override
+  String get adminConfigBackdropMaxImageBytes => 'Backdrop image size limit';
+
+  @override
+  String get adminConfigBackdropMaxImageBytesDescription =>
+      'Maximum size in bytes of a single backdrop image.';
+
+  @override
+  String get adminConfigBackdropMaxVideoBytes => 'Backdrop video size limit';
+
+  @override
+  String get adminConfigBackdropMaxVideoBytesDescription =>
+      'Maximum size in bytes of a single backdrop video.';
+
+  @override
+  String get adminConfigBackdropMaxAssets => 'Backdrop asset count limit';
+
+  @override
+  String get adminConfigBackdropMaxAssetsDescription =>
+      'Maximum number of backdrop assets kept per user.';
+
+  @override
+  String get adminConfigBackdropUploadRate => 'Backdrop upload rate limit';
+
+  @override
+  String get adminConfigBackdropUploadRateDescription =>
+      'Backdrop uploads allowed per user each hour.';
+
+  @override
+  String get adminConfigAppVersionLatest => 'Latest client version';
+
+  @override
+  String get adminConfigAppVersionLatestDescription =>
+      'Latest client version number; empty means every client is up to date.';
+
+  @override
+  String get adminConfigAppVersionReleaseNotes => 'Release notes URL';
+
+  @override
+  String get adminConfigAppVersionReleaseNotesDescription =>
+      'Link to the release notes of the current version.';
+
+  @override
+  String get adminConfigAppVersionDownloadUrl => 'Installer download URL';
+
+  @override
+  String get adminConfigAppVersionDownloadUrlDescription =>
+      'Link to the client installer download page.';
 
   @override
   String get adminConfigMediaAutoImportDescription =>

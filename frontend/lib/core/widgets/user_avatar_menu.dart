@@ -61,6 +61,13 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
     }
   }
 
+  /// Admin 入口用 push 保留 Portal shell 状态（返回时 pop 即可）。
+  void _push(String location) {
+    if (mounted) {
+      context.push(location);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -177,7 +184,7 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
                   _MenuActionRow(
                     icon: Icons.admin_panel_settings_outlined,
                     label: l10n.coreAdmin,
-                    onTap: () => _closeAndRun(() => _go('/admin')),
+                    onTap: () => _closeAndRun(() => _push('/admin')),
                   ),
                 _MenuActionRow(
                   icon: Icons.logout_rounded,

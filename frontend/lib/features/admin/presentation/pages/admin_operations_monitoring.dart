@@ -59,155 +59,124 @@ class _PageEntranceState extends State<_PageEntrance>
   }
 }
 
-class AdminMonitoringPage extends StatefulWidget {
+/// 中栏「趋势 + 组件健康」统一高度，保证左右面板顶底对齐。
+const double _monitoringMidRowHeight = 420;
+
+/// 监控页布局：
+/// 1. 系统负载仪表 + 摘要指标
+/// 2. 左趋势 / 右组件健康（等高）
+/// 3. 最近告警（通栏；操作审计已在日志中心，此处不再重复）
+class AdminMonitoringPage extends StatelessWidget {
   const AdminMonitoringPage({required this.view, super.key});
 
   final AdminMonitoringView view;
-
-  @override
-  State<AdminMonitoringPage> createState() => _AdminMonitoringPageState();
-}
-
-class _AdminMonitoringPageState extends State<AdminMonitoringPage>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _entrance;
-
-  @override
-  void initState() {
-    super.initState();
-    _entrance = AnimationController(duration: MotionToken.slow, vsync: this)
-      ..forward();
-  }
-
-  @override
-  void dispose() {
-    _entrance.dispose();
-    super.dispose();
-  }
-
-  Widget _fadeSlide(int index, Widget child) {
-    final start = index * 0.15;
-    final end = (start + 0.6).clamp(0.0, 1.0);
-    final curve = CurvedAnimation(
-      parent: _entrance,
-      curve: Interval(start, end, curve: MotionToken.curve),
-    );
-    return FadeTransition(
-      opacity: curve,
-      child: SlideTransition(
-        position: Tween<Offset>(
-          begin: MotionToken.slideContent,
-          end: Offset.zero,
-        ).animate(curve),
-        child: child,
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final adminColors = context.adminColors;
     final warnCount =
-        widget.view.components.where((item) => item.status != 'UP').length +
-        widget.view.alerts.where((item) => item.severity == 'WARNING').length;
-    final overview = widget.view.overview;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.start,
+        view.components.where((item) => item.status != 'UP').length +
+        view.alerts.where((item) => item.severity == 'WARNING').length;
+    final overview = view.overview;
+    return AdminSectionEntrance(
       children: [
-        _fadeSlide(
-          0,
-          AdminPageHeader(
-            title: l10n.adminSystemMonitoring,
-            subtitle: l10n.adminMonitoringSubtitle,
-            trailing: AdminStatusPill(
-              label:
-                  overview.status == 'UP'
-                      ? l10n.adminRunning
-                      : l10n.adminAttentionItems('$warnCount'),
-              color:
-                  warnCount == 0
-                      ? adminColors.success
-                      : context.adminColors.error,
+        AdminPageHeader(
+          title: l10n.adminSystemMonitoring,
+          subtitle: l10n.adminMonitoringSubtitle,
+          trailing: AdminStatusPill(
+            label:
+                overview.status == 'UP'
+                    ? l10n.adminRunning
+                    : l10n.adminAttentionItems('$warnCount'),
+            // 颜色与标签同源：系统正常（UP）必须显示绿色，
+            // 仅存在告警项时为琥珀，避免「运行正常」标签配红色指示的矛盾。
+            color: _statusColor(overview.status, adminColors),
+          ),
+        ),
+        const SizedBox(height: 20),
+        // ── 1. 系统负载 ──
+        AdminInfoPanel(
+          title: l10n.adminSystemLoad,
+          subtitle: l10n.adminUptime(overview.uptime),
+          trailing: AdminStatusPill(
+            label: overview.status,
+            color: _statusColor(overview.status, adminColors),
+          ),
+          children: [
+            AdminGaugeGrid(
+              gaugeSize: 112,
+              children: [
+                AdminGaugeRing(
+                  label: l10n.adminSystemCpu,
+                  value: overview.cpuUsage,
+                  detail: '',
+                  size: 112,
+                ),
+                AdminGaugeRing(
+                  label: l10n.adminLoadMemory,
+                  value: overview.memoryUsage,
+                  detail: '',
+                  size: 112,
+                ),
+                AdminGaugeRing(
+                  label: l10n.adminLoadDisk,
+                  value: overview.diskUsage,
+                  detail: '',
+                  size: 112,
+                ),
+                AdminGaugeRing(
+                  label: l10n.adminLoadJvm,
+                  value: overview.jvmHeapUsage,
+                  detail: '',
+                  size: 112,
+                ),
+              ],
             ),
-          ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                AdminMetricMiniStat(
+                  label: l10n.adminComponents,
+                  value: view.components.length.toString(),
+                ),
+                AdminMetricMiniStat(
+                  label: l10n.adminAlerts,
+                  value: view.alerts.length.toString(),
+                  color: view.alerts.isEmpty ? null : adminColors.error,
+                ),
+                AdminMetricMiniStat(
+                  label: l10n.adminRequests,
+                  value: overview.todayRequests.toString(),
+                ),
+              ],
+            ),
+          ],
         ),
-        const SizedBox(height: 24),
-        _fadeSlide(
-          1,
-          _MetricGrid(
-            mainAxisExtent: 176,
-            children: [
-              AdminMetricCard(
-                title: l10n.adminServiceStatus,
-                value: overview.status,
-                detail: l10n.adminUptime(overview.uptime),
-                icon: Icons.monitor_heart_outlined,
-                accent:
-                    overview.status == 'UP'
-                        ? adminColors.success
-                        : context.adminColors.error,
-                supporting: [
-                  AdminMetricMiniStat(
-                    label: l10n.adminComponents,
-                    value: widget.view.components.length.toString(),
-                  ),
-                  AdminMetricMiniStat(
-                    label: l10n.adminAlerts,
-                    value: widget.view.alerts.length.toString(),
-                  ),
-                ],
+        const SizedBox(height: 20),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isWide = constraints.maxWidth >= 1080;
+            final trend = _MonitoringTrendPanel(series: view.series);
+            final components = AdminInfoPanel(
+              title: l10n.adminComponentHealth,
+              subtitle: l10n.adminComponentHealthSubtitle,
+              expandBody: true,
+              trailing: AdminStatusPill(
+                label:
+                    '${view.components.where((c) => c.status == 'UP').length}/${view.components.length}',
+                color:
+                    warnCount == 0 ? adminColors.success : adminColors.tertiary,
               ),
-              AdminMetricCard(
-                title: l10n.adminSystemCpu,
-                value: '${overview.cpuUsage.toStringAsFixed(1)}%',
-                detail:
-                    '${l10n.adminMemory} ${overview.memoryUsage.toStringAsFixed(1)}%',
-                icon: Icons.memory_rounded,
-                accent: _usageColor(overview.cpuUsage, adminColors),
-                progress: overview.cpuUsage / 100,
-                supporting: [
-                  AdminMetricMiniStat(
-                    label: l10n.adminLoadJvm,
-                    value: '${overview.jvmHeapUsage.toStringAsFixed(1)}%',
-                    color: _usageColor(overview.jvmHeapUsage, adminColors),
-                  ),
-                ],
-              ),
-              AdminMetricCard(
-                title: l10n.adminDiskUsage,
-                value: '${overview.diskUsage.toStringAsFixed(1)}%',
-                detail: l10n.adminDataDirectoryDisk,
-                icon: Icons.storage_rounded,
-                accent: _usageColor(overview.diskUsage, adminColors),
-                progress: overview.diskUsage / 100,
-                supporting: [
-                  AdminMetricMiniStat(
-                    label: l10n.adminRequests,
-                    value: overview.todayRequests.toString(),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-        _fadeSlide(
-          2,
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth >= 1180;
-              final trend = _MonitoringTrendPanel(series: widget.view.series);
-              final components = AdminInfoPanel(
-                title: l10n.adminComponentHealth,
-                subtitle: l10n.adminComponentHealthSubtitle,
-                children: [
-                  _BoundedMonitoringList(
-                    maxHeight: 420,
+              children: [
+                Expanded(
+                  child: _BoundedMonitoringList(
+                    maxHeight: double.infinity,
                     emptyMessage: l10n.adminNoComponentHealth,
                     children: [
-                      for (final item in widget.view.components)
+                      for (final item in view.components)
                         _InfoRow(
                           leading: item.name,
                           middle: _detailText(item.detail, l10n),
@@ -218,93 +187,76 @@ class _AdminMonitoringPageState extends State<AdminMonitoringPage>
                         ),
                     ],
                   ),
-                ],
-              );
-              final alerts = AdminInfoPanel(
-                title: l10n.adminRecentAlerts,
-                subtitle: l10n.adminRecentAlertsSubtitle,
-                children: [
-                  _BoundedMonitoringList(
-                    maxHeight: 320,
-                    emptyMessage: l10n.adminNoAlerts,
-                    children: [
-                      for (final alert in widget.view.alerts.take(10))
-                        _InfoRow(
-                          leading: alert.severity,
-                          middle: '${alert.message}\n${alert.timestamp}',
-                          trailing: Icon(
-                            alert.severity == 'WARNING'
-                                ? Icons.warning_amber_rounded
-                                : Icons.info_outline_rounded,
-                            color:
-                                alert.severity == 'WARNING'
-                                    ? context.adminColors.error
-                                    : adminColors.info,
-                          ),
-                        ),
-                    ],
-                  ),
-                ],
-              );
-              final recentOperations = AdminInfoPanel(
-                title: l10n.adminRecentOperations,
-                subtitle: l10n.adminRecentOperationsSubtitle,
-                children: [
-                  _BoundedMonitoringList(
-                    maxHeight: 320,
-                    emptyMessage: l10n.adminNoOperations,
-                    children: [
-                      for (final item in widget.view.auditRecent.take(20))
-                        _InfoRow(
-                          leading:
-                              item.description.isEmpty
-                                  ? item.action
-                                  : item.description,
-                          middle:
-                              '${item.action} · ${item.resourceType} ${item.resourceId ?? ''}\n${item.ipAddress} · ${item.createdAt}',
-                          trailing: const Icon(Icons.receipt_long_outlined),
-                        ),
-                    ],
-                  ),
-                ],
-              );
-
-              if (!isWide) {
-                return Column(
+                ),
+              ],
+            );
+            final alerts = AdminInfoPanel(
+              title: l10n.adminRecentAlerts,
+              subtitle: l10n.adminRecentAlertsSubtitle,
+              trailing: AdminStatusPill(
+                label: '${view.alerts.length}',
+                color:
+                    view.alerts.isEmpty
+                        ? adminColors.success
+                        : adminColors.error,
+              ),
+              children: [
+                _BoundedMonitoringList(
+                  maxHeight: 320,
+                  emptyMessage: l10n.adminNoAlerts,
                   children: [
-                    trend,
-                    const SizedBox(height: 24),
-                    components,
-                    const SizedBox(height: 24),
-                    alerts,
-                    const SizedBox(height: 24),
-                    recentOperations,
+                    for (final alert in view.alerts.take(20))
+                      _InfoRow(
+                        leading: alert.severity,
+                        middle: '${alert.message}\n${alert.timestamp}',
+                        trailing: Icon(
+                          alert.severity == 'WARNING'
+                              ? Icons.warning_amber_rounded
+                              : Icons.info_outline_rounded,
+                          color:
+                              alert.severity == 'WARNING'
+                                  ? adminColors.error
+                                  : adminColors.info,
+                        ),
+                      ),
                   ],
-                );
-              }
+                ),
+              ],
+            );
+
+            if (!isWide) {
               return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  trend,
+                  const SizedBox(height: 16),
+                  SizedBox(height: _monitoringMidRowHeight, child: components),
+                  const SizedBox(height: 16),
+                  alerts,
+                ],
+              );
+            }
+
+            // 等高中栏：左趋势 / 右组件健康，底边对齐。
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                SizedBox(
+                  height: _monitoringMidRowHeight,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Expanded(flex: 7, child: trend),
-                      const SizedBox(width: 24),
-                      Expanded(flex: 4, child: components),
+                      const SizedBox(width: 16),
+                      Expanded(flex: 5, child: components),
                     ],
                   ),
-                  const SizedBox(height: 24),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(flex: 4, child: alerts),
-                      const SizedBox(width: 24),
-                      Expanded(flex: 7, child: recentOperations),
-                    ],
-                  ),
-                ],
-              );
-            },
-          ),
+                ),
+                const SizedBox(height: 16),
+                alerts,
+              ],
+            );
+          },
         ),
       ],
     );
@@ -322,30 +274,21 @@ class _MonitoringTrendPanel extends StatelessWidget {
     return AdminInfoPanel(
       title: l10n.adminTrendCharts,
       subtitle: l10n.adminTrendChartsSubtitle,
+      expandBody: true,
       trailing: AdminStatusPill(label: l10n.adminMonitoringStepMinutes(5)),
       children:
           series.isEmpty
-              ? [_EmptyText(l10n.adminNoTrendData)]
+              ? [
+                Expanded(
+                  child: Center(child: _EmptyText(l10n.adminNoTrendData)),
+                ),
+              ]
               : [
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final isWide = constraints.maxWidth >= 700;
-                    final panelWidth =
-                        isWide
-                            ? (constraints.maxWidth - 16) / 2
-                            : constraints.maxWidth;
-                    return Wrap(
-                      spacing: 16,
-                      runSpacing: 16,
-                      children: [
-                        for (final item in series)
-                          SizedBox(
-                            width: panelWidth,
-                            child: _MonitoringTrendCard(series: item),
-                          ),
-                      ],
-                    );
-                  },
+                Expanded(
+                  child: _MonitoringTrendCards(
+                    series: series,
+                    maxCardHeight: _monitoringMidRowHeight - 120,
+                  ),
                 ),
               ],
     );
@@ -389,9 +332,8 @@ class _MonitoringTrendCardState extends State<_MonitoringTrendCard> {
           borderRadius: BorderRadius.circular(8),
           border: Border.all(color: c.outlineVariant.withValues(alpha: 0.18)),
         ),
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
@@ -439,9 +381,8 @@ class _MonitoringTrendCardState extends State<_MonitoringTrendCard> {
                 ),
               ],
             ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: 180,
+            const SizedBox(height: 10),
+            Expanded(
               child: _TrendChart(
                 points: points,
                 color: color,
@@ -451,6 +392,48 @@ class _MonitoringTrendCardState extends State<_MonitoringTrendCard> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 监控趋势卡片区域：统一 2 列网格，卡片等高填满容器。
+class _MonitoringTrendCards extends StatelessWidget {
+  const _MonitoringTrendCards({required this.series, this.maxCardHeight = 300});
+
+  final List<AdminMonitoringSeries> series;
+  final double maxCardHeight;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 520;
+        final columns = isWide ? 2 : 1;
+        final spacing = 12.0;
+        final rows = (series.length / columns).ceil().clamp(1, 4);
+        final tileWidth =
+            (constraints.maxWidth - spacing * (columns - 1)) / columns;
+        final available =
+            constraints.maxHeight.isFinite
+                ? constraints.maxHeight
+                : maxCardHeight;
+        final tileHeight = ((available - spacing * (rows - 1)) / rows).clamp(
+          140.0,
+          maxCardHeight,
+        );
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final item in series)
+              SizedBox(
+                width: tileWidth,
+                height: tileHeight,
+                child: _MonitoringTrendCard(series: item),
+              ),
+          ],
+        );
+      },
     );
   }
 }
@@ -510,7 +493,7 @@ class _TrendChart extends StatelessWidget {
           leftTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 38,
+              reservedSize: 36,
               interval: gridInterval,
               getTitlesWidget:
                   (value, meta) => Text(
@@ -525,7 +508,7 @@ class _TrendChart extends StatelessWidget {
           bottomTitles: AxisTitles(
             sideTitles: SideTitles(
               showTitles: true,
-              reservedSize: 24,
+              reservedSize: 22,
               interval: labelInterval.toDouble(),
               getTitlesWidget: (value, meta) {
                 final index = value.round();
@@ -533,7 +516,7 @@ class _TrendChart extends StatelessWidget {
                   return const SizedBox.shrink();
                 }
                 return Padding(
-                  padding: const EdgeInsets.only(top: 6),
+                  padding: const EdgeInsets.only(top: 4),
                   child: Text(
                     _shortMonitoringTimestamp(points[index].timestamp),
                     style: TextStyle(
@@ -582,14 +565,14 @@ class _TrendChart extends StatelessWidget {
             isCurved: true,
             curveSmoothness: 0.35,
             color: color,
-            barWidth: 2.5,
+            barWidth: 2.2,
             isStrokeCapRound: true,
             dotData: FlDotData(
               show: true,
               getDotPainter: (spot, percent, bar, index) {
                 if (index == spots.length - 1) {
                   return FlDotCirclePainter(
-                    radius: 4,
+                    radius: 3.5,
                     color: color,
                     strokeWidth: 2,
                     strokeColor: c.surfaceContainerLow,
@@ -617,7 +600,6 @@ class _TrendChart extends StatelessWidget {
               ),
             ),
           ),
-          // 当前值高亮圆点（叠加层）
           if (spots.length > 1)
             LineChartBarData(
               spots: [spots.last],
@@ -673,20 +655,24 @@ class _BoundedMonitoringListState extends State<_BoundedMonitoringList> {
     if (widget.children.isEmpty) {
       return _EmptyText(widget.emptyMessage);
     }
+    final list = Scrollbar(
+      controller: _controller,
+      thumbVisibility: widget.children.length > 5,
+      child: ListView.separated(
+        controller: _controller,
+        primary: false,
+        shrinkWrap: widget.maxHeight.isFinite,
+        itemCount: widget.children.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 8),
+        itemBuilder: (context, index) => widget.children[index],
+      ),
+    );
+    if (!widget.maxHeight.isFinite) {
+      return list;
+    }
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: widget.maxHeight),
-      child: Scrollbar(
-        controller: _controller,
-        thumbVisibility: widget.children.length > 5,
-        child: ListView.separated(
-          controller: _controller,
-          primary: false,
-          shrinkWrap: true,
-          itemCount: widget.children.length,
-          separatorBuilder: (context, index) => const SizedBox(height: 8),
-          itemBuilder: (context, index) => widget.children[index],
-        ),
-      ),
+      child: list,
     );
   }
 }

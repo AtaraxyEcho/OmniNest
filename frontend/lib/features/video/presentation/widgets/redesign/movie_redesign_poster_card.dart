@@ -241,7 +241,8 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                               overflow: TextOverflow.ellipsis,
                               style: text.body(
                                 size: smallSize,
-                                color: palette.mutedForeground,
+                                // 深色模式用高对比次要色，浅壁纸上仍可读。
+                                color: palette.secondaryForeground,
                                 height: 14 / smallSize,
                               ),
                             ),
@@ -252,7 +253,10 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                               Flexible(
                                 child: Text(
                                   data.year,
-                                  style: text.mono(size: smallSize),
+                                  style: text.mono(
+                                    size: smallSize,
+                                    color: palette.secondaryForeground,
+                                  ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -267,7 +271,10 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                                 const SizedBox(width: 2),
                                 Text(
                                   data.rating!.toStringAsFixed(1),
-                                  style: text.mono(size: smallSize),
+                                  style: text.mono(
+                                    size: smallSize,
+                                    color: palette.secondaryForeground,
+                                  ),
                                 ),
                                 _MetaDot(palette: palette),
                               ],

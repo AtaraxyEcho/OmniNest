@@ -5,11 +5,13 @@ class _AdminNavItem extends StatefulWidget {
     required this.section,
     required this.selected,
     required this.closeOnSelect,
+    required this.onSectionChanged,
   });
 
   final AdminSection section;
   final bool selected;
   final bool closeOnSelect;
+  final ValueChanged<AdminSection> onSectionChanged;
 
   @override
   State<_AdminNavItem> createState() => _AdminNavItemState();
@@ -34,11 +36,12 @@ class _AdminNavItemState extends State<_AdminNavItem> {
         onExit: (_) => setState(() => _hovered = false),
         child: GestureDetector(
           onTap: () {
-            final router = GoRouter.of(context);
             if (widget.closeOnSelect) {
               Navigator.of(context).pop();
             }
-            router.go(widget.section.location);
+            if (!widget.selected) {
+              widget.onSectionChanged(widget.section);
+            }
           },
           child: AnimatedContainer(
             duration: MotionToken.fast,

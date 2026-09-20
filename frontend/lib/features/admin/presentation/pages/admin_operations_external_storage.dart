@@ -20,51 +20,35 @@ class AdminExternalStoragePage extends ConsumerWidget {
                       item.provider.toLowerCase().contains(query),
                 )
                 .toList();
-    return _PageEntrance(
+    final activeCount =
+        view.items.where((item) => item.status == 'ACTIVE').length;
+    return AdminSectionEntrance(
       children: [
         AdminPageHeader(
           title: l10n.adminExternalStorageIntegration,
           subtitle: l10n.adminExternalStorageSubtitle,
-        ),
-        const SizedBox(height: 24),
-        _MetricGrid(
-          children: [
-            AdminMetricCard(
-              title: l10n.adminConnections,
-              value: view.items.length.toString(),
-              detail: l10n.adminExternalSources,
-              icon: Icons.add_to_drive_outlined,
-            ),
-            AdminMetricCard(
-              title: l10n.adminEnabled,
-              value:
-                  view.items
-                      .where((item) => item.status == 'ACTIVE')
-                      .length
-                      .toString(),
-              detail: l10n.adminSyncable,
-              icon: Icons.link_rounded,
-              accent: adminColors.success,
-            ),
-            AdminMetricCard(
-              title: l10n.adminDisabled,
-              value:
-                  view.items
-                      .where((item) => item.status == 'DISABLED')
-                      .length
-                      .toString(),
-              detail: l10n.adminPausedSync,
-              icon: Icons.link_off_rounded,
-              accent: context.adminColors.tertiary,
-            ),
-          ],
+          // 统计内联到标题行，替代冗余的指标卡网格。
+          trailing: Wrap(
+            spacing: 8,
+            children: [
+              AdminMetricMiniStat(
+                label: l10n.adminConnections,
+                value: view.items.length.toString(),
+              ),
+              AdminMetricMiniStat(
+                label: l10n.adminEnabled,
+                value: activeCount.toString(),
+                color: adminColors.success,
+              ),
+            ],
+          ),
         ),
         const SizedBox(height: 24),
         AdminInfoPanel(
           title: l10n.adminOAuthAppsTitle,
           subtitle: l10n.adminOAuthAppsSubtitle,
           trailing: FilledButton.tonalIcon(
-            onPressed: () => _showOAuthAppDialog(context, ref),
+            onPressed: () => _showOAuthAppDialog(context),
             icon: const Icon(Icons.vpn_key_outlined),
             label: Text(l10n.adminSave),
           ),
@@ -168,100 +152,170 @@ class AdminExternalStoragePage extends ConsumerWidget {
   }
 }
 
-Future<void> _showOAuthAppDialog(BuildContext context, WidgetRef ref) async {
-  final l10n = AppLocalizations.of(context);
-  final codeController = TextEditingController(text: 'ONEDRIVE');
-  final clientIdController = TextEditingController();
-  final clientSecretController = TextEditingController();
-  final redirectController = TextEditingController();
-  var enabled = true;
-  await showDialog<void>(
+/// 后端已实现 OAuth 授权流的连接器类型；编码与账号侧外部存储对话框保持一致。
+const List<AppDropdownItem<String>> _oauthConnectorItems = [
+  AppDropdownItem<String>(value: 'ONEDRIVE', label: 'OneDrive'),
+  AppDropdownItem<String>(value: 'GDRIVE', label: 'Google Drive'),
+  AppDropdownItem<String>(value: 'DROPBOX', label: 'Dropbox'),
+];
+
+Future<void> _showOAuthAppDialog(BuildContext context) {
+  return showDialog<void>(
     context: context,
-    builder:
-        (dialogContext) => StatefulBuilder(
-          builder:
-              (context, setDialogState) => AlertDialog(
-                title: Text(l10n.adminOAuthAppsTitle),
-                content: SizedBox(
-                  width: 480,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextField(
-                        controller: codeController,
-                        decoration: InputDecoration(
-                          labelText: l10n.adminType,
-                          hintText: 'ONEDRIVE',
-                        ),
-                      ),
-                      TextField(
-                        controller: clientIdController,
-                        decoration: InputDecoration(
-                          labelText: l10n.adminExternalStorageClientId,
-                        ),
-                      ),
-                      TextField(
-                        controller: clientSecretController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          labelText: l10n.adminExternalStorageClientSecret,
-                        ),
-                      ),
-                      TextField(
-                        controller: redirectController,
-                        decoration: InputDecoration(
-                          labelText: l10n.adminExternalStorageRedirectUri,
-                        ),
-                      ),
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(l10n.adminEnabled),
-                        value: enabled,
-                        onChanged:
-                            (value) => setDialogState(() => enabled = value),
-                      ),
-                    ],
-                  ),
+    builder: (_) => const _OAuthAppDialog(),
+  );
+}
+
+/// OAuth 应用编辑对话框。
+///
+/// 控制器由 Dialog State 持有并在 dispose 释放。旧实现把控制器留在函数
+/// 作用域内、await showDialog 返回后立即 dispose，而对话框退场动画期间
+/// TextField 仍会访问控制器，触发 used after disposed 断言并连带布局溢出。
+class _OAuthAppDialog extends ConsumerStatefulWidget {
+  const _OAuthAppDialog();
+
+  @override
+  ConsumerState<_OAuthAppDialog> createState() => _OAuthAppDialogState();
+}
+
+class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
+  final _clientIdController = TextEditingController();
+  final _clientSecretController = TextEditingController();
+  final _redirectController = TextEditingController();
+  String _connectorCode = 'ONEDRIVE';
+  bool _enabled = true;
+  bool _saving = false;
+  String? _errorMessage;
+
+  @override
+  void dispose() {
+    _clientIdController.dispose();
+    _clientSecretController.dispose();
+    _redirectController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context);
+    setState(() {
+      _saving = true;
+      _errorMessage = null;
+    });
+    try {
+      await ref
+          .read(adminOperationsActionsProvider)
+          .saveConnectorOAuthApp(
+            connectorCode: _connectorCode,
+            clientId: _clientIdController.text.trim(),
+            clientSecret: _clientSecretController.text.trim(),
+            redirectUri: _redirectController.text.trim(),
+            enabled: _enabled,
+          );
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = describeUserFacingError(error, l10n: l10n).message;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return AlertDialog(
+      title: Text(l10n.adminOAuthAppsTitle),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              AppDropdown<String>(
+                value: _connectorCode,
+                items: _oauthConnectorItems,
+                onChanged:
+                    (value) =>
+                        setState(() => _connectorCode = value ?? 'ONEDRIVE'),
+                label: l10n.adminType,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _clientIdController,
+                decoration: InputDecoration(
+                  labelText: l10n.adminExternalStorageClientId,
+                  isDense: true,
                 ),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(dialogContext).pop(),
-                    child: Text(l10n.adminCancel),
-                  ),
-                  FilledButton(
-                    onPressed: () async {
-                      await ref
-                          .read(adminOperationsActionsProvider)
-                          .saveConnectorOAuthApp(
-                            connectorCode: codeController.text.trim(),
-                            clientId: clientIdController.text.trim(),
-                            clientSecret: clientSecretController.text.trim(),
-                            redirectUri: redirectController.text.trim(),
-                            enabled: enabled,
-                          );
-                      if (dialogContext.mounted) {
-                        Navigator.of(dialogContext).pop();
-                      }
-                    },
-                    child: Text(l10n.adminSave),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _clientSecretController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: l10n.adminExternalStorageClientSecret,
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _redirectController,
+                decoration: InputDecoration(
+                  labelText: l10n.adminExternalStorageRedirectUri,
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              // 紧凑单行开关，避免 SwitchListTile 在宽对话框中把标签与开关拉开。
+              Row(
+                children: [
+                  Expanded(child: Text(l10n.adminEnabled)),
+                  Switch(
+                    value: _enabled,
+                    onChanged: (value) => setState(() => _enabled = value),
                   ),
                 ],
               ),
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 14),
+                Text(
+                  _errorMessage!,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.adminColors.error,
+                  ),
+                ),
+              ],
+            ],
+          ),
         ),
-  );
-  codeController.dispose();
-  clientIdController.dispose();
-  clientSecretController.dispose();
-  redirectController.dispose();
+      ),
+      actions: [
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.of(context).pop(),
+          child: Text(l10n.adminCancel),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _submit,
+          child: Text(_saving ? l10n.adminSaving : l10n.adminSave),
+        ),
+      ],
+    );
+  }
 }
 
 class _MetricGrid extends StatelessWidget {
-  const _MetricGrid({required this.children, this.mainAxisExtent = 128});
+  const _MetricGrid({required this.children});
 
   final List<Widget> children;
 
   /// 单卡固定高度；内容较多的页面（如监控页含 supporting 行）可调大。
-  final double mainAxisExtent;
 
   @override
   Widget build(BuildContext context) {
@@ -275,7 +329,7 @@ class _MetricGrid extends StatelessWidget {
           crossAxisCount: columns,
           crossAxisSpacing: 16,
           mainAxisSpacing: 16,
-          mainAxisExtent: mainAxisExtent * textScale,
+          mainAxisExtent: 128 * textScale,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: children,
@@ -391,16 +445,6 @@ String _detailText(Map<String, dynamic> detail, AppLocalizations l10n) {
       .join('\n');
 }
 
-Color _usageColor(double value, AdminColors adminColors) {
-  if (value >= 85) {
-    return adminColors.error;
-  }
-  if (value >= 70) {
-    return adminColors.tertiary;
-  }
-  return adminColors.success;
-}
-
 Color _seriesColor(String metric, AdminColors adminColors) {
   return switch (metric) {
     'cpu' => adminColors.tertiary,
@@ -431,7 +475,8 @@ String _formatConfigValue(String key, String value) {
 Color _statusColor(String status, AdminColors adminColors) {
   return switch (status) {
     'UP' || 'ACTIVE' || 'COMPLETED' => adminColors.success,
-    'WARN' || 'FAILED' || 'DLQ' || 'DISABLED' => adminColors.error,
+    'WARN' => adminColors.warning,
+    'DOWN' || 'FAILED' || 'DLQ' || 'DISABLED' => adminColors.error,
     'RUNNING' => adminColors.info,
     _ => adminColors.tertiary,
   };

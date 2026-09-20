@@ -178,9 +178,12 @@ final adminOperationsActionsProvider = Provider<AdminOperationsActions>((ref) {
 });
 
 class AdminOperationsActions {
-  const AdminOperationsActions(this.ref);
+  AdminOperationsActions(this.ref);
 
   final Ref ref;
+
+  /// 同一批次内只允许一次存储相关 Provider 重建（Riverpod 3 禁止同帧重复 rebuild）。
+  static int _storageRelatedEpoch = 0;
 
   AdminOperationsApi get _api => ref.read(adminOperationsApiProvider);
 
@@ -257,7 +260,7 @@ class AdminOperationsActions {
   /// 重算所有用户的存储用量
   Future<int> recalculateStorage() async {
     final count = await _api.recalculateStorage();
-    ref.invalidate(adminStorageProvider);
+    scheduleStorageRelatedRefresh();
     return count;
   }
 
@@ -280,7 +283,7 @@ class AdminOperationsActions {
       mountKey: mountKey,
       relativeRoot: relativeRoot,
     );
-    _invalidateStorageRelated();
+    scheduleStorageRelatedRefresh();
     return location;
   }
 
@@ -293,19 +296,30 @@ class AdminOperationsActions {
       name: location.name,
       enabled: enabled,
     );
-    _invalidateStorageRelated();
+    scheduleStorageRelatedRefresh();
   }
 
   Future<void> deleteStorageLocation(String id) async {
     await _api.deleteStorageLocation(id);
-    _invalidateStorageRelated();
+    scheduleStorageRelatedRefresh();
   }
 
-  void _invalidateStorageRelated() {
-    ref.invalidate(adminStorageProvider);
-    // 同页库源区依赖位置列表与库源列表，挂载变更后必须同步失效。
-    ref.invalidate(videoStorageLocationsProvider);
-    ref.invalidate(videoLibrarySourcesProvider);
+  /// 合并失效存储相关 Provider。
+  ///
+  /// 创建挂载位置可能同时触发：控制器动作、向导回写、库源 Provider 的
+  /// ref.listen 级联。Riverpod 3 下同帧多次 invalidate FutureProvider 会抛
+  /// "rebuild multiple times in the same frame"。此处用 epoch + microtask
+  /// 把整批失效压成一次。
+  void scheduleStorageRelatedRefresh() {
+    final epoch = ++_storageRelatedEpoch;
+    scheduleMicrotask(() {
+      if (!ref.mounted || epoch != _storageRelatedEpoch) {
+        return;
+      }
+      ref.invalidate(adminStorageProvider);
+      ref.invalidate(videoStorageLocationsProvider);
+      ref.invalidate(videoLibrarySourcesProvider);
+    });
   }
 
   Future<void> updateExternalStorageStatus(String id, String status) async {

@@ -4,10 +4,10 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_operations_pages.dart';
-import 'package:omninest/features/admin/presentation/widgets/admin_common_widgets.dart';
+import 'package:omninest/features/admin/presentation/widgets/admin_redesign_components.dart';
 
 void main() {
-  testWidgets('监控列表使用独立限高滚动区域', (tester) async {
+  testWidgets('监控页组件健康与告警使用限高滚动，不再展示操作审计', (tester) async {
     tester.view.physicalSize = const Size(1920, 1080);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -61,16 +61,14 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.byType(Scrollbar), findsNWidgets(3));
-    for (final element in tester.elementList(find.byType(Scrollbar))) {
-      final size = tester.getSize(find.byWidget(element.widget));
-      expect(size.height, lessThanOrEqualTo(420));
-    }
+    // 操作审计已从监控页移除（日志中心已有），仅保留组件健康 + 告警两个滚动区。
+    expect(find.text('最近操作记录'), findsNothing);
+    expect(find.byType(Scrollbar), findsNWidgets(2));
     expect(tester.takeException(), isNull);
   });
 
   for (final scale in <double>[1.15, 1.3]) {
-    testWidgets('监控页指标卡在字体档位 $scale 下不溢出', (tester) async {
+    testWidgets('监控页仪表环在字体档位 $scale 下不溢出', (tester) async {
       tester.view.physicalSize = const Size(1920, 1080);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
@@ -99,7 +97,8 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(find.byType(AdminMetricCard), findsNWidgets(3));
+      // 重设计后：4 个仪表环（CPU/内存/磁盘/JVM）替代 3 张指标卡。
+      expect(find.byType(AdminGaugeRing), findsNWidgets(4));
       expect(tester.takeException(), isNull);
     });
   }

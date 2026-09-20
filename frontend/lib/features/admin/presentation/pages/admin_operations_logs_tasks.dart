@@ -447,15 +447,9 @@ class _TaskListTab extends StatelessWidget {
               rowCellsBuilder: (context, index) {
                 final item = page.items[index];
                 return [
-                  Text(
-                    item.taskType,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  Text(
+                  AdminCellText(item.taskType),
+                  AdminCellText(
                     item.description.isEmpty ? item.id : item.description,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                   SizedBox(
                     width: 110,
@@ -480,14 +474,9 @@ class _TaskListTab extends StatelessWidget {
                     label: taskStatusLabelFor(l10n, item.status),
                     tone: taskStatusToneFor(item.status),
                   ),
-                  Tooltip(
-                    message: item.errorSummary ?? '-',
-                    child: Text(
-                      item.errorSummary ?? '-',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                  AdminCellText(
+                    item.errorSummary ?? '-',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   Text(
                     item.updatedAt,
@@ -671,10 +660,8 @@ class _DlqTab extends StatelessWidget {
                 rowCellsBuilder: (context, index) {
                   final item = filtered[index];
                   return [
-                    Text(
+                    AdminCellText(
                       item.taskType,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     AdminStatusTag(
@@ -685,24 +672,20 @@ class _DlqTab extends StatelessWidget {
                       '${item.progress}%',
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
-                    Tooltip(
-                      message:
+                    // 错误摘要被截断时悬停展示全文并附带堆栈摘要；
+                    // 富文案交给 AdminCellText 统一挂载，避免嵌套双 Tooltip。
+                    AdminCellText(
+                      item.errorSummary ?? l10n.adminNoErrorSummary,
+                      style: Theme.of(context).textTheme.bodySmall,
+                      tooltipMessage:
                           (item.errorSummary ?? l10n.adminNoErrorSummary) +
                           ((item.stackSummary == null ||
                                   item.stackSummary!.isEmpty)
                               ? ''
                               : '\n\n${item.stackSummary}'),
-                      child: Text(
-                        item.errorSummary ?? l10n.adminNoErrorSummary,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
                     ),
-                    Text(
+                    AdminCellText(
                       item.updatedAt,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall,
                     ),
                   ];

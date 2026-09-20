@@ -88,17 +88,20 @@ class MovieRedesignPalette {
   );
 
   /// 暗色主题调色板。
+  ///
+  /// [mutedForeground] 从 #888 提亮到 #C8C6C0：深色模式下若页面叠在
+  /// 偏白壁纸上，过浅的灰字对比度不足，卡片副标题/元数据会看不清。
   static const MovieRedesignPalette dark = MovieRedesignPalette(
     background: Color(0xFF0D0D0D),
     card: Color(0xFF161616),
     foreground: Color(0xFFF0EFE9),
     muted: Color(0xFF1A1A1A),
-    mutedForeground: Color(0xFF888888),
+    mutedForeground: Color(0xFFC8C6C0),
     border: Color(0xFF2A2A2A),
     primary: Color(0xFFD95F3F),
     onPrimary: Color(0xFFFFFFFF),
     secondary: Color(0xFF1E1E1E),
-    secondaryForeground: Color(0xFFCCCCCC),
+    secondaryForeground: Color(0xFFE0DED8),
   );
 }
 
@@ -183,8 +186,9 @@ class MovieDetailTheme {
   static const Color background = Color(0xFF0A0A0A);
   static const Color surface = Color(0xFF111111);
   static const Color foreground = Color(0xFFF0F0F0);
-  static const Color secondaryText = Color(0xFFA0A0A0);
-  static const Color mutedText = Color(0xFF606060);
+  // 提亮次要/弱化文字：深色 UI 叠在浅色壁纸时避免灰字不可读。
+  static const Color secondaryText = Color(0xFFD4D2CC);
+  static const Color mutedText = Color(0xFFB0AEA8);
   static const Color border = Color(0xFF1E1E1E);
   static const Color accent = Color(0xFFC8A96E);
   static const Color statusPending = Color(0xFFFBBF24);

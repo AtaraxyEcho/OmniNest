@@ -176,36 +176,21 @@ class _AdminConfigPageState extends ConsumerState<AdminConfigPage> {
                 final item = pageItems[index];
                 final summary = _configValueSummary(l10n, item);
                 return [
-                  Text(
+                  AdminCellText(
                     _configGroup(l10n, item),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  Text(
+                  AdminCellText(
                     _configTitle(l10n, item),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  Text(
+                  AdminCellText(
                     _configDescription(l10n, item),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
-                  Tooltip(
-                    message: summary,
-                    child: Text(
-                      summary,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Text(
+                  AdminCellText(summary),
+                  AdminCellText(
                     item.updatedAt,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ];

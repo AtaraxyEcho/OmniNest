@@ -24,7 +24,7 @@ class TaskStatusWidget extends ConsumerWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: canAccessAdmin ? () => context.go('/admin') : null,
+        onTap: canAccessAdmin ? () => context.push('/admin') : null,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(

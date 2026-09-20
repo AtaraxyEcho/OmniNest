@@ -198,6 +198,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
       children: [
         _AdminTextAction(
           label: l10n.videoAdminLibrarySources,
+          // 库源管理在 Admin 控制台 storage 分区（/admin/:section 深链）。
           onTap: () => context.go('/admin/storage'),
         ),
         _AdminTextAction(

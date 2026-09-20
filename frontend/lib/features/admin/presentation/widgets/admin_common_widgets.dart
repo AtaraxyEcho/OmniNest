@@ -287,6 +287,7 @@ class AdminInfoPanel extends StatelessWidget {
     required this.subtitle,
     required this.children,
     this.trailing,
+    this.expandBody = false,
     super.key,
   });
 
@@ -295,44 +296,60 @@ class AdminInfoPanel extends StatelessWidget {
   final List<Widget> children;
   final Widget? trailing;
 
+  /// 为 true 时内容区吃满父级有界高度，children 中可使用 Expanded。
+  /// 仅用于已用 SizedBox/Expanded 限高的并排面板；页面纵向流式布局须保持 false。
+  final bool expandBody;
+
   @override
   Widget build(BuildContext context) {
+    final header = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                  fontSize: AppTypography.titleLarge,
+                  height: 28 / 20,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                subtitle,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontSize: AppTypography.bodyMedium,
+                  height: 20 / 13,
+                  color: context.adminColors.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (trailing != null) ...[const SizedBox(width: 16), trailing!],
+      ],
+    );
     return WorkbenchPanel(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
+          header,
+          const SizedBox(height: 22),
+          if (expandBody)
+            Expanded(
+              child: SizedBox(
+                width: double.infinity,
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontSize: AppTypography.titleLarge,
-                        height: 28 / 20,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      subtitle,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontSize: AppTypography.bodyMedium,
-                        height: 20 / 13,
-                        color: context.adminColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: children,
                 ),
               ),
-              if (trailing != null) ...[const SizedBox(width: 16), trailing!],
-            ],
-          ),
-          const SizedBox(height: 22),
-          ...children,
+            )
+          else
+            ...children,
         ],
       ),
     );

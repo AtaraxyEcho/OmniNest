@@ -560,7 +560,14 @@ class _PortalFocusPreviewCard extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: () => context.go(entry.route),
+        onTap: () {
+          // Admin 用 push 保留 Portal shell 状态（返回时 pop）。
+          if (entry.route == '/admin') {
+            context.push(entry.route);
+          } else {
+            context.go(entry.route);
+          }
+        },
         child: SizedBox(
           width: width,
           height: height,
@@ -680,7 +687,16 @@ class _PortalHeroActionButton extends StatelessWidget {
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
-        onTap: action.onTap ?? () => context.go(action.route!),
+        onTap:
+            action.onTap ??
+            () {
+              // Admin 用 push 保留 Portal shell 状态（返回时 pop）。
+              if (action.route == '/admin') {
+                context.push(action.route!);
+              } else {
+                context.go(action.route!);
+              }
+            },
         child: Container(
           height: compact ? 32 : 36,
           constraints: BoxConstraints(maxWidth: compact ? 116 : 168),

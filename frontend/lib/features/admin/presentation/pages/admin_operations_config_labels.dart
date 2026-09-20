@@ -74,8 +74,11 @@ int _configCategoryOrder(String category) {
     'storage' => 4,
     'upload' => 5,
     'security' => 6,
-    'weather' => 7,
-    _ => 8,
+    'auth' => 7,
+    'weather' => 8,
+    'backdrop' => 9,
+    'general' => 10,
+    _ => 11,
   };
 }
 
@@ -127,7 +130,10 @@ String _configGroup(AppLocalizations l10n, AdminConfigEntry entry) {
     'storage' => l10n.adminConfigGroupStorage,
     'upload' => l10n.adminConfigGroupUpload,
     'security' => l10n.adminConfigGroupSecurity,
+    'auth' => l10n.adminConfigGroupAuth,
     'weather' => l10n.adminConfigGroupWeather,
+    'backdrop' => l10n.adminConfigGroupBackdrop,
+    'general' => l10n.adminConfigGroupSystem,
     _ => l10n.adminConfigGroupOther,
   };
 }
@@ -261,6 +267,26 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
         'weather.qweather.key': l10n.adminConfigQWeatherPrivateKey,
         'weather.qweather.private-key': l10n.adminConfigQWeatherPrivateKey,
         'weather.location': l10n.adminConfigWeatherLocation,
+        'log-retention.enabled': l10n.adminConfigLogRetentionEnabled,
+        'log-retention.retention-days': l10n.adminConfigLogRetentionDays,
+        'log-retention.scan-paths': l10n.adminConfigLogRetentionPaths,
+        'photo.geo.offline': l10n.adminConfigPhotoGeoOffline,
+        'photo.geo.nominatim': l10n.adminConfigPhotoGeoNominatim,
+        'photo.geo.max-distance-km': l10n.adminConfigPhotoGeoMaxDistance,
+        'photo.geo.import.batch-size': l10n.adminConfigPhotoGeoImportBatchSize,
+        'photo.geo.import.auto': l10n.adminConfigPhotoGeoImportAuto,
+        'security.quarantine.retention-days':
+            l10n.adminConfigQuarantineRetentionDays,
+        'clamav.timeout-millis': l10n.adminConfigClamavTimeout,
+        'auth.two-factor.required-roles':
+            l10n.adminConfigTwoFactorRequiredRoles,
+        'backdrop.max-image-bytes': l10n.adminConfigBackdropMaxImageBytes,
+        'backdrop.max-video-bytes': l10n.adminConfigBackdropMaxVideoBytes,
+        'backdrop.max-assets-per-user': l10n.adminConfigBackdropMaxAssets,
+        'backdrop.upload.rate-per-hour': l10n.adminConfigBackdropUploadRate,
+        'app.version.latest': l10n.adminConfigAppVersionLatest,
+        'app.version.release-notes-url': l10n.adminConfigAppVersionReleaseNotes,
+        'app.version.download-url': l10n.adminConfigAppVersionDownloadUrl,
       }[entry.key];
   if (keyTitle != null) {
     return keyTitle;
@@ -398,6 +424,36 @@ String _configDescription(AppLocalizations l10n, AdminConfigEntry entry) {
         'music.qq.hosts': l10n.adminConfigHostSuffixesDescription,
         'music.platform.qq.playback-host-suffixes':
             l10n.adminConfigHostSuffixesDescription,
+        'log-retention.enabled': l10n.adminConfigLogRetentionEnabledDescription,
+        'log-retention.retention-days':
+            l10n.adminConfigLogRetentionDaysDescription,
+        'log-retention.scan-paths':
+            l10n.adminConfigLogRetentionPathsDescription,
+        'photo.geo.offline': l10n.adminConfigPhotoGeoOfflineDescription,
+        'photo.geo.nominatim': l10n.adminConfigPhotoGeoNominatimDescription,
+        'photo.geo.max-distance-km':
+            l10n.adminConfigPhotoGeoMaxDistanceDescription,
+        'photo.geo.import.batch-size':
+            l10n.adminConfigPhotoGeoImportBatchSizeDescription,
+        'photo.geo.import.auto': l10n.adminConfigPhotoGeoImportAutoDescription,
+        'security.quarantine.retention-days':
+            l10n.adminConfigQuarantineRetentionDaysDescription,
+        'clamav.timeout-millis': l10n.adminConfigClamavTimeoutDescription,
+        'auth.two-factor.required-roles':
+            l10n.adminConfigTwoFactorRequiredRolesDescription,
+        'backdrop.max-image-bytes':
+            l10n.adminConfigBackdropMaxImageBytesDescription,
+        'backdrop.max-video-bytes':
+            l10n.adminConfigBackdropMaxVideoBytesDescription,
+        'backdrop.max-assets-per-user':
+            l10n.adminConfigBackdropMaxAssetsDescription,
+        'backdrop.upload.rate-per-hour':
+            l10n.adminConfigBackdropUploadRateDescription,
+        'app.version.latest': l10n.adminConfigAppVersionLatestDescription,
+        'app.version.release-notes-url':
+            l10n.adminConfigAppVersionReleaseNotesDescription,
+        'app.version.download-url':
+            l10n.adminConfigAppVersionDownloadUrlDescription,
       }[entry.key];
   if (keyDescription != null) {
     return keyDescription;
@@ -423,7 +479,12 @@ String _configDescription(AppLocalizations l10n, AdminConfigEntry entry) {
     'config.integration.tmdb.accessToken' ||
     'config.integration.qweather.privateKey' =>
       l10n.adminConfigCredentialDescription,
-    _ => l10n.adminConfigProviderToggleDescription,
+    // 集成开关文案仅对布尔项成立；其余未映射项回退后端目录描述，
+    // 避免字符串/数字配置被误标为“控制是否允许使用此集成服务”。
+    _ =>
+      entry.valueType == 'BOOLEAN' || entry.description.isEmpty
+          ? l10n.adminConfigProviderToggleDescription
+          : entry.description,
   };
 }
 

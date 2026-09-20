@@ -49,7 +49,8 @@ class AppThemePalette {
     surfaceContainerHigh: Color(0xFF272C28),
     surfaceContainerHighest: Color(0xFF313733),
     onSurface: Color(0xFFE7ECE8),
-    onSurfaceVariant: Color(0xFFAAB3AC),
+    // 深色模式次要文字：从 #AAB3AC 提亮，降低灰字在深色卡片/浅壁纸场景下的不可读风险。
+    onSurfaceVariant: Color(0xFFD2D8D4),
     primary: Color(0xFF79D6C8),
     primaryContainer: Color(0xFF1C5049),
     onPrimary: Color(0xFF003730),

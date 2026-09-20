@@ -3275,7 +3275,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminConfigGroupSecurity => '安全';
 
   @override
+  String get adminConfigGroupAuth => '认证';
+
+  @override
   String get adminConfigGroupWeather => '天气服务';
+
+  @override
+  String get adminConfigGroupBackdrop => '背景库';
+
+  @override
+  String get adminConfigGroupSystem => '系统';
 
   @override
   String get adminConfigGroupOther => '其他设置';
@@ -3531,6 +3540,115 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminConfigLogRetentionPaths => '日志清理扫描目录';
+
+  @override
+  String get adminConfigLogRetentionEnabledDescription =>
+      '启用后按保留天数自动清理日志归档与临时文件。';
+
+  @override
+  String get adminConfigLogRetentionDaysDescription => '日志归档与临时文件的最长保留天数。';
+
+  @override
+  String get adminConfigLogRetentionPathsDescription =>
+      '逗号分隔的运行目录相对路径，仅这些目录参与保留清理。';
+
+  @override
+  String get adminConfigPhotoGeoOffline => '离线逆地理编码';
+
+  @override
+  String get adminConfigPhotoGeoOfflineDescription =>
+      '启用后使用本地 GeoNames 数据把照片坐标解析为地名。';
+
+  @override
+  String get adminConfigPhotoGeoNominatim => '在线地理编码回退';
+
+  @override
+  String get adminConfigPhotoGeoNominatimDescription =>
+      '离线未命中时是否回退到 Nominatim 在线服务。';
+
+  @override
+  String get adminConfigPhotoGeoMaxDistance => '最近城市最大距离';
+
+  @override
+  String get adminConfigPhotoGeoMaxDistanceDescription =>
+      '离线匹配最近城市的可信距离上限（公里，0 表示不限制）。';
+
+  @override
+  String get adminConfigPhotoGeoImportBatchSize => 'GeoNames 导入批量';
+
+  @override
+  String get adminConfigPhotoGeoImportBatchSizeDescription =>
+      'GeoNames 离线数据导入时每批写入的行数。';
+
+  @override
+  String get adminConfigPhotoGeoImportAuto => 'GeoNames 自动导入';
+
+  @override
+  String get adminConfigPhotoGeoImportAutoDescription =>
+      '启动时无已发布数据集且文件齐全时自动触发 GeoNames 导入。';
+
+  @override
+  String get adminConfigQuarantineRetentionDays => '隔离区保留天数';
+
+  @override
+  String get adminConfigQuarantineRetentionDaysDescription =>
+      '病毒扫描隔离对象的保留天数，到期后自动清理。';
+
+  @override
+  String get adminConfigClamavTimeout => '扫描超时';
+
+  @override
+  String get adminConfigClamavTimeoutDescription => '单文件安全扫描时限（毫秒），超时视为无法完成扫描。';
+
+  @override
+  String get adminConfigTwoFactorRequiredRoles => '强制两步验证角色';
+
+  @override
+  String get adminConfigTwoFactorRequiredRolesDescription =>
+      '逗号分隔的角色编码列表，这些角色必须开启两步验证；留空表示全员自愿。';
+
+  @override
+  String get adminConfigBackdropMaxImageBytes => '背景图片大小上限';
+
+  @override
+  String get adminConfigBackdropMaxImageBytesDescription => '背景图片单文件大小上限（字节）。';
+
+  @override
+  String get adminConfigBackdropMaxVideoBytes => '背景视频大小上限';
+
+  @override
+  String get adminConfigBackdropMaxVideoBytesDescription => '背景视频单文件大小上限（字节）。';
+
+  @override
+  String get adminConfigBackdropMaxAssets => '背景素材数量上限';
+
+  @override
+  String get adminConfigBackdropMaxAssetsDescription => '每用户可保留的背景素材数量上限。';
+
+  @override
+  String get adminConfigBackdropUploadRate => '背景上传频率上限';
+
+  @override
+  String get adminConfigBackdropUploadRateDescription => '每用户每小时允许的背景素材上传次数。';
+
+  @override
+  String get adminConfigAppVersionLatest => '客户端最新版本号';
+
+  @override
+  String get adminConfigAppVersionLatestDescription =>
+      '客户端最新版本号，留空表示所有客户端已是最新。';
+
+  @override
+  String get adminConfigAppVersionReleaseNotes => '发布说明地址';
+
+  @override
+  String get adminConfigAppVersionReleaseNotesDescription => '当前版本发布说明页面的链接。';
+
+  @override
+  String get adminConfigAppVersionDownloadUrl => '安装包下载地址';
+
+  @override
+  String get adminConfigAppVersionDownloadUrlDescription => '客户端安装包下载页面的链接。';
 
   @override
   String get adminConfigMediaAutoImportDescription => '启用后可按媒体模块规则自动接收已发现的影片。';

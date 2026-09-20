@@ -6,7 +6,6 @@ import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/admin/application/admin_console_controller.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
-import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
@@ -124,7 +123,7 @@ void main() {
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             locale: const Locale('zh'),
-            home: const AdminDashboardPage(section: AdminSection.tasks),
+            home: const AdminDashboardPage(),
           ),
         ),
       );
