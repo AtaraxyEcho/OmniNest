@@ -13,6 +13,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
@@ -101,6 +102,31 @@ class GlobalExceptionHandlerTest {
             logger.detachAppender(appender);
             logger.setLevel(originalLevel);
         }
+    }
+
+    @Test
+    @DisplayName("缺失必填请求参数返回 400 而非 500")
+    void handleMissingParameterReturns400() {
+        var exception = new MissingServletRequestParameterException("q", "String");
+
+        var response = handler.handleMissingParameter(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR.getCode());
+        Assertions.assertThat(response.getBody().getMessage()).contains("q");
+    }
+
+    @Test
+    @DisplayName("日期时间解析失败返回 400 而非 500")
+    void handleDateTimeParseReturns400() {
+        var exception = new java.time.format.DateTimeParseException("Text could not be parsed", "bad", 0);
+
+        var response = handler.handleDateTimeParse(exception);
+
+        Assertions.assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        Assertions.assertThat(response.getBody().getCode())
+                .isEqualTo(ErrorCode.PARAM_ERROR.getCode());
     }
 
     @Test

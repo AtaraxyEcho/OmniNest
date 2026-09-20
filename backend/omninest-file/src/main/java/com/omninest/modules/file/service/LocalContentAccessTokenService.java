@@ -18,7 +18,11 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class LocalContentAccessTokenService {
-    private static final Duration TOKEN_TTL = Duration.ofMinutes(15);
+    /**
+     * 本地内容令牌有效期。与 MinIO 预签名一致取 2 小时；令牌为进程内
+     * Caffeine 缓存，后端重启后旧令牌失效由前端重签闭环兜底。
+     */
+    private static final Duration TOKEN_TTL = Duration.ofHours(2);
     private static final int TOKEN_BYTES = 32;
     private static final long MAXIMUM_TOKENS = 20000;
 

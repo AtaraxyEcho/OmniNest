@@ -25,7 +25,11 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class MinioFileContentProvider implements FileContentProvider {
-    private static final Duration DOWNLOAD_URL_TTL = Duration.ofMinutes(15);
+    /**
+     * 封面/缩略类派生资产的预签名有效期。取 2 小时以覆盖长会话场景；
+     * 前端另有失败重签闭环兜底，不依赖无限延长。
+     */
+    private static final Duration DOWNLOAD_URL_TTL = Duration.ofHours(2);
     private static final String PROVIDER_TYPE = "MINIO";
 
     private final FileObjectRepository fileObjectRepository;

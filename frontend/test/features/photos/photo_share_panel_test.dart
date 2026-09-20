@@ -113,7 +113,7 @@ void main() {
     expect(find.text('Motion Shot'), findsOneWidget);
     expect(find.text('Bern'), findsNWidgets(2));
     // 链接基于前端站点地址（默认退化 origin），而非 API 地址；复制为手动操作。
-    expect(find.text('http://localhost:8080/share/tok-1'), findsOneWidget);
+    expect(find.text('http://localhost:8080/#/shared/photos/item/tok-1'), findsOneWidget);
     // 链接区复制 + 渠道宫格「复制链接」共用「复制」文案。
     expect(find.text('复制'), findsWidgets);
     expect(find.text('✓ 已复制'), findsNothing);
@@ -198,7 +198,7 @@ void main() {
     await tester.tap(find.text('二维码'));
     await tester.pumpAndSettle();
     expect(find.byType(QrImageView), findsOneWidget);
-    expect(find.text('http://localhost:8080/share/tok-1'), findsWidgets);
+    expect(find.text('http://localhost:8080/#/shared/photos/item/tok-1'), findsWidgets);
   }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets('关闭包含位置信息开关后携带参数重建链接', (tester) async {

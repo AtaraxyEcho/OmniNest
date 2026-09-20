@@ -105,4 +105,16 @@ class MeApi {
   Future<void> revokeSession(String sessionId) async {
     await _client.dio.delete<void>('/me/sessions/$sessionId');
   }
+
+  /// 获取服务器配置的对外 Web 基址（分享链接用）；未配置时返回 null。
+  Future<String?> webShareBaseUrl() async {
+    final response = await _client.dio.get<Map<String, dynamic>>(
+      '/me/web-share-base-url',
+    );
+    final data = response.data?['data'];
+    if (data is String && data.isNotEmpty) {
+      return data;
+    }
+    return null;
+  }
 }

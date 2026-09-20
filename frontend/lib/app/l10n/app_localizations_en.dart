@@ -7790,8 +7790,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosCreateLink => 'Create Link';
 
   @override
-  String photosShareLinkCreated(Object token) {
-    return 'Share link created: $token';
+  String photosShareLinkCreated(Object link) {
+    return 'Share link created: $link';
   }
 
   @override

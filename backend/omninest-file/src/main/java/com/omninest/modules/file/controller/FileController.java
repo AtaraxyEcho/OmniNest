@@ -9,6 +9,7 @@ import com.omninest.modules.file.dto.AcceptShareRequest;
 import com.omninest.modules.file.dto.ShareAccessSessionDto;
 import com.omninest.modules.file.dto.ShareAuthorizationRequest;
 import com.omninest.modules.file.dto.BatchDownloadRequest;
+import com.omninest.modules.file.dto.BatchDownloadUrlRequest;
 import com.omninest.modules.file.dto.BatchFileOperationRequest;
 import com.omninest.modules.file.dto.BatchMoveFileNodeRequest;
 import com.omninest.modules.file.dto.CompleteFileUploadPartRequest;
@@ -402,6 +403,25 @@ public class FileController {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         fileManagerService.recordAccess(ownerUserId, fileId);
         return ApiResponse.success(fileQueryService.createDownloadUrl(ownerUserId, fileId));
+    }
+
+    /**
+     * 批量签发短期下载地址（封面/缩略等派生资产的前端重签场景）。
+     *
+     * <p>仅处理当前用户拥有的 FILE 节点；缺失、已删除或非 FILE 节点静默
+     * 跳过，不进入结果。不记录访问流水，避免重签风暴污染最近访问。</p>
+     */
+    @Operation(summary = "批量创建下载链接", description = "为当前用户拥有的文件批量签发短期下载链接")
+    @PostMapping("/api/v1/files/download-urls")
+    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    ApiResponse<List<FileDownloadUrlDto>> createDownloadUrls(
+            @Valid @RequestBody BatchDownloadUrlRequest request) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        List<UUID> fileIds = request.fileIds().stream()
+                .map(UUID::fromString)
+                .toList();
+        return ApiResponse.success(
+                List.copyOf(fileQueryService.createDownloadUrls(ownerUserId, fileIds).values()));
     }
 
     @Operation(summary = "列出共享给我的文件", description = "列出其他用户共享给当前用户的文件")

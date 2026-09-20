@@ -8,6 +8,7 @@ import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.service.CurrentUserService;
 import java.util.List;
 import com.omninest.modules.user.dto.ChangePasswordRequest;
+import com.omninest.modules.user.service.WebShareBaseUrlService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -34,12 +35,26 @@ import org.springframework.web.multipart.MultipartFile;
 public class MeController {
     private final CurrentUserService currentUserService;
     private final CurrentUserContext currentUserContext;
+    private final WebShareBaseUrlService webShareBaseUrlService;
 
     @Operation(summary = "获取当前用户信息", description = "返回当前登录用户的基本信息")
     @GetMapping("/api/v1/me")
     @PreAuthorize("hasAuthority('" + Permissions.PROFILE_READ + "')")
     ApiResponse<AuthUserDto> me() {
         return ApiResponse.success(currentUserService.currentUser());
+    }
+
+    /**
+     * 获取分享链接基址。
+     *
+     * <p>返回部署者配置的对外 Web 地址；未配置时 data 为空，客户端按
+     * 平台语义回退（Web 用当前 origin，原生端退化为 API origin 并提示）。</p>
+     */
+    @Operation(summary = "获取分享链接基址", description = "返回服务器配置的对外 Web 地址，未配置时为空")
+    @GetMapping("/api/v1/me/web-share-base-url")
+    @PreAuthorize("hasAuthority('" + Permissions.PROFILE_READ + "')")
+    ApiResponse<String> webShareBaseUrl() {
+        return ApiResponse.success(webShareBaseUrlService.resolveShareBaseUrl());
     }
 
     @PutMapping("/api/v1/me/password")

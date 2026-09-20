@@ -13,6 +13,8 @@ import org.springframework.security.authorization.AuthorizationDeniedException;
 import org.springframework.validation.BindException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import java.time.format.DateTimeParseException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
@@ -83,6 +85,21 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(ErrorCode.PARAM_ERROR, "参数 " + exception.getName() + " 格式不正确"));
     }
 
+    // 缺失必填 @RequestParam 落入通用 Exception 处理器返回 500；按参数错误返回 400。
+    @ExceptionHandler(MissingServletRequestParameterException.class)
+    ResponseEntity<ApiResponse<Void>> handleMissingParameter(MissingServletRequestParameterException exception) {
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(ErrorCode.PARAM_ERROR, "缺少必填参数: " + exception.getParameterName()));
+    }
+
+    // FastJson 按全局日期格式解析失败时抛出 DateTimeParseException，属请求体格式问题而非系统故障。
+    @ExceptionHandler(DateTimeParseException.class)
+    ResponseEntity<ApiResponse<Void>> handleDateTimeParse(DateTimeParseException exception) {
+        log.warn("日期时间格式解析失败: {}", exception.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ApiResponse.error(ErrorCode.PARAM_ERROR, "日期时间格式不正确，支持 yyyy-MM-dd HH:mm:ss 与 ISO-8601"));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException exception) {
         log.warn("请求体解析异常: {}", exception.getMessage());
@@ -118,7 +135,7 @@ public class GlobalExceptionHandler {
     }
 
     // API 路径缺失是真实的接口契约信号，保持 WARN；
-    // 静态资源缺失（webapp 未部署、扫描器探测）降为 DEBUG，避免污染错误日志。
+    // 静态资源缺失（扫描器探测等）降为 DEBUG，避免污染错误日志。
     private void logUnknownPath(String method, String path) {
         String normalized = path == null ? "" : path;
         if (normalized.startsWith("/api/") || normalized.startsWith("api/")) {

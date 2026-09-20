@@ -1,9 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/environment_providers.dart';
+import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/files/application/share_link_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -43,6 +45,26 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
   bool _showOptions = false;
   bool _enablePassword = false;
   _PasswordMode _passwordMode = _PasswordMode.random;
+
+  /// 分享基址（服务器下发优先）；打开面板时解析一次。
+  String? _shareBaseUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_resolveShareBaseUrl());
+  }
+
+  Future<void> _resolveShareBaseUrl() async {
+    try {
+      final baseUrl = await ref.read(webShareBaseUrlResolverProvider).resolve();
+      if (mounted) {
+        setState(() => _shareBaseUrl = baseUrl);
+      }
+    } on Exception {
+      // 环境未配置等异常由分享创建流程暴露，这里保持占位。
+    }
+  }
 
   @override
   void dispose() {
@@ -288,8 +310,9 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
 
   Widget _buildShareInfo(FileShareLink share) {
     final l10n = AppLocalizations.of(context);
-    final baseUrl = ref.read(webShareBaseUrlProvider);
-    final shareUrl = '$baseUrl/#/s/${share.shareCode}';
+    // 基址解析完成前先占位（复制按钮同时禁用）。
+    final baseUrl = _shareBaseUrl;
+    final shareUrl = baseUrl == null ? null : '$baseUrl/#/s/${share.shareCode}';
     final hasPassword = share.generatedPassword != null;
 
     return Column(
@@ -315,7 +338,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                 children: [
                   Expanded(
                     child: Text(
-                      shareUrl,
+                      shareUrl ?? '…',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
@@ -326,7 +349,10 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
                     ),
                   ),
                   InkWell(
-                    onTap: () => _copyToClipboard(shareUrl),
+                    onTap:
+                        shareUrl == null
+                            ? null
+                            : () => _copyToClipboard(shareUrl),
                     borderRadius: BorderRadius.circular(6),
                     child: Padding(
                       padding: const EdgeInsets.all(4),
@@ -418,17 +444,18 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
           spacing: 8,
           runSpacing: 4,
           children: [
-            if (hasPassword)
+            if (hasPassword && shareUrl != null)
               _buildCapsuleButton(
                 l10n.filesCopyLinkWithPassword,
                 Icons.copy,
                 () => _copyToClipboard(shareUrl),
               ),
-            _buildCapsuleButton(
-              hasPassword ? l10n.filesCopyLinkOnly : l10n.filesCopyLink,
-              Icons.link,
-              () => _copyToClipboard(shareUrl),
-            ),
+            if (shareUrl != null)
+              _buildCapsuleButton(
+                hasPassword ? l10n.filesCopyLinkOnly : l10n.filesCopyLink,
+                Icons.link,
+                () => _copyToClipboard(shareUrl),
+              ),
           ],
         ),
       ],

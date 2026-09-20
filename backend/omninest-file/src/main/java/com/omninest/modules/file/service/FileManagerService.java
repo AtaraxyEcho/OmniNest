@@ -315,7 +315,7 @@ public class FileManagerService {
         share.setResourceType(resourceType);
         share.setResourceId(node.getId());
         share.setTokenHash(sha256(rawToken));
-        share.setExpiresAt(request.expiresAt());
+        share.setExpiresAt(request.parsedExpiresAt());
         share.setMaxAccessCount(request.maxAccessCount());
 
         String generatedPassword = null;

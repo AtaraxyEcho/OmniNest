@@ -215,6 +215,25 @@ class FileManagerServiceTest {
     }
 
     @Test
+    void shareExpiresAtAcceptsIso8601AndLegacyWireFormat() {
+        // ISO-8601 即时区（前端 toIso8601String / Swagger 契约形态）
+        CreateShareLinkRequest iso = new CreateShareLinkRequest(
+                FILE_ID, "FILE", null, false, "2026-09-26T00:00:00Z", null, null);
+        assertThat(iso.parsedExpiresAt()).isEqualTo(Instant.parse("2026-09-26T00:00:00Z"));
+
+        // FastJson 全局线格式 yyyy-MM-dd HH:mm:ss（按 UTC）
+        CreateShareLinkRequest legacy = new CreateShareLinkRequest(
+                FILE_ID, "FILE", null, false, "2026-09-26 00:00:00", null, null);
+        assertThat(legacy.parsedExpiresAt()).isEqualTo(Instant.parse("2026-09-26T00:00:00Z"));
+
+        // 空白与 null 容忍
+        assertThat(new CreateShareLinkRequest(FILE_ID, "FILE", null, false, "  ", null, null)
+                .parsedExpiresAt()).isNull();
+        assertThat(new CreateShareLinkRequest(FILE_ID, "FILE", null, false, null, null, null)
+                .parsedExpiresAt()).isNull();
+    }
+
+    @Test
     void createShareWithCustomPasswordDoesNotReturnGeneratedPassword() {
         FileNode file = node("doc.pdf", "application/pdf", 1024);
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))

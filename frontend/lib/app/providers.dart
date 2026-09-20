@@ -40,6 +40,40 @@ final apiClientProvider = Provider<ApiClient>((ref) {
   );
 });
 
+/// 分享链接基址解析器。
+///
+/// 每次解析都实时读取服务器下发的对外 Web 地址（omninest.setup.web-base-url），
+/// 配置热修改后下一次分享创建即生效；未配置或读取失败时按平台语义回退
+/// （Web 用浏览器当前 origin，原生端退化为 API origin，仅本机可用）。
+/// 不做会话级缓存，避免未配置的空结果或旧配置被长期固定。
+class WebShareBaseUrlResolver {
+  const WebShareBaseUrlResolver(this._ref);
+
+  final Ref _ref;
+
+  Future<String> resolve() async {
+    final environment = _ref.read(appEnvironmentProvider);
+    if (environment == null) {
+      throw StateError('服务器地址未配置');
+    }
+    try {
+      final serverBase = await _ref.read(meApiProvider).webShareBaseUrl();
+      if (serverBase != null && serverBase.isNotEmpty) {
+        return serverBase;
+      }
+    } on Exception {
+      // 服务器读取失败不阻断分享：回退客户端推导基址。
+    }
+    return environment.effectiveWebBaseUrl;
+  }
+}
+
+final webShareBaseUrlResolverProvider = Provider<WebShareBaseUrlResolver>((
+  ref,
+) {
+  return WebShareBaseUrlResolver(ref);
+});
+
 final userPreferencesApiProvider = Provider<UserPreferencesApi>((ref) {
   return UserPreferencesApi(ref.watch(apiClientProvider));
 });

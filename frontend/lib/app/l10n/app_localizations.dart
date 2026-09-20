@@ -14294,8 +14294,8 @@ abstract class AppLocalizations {
   /// No description provided for @photosShareLinkCreated.
   ///
   /// In en, this message translates to:
-  /// **'Share link created: {token}'**
-  String photosShareLinkCreated(Object token);
+  /// **'Share link created: {link}'**
+  String photosShareLinkCreated(Object link);
 
   /// No description provided for @photosShareLinkFailed.
   ///

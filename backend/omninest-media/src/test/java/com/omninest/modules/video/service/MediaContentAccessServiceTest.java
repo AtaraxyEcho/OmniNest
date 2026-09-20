@@ -1,6 +1,7 @@
 package com.omninest.modules.video.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -13,8 +14,10 @@ import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.service.FileContentAccessService;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.modules.video.domain.ContentAsset;
+import com.omninest.modules.video.domain.MediaMovie;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.repository.ContentAssetRepository;
+import com.omninest.modules.video.repository.MediaMovieRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.time.Instant;
@@ -33,6 +36,7 @@ class MediaContentAccessServiceTest {
 
     private final MediaVideoItemRepository videoItemRepository = mock(MediaVideoItemRepository.class);
     private final MediaTvSeriesRepository seriesRepository = mock(MediaTvSeriesRepository.class);
+    private final MediaMovieRepository movieRepository = mock(MediaMovieRepository.class);
     private final MediaLibraryAccessService libraryAccessService = mock(MediaLibraryAccessService.class);
     private final FileContentAccessService fileContentAccessService = mock(FileContentAccessService.class);
     private final MediaPlaybackTokenService tokenService = mock(MediaPlaybackTokenService.class);
@@ -40,6 +44,7 @@ class MediaContentAccessServiceTest {
     private final MediaContentAccessService service = new MediaContentAccessService(
             videoItemRepository,
             seriesRepository,
+            movieRepository,
             libraryAccessService,
             fileContentAccessService,
             tokenService,
@@ -82,6 +87,27 @@ class MediaContentAccessServiceTest {
         assertThatThrownBy(() -> service.openVideoAsset("token", ITEM_ID, FILE_ID))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->
                         assertThat(exception.errorCode()).isEqualTo(ErrorCode.FORBIDDEN));
+    }
+
+    @Test
+    void legacyMetadataPosterBypassesContentAssetLinkage() {
+        MediaVideoItem item = item();
+        MediaMovie movie = new MediaMovie();
+        movie.setId(MOVIE_ID);
+        movie.setOwnerUserId(OWNER_ID);
+        movie.setPosterFileId(FILE_ID);
+        when(tokenService.requireGrant("token", ITEM_ID)).thenReturn(new MediaPlaybackTokenService.MediaGrant(
+                USER_ID,
+                "VIDEO_ITEM",
+                ITEM_ID,
+                Instant.now().plusSeconds(60)
+        ));
+        when(videoItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(movieRepository.findById(MOVIE_ID)).thenReturn(Optional.of(movie));
+        when(contentAssetRepository.findByOwnerUserIdAndFileNodeId(OWNER_ID, FILE_ID)).thenReturn(List.of());
+
+        assertThatCode(() -> service.openVideoAsset("token", ITEM_ID, FILE_ID))
+                .doesNotThrowAnyException();
     }
 
     @Test

@@ -8,9 +8,11 @@ import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.FileContentAccessService;
 import com.omninest.modules.media.domain.ResourceType;
 import com.omninest.modules.video.domain.ContentAsset;
+import com.omninest.modules.video.domain.MediaMovie;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.repository.ContentAssetRepository;
+import com.omninest.modules.video.repository.MediaMovieRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.util.Locale;
@@ -30,6 +32,7 @@ public class MediaContentAccessService {
 
     private final MediaVideoItemRepository videoItemRepository;
     private final MediaTvSeriesRepository tvSeriesRepository;
+    private final MediaMovieRepository movieRepository;
     private final MediaLibraryAccessService libraryAccessService;
     private final FileContentAccessService fileContentAccessService;
     private final MediaPlaybackTokenService tokenService;
@@ -122,6 +125,11 @@ public class MediaContentAccessService {
                 .stream()
                 .anyMatch(asset -> belongsToVideo(asset, item));
         if (!linked) {
+            // 元数据编辑直写的 legacy posterFileId/backdropFileId 未登记
+            // ContentAsset，但归属同一影片所有者，允许命中以免封面永久 403。
+            linked = matchesVideoLegacyArtwork(item, fileNodeId);
+        }
+        if (!linked) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "媒体令牌不能访问其他影片的派生资源");
         }
         return fileContentAccessService.openAuthorizedMediaStream(fileNodeId, MediaContentPurpose.MEDIA_ASSET);
@@ -137,9 +145,41 @@ public class MediaContentAccessService {
                 .anyMatch(asset -> ResourceType.TV_SERIES.getValue().equals(asset.getResourceType())
                         && seriesId.equals(asset.getResourceId()));
         if (!linked) {
+            // legacy 字段回退同影片：允许系列自身直写的海报/背景图。
+            linked = matchesLegacyArtwork(series, fileNodeId);
+        }
+        if (!linked) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "媒体令牌不能访问其他系列的派生资源");
         }
         return fileContentAccessService.openAuthorizedMediaStream(fileNodeId, MediaContentPurpose.MEDIA_ASSET);
+    }
+
+    /**
+     * 判断文件节点是否命中影片条目关联的 legacy 海报/背景图直写字段。
+     *
+     * <p>条目本身不承载海报字段，按电影、系列的 legacy 字段逐一回退。</p>
+     */
+    private boolean matchesVideoLegacyArtwork(MediaVideoItem item, UUID fileNodeId) {
+        if (item.getMovieId() != null
+                && movieRepository.findById(item.getMovieId())
+                        .map(movie -> matchesLegacyArtwork(movie, fileNodeId))
+                        .orElse(false)) {
+            return true;
+        }
+        return item.getSeriesId() != null
+                && tvSeriesRepository.findById(item.getSeriesId())
+                        .map(series -> matchesLegacyArtwork(series, fileNodeId))
+                        .orElse(false);
+    }
+
+    /** 判断文件节点是否为电影自身 legacy 字段登记的海报或背景图。 */
+    private boolean matchesLegacyArtwork(MediaMovie movie, UUID fileNodeId) {
+        return fileNodeId.equals(movie.getPosterFileId()) || fileNodeId.equals(movie.getBackdropFileId());
+    }
+
+    /** 判断文件节点是否为系列自身 legacy 字段登记的海报或背景图。 */
+    private boolean matchesLegacyArtwork(MediaTvSeries series, UUID fileNodeId) {
+        return fileNodeId.equals(series.getPosterFileId()) || fileNodeId.equals(series.getBackdropFileId());
     }
 
     private boolean belongsToVideo(ContentAsset asset, MediaVideoItem item) {

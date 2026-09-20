@@ -27,14 +27,15 @@ void bootstrap(Widget Function(AppBootstrapData data) builder) {
   }
 
   FlutterError.onError = (details) {
-    if (impl.isEngineNoise(details.exception)) {
+    if (_isBootstrapRouteNoise(details.exception) ||
+        impl.isEngineNoise(details.exception)) {
       return;
     }
     FlutterError.presentError(details);
   };
 
   PlatformDispatcher.instance.onError = (error, stackTrace) {
-    if (impl.isEngineNoise(error)) {
+    if (_isBootstrapRouteNoise(error) || impl.isEngineNoise(error)) {
       return true;
     }
     FlutterError.reportError(
@@ -107,6 +108,15 @@ void _reportRecoverableBootstrapError(Object error, StackTrace stackTrace) {
   );
 }
 
+/// 启动过渡期的路由断言噪音：Flutter 3.47 起引擎把 URL hash 写入
+/// defaultRouteName（Web 冷启动带 /#/portal 时为 '/portal'），过渡期
+/// _BootstrapStatusApp 的普通 MaterialApp 无该命名路由，框架在 debug
+/// 下抛出 "Could not navigate to initial route" 断言后回退 '/'。
+/// 真实路由由 go_router 承接，此噪音可安全忽略（release 本就静默）。
+bool _isBootstrapRouteNoise(Object error) {
+  return error.toString().contains('Could not navigate to initial route');
+}
+
 class AppBootstrapGate extends StatefulWidget {
   const AppBootstrapGate({
     required this.builder,
@@ -176,16 +186,6 @@ class _BootstrapStatusApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       initialRoute: '/',
-      // Flutter 3.47 起引擎会把 URL hash 写入 defaultRouteName（Web 冷启动
-      // 带 /#/portal 之类地址时为 '/portal'），该值会覆盖 initialRoute 并因
-      // 此处无对应命名路由抛出断言。显式固定初始路由为 '/' 消除该噪音。
-      onGenerateInitialRoutes:
-          (String initialRoute) => <Route<Object>>[
-            MaterialPageRoute<Object>(
-              builder:
-                  (_) => _BootstrapStatusBody(error: error, onRetry: onRetry),
-            ),
-          ],
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OmniNestTheme.light(),

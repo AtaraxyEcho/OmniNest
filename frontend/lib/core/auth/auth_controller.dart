@@ -7,7 +7,6 @@ import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/core/auth/auth_client.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
-import 'package:omninest/core/network/retry_interceptor.dart';
 import 'package:omninest/core/security/offline_data_lifecycle.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
@@ -38,13 +37,6 @@ final authClientProvider = Provider<AuthClient>((ref) {
       validateStatus: (status) => status != null && status < 500,
     ),
   );
-  // 认证请求是恢复会话的关键路径，连接层故障时按幂等键安全重试一次。
-  final retryInterceptor = RetryInterceptor(
-    maxRetries: 1,
-    baseDelay: const Duration(milliseconds: 800),
-  );
-  dio.interceptors.add(retryInterceptor);
-  retryInterceptor.setDio(dio);
   return AuthClient(dio);
 });
 
@@ -112,16 +104,16 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     return const AuthSessionState.unauthenticated();
   }
 
-  /// 恢复期瞬时故障单次退避重试：启动阶段网络栈常未就绪，直接按
-  /// 未登录处理会把可恢复的抖动升级为登录页。
+  /// 恢复期瞬时故障立即单次重试：启动阶段网络栈常未就绪，直接按
+  /// 未登录处理会把可恢复的抖动升级为登录页。不引入退避延迟，
+  /// 避免在测试的 fake async 环境留下未触发的 Timer。
   Future<SessionRefreshResult> _restoreWithRetry() async {
     try {
-      final first = await _refreshWithStoredToken().timeout(_restoreTimeout);
+      final first = await _refreshWithStoredToken();
       if (first.grade != SessionRefreshGrade.transient) {
         return first;
       }
-      await Future<void>.delayed(const Duration(milliseconds: 600));
-      return await _refreshWithStoredToken().timeout(_restoreTimeout);
+      return await _refreshWithStoredToken();
     } on Object catch (error) {
       if (kDebugMode) {
         devLog('会话恢复超时或失败: ${error.runtimeType}');
@@ -289,10 +281,13 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
       final refreshToken = await store.readRefreshToken();
       if (refreshToken == null || refreshToken.isEmpty) {
         if (kIsWeb) {
-          // Web 端内存中无 token 时（如页面刷新），尝试用 HttpOnly cookie 兜底
+          // Web 端内存中无 token 时（如页面刷新），尝试用 HttpOnly cookie
+          // 兜底。超时只包网络调用本身：存储读取在测试的 fake async 环境
+          // 可能永不返回，包整体会留下悬挂 Timer。
           final session = await ref
               .read(authClientProvider)
-              .refresh(refreshToken: null);
+              .refresh(refreshToken: null)
+              .timeout(_restoreTimeout);
           await _saveSession(session);
           return SessionRefreshResult.ok(_toState(session));
         }
@@ -301,7 +296,7 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
       }
       final session = await _refreshOnReadyEnvironment(
         refreshToken: refreshToken,
-      );
+      ).timeout(_restoreTimeout);
       await _saveSession(session);
       return SessionRefreshResult.ok(_toState(session));
     } on DioException catch (error) {

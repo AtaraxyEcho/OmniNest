@@ -7560,8 +7560,8 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosCreateLink => '创建链接';
 
   @override
-  String photosShareLinkCreated(Object token) {
-    return '分享链接已创建: $token';
+  String photosShareLinkCreated(Object link) {
+    return '分享链接已创建: $link';
   }
 
   @override

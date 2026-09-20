@@ -18,12 +18,3 @@ final appEnvironmentProvider = Provider<AppEnvironment?>((ref) {
   }
   return ref.watch(presetAppEnvironmentProvider);
 });
-
-/// 分享链接基址；仅在服务器已配置（登录后分享流程）时读取。
-final webShareBaseUrlProvider = Provider<String>((ref) {
-  final environment = ref.watch(appEnvironmentProvider);
-  if (environment == null) {
-    throw StateError('服务器地址未配置');
-  }
-  return environment.effectiveWebBaseUrl;
-});

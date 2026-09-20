@@ -3388,10 +3388,10 @@
     }
   },
   "photosCreateLink": "Create Link",
-  "photosShareLinkCreated": "Share link created: {token}",
+  "photosShareLinkCreated": "Share link created: {link}",
   "@photosShareLinkCreated": {
     "placeholders": {
-      "token": {}
+      "link": {}
     }
   },
   "photosShareLinkFailed": "Failed to create share link",

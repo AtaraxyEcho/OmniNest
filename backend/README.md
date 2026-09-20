@@ -173,21 +173,12 @@ mvn -q -pl omninest-app -am -DskipTests package
 
 生产环境使用 [部署指南](../deploy/README.md) 和对应 Docker Compose 运行 API、Worker、Scheduler。不同运行角色共享同一个代码库和应用镜像，通过 `OMNINEST_ROLE` 区分启动职责。
 
-### 静态分享页（webapp）
+### 分享链接基址
 
-dev Profile 通过 `OMNINEST_WEBAPP_DIR`（默认 `./webapp`）托管静态资源，供 `/share/{token}` 转发到 `share.html`。
-
-- **唯一运行时目录**：`backend/webapp/`（相对 `cd backend` 的工作目录）。
-- **源文件**：`frontend/web/share.html`（gitignore 忽略 `**/webapp/`，需本地同步）。
-- 同步示例：
-
-  ```bash
-  cp ../frontend/web/share.html webapp/share.html
-  # 或完整 SPA
-  cp -r ../frontend/build/web/* webapp/
-  ```
-
-- 生产由 Nginx 托管 Flutter Web，后端不必挂 webapp。
+照片/文件分享链接的基址取自部署者配置的对外 Web 地址（`OMNINEST_SETUP_WEB_BASE_URL`，
+即 `omninest.setup.web-base-url`），客户端经 `GET /api/v1/me/web-share-base-url` 读取；
+SPA hash 路由（`/#/shared/photos/{token}`、`/#/s/{code}`）由 Web 站点承接。
+未配置时 Web 端回退为浏览器当前地址、原生端回退为 API 地址（仅本机可用，分享面板会提示）。
 
 首次启动空数据库时，Flyway 执行当前基线迁移 `V001__init_schema.sql` 和 `V002__builtin_catalog.sql`。这是运行时初始化的一部分，首个超级管理员仍通过安装向导创建。
 

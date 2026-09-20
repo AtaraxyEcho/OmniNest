@@ -3262,10 +3262,10 @@
     }
   },
   "photosCreateLink": "创建链接",
-  "photosShareLinkCreated": "分享链接已创建: {token}",
+  "photosShareLinkCreated": "分享链接已创建: {link}",
   "@photosShareLinkCreated": {
     "placeholders": {
-      "token": {}
+      "link": {}
     }
   },
   "photosShareLinkFailed": "创建分享链接失败",
