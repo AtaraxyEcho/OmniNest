@@ -6,7 +6,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import com.omninest.common.error.BusinessException;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackQueueDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackQueueItemDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicQueueSourceDto;
@@ -47,8 +46,8 @@ class MusicPlaybackQueueServiceTest {
     }
 
     @Test
-    void unsupportedPlayableKeyIsRejected() {
-        MusicPlaybackQueueItemDto item = new MusicPlaybackQueueItemDto(
+    void unsupportedPlayableKeysAreSoftFilteredOnSave() {
+        MusicPlaybackQueueItemDto invalid = new MusicPlaybackQueueItemDto(
                 "online:unknown:song-1",
                 "Song",
                 "Artist",
@@ -58,11 +57,15 @@ class MusicPlaybackQueueServiceTest {
                 "mp3",
                 null
         );
+        MusicPlaybackQueueItemDto valid = onlineItem();
 
-        assertThatThrownBy(() -> service.save(
+        MusicPlaybackQueueDto saved = service.save(
                 OWNER_ID,
-                new SaveMusicPlaybackQueueRequest(List.of(item), 0, "off", false, null, null)
-        )).isInstanceOf(BusinessException.class);
+                new SaveMusicPlaybackQueueRequest(List.of(invalid, valid), 1, "off", false, null, null)
+        );
+
+        assertThat(saved.items()).containsExactly(valid);
+        assertThat(saved.currentIndex()).isZero();
     }
 
     @Test

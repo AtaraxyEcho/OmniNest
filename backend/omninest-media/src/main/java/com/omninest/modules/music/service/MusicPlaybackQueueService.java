@@ -1,7 +1,5 @@
 package com.omninest.modules.music.service;
 
-import com.omninest.common.enums.ErrorCode;
-import com.omninest.common.error.BusinessException;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackQueueDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackQueueItemDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicQueueSourceDto;
@@ -46,15 +44,21 @@ public class MusicPlaybackQueueService {
     /**
      * 校验并保存用户播放队列的稳定引用和展示快照。
      *
+     * <p>非法播放键按 load 侧同策略软过滤（队列是可重建派生态），结构性错误仍由
+     * bean validation 拒绝。
+     *
      * @param ownerUserId 当前用户标识
      * @param request 队列保存请求
      * @return 已规范化的队列快照
      */
     public MusicPlaybackQueueDto save(UUID ownerUserId, SaveMusicPlaybackQueueRequest request) {
-        validateKeys(request.items());
-        int currentIndex = normalizeIndex(request.currentIndex(), request.items().size());
+        List<MusicPlaybackQueueItemDto> items = request.items().stream()
+                .filter(this::isSupportedItem)
+                .limit(MAX_QUEUE_SIZE)
+                .toList();
+        int currentIndex = normalizeIndex(request.currentIndex(), items.size());
         MusicPlaybackQueueDto snapshot = new MusicPlaybackQueueDto(
-                List.copyOf(request.items()),
+                List.copyOf(items),
                 currentIndex,
                 normalizeRepeatMode(request.repeatMode()),
                 request.shuffleEnabled(),
@@ -83,14 +87,6 @@ public class MusicPlaybackQueueService {
                 snapshot.truncated(),
                 snapshot.updatedAt() == null ? Instant.now() : snapshot.updatedAt()
         );
-    }
-
-    private void validateKeys(List<MusicPlaybackQueueItemDto> items) {
-        for (MusicPlaybackQueueItemDto item : items) {
-            if (!isSupportedItem(item)) {
-                throw new BusinessException(ErrorCode.PARAM_ERROR, "播放队列包含不支持的曲目标识");
-            }
-        }
     }
 
     private boolean isSupportedItem(MusicPlaybackQueueItemDto item) {

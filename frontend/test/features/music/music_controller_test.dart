@@ -117,6 +117,7 @@ void main() {
 
   registerMusicQueueTests();
   registerMusicQueueSourceTests();
+  registerMusicQueuePersistenceTests();
 
   test('scrape library passes force flag and records the job', () async {
     final api = _FakeMusicApi();
@@ -971,8 +972,14 @@ class _FakeMusicApi implements MusicApi {
     return restoredPlaybackQueue;
   }
 
+  Completer<void>? queueSaveGate;
+  DateTime queueSaveServerTime = DateTime.utc(2026, 9, 20, 12);
+  Set<String> serverFilteredKeys = const <String>{};
+
   @override
-  Future<void> savePlaybackQueue(MusicPlaybackQueueSnapshot snapshot) async {
+  Future<MusicPlaybackQueueSnapshot> savePlaybackQueue(
+    MusicPlaybackQueueSnapshot snapshot,
+  ) async {
     queueSaveAttempts++;
     if (queueSaveFailuresRemaining > 0) {
       queueSaveFailuresRemaining--;
@@ -981,7 +988,23 @@ class _FakeMusicApi implements MusicApi {
         message: 'Queue save timed out',
       );
     }
+    final gate = queueSaveGate;
+    if (gate != null) {
+      await gate.future;
+    }
     savedPlaybackQueues.add(snapshot);
+    return MusicPlaybackQueueSnapshot(
+      items:
+          snapshot.items
+              .where((item) => !serverFilteredKeys.contains(item.playableKey))
+              .toList(),
+      currentIndex: snapshot.currentIndex,
+      repeatMode: snapshot.repeatMode,
+      shuffleEnabled: snapshot.shuffleEnabled,
+      source: snapshot.source,
+      truncated: snapshot.truncated,
+      updatedAt: queueSaveServerTime,
+    );
   }
 
   @override

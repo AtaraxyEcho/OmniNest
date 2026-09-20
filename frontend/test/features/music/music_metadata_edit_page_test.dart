@@ -203,7 +203,9 @@ class _StubMusicApi implements MusicApi {
       const MusicPlaybackQueueSnapshot();
 
   @override
-  Future<void> savePlaybackQueue(MusicPlaybackQueueSnapshot snapshot) async {}
+  Future<MusicPlaybackQueueSnapshot> savePlaybackQueue(
+    MusicPlaybackQueueSnapshot snapshot,
+  ) async => snapshot;
 
   @override
   Future<PlatformUserInfo?> platformInfo(String platform) async => null;

@@ -312,11 +312,15 @@ class MusicApi {
     return MusicPlaybackQueueSnapshot.fromJson(parseData(response.data));
   }
 
-  Future<void> savePlaybackQueue(MusicPlaybackQueueSnapshot snapshot) async {
-    await apiClient.dio.put<Map<String, dynamic>>(
+  /// 保存播放队列并返回服务端规范化结果（含服务端时间戳）。
+  Future<MusicPlaybackQueueSnapshot> savePlaybackQueue(
+    MusicPlaybackQueueSnapshot snapshot,
+  ) async {
+    final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/music/playback-queue',
       data: snapshot.toJson(),
     );
+    return MusicPlaybackQueueSnapshot.fromJson(parseData(response.data));
   }
 
   Future<void> savePosition({

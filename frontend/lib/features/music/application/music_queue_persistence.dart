@@ -117,7 +117,7 @@ class _MusicQueuePersistenceCoordinator {
       shuffleEnabled: current.shuffleEnabled,
       source: current.queueSource,
       truncated: queue.length > _cacheLimit,
-      updatedAt: DateTime.now().toUtc(),
+      // 未同步脏标志：updatedAt 留空，仅在远端保存成功回显后写入服务端时间戳。
     );
     _latestSnapshot = snapshot;
     _pendingSnapshot = snapshot;
@@ -190,11 +190,26 @@ class _MusicQueuePersistenceCoordinator {
   }
 
   Future<void> _persist(MusicPlaybackQueueSnapshot snapshot) async {
-    final error = await _saveRemoteWithRetry(snapshot);
+    final (response, error) = await _saveRemoteWithRetry(snapshot);
     if (_disposed) {
       return;
     }
     if (error == null) {
+      // 仅当保存的仍是最新快照时，整体采用服务端规范化结果（时间戳＋过滤后的条目）；
+      // 保存期间又有新变更入列时，该快照会有自己的保存回程，不在此覆盖。
+      final owner = ownerId;
+      if (response != null &&
+          owner != null &&
+          identical(_latestSnapshot, snapshot)) {
+        if (response.items.length < snapshot.items.length && kDebugMode) {
+          _logFailure(
+            '服务端过滤播放键 ${snapshot.items.length - response.items.length} 条',
+            'snapshot=${snapshot.items.length}',
+          );
+        }
+        _latestSnapshot = response;
+        unawaited(_saveLocal(owner, response));
+      }
       onRemoteSuccess();
     } else {
       onRemoteFailure(error);
@@ -202,20 +217,21 @@ class _MusicQueuePersistenceCoordinator {
   }
 
   Future<void> _persistOnDispose(MusicPlaybackQueueSnapshot snapshot) async {
-    final error = await _saveRemoteWithRetry(snapshot);
+    final (_, error) = await _saveRemoteWithRetry(snapshot);
     if (error != null) {
       _logFailure('退出前同步播放队列失败', error);
     }
   }
 
-  Future<Object?> _saveRemoteWithRetry(
+  /// 单次远端保存（含重试），成功返回服务端规范化快照，失败返回最后一次错误。
+  Future<(MusicPlaybackQueueSnapshot?, Object?)> _saveRemoteWithRetry(
     MusicPlaybackQueueSnapshot snapshot,
   ) async {
     Object? lastError;
     for (var attempt = 0; attempt <= _retryDelays.length; attempt++) {
       try {
-        await api.savePlaybackQueue(snapshot);
-        return null;
+        final response = await api.savePlaybackQueue(snapshot);
+        return (response, null);
       } on Exception catch (error) {
         lastError = error;
         if (attempt < _retryDelays.length) {
@@ -223,7 +239,7 @@ class _MusicQueuePersistenceCoordinator {
         }
       }
     }
-    return lastError;
+    return (null, lastError);
   }
 
   Future<void> _saveLocal(
@@ -244,7 +260,9 @@ class _MusicQueuePersistenceCoordinator {
     final localUpdatedAt = local.updatedAt;
     final remoteUpdatedAt = remote.updatedAt;
     if (localUpdatedAt == null) {
-      return remote.items.isEmpty && local.items.isNotEmpty;
+      // 本地时间戳留空即含未同步变更（schedule 落盘形态），无论条目多少判本地新，
+      // 与客户端时钟无关；弃用设备残留未同步变更胜过他端较新已同步变更为既定取舍。
+      return true;
     }
     if (remoteUpdatedAt == null) {
       return true;
