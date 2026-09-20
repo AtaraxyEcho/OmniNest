@@ -313,7 +313,7 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
   }
 
   void _onScroll() {
-    if (!_scrollController.hasClients || _requestingNextPage) {
+    if (!mounted || !_scrollController.hasClients || _requestingNextPage) {
       return;
     }
     final position = _scrollController.position;
@@ -327,7 +327,13 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
       return;
     }
     _requestingNextPage = true;
-    unawaited(_loadNextPage());
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        _requestingNextPage = false;
+        return;
+      }
+      unawaited(_loadNextPage());
+    });
   }
 
   Future<void> _loadNextPage() async {

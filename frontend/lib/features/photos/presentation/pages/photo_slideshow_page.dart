@@ -324,10 +324,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 当前缓存窗口由 SlideshowImageCache 内部管理（current ± radius）。
 
   /// 播放集合随来源类型实时扩展：库/收藏跟随分页控制器，影集/标签为全量查询。
+  /// 地点/时间线为进入时锁定的子集，不做全库回退替换。
   void _ensurePlaylist() {
     switch (widget.source) {
       case PhotoBrowseSource.library:
-      case PhotoBrowseSource.locations:
         final live =
             ref.read(photoCenterControllerProvider).asData?.value.photos;
         if (live != null && live.length > _photos.length) _photos = live;
@@ -344,8 +344,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         final tagged =
             ref.read(photosByTagProvider(widget.sourceKey!)).asData?.value;
         if (tagged != null && tagged.length > _photos.length) _photos = tagged;
+      case PhotoBrowseSource.locations:
       case PhotoBrowseSource.timeline:
-        // 时间线范围播放由批次 B 的 by-period 端点接入。
+        // 地点=进入时锁定的该地点照片；时间线范围播放由批次 B 的
+        // by-period 端点接入。两者均保留传入子集。
         break;
     }
   }
@@ -564,11 +566,16 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       });
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.escape && (_showInfo || _showShare)) {
-      setState(() {
-        _showInfo = false;
-        _showShare = false;
-      });
+    if (key == LogicalKeyboardKey.escape) {
+      if (_showInfo || _showShare) {
+        setState(() {
+          _showInfo = false;
+          _showShare = false;
+        });
+        return KeyEventResult.handled;
+      }
+      // 面板均未展开时 Esc 退出幻灯片，与顶栏关闭按钮同路径。
+      Navigator.of(context).maybePop();
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;

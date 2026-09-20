@@ -592,7 +592,11 @@ mixin ReaderViewPageBuilders on ConsumerState<ReaderViewPage> {
           if (notification is OverscrollNotification &&
               notification.overscroll < 0 &&
               notification.depth == 0) {
-            handleBackwardChapterOverscroll();
+            // layout/overscroll 回调中禁止同步切章，延迟到帧末。
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (!mounted) return;
+              handleBackwardChapterOverscroll();
+            });
           }
           return false;
         },

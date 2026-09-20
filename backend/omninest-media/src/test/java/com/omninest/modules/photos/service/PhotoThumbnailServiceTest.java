@@ -31,10 +31,7 @@ class PhotoThumbnailServiceTest {
     private final DerivedAssetStorageService storageService = mock(DerivedAssetStorageService.class);
     private final FileLifecycleGuard fileLifecycleGuard = mock(FileLifecycleGuard.class);
     private final PhotoFileDetector fileDetector = new PhotoFileDetector();
-    private final PhotoInputGuard inputGuard = new PhotoInputGuard(
-            new PhotoMediaLimitsProperties(),
-            fileDetector
-    );
+    private final PhotoInputGuard inputGuard = new PhotoInputGuard(new PhotoMediaLimitsProperties());
     private final PhotoSourceFileService sourceFileService = new PhotoSourceFileService(
             mock(FileQueryService.class),
             fileDetector,
@@ -106,11 +103,37 @@ class PhotoThumbnailServiceTest {
     }
 
     @Test
-    void generateAndStoreRejectsMagicMismatchBeforeStorage() throws Exception {
+    void generateAndStoreTrustsContentMagicOverExtensionMismatch() throws Exception {
+        // 扩展名与内容不符时以魔数为准继续生成封面，避免僵尸占位条目。
+        UUID ownerUserId = UUID.randomUUID();
+        UUID fileNodeId = UUID.randomUUID();
+        UUID thumbnailId = UUID.randomUUID();
+        when(fileLifecycleGuard.isOwnedProcessable(ownerUserId, fileNodeId)).thenReturn(true);
+        when(storageService.store(any(), any(), any(), any(), any(), any(), any(Path.class)))
+                .thenReturn(thumbnailId);
+        Path source = createImage("png");
+        try {
+            UUID result = service.generateAndStoreFile(
+                    ownerUserId,
+                    fileNodeId,
+                    source,
+                    "photo.jpg"
+            );
+
+            assertThat(result).isEqualTo(thumbnailId);
+            verify(storageService).store(any(), any(), any(), any(), any(), any(), any(Path.class));
+        } finally {
+            Files.deleteIfExists(source);
+        }
+    }
+
+    @Test
+    void generateAndStoreRejectsUnknownContentBeforeStorage() throws Exception {
         UUID ownerUserId = UUID.randomUUID();
         UUID fileNodeId = UUID.randomUUID();
         when(fileLifecycleGuard.isOwnedProcessable(ownerUserId, fileNodeId)).thenReturn(true);
-        Path source = createImage("png");
+        Path source = Files.createTempFile("omninest-thumb-test-", ".jpg");
+        Files.write(source, new byte[]{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07});
         try {
             UUID result = service.generateAndStoreFile(
                     ownerUserId,

@@ -42,11 +42,7 @@ class PhotoEditServiceTest {
     private final DerivedAssetStorageService storageService = mock(DerivedAssetStorageService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final PhotoSourceFileService sourceFileService = mock(PhotoSourceFileService.class);
-    private final PhotoFileDetector fileDetector = new PhotoFileDetector();
-    private final PhotoInputGuard inputGuard = new PhotoInputGuard(
-            new PhotoMediaLimitsProperties(),
-            fileDetector
-    );
+    private final PhotoInputGuard inputGuard = new PhotoInputGuard(new PhotoMediaLimitsProperties());
     private final PlatformTransactionManager txManager = mock(PlatformTransactionManager.class);
     private final TransactionTemplate transactionTemplate = new TransactionTemplate(txManager);
     private final PhotoEditService service = new PhotoEditService(

@@ -415,6 +415,8 @@ class PortalGradientCover extends StatelessWidget {
     this.minCoverHeight = 120,
     this.borderWidth = 1,
     this.directImage = false,
+    this.coverCacheKey,
+    this.onCoverError,
     super.key,
   });
 
@@ -434,6 +436,12 @@ class PortalGradientCover extends StatelessWidget {
   final double minCoverHeight;
   final double borderWidth;
   final bool directImage;
+
+  /// 稳定缓存键（内容标识构造），与签名 URL 解耦。
+  final String? coverCacheKey;
+
+  /// 封面加载失败回调；调用方据此触发对应数据分区重签刷新。
+  final VoidCallback? onCoverError;
 
   @override
   Widget build(BuildContext context) {
@@ -489,6 +497,8 @@ class PortalGradientCover extends StatelessWidget {
                       foregroundFit: foregroundFit,
                       foregroundPadding: foregroundPadding,
                       directImage: directImage,
+                      coverCacheKey: coverCacheKey,
+                      onCoverError: onCoverError,
                     ),
                   )
                 else
@@ -606,10 +616,14 @@ class _AdaptiveCoverImage extends StatelessWidget {
     required this.directImage,
     this.imageUrl,
     this.readerItemId,
+    this.coverCacheKey,
+    this.onCoverError,
   });
 
   final String? imageUrl;
   final String? readerItemId;
+  final String? coverCacheKey;
+  final VoidCallback? onCoverError;
   final List<Color> fallbackColors;
   final BoxFit foregroundFit;
   final EdgeInsetsGeometry foregroundPadding;
@@ -638,6 +652,7 @@ class _AdaptiveCoverImage extends StatelessWidget {
       }
       return CachedNetworkImage(
         imageUrl: networkCoverUrl!,
+        cacheKey: coverCacheKey,
         fit: BoxFit.cover,
         alignment: Alignment.center,
         filterQuality: FilterQuality.medium,
@@ -648,6 +663,14 @@ class _AdaptiveCoverImage extends StatelessWidget {
           min: 128,
           max: 800,
         ),
+        errorListener: (_) {
+          // 签名 URL 过期是封面失败主因：post-frame 通知上层重签，
+          // 避免在图片流回调（可发生于 build 期）中直接触发状态改写。
+          final callback = onCoverError;
+          if (callback != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) => callback());
+          }
+        },
         placeholder: (context, url) => fallback,
         errorWidget: (context, url, error) => fallback,
       );

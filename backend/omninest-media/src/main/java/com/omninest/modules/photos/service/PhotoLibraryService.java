@@ -265,7 +265,7 @@ public class PhotoLibraryService {
                 .filter(Objects::nonNull)
                 .map(item -> PhotoItemDto.fromEntity(
                         item,
-                        coverUrls.get(item.getCoverFileId()),
+                        coverUrlOrNull(coverUrls, item.getCoverFileId()),
                         favoriteIds.contains(item.getId()),
                         tagsByPhoto.getOrDefault(item.getId(), List.of())
                 ))
@@ -559,7 +559,7 @@ public class PhotoLibraryService {
         return items.stream()
                 .map(item -> PhotoItemDto.fromEntity(
                         item,
-                        coverUrls.get(item.getCoverFileId()),
+                        coverUrlOrNull(coverUrls, item.getCoverFileId()),
                         favoriteIds.contains(item.getId()),
                         tagsByPhoto.getOrDefault(item.getId(), List.of())
                 ))
@@ -1039,6 +1039,15 @@ public class PhotoLibraryService {
                 .createDownloadUrls(ownerUserId, coverFileIds)
                 .forEach((fileId, dto) -> result.put(fileId, dto.downloadUrl()));
         return result;
+    }
+
+    /// 封面文件 ID 为空（派生未完成/失败）或映射未命中时返回 null；
+    /// Map.of() 不可变映射对 null 键 get() 直接抛 NPE（D-012）。
+    private String coverUrlOrNull(Map<UUID, String> coverUrls, UUID coverFileId) {
+        if (coverFileId == null) {
+            return null;
+        }
+        return coverUrls.get(coverFileId);
     }
 
     private void invalidateDashboardCache(UUID ownerUserId) {

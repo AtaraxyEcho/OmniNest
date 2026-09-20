@@ -87,7 +87,10 @@ class _HistoryListState extends ConsumerState<_HistoryList> {
     }
     final position = _scrollController.position;
     if (position.maxScrollExtent - position.pixels <= 480) {
-      ref.read(musicHistoryControllerProvider.notifier).loadMore();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(musicHistoryControllerProvider.notifier).loadMore();
+      });
     }
   }
 

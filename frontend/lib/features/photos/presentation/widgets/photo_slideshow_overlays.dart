@@ -581,7 +581,8 @@ class SlideshowThumbnailStrip extends StatelessWidget {
         separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (context, index) {
           final selected = index == current;
-          final thumb = photos[index].coverUrl;
+          final photo = photos[index];
+          final thumb = photo.coverUrl;
           return Opacity(
             opacity: selected ? 1 : 0.45,
             child: GestureDetector(
@@ -606,6 +607,10 @@ class SlideshowThumbnailStrip extends StatelessWidget {
                       thumb != null && thumb.isNotEmpty
                           ? CachedNetworkImage(
                             imageUrl: thumb,
+                            // 稳定缓存键（照片 id，忽略短签名参数轮换）：
+                            // 否则每次令牌刷新都会产生整套重复缓存条目，
+                            // 快速挤爆 Web 端内存图片缓存预算。
+                            cacheKey: 'slideshow-thumb:${photo.id}',
                             fit: BoxFit.cover,
                             fadeInDuration: Duration.zero,
                             errorWidget:

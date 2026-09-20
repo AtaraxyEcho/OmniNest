@@ -14261,6 +14261,24 @@ abstract class AppLocalizations {
   /// **'Accessed {count} times'**
   String photosShareAccessCount(Object count);
 
+  /// No description provided for @photosShareLinkNoExpiry.
+  ///
+  /// In en, this message translates to:
+  /// **'Never expires'**
+  String get photosShareLinkNoExpiry;
+
+  /// No description provided for @photosShareLinkExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'Expired'**
+  String get photosShareLinkExpired;
+
+  /// No description provided for @photosShareLinkExpiresOn.
+  ///
+  /// In en, this message translates to:
+  /// **'Expires {date}'**
+  String photosShareLinkExpiresOn(Object date);
+
   /// No description provided for @photosCreateLink.
   ///
   /// In en, this message translates to:

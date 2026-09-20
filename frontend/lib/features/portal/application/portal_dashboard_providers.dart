@@ -101,6 +101,17 @@ class PortalDashboardActions {
     await maybeRefreshAll();
   }
 
+  /// 分支重返时刷新封面关键分区：不受全量 30s 节流约束，
+  /// 各分区自身仍有节流与在飞去重；与全量刷新并发时会被去重合并。
+  Future<void> refreshCoverSections() async {
+    await Future.wait([
+      retry(PortalDashboardSection.video),
+      retry(PortalDashboardSection.music),
+      retry(PortalDashboardSection.photos),
+      retry(PortalDashboardSection.reader),
+    ]);
+  }
+
   /// 窗口重新聚焦等场景的节流全量刷新。
   Future<void> maybeRefreshAll() async {
     final last = _lastFullRefreshAt;

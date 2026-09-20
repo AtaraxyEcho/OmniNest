@@ -24,6 +24,7 @@ class PhotoSharedAlbumPage extends ConsumerStatefulWidget {
 class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
   String? _password;
   bool _needPassword = false;
+  String? _passwordError;
   PhotoSharedAlbum? _album;
   Object? _error;
   bool _loading = true;
@@ -61,19 +62,23 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
         _album = album;
         _loading = false;
         _needPassword = false;
+        _passwordError = null;
       });
     } catch (e) {
       if (!mounted || generation != _loadGeneration) {
         return;
       }
-      // 简单判断是否需要密码
+      // 后端密码校验失败返回 400 +「密码错误」文案；据此进入密码流程，
+      // 并在二次输入失败时给出可区分的错误提示。
       final msg = e.toString();
-      if (msg.contains('401') ||
-          msg.contains('password') ||
-          msg.contains('密码')) {
+      if (msg.contains('password') || msg.contains('密码')) {
         setState(() {
           _needPassword = true;
           _loading = false;
+          _passwordError =
+              _password == null || _password!.isEmpty
+                  ? null
+                  : describeUserFacingError(e).displayMessage;
         });
       } else {
         setState(() {
@@ -112,6 +117,7 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
 
     if (_needPassword) {
       return _PasswordPrompt(
+        errorText: _passwordError,
         onSubmit: (password) {
           _password = password;
           _loadAlbum();
@@ -127,9 +133,10 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
 
 /// 密码输入提示
 class _PasswordPrompt extends StatefulWidget {
-  const _PasswordPrompt({required this.onSubmit});
+  const _PasswordPrompt({required this.onSubmit, this.errorText});
 
   final ValueChanged<String> onSubmit;
+  final String? errorText;
 
   @override
   State<_PasswordPrompt> createState() => _PasswordPromptState();
@@ -179,6 +186,16 @@ class _PasswordPromptState extends State<_PasswordPrompt> {
                 fontSize: AppTypography.bodyMedium,
               ),
             ),
+            if (widget.errorText != null) ...[
+              SizedBox(height: 8),
+              Text(
+                widget.errorText!,
+                style: TextStyle(
+                  color: context.photosColors.danger,
+                  fontSize: AppTypography.bodyMedium,
+                ),
+              ),
+            ],
             SizedBox(height: 20),
             TextField(
               controller: _controller,

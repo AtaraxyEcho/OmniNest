@@ -4,6 +4,7 @@ part of 'photo_controller.dart';
 mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
   int _importRefreshEpoch = 0;
   int _refreshGeneration = 0;
+  bool _listRefreshSuperseded = false;
   Future<bool>? _importRefreshInFlight;
   PhotoImportNotice? _lastImportNotice;
   String? _lastImportDetail;
@@ -643,12 +644,19 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       await refresh();
       await loadTrashPage(force: true);
     } on Exception catch (e) {
+      if (_isPhotoTrashGoneError(e)) {
+        _removePhotosFromTrash(<String>{photoId});
+        unawaited(loadTrashPage(force: true));
+      }
       _setError(describeUserFacingError(e).message);
       rethrow;
     }
   }
 
   /// 永久删除回收站中的照片。
+  ///
+  /// 后端仅创建异步 FILE_PURGE 任务；PhotoItem 由 Worker 在 finalizePurge 落库删除。
+  /// 提交成功后立即从本地回收站移除，并在实时刷新/任务落库后补查服务端。
   Future<TaskSubmission> purgePhotoFromTrash(
     String photoId, {
     bool cascade = false,
@@ -657,10 +665,14 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       final submission = await _repo.purgePhoto(photoId, cascade: cascade);
       ref.invalidate(activeTaskSummaryProvider);
       unawaited(ref.read(taskListProvider.notifier).load());
-      await refresh();
-      await loadTrashPage(force: true);
+      _removePhotosFromTrash(<String>{photoId});
+      unawaited(ref.read(photoDashboardProvider.notifier).reload());
       return submission;
     } on Exception catch (e) {
+      if (_isPhotoTrashGoneError(e)) {
+        _removePhotosFromTrash(<String>{photoId});
+        unawaited(loadTrashPage(force: true));
+      }
       _setError(describeUserFacingError(e).message);
       rethrow;
     }
@@ -672,13 +684,72 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
       final submission = await _repo.purgeTrash();
       ref.invalidate(activeTaskSummaryProvider);
       unawaited(ref.read(taskListProvider.notifier).load());
-      await refresh();
-      await loadTrashPage(force: true);
+      final current = state.asData?.value;
+      if (current != null && current.trashPhotos.isNotEmpty) {
+        _removePhotosFromTrash(
+          current.trashPhotos.map((photo) => photo.id).toSet(),
+        );
+      } else {
+        state = AsyncData(
+          (state.asData?.value ?? PhotoCenterState.empty()).copyWith(
+            trashPhotos: const [],
+            trashTotalElements: 0,
+          ),
+        );
+      }
+      unawaited(ref.read(photoDashboardProvider.notifier).reload());
       return submission;
     } on Exception catch (e) {
+      if (_isPhotoTrashGoneError(e)) {
+        unawaited(loadTrashPage(force: true));
+      }
       _setError(describeUserFacingError(e).message);
       rethrow;
     }
+  }
+
+  /// 后端回收站中已不存在该照片（任务已落库删除，或重复提交）。
+  bool _isPhotoTrashGoneError(Object error) {
+    if (error is! AppException) {
+      return false;
+    }
+    final code = error.code.toUpperCase();
+    return code == 'NOT_FOUND' || code == '404';
+  }
+
+  /// 从本地回收站状态移除照片，并同步扣减总数与回收站徽章。
+  void _removePhotosFromTrash(Set<String> photoIds) {
+    final current = state.asData?.value;
+    if (current == null || photoIds.isEmpty) {
+      return;
+    }
+    final remaining = current.trashPhotos
+        .where((photo) => !photoIds.contains(photo.id))
+        .toList(growable: false);
+    final removed = current.trashPhotos.length - remaining.length;
+    if (removed == 0) {
+      return;
+    }
+    final dashboard = current.dashboard;
+    final nextTrashCount = _subtractFloorZero(dashboard.trashCount, removed);
+    state = AsyncData(
+      current.copyWith(
+        trashPhotos: remaining,
+        trashTotalElements: _subtractFloorZero(
+          current.trashTotalElements,
+          removed,
+        ),
+        dashboard: PhotoDashboard(
+          totalPhotos: dashboard.totalPhotos,
+          totalAlbums: dashboard.totalAlbums,
+          totalFavorites: dashboard.totalFavorites,
+          trashCount: nextTrashCount,
+          recentPhotos: dashboard.recentPhotos,
+          favoritePhotos: dashboard.favoritePhotos,
+        ),
+      ),
+    );
+    ref.read(photoDashboardProvider.notifier).removeTrashPhotos(photoIds);
   }
 
   void _removePhotosOptimistically(Set<String> photoIds) {
@@ -699,6 +770,8 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
             dashboard.totalFavorites,
             removedFavoriteCount,
           ),
+          // 移入回收站：库内减少，回收站增加。
+          trashCount: dashboard.trashCount + photoIds.length,
           recentPhotos: dashboard.recentPhotos
               .where((photo) => !photoIds.contains(photo.id))
               .toList(growable: false),

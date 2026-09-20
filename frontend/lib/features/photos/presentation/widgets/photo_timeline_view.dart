@@ -79,9 +79,13 @@ class _PhotoTimelineViewState extends ConsumerState<PhotoTimelineView> {
     }
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.metrics.extentAfter < 800) {
-          ref.read(photoCenterControllerProvider.notifier).loadMoreTimeline();
+        if (notification.depth != 0 ||
+            notification.metrics.axis != Axis.vertical ||
+            notification.metrics.extentAfter >= 800) {
+          return false;
         }
+        // 滚动通知可能落在 layout 阶段；延迟到帧末再改状态，避免 Navigator/Focus 断言。
+        _scheduleLoadMoreTimeline();
         return false;
       },
       child: CustomScrollView(
@@ -92,7 +96,9 @@ class _PhotoTimelineViewState extends ConsumerState<PhotoTimelineView> {
           // 与设计稿一致：按月平铺（November 2024），不再插入年份分组头。
           for (final year in timeline.years)
             for (final month in year.months) ...[
-              _MonthHeader(year: year.year, month: month),
+              SliverToBoxAdapter(
+                child: _MonthHeader(year: year.year, month: month),
+              ),
               _MonthPhotoGrid(
                 photos: month.previewPhotos,
                 onOpenPhoto: widget.onOpenPhoto,
@@ -102,6 +108,15 @@ class _PhotoTimelineViewState extends ConsumerState<PhotoTimelineView> {
         ],
       ),
     );
+  }
+
+  void _scheduleLoadMoreTimeline() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ref.read(photoCenterControllerProvider.notifier).loadMoreTimeline();
+    });
   }
 }
 
@@ -214,66 +229,75 @@ class _MonthHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SliverToBoxAdapter(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(24, 16, 24, 8),
-        child: Row(
-          children: [
-            Expanded(
-              // 点击月份标题进入该月完整照片列表。
-              child: InkWell(
-                borderRadius: BorderRadius.circular(8),
-                onTap:
-                    () => context.push('/photos/period/$year/${month.month}'),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: Row(
-                    children: [
-                      Text(
-                        MaterialLocalizations.of(
-                          context,
-                        ).formatMonthYear(DateTime(year, month.month)),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      child: Row(
+        children: [
+          Expanded(
+            // 点击月份标题进入该月完整照片列表。
+            child: InkWell(
+              borderRadius: BorderRadius.circular(8),
+              onTap: () => _openPeriod(context),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 2),
+                child: Row(
+                  children: [
+                    Text(
+                      MaterialLocalizations.of(
+                        context,
+                      ).formatMonthYear(DateTime(year, month.month)),
+                      style: TextStyle(
+                        color: context.photosColors.onSurface,
+                        fontSize: AppTypography.titleMedium,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.photosColors.primaryContainer.withValues(
+                          alpha: 0.14,
+                        ),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(
+                        '${month.photoCount}',
                         style: TextStyle(
-                          color: context.photosColors.onSurface,
-                          fontSize: AppTypography.titleMedium,
-                          fontWeight: FontWeight.w700,
+                          color: context.photosColors.primaryContainer,
+                          fontSize: AppTypography.bodySmall,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      SizedBox(width: 8),
-                      Container(
-                        padding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: context.photosColors.primaryContainer
-                              .withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          '${month.photoCount}',
-                          style: TextStyle(
-                            color: context.photosColors.primaryContainer,
-                            fontSize: AppTypography.bodySmall,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Icon(
-                        Icons.chevron_right_rounded,
-                        size: 18,
-                        color: context.photosColors.onSurfaceVariant,
-                      ),
-                    ],
-                  ),
+                    ),
+                    const SizedBox(width: 6),
+                    Icon(
+                      Icons.chevron_right_rounded,
+                      size: 18,
+                      color: context.photosColors.onSurfaceVariant,
+                    ),
+                  ],
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  void _openPeriod(BuildContext context) {
+    final target = '/photos/period/$year/${month.month}';
+    // 避免在手势/LayoutBuilder 回调中同步 push，降低 Navigator/Focus 重建断言风险。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!context.mounted) {
+        return;
+      }
+      context.push(target);
+    });
   }
 }
 
@@ -286,14 +310,17 @@ class _MonthPhotoGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (photos.isEmpty) return const SliverToBoxAdapter(child: SizedBox());
-    return LayoutBuilder(
+    // slivers 槽位只能接受 RenderSliver；须用 SliverLayoutBuilder，
+    // 不能用 LayoutBuilder（RenderBox），否则 Viewport 协议不匹配并连带 Focus 断言。
+    return SliverLayoutBuilder(
       builder: (context, constraints) {
+        final width = constraints.crossAxisExtent;
         final columns =
-            constraints.maxWidth >= 1200
+            width >= 1200
                 ? 6
-                : constraints.maxWidth >= 900
+                : width >= 900
                 ? 5
-                : constraints.maxWidth >= 600
+                : width >= 600
                 ? 4
                 : 3;
         final displayPhotos =

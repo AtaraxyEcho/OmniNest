@@ -106,11 +106,18 @@ class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
 
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification.metrics.extentAfter < 640) {
+        if (notification.depth != 0 ||
+            notification.metrics.axis != Axis.vertical ||
+            notification.metrics.extentAfter >= 640) {
+          return false;
+        }
+        // 滚动通知可能落在 layout 阶段，延迟加载避免 Navigator/Focus 断言。
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
           ref
               .read(photoCenterControllerProvider.notifier)
               .loadMoreVisiblePhotos();
-        }
+        });
         return false;
       },
       child: CustomScrollView(

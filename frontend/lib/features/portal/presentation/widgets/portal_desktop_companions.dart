@@ -1,6 +1,8 @@
 part of 'portal_desktop_visual_shells.dart';
 
-class _VisualFilmStrip extends StatelessWidget {
+/// 胶片条迷你卡封面自愈：加载失败（签名 URL 过期为主因）时按模块
+/// 有限次重试对应数据分区，重签 URL 后由稳定缓存键命中或重新下载。
+class _VisualFilmStrip extends ConsumerStatefulWidget {
   const _VisualFilmStrip({
     required this.palette,
     required this.items,
@@ -16,7 +18,43 @@ class _VisualFilmStrip extends StatelessWidget {
   final bool lightweight;
 
   @override
+  ConsumerState<_VisualFilmStrip> createState() => _VisualFilmStripState();
+}
+
+class _VisualFilmStripState extends ConsumerState<_VisualFilmStrip> {
+  static const int _maxRecoverAttempts = 2;
+  final Map<PortalFocusModule, int> _recoverAttempts = {};
+
+  PortalDashboardSection? _sectionFor(PortalFocusModule module) {
+    // 仅封面数据来自可重签分区的模块参与自愈；files 等模块无封面。
+    return switch (module) {
+      PortalFocusModule.video => PortalDashboardSection.video,
+      PortalFocusModule.photos => PortalDashboardSection.photos,
+      PortalFocusModule.music => PortalDashboardSection.music,
+      PortalFocusModule.reader => PortalDashboardSection.reader,
+      _ => null,
+    };
+  }
+
+  void _handleCoverError(PortalFocusModule module) {
+    final attempts = _recoverAttempts[module] ?? 0;
+    if (attempts >= _maxRecoverAttempts) {
+      return;
+    }
+    _recoverAttempts[module] = attempts + 1;
+    final section = _sectionFor(module);
+    if (section != null) {
+      unawaited(ref.read(portalDashboardActionsProvider).retry(section));
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final palette = widget.palette;
+    final items = widget.items;
+    final activeIndex = widget.activeIndex;
+    final onSelected = widget.onSelected;
+    final lightweight = widget.lightweight;
     final viewportHeight = MediaQuery.sizeOf(context).height;
     final dense = viewportHeight < 760;
     final relaxed = viewportHeight >= 840;
@@ -74,6 +112,8 @@ class _VisualFilmStrip extends StatelessWidget {
                       variant: item.variant,
                       imageUrl: item.imageUrl,
                       readerItemId: item.readerItemId,
+                      coverCacheKey: item.coverCacheKey,
+                      onCoverError: () => _handleCoverError(item.module),
                       fallbackIcon: item.icon.iconData,
                       height: itemHeight,
                       maxCoverWidth: itemWidth,

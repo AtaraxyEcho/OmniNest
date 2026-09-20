@@ -9,8 +9,9 @@ import 'package:omninest/features/photos/presentation/widgets/photo_common_widge
 
 /// 照片/相册分享管理对话框：密码 + 有效期 + 现有链接管理（Frame 极简风格）。
 ///
-/// 返回 (密码, 有效期选项)；取消返回 null。创建与撤销由调用方通过回调执行，
-/// 撤销成功后对话框关闭。
+/// 返回 (密码, 有效期选项)；取消返回 null。密码留空表示显式创建无密码链接。
+/// 创建与撤销由调用方通过回调执行；撤销成功后就地移除该行并保持对话框打开，
+/// 由调用方在对话框关闭后重新拉取列表刷新自身状态。
 Future<(String, String)?> showPhotoShareDialog(
   BuildContext context, {
   required String title,
@@ -18,6 +19,8 @@ Future<(String, String)?> showPhotoShareDialog(
   required Future<void> Function(String shareId) onRevoke,
 }) async {
   String expiryOption = 'never';
+  final remainingShares = [...shares];
+  String? revokeError;
 
   return showDialog<(String, String)>(
     context: context,
@@ -119,11 +122,11 @@ Future<(String, String)?> showPhotoShareDialog(
                                 ],
                               ),
                               // 现有链接
-                              if (shares.isNotEmpty) ...[
+                              if (remainingShares.isNotEmpty) ...[
                                 const SizedBox(height: 16),
                                 Text(
                                   AppLocalizations.of(
-                                    context,
+                                    ctx,
                                   ).photosExistingShareLinks,
                                   style: TextStyle(
                                     color: ctx.frameColors.sub,
@@ -132,7 +135,17 @@ Future<(String, String)?> showPhotoShareDialog(
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-                                ...shares.map(
+                                if (revokeError != null) ...[
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    revokeError!,
+                                    style: TextStyle(
+                                      color: const Color(0xFFEF4444),
+                                      fontSize: AppTypography.labelSmall,
+                                    ),
+                                  ),
+                                ],
+                                ...remainingShares.map(
                                   (share) => Padding(
                                     padding: const EdgeInsets.only(bottom: 4),
                                     child: Row(
@@ -143,18 +156,23 @@ Future<(String, String)?> showPhotoShareDialog(
                                                 CrossAxisAlignment.start,
                                             children: [
                                               Text(
-                                                share.token,
+                                                _shareStatusText(ctx, share),
                                                 maxLines: 1,
                                                 overflow: TextOverflow.ellipsis,
                                                 style: TextStyle(
-                                                  color: ctx.frameColors.ink,
+                                                  color:
+                                                      share.isExpired
+                                                          ? ctx
+                                                              .frameColors
+                                                              .muted
+                                                          : ctx.frameColors.ink,
                                                   fontSize:
                                                       AppTypography.bodyMedium,
                                                 ),
                                               ),
                                               Text(
                                                 AppLocalizations.of(
-                                                  context,
+                                                  ctx,
                                                 ).photosShareAccessCount(
                                                   share.accessCount,
                                                 ),
@@ -170,7 +188,7 @@ Future<(String, String)?> showPhotoShareDialog(
                                         IconButton(
                                           tooltip:
                                               AppLocalizations.of(
-                                                context,
+                                                ctx,
                                               ).coreDelete,
                                           icon: const Icon(
                                             Icons.delete_outline,
@@ -180,24 +198,25 @@ Future<(String, String)?> showPhotoShareDialog(
                                           onPressed: () async {
                                             try {
                                               await onRevoke(share.id);
-                                              if (ctx.mounted) {
-                                                Navigator.pop(ctx, null);
-                                              }
                                             } on Exception catch (error) {
-                                              if (ctx.mounted) {
-                                                ScaffoldMessenger.of(
-                                                  ctx,
-                                                ).showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                      describeUserFacingError(
-                                                        error,
-                                                      ).displayMessage,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
+                                              // 删除失败：在对话框内联提示并
+                                              // 保留该行，用户可重试或取消。
+                                              setDialogState(() {
+                                                revokeError =
+                                                    describeUserFacingError(
+                                                      error,
+                                                    ).displayMessage;
+                                              });
+                                              return;
                                             }
+                                            // 删除成功：就地移除该行并清除
+                                            // 旧错误，保持对话框打开。
+                                            setDialogState(() {
+                                              revokeError = null;
+                                              remainingShares.removeWhere(
+                                                (item) => item.id == share.id,
+                                              );
+                                            });
                                           },
                                         ),
                                       ],
@@ -240,6 +259,22 @@ String _expiryLabel(BuildContext context, String option) {
     '30d' => l10n.photosShareExpiry30d,
     _ => l10n.photosShareExpiryNever,
   };
+}
+
+/// 链接行的主文案。后端列表不回传令牌原文（仅存哈希），
+/// 以有效期状态区分各条链接，过期链接置灰提示。
+String _shareStatusText(BuildContext context, PhotoShareLink share) {
+  final l10n = AppLocalizations.of(context);
+  if (share.isExpired) {
+    return l10n.photosShareLinkExpired;
+  }
+  final expiresAt = share.expiresAt;
+  if (expiresAt == null) {
+    return l10n.photosShareLinkNoExpiry;
+  }
+  final month = expiresAt.month.toString().padLeft(2, '0');
+  final day = expiresAt.day.toString().padLeft(2, '0');
+  return l10n.photosShareLinkExpiresOn('${expiresAt.year}-$month-$day');
 }
 
 class _ExpiryChip extends StatelessWidget {

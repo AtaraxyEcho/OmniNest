@@ -35,7 +35,7 @@ class PhotoSourceFileServiceTest {
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
     private final PhotoFileDetector fileDetector = new PhotoFileDetector();
     private final PhotoMediaLimitsProperties properties = new PhotoMediaLimitsProperties();
-    private final PhotoInputGuard inputGuard = new PhotoInputGuard(properties, fileDetector);
+    private final PhotoInputGuard inputGuard = new PhotoInputGuard(properties);
     private final PhotoSourceFileService service = new PhotoSourceFileService(
             fileQueryService,
             fileDetector,

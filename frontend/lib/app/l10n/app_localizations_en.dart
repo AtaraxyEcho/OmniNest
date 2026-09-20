@@ -7772,6 +7772,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get photosShareLinkNoExpiry => 'Never expires';
+
+  @override
+  String get photosShareLinkExpired => 'Expired';
+
+  @override
+  String photosShareLinkExpiresOn(Object date) {
+    return 'Expires $date';
+  }
+
+  @override
   String get photosCreateLink => 'Create Link';
 
   @override

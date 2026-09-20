@@ -45,7 +45,11 @@ class _TasksPageState extends ConsumerState<TasksPage> {
     }
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      ref.read(taskListProvider.notifier).loadMore();
+      // 滚动监听可能处于 layout 阶段，延迟到帧末再改状态。
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(taskListProvider.notifier).loadMore();
+      });
     }
   }
 

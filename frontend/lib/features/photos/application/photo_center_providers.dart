@@ -47,12 +47,31 @@ class PhotoDashboardController extends AsyncNotifier<PhotoDashboard> {
           dashboard.totalFavorites,
           removedFavoriteCount,
         ),
+        trashCount: dashboard.trashCount,
         recentPhotos: dashboard.recentPhotos
             .where((photo) => !photoIds.contains(photo.id))
             .toList(growable: false),
         favoritePhotos: dashboard.favoritePhotos
             .where((photo) => !photoIds.contains(photo.id))
             .toList(growable: false),
+      ),
+    );
+  }
+
+  /// 永久删除回收站照片后立即扣减回收站徽章。
+  void removeTrashPhotos(Set<String> photoIds) {
+    final dashboard = state.asData?.value;
+    if (dashboard == null || photoIds.isEmpty) {
+      return;
+    }
+    state = AsyncData(
+      PhotoDashboard(
+        totalPhotos: dashboard.totalPhotos,
+        totalAlbums: dashboard.totalAlbums,
+        totalFavorites: dashboard.totalFavorites,
+        trashCount: _subtractFloorZero(dashboard.trashCount, photoIds.length),
+        recentPhotos: dashboard.recentPhotos,
+        favoritePhotos: dashboard.favoritePhotos,
       ),
     );
   }
@@ -80,6 +99,7 @@ class PhotoDashboardController extends AsyncNotifier<PhotoDashboard> {
         dashboard.totalFavorites,
         removedFavoriteCount,
       ),
+      trashCount: dashboard.trashCount,
       recentPhotos: dashboard.recentPhotos
           .where((photo) => !_optimisticallyRemovedIds.contains(photo.id))
           .toList(growable: false),

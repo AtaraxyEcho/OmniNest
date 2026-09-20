@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/photos/application/photo_center_models.dart';
 import 'package:omninest/features/photos/application/photo_detail_memory_cache.dart';
@@ -143,7 +144,10 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     ]);
     final photoPage = results[1] as PhotoPage;
     final favoritePage = results[2] as PhotoPage;
-    if (!ref.mounted || generation != _refreshGeneration) return;
+    if (!ref.mounted || generation != _refreshGeneration) {
+      _listRefreshSuperseded = true;
+      return;
+    }
     state = AsyncData(
       current.copyWith(
         dashboard: results[0] as PhotoDashboard,
@@ -236,6 +240,18 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     if (current.groups != null) {
       if (!ref.mounted || generation != _refreshGeneration) return;
       await loadGroups(current.groupBy, force: true);
+    }
+    // 永久删除由 Worker 异步落库；回收站已加载或当前在回收站视图时必须补查。
+    final latest = state.asData?.value;
+    final shouldReloadTrash =
+        latest != null &&
+        (latest.trashPhotos.isNotEmpty ||
+            latest.frameView == FrameView.trash ||
+            current.frameView == FrameView.trash ||
+            current.trashPhotos.isNotEmpty);
+    if (shouldReloadTrash) {
+      if (!ref.mounted || generation != _refreshGeneration) return;
+      await loadTrashPage(force: true);
     }
   }
 
@@ -332,6 +348,18 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
     if (view == FrameView.trash) {
       unawaited(loadTrashPage());
     }
+    _maybeReissueSupersededRefresh();
+  }
+
+  /// refresh 结果被切视图/搜索/实时失效作废后，列表可能停留在旧快照
+  /// （封面短签名过期即表现为网格空白）；在用户下一次交互时补发一次
+  /// 刷新。补发本身再被作废则不再级联，避免事件风暴下死循环。
+  void _maybeReissueSupersededRefresh() {
+    if (!_listRefreshSuperseded) {
+      return;
+    }
+    _listRefreshSuperseded = false;
+    unawaited(refresh());
   }
 
   /// 全选/取消全选当前视图可见照片；已全选时清空选择。

@@ -29,6 +29,7 @@ class PortalFocusItem {
     this.heroEyebrow,
     this.heroBody,
     this.readerItemId,
+    this.coverCacheKey,
   });
 
   final PortalFocusIcon icon;
@@ -42,4 +43,8 @@ class PortalFocusItem {
   final String? heroEyebrow;
   final String? heroBody;
   final String? readerItemId;
+
+  /// 封面稳定缓存键：以内容标识（影片/照片/曲目 ID）构造，与会过期的
+  /// 签名 URL 解耦；URL 重签后命中同一缓存条目，避免重复下载与错失恢复。
+  final String? coverCacheKey;
 }

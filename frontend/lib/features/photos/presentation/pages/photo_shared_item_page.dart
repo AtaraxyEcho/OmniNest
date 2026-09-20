@@ -24,6 +24,7 @@ class PhotoSharedItemPage extends ConsumerStatefulWidget {
 class _PhotoSharedItemPageState extends ConsumerState<PhotoSharedItemPage> {
   String? _password;
   bool _needPassword = false;
+  String? _passwordError;
   PhotoItem? _photo;
   Object? _error;
   bool _loading = true;
@@ -59,19 +60,23 @@ class _PhotoSharedItemPageState extends ConsumerState<PhotoSharedItemPage> {
         _photo = photo;
         _loading = false;
         _needPassword = false;
+        _passwordError = null;
       });
     } catch (e) {
       if (!mounted || generation != _loadGeneration) {
         return;
       }
-      // 简单判断是否需要密码
+      // 后端密码校验失败返回 400 +「密码错误」文案；据此进入密码流程，
+      // 并在二次输入失败时给出可区分的错误提示。
       final msg = e.toString();
-      if (msg.contains('401') ||
-          msg.contains('password') ||
-          msg.contains('密码')) {
+      if (msg.contains('password') || msg.contains('密码')) {
         setState(() {
           _needPassword = true;
           _loading = false;
+          _passwordError =
+              _password == null || _password!.isEmpty
+                  ? null
+                  : describeUserFacingError(e).displayMessage;
         });
       } else {
         setState(() {
@@ -108,6 +113,7 @@ class _PhotoSharedItemPageState extends ConsumerState<PhotoSharedItemPage> {
 
     if (_needPassword) {
       return _SharedItemPasswordPrompt(
+        errorText: _passwordError,
         onSubmit: (password) {
           _password = password;
           _loadPhoto();
@@ -124,9 +130,10 @@ class _PhotoSharedItemPageState extends ConsumerState<PhotoSharedItemPage> {
 
 /// 密码输入提示（单张照片分享）
 class _SharedItemPasswordPrompt extends StatefulWidget {
-  const _SharedItemPasswordPrompt({required this.onSubmit});
+  const _SharedItemPasswordPrompt({required this.onSubmit, this.errorText});
 
   final ValueChanged<String> onSubmit;
+  final String? errorText;
 
   @override
   State<_SharedItemPasswordPrompt> createState() =>
@@ -177,6 +184,16 @@ class _SharedItemPasswordPromptState extends State<_SharedItemPasswordPrompt> {
                 fontSize: AppTypography.bodyMedium,
               ),
             ),
+            if (widget.errorText != null) ...[
+              SizedBox(height: 8),
+              Text(
+                widget.errorText!,
+                style: TextStyle(
+                  color: context.photosColors.danger,
+                  fontSize: AppTypography.bodyMedium,
+                ),
+              ),
+            ],
             SizedBox(height: 20),
             TextField(
               controller: _controller,

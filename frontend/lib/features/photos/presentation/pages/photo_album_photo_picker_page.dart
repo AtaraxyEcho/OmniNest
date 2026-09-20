@@ -147,13 +147,19 @@ class _PhotoAlbumPhotoPickerPageState
                     )
                     : NotificationListener<ScrollNotification>(
                       onNotification: (notification) {
-                        if (notification.metrics.extentAfter < 640) {
+                        if (notification.depth != 0 ||
+                            notification.metrics.axis != Axis.vertical ||
+                            notification.metrics.extentAfter >= 640) {
+                          return false;
+                        }
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (!mounted) return;
                           unawaited(
                             ref
                                 .read(photoAlbumPickerProvider.notifier)
                                 .loadMore(),
                           );
-                        }
+                        });
                         return false;
                       },
                       child: LayoutBuilder(

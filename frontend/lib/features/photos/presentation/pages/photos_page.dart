@@ -17,6 +17,7 @@ import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/domain/photo_album.dart';
+import 'package:omninest/features/photos/domain/photo_timeline.dart';
 import 'package:omninest/features/photos/presentation/widgets/batch_progress_dialog.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_albums_view.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_bottom_nav.dart';
@@ -463,13 +464,17 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
           .read(photoCenterControllerProvider.notifier)
           .createAlbum(name: name, description: description);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context).photosAlbumCreated(name),
+        // 先清掉在播提示再弹出：同名相册连续创建时两条同文案 SnackBar
+        // 并存会触发 SnackBar Hero tag 重复断言。
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              content: Text(
+                AppLocalizations.of(context).photosAlbumCreated(name),
+              ),
             ),
-          ),
-        );
+          );
       }
     } on Exception {
       if (context.mounted) {

@@ -84,11 +84,17 @@ class _PhotoGroupViewState extends ConsumerState<PhotoGroupView> {
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: (notification) {
-              if (notification.metrics.extentAfter < 800) {
+              if (notification.depth != 0 ||
+                  notification.metrics.axis != Axis.vertical ||
+                  notification.metrics.extentAfter >= 800) {
+                return false;
+              }
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (!mounted) return;
                 ref
                     .read(photoCenterControllerProvider.notifier)
                     .loadMoreGroups();
-              }
+              });
               return false;
             },
             child:

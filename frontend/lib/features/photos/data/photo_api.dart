@@ -497,9 +497,13 @@ class PhotoApi {
     return parseList(response.data).map(PhotoShareLink.fromJson).toList();
   }
 
-  /// 撤销分享链接
+  /// 撤销分享链接。后端业务失败（如链接不存在）返回 4xx 错误包络，
+  /// 必须解析并抛出；否则 Dio 在 status<500 下不抛错，失败会被静默当作成功。
   Future<void> revokeAlbumShare(String shareId) async {
-    await apiClient.dio.delete<Map<String, dynamic>>('/photos/share/$shareId');
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/photos/share/$shareId',
+    );
+    parseEnvelope(response.data);
   }
 
   /// 创建单张照片分享链接

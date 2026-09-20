@@ -67,7 +67,10 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
     }
     final position = _scrollController.position;
     if (position.maxScrollExtent - position.pixels <= 480) {
-      onReachEnd();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        onReachEnd();
+      });
     }
   }
 

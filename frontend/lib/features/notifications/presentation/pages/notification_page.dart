@@ -45,7 +45,10 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
     }
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
-      ref.read(notificationControllerProvider.notifier).loadMore();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        ref.read(notificationControllerProvider.notifier).loadMore();
+      });
     }
   }
 

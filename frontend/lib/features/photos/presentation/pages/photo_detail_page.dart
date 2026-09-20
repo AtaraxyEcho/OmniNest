@@ -720,13 +720,50 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
 ///
 /// 列表接口不返回 sourceUrl，原图需详情接口签发；网格已解码的封面可立刻
 /// 展示，原图按屏宽降采样解码，避免移动端整幅原图解码卡顿。
-class _ProgressivePhotoImage extends StatelessWidget {
+///
+/// 首帧种子（列表/内存缓存）可能携带已过期的预签名 URL；签名 URL 失败
+/// 后按世代后缀重试并作废详情 provider 换取现签地址：CachedNetworkImage
+/// 的 provider 相等性只看 cacheKey，同 key 的 URL 轮换不会重载已失败的
+/// 流，必须换 key 才能重试。
+class _ProgressivePhotoImage extends ConsumerStatefulWidget {
   const _ProgressivePhotoImage({required this.photo});
 
   final PhotoItem photo;
 
   @override
+  ConsumerState<_ProgressivePhotoImage> createState() =>
+      _ProgressivePhotoImageState();
+}
+
+class _ProgressivePhotoImageState
+    extends ConsumerState<_ProgressivePhotoImage> {
+  static const int _maxRetryTicks = 2;
+  int _retryTick = 0;
+  bool _recovering = false;
+
+  void _handleImageError() {
+    if (_recovering || _retryTick >= _maxRetryTicks) {
+      return;
+    }
+    // post-frame 触发，避免图片流回调（可发生于 build 期）中直接改状态。
+    _recovering = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _retryTick++;
+        _recovering = false;
+      });
+      // 作废详情取现签 URL；新 URL 配合世代后缀 cacheKey 才会真正重载。
+      ref.invalidate(photoDetailProvider(widget.photo.id));
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final photo = widget.photo;
+    final retrySuffix = _retryTick > 0 ? ':r$_retryTick' : '';
     final coverUrl = photo.coverUrl;
     final sourceUrl = photo.sourceUrl;
     final size = MediaQuery.sizeOf(context);
@@ -753,8 +790,9 @@ class _ProgressivePhotoImage extends StatelessWidget {
       }
       return _ViewerNetworkImage(
         imageUrl: coverUrl,
-        cacheKey: photo.coverCacheKey,
+        cacheKey: '${photo.coverCacheKey}$retrySuffix',
         memCacheWidth: sourceDecodeWidth,
+        onError: _handleImageError,
       );
     }
 
@@ -765,16 +803,18 @@ class _ProgressivePhotoImage extends StatelessWidget {
         if (hasCover)
           _ViewerNetworkImage(
             imageUrl: coverUrl,
-            cacheKey: photo.coverCacheKey,
+            cacheKey: '${photo.coverCacheKey}$retrySuffix',
             memCacheWidth: coverDecodeWidth,
+            onError: _handleImageError,
           ),
         _ViewerNetworkImage(
           imageUrl: sourceUrl,
-          cacheKey: photo.sourceCacheKey,
+          cacheKey: '${photo.sourceCacheKey}$retrySuffix',
           memCacheWidth: sourceDecodeWidth,
           // 封面已在底层：原图加载中不再叠 spinner，失败时保留封面。
           transparentWhilePending: hasCover,
           hideError: hasCover,
+          onError: _handleImageError,
         ),
       ],
     );
@@ -788,6 +828,7 @@ class _ViewerNetworkImage extends StatelessWidget {
     required this.memCacheWidth,
     this.transparentWhilePending = false,
     this.hideError = false,
+    this.onError,
   });
 
   final String imageUrl;
@@ -795,6 +836,7 @@ class _ViewerNetworkImage extends StatelessWidget {
   final int memCacheWidth;
   final bool transparentWhilePending;
   final bool hideError;
+  final VoidCallback? onError;
 
   @override
   Widget build(BuildContext context) {
@@ -806,6 +848,12 @@ class _ViewerNetworkImage extends StatelessWidget {
       fadeInDuration: Duration.zero,
       fadeOutDuration: Duration.zero,
       useOldImageOnUrlChange: true,
+      errorListener: (_) {
+        final callback = onError;
+        if (callback != null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) => callback());
+        }
+      },
       placeholder:
           transparentWhilePending
               ? (context, url) => const SizedBox.shrink()

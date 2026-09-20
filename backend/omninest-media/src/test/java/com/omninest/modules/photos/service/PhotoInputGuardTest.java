@@ -19,7 +19,7 @@ import org.junit.jupiter.api.Test;
 class PhotoInputGuardTest {
 
     private final PhotoMediaLimitsProperties properties = new PhotoMediaLimitsProperties();
-    private final PhotoInputGuard guard = new PhotoInputGuard(properties, new PhotoFileDetector());
+    private final PhotoInputGuard guard = new PhotoInputGuard(properties);
 
     @Test
     void inspectForDecodeReturnsDimensionsForValidImage() throws Exception {
@@ -35,12 +35,28 @@ class PhotoInputGuardTest {
     }
 
     @Test
-    void inspectForDecodeRejectsExtensionAndMagicMismatch() throws Exception {
-        Path image = createImage(4, 4, "png");
+    void inspectForDecodeTrustsContentMagicOverExtensionMismatch() throws Exception {
+        // 入口按声明 MIME 收件，扩展名可能与内容不符；处理端以魔数为
+        // 事实来源放行可解码内容，否则会留下永久无封面的僵尸条目。
+        Path image = createImage(10, 6, "png");
         try {
+            PhotoInputGuard.ImageDimensions dimensions = guard.inspectForDecode(image, "photo.jpg");
+
+            assertThat(dimensions.width()).isEqualTo(10);
+            assertThat(dimensions.height()).isEqualTo(6);
+        } finally {
+            Files.deleteIfExists(image);
+        }
+    }
+
+    @Test
+    void inspectForDecodeRejectsUnknownContent() throws Exception {
+        Path image = Files.createTempFile("omninest-photo-guard-test-", ".jpg");
+        try {
+            Files.write(image, new byte[]{0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07});
             assertThatThrownBy(() -> guard.inspectForDecode(image, "photo.jpg"))
                     .isInstanceOf(BusinessException.class)
-                    .hasMessage("图片扩展名与文件内容不一致");
+                    .hasMessage("图片编码不受支持");
         } finally {
             Files.deleteIfExists(image);
         }
@@ -58,6 +74,17 @@ class PhotoInputGuardTest {
         } finally {
             Files.deleteIfExists(image);
         }
+    }
+
+    @Test
+    void detectContentFormatIdentifiesRasterMagics() {
+        byte[] jpeg = {(byte) 0xFF, (byte) 0xD8, (byte) 0xFF, (byte) 0xE0, 0x00, 0x10};
+        byte[] png = {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+        byte[] unknown = {0x12, 0x34};
+
+        assertThat(guard.detectContentFormat(jpeg)).isEqualTo("jpeg");
+        assertThat(guard.detectContentFormat(png)).isEqualTo("png");
+        assertThat(guard.detectContentFormat(unknown)).isNull();
     }
 
     private Path createImage(int width, int height, String format) throws Exception {

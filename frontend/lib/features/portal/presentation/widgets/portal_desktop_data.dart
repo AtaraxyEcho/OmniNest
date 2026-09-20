@@ -232,6 +232,10 @@ class _PortalDesktopData {
         subtitle: continueSubtitle(context),
         imageUrl: readerImageUrl,
         readerItemId: readerCoverItemId,
+        coverCacheKey:
+            readerCoverItemId == null
+                ? null
+                : 'portal-cover:reader:$readerCoverItemId',
         route:
             readerItem == null
                 ? '/reader'
@@ -252,6 +256,10 @@ class _PortalDesktopData {
         title: movieTitle.isEmpty ? l10n.portalNoWatchingContent : movieTitle,
         subtitle: movieSubtitle(context),
         imageUrl: movieImageUrl,
+        coverCacheKey: () {
+          final coverId = movieItem?.id ?? primaryMovieItem?.id;
+          return coverId == null ? null : 'portal-cover:video:$coverId';
+        }(),
         route:
             movieItem == null
                 ? primaryMovieItem == null
@@ -272,6 +280,8 @@ class _PortalDesktopData {
         title: photoItem?.title ?? l10n.portalNoPhotos,
         subtitle: exhibitSubtitle(context),
         imageUrl: photoImageUrl,
+        coverCacheKey:
+            photoItem == null ? null : 'portal-cover:photos:${photoItem.id}',
         route: photoItem == null ? '/photos' : '/photos/${photoItem.id}',
         actionLabel:
             photoItem == null ? l10n.portalDockPhotos : l10n.portalOpenPhoto,
@@ -289,6 +299,14 @@ class _PortalDesktopData {
             musicAlbum?.artistName ??
             l10n.portalDockMusic,
         imageUrl: musicImageUrl,
+        coverCacheKey: () {
+          final trackId = musicTrack?.id;
+          if (trackId != null) {
+            return 'portal-cover:music:$trackId';
+          }
+          final album = musicAlbum;
+          return album == null ? null : 'portal-cover:music:${album.title}';
+        }(),
         route: '/music',
         actionLabel: l10n.portalDockMusic,
         heroEyebrow: l10n.portalDockMusic,

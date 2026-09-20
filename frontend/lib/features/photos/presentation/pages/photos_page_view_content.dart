@@ -45,16 +45,20 @@ class _FrameViewContent extends ConsumerWidget {
           PhotoTimelineView(
             key: const ValueKey('frame-timeline'),
             onOpenPhoto: (photo) {
-              // 时间线的浏览范围为当前已加载的各月份预览照片。
+              // 时间线的浏览/幻灯片范围限定为点击照片所在月份，
+              // 与 period 页口径一致（sourceKey = 年-月）。
               final timeline = state.timeline;
               if (timeline != null) {
-                final previews = <PhotoItem>[
-                  for (final year in timeline.years)
-                    for (final month in year.months) ...month.previewPhotos,
-                ];
-                ref
-                    .read(photoBrowseScopeProvider.notifier)
-                    .set(previews, PhotoBrowseSource.timeline);
+                final month = _findTimelineMonthOf(timeline, photo.id);
+                if (month != null) {
+                  ref
+                      .read(photoBrowseScopeProvider.notifier)
+                      .set(
+                        month.$2.previewPhotos,
+                        PhotoBrowseSource.timeline,
+                        sourceKey: '${month.$1}-${month.$2.month}',
+                      );
+                }
               }
               onOpenPhoto(photo);
             },
@@ -160,4 +164,19 @@ class _FrameViewContent extends ConsumerWidget {
       child: grid,
     );
   }
+}
+
+/// 在时间线中定位照片所属的 (年, 月分组)；跨月唯一，找不到返回 null。
+(int, PhotoMonthGroup)? _findTimelineMonthOf(
+  PhotoTimeline timeline,
+  String photoId,
+) {
+  for (final year in timeline.years) {
+    for (final month in year.months) {
+      if (month.previewPhotos.any((item) => item.id == photoId)) {
+        return (year.year, month);
+      }
+    }
+  }
+  return null;
 }

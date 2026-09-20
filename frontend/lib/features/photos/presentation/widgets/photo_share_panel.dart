@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/environment_providers.dart';
+import 'package:omninest/app/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -111,8 +111,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         originalQuality: _originalQuality,
       );
       if (!mounted || photoId != widget.photo.id) return;
+      final shareUrl = await _buildShareUrl(link.token);
+      if (!mounted || photoId != widget.photo.id) return;
       setState(() {
-        _shareUrl = _buildShareUrl(link.token);
+        _shareUrl = shareUrl;
         _loadedForPhotoId = photoId;
         _creating = false;
       });
@@ -174,8 +176,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
         originalQuality: _originalQuality,
       );
       if (!mounted || photoId != widget.photo.id) return;
+      final shareUrl = await _buildShareUrl(link.token);
+      if (!mounted || photoId != widget.photo.id) return;
       setState(() {
-        _shareUrl = _buildShareUrl(link.token);
+        _shareUrl = shareUrl;
         _creating = false;
       });
     } on Exception {
@@ -213,9 +217,13 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   /// 分享页为独立静态页（share.html，原生 JS 调公开 API），
   /// 不依赖 Flutter SPA 部署；链接用路径形态携带令牌，避免地址栏暴露查询参数。
   /// 指向 API 地址会命中受保护接口返回 401。
-  String _buildShareUrl(String token) {
-    final webBase = ref.read(webShareBaseUrlProvider);
-    return '$webBase/share/$token';
+  /// 单照分享链接为 SPA hash 路由（/shared/photos/item/:token），基址取
+  /// 服务器下发的对外 Web 地址；未配置时回退浏览器地址或 API origin
+  ///（仅本机可用）。旧路径形态 /share/{token} 仅开发期后端托管页可用，
+  /// 生产 nginx 与 SPA 路由均无该路径，已废弃。
+  Future<String> _buildShareUrl(String token) async {
+    final webBase = await ref.read(webShareBaseUrlResolverProvider).resolve();
+    return '$webBase/#/shared/photos/item/$token';
   }
 
   @override
@@ -459,33 +467,49 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
               .read(photoCenterControllerProvider.notifier)
               .revokeAlbumShare(shareId),
     );
-    if (result != null && mounted) {
-      // 在管理对话框里新建了带密码/有效期的链接后，刷新面板链接显示。
-      final (password, expiryOption) = result;
-      if (password.isNotEmpty) {
-        try {
-          final link = await ref
-              .read(photoCenterControllerProvider.notifier)
-              .createPhotoShare(
-                widget.photo.id,
-                password: password,
-                expiresAt: resolveShareExpiry(expiryOption),
-                includeLocation: _includeLocation,
-                originalQuality: _originalQuality,
-              );
-          if (!mounted) return;
-          setState(() {
-            _shareUrl = _buildShareUrl(link.token);
-            _error = null;
-          });
-          unawaited(_copyToClipboard());
-        } on Exception {
-          if (!mounted) return;
-          setState(() {
-            _error = AppLocalizations.of(context).photosShareLinkFailed;
-          });
-        }
+    if (!mounted) return;
+    // 对话框内可能已撤销链接：以最新列表为准同步面板，
+    // 全部撤销后清空缓存链接，面板回到创建态而不是继续展示失效 URL。
+    try {
+      final latest = await controller.listPhotoShares(widget.photo.id);
+      if (!mounted) return;
+      if (latest.isEmpty) {
+        setState(() {
+          _shareUrl = null;
+          _loadedForPhotoId = null;
+        });
       }
+    } on Exception {
+      // 刷新失败不影响后续创建流程
+    }
+    if (result == null || !mounted) {
+      return;
+    }
+    // 在管理对话框里新建了链接（密码留空 = 显式创建无密码链接）后，刷新面板链接显示。
+    final (password, expiryOption) = result;
+    try {
+      final link = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .createPhotoShare(
+            widget.photo.id,
+            password: password.isEmpty ? null : password,
+            expiresAt: resolveShareExpiry(expiryOption),
+            includeLocation: _includeLocation,
+            originalQuality: _originalQuality,
+          );
+      if (!mounted) return;
+      final shareUrl = await _buildShareUrl(link.token);
+      if (!mounted) return;
+      setState(() {
+        _shareUrl = shareUrl;
+        _error = null;
+      });
+      unawaited(_copyToClipboard());
+    } on Exception {
+      if (!mounted) return;
+      setState(() {
+        _error = AppLocalizations.of(context).photosShareLinkFailed;
+      });
     }
   }
 

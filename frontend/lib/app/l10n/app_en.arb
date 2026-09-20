@@ -219,7 +219,9 @@
   "photoBackupScopeSelectedCount": "{count} albums selected",
   "@photoBackupScopeSelectedCount": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "photoBackupScopeOptionAll": "All albums",
@@ -232,7 +234,9 @@
   "photoBackupScopeSummarySelected": "Scope: {count} albums selected",
   "@photoBackupScopeSummarySelected": {
     "placeholders": {
-      "count": {"type": "int"}
+      "count": {
+        "type": "int"
+      }
     }
   },
   "profileManageBackdrop": "Manage background",
@@ -706,8 +710,7 @@
   "filesResumingUpload": "Resuming upload",
   "filesUploadRetrying": "Cleanup complete. Retrying upload",
   "filesUploadDone": "Upload complete",
-  "filesUploadScanPending":
-      "Upload complete. Security scan in progress; the file will appear once it passes.",
+  "filesUploadScanPending": "Upload complete. Security scan in progress; the file will appear once it passes.",
   "filesUploadedParts": "Uploaded {current}/{total} parts",
   "@filesUploadedParts": {
     "placeholders": {
@@ -3375,6 +3378,14 @@
       "count": {}
     }
   },
+  "photosShareLinkNoExpiry": "Never expires",
+  "photosShareLinkExpired": "Expired",
+  "photosShareLinkExpiresOn": "Expires {date}",
+  "@photosShareLinkExpiresOn": {
+    "placeholders": {
+      "date": {}
+    }
+  },
   "photosCreateLink": "Create Link",
   "photosShareLinkCreated": "Share link created: {token}",
   "@photosShareLinkCreated": {
@@ -3578,7 +3589,8 @@
   "musicScrapeLibraryConfirmTitle": "Rescrape entire library?",
   "musicScrapeLibraryConfirmMessage": "Every local track will be re-matched online, including already scraped ones. Continue?",
   "musicQualityHint": "Playback falls back automatically to tiers your connected platforms support",
-  "musicQualityUnsupported": "Not supported by connected platforms",  "musicQualityTitle": "Playback Quality",
+  "musicQualityUnsupported": "Not supported by connected platforms",
+  "musicQualityTitle": "Playback Quality",
   "musicQualityJymaster": "Master",
   "musicQualityJyeffect": "HD Surround",
   "musicQualitySky": "Immersive Surround",

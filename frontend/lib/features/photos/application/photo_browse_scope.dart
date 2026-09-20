@@ -18,7 +18,7 @@ class PhotoBrowseScope {
   final List<PhotoItem> photos;
   final PhotoBrowseSource source;
 
-  /// 来源限定键：影集=影集 ID，标签=标签名，时间线=年月范围；其余为空。
+  /// 来源限定键：影集=影集 ID，标签=标签名，时间线=年-月，地点=地名；其余为空。
   final String? sourceKey;
 
   bool contains(String photoId) => photos.any((p) => p.id == photoId);

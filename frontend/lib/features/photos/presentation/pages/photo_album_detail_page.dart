@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -141,9 +142,16 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
           onDelete: () => _confirmDelete(context, ref),
           onSlideshow: () {
             if (photos.isEmpty) return;
+            // 声明影集来源：缺省会被按全库语义处理，播放列表在 build 时
+            // 被全库照片整体替换，越出影集范围。
             context.push(
               '/photos/slideshow',
-              extra: {'photos': photos, 'initialIndex': 0},
+              extra: {
+                'photos': photos,
+                'initialIndex': 0,
+                'source': PhotoBrowseSource.album,
+                'sourceKey': albumId,
+              },
             );
           },
           onShare: () => _showShareDialog(context, ref, albumId),
@@ -182,9 +190,15 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
                   )
                   : NotificationListener<ScrollNotification>(
                     onNotification: (notification) {
-                      if (notification.metrics.extentAfter < 480) {
-                        unawaited(_loadMorePhotos());
+                      if (notification.depth != 0 ||
+                          notification.metrics.axis != Axis.vertical ||
+                          notification.metrics.extentAfter >= 480) {
+                        return false;
                       }
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (!mounted) return;
+                        unawaited(_loadMorePhotos());
+                      });
                       return false;
                     },
                     child: CustomScrollView(
@@ -365,36 +379,41 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
               .revokeAlbumShare(shareId),
     );
 
-    if (result == null || !context.mounted) return;
+    if (!context.mounted) return;
+    if (result == null) return;
+    // 密码留空 = 显式创建无密码链接。
     final (password, expiryOption) = result;
-    if (password.isNotEmpty) {
-      final expiresAt = resolveShareExpiry(expiryOption);
+    final expiresAt = resolveShareExpiry(expiryOption);
 
-      try {
-        final link = await ref
-            .read(photoCenterControllerProvider.notifier)
-            .createAlbumShare(
-              albumId,
-              password: password.isEmpty ? null : password,
-              expiresAt: expiresAt,
-            );
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                AppLocalizations.of(context).photosShareLinkCreated(link.token),
+    try {
+      final link = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .createAlbumShare(
+            albumId,
+            password: password.isEmpty ? null : password,
+            expiresAt: expiresAt,
+          );
+      final baseUrl = await ref.read(webShareBaseUrlResolverProvider).resolve();
+      if (context.mounted) {
+        // 影集分享走 SPA hash 路由（/shared/photos/:token）；基址取
+        // 服务器下发的对外 Web 地址，未配置时回退到客户端推导值。
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context).photosShareLinkCreated(
+                '$baseUrl/#/shared/photos/${link.token}',
               ),
             ),
-          );
-        }
-      } on Exception {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(AppLocalizations.of(context).photosShareLinkFailed),
-            ),
-          );
-        }
+          ),
+        );
+      }
+    } on Exception {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context).photosShareLinkFailed),
+          ),
+        );
       }
     }
   }

@@ -57,10 +57,16 @@ class _FrameLocationsViewState extends ConsumerState<FrameLocationsView> {
       photos: groups[selected]!,
       onBack: () => setState(() => _selectedLocation = null),
       onOpenPhoto: (photo) {
-        // 地点视图的幻灯片播放范围为全部照片（v5.1 语义）。
+        // 地点视图的浏览/幻灯片范围限定为当前地点的照片，
+        // 与影集/时间线的区域隔离语义一致；幻灯片侧对 locations
+        // 来源保留子集，不再回退全库替换。
         ref
             .read(photoBrowseScopeProvider.notifier)
-            .set(const <PhotoItem>[], PhotoBrowseSource.library);
+            .set(
+              groups[selected]!,
+              PhotoBrowseSource.locations,
+              sourceKey: selected,
+            );
         widget.onOpenPhoto(photo);
       },
       onToggleFavorite: widget.onToggleFavorite,

@@ -130,13 +130,14 @@ void main() {
     expect(find.text('中国 · 上海市'), findsOneWidget);
     expect(find.byType(PhotoGridTile), findsNWidgets(2));
 
-    // 打开照片时浏览范围写入该地点的全部照片。
+    // 打开照片时浏览范围写入该地点的照片子集（区域隔离），
+    // sourceKey 锚定地名，幻灯片不再回退全库播放。
     await tester.tap(find.byType(PhotoGridTile).first);
     await tester.pumpAndSettle();
-    // 地点视图写入空 scope + library 来源，查看器回退到中心列表。
     final scope = container!.read(photoBrowseScopeProvider);
-    expect(scope.source, PhotoBrowseSource.library);
-    expect(scope.photos.length, 0);
+    expect(scope.source, PhotoBrowseSource.locations);
+    expect(scope.sourceKey, '中国 · 上海市');
+    expect(scope.photos.length, 2);
   });
 
   testWidgets('返回按钮回到地点卡片网格', (tester) async {

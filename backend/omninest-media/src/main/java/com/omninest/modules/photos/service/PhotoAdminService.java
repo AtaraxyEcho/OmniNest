@@ -35,6 +35,7 @@ import com.omninest.common.util.ThrowableDescriber;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.io.PushbackInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.DigestInputStream;
@@ -274,6 +275,13 @@ public class PhotoAdminService {
         }
         var existing = photoItemRepository.findByOwnerUserIdAndFileNodeId(ownerUserId, file.id());
         if (existing.isPresent()) {
+            // 历史无封面条目（如内容与扩展名不符曾被旧校验拒绝）在重扫时
+            // 补投缩略图任务自愈，避免永久占位。
+            PhotoItem present = existing.get();
+            if (present.getCoverFileId() == null && file.currentObjectId() != null) {
+                filePostProcessingTaskService.enqueueThumbnailIfAbsent(
+                        thumbnailEvent(file, ownerUserId));
+            }
             return;
         }
         PhotoItem photo = new PhotoItem();
@@ -312,7 +320,19 @@ public class PhotoAdminService {
             try (FileContentStream content = fileQueryService.openReadableFileContent(ownerUserId, file.id());
                  DigestInputStream digestInput = new DigestInputStream(content.inputStream(), sha256Digest())) {
                 photo.setFileSize(file.sizeBytes());
-                exif = exifExtractor.extract(digestInput);
+                // 先取头部魔数归一化 format：入口按声明 MIME 收件，扩展名
+                // 可能与真实内容不符，后续处理与展示都以魔数为准。
+                // pushback 仅是摘录流的包装，不拥有底层流生命周期：
+                // 关闭它会连带关闭 digestInput，破坏后续尾部扫描与哈希。
+                byte[] head = digestInput.readNBytes(CONTENT_PEEK_BYTES);
+                String detectedFormat = inputGuard.detectContentFormat(head);
+                if (detectedFormat != null) {
+                    photo.setFormat(detectedFormat);
+                }
+                PushbackInputStream pushback = new PushbackInputStream(
+                        digestInput, CONTENT_PEEK_BYTES);
+                pushback.unread(head, 0, head.length);
+                exif = exifExtractor.extract(pushback);
                 inputGuard.validateDimensions(exif.width(), exif.height());
                 applyExif(photo, exif);
                 applyLocation(photo);
@@ -419,6 +439,9 @@ public class PhotoAdminService {
 
     /** 动态照片检测的流式读取块大小。 */
     private static final int READ_CHUNK_BYTES = 8192;
+
+    /** 内容魔数探测的头部字节数，与 PhotoInputGuard 的魔数表保持一致。 */
+    private static final int CONTENT_PEEK_BYTES = 16;
 
     /**
      * 把本次读取的字节追加进尾部环形缓冲，保留最近的窗口字节。

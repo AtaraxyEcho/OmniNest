@@ -7543,6 +7543,17 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get photosShareLinkNoExpiry => '永久有效';
+
+  @override
+  String get photosShareLinkExpired => '已过期';
+
+  @override
+  String photosShareLinkExpiresOn(Object date) {
+    return '到期 $date';
+  }
+
+  @override
   String get photosCreateLink => '创建链接';
 
   @override

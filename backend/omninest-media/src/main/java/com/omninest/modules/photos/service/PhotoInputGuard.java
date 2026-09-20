@@ -9,7 +9,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
-import java.util.Locale;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
@@ -29,7 +28,6 @@ public class PhotoInputGuard {
     private static final int BYTES_PER_PIXEL = 4;
 
     private final PhotoMediaLimitsProperties properties;
-    private final PhotoFileDetector fileDetector;
 
     /**
      * 返回指定照片类型的最大文件字节数。
@@ -57,14 +55,18 @@ public class PhotoInputGuard {
     /**
      * 在完整解码前检查图片魔数、宽高、像素和估算内存。
      *
+     * <p>以魔数为唯一格式事实来源：文件名扩展名可能与内容不符
+     * （入口按声明 MIME 收件），此时拒绝处理会留下永久无封面的
+     * 僵尸条目；内容可解码即放行，仅拒绝无法识别的光栅格式。</p>
+     *
      * @param sourceFile 图片文件
-     * @param fileName 原始文件名
+     * @param fileName 原始文件名（仅用于调用方上下文）
      * @return 图片宽高
      */
     public ImageDimensions inspectForDecode(Path sourceFile, String fileName) {
         try {
             validateFileSize(Files.size(sourceFile), false);
-            validateMagic(sourceFile, fileName);
+            validateMagic(sourceFile);
             try (ImageInputStream imageInput = ImageIO.createImageInputStream(sourceFile.toFile())) {
                 if (imageInput == null) {
                     throw new BusinessException(ErrorCode.PARAM_ERROR, "图片编码不受支持");
@@ -89,6 +91,32 @@ public class PhotoInputGuard {
         } catch (IOException exception) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "图片文件检查失败");
         }
+    }
+
+    /**
+     * 从文件头魔数识别实际光栅格式。
+     *
+     * @param sourceFile 图片文件
+     * @return 识别出的格式（jpeg/png/gif/bmp/tiff），无法识别时返回 null
+     */
+    public String detectContentFormat(Path sourceFile) {
+        byte[] header;
+        try (InputStream input = Files.newInputStream(sourceFile)) {
+            header = input.readNBytes(HEADER_BYTES);
+        } catch (IOException exception) {
+            return null;
+        }
+        return detectFormat(header);
+    }
+
+    /**
+     * 从字节头魔数识别实际光栅格式。
+     *
+     * @param header 文件头字节
+     * @return 识别出的格式（jpeg/png/gif/bmp/tiff），无法识别时返回 null
+     */
+    public String detectContentFormat(byte[] header) {
+        return detectFormat(header);
     }
 
     /**
@@ -117,15 +145,13 @@ public class PhotoInputGuard {
         }
     }
 
-    private void validateMagic(Path sourceFile, String fileName) throws IOException {
+    private void validateMagic(Path sourceFile) throws IOException {
         byte[] header;
         try (InputStream input = Files.newInputStream(sourceFile)) {
             header = input.readNBytes(HEADER_BYTES);
         }
-        String detected = detectFormat(header);
-        String extension = fileDetector.extension(fileName);
-        if (detected == null || !matchesExtension(detected, extension)) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片扩展名与文件内容不一致");
+        if (detectFormat(header) == null) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "图片编码不受支持");
         }
     }
 
@@ -154,15 +180,6 @@ public class PhotoInputGuard {
             return "tiff";
         }
         return null;
-    }
-
-    private boolean matchesExtension(String format, String extension) {
-        String normalized = extension == null ? "" : extension.toLowerCase(Locale.ROOT);
-        return switch (format) {
-            case "jpeg" -> "jpg".equals(normalized) || "jpeg".equals(normalized);
-            case "tiff" -> "tif".equals(normalized) || "tiff".equals(normalized);
-            default -> format.equals(normalized);
-        };
     }
 
     private boolean startsWith(byte[] source, int[] expected) {
