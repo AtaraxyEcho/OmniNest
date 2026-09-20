@@ -7,7 +7,6 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
-import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/widgets/music_glass_panel.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -66,7 +65,11 @@ class PlatformLoginSheet extends ConsumerWidget {
                 padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
                 child: Row(
                   children: [
-                    Icon(Icons.cloud_outlined, color: colors.primary, size: 22),
+                    Icon(
+                      Icons.cloud_outlined,
+                      color: colors.onSurfaceVariant,
+                      size: 22,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
@@ -140,8 +143,9 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
       if (!mounted || status?.status != 'confirmed') {
         return;
       }
-      // 后台刷新账号与曲库，避免扫码确认后同步全量拉取造成数秒卡顿。
-      unawaited(_refreshPlatformData(musicController));
+      // 登录确认后的刷新在 application 层完整执行（资料回源 + 曲库
+      // 失效），不因面板提前关闭而丢失曲库失效。
+      unawaited(musicController.refreshAfterPlatformChange());
     } on Exception catch (error) {
       if (!mounted) {
         return;
@@ -157,18 +161,6 @@ class _NeteaseLoginSectionState extends ConsumerState<_NeteaseLoginSection> {
         ),
       );
     }
-  }
-
-  Future<void> _refreshPlatformData(dynamic musicController) async {
-    try {
-      await musicController.loadPlatformInfo();
-    } on Object {
-      // 账号资料刷新失败不阻塞曲库刷新。
-    }
-    if (!mounted) {
-      return;
-    }
-    ref.invalidate(musicPlatformLibraryProvider);
   }
 
   @override

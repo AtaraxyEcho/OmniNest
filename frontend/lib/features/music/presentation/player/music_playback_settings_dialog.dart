@@ -399,7 +399,7 @@ class _SettingsSection extends StatelessWidget {
       children: [
         Row(
           children: [
-            Icon(icon, size: 16, color: context.musicColors.primary),
+            Icon(icon, size: 16, color: context.musicColors.onSurfaceVariant),
             const SizedBox(width: 7),
             Text(
               title,

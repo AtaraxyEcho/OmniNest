@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -26,9 +27,12 @@ class MusicMetadataEditPage extends ConsumerWidget {
     if (track == null) {
       return const Scaffold(body: AppLoading.detail());
     }
-    return Scaffold(
-      backgroundColor: context.musicColors.surface,
-      body: _MetadataEditForm(track: track),
+    return Theme(
+      data: MusicBackdropTheme.withNeutralTextButtons(Theme.of(context)),
+      child: Scaffold(
+        backgroundColor: context.musicColors.surface,
+        body: _MetadataEditForm(track: track),
+      ),
     );
   }
 }
@@ -544,15 +548,22 @@ class _CoverPanel extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
               decoration: BoxDecoration(
+                // 音质是客观属性而非状态，用中性底；品牌色留给交互与激活态。
                 color: Theme.of(
                   context,
-                ).colorScheme.primaryContainer.withValues(alpha: 0.5),
+                ).colorScheme.surfaceContainerHigh.withValues(alpha: 0.6),
                 borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: Theme.of(
+                    context,
+                  ).colorScheme.outlineVariant.withValues(alpha: 0.5),
+                ),
               ),
               child: Text(
                 track.qualityText,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  color: context.musicColors.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),

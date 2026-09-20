@@ -146,9 +146,10 @@ class _WeatherContent extends StatelessWidget {
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            Icon(
               weather.weatherIcon,
-              style: const TextStyle(fontSize: AppTypography.titleLarge),
+              size: 28,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             const SizedBox(width: 8),
             Expanded(

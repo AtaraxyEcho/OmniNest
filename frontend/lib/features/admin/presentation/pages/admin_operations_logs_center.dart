@@ -398,12 +398,11 @@ class _AuditLogTab extends StatelessWidget {
             showIndex: true,
             indexBase: result.page * pageSize,
             minTableWidth: 960,
-            maxTableWidth: 1060,
             columns: [
               AdminListColumn(
                 key: 'action',
                 label: l10n.adminFilterAction,
-                minWidth: 160,
+                minWidth: 170,
                 sortable: true,
               ),
               AdminListColumn(
@@ -436,7 +435,8 @@ class _AuditLogTab extends StatelessWidget {
               final item = result.items[index];
               return [
                 AdminCellText(
-                  item.action,
+                  adminAuditActionLabel(l10n, item.action),
+                  tooltipMessage: item.action,
                   style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 AdminCellText(
@@ -513,12 +513,11 @@ class _LoginAuditLogTab extends StatelessWidget {
             showIndex: true,
             indexBase: result.page * pageSize,
             minTableWidth: 960,
-            maxTableWidth: 1060,
             columns: [
-              // 用户名改为 S 档：与失败原因按 1:2 分配剩余宽度，避免长屏下过宽。
               AdminListColumn(
                 key: 'username',
                 label: l10n.adminUsername,
+                minWidth: 160,
                 sortable: true,
               ),
               AdminListColumn(
@@ -670,4 +669,29 @@ class _AdminRecordFilterBar extends StatelessWidget {
       ],
     );
   }
+}
+
+/// 审计操作类型的本地化短标签；未收录的枚举回退原始值，
+/// 由 [AdminCellText] 的 tooltip 保留完整名称。
+String adminAuditActionLabel(AppLocalizations l10n, String action) {
+  final labels = <String, String>{
+    'ADMIN_CONFIG_UPDATE': l10n.adminAuditActionConfigUpdate,
+    'ADMIN_EXTERNAL_STORAGE_CREATE': l10n.adminAuditActionExternalStorageCreate,
+    'ADMIN_EXTERNAL_STORAGE_STATUS_UPDATE':
+        l10n.adminAuditActionExternalStorageStatusUpdate,
+    'ADMIN_EXTERNAL_STORAGE_DELETE': l10n.adminAuditActionExternalStorageDelete,
+    'ADMIN_QUOTA_UPDATE': l10n.adminAuditActionQuotaUpdate,
+    'ADMIN_ROLE_PERMISSIONS_UPDATE': l10n.adminAuditActionRolePermissionsUpdate,
+    'ADMIN_TASK_RETRY': l10n.adminAuditActionTaskRetry,
+    'ADMIN_USER_CREATE': l10n.adminAuditActionUserCreate,
+    'ADMIN_USER_ROLES_UPDATE': l10n.adminAuditActionUserRolesUpdate,
+    'ADMIN_USER_ROLE_UPDATE': l10n.adminAuditActionUserRoleUpdate,
+    'ADMIN_USER_STATUS_UPDATE': l10n.adminAuditActionUserStatusUpdate,
+    'ADMIN_USER_DELETE': l10n.adminAuditActionUserDelete,
+    'ADMIN_SESSION_REVOKE': l10n.adminAuditActionSessionRevoke,
+    'ADMIN_SESSION_CLEANUP': l10n.adminAuditActionSessionCleanup,
+    'ADMIN_AUDIT_LOG_CLEANUP': l10n.adminAuditActionAuditLogCleanup,
+    'ADMIN_LOGIN_AUDIT_CLEANUP': l10n.adminAuditActionLoginAuditCleanup,
+  };
+  return labels[action] ?? l10n.adminAuditActionUnknown;
 }

@@ -181,7 +181,7 @@ class _MusicDeckCreatePlaylistDialogState
       titlePadding: const EdgeInsets.fromLTRB(24, 22, 16, 0),
       title: Row(
         children: [
-          Icon(Icons.queue_music_rounded, color: colors.primary),
+          Icon(Icons.queue_music_rounded, color: colors.onSurfaceVariant),
           const SizedBox(width: 12),
           Expanded(
             child: Text(

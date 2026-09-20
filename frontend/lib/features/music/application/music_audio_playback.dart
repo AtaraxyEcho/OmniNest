@@ -570,11 +570,6 @@ class MusicSpectrumSampler extends ChangeNotifier
   }
 }
 
-/// 创建音乐模块专用播放器。
-MusicAudioPlayback createMusicAudioPlayer() {
-  return MusicAudioPlayer();
-}
-
 /// 打开音乐播放源。
 Future<void> openMusicAudio(
   MusicAudioPlayback player,

@@ -23,6 +23,7 @@ void main() {
     List<String> unsupportedExtensions = const <String>[],
     ImportButtonStyle style = ImportButtonStyle.iconButton,
     String? label,
+    Color? color,
   }) {
     return ProviderScope(
       overrides: [
@@ -47,6 +48,7 @@ void main() {
                         allowSharedSpace: false,
                         style: style,
                         label: label,
+                        color: color,
                       ),
                     ),
               ),
@@ -66,6 +68,22 @@ void main() {
 
     expect(find.byType(FilledButton), findsOneWidget);
     expect(find.text('导入书籍'), findsOneWidget);
+  });
+
+  testWidgets('outlined 样式支持整体前景色覆盖', (tester) async {
+    await tester.pumpWidget(
+      buildButton(
+        (_) async => const <XFile>[],
+        style: ImportButtonStyle.outlinedButton,
+        label: '导入文件',
+        color: const Color(0xFF123456),
+      ),
+    );
+
+    final button = tester.widget<OutlinedButton>(find.byType(OutlinedButton));
+    expect(button.style?.foregroundColor?.resolve({}), const Color(0xFF123456));
+    expect(find.text('导入文件'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('文件选择期间禁止重复打开原生选择器', (tester) async {

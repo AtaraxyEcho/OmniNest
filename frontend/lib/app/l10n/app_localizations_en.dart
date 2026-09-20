@@ -10300,4 +10300,59 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get serverPanelChangeCancel => 'Cancel';
+
+  @override
+  String get adminAuditActionConfigUpdate => 'Config updated';
+
+  @override
+  String get adminAuditActionExternalStorageCreate =>
+      'External storage created';
+
+  @override
+  String get adminAuditActionExternalStorageStatusUpdate =>
+      'External storage status updated';
+
+  @override
+  String get adminAuditActionExternalStorageDelete =>
+      'External storage deleted';
+
+  @override
+  String get adminAuditActionQuotaUpdate => 'Quota updated';
+
+  @override
+  String get adminAuditActionRolePermissionsUpdate =>
+      'Role permissions updated';
+
+  @override
+  String get adminAuditActionTaskRetry => 'Task retried';
+
+  @override
+  String get adminAuditActionUserCreate => 'User created';
+
+  @override
+  String get adminAuditActionUserRolesUpdate => 'User roles updated';
+
+  @override
+  String get adminAuditActionUserRoleUpdate => 'User role changed';
+
+  @override
+  String get adminAuditActionUserStatusUpdate => 'User status updated';
+
+  @override
+  String get adminAuditActionUserDelete => 'User deleted';
+
+  @override
+  String get adminAuditActionSessionRevoke => 'Session revoked';
+
+  @override
+  String get adminAuditActionSessionCleanup => 'Session cleanup';
+
+  @override
+  String get adminAuditActionAuditLogCleanup => 'Audit log cleanup';
+
+  @override
+  String get adminAuditActionLoginAuditCleanup => 'Login log cleanup';
+
+  @override
+  String get adminAuditActionUnknown => 'System action';
 }

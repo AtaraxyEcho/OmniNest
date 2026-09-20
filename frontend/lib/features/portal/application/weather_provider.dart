@@ -6,17 +6,24 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
-/// 天气图标映射（和风图标代码 → emoji）
-String weatherIconFromCode(String icon) {
+/// 天气图标映射（和风图标代码 → Material 矢量图标）。
+///
+/// 使用矢量图标而非 emoji：Web 端 emoji 字体在首次绘制时才从外部
+/// CDN 下载（详情页首开约 1 秒空白），离线/内网部署则永久空白。
+IconData weatherIconFromCode(String icon) {
   final iconCode = int.tryParse(icon) ?? 999;
-  if (iconCode == 100) return '☀️';
-  if (iconCode == 101 || iconCode == 102) return '⛅';
-  if (iconCode == 103 || iconCode == 104) return '☁️';
-  if (iconCode >= 150 && iconCode <= 153) return '🌙';
-  if (iconCode >= 300 && iconCode < 400) return '🌧️';
-  if (iconCode >= 400 && iconCode < 500) return '🌨️';
-  if (iconCode >= 500) return '🌫️';
-  return '🌤️';
+  if (iconCode == 100) return Icons.wb_sunny_outlined;
+  if (iconCode == 101 || iconCode == 102) {
+    return Icons.cloud_queue_outlined;
+  }
+  if (iconCode == 103 || iconCode == 104 || iconCode == 154) {
+    return Icons.cloud_outlined;
+  }
+  if (iconCode >= 150 && iconCode <= 153) return Icons.nightlight_round;
+  if (iconCode >= 300 && iconCode < 400) return Icons.water_drop_outlined;
+  if (iconCode >= 400 && iconCode < 500) return Icons.ac_unit_outlined;
+  if (iconCode >= 500) return Icons.blur_on_outlined;
+  return Icons.wb_cloudy_outlined;
 }
 
 /// 逐小时预报条目。
@@ -33,7 +40,7 @@ class WeatherHourly {
   final String icon;
   final String text;
 
-  String get weatherIcon => weatherIconFromCode(icon);
+  IconData get weatherIcon => weatherIconFromCode(icon);
 
   /// 显示用时间：ISO 时间取 HH:mm，否则原样展示。
   String get displayTime {
@@ -74,7 +81,7 @@ class WeatherDaily {
   final String iconNight;
   final String textNight;
 
-  String get weatherIcon => weatherIconFromCode(iconDay);
+  IconData get weatherIcon => weatherIconFromCode(iconDay);
 
   factory WeatherDaily.fromJson(Map<String, dynamic> json) {
     return WeatherDaily(
@@ -230,7 +237,7 @@ class WeatherData {
   Color get aqiColorValue => Color(aqiColor);
 
   /// 天气图标映射
-  String get weatherIcon => weatherIconFromCode(icon);
+  IconData get weatherIcon => weatherIconFromCode(icon);
 }
 
 /// 用户 GPS 位置 Provider（请求权限并获取经纬度）

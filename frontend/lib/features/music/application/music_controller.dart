@@ -7,6 +7,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
+import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/application/music_playback_resolver.dart';
 import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_playback_queue_store.dart';
@@ -32,6 +33,10 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   String? _queuePersistenceErrorMessage;
   bool _controllerDisposed = false;
 
+  /// 洗牌随机源，测试可注入固定种子保证确定性。
+  @visibleForTesting
+  Random random = Random();
+
   /// 曲库曲目分页大小，初始加载与增量加载保持一致。
   static const int musicLibraryPageSize = 100;
 
@@ -50,6 +55,23 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
 
   void _replaceState(MusicCenterState value) {
     state = AsyncData(value);
+  }
+
+  /// 平台登录/断开后的后台刷新：账号资料 + 曲库全量失效。
+  ///
+  /// 由 application 层持有完整流程，不随登录面板关闭而丢失——此前
+  /// 面板在慢速资料回源期间被用户关闭，`mounted` 守卫会跳过曲库
+  /// 失效，表现为"登录成功但首页/曲库/歌单/收藏全空"。
+  Future<void> refreshAfterPlatformChange() async {
+    try {
+      await loadPlatformInfo();
+    } on Object {
+      // 账号资料刷新失败不阻塞曲库刷新。
+    }
+    if (_controllerDisposed || !ref.mounted) {
+      return;
+    }
+    ref.invalidate(musicPlatformLibraryProvider);
   }
 
   Future<void> _refreshTaskState() async {
@@ -240,17 +262,15 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       try {
         resolvedPlan = await _playbackResolver.resolve(selectedItem);
       } on Object catch (error) {
-        final unavailable =
-            selectedItem.ref is OnlineMusicRef &&
-            _isUnavailableOnlineResource(error);
+        final unavailable = _isUnavailableResource(error);
         if (unavailable) {
-          resolvedQueue.removeWhere(
-            (item) => item.playableKey == selectedItem?.playableKey,
-          );
+          final failedKey = selectedItem.playableKey;
+          resolvedQueue.removeWhere((item) => item.playableKey == failedKey);
           final fallback = _resolveLocalFallback(
             recentItems: recentItems,
             lastPlayed: lastPlayed,
             tracks: tracks,
+            excludedKeys: {failedKey},
           );
           if (fallback != null) {
             selectedItem = fallback;
@@ -385,24 +405,36 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     );
   }
 
+  /// 本地兜底候选；[excludedKeys] 用于排除刚解析失败的曲目，避免兜底选中坏曲。
   MusicPlayableItem? _resolveLocalFallback({
     required List<MusicPlayableItem> recentItems,
     required MusicTrack? lastPlayed,
     required List<MusicTrack> tracks,
+    Set<String> excludedKeys = const <String>{},
   }) {
     for (final item in recentItems) {
+      if (excludedKeys.contains(item.playableKey)) {
+        continue;
+      }
       if (item.ref case LocalMusicRef(:final trackId)) {
         return MusicPlayableItem.local(
           _findTrack(tracks, trackId) ?? item.track,
         );
       }
     }
-    if (lastPlayed != null) {
+    if (lastPlayed != null &&
+        !excludedKeys.contains('local:${lastPlayed.id}')) {
       return MusicPlayableItem.local(
         _findTrack(tracks, lastPlayed.id) ?? lastPlayed,
       );
     }
-    return tracks.isEmpty ? null : MusicPlayableItem.local(tracks.first);
+    final available = tracks.where(
+      (track) => !excludedKeys.contains('local:${track.id}'),
+    );
+    for (final track in available) {
+      return MusicPlayableItem.local(track);
+    }
+    return null;
   }
 
   MusicTrack? _findTrack(List<MusicTrack> tracks, String trackId) {
@@ -414,7 +446,9 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     return null;
   }
 
-  bool _isUnavailableOnlineResource(Object error) {
+  /// 判断解析失败是否属于资源确定性不可用（已删除/已下架等），可安全自动跳过；
+  /// 网络瞬断类错误不匹配，会停播报错而不是移除队列条目。
+  bool _isUnavailableResource(Object error) {
     final described = describeUserFacingError(error);
     final code = described.code?.trim().toUpperCase();
     if (code == '5001' || code == 'MEDIA_NOT_FOUND' || code == '404') {
@@ -499,7 +533,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         return;
       }
       final latest = state.asData?.value;
-      if (item.ref is OnlineMusicRef && _isUnavailableOnlineResource(error)) {
+      if (_isUnavailableResource(error)) {
         await _skipUnavailableQueueItem(
           latest ?? pendingState,
           queue,
@@ -526,11 +560,16 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     if (latest == null || latest.currentItem?.playableKey != item.playableKey) {
       return;
     }
+    // 解析期间队列可能已被 reorder/remove 改变，回写索引按 key 重定位而非沿用旧几何。
+    final resolvedIndex = latest.playbackItems.indexWhere(
+      (candidate) => candidate.playableKey == item.playableKey,
+    );
     state = AsyncData(
       latest.copyWith(
         playbackPlan: plan,
         isPlaying: true,
-        playbackIndex: index,
+        playbackIndex:
+            resolvedIndex >= 0 ? resolvedIndex : latest.playbackIndex,
       ),
     );
     _promoteRecentItem(item);
@@ -569,6 +608,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       recentItems: current.recentItems,
       lastPlayed: null,
       tracks: current.tracks,
+      excludedKeys: {failedItem.playableKey},
     );
     if (fallback != null && fallback.playableKey != failedItem.playableKey) {
       await _playItemInQueue(current, <MusicPlayableItem>[fallback], 0);

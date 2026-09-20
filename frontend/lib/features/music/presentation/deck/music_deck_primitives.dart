@@ -200,30 +200,50 @@ class MusicDeckSourceBadge extends StatelessWidget {
     final label = musicDeckSourceLabel(l10n, platform);
     final color = switch (platform) {
       MusicPlatform.local =>
-        light ? const Color(0xFF266B70) : const Color(0xFF85D7DE),
+        light ? const Color(0xFF356F8A) : const Color(0xFF85D7DE),
       MusicPlatform.netease =>
         light ? const Color(0xFF9A3037) : const Color(0xFFF28C8C),
       MusicPlatform.qq =>
         light ? const Color(0xFF735A08) : const Color(0xFFF0CD76),
     };
-    final backgroundColor =
-        overlay
-            ? context.musicColors.surfaceContainerHigh.withValues(alpha: 0.94)
-            : color.withValues(alpha: 0.14);
+    // 覆盖在封面等影像上时沿用近实底表面 + 平台色文字描边。
+    if (overlay) {
+      return DecoratedBox(
+        decoration: BoxDecoration(
+          color: context.musicColors.surfaceContainerHigh.withValues(
+            alpha: 0.94,
+          ),
+          borderRadius: BorderRadius.circular(4),
+          border: Border.all(color: color.withValues(alpha: 0.46)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: AppTypography.labelSmall,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      );
+    }
+    // 常规徽章改为平台色实底 + 按亮度反差的前景文字：承载卡是低 alpha
+    // 玻璃且壁纸直透（浅色纱仅 4%-12%），此前的 0.14 alpha 底色与
+    // 0.32 描边在浅色壁纸上完全融入背景，是浅色模式不可读的根因。
+    final foreground = light ? Colors.white : const Color(0xFF12211E);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: backgroundColor,
+        color: color,
         borderRadius: BorderRadius.circular(4),
-        border: Border.all(
-          color: color.withValues(alpha: overlay ? 0.46 : 0.32),
-        ),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         child: Text(
           label,
           style: TextStyle(
-            color: color,
+            color: foreground,
             fontSize: AppTypography.labelSmall,
             fontWeight: FontWeight.w700,
           ),

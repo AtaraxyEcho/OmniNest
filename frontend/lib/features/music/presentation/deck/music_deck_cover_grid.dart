@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
@@ -79,7 +80,14 @@ class MusicDeckCoverGrid extends StatelessWidget {
           maxTileWidth,
         );
         return GridView.builder(
-          padding: const EdgeInsets.only(bottom: 112),
+          // 桌面态卡片已带播放条避让，仅留小余量；紧凑态保留完整避让。
+          padding: EdgeInsets.only(
+            bottom:
+                MobileShellScope.isHosted(context) ||
+                        MediaQuery.sizeOf(context).width < 760
+                    ? 112
+                    : 24,
+          ),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: 18,

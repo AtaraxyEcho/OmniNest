@@ -45,6 +45,10 @@ class MusicDeckMiniPlayer extends ConsumerStatefulWidget {
     super.key,
   });
 
+  /// 悬浮态整条控制岛的高度（外边距 7 + 内容行 66 + 外边距 7）。
+  /// 甲板布局用它作为三张玻璃卡的统一底距，使卡片底边与控制岛顶边对齐。
+  static const double barHeight = 80;
+
   final bool compact;
   final VoidCallback onOpenQueue;
   final VoidCallback? onOpenPlayer;

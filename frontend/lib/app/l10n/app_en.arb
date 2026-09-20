@@ -4573,5 +4573,22 @@
   "serverPanelChangeTitle": "Change server?",
   "serverPanelChangeBody": "You will be signed out and local session data cleared, then re-enter the server address.",
   "serverPanelChangeConfirm": "Sign out & change",
-  "serverPanelChangeCancel": "Cancel"
+  "serverPanelChangeCancel": "Cancel",
+  "adminAuditActionConfigUpdate": "Config updated",
+  "adminAuditActionExternalStorageCreate": "External storage created",
+  "adminAuditActionExternalStorageStatusUpdate": "External storage status updated",
+  "adminAuditActionExternalStorageDelete": "External storage deleted",
+  "adminAuditActionQuotaUpdate": "Quota updated",
+  "adminAuditActionRolePermissionsUpdate": "Role permissions updated",
+  "adminAuditActionTaskRetry": "Task retried",
+  "adminAuditActionUserCreate": "User created",
+  "adminAuditActionUserRolesUpdate": "User roles updated",
+  "adminAuditActionUserRoleUpdate": "User role changed",
+  "adminAuditActionUserStatusUpdate": "User status updated",
+  "adminAuditActionUserDelete": "User deleted",
+  "adminAuditActionSessionRevoke": "Session revoked",
+  "adminAuditActionSessionCleanup": "Session cleanup",
+  "adminAuditActionAuditLogCleanup": "Audit log cleanup",
+  "adminAuditActionLoginAuditCleanup": "Login log cleanup",
+  "adminAuditActionUnknown": "System action"
 }

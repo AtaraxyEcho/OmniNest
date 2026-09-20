@@ -150,8 +150,10 @@ class _HomeContent extends ConsumerWidget {
       onOpenCollection,
     ).take(8).toList(growable: false);
     final hosted = MobileShellScope.isHosted(context);
+    // 桌面态卡片已带播放条避让，仅留小余量；紧凑态播放条在布局流内，保留完整避让。
+    final compact = hosted || MediaQuery.sizeOf(context).width < 760;
     return SingleChildScrollView(
-      padding: const EdgeInsets.only(bottom: 112),
+      padding: EdgeInsets.only(bottom: compact ? 112 : 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -372,10 +374,13 @@ class _NowPlayingFocusStrip extends ConsumerWidget {
                         center.currentItem == null
                             ? l10n.musicDeckLibraryReady
                             : l10n.musicDeckNowPlaying,
+                        // 眉标用中性次级色；品牌青绿仅保留给交互与激活态，
+                        // 避免大面积绿色文字主导页面。
                         style: TextStyle(
-                          color: context.musicColors.primary,
+                          color: context.musicColors.onSurfaceVariant,
                           fontSize: AppTypography.labelSmall,
                           fontWeight: FontWeight.w800,
+                          letterSpacing: 0.2,
                         ),
                       ),
                       SizedBox(height: compact ? 4 : 7),
@@ -838,6 +843,8 @@ class _LocalManagementContent extends ConsumerWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // 三个操作按钮统一为描边样式 + 中性前景，
+              // 不使用主题 primary（模块语境下为绿色）。
               MediaImportButton(
                 subsystemDirectory: 'Music',
                 acceptedExtensions: const [
@@ -859,18 +866,25 @@ class _LocalManagementContent extends ConsumerWidget {
                       .read(musicCenterControllerProvider.notifier)
                       .refresh();
                 },
-                style: ImportButtonStyle.textButton,
+                style: ImportButtonStyle.outlinedButton,
+                color: context.musicColors.onSurface,
               ),
               const SizedBox(width: 12),
               OutlinedButton.icon(
                 onPressed: () => _confirmScrapeLibrary(context, ref),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: context.musicColors.onSurface,
+                ),
                 icon: const Icon(Icons.travel_explore_rounded, size: 18),
                 label: Text(l10n.musicScrapeLibrary),
               ),
               const SizedBox(width: 12),
-              FilledButton.icon(
+              OutlinedButton.icon(
                 onPressed:
                     scanRunning ? null : () => _confirmStartScan(context, ref),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: context.musicColors.onSurface,
+                ),
                 icon: const Icon(Icons.radar_rounded, size: 18),
                 label: Text(l10n.musicStartScan),
               ),

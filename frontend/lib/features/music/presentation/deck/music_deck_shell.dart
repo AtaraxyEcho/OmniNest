@@ -44,6 +44,10 @@ class MusicDeckShell extends ConsumerStatefulWidget {
 }
 
 class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
+  /// 桌面三卡（导航/内容/正在播放）的统一底距：与底部悬浮迷你播放器
+  /// 顶边对齐（高度取自 MusicDeckMiniPlayer.barHeight，单一事实来源）。
+  static const double _playerOverlayInset = MusicDeckMiniPlayer.barHeight;
+
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode(debugLabel: 'Music Deck 搜索');
   Timer? _searchDismissTimer;
@@ -95,16 +99,23 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 key: const ValueKey<String>('music-player-detail'),
                 onClose: () => setState(() => _immersivePlayerVisible = false),
               )
-              : Focus(
-                key: const ValueKey<String>('music-deck-system'),
-                autofocus: true,
-                onKeyEvent: _handleKeyEvent,
-                child: Scaffold(
-                  backgroundColor: Colors.transparent,
-                  body:
-                      compact
-                          ? _buildMobile(context, platform, sources)
-                          : _buildDesktop(context, platform, sources),
+              // 语义容器：阻断子树语义向页面根合并。此前禁用态的播放按钮
+              // 语义沿无边界祖先链一路合并到语义树根，整页被标记为
+              // [disabled] 按钮，屏幕阅读器完全不可用。
+              : Semantics(
+                container: true,
+                explicitChildNodes: true,
+                child: Focus(
+                  key: const ValueKey<String>('music-deck-system'),
+                  autofocus: true,
+                  onKeyEvent: _handleKeyEvent,
+                  child: Scaffold(
+                    backgroundColor: Colors.transparent,
+                    body:
+                        compact
+                            ? _buildMobile(context, platform, sources)
+                            : _buildDesktop(context, platform, sources),
+                  ),
                 ),
               ),
     );
@@ -142,19 +153,26 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 Expanded(
                   child: Row(
                     children: [
-                      MusicDeckNavigation(
-                        selected: _section,
-                        compact: layout.compactNavigation,
-                        canManage: canManage,
-                        connectedPlatformCount:
-                            platform?.connectedStatuses.length ?? 0,
-                        onSelected: _selectSection,
-                        onManageAccounts: _openAccounts,
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: _playerOverlayInset,
+                        ),
+                        child: MusicDeckNavigation(
+                          selected: _section,
+                          compact: layout.compactNavigation,
+                          canManage: canManage,
+                          connectedPlatformCount:
+                              platform?.connectedStatuses.length ?? 0,
+                          onSelected: _selectSection,
+                          onManageAccounts: _openAccounts,
+                        ),
                       ),
-                      const SizedBox(width: 14),
+                      const SizedBox(width: MusicDeckDesktopLayout.cardGap),
                       Expanded(
                         child: Padding(
-                          padding: const EdgeInsets.only(bottom: 88),
+                          padding: const EdgeInsets.only(
+                            bottom: _playerOverlayInset,
+                          ),
                           child: MusicDeckContent(
                             section: _section,
                             libraryView: _libraryView,
@@ -169,11 +187,13 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                         ),
                       ),
                       if (layout.showWidePanel) ...[
-                        const SizedBox(width: 14),
+                        const SizedBox(width: MusicDeckDesktopLayout.cardGap),
                         SizedBox(
                           width: layout.widePanelWidth,
                           child: Padding(
-                            padding: const EdgeInsets.only(bottom: 88),
+                            padding: const EdgeInsets.only(
+                              bottom: _playerOverlayInset,
+                            ),
                             child: _WideNowPanel(platform: platform),
                           ),
                         ),
@@ -187,6 +207,9 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
               left: layout.navigationWidth + 14,
               right: layout.trailingPanelSpace,
               top: 54,
+              // 矮视口下搜索结果尾部会滑入底部播放条下方：约束底边
+              // 止于播放条顶线，列表内部自行滚动。
+              bottom: _playerOverlayInset,
               child: IgnorePointer(
                 ignoring: !_searchFocused,
                 child: AnimatedOpacity(
@@ -502,9 +525,10 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
     if (!mounted) {
       return;
     }
-    // 关闭面板仅轻量刷新账号信息；曲库全量刷新由登录成功路径触发，避免双触发卡顿。
+    // 关闭面板同样走完整刷新链（资料 + 曲库失效），覆盖 QQ Cookie 注入、
+    // 断开平台等未走 QR 确认路径的账号变更。
     final musicController = ref.read(musicCenterControllerProvider.notifier);
-    unawaited(musicController.loadPlatformInfo());
+    unawaited(musicController.refreshAfterPlatformChange());
   }
 
   Future<void> _openBackdropSettings() {

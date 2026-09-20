@@ -18791,6 +18791,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Cancel'**
   String get serverPanelChangeCancel;
+
+  /// No description provided for @adminAuditActionConfigUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Config updated'**
+  String get adminAuditActionConfigUpdate;
+
+  /// No description provided for @adminAuditActionExternalStorageCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'External storage created'**
+  String get adminAuditActionExternalStorageCreate;
+
+  /// No description provided for @adminAuditActionExternalStorageStatusUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'External storage status updated'**
+  String get adminAuditActionExternalStorageStatusUpdate;
+
+  /// No description provided for @adminAuditActionExternalStorageDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'External storage deleted'**
+  String get adminAuditActionExternalStorageDelete;
+
+  /// No description provided for @adminAuditActionQuotaUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Quota updated'**
+  String get adminAuditActionQuotaUpdate;
+
+  /// No description provided for @adminAuditActionRolePermissionsUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Role permissions updated'**
+  String get adminAuditActionRolePermissionsUpdate;
+
+  /// No description provided for @adminAuditActionTaskRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Task retried'**
+  String get adminAuditActionTaskRetry;
+
+  /// No description provided for @adminAuditActionUserCreate.
+  ///
+  /// In en, this message translates to:
+  /// **'User created'**
+  String get adminAuditActionUserCreate;
+
+  /// No description provided for @adminAuditActionUserRolesUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'User roles updated'**
+  String get adminAuditActionUserRolesUpdate;
+
+  /// No description provided for @adminAuditActionUserRoleUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'User role changed'**
+  String get adminAuditActionUserRoleUpdate;
+
+  /// No description provided for @adminAuditActionUserStatusUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'User status updated'**
+  String get adminAuditActionUserStatusUpdate;
+
+  /// No description provided for @adminAuditActionUserDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'User deleted'**
+  String get adminAuditActionUserDelete;
+
+  /// No description provided for @adminAuditActionSessionRevoke.
+  ///
+  /// In en, this message translates to:
+  /// **'Session revoked'**
+  String get adminAuditActionSessionRevoke;
+
+  /// No description provided for @adminAuditActionSessionCleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Session cleanup'**
+  String get adminAuditActionSessionCleanup;
+
+  /// No description provided for @adminAuditActionAuditLogCleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Audit log cleanup'**
+  String get adminAuditActionAuditLogCleanup;
+
+  /// No description provided for @adminAuditActionLoginAuditCleanup.
+  ///
+  /// In en, this message translates to:
+  /// **'Login log cleanup'**
+  String get adminAuditActionLoginAuditCleanup;
+
+  /// No description provided for @adminAuditActionUnknown.
+  ///
+  /// In en, this message translates to:
+  /// **'System action'**
+  String get adminAuditActionUnknown;
 }
 
 class _AppLocalizationsDelegate

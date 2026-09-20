@@ -103,7 +103,7 @@ class MusicDeckAddToPlaylistSheet extends ConsumerWidget {
                   ListTile(
                     leading: Icon(
                       Icons.add_rounded,
-                      color: context.musicColors.primary,
+                      color: context.musicColors.onSurfaceVariant,
                     ),
                     title: Text(l10n.musicCreatePlaylist),
                     onTap: () => _createAndAdd(context, ref),

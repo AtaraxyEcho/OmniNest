@@ -255,10 +255,20 @@ void main() {
     expect(wide.showWidePanel, isTrue);
     expect(ultraWide.mainContentWidth, greaterThan(wide.mainContentWidth));
     expect(ultraWide.mainContentWidth, greaterThan(2800));
-    expect(ultraWide.widePanelWidth, 380);
+    // 左右侧卡统一宽度与间距，不再随视口放大。
+    expect(ultraWide.widePanelWidth, MusicDeckDesktopLayout.sideCardWidth);
+    expect(ultraWide.navigationWidth, MusicDeckDesktopLayout.sideCardWidth);
     expect(ultraWide.playerMaxWidth, 1480);
     // 搜索框上限与其他模块顶栏搜索令牌一致,不再随视口放宽。
     expect(ultraWide.searchMaxWidth, AppControlTokens.searchFieldWidth);
+  });
+
+  test('高 DPI 缩放档最大化窗口仍显示右侧正在播放卡', () {
+    // Windows 4K@250% 缩放的最大化逻辑宽度为 1536。
+    final scaled = MusicDeckDesktopLayout.resolve(1536);
+    expect(scaled.showWidePanel, isTrue);
+    expect(scaled.compactNavigation, isFalse);
+    expect(scaled.mainContentWidth, greaterThan(600), reason: '三卡并存时主内容区仍需可用');
   });
 
   test('桌面布局在最小桌面宽度下仍保留有效主内容区', () {

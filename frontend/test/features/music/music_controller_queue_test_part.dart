@@ -257,4 +257,147 @@ void registerMusicQueueTests() {
 
     expect(api.savedPlaybackQueues, hasLength(1));
   });
+
+  test('reorder during pending resolve recomputes index by key', () async {
+    final api = _DelayedMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    api.delayFirstTrack = true;
+
+    final controller = container.read(musicCenterControllerProvider.notifier);
+    final pending = controller.playItems(<MusicPlayableItem>[
+      MusicPlayableItem.local(api.track),
+      MusicPlayableItem.local(api.secondTrack),
+    ], startIndex: 0);
+    controller.reorderQueue(1, 0);
+    api.releaseFirstTrack();
+    await pending;
+
+    final state = container.read(musicCenterControllerProvider).asData!.value;
+    expect(state.playbackItems.map((item) => item.playableKey).toList(), [
+      'local:track-2',
+      'local:track-1',
+    ]);
+    expect(state.playbackIndex, 1);
+  });
+
+  test(
+    'removing current track during resolve keeps the recomputed index',
+    () async {
+      final api = _DelayedMusicApi();
+      final container = ProviderContainer.test(
+        overrides: [musicApiProvider.overrideWithValue(api)],
+      );
+      addTearDown(container.dispose);
+      await container.read(musicCenterControllerProvider.future);
+      api.delayFirstTrack = true;
+
+      final controller = container.read(musicCenterControllerProvider.notifier);
+      final pending = controller.playItems(<MusicPlayableItem>[
+        MusicPlayableItem.local(api.track),
+        MusicPlayableItem.local(api.secondTrack),
+      ], startIndex: 0);
+      controller.removeFromQueue('local:track-1');
+      api.releaseFirstTrack();
+      await pending;
+
+      final state = container.read(musicCenterControllerProvider).asData!.value;
+      expect(state.playbackItems.map((item) => item.playableKey), [
+        'local:track-2',
+      ]);
+      expect(state.playbackIndex, -1);
+    },
+  );
+
+  test('local unavailable track auto-skips to the next queue item', () async {
+    final api =
+        _FakeMusicApi()
+          ..playbackPlanErrors['track-1'] = const AppException(
+            code: '5001',
+            message: '媒体资源不存在',
+          );
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .playItems(<MusicPlayableItem>[
+          MusicPlayableItem.local(api.track),
+          MusicPlayableItem.local(api.secondTrack),
+        ], startIndex: 0);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.playableKey, 'local:track-2');
+    expect(state.playbackItems.map((item) => item.playableKey), [
+      'local:track-2',
+    ]);
+    expect(state.playbackIndex, 0);
+    expect(state.isPlaying, isTrue);
+    expect(api.playbackPlanTrackIds, ['track-1', 'track-2']);
+  });
+
+  test(
+    'transient local failure stops playback without mutating the queue',
+    () async {
+      final api =
+          _FakeMusicApi()
+            ..playbackPlanErrors['track-1'] = const AppException(
+              code: 'REQUEST_TIMEOUT',
+              message: '请求超时，请稍后重试',
+            );
+      final container = ProviderContainer.test(
+        overrides: [musicApiProvider.overrideWithValue(api)],
+      );
+      addTearDown(container.dispose);
+      await container.read(musicCenterControllerProvider.future);
+
+      await container
+          .read(musicCenterControllerProvider.notifier)
+          .playItems(<MusicPlayableItem>[
+            MusicPlayableItem.local(api.track),
+            MusicPlayableItem.local(api.secondTrack),
+          ], startIndex: 0);
+
+      final state = container.read(musicCenterControllerProvider).value!;
+      expect(state.currentItem?.playableKey, 'local:track-1');
+      expect(state.playbackItems, hasLength(2));
+      expect(state.isPlaying, isFalse);
+      expect(state.errorMessage, contains('REQUEST_TIMEOUT'));
+    },
+  );
+
+  test(
+    'playItems resolves the start index against the original list before dedupe',
+    () async {
+      final api = _FakeMusicApi();
+      final container = ProviderContainer.test(
+        overrides: [musicApiProvider.overrideWithValue(api)],
+      );
+      addTearDown(container.dispose);
+      await container.read(musicCenterControllerProvider.future);
+
+      // 原始列表第 1 位是重复曲目：旧实现先去重再取模会跳到第 2 首。
+      await container
+          .read(musicCenterControllerProvider.notifier)
+          .playItems(<MusicPlayableItem>[
+            MusicPlayableItem.local(api.track),
+            MusicPlayableItem.local(api.track),
+            MusicPlayableItem.local(api.secondTrack),
+          ], startIndex: 1);
+
+      final state = container.read(musicCenterControllerProvider).value!;
+      expect(state.currentItem?.playableKey, 'local:track-1');
+      expect(state.playbackItems.map((item) => item.playableKey).toList(), [
+        'local:track-1',
+        'local:track-2',
+      ]);
+      expect(state.playbackIndex, 0);
+    },
+  );
 }

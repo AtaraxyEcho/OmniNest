@@ -135,7 +135,10 @@ public class MusicAdminService {
 
         job.setStatus(TaskStatus.RUNNING.getValue());
         job.setMessage("音乐库扫描中");
-        scanJobRepository.save(job);
+        // executeScanJob 无外层事务，job 为脱管实体：merge 返回的新受管实例
+        // 才携带推进后的 version；不接住返回值则后续收尾 save 仍带旧版本，
+        // 必然触发 StaleObjectStateException（D-009）。
+        job = scanJobRepository.save(job);
 
         int imported = 0;
         try {
@@ -197,12 +200,17 @@ public class MusicAdminService {
             taskRecordService.markCompleted(jobId, Map.of("imported", imported));
             // 扫描入库改变音乐仪表盘统计与最近列表，需失效缓存。
             readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
-            syncEventService.invalidate(
+            // 同步事件记录器要求外层事务（MANDATORY 传播），而 executeScanJob
+            // 本体刻意无事务（逐文件独立提交），故失效事件在独立短事务内落库；
+            // 此前裸调触发 IllegalTransactionStateException 使任务在完成边缘
+            // 失败并进入重试死循环（D-009）。
+            final int importedCount = imported;
+            transactionTemplate.executeWithoutResult(status -> syncEventService.invalidate(
                     ownerUserId,
                     SyncScope.MUSIC,
                     "MUSIC_LIBRARY",
-                    Map.of("source", "SCAN", "imported", imported)
-            );
+                    Map.of("source", "SCAN", "imported", importedCount)
+            ));
             log.info("音乐扫描完成: jobId={}, imported={}", jobId, imported);
             // 发送完成通知
             notificationService.notifyOrLog(ownerUserId, "TASK_COMPLETED",

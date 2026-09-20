@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
@@ -98,7 +99,15 @@ class _MusicDeckTrackListState extends State<MusicDeckTrackList> {
       child: ListView.builder(
         controller: _scrollController,
         primary: false,
-        padding: const EdgeInsets.only(bottom: 108),
+        // 桌面态卡片已带 80px 播放条避让（_playerOverlayInset），
+        // 这里仅保留小余量；紧凑态播放条在布局流内，保留完整避让。
+        padding: EdgeInsets.only(
+          bottom:
+              MobileShellScope.isHosted(context) ||
+                      MediaQuery.sizeOf(context).width < 760
+                  ? 108
+                  : 24,
+        ),
         itemCount: widget.items.length + (footer == null ? 0 : 1),
         itemExtent: 66,
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,

@@ -63,9 +63,11 @@ class _MusicCenterPageState extends ConsumerState<MusicCenterPage> {
     final backdrop = ref.watch(appBackdropControllerProvider).asData?.value;
     final backdropActive = backdrop?.hasActiveBackdrop == true;
     final content = Theme(
-      data: MusicBackdropTheme.resolve(
-        Theme.of(context),
-        backdropActive: backdropActive,
+      data: MusicBackdropTheme.withNeutralTextButtons(
+        MusicBackdropTheme.resolve(
+          Theme.of(context),
+          backdropActive: backdropActive,
+        ),
       ),
       child: Builder(
         builder:

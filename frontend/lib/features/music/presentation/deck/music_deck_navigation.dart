@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/features/music/presentation/deck/music_deck_layout.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
@@ -30,7 +31,8 @@ class MusicDeckNavigation extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final colors = context.musicColors;
     return SizedBox(
-      width: compact ? 76 : 216,
+      // 宽度与正在播放侧卡统一（MusicDeckDesktopLayout.sideCardWidth）。
+      width: compact ? 76 : MusicDeckDesktopLayout.sideCardWidth,
       child: MusicDeckGlass(
         opacity: 0.18,
         blur: 12,

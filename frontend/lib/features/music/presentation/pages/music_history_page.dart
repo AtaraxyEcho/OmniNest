@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -18,39 +19,42 @@ class MusicHistoryPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final history = ref.watch(musicHistoryControllerProvider);
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      backgroundColor: context.musicColors.surface,
-      body: history.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => _HistoryFailure(message: '$error'),
-        data: (state) {
-          if (state.errorMessage != null) {
-            return _HistoryFailure(
-              message: l10n.localizeStoredError(state.errorMessage!),
-            );
-          }
-          return Column(
-            children: [
-              _HistoryHeader(
-                title: l10n.musicHistoryTitle,
-                onBack: () => Navigator.of(context).maybePop(),
-              ),
-              Expanded(
-                child:
-                    state.groups.isEmpty
-                        ? Center(
-                          child: Text(
-                            l10n.musicHistoryEmpty,
-                            style: TextStyle(
-                              color: context.musicColors.onSurfaceVariant,
+    return Theme(
+      data: MusicBackdropTheme.withNeutralTextButtons(Theme.of(context)),
+      child: Scaffold(
+        backgroundColor: context.musicColors.surface,
+        body: history.when(
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (error, stackTrace) => _HistoryFailure(message: '$error'),
+          data: (state) {
+            if (state.errorMessage != null) {
+              return _HistoryFailure(
+                message: l10n.localizeStoredError(state.errorMessage!),
+              );
+            }
+            return Column(
+              children: [
+                _HistoryHeader(
+                  title: l10n.musicHistoryTitle,
+                  onBack: () => Navigator.of(context).maybePop(),
+                ),
+                Expanded(
+                  child:
+                      state.groups.isEmpty
+                          ? Center(
+                            child: Text(
+                              l10n.musicHistoryEmpty,
+                              style: TextStyle(
+                                color: context.musicColors.onSurfaceVariant,
+                              ),
                             ),
-                          ),
-                        )
-                        : _HistoryList(state: state),
-              ),
-            ],
-          );
-        },
+                          )
+                          : _HistoryList(state: state),
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }

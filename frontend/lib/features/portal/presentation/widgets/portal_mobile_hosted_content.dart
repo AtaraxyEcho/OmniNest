@@ -237,7 +237,7 @@ class _PortalWeatherReading extends StatelessWidget {
     required this.shadows,
   });
 
-  final String icon;
+  final IconData icon;
   final int temperature;
   final VoidCallback onTap;
   final Color foreground;
@@ -251,13 +251,7 @@ class _PortalWeatherReading extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            icon,
-            style: TextStyle(
-              fontSize: AppTypography.headlineMedium,
-              shadows: shadows,
-            ),
-          ),
+          Icon(icon, size: 32, color: foreground, shadows: shadows),
           const SizedBox(width: 6),
           Text(
             '$temperature°',

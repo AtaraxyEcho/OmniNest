@@ -9975,4 +9975,55 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get serverPanelChangeCancel => '取消';
+
+  @override
+  String get adminAuditActionConfigUpdate => '配置更新';
+
+  @override
+  String get adminAuditActionExternalStorageCreate => '外部存储创建';
+
+  @override
+  String get adminAuditActionExternalStorageStatusUpdate => '外部存储状态更新';
+
+  @override
+  String get adminAuditActionExternalStorageDelete => '外部存储删除';
+
+  @override
+  String get adminAuditActionQuotaUpdate => '配额更新';
+
+  @override
+  String get adminAuditActionRolePermissionsUpdate => '角色权限更新';
+
+  @override
+  String get adminAuditActionTaskRetry => '任务重试';
+
+  @override
+  String get adminAuditActionUserCreate => '用户创建';
+
+  @override
+  String get adminAuditActionUserRolesUpdate => '用户角色更新';
+
+  @override
+  String get adminAuditActionUserRoleUpdate => '用户角色调整';
+
+  @override
+  String get adminAuditActionUserStatusUpdate => '用户状态更新';
+
+  @override
+  String get adminAuditActionUserDelete => '用户删除';
+
+  @override
+  String get adminAuditActionSessionRevoke => '会话吊销';
+
+  @override
+  String get adminAuditActionSessionCleanup => '会话清理';
+
+  @override
+  String get adminAuditActionAuditLogCleanup => '审计日志清理';
+
+  @override
+  String get adminAuditActionLoginAuditCleanup => '登录日志清理';
+
+  @override
+  String get adminAuditActionUnknown => '系统操作';
 }

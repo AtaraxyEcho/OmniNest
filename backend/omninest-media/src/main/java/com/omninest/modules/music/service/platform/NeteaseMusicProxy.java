@@ -230,9 +230,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
 
     @Override
     public List<OnlinePlaylistDto> playlists(UUID ownerUserId) {
-        MusicPlatformCredential credential = credential(ownerUserId);
-        if (credential == null || credential.externalUserId() == null
-                || credential.externalUserId().isBlank()) {
+        MusicPlatformCredential credential = requireCredentialWithExternalUserId(ownerUserId);
+        if (credential == null) {
             return List.of();
         }
         try {
@@ -284,9 +283,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
 
     @Override
     public List<OnlineTrackDto> likedTracks(UUID ownerUserId) {
-        MusicPlatformCredential credential = credential(ownerUserId);
-        if (credential == null || credential.externalUserId() == null
-                || credential.externalUserId().isBlank()) {
+        MusicPlatformCredential credential = requireCredentialWithExternalUserId(ownerUserId);
+        if (credential == null) {
             return List.of();
         }
         try {
@@ -799,6 +797,33 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
 
     private MusicPlatformCredential credential(UUID ownerUserId) {
         return credentialService.find(ownerUserId, MusicPlatform.NETEASE).orElse(null);
+    }
+
+    /**
+     * 解析凭据中的外部用户 ID；为空时先回源补拉账号资料并重读凭据。
+     *
+     * <p>QR 确认会先以占位资料落盘，资料回源失败会留下空 externalUserId，
+     * 此时歌单/喜欢接口静默返回空列表，前端表现为"已连接但全空"。
+     * 返回 null 表示凭据不存在；补拉后仍无法确定账号则抛出明确错误码，
+     * 由前端失败横幅呈现。</p>
+     */
+    private MusicPlatformCredential requireCredentialWithExternalUserId(UUID ownerUserId) {
+        MusicPlatformCredential credential = credential(ownerUserId);
+        if (credential == null) {
+            return null;
+        }
+        if (credential.externalUserId() == null || credential.externalUserId().isBlank()) {
+            getUserInfo(ownerUserId);
+            credential = credential(ownerUserId);
+            if (credential == null || credential.externalUserId() == null
+                    || credential.externalUserId().isBlank()) {
+                throw new BusinessException(
+                        ErrorCode.MUSIC_PLATFORM_NOT_CONNECTED,
+                        "网易云账号资料缺失，请重新登录"
+                );
+            }
+        }
+        return credential;
     }
 
     private PlatformUserInfo emptyUserInfo() {

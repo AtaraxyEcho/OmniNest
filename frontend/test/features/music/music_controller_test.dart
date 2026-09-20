@@ -738,6 +738,7 @@ class _FakeMusicApi implements MusicApi {
   int queueSaveFailuresRemaining = 0;
   List<MusicRecentEntry> recentEntries = <MusicRecentEntry>[];
   Object? onlinePlaybackError;
+  final playbackPlanErrors = <String, Object>{};
   final playlist = const MusicPlaylist(
     id: 'playlist-1',
     name: 'Road Trip',
@@ -907,6 +908,10 @@ class _FakeMusicApi implements MusicApi {
   @override
   Future<MusicPlaybackPlan> playbackPlan(String trackId) async {
     playbackPlanTrackIds.add(trackId);
+    final error = playbackPlanErrors[trackId];
+    if (error != null) {
+      throw error;
+    }
     return MusicPlaybackPlan(
       trackId: trackId,
       url: 'http://localhost/$trackId.flac',

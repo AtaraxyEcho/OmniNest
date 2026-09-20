@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/app_theme.dart';
 
 /// Music 沉浸播放器使用的视觉配色。
 class MusicImmersivePalette {
@@ -12,6 +13,21 @@ class MusicImmersivePalette {
     required this.accentAlt,
     required this.glow,
   });
+
+  /// 从主题色板派生 UI chrome 配色：编辑视觉窗口的面板与调色盘按此
+  /// 映射取色，保证与全局主题观感一致。
+  factory MusicImmersivePalette.fromColorScheme(ColorScheme colorScheme) {
+    return MusicImmersivePalette(
+      background: colorScheme.surface,
+      surface: colorScheme.surfaceContainerHigh,
+      surfaceStrong: colorScheme.surfaceContainerHighest,
+      text: colorScheme.onSurface,
+      muted: colorScheme.onSurfaceVariant,
+      accent: colorScheme.primary,
+      accentAlt: colorScheme.tertiary,
+      glow: colorScheme.primary.withValues(alpha: 0.35),
+    );
+  }
 
   static const digital = MusicImmersivePalette(
     background: Color(0xFF071016),
@@ -33,6 +49,16 @@ class MusicImmersivePalette {
   final Color accentAlt;
   final Color glow;
 }
+
+/// 编辑视觉窗口统一复用的深色主题：面板、内嵌表单件与调色盘弹窗固定
+/// 按深色渲染，不随宿主主题切换，避免浅色主题下深底浅字混配不可读。
+final ThemeData musicVisualEditorDarkTheme = OmniNestTheme.dark();
+
+/// 编辑视觉窗口固定深色调色板：从 [musicVisualEditorDarkTheme] 派生。
+final MusicImmersivePalette musicVisualEditorDarkPalette =
+    MusicImmersivePalette.fromColorScheme(
+      musicVisualEditorDarkTheme.colorScheme,
+    );
 
 /// Music 沉浸播放器的减少动态效果适配。
 class MusicImmersiveMotion {

@@ -304,7 +304,9 @@ class TaskThroughputChart extends StatelessWidget {
     final c = context.adminColors;
     final l10n = AppLocalizations.of(context);
     final totals =
-        data.map((d) => (d.completed + d.failed + d.running).toDouble()).toList();
+        data
+            .map((d) => (d.completed + d.failed + d.running).toDouble())
+            .toList();
     final maxY = _safeMaxY(totals);
     final iv = (maxY / 4).ceilToDouble().clamp(1.0, double.infinity);
     final barW = data.length > 14 ? 8.0 : 14.0;
@@ -367,8 +369,7 @@ class TaskThroughputChart extends StatelessWidget {
             sideTitles: SideTitles(
               showTitles: true,
               reservedSize: 24,
-              interval:
-                  data.length > 14 ? (data.length / 7).ceilToDouble() : 1,
+              interval: data.length > 14 ? (data.length / 7).ceilToDouble() : 1,
               getTitlesWidget: (v, _) {
                 final i = v.toInt();
                 if (i < 0 || i >= data.length) return const SizedBox();
@@ -393,8 +394,7 @@ class TaskThroughputChart extends StatelessWidget {
             tooltipRoundedRadius: 6,
             getTooltipItem: (group, _, rod, _) {
               final d = data[group.x.toInt()];
-              final hasData =
-                  d.completed > 0 || d.failed > 0 || d.running > 0;
+              final hasData = d.completed > 0 || d.failed > 0 || d.running > 0;
               if (!hasData) return null;
               return BarTooltipItem(
                 l10n.adminTaskThroughputTooltip(d.completed, d.failed),

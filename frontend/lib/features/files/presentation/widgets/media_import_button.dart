@@ -14,7 +14,7 @@ import 'package:omninest/features/files/application/media_import_file_picker.dar
 import 'package:omninest/features/files/application/media_import_service.dart';
 
 /// 导入按钮样式。
-enum ImportButtonStyle { textButton, iconButton, filledButton }
+enum ImportButtonStyle { textButton, iconButton, filledButton, outlinedButton }
 
 /// 媒体导入使用的文件选择函数。
 typedef MediaImportFilePicker =
@@ -64,7 +64,7 @@ class MediaImportButton extends ConsumerStatefulWidget {
   /// 按钮样式。
   final ImportButtonStyle style;
 
-  /// 图标颜色，不传则使用主题默认。
+  /// 图标颜色，不传则使用主题默认；outlined 样式下同时作为整枚按钮前景色。
   final Color? color;
 
   /// 允许选择的扩展名。空列表表示由系统展示全部文件。
@@ -118,6 +118,12 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
           color: widget.color ?? Theme.of(context).colorScheme.onPrimary,
           size: 18,
         ),
+        label: Text(buttonLabel),
+      ),
+      ImportButtonStyle.outlinedButton => OutlinedButton.icon(
+        onPressed: _busy ? null : _handleImport,
+        style: OutlinedButton.styleFrom(foregroundColor: widget.color),
+        icon: _ImportButtonIcon(busy: _busy, color: widget.color, size: 18),
         label: Text(buttonLabel),
       ),
     };

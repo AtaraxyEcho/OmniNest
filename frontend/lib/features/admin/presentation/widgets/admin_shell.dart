@@ -410,9 +410,7 @@ class _AdminTopBar extends ConsumerWidget {
         child: Row(
           children: [
             if (isWide) ...[
-              _TopBarPortalButton(
-                onPressed: () => _backToPortal(context),
-              ),
+              _TopBarPortalButton(onPressed: () => _backToPortal(context)),
               const SizedBox(width: 12),
               AdminStatusPill(
                 label: l10n.adminRolePillLabel,

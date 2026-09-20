@@ -2,6 +2,9 @@ package com.omninest.modules.music.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.modules.media.service.MediaSyncEventService;
+import java.util.Map;
 import com.omninest.modules.music.dto.OnlineMusicDtos.MusicPlatformStatusDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.PlatformUserInfo;
 import com.omninest.modules.music.dto.OnlineMusicDtos.QrLoginSession;
@@ -32,6 +35,7 @@ public class MusicPlatformAccountService {
     private final MusicRuntimeConfigService configService;
     private final MusicPlatformLoginSessionService loginSessionService;
     private final MusicPlatformCredentialService credentialService;
+    private final MediaSyncEventService mediaSyncEventService;
 
     /**
      * 获取当前用户的全部平台连接状态。
@@ -84,6 +88,9 @@ public class MusicPlatformAccountService {
         requireEnabled(MusicPlatform.NETEASE);
         loginSessionService.requireOwner(ownerUserId, MusicPlatform.NETEASE, loginKey);
         QrLoginStatus status = neteaseMusicProxy.checkQrLogin(ownerUserId, loginKey);
+        if ("confirmed".equals(status.status())) {
+            publishPlatformChanged(ownerUserId);
+        }
         if ("confirmed".equals(status.status()) || "expired".equals(status.status())) {
             loginSessionService.complete(MusicPlatform.NETEASE, loginKey);
         }
@@ -99,7 +106,9 @@ public class MusicPlatformAccountService {
      */
     public PlatformUserInfo applyQqCookie(UUID ownerUserId, String cookie) {
         requireEnabled(MusicPlatform.QQ);
-        return qqMusicApi.applyCookie(ownerUserId, cookie);
+        PlatformUserInfo userInfo = qqMusicApi.applyCookie(ownerUserId, cookie);
+        publishPlatformChanged(ownerUserId);
+        return userInfo;
     }
 
     /**
@@ -111,10 +120,24 @@ public class MusicPlatformAccountService {
     public void disconnect(UUID ownerUserId, String platformValue) {
         MusicPlatformProvider provider = provider(MusicPlatform.fromApiValue(platformValue));
         provider.clearLogin(ownerUserId);
+        publishPlatformChanged(ownerUserId);
         log.info(
                 "音乐平台连接已删除: userId={}, platform={}",
                 ownerUserId,
                 provider.platform().apiValue()
+        );
+    }
+
+    /**
+     * 广播平台连接变更：同账号其他端收到 MUSIC 失效后刷新平台曲库，
+     * 而非依赖各端手动刷新。
+     */
+    private void publishPlatformChanged(UUID ownerUserId) {
+        mediaSyncEventService.invalidate(
+                ownerUserId,
+                SyncScope.MUSIC,
+                "MUSIC_PLATFORM",
+                Map.of("scope", "platform-library")
         );
     }
 

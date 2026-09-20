@@ -425,7 +425,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
             children: [
               Row(
                 children: [
-                  Text(w.weatherIcon, style: const TextStyle(fontSize: 22)),
+                  Icon(w.weatherIcon, size: 24, color: Colors.amber.shade700),
                   const SizedBox(width: 8),
                   Flexible(
                     child: Text(
@@ -718,7 +718,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                     ),
                   ),
                   const SizedBox(height: 8),
-                  Text(item.weatherIcon, style: const TextStyle(fontSize: 18)),
+                  Icon(item.weatherIcon, size: 20, color: Colors.white70),
                   const SizedBox(height: 8),
                   Text(
                     '${item.temp}°',
@@ -779,9 +779,10 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                         ),
                       ),
                     ),
-                    Text(
+                    Icon(
                       daily[i].weatherIcon,
-                      style: const TextStyle(fontSize: 18),
+                      size: 20,
+                      color: Colors.white.withValues(alpha: 0.80),
                     ),
                     const SizedBox(width: 10),
                     Expanded(

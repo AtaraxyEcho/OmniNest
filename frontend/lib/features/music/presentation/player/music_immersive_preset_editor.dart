@@ -37,8 +37,24 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
     super.dispose();
   }
 
+  /// 面板 UI 配色：外层已固定注入深色 Theme，此处从深色上下文派生，
+  /// 不沿用沉浸播放的固定深色调色板。
+  MusicImmersivePalette _editorPalette(BuildContext context) {
+    return MusicImmersivePalette.fromColorScheme(Theme.of(context).colorScheme);
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 面板统一复用深色主题样式：黑玻璃底色与内嵌表单件（开关、滑条、
+    // 下拉、按钮）都在深色 Theme 下渲染，浅色主题不再保留实底分支，
+    // 与深色主题观感完全一致。
+    return Theme(
+      data: musicVisualEditorDarkTheme,
+      child: Builder(builder: _buildPanel),
+    );
+  }
+
+  Widget _buildPanel(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
@@ -60,7 +76,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                       child: Text(
                         l10n.portalMusicVisualizerEdit,
                         style: TextStyle(
-                          color: widget.palette.text,
+                          color: _editorPalette(context).text,
                           fontSize: AppTypography.titleLarge,
                           fontWeight: FontWeight.w800,
                         ),
@@ -71,7 +87,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                       onPressed: _resetToDefault,
                       icon: Icon(
                         Icons.restart_alt_rounded,
-                        color: widget.palette.text,
+                        color: _editorPalette(context).text,
                         size: 20,
                       ),
                     ),
@@ -82,7 +98,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                       onPressed: widget.onClose,
                       icon: Icon(
                         Icons.close_rounded,
-                        color: widget.palette.text,
+                        color: _editorPalette(context).text,
                       ),
                     ),
                   ],
@@ -95,11 +111,11 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                   child: Column(
                     children: [
                       _VisualEditorSection(
-                        palette: widget.palette,
+                        palette: _editorPalette(context),
                         title: l10n.portalMusicVisualizerOriginalCover,
                         children: [
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerOriginalCover,
                             value: _draft.coverElements.originalCoverEnabled,
                             onChanged:
@@ -111,7 +127,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerCoverBorder,
                             value: _draft.coverElements.borderEnabled,
                             onChanged:
@@ -123,7 +139,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerCoverSize,
                             value: _draft.coverElements.sizeScale,
                             min: 0.7,
@@ -138,7 +154,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerCoverRadius,
                             value: _draft.coverElements.cornerRadius,
                             min: 0,
@@ -154,7 +170,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerCoverTilt,
                             value: _draft.coverElements.tiltDegrees,
                             min: -12,
@@ -170,7 +186,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerHeroCoverOpacity,
                             value: _draft.coverElements.opacity,
                             min: 0,
@@ -187,11 +203,11 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                         ],
                       ),
                       _VisualEditorSection(
-                        palette: widget.palette,
+                        palette: _editorPalette(context),
                         title: l10n.portalMusicVisualizerLyrics,
                         children: [
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerLyrics,
                             value: _draft.lyrics.enabled,
                             onChanged:
@@ -204,7 +220,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerCurrentFont,
                             value: _draft.lyrics.currentFontScale,
                             min: 0.82,
@@ -220,7 +236,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerInactiveOpacity,
                             value: _draft.lyrics.inactiveOpacity,
                             min: 0.25,
@@ -236,7 +252,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           MusicVisualColorField(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerLyricActiveColor,
                             value: Color(_draft.lyrics.activeColorValue),
                             defaultValue: Color(
@@ -254,7 +270,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           MusicVisualColorField(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerLyricReadColor,
                             value: Color(_draft.lyrics.readColorValue),
                             defaultValue: Color(
@@ -270,7 +286,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           MusicVisualColorField(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerLyricUnreadColor,
                             value: Color(_draft.lyrics.unreadColorValue),
                             defaultValue: Color(
@@ -288,7 +304,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerLyricBreathing,
                             value: _draft.lyrics.breathingEnabled,
                             onChanged:
@@ -301,7 +317,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerVisibleLines,
                             value: _draft.lyrics.visibleLines.toDouble(),
                             min: 1,
@@ -318,7 +334,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerLyricLineSpacing,
                             value: _draft.lyrics.lineSpacing,
                             min: 0.75,
@@ -333,31 +349,34 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                   ),
                                 ),
                           ),
-                          _VisualDropdown<PortalLyricPosition>(
-                            palette: widget.palette,
+                          AppDropdown<PortalLyricPosition>(
                             label: l10n.musicVisualizerLyricPosition,
                             value: _draft.lyrics.position,
-                            values: PortalLyricPosition.values,
-                            labelBuilder:
-                                (value) => switch (value) {
-                                  PortalLyricPosition.left =>
-                                    l10n.musicVisualizerLyricPositionLeft,
-                                  PortalLyricPosition.center =>
-                                    l10n.musicVisualizerLyricPositionCenter,
-                                  PortalLyricPosition.right =>
-                                    l10n.musicVisualizerLyricPositionRight,
-                                },
+                            items: [
+                              for (final entry in PortalLyricPosition.values)
+                                AppDropdownItem(
+                                  value: entry,
+                                  label: switch (entry) {
+                                    PortalLyricPosition.left =>
+                                      l10n.musicVisualizerLyricPositionLeft,
+                                    PortalLyricPosition.center =>
+                                      l10n.musicVisualizerLyricPositionCenter,
+                                    PortalLyricPosition.right =>
+                                      l10n.musicVisualizerLyricPositionRight,
+                                  },
+                                ),
+                            ],
                             onChanged:
                                 (value) => _update(
                                   _draft.copyWith(
                                     lyrics: _draft.lyrics.copyWith(
-                                      position: value,
+                                      position: value ?? _draft.lyrics.position,
                                     ),
                                   ),
                                 ),
                           ),
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerLyricGlow,
                             value: _draft.lyrics.shadowEnabled,
                             onChanged:
@@ -371,7 +390,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                           ),
                           if (_draft.lyrics.shadowEnabled) ...[
                             _VisualSlider(
-                              palette: widget.palette,
+                              palette: _editorPalette(context),
                               label: l10n.musicVisualizerLyricGlowIntensity,
                               value: _draft.lyrics.glowIntensity,
                               min: 0,
@@ -387,7 +406,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                   ),
                             ),
                             MusicVisualColorField(
-                              palette: widget.palette,
+                              palette: _editorPalette(context),
                               label: l10n.musicVisualizerLyricGlowColor,
                               value: Color(_draft.lyrics.glowColorValue),
                               defaultValue: Color(
@@ -408,11 +427,11 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                         ],
                       ),
                       _VisualEditorSection(
-                        palette: widget.palette,
+                        palette: _editorPalette(context),
                         title: l10n.musicVisualizerFrequencyResponse,
                         children: [
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerLow,
                             value: _draft.spectrum.lowResponse,
                             min: 0.2,
@@ -428,7 +447,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerMid,
                             value: _draft.spectrum.midResponse,
                             min: 0.2,
@@ -444,7 +463,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSlider(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerHigh,
                             value: _draft.spectrum.highResponse,
                             min: 0.2,
@@ -462,11 +481,11 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                         ],
                       ),
                       _VisualEditorSection(
-                        palette: widget.palette,
+                        palette: _editorPalette(context),
                         title: l10n.portalMusicVisualizerPlayer,
                         children: [
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerPlayerVisible,
                             value: _draft.player.enabled,
                             onChanged:
@@ -479,7 +498,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.musicVisualizerAudioBar,
                             value: _draft.player.audioBarEnabled,
                             onChanged:
@@ -492,31 +511,36 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           if (_draft.player.audioBarEnabled)
-                            _VisualDropdown<MusicAudioBarStyle>(
-                              palette: widget.palette,
+                            AppDropdown<MusicAudioBarStyle>(
                               label: l10n.musicVisualizerAudioBarStyle,
                               value: _draft.player.audioBarStyle,
-                              values: MusicAudioBarStyle.values,
-                              labelBuilder:
-                                  (value) => switch (value) {
-                                    MusicAudioBarStyle.spectrumBars =>
-                                      l10n.musicVisualizerAudioBarSpectrum,
-                                    MusicAudioBarStyle.lineWave =>
-                                      l10n.musicVisualizerAudioBarLine,
-                                    MusicAudioBarStyle.pulseDots =>
-                                      l10n.musicVisualizerAudioBarDots,
-                                  },
+                              items: [
+                                for (final entry in MusicAudioBarStyle.values)
+                                  AppDropdownItem(
+                                    value: entry,
+                                    label: switch (entry) {
+                                      MusicAudioBarStyle.spectrumBars =>
+                                        l10n.musicVisualizerAudioBarSpectrum,
+                                      MusicAudioBarStyle.lineWave =>
+                                        l10n.musicVisualizerAudioBarLine,
+                                      MusicAudioBarStyle.pulseDots =>
+                                        l10n.musicVisualizerAudioBarDots,
+                                    },
+                                  ),
+                              ],
                               onChanged:
                                   (value) => _update(
                                     _draft.copyWith(
                                       player: _draft.player.copyWith(
-                                        audioBarStyle: value,
+                                        audioBarStyle:
+                                            value ??
+                                            _draft.player.audioBarStyle,
                                       ),
                                     ),
                                   ),
                             ),
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerProgressControl,
                             value: _draft.player.progressEnabled,
                             onChanged:
@@ -529,7 +553,7 @@ class _MusicVisualizerEditorState extends State<_MusicVisualizerEditor> {
                                 ),
                           ),
                           _VisualSwitch(
-                            palette: widget.palette,
+                            palette: _editorPalette(context),
                             label: l10n.portalMusicVisualizerVolume,
                             value: _draft.player.volumeEnabled,
                             onChanged:
@@ -650,50 +674,6 @@ class _VisualSwitch extends StatelessWidget {
       onChanged: onChanged,
       activeTrackColor: palette.accent.withValues(alpha: 0.55),
       activeThumbColor: palette.text,
-    );
-  }
-}
-
-class _VisualDropdown<T> extends StatelessWidget {
-  const _VisualDropdown({
-    required this.palette,
-    required this.label,
-    required this.value,
-    required this.values,
-    required this.labelBuilder,
-    required this.onChanged,
-  });
-
-  final MusicImmersivePalette palette;
-  final String label;
-  final T value;
-  final List<T> values;
-  final String Function(T value) labelBuilder;
-  final ValueChanged<T> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return DropdownButtonFormField<T>(
-      initialValue: value,
-      dropdownColor: const Color(0xFF141D23),
-      style: TextStyle(color: palette.text),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: palette.text.withValues(alpha: 0.68)),
-      ),
-      items: values
-          .map(
-            (item) => DropdownMenuItem<T>(
-              value: item,
-              child: Text(labelBuilder(item)),
-            ),
-          )
-          .toList(growable: false),
-      onChanged: (next) {
-        if (next != null) {
-          onChanged(next);
-        }
-      },
     );
   }
 }

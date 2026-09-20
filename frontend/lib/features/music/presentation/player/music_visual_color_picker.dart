@@ -116,144 +116,134 @@ class _VisualColorDialog extends StatefulWidget {
 class _VisualColorDialogState extends State<_VisualColorDialog> {
   late HSVColor _color;
   late final TextEditingController _hexController;
-  late final FocusNode _hexFocusNode;
-  bool _hexEditing = false;
 
   @override
   void initState() {
     super.initState();
     _color = HSVColor.fromColor(widget.initialColor);
     _hexController = TextEditingController(text: _formatHex(_color.toColor()));
-    _hexFocusNode = FocusNode();
-    _hexFocusNode.addListener(_handleHexFocusChange);
   }
 
   @override
   void dispose() {
-    _hexFocusNode.removeListener(_handleHexFocusChange);
-    _hexFocusNode.dispose();
     _hexController.dispose();
     super.dispose();
-  }
-
-  void _handleHexFocusChange() {
-    final focused = _hexFocusNode.hasFocus;
-    if (_hexEditing && !focused) {
-      _hexController.text = _formatHex(_color.toColor());
-    }
-    _hexEditing = focused;
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return AlertDialog(
-      backgroundColor: const Color(0xFF111A20),
-      title: Text(widget.title, style: TextStyle(color: widget.palette.text)),
-      content: SizedBox(
-        width: 380,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildCaption(l10n.musicVisualizerColorPreset),
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: _visualPresetColors.map(_buildSwatch).toList(),
-              ),
-              const SizedBox(height: 12),
-              _buildCaption(l10n.musicVisualizerColorTheme),
-              Wrap(
-                spacing: 10,
-                children: [
-                  _buildSwatch(widget.palette.accent),
-                  _buildSwatch(widget.palette.accentAlt),
-                  _buildSwatch(widget.palette.text),
-                  _buildSwatch(widget.palette.surfaceStrong),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _buildCaption(l10n.musicVisualizerColorCustom),
-              _VisualSvPanel(
-                color: _color,
-                semanticLabel: l10n.musicVisualizerColorCustom,
-                onChanged: _applyColor,
-              ),
-              const SizedBox(height: 10),
-              _VisualHueBar(
-                color: _color,
-                semanticLabel: l10n.musicVisualizerColorHue,
-                onChanged: (hue) => _applyColor(_color.withHue(hue)),
-              ),
-              const SizedBox(height: 14),
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 32,
-                    decoration: BoxDecoration(
-                      color: _color.toColor(),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.34),
+    // 弹窗统一复用深色主题样式：与编辑面板共用固定深色 Theme 与调色板，
+    // 内嵌输入框、按钮等表单件也随深色 Theme 渲染，不随宿主主题切换。
+    return Theme(
+      data: musicVisualEditorDarkTheme,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF111A20),
+        title: Text(
+          widget.title,
+          style: TextStyle(color: musicVisualEditorDarkPalette.text),
+        ),
+        content: SizedBox(
+          width: 380,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildCaption(l10n.musicVisualizerColorPreset),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _visualPresetColors.map(_buildSwatch).toList(),
+                ),
+                const SizedBox(height: 12),
+                _buildCaption(l10n.musicVisualizerColorTheme),
+                Wrap(
+                  spacing: 10,
+                  children: [
+                    _buildSwatch(musicVisualEditorDarkPalette.accent),
+                    _buildSwatch(musicVisualEditorDarkPalette.accentAlt),
+                    _buildSwatch(musicVisualEditorDarkPalette.text),
+                    _buildSwatch(musicVisualEditorDarkPalette.surfaceStrong),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                _buildCaption(l10n.musicVisualizerColorCustom),
+                _VisualSvPanel(
+                  color: _color,
+                  semanticLabel: l10n.musicVisualizerColorCustom,
+                  onChanged: _applyColor,
+                ),
+                const SizedBox(height: 10),
+                _VisualHueBar(
+                  color: _color,
+                  semanticLabel: l10n.musicVisualizerColorHue,
+                  onChanged: (hue) => _applyColor(_color.withHue(hue)),
+                ),
+                const SizedBox(height: 14),
+                Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: _color.toColor(),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.34),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: TextFormField(
-                      key: const ValueKey('music-visual-color-hex'),
-                      controller: _hexController,
-                      focusNode: _hexFocusNode,
-                      style: TextStyle(color: widget.palette.text),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.allow(
-                          RegExp(r'[#0-9a-fA-F]'),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: TextFormField(
+                        key: const ValueKey('music-visual-color-hex'),
+                        controller: _hexController,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.allow(
+                            RegExp(r'[#0-9a-fA-F]'),
+                          ),
+                          LengthLimitingTextInputFormatter(9),
+                        ],
+                        // 与全库标准输入框一致：仅传 labelText，
+                        // 填充、描边、文字色全部交给全局 InputDecorationTheme。
+                        decoration: InputDecoration(
+                          labelText: l10n.musicVisualizerColorHex,
+                          isDense: true,
                         ),
-                        LengthLimitingTextInputFormatter(7),
-                      ],
-                      decoration: InputDecoration(
-                        labelText: l10n.musicVisualizerColorHex,
-                        labelStyle: TextStyle(
-                          color: widget.palette.text.withValues(alpha: 0.68),
-                        ),
-                        isDense: true,
-                        border: const OutlineInputBorder(),
+                        onChanged: _handleHexChanged,
                       ),
-                      onChanged: _handleHexChanged,
                     ),
-                  ),
-                  const SizedBox(width: 4),
-                  IconButton(
-                    tooltip: l10n.musicVisualizerColorResetDefault,
-                    onPressed:
-                        () => _applyColor(
-                          HSVColor.fromColor(widget.defaultValue),
-                        ),
-                    icon: Icon(
-                      Icons.restart_alt_rounded,
-                      color: widget.palette.text,
-                      size: 20,
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: l10n.musicVisualizerColorResetDefault,
+                      onPressed:
+                          () => _applyColor(
+                            HSVColor.fromColor(widget.defaultValue),
+                          ),
+                      icon: Icon(
+                        Icons.restart_alt_rounded,
+                        color: musicVisualEditorDarkPalette.text,
+                        size: 20,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(_color.toColor()),
+            child: Text(MaterialLocalizations.of(context).okButtonLabel),
+          ),
+        ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(_color.toColor()),
-          child: Text(MaterialLocalizations.of(context).okButtonLabel),
-        ),
-      ],
     );
   }
 
@@ -263,7 +253,7 @@ class _VisualColorDialogState extends State<_VisualColorDialog> {
       child: Text(
         text,
         style: TextStyle(
-          color: widget.palette.text.withValues(alpha: 0.62),
+          color: musicVisualEditorDarkPalette.text.withValues(alpha: 0.62),
           fontSize: 12,
         ),
       ),
@@ -290,7 +280,7 @@ class _VisualColorDialogState extends State<_VisualColorDialog> {
               border: Border.all(
                 color:
                     selected
-                        ? widget.palette.text
+                        ? musicVisualEditorDarkPalette.text
                         : Colors.white.withValues(alpha: 0.22),
                 width: selected ? 3 : 1,
               ),
@@ -314,8 +304,11 @@ class _VisualColorDialogState extends State<_VisualColorDialog> {
 
   void _applyColor(HSVColor next) {
     setState(() => _color = next);
-    if (!_hexEditing) {
-      _hexController.text = _formatHex(next.toColor());
+    // 取色面板/色相条/预设点选即时回写 HEX 文本框：桌面端点击取色面
+    // 不会让文本框失焦，旧实现依赖失焦同步导致色值持续显示旧值。
+    final formatted = _formatHex(next.toColor());
+    if (_hexController.text.toUpperCase() != formatted.toUpperCase()) {
+      _hexController.text = formatted;
     }
   }
 
@@ -332,19 +325,26 @@ class _VisualColorDialogState extends State<_VisualColorDialog> {
     if (text.startsWith('#')) {
       text = text.substring(1);
     }
-    if (text.length != 6) {
+    // 6 位视为不透明，8 位为 RRGGBBAA：与 [_formatHex] 对称，
+    // 主题派生色等带 alpha 的颜色往返不再漂移。
+    if (text.length == 6) {
+      text = 'FF$text';
+    }
+    if (text.length != 8) {
       return null;
     }
     final value = int.tryParse(text, radix: 16);
     if (value == null) {
       return null;
     }
-    return Color(0xFF000000 | value);
+    return Color(value);
   }
 
   static String _formatHex(Color color) {
-    final rgb = color.toARGB32() & 0xFFFFFF;
-    return '#${rgb.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+    final argb = color.toARGB32();
+    final alpha = (argb >> 24) & 0xFF;
+    final digits = argb.toRadixString(16).padLeft(8, '0').toUpperCase();
+    return alpha == 0xFF ? '#${digits.substring(2)}' : '#$digits';
   }
 }
 

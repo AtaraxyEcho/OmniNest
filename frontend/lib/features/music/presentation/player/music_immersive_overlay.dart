@@ -13,6 +13,7 @@ import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/music/presentation/player/music_mobile_now_playing.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_player.dart';
 import 'package:omninest/features/music/application/music_sleep_timer_controller.dart';
+import 'package:omninest/features/music/application/music_immersive_controller.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 
 /// Music Deck 使用的全平台沉浸播放覆盖层。
@@ -29,12 +30,22 @@ class MusicImmersiveOverlay extends ConsumerStatefulWidget {
 class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
   bool _topBarHovered = false;
   bool _webFullscreen = false;
+  late final MusicImmersiveController _immersiveController;
   late final WindowChromeController _windowChromeController;
 
   @override
   void initState() {
     super.initState();
     _windowChromeController = ref.read(windowChromeControllerProvider.notifier);
+    // 壳层顶栏据此把门户沉浸按钮切换为「退出沉浸播放」（D-006）。
+    // 帧尾激活/微任务注销避开 Riverpod 构建期修改断言；控制器自带
+    // ref.mounted 守卫，注销晚于容器销毁时仅清理处理器。
+    _immersiveController = ref.read(musicImmersiveControllerProvider.notifier);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _immersiveController.activate(widget.onClose);
+      }
+    });
     if (kIsWeb) {
       _webFullscreen = fs.isFullscreen;
       fs.addFullscreenChangeListener(_handleWebFullscreenChange);
@@ -51,6 +62,7 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
 
   @override
   void dispose() {
+    Future.microtask(_immersiveController.deactivate);
     if (kIsWeb) {
       fs.removeFullscreenChangeListener(_handleWebFullscreenChange);
       if (fs.isFullscreen) {

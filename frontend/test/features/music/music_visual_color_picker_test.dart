@@ -119,4 +119,13 @@ void main() {
 
     expect(captured, defaultColor);
   });
+
+  testWidgets('浅色宿主主题下弹窗仍复用深色主题样式', (tester) async {
+    await pumpField(tester);
+
+    final dialog = tester.widget<AlertDialog>(find.byType(AlertDialog));
+    expect(dialog.backgroundColor, const Color(0xFF111A20));
+    final dialogContext = tester.element(find.byType(AlertDialog));
+    expect(Theme.of(dialogContext).brightness, Brightness.dark);
+  });
 }

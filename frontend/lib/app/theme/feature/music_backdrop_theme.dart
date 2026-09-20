@@ -4,6 +4,21 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 
 /// Music 在浅色主题动态背景上使用的局部主题。
 abstract final class MusicBackdropTheme {
+  /// Music 模块内文字按钮统一中性前景。
+  ///
+  /// 模块语境下的 colorScheme.primary 为深绿；按配色原则，绿色仅保留给
+  /// 激活与选中语义，「查看全部」等文字动作一律使用中性次级色。
+  /// 各 Music 路由入口统一套用，避免逐个按钮覆写产生漂移。
+  static ThemeData withNeutralTextButtons(ThemeData source) {
+    return source.copyWith(
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(
+          foregroundColor: source.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
   /// 动态背景启用时切换为烟熏透明表面，其他场景保持原主题。
   static ThemeData resolve(ThemeData source, {required bool backdropActive}) {
     if (!backdropActive || source.brightness != Brightness.light) {

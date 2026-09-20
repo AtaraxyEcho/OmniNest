@@ -22,6 +22,9 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
   }
 
   /// 使用统一可播放对象替换当前队列并播放指定位置。
+  ///
+  /// [startIndex] 以调用方传入的原始列表为准取目标曲目，再按 key 在去重后的
+  /// 队列中定位，避免重复曲目导致起始位偏移。
   Future<void> playItems(
     List<MusicPlayableItem> items, {
     int startIndex = 0,
@@ -30,6 +33,8 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     if (current == null || items.isEmpty) {
       return;
     }
+    final startKey =
+        items[startIndex.clamp(0, items.length - 1).toInt()].playableKey;
     final uniqueItems = <MusicPlayableItem>[];
     final keys = <String>{};
     for (final item in items) {
@@ -37,8 +42,14 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
         uniqueItems.add(item);
       }
     }
-    final safeIndex = startIndex.clamp(0, uniqueItems.length - 1).toInt();
-    await _playItemInQueue(current, uniqueItems, safeIndex);
+    final targetIndex = uniqueItems.indexWhere(
+      (candidate) => candidate.playableKey == startKey,
+    );
+    await _playItemInQueue(
+      current,
+      uniqueItems,
+      targetIndex < 0 ? 0 : targetIndex,
+    );
   }
 
   /// 将可播放对象插入当前曲目之后（下一首播放），已存在时不重复添加。
@@ -183,7 +194,7 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
         for (var index = 0; index < queue.length; index++)
           if (index != currentIndex) index,
       ];
-      final nextIndex = nextIndexes[Random().nextInt(nextIndexes.length)];
+      final nextIndex = nextIndexes[random.nextInt(nextIndexes.length)];
       await _playItemInQueue(current, queue, nextIndex);
       return;
     }

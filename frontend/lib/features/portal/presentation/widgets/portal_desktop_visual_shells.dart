@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/features/music/application/music_immersive_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -338,6 +339,9 @@ class _PortalDesktopVisualHostState
     required PortalPreferences resolved,
   }) {
     final immersive = resolved.immersiveModeEnabled;
+    // 音乐沉浸层激活时，按钮让位为「退出沉浸播放」（D-006 语境路由：
+    // 门户沉浸偏好与音乐沉浸层是两个特性，不得互相串状态）。
+    final musicImmersive = ref.watch(musicImmersiveControllerProvider);
     final l10n = AppLocalizations.of(context);
     return PortalImmersiveTopBarReveal(
       immersive: immersive,
@@ -348,17 +352,32 @@ class _PortalDesktopVisualHostState
           _PortalLocalBackdropButton(palette: palette),
           const SizedBox(width: 10),
           AppFullscreenButton(
-            isFullscreen: resolved.immersiveModeEnabled,
+            isFullscreen: musicImmersive || resolved.immersiveModeEnabled,
             foregroundColor: palette.text,
             accentColor: palette.accent,
             // 此按钮切换的是门户沉浸模式偏好（整屏音乐沉浸视觉），
-            // 不是 F11 无边框全屏，提示文案不得借用全屏快捷键。
+            // 不是 F11 无边框全屏，提示文案不得借用全屏快捷键；
+            // 音乐沉浸播放期间则直接退出沉浸层。
             enterTooltip: l10n.portalImmersiveModeEnter,
-            exitTooltip: l10n.portalImmersiveModeExit,
-            onPressed:
-                () => ref
-                    .read(portalPreferencesProvider.notifier)
-                    .updateImmersiveMode(!resolved.immersiveModeEnabled),
+            exitTooltip:
+                musicImmersive
+                    ? l10n.portalExitImmersivePlayback
+                    : l10n.portalImmersiveModeExit,
+            onPressed: () {
+              if (musicImmersive) {
+                final exited =
+                    ref
+                        .read(musicImmersiveControllerProvider.notifier)
+                        .requestExit();
+                if (!exited) {
+                  context.go('/music');
+                }
+                return;
+              }
+              ref
+                  .read(portalPreferencesProvider.notifier)
+                  .updateImmersiveMode(!resolved.immersiveModeEnabled);
+            },
           ),
           const SizedBox(width: 10),
           FontScaleControl(size: 20, color: palette.text),

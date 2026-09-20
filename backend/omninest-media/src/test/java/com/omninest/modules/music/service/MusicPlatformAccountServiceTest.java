@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.modules.music.dto.OnlineMusicDtos.QrLoginSession;
 import com.omninest.modules.music.dto.OnlineMusicDtos.QrLoginStatus;
+import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.music.service.platform.MusicPlatform;
 import com.omninest.modules.music.service.platform.MusicPlatformCapabilities;
 import com.omninest.modules.music.service.platform.NeteaseMusicProxy;
@@ -29,13 +30,15 @@ class MusicPlatformAccountServiceTest {
     private final MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
     private final MusicPlatformLoginSessionService loginSessionService = mock(MusicPlatformLoginSessionService.class);
     private final MusicPlatformCredentialService credentialService = mock(MusicPlatformCredentialService.class);
+    private final MediaSyncEventService mediaSyncEventService = mock(MediaSyncEventService.class);
     private final MusicPlatformAccountService service = new MusicPlatformAccountService(
             List.of(neteaseProvider, qqProvider),
             neteaseProvider,
             qqProvider,
             configService,
             loginSessionService,
-            credentialService
+            credentialService,
+            mediaSyncEventService
     );
 
     @BeforeEach
