@@ -589,6 +589,50 @@ class AuthServiceTest {
         }
     }
 
+    @Nested
+    @DisplayName("退出登录")
+    class Logout {
+
+        @Test
+        @DisplayName("登出吊销会话：先即时撤销再持久化")
+        void logoutRevokesActiveSession() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            AuthActiveSession session = activeSession(user.getId());
+            UUID sessionId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+            when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
+                    .thenReturn(Optional.of(session));
+
+            service.logout("refresh-token");
+
+            verify(sessionRevocationService).revokeSession(user.getId(), sessionId, Duration.ofDays(30));
+            verify(activeSessionRepository).revokeBySessionId(sessionId, "用户退出登录");
+        }
+
+        @Test
+        @DisplayName("登出幂等：会话不存在时不产生撤销副作用")
+        void logoutIsIdempotentWhenSessionMissing() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            UUID sessionId = UUID.fromString("22222222-2222-2222-2222-222222222222");
+            when(activeSessionRepository.findByIdAndUserId(sessionId, user.getId()))
+                    .thenReturn(Optional.empty());
+
+            service.logout("refresh-token");
+
+            verifyNoInteractions(sessionRevocationService);
+            verify(activeSessionRepository, never()).revokeBySessionId(any(), anyString());
+        }
+
+        @Test
+        @DisplayName("登出幂等：令牌缺失或无效不抛异常、不触碰仓储")
+        void logoutIsIdempotentForMissingOrInvalidTokens() {
+            service.logout(null);
+            service.logout("   ");
+            service.logout("not-a-jwt");
+
+            verifyNoInteractions(activeSessionRepository, sessionRevocationService);
+        }
+    }
+
     // ========== 辅助方法 ==========
 
     private AuthUser localUser(String username, String passwordHash) {

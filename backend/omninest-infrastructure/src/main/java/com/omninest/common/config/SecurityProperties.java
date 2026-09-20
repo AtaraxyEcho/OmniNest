@@ -28,6 +28,8 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
 
     private boolean refreshCookieSecure = false;
 
+    private String refreshCookieSameSite = "Strict";
+
     private boolean registrationEnabled = false;
 
     private List<String> trustedProxies = new ArrayList<>();
@@ -66,6 +68,11 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
     @Override
     public boolean refreshCookieSecure() {
         return refreshCookieSecure;
+    }
+
+    @Override
+    public String refreshCookieSameSite() {
+        return refreshCookieSameSite;
     }
 
     @Override

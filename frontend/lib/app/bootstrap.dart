@@ -176,6 +176,16 @@ class _BootstrapStatusApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       initialRoute: '/',
+      // Flutter 3.47 起引擎会把 URL hash 写入 defaultRouteName（Web 冷启动
+      // 带 /#/portal 之类地址时为 '/portal'），该值会覆盖 initialRoute 并因
+      // 此处无对应命名路由抛出断言。显式固定初始路由为 '/' 消除该噪音。
+      onGenerateInitialRoutes:
+          (String initialRoute) => <Route<Object>>[
+            MaterialPageRoute<Object>(
+              builder:
+                  (_) => _BootstrapStatusBody(error: error, onRetry: onRetry),
+            ),
+          ],
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: OmniNestTheme.light(),

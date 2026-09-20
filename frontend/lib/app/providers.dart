@@ -37,7 +37,6 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     sessionStore: sessionStore,
     refreshSession:
         () => ref.read(authSessionProvider.notifier).refreshSession(),
-    clearSession: () => ref.read(authSessionProvider.notifier).clearSession(),
   );
 });
 

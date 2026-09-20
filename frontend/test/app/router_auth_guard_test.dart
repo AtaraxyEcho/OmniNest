@@ -40,18 +40,84 @@ void main() {
     );
   });
 
-  test('认证检查期间不触发跳转', () {
+  test('认证检查期间受保护路径停泊到引导页并保留目标', () {
     expect(
       authRedirectPath(
         isChecking: true,
         isAuthenticated: false,
-        location: '/admin',
+        location: '/portal',
+      ),
+      '/boot?redirect=%2Fportal',
+    );
+    expect(
+      authRedirectPath(isChecking: true, isAuthenticated: false, location: '/'),
+      '/boot?redirect=%2Fportal',
+    );
+  });
+
+  test('认证检查期间公开路径与引导页正常放行', () {
+    expect(
+      authRedirectPath(
+        isChecking: true,
+        isAuthenticated: false,
+        location: '/login',
+      ),
+      isNull,
+    );
+    expect(
+      authRedirectPath(
+        isChecking: true,
+        isAuthenticated: false,
+        location: '/s/tok-1',
+      ),
+      isNull,
+    );
+    expect(
+      authRedirectPath(
+        isChecking: true,
+        isAuthenticated: false,
+        location: '/shared/photos/item/tok-1',
+      ),
+      isNull,
+    );
+    expect(
+      authRedirectPath(
+        isChecking: true,
+        isAuthenticated: false,
+        location: '/boot',
       ),
       isNull,
     );
   });
 
-  test('安装状态检查期间不触发跳转', () {
+  test('检查结束后引导页按认证结果落位', () {
+    expect(
+      authRedirectPath(
+        isChecking: false,
+        isAuthenticated: true,
+        location: '/boot?redirect=%2Fadmin%2Fusers',
+      ),
+      '/admin/users',
+    );
+    expect(
+      authRedirectPath(
+        isChecking: false,
+        isAuthenticated: false,
+        location: '/boot?redirect=%2Fportal',
+      ),
+      '/login?redirect=%2Fportal',
+    );
+    expect(
+      authRedirectPath(
+        isChecking: false,
+        isAuthenticated: true,
+        location: '/boot',
+      ),
+      '/portal',
+    );
+  });
+
+  test('安装状态检查期间受保护路径同样停泊到引导页', () {
     expect(
       authRedirectPath(
         isChecking: false,
@@ -59,7 +125,7 @@ void main() {
         isSetupChecking: true,
         location: '/portal',
       ),
-      isNull,
+      '/boot?redirect=%2Fportal',
     );
   });
 

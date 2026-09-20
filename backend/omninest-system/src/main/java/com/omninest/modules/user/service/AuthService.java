@@ -417,6 +417,40 @@ public class AuthService {
         return issueToken(toDto(profile), sessionId);
     }
 
+    /**
+     * 退出登录：吊销刷新令牌对应的活动会话。
+     *
+     * 幂等成功语义：凭证缺失、无法解码、类型不符或会话已不存在时直接返回，
+     * 仅记录调试日志，保证客户端任何状态下都能完成本地登出清理。
+     *
+     * @param refreshToken 客户端持有的刷新令牌，Web 端为 Cookie 值
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void logout(String refreshToken) {
+        if (refreshToken == null || refreshToken.isBlank()) {
+            return;
+        }
+        UUID userId;
+        UUID sessionId;
+        try {
+            Jwt jwt = jwtDecoder.decode(refreshToken.trim());
+            if (!"refresh".equals(jwt.getClaimAsString("token_use"))) {
+                log.debug("登出令牌类型非 refresh，按幂等成功处理");
+                return;
+            }
+            userId = parseUserId(jwt.getSubject());
+            sessionId = parseSessionId(jwt.getClaimAsString("sid"));
+        } catch (RuntimeException ex) {
+            log.debug("登出令牌无效，按幂等成功处理: {}", ex.getMessage());
+            return;
+        }
+        if (activeSessionRepository.findByIdAndUserId(sessionId, userId).isEmpty()) {
+            return;
+        }
+        sessionRevocationService.revokeSession(userId, sessionId, Duration.ofDays(30));
+        activeSessionRepository.revokeBySessionId(sessionId, "用户退出登录");
+    }
+
     private AuthTokenResponse issueToken(AuthUserDto user, UUID sessionId) {
         Instant now = Instant.now();
         Instant accessExpiresAt = now.plus(authenticationTokenPolicy.accessTokenTtl());

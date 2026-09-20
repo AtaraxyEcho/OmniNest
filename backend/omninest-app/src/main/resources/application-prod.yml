@@ -80,6 +80,7 @@ omninest:
     credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}
     # HTTPS 由外部网关终止；该开关描述公开入口并同步约束安全 Cookie。
     refresh-cookie-secure: ${OMNINEST_HTTPS_ENABLED:true}
+    refresh-cookie-same-site: ${OMNINEST_SECURITY_REFRESH_COOKIE_SAME_SITE:STRICT}
     registration-enabled: ${OMNINEST_SECURITY_REGISTRATION_ENABLED:false}
     trusted-proxies: ${OMNINEST_SECURITY_TRUSTED_PROXIES:}
     allowed-origins: ${OMNINEST_SECURITY_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}

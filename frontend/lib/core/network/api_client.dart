@@ -7,7 +7,6 @@ import 'package:omninest/core/log/dev_log.dart';
 
 typedef AccessTokenReader = String? Function();
 typedef SessionRefresher = Future<bool> Function();
-typedef SessionClearer = Future<void> Function();
 
 class ApiClient {
   ApiClient(
@@ -15,12 +14,10 @@ class ApiClient {
     AuthSessionStore? sessionStore,
     AccessTokenReader? readAccessToken,
     SessionRefresher? refreshSession,
-    SessionClearer? clearSession,
     HttpClientAdapter? httpClientAdapter,
   }) : _sessionStore = sessionStore,
        _readAccessToken = readAccessToken,
        _refreshSession = refreshSession,
-       _clearSession = clearSession,
        dio = Dio(
          BaseOptions(
            baseUrl: environment.apiBaseUrl,
@@ -62,13 +59,23 @@ class ApiClient {
             final originalToken =
                 response.requestOptions.extra[_requestTokenKey]?.toString();
             final currentToken = _currentAccessToken();
-            final refreshed =
+            var refreshed =
                 currentToken != null &&
                         currentToken.isNotEmpty &&
                         originalToken != null &&
                         currentToken != originalToken
                     ? true
                     : await _refreshOnce();
+            if (!refreshed) {
+              // 刷新调用失败但令牌可能已被并发路径更新（如周期刷新恰好
+              // 成功），复核一次签名避免把可恢复请求误判为会话失效。
+              final latestToken = _currentAccessToken();
+              refreshed =
+                  latestToken != null &&
+                  latestToken.isNotEmpty &&
+                  originalToken != null &&
+                  latestToken != originalToken;
+            }
 
             if (!refreshed) {
               if (isForbidden) {
@@ -83,7 +90,8 @@ class ApiClient {
                 );
                 return;
               }
-              await _clearSession?.call();
+              // 会话清理由会话通知器按刷新结果分级处理：服务端明确拒绝
+              // 才清除；瞬时网络故障保留会话，这里不再无条件登出。
               handler.reject(
                 DioException.badResponse(
                   statusCode: response.statusCode ?? 401,
@@ -108,7 +116,7 @@ class ApiClient {
               );
             }
           } catch (_) {
-            // _refreshOnce() 或后续逻辑抛出异常时，清理会话并拒绝请求；
+            // _refreshOnce() 或后续逻辑抛出异常时拒绝请求；
             // 403 路径不清会话，避免权限误判升级为登出。
             if (isForbidden) {
               handler.reject(
@@ -120,7 +128,6 @@ class ApiClient {
               );
               return;
             }
-            await _clearSession?.call();
             handler.reject(
               DioException.badResponse(
                 statusCode: response.statusCode ?? 401,
@@ -154,7 +161,6 @@ class ApiClient {
   final AuthSessionStore? _sessionStore;
   final AccessTokenReader? _readAccessToken;
   final SessionRefresher? _refreshSession;
-  final SessionClearer? _clearSession;
   String? _manualAccessToken;
   Future<bool>? _refreshing;
 

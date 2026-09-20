@@ -84,6 +84,11 @@ class DeepLinkService {
   }
 
   void _handle(Uri uri) {
+    if (uri.scheme.toLowerCase() != 'omninest') {
+      // Web 端 app_links 会把当前页面 URL 作为初始链接与流事件重复上报，
+      // 非 omninest 协议一律静默忽略，避免每次启动重复输出拒绝日志。
+      return;
+    }
     final route = resolveDeepLinkPath(uri);
     if (route == null) {
       if (kDebugMode) {

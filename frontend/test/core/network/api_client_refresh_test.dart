@@ -22,7 +22,6 @@ void main() {
         accessToken = 'fresh-token';
         return true;
       },
-      clearSession: () async {},
       httpClientAdapter: adapter,
     );
 
@@ -53,7 +52,6 @@ void main() {
         refreshCount++;
         return true;
       },
-      clearSession: () async {},
       httpClientAdapter: adapter,
     );
 
@@ -73,7 +71,6 @@ void main() {
   test('403 刷新会话并携带新令牌重试一次成功', () async {
     var accessToken = 'stale-claims-token';
     var refreshCount = 0;
-    var clearCount = 0;
     final adapter = _ReplayAdapter();
     final client = ApiClient(
       const AppEnvironment(
@@ -86,16 +83,12 @@ void main() {
         accessToken = 'fresh-claims-token';
         return true;
       },
-      clearSession: () async {
-        clearCount++;
-      },
       httpClientAdapter: adapter,
     );
 
     final response = await client.dio.get<Map<String, dynamic>>('/claims');
 
     expect(refreshCount, 1);
-    expect(clearCount, 0);
     expect(response.data?['code'], 200);
     expect(adapter.claimAuthorizationHeaders, [
       'Bearer stale-claims-token',
@@ -106,7 +99,6 @@ void main() {
   test('403 真实权限拒绝重试后原样上抛且不清除会话', () async {
     var accessToken = 'stale-claims-token';
     var refreshCount = 0;
-    var clearCount = 0;
     final adapter = _ReplayAdapter();
     final client = ApiClient(
       const AppEnvironment(
@@ -119,9 +111,6 @@ void main() {
         accessToken = 'fresh-claims-token';
         return true;
       },
-      clearSession: () async {
-        clearCount++;
-      },
       httpClientAdapter: adapter,
     );
 
@@ -129,8 +118,56 @@ void main() {
 
     expect(response.statusCode, 403);
     expect(refreshCount, 1);
-    expect(clearCount, 0);
     expect(adapter.forbiddenRequestCount, 2);
+  });
+
+  test('刷新失败时原样上抛 401 且不触发登出（分级由会话通知器负责）', () async {
+    var refreshCount = 0;
+    final adapter = _ReplayAdapter();
+    final client = ApiClient(
+      const AppEnvironment(
+        apiBaseUrl: 'http://localhost:8080/api/v1',
+        wsBaseUrl: 'ws://localhost:8080/ws',
+      ),
+      readAccessToken: () => 'expired-token',
+      refreshSession: () async {
+        refreshCount++;
+        return false;
+      },
+      httpClientAdapter: adapter,
+    );
+
+    await expectLater(
+      client.dio.get<Map<String, dynamic>>('/secure'),
+      throwsA(
+        isA<DioException>().having(
+          (error) => error.response?.statusCode,
+          'statusCode',
+          401,
+        ),
+      ),
+    );
+    expect(refreshCount, 1);
+  });
+
+  test('刷新返回失败但并发路径已更新令牌时直接重放成功', () async {
+    var accessToken = 'expired-token';
+    final adapter = _ReplayAdapter();
+    final client = ApiClient(
+      const AppEnvironment(
+        apiBaseUrl: 'http://localhost:8080/api/v1',
+        wsBaseUrl: 'ws://localhost:8080/ws',
+      ),
+      readAccessToken: () => accessToken,
+      refreshSession: () async {
+        accessToken = 'fresh-token';
+        return false;
+      },
+      httpClientAdapter: adapter,
+    );
+
+    final response = await client.dio.get<Map<String, dynamic>>('/secure');
+    expect(response.data?['code'], 200);
   });
 }
 

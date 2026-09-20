@@ -81,6 +81,7 @@ omninest:
     jwt-secret: ${OMNINEST_SECURITY_JWT_SECRET:change-me-omninest-local-jwt-secret-at-least-32-bytes}
     credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}
     refresh-cookie-secure: ${OMNINEST_SECURITY_REFRESH_COOKIE_SECURE:false}
+    refresh-cookie-same-site: ${OMNINEST_SECURITY_REFRESH_COOKIE_SAME_SITE:STRICT}
     registration-enabled: ${OMNINEST_SECURITY_REGISTRATION_ENABLED:false}
     trusted-proxies: ${OMNINEST_SECURITY_TRUSTED_PROXIES:}
     allowed-origins: ${OMNINEST_SECURITY_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}

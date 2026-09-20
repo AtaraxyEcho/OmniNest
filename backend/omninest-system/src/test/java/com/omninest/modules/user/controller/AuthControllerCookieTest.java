@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.ratelimit.RateLimitService;
@@ -14,7 +15,9 @@ import com.omninest.common.security.RegistrationPolicy;
 import com.omninest.modules.user.dto.AuthTokenResponse;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.dto.LoginRequest;
+import com.omninest.modules.user.dto.RefreshRequest;
 import com.omninest.modules.user.service.AuthService;
+import jakarta.servlet.http.Cookie;
 import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
@@ -88,6 +91,93 @@ class AuthControllerCookieTest {
 
         assertThat(response.getData().refreshToken()).isEqualTo("refresh-token");
         assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE)).isNull();
+    }
+
+    @Test
+    void webLogoutRevokesSessionFromCookieAndClearsCookie() {
+        MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+        MockHttpServletRequest servletRequest = request();
+        servletRequest.setCookies(new Cookie("omninest_refresh_token", "refresh-token"));
+
+        controller.logout(new RefreshRequest(null), "web", servletRequest, servletResponse);
+
+        verify(authService).logout("refresh-token");
+        assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE))
+                .contains("omninest_refresh_token=")
+                .contains("Max-Age=0")
+                .contains("HttpOnly")
+                .contains("SameSite=Strict");
+    }
+
+    @Test
+    void sameSiteNoneForcesSecureCookie() throws Exception {
+        when(browserSecurityPolicy.refreshCookieSameSite()).thenReturn("None");
+        MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+
+        controller.login(
+                new LoginRequest("root", "secret"),
+                "web",
+                "browser-1",
+                "Chrome",
+                request(),
+                servletResponse
+        );
+
+        // SameSite=None 不带 Secure 会被浏览器整体拒绝，必须强制安全传输。
+        assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE))
+                .contains("SameSite=None")
+                .contains("Secure");
+    }
+
+    @Test
+    void sameSiteLaxPassesThroughWithoutForcingSecure() throws Exception {
+        when(browserSecurityPolicy.refreshCookieSameSite()).thenReturn("LAX");
+        MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+
+        controller.login(
+                new LoginRequest("root", "secret"),
+                "web",
+                "browser-1",
+                "Chrome",
+                request(),
+                servletResponse
+        );
+
+        assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE))
+                .contains("SameSite=Lax")
+                .doesNotContain("Secure");
+    }
+
+    @Test
+    void nullPolicySameSiteFallsBackToStrict() throws Exception {
+        when(browserSecurityPolicy.refreshCookieSameSite()).thenReturn(null);
+        MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+
+        controller.login(
+                new LoginRequest("root", "secret"),
+                "web",
+                "browser-1",
+                "Chrome",
+                request(),
+                servletResponse
+        );
+
+        assertThat(servletResponse.getHeader(HttpHeaders.SET_COOKIE))
+                .contains("SameSite=Strict");
+    }
+
+    @Test
+    void nativeLogoutRevokesSessionFromBodyToken() {
+        MockHttpServletResponse servletResponse = new MockHttpServletResponse();
+
+        controller.logout(
+                new RefreshRequest("refresh-token"),
+                "android",
+                request(),
+                servletResponse
+        );
+
+        verify(authService).logout("refresh-token");
     }
 
     private MockHttpServletRequest request() {

@@ -7,6 +7,7 @@ import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/core/auth/auth_client.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
+import 'package:omninest/core/network/retry_interceptor.dart';
 import 'package:omninest/core/security/offline_data_lifecycle.dart';
 import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
@@ -37,6 +38,13 @@ final authClientProvider = Provider<AuthClient>((ref) {
       validateStatus: (status) => status != null && status < 500,
     ),
   );
+  // 认证请求是恢复会话的关键路径，连接层故障时按幂等键安全重试一次。
+  final retryInterceptor = RetryInterceptor(
+    maxRetries: 1,
+    baseDelay: const Duration(milliseconds: 800),
+  );
+  dio.interceptors.add(retryInterceptor);
+  retryInterceptor.setDio(dio);
   return AuthClient(dio);
 });
 
@@ -44,6 +52,33 @@ final authSessionProvider =
     AsyncNotifierProvider<AuthSessionNotifier, AuthSessionState>(
       AuthSessionNotifier.new,
     );
+
+/// 会话刷新结果分级。
+enum SessionRefreshGrade {
+  /// 刷新成功。
+  success,
+
+  /// 服务端明确拒绝（4xx）：会话或凭据确定失效。
+  invalid,
+
+  /// 网络等瞬时故障：会话有效性未知，不得清除本地会话与凭据。
+  transient,
+}
+
+/// 单次会话刷新的结果。
+class SessionRefreshResult {
+  const SessionRefreshResult.ok(AuthSessionState this.session)
+    : grade = SessionRefreshGrade.success;
+  const SessionRefreshResult.invalid()
+    : session = null,
+      grade = SessionRefreshGrade.invalid;
+  const SessionRefreshResult.transient()
+    : session = null,
+      grade = SessionRefreshGrade.transient;
+
+  final AuthSessionState? session;
+  final SessionRefreshGrade grade;
+}
 
 class AuthSessionState {
   const AuthSessionState({this.user, this.expiresAt});
@@ -60,16 +95,39 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   static const _refreshCheckInterval = Duration(seconds: 30);
   static const _refreshAhead = Duration(minutes: 2);
 
+  /// 冷启动会话恢复的总超时：Cookie 刷新悬挂时按未登录处理，避免
+  /// 启动门控永久停留在引导页。
+  static const _restoreTimeout = Duration(seconds: 12);
+
   Timer? _refreshTimer;
 
   @override
   Future<AuthSessionState> build() async {
     ref.onDispose(() => _refreshTimer?.cancel());
-    final restored = await _refreshWithStoredToken();
-    if (restored != null) {
-      _scheduleRefresh(restored.expiresAt);
+    var restored = await _restoreWithRetry();
+    if (restored.session != null) {
+      _scheduleRefresh(restored.session!.expiresAt);
+      return restored.session!;
     }
-    return restored ?? const AuthSessionState.unauthenticated();
+    return const AuthSessionState.unauthenticated();
+  }
+
+  /// 恢复期瞬时故障单次退避重试：启动阶段网络栈常未就绪，直接按
+  /// 未登录处理会把可恢复的抖动升级为登录页。
+  Future<SessionRefreshResult> _restoreWithRetry() async {
+    try {
+      final first = await _refreshWithStoredToken().timeout(_restoreTimeout);
+      if (first.grade != SessionRefreshGrade.transient) {
+        return first;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 600));
+      return await _refreshWithStoredToken().timeout(_restoreTimeout);
+    } on Object catch (error) {
+      if (kDebugMode) {
+        devLog('会话恢复超时或失败: ${error.runtimeType}');
+      }
+      return const SessionRefreshResult.transient();
+    }
   }
 
   /// 密码登录：正常返回并建立会话；需要两步验证时返回挑战结果，不改变当前会话状态。
@@ -137,20 +195,60 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
     state = AsyncData(authState);
   }
 
+  /// 刷新当前会话并按结果分级处理：成功续期；服务端明确拒绝才清除
+  /// 会话；瞬时网络故障保留本地会话与凭据，避免抖动被放大为登出。
   Future<bool> refreshSession() async {
-    final refreshed = await _refreshWithStoredToken();
-    if (refreshed == null) {
+    final result = await _refreshWithStoredToken();
+    final session = result.session;
+    if (session != null) {
+      state = AsyncData(session);
+      _scheduleRefresh(session.expiresAt);
+      return true;
+    }
+    if (result.grade == SessionRefreshGrade.invalid) {
       await clearSession();
       return false;
     }
-    state = AsyncData(refreshed);
-    _scheduleRefresh(refreshed.expiresAt);
-    return true;
+    if (kDebugMode) {
+      devLog('会话刷新瞬时失败，保留本地会话等待下个周期');
+    }
+    return false;
   }
 
+  bool _clearingSession = false;
+
   Future<void> clearSession() async {
+    // 登出会触发路由与 provider 级联调用，单飞防止重复请求吊销接口。
+    if (_clearingSession) {
+      return;
+    }
+    _clearingSession = true;
+    try {
+      await _clearSessionInternal();
+    } finally {
+      _clearingSession = false;
+    }
+  }
+
+  Future<void> _clearSessionInternal() async {
     _refreshTimer?.cancel();
     _refreshTimer = null;
+    // 先吊销服务端会话（Web 端同时清 HttpOnly Cookie），失败不阻断本地清理；
+    // 仅在确实持有会话时请求，避免登出后的级联清理反复打接口触发限流。
+    final store = ref.read(authSessionStoreProvider);
+    final wasAuthenticated = state.asData?.value.isAuthenticated ?? false;
+    final storedRefreshToken = await store.readRefreshToken();
+    if (wasAuthenticated || (storedRefreshToken ?? '').isNotEmpty) {
+      try {
+        await ref
+            .read(authClientProvider)
+            .logout(refreshToken: storedRefreshToken);
+      } catch (error) {
+        if (kDebugMode) {
+          devLog('服务端会话吊销失败: ${error.runtimeType}');
+        }
+      }
+    }
     final userId = state.asData?.value.user?.id;
     if (userId != null) {
       try {
@@ -161,7 +259,7 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
         }
       }
     }
-    await ref.read(authSessionStoreProvider).clear();
+    await store.clear();
     state = const AsyncData(AuthSessionState.unauthenticated());
   }
 
@@ -175,11 +273,17 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
 
       _refreshTimer?.cancel();
       final ok = await refreshSession();
-      if (!ok) await clearSession();
+      if (ok) return;
+      // 明确失效时 refreshSession 内部已清会话并取消排程；
+      // 瞬时故障保留会话，按原过期时间继续排程等待下个周期。
+      final stillAuthenticated = state.asData?.value.isAuthenticated ?? false;
+      if (stillAuthenticated) {
+        _scheduleRefresh(expiresAt);
+      }
     });
   }
 
-  Future<AuthSessionState?> _refreshWithStoredToken() async {
+  Future<SessionRefreshResult> _refreshWithStoredToken() async {
     final store = ref.read(authSessionStoreProvider);
     try {
       final refreshToken = await store.readRefreshToken();
@@ -190,18 +294,40 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
               .read(authClientProvider)
               .refresh(refreshToken: null);
           await _saveSession(session);
-          return _toState(session);
+          return SessionRefreshResult.ok(_toState(session));
         }
-        return null;
+        // 无凭据且非 Web：确定无会话，不视为故障。
+        return const SessionRefreshResult.invalid();
       }
       final session = await _refreshOnReadyEnvironment(
         refreshToken: refreshToken,
       );
       await _saveSession(session);
-      return _toState(session);
-    } catch (_) {
-      return null;
+      return SessionRefreshResult.ok(_toState(session));
+    } on DioException catch (error) {
+      return _gradeRefreshFailure(error);
+    } catch (error) {
+      if (kDebugMode) {
+        devLog('会话刷新失败: ${error.runtimeType}');
+      }
+      return const SessionRefreshResult.transient();
     }
+  }
+
+  /// 按响应分级刷新失败：4xx 为服务端明确拒绝（凭据确定失效）；
+  /// 连接层故障与 5xx 视为瞬时，不清除本地会话与 Cookie。
+  SessionRefreshResult _gradeRefreshFailure(DioException error) {
+    final statusCode = error.response?.statusCode;
+    if (statusCode != null && statusCode >= 400 && statusCode < 500) {
+      if (kDebugMode) {
+        devLog('会话刷新被服务端拒绝: HTTP $statusCode');
+      }
+      return const SessionRefreshResult.invalid();
+    }
+    if (kDebugMode) {
+      devLog('会话刷新网络故障: ${error.type}（保留本地会话与凭据）');
+    }
+    return const SessionRefreshResult.transient();
   }
 
   /// 持有令牌的刷新前先等服务器配置就绪：自定义配置仍在加载时环境

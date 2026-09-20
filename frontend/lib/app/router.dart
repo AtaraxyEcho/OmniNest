@@ -6,6 +6,8 @@ import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/mobile_shell/mobile_activity_center_page.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
+import 'package:omninest/app/route/boot_page.dart';
+import 'package:omninest/app/web_initial_location.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/login_page.dart';
 import 'package:omninest/core/server/presentation/server_setup_page.dart';
@@ -66,13 +68,20 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.listen(serverConfigProvider, (previous, next) {
     authRefreshListenable.value++;
   });
+  // Web 引擎的 defaultRouteName 恒为 '/'，且 Dart 侧 Uri.base 在 isolate
+  // 启动时已拿不到地址 hash；go_router 以它们作初始位置会丢失浏览器深链
+  // （整页加载/F5/书签/分享链接全部弹回门户）。index.html 在引擎归一化
+  // history 之前把原始地址存入 __omninestInitialHref，经条件导入在 Web 端
+  // 读取恢复初始路由；原生端无地址栏，固定从门户进入。
+  final webInitialLocation = kIsWeb ? readWebInitialLocation() : null;
   final router = GoRouter(
     navigatorKey: desktopCloseNavigatorKey,
-    initialLocation: '/',
+    initialLocation: webInitialLocation ?? '/',
     refreshListenable: authRefreshListenable,
     redirect: (context, state) => _redirect(ref, state),
     routes: [
       GoRoute(path: '/', redirect: (context, state) => '/portal'),
+      _animatedRoute('/boot', (state) => const BootPage()),
       _animatedRoute('/setup', (state) => const InitialSetupPage()),
       _animatedRoute('/login', (state) => const LoginPage()),
       _animatedRoute('/server-setup', (state) => const ServerSetupPage()),
@@ -473,7 +482,16 @@ String? authRedirectPath({
   Set<String>? userPermissions,
 }) {
   if (isChecking || isSetupChecking) {
-    return null;
+    // 认证/安装检查在途：仅放行公开路径，受保护路径停泊到引导页。
+    // 避免页面在无凭据状态下构建并发起必然 401 的首批请求——这是
+    // Web 刷新后被强制登出的直接诱因。
+    final uri = Uri.parse(location);
+    final path = uri.path;
+    if (path == '/boot' || _isPublicPath(path) || path == '/server-setup') {
+      return null;
+    }
+    final target = location == '/' ? '/portal' : location;
+    return Uri(path: '/boot', queryParameters: {'redirect': target}).toString();
   }
 
   final uri = Uri.parse(location);
@@ -482,6 +500,17 @@ String? authRedirectPath({
 
   if (setupRequired) {
     return path == '/setup' ? null : '/setup';
+  }
+  if (path == '/boot') {
+    // 检查已结束：按认证结果落位到原目标或登录页。
+    final target = _safeRedirectTarget(uri.queryParameters['redirect']);
+    if (!isAuthenticated) {
+      return Uri(
+        path: '/login',
+        queryParameters: {'redirect': target ?? '/portal'},
+      ).toString();
+    }
+    return target ?? '/portal';
   }
   if (path == '/setup') {
     return isAuthenticated ? '/portal' : '/login';

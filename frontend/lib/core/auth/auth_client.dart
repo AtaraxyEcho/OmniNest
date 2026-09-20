@@ -96,6 +96,19 @@ class AuthClient {
     return parseAuthResponse(response.data);
   }
 
+  /// 退出登录：吊销服务端刷新会话；Web 端由后端清除 HttpOnly Cookie。
+  /// 原生端传入本地保存的刷新令牌，Web 端留空走 Cookie 通道。
+  Future<void> logout({String? refreshToken}) async {
+    await _dio.post<Map<String, dynamic>>(
+      '/auth/logout',
+      data:
+          refreshToken == null || refreshToken.isEmpty
+              ? null
+              : {'refreshToken': refreshToken},
+      options: _credentialOptions(),
+    );
+  }
+
   AuthTokenResponse parseAuthResponse(Map<String, dynamic>? body) {
     return AuthTokenResponse.fromJson(_unwrap(body));
   }
@@ -142,6 +155,9 @@ class AuthClient {
     return data;
   }
 
+  /// 认证请求公共选项。携带凭据 Cookie（Web 端 HttpOnly 刷新令牌通道）。
+  /// 自定义请求头必须与后端 CORS allowedHeaders 白名单保持一致：
+  /// 新增头若不在白名单内，跨源预检会被浏览器拦截，表现为刷新必失败。
   Options _credentialOptions() {
     return Options(
       headers: {'X-Client-Platform': _clientPlatform},

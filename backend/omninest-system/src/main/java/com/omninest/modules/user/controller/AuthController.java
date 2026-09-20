@@ -32,6 +32,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Locale;
 
 @RestController
 @RequiredArgsConstructor
@@ -197,6 +198,24 @@ public class AuthController {
         return issueResponse(authService.refresh(refreshToken), clientPlatform, response);
     }
 
+    @Operation(summary = "退出登录", description = "吊销当前刷新会话并清除刷新 Cookie；凭证无效时幂等成功")
+    @PostMapping("/api/v1/auth/logout")
+    ApiResponse<Void> logout(
+            @RequestBody(required = false) RefreshRequest request,
+            @RequestHeader(name = CLIENT_PLATFORM_HEADER, required = false, defaultValue = "native") String clientPlatform,
+            HttpServletRequest httpRequest,
+            HttpServletResponse response
+    ) {
+        String ip = resolveClientIp(httpRequest);
+        if (!rateLimitService.tryAcquire("ip:" + ip + ":logout", 10, Duration.ofMinutes(1))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "退出请求过于频繁，请稍后再试");
+        }
+        String refreshToken = resolveRefreshToken(clientPlatform, request, httpRequest);
+        authService.logout(refreshToken);
+        clearRefreshCookie(response);
+        return ApiResponse.success(null);
+    }
+
     private ApiResponse<AuthTokenResponse> issueResponse(
             AuthTokenResponse token,
             String clientPlatform,
@@ -252,12 +271,35 @@ public class AuthController {
         }
         ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, refreshToken)
                 .httpOnly(true)
-                .secure(browserSecurityPolicy.refreshCookieSecure())
-                .sameSite("Strict")
+                .secure(refreshCookieSecure())
+                .sameSite(refreshCookieSameSite())
                 .path("/api/v1/auth")
                 .maxAge(resolveMaxAge(expiresAt))
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    /**
+     * SameSite 属性取安全策略配置并归一化：合法值为 Strict/Lax/None，
+     * 缺省或非法值回落 Strict（测试桩的接口默认方法可能返回 null）。
+     */
+    private String refreshCookieSameSite() {
+        String value = browserSecurityPolicy.refreshCookieSameSite();
+        if (value == null || value.isBlank()) {
+            return "Strict";
+        }
+        return switch (value.trim().toUpperCase(Locale.ROOT)) {
+            case "LAX" -> "Lax";
+            case "NONE" -> "None";
+            default -> "Strict";
+        };
+    }
+
+    /**
+     * SameSite=None 不带 Secure 会被浏览器整体拒绝，该形态下强制安全传输。
+     */
+    private boolean refreshCookieSecure() {
+        return "None".equals(refreshCookieSameSite()) || browserSecurityPolicy.refreshCookieSecure();
     }
 
     private Duration resolveMaxAge(String expiresAt) {
@@ -266,6 +308,18 @@ public class AuthController {
         } catch (RuntimeException ex) {
             return Duration.ofDays(30);
         }
+    }
+
+    // 登出时以相同属性覆盖刷新 Cookie，使浏览器立即删除。
+    private void clearRefreshCookie(HttpServletResponse response) {
+        ResponseCookie cookie = ResponseCookie.from(REFRESH_COOKIE_NAME, "")
+                .httpOnly(true)
+                .secure(refreshCookieSecure())
+                .sameSite(refreshCookieSameSite())
+                .path("/api/v1/auth")
+                .maxAge(Duration.ZERO)
+                .build();
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     }
 
     private String resolveClientIp(HttpServletRequest request) {

@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <script>
+    // 在引擎做任何 history 归一化之前捕获原始地址，供冷启动深链恢复使用
+    // （分享链接 /#/s/:token、书签、F5 刷新都必须保留进入位置）。
+    window.__omninestInitialHref = window.location.href;
+  </script>
+
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
