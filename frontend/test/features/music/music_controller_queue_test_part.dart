@@ -1334,6 +1334,42 @@ void registerMusicQueuePersistenceTests() {
     ]);
   });
 
+  test('playOnlineTrack resets the source to transient', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    // 先绑定歌单来源，再从历史页点播在线单曲：来源必须重置为 transient。
+    await controller.playItems(
+      _fourTrackItems(api),
+      startIndex: 0,
+      source: const MusicQueueSource(
+        kind: MusicQueueSourceKind.playlist,
+        id: 'playlist-1',
+        title: 'Road Trip',
+      ),
+    );
+    await controller.playOnlineTrack(
+      const OnlineTrack(
+        platform: 'netease',
+        songId: '188888',
+        title: 'Cloud Song',
+        artistName: 'Online Artist',
+      ),
+    );
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.playableKey, 'online:netease:188888');
+    expect(state.playbackItems.map((item) => item.playableKey).toList(), [
+      'online:netease:188888',
+    ]);
+    expect(state.queueSource.kind, MusicQueueSourceKind.transient);
+  });
+
   test(
     'snapshot source and truncated flag round-trip through local store',
     () async {

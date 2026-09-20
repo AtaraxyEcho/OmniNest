@@ -1131,7 +1131,12 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     }
     try {
       final item = MusicPlayableItem.online(track);
-      await _playItemInQueue(current, <MusicPlayableItem>[item], 0);
+      await _playItemInQueue(
+        current,
+        <MusicPlayableItem>[item],
+        0,
+        source: MusicQueueSource.transient,
+      );
     } on Exception catch (error) {
       _setError(describeUserFacingError(error).message);
     }
