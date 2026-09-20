@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/features/music/data/music_cover_cache.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 
 /// Music Deck 局部玻璃表面。
@@ -117,6 +118,10 @@ class MusicDeckArtwork extends StatelessWidget {
     final cacheWidth = (logicalWidth * MediaQuery.devicePixelRatioOf(context))
         .round()
         .clamp(120, 1200);
+    // 本地封面走稳定鉴权 API 路径时使用专域缓存管理器（dio 拼 baseUrl
+    // 并附带鉴权头）；CDN 地址与缓存未注入时保持默认路径。
+    final manager =
+        isMusicCoverApiPath(source) ? MusicCoverCache.maybeInstance : null;
     return CachedNetworkImage(
       imageUrl: source,
       fit: BoxFit.cover,
@@ -124,6 +129,7 @@ class MusicDeckArtwork extends StatelessWidget {
       height: double.infinity,
       memCacheWidth: cacheWidth,
       maxWidthDiskCache: cacheWidth,
+      cacheManager: manager,
       useOldImageOnUrlChange: true,
       fadeInDuration: const Duration(milliseconds: 160),
       fadeOutDuration: const Duration(milliseconds: 80),

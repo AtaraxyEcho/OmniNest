@@ -13,6 +13,7 @@ import 'package:omninest/core/storage/sync_queue.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/data/file_providers.dart';
 import 'package:omninest/features/music/data/music_api.dart';
+import 'package:omninest/features/music/data/music_cover_cache.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
 import 'package:omninest/features/notifications/data/notification_type_api.dart';
 import 'package:omninest/features/profile/data/me_api.dart';
@@ -32,12 +33,15 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     throw StateError('服务器地址未配置');
   }
   final sessionStore = ref.watch(authSessionStoreProvider);
-  return ApiClient(
+  final apiClient = ApiClient(
     environment,
     sessionStore: sessionStore,
     refreshSession:
         () => ref.read(authSessionProvider.notifier).refreshSession(),
   );
+  // 封面专域缓存的下载客户端与 ApiClient 同生命周期，重建时刷新引用。
+  MusicCoverCache.configure(apiClient.dio);
+  return apiClient;
 });
 
 /// 分享链接基址解析器。

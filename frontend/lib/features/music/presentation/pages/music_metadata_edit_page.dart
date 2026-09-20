@@ -12,6 +12,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
+import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/core/errors/error_message.dart';
 
 class MusicMetadataEditPage extends ConsumerWidget {
@@ -501,20 +502,14 @@ class _CoverPanel extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child:
-                  track.coverUrl != null && track.coverUrl!.isNotEmpty
-                      ? Image.network(
-                        track.coverUrl!,
-                        width: 200,
-                        height: 200,
-                        fit: BoxFit.cover,
-                        errorBuilder:
-                            (_, error, stackTrace) =>
-                                _placeholderCover(context),
-                      )
-                      : _placeholderCover(context),
+            SizedBox.square(
+              dimension: 200,
+              child: MusicDeckArtwork(
+                title: track.title,
+                imageUrl: track.coverUrl,
+                borderRadius: 12,
+                icon: Icons.album_rounded,
+              ),
             ),
             const SizedBox(height: 16),
             Text(
@@ -569,22 +564,6 @@ class _CoverPanel extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _placeholderCover(BuildContext context) {
-    return Container(
-      width: 200,
-      height: 200,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Icon(
-        Icons.music_note_rounded,
-        size: 64,
-        color: context.musicColors.onSurfaceVariant.withValues(alpha: 0.4),
       ),
     );
   }

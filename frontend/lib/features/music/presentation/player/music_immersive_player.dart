@@ -19,6 +19,7 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_spectrum_analyzer.dart';
 import 'package:omninest/features/music/application/music_visualizer_preset_controller.dart';
+import 'package:omninest/features/music/data/music_cover_cache.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_lyrics.dart';
@@ -120,6 +121,11 @@ class _MusicImmersiveArtwork extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final url = imageUrl?.trim();
+    // 本地封面稳定 API 路径走专域缓存管理器；CDN 地址保持默认路径。
+    final manager =
+        url == null || !isMusicCoverApiPath(url)
+            ? null
+            : MusicCoverCache.maybeInstance;
     final child =
         url == null || url.isEmpty
             ? fallback
@@ -130,6 +136,7 @@ class _MusicImmersiveArtwork extends StatelessWidget {
               height: height,
               memCacheWidth: cacheWidth,
               memCacheHeight: cacheHeight,
+              cacheManager: manager,
               filterQuality: FilterQuality.medium,
               placeholder: (context, url) => fallback,
               errorWidget: (context, url, error) => fallback,
