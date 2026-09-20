@@ -9,10 +9,18 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.SpaceType;
+import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
@@ -23,7 +31,9 @@ class MusicCoverServiceTest {
 
     private final DerivedAssetStorageService storageService = mock(DerivedAssetStorageService.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
-    private final MusicCoverService coverService = new MusicCoverService(storageService, fileQueryService);
+    private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
+    private final MusicCoverService coverService =
+            new MusicCoverService(storageService, fileQueryService, fileMetadataQueryService);
 
     @Test
     void uploadDetectsPngFromFileHeader() {
@@ -65,5 +75,81 @@ class MusicCoverServiceTest {
         coverService.validateOwnedCover(OWNER_ID, FILE_ID);
 
         verify(fileQueryService).validateOwnedImage(OWNER_ID, FILE_ID);
+    }
+
+    @Test
+    void prepareCoverStreamReturnsDescriptorForOwnedImage() {
+        when(fileMetadataQueryService.findActiveById(FILE_ID)).thenReturn(Optional.of(imageDescriptor("image/png", 1024)));
+
+        var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
+
+        assertThat(descriptor.fileId()).isEqualTo(FILE_ID);
+        assertThat(descriptor.contentType()).isEqualTo("image/png");
+        assertThat(descriptor.sizeBytes()).isEqualTo(1024);
+        verify(fileQueryService).validateOwnedImage(OWNER_ID, FILE_ID);
+    }
+
+    @Test
+    void prepareCoverStreamFallsBackToJpegWhenMimeTypeMissing() {
+        when(fileMetadataQueryService.findActiveById(FILE_ID)).thenReturn(Optional.of(imageDescriptor(null, 2048)));
+
+        var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
+
+        assertThat(descriptor.contentType()).isEqualTo("image/jpeg");
+    }
+
+    @Test
+    void prepareCoverStreamRejectsOversizedCover() {
+        when(fileMetadataQueryService.findActiveById(FILE_ID))
+                .thenReturn(Optional.of(imageDescriptor("image/png", 9L * 1024 * 1024)));
+
+        assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void prepareCoverStreamRejectsMissingNode() {
+        when(fileMetadataQueryService.findActiveById(FILE_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
+                .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void streamCoverWritesContentAndClosesStream() throws Exception {
+        byte[] payload = "cover-bytes".getBytes(StandardCharsets.US_ASCII);
+        var descriptor = new MusicCoverService.CoverStreamDescriptor(OWNER_ID, FILE_ID, "image/png", payload.length);
+        when(fileQueryService.openReadableFileContent(OWNER_ID, FILE_ID)).thenReturn(new FileContentStream(
+                new ByteArrayInputStream(payload),
+                "cover.png",
+                payload.length,
+                "image/png"
+        ));
+
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        coverService.streamCover(descriptor, output);
+
+        assertThat(output.toByteArray()).isEqualTo(payload);
+    }
+
+    private FileDescriptor imageDescriptor(String mimeType, long sizeBytes) {
+        return new FileDescriptor(
+                FILE_ID,
+                OWNER_ID,
+                null,
+                "FILE",
+                "cover.png",
+                "/library/cover.png",
+                mimeType,
+                sizeBytes,
+                null,
+                "MINIO",
+                false,
+                false,
+                SpaceType.PERSONAL,
+                OWNER_ID,
+                Instant.parse("2026-01-01T00:00:00Z"),
+                Instant.parse("2026-01-01T00:00:00Z")
+        );
     }
 }

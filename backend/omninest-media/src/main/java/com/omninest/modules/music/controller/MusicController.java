@@ -62,6 +62,7 @@ import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -401,6 +402,28 @@ public class MusicController {
                 currentUserContext.requireCurrentUserId(),
                 file
         ));
+    }
+
+    /**
+     * 流式下载音乐封面：鉴权后经统一内容访问接口回源，供客户端内嵌渲染。
+     *
+     * <p>路径永久稳定（封面重传会生成新文件标识），配合 immutable 缓存指令
+     * 允许客户端私有缓存长期复用，替代此前每次组装重签的短期下载地址。
+     */
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @Operation(summary = "下载音乐封面", description = "校验归属后流式返回封面内容，路径稳定可长期缓存")
+    @GetMapping("/api/v1/music/covers/{fileId}")
+    ResponseEntity<StreamingResponseBody> downloadMusicCover(@PathVariable UUID fileId) {
+        MusicCoverService.CoverStreamDescriptor descriptor = musicCoverService.prepareCoverStream(
+                currentUserContext.requireCurrentUserId(),
+                fileId
+        );
+        StreamingResponseBody body = outputStream -> musicCoverService.streamCover(descriptor, outputStream);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(descriptor.contentType()))
+                .contentLength(descriptor.sizeBytes())
+                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=2592000, immutable")
+                .body(body);
     }
 
     @PostMapping("/api/v1/admin/music/scan")

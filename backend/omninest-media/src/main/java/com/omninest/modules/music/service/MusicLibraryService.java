@@ -567,7 +567,7 @@ public class MusicLibraryService {
                 track.getLyricsTranslation(),
                 track.getGenre(),
                 firstText(
-                        resolveCoverUrl(track.getOwnerUserId(), track.getCoverFileId()),
+                        resolveCoverApiPath(track.getCoverFileId()),
                         firstText(
                                 metadataText(track.getProviderMetadata(), "coverDataUrl"),
                                 metadataText(track.getProviderMetadata(), "coverUrl")
@@ -600,7 +600,7 @@ public class MusicLibraryService {
                 album.getTitle(),
                 fallback(album.getArtistName(), "Various Artists"),
                 firstText(
-                        resolveCoverUrl(album.getOwnerUserId(), album.getCoverFileId()),
+                        resolveCoverApiPath(album.getCoverFileId()),
                         metadataText(album.getProviderMetadata(), "coverUrl")
                 ),
                 album.getReleaseDate(),
@@ -615,7 +615,7 @@ public class MusicLibraryService {
                 artist.getId(),
                 artist.getName(),
                 firstText(
-                        resolveCoverUrl(artist.getOwnerUserId(), artist.getAvatarFileId()),
+                        resolveCoverApiPath(artist.getAvatarFileId()),
                         metadataText(artist.getProviderMetadata(), "avatarUrl")
                 ),
                 artist.getTrackCount(),
@@ -641,6 +641,23 @@ public class MusicLibraryService {
             log.debug("音乐封面 URL 解析失败: fileId={}, message={}", fileId, ex.getMessage());
             return null;
         }
+    }
+
+    /**
+     * 解析本地封面文件的稳定鉴权 API 路径，用于内嵌渲染场景。
+     *
+     * <p>路径不含签名与过期时间，客户端可按稳定 URL 缓存；访问时由
+     * 音乐封面端点校验归属并流式回源。签名 URL（{@link #resolveCoverUrl}）
+     * 保留给真正的下载语义，Photos 相册封面仍在使用该方法。
+     *
+     * @param fileId 封面文件标识
+     * @return 稳定 API 路径，文件标识为空时返回空值
+     */
+    public String resolveCoverApiPath(UUID fileId) {
+        if (fileId == null) {
+            return null;
+        }
+        return "/api/v1/music/covers/" + fileId;
     }
 
     private String fallback(String value, String fallback) {

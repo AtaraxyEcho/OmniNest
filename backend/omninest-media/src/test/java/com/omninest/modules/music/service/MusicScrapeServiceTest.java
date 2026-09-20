@@ -195,8 +195,8 @@ class MusicScrapeServiceTest {
         assertThat(dto.title()).isEqualTo("Night Drive");
         assertThat(dto.artistName()).isEqualTo("Omni Band");
         assertThat(dto.albumTitle()).isEqualTo("City Lights");
-        // 封面已下载到 MinIO，coverUrl 应为本地下载 URL（coverFileId 优先于外部 URL）
-        assertThat(dto.coverUrl()).isEqualTo("https://minio.example/cover.jpg");
+        // 封面已下载到 MinIO，coverUrl 应为稳定鉴权 API 路径（coverFileId 优先于外部 URL）
+        assertThat(dto.coverUrl()).isEqualTo("/api/v1/music/covers/" + coverFileId);
         assertThat(track.getCoverFileId()).isEqualTo(coverFileId);
         assertThat(track.getMetadataStatus()).isEqualTo("MATCHED");
         assertThat(track.getExternalIds()).containsEntry("musicbrainzRecordingId", "rec-1");

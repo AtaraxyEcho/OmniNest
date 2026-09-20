@@ -2,12 +2,17 @@ package com.omninest.modules.music.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
+import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.music.dto.MusicDtos.MusicCoverUploadDto;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -16,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 负责音乐封面的校验、存储和所有权检查。
+ * 负责音乐封面的校验、存储、所有权检查和流式读取。
  *
  * @author OmniNest
  */
@@ -28,6 +33,58 @@ public class MusicCoverService {
 
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
+    private final FileMetadataQueryService fileMetadataQueryService;
+
+    /**
+     * 已完成权限校验的封面流式读取描述。
+     *
+     * @param ownerUserId 所属用户标识
+     * @param fileId 封面文件标识
+     * @param contentType 响应 MIME 类型
+     * @param sizeBytes 响应字节数
+     */
+    public record CoverStreamDescriptor(
+            UUID ownerUserId,
+            UUID fileId,
+            String contentType,
+            long sizeBytes
+    ) {
+    }
+
+    /**
+     * 校验封面可被当前用户读取并返回流式描述。
+     *
+     * @param ownerUserId 所属用户标识
+     * @param fileId 封面文件标识
+     * @return 流式读取描述
+     */
+    public CoverStreamDescriptor prepareCoverStream(UUID ownerUserId, UUID fileId) {
+        fileQueryService.validateOwnedImage(ownerUserId, fileId);
+        FileDescriptor node = fileMetadataQueryService.findActiveById(fileId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在"));
+        if (!NodeType.FILE.getValue().equals(node.nodeType()) || node.sizeBytes() > MAX_COVER_SIZE_BYTES) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在");
+        }
+        String contentType = node.mimeType();
+        if (contentType == null || contentType.isBlank()) {
+            contentType = "image/jpeg";
+        }
+        return new CoverStreamDescriptor(ownerUserId, fileId, contentType, node.sizeBytes());
+    }
+
+    /**
+     * 将封面内容流式写出。流句柄由本方法持有并在写完后关闭。
+     *
+     * @param descriptor 权限校验后的流式描述
+     * @param outputStream 响应输出流
+     * @throws IOException 内容读取或写出失败
+     */
+    public void streamCover(CoverStreamDescriptor descriptor, OutputStream outputStream) throws IOException {
+        try (FileContentStream content = fileQueryService.openReadableFileContent(
+                descriptor.ownerUserId(), descriptor.fileId())) {
+            content.inputStream().transferTo(outputStream);
+        }
+    }
 
     /**
      * 将用户上传的图片保存为音乐封面资产。

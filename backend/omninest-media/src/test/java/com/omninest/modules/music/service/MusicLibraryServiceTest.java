@@ -9,7 +9,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 
 import com.omninest.common.cache.ReadThroughCache;
-import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FilePurgeOrigin;
@@ -178,24 +177,33 @@ class MusicLibraryServiceTest {
     }
 
     @Test
-    void trackDtoUsesDirectDownloadUrlForLocalCover() {
+    void trackDtoUsesStableApiPathForLocalCover() {
         MusicTrack track = new MusicTrack();
         track.setId(TRACK_ID);
         track.setOwnerUserId(OWNER_ID);
         track.setFileNodeId(FILE_NODE_ID);
         track.setCoverFileId(COVER_FILE_ID);
         track.setTitle("Night Drive");
-        when(fileQueryService.createDownloadUrl(OWNER_ID, COVER_FILE_ID))
-                .thenReturn(new FileDownloadUrlDto(
-                        COVER_FILE_ID,
-                        "cover.jpg",
-                        "https://minio.example/cover.jpg",
-                        Instant.now().plusSeconds(900)
-                ));
 
         var dto = libraryService.toTrackDto(track, false);
 
-        assertThat(dto.coverUrl()).isEqualTo("https://minio.example/cover.jpg");
+        assertThat(dto.coverUrl()).isEqualTo("/api/v1/music/covers/" + COVER_FILE_ID);
+    }
+
+    @Test
+    void trackDtoLocalCoverTakesPriorityOverProviderMetadata() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setCoverFileId(COVER_FILE_ID);
+        track.setTitle("Night Drive");
+        track.setProviderMetadata(new LinkedHashMap<>());
+        track.getProviderMetadata().put("coverUrl", "https://example.com/cover.jpg");
+
+        var dto = libraryService.toTrackDto(track, false);
+
+        assertThat(dto.coverUrl()).isEqualTo("/api/v1/music/covers/" + COVER_FILE_ID);
     }
 
     @Test

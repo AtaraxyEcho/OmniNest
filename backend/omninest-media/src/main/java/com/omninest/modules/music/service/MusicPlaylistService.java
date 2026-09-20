@@ -245,10 +245,7 @@ public class MusicPlaylistService {
     private MusicPlaylistDto toDto(MusicPlaylist playlist, long itemCount, String fallbackCoverUrl) {
         String coverUrl = fallbackCoverUrl;
         if (playlist.getCoverFileId() != null) {
-            String customCoverUrl = musicLibraryService.resolveCoverUrl(
-                        playlist.getOwnerUserId(),
-                        playlist.getCoverFileId()
-                );
+            String customCoverUrl = musicLibraryService.resolveCoverApiPath(playlist.getCoverFileId());
             if (customCoverUrl != null && !customCoverUrl.isBlank()) {
                 coverUrl = customCoverUrl;
             }
