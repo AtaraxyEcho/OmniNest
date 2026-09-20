@@ -4,7 +4,7 @@ import 'package:omninest/app/theme/feature/files_colors.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/features/files/application/share_link_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -288,7 +288,7 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
 
   Widget _buildShareInfo(FileShareLink share) {
     final l10n = AppLocalizations.of(context);
-    final baseUrl = ref.read(appEnvironmentProvider).effectiveWebBaseUrl;
+    final baseUrl = ref.read(webShareBaseUrlProvider);
     final shareUrl = '$baseUrl/#/s/${share.shareCode}';
     final hasPassword = share.generatedPassword != null;
 

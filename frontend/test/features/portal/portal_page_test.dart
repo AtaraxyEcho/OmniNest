@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/environment.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
@@ -32,6 +34,12 @@ void main() {
             // 覆盖 session 存储以避免 FlutterSecureStorage 插件依赖
             authSessionStoreProvider.overrideWithValue(
               MemoryAuthSessionStore(),
+            ),
+            presetAppEnvironmentProvider.overrideWithValue(
+              const AppEnvironment(
+                apiBaseUrl: 'http://localhost:8080/api/v1',
+                wsBaseUrl: 'ws://localhost:8080/ws',
+              ),
             ),
             musicAudioPlaybackProvider.overrideWith(
               (ref) => const _FakeMusicAudioPlayback(),
@@ -77,6 +85,12 @@ void main() {
             // 覆盖 session 存储以避免 FlutterSecureStorage 插件依赖
             authSessionStoreProvider.overrideWithValue(
               MemoryAuthSessionStore(),
+            ),
+            presetAppEnvironmentProvider.overrideWithValue(
+              const AppEnvironment(
+                apiBaseUrl: 'http://localhost:8080/api/v1',
+                wsBaseUrl: 'ws://localhost:8080/ws',
+              ),
             ),
             musicAudioPlaybackProvider.overrideWith(
               (ref) => const _FakeMusicAudioPlayback(),

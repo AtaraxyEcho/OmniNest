@@ -9756,4 +9756,94 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get trayQuit => '退出';
+
+  @override
+  String get serverSetupTitle => '连接你的 OmniNest';
+
+  @override
+  String get serverSetupSubtitle => '输入自托管服务器地址，首次安装将从这里开始';
+
+  @override
+  String get serverSetupAddressLabel => '服务器地址';
+
+  @override
+  String get serverSetupAddressHint =>
+      '例如 192.168.1.10:8080 或 https://nest.example.com';
+
+  @override
+  String get serverSetupAdvanced => '高级选项';
+
+  @override
+  String get serverSetupWsLabel => '实时连接地址（可选）';
+
+  @override
+  String get serverSetupWsHint => '默认由服务器地址推导';
+
+  @override
+  String get serverSetupWebLabel => '分享页地址（可选）';
+
+  @override
+  String get serverSetupWebHint => '默认由服务器地址推导';
+
+  @override
+  String get serverSetupConnect => '连接';
+
+  @override
+  String get serverSetupConnecting => '正在连接…';
+
+  @override
+  String serverSetupWillConnect(String url) {
+    return '将连接：$url';
+  }
+
+  @override
+  String get serverSetupHttpWarning => '当前为明文 HTTP 连接，公网环境建议使用 HTTPS';
+
+  @override
+  String get serverSetupErrorInvalid => '地址无法解析，请检查后重试';
+
+  @override
+  String get serverSetupErrorHttpsOnly => '此构建仅允许 HTTPS 服务器地址';
+
+  @override
+  String get serverSetupErrorUnreachable => '无法连接到服务器，请确认地址与网络';
+
+  @override
+  String get serverSetupErrorTimeout => '连接超时，请确认服务器可达后重试';
+
+  @override
+  String get serverSetupErrorNotOmniNest => '目标不是 OmniNest 服务器';
+
+  @override
+  String get serverSetupErrorRejected => '服务器返回异常状态，请确认地址是否正确';
+
+  @override
+  String get profileSectionServer => '服务器与连接';
+
+  @override
+  String get serverPanelCurrent => '当前服务器';
+
+  @override
+  String get serverPanelBadgeCustom => '自定义';
+
+  @override
+  String get serverPanelBadgePreset => '预置（未修改）';
+
+  @override
+  String get serverPanelBadgeUnconfigured => '未配置';
+
+  @override
+  String get serverPanelChange => '更改服务器';
+
+  @override
+  String get serverPanelChangeTitle => '更改服务器？';
+
+  @override
+  String get serverPanelChangeBody => '将退出当前账号并清除本机会话，随后重新输入服务器地址。';
+
+  @override
+  String get serverPanelChangeConfirm => '退出并更改';
+
+  @override
+  String get serverPanelChangeCancel => '取消';
 }

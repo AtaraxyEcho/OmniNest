@@ -18383,6 +18383,180 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Quit'**
   String get trayQuit;
+
+  /// No description provided for @serverSetupTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to your OmniNest'**
+  String get serverSetupTitle;
+
+  /// No description provided for @serverSetupSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your self-hosted server address; first-time setup starts here'**
+  String get serverSetupSubtitle;
+
+  /// No description provided for @serverSetupAddressLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Server address'**
+  String get serverSetupAddressLabel;
+
+  /// No description provided for @serverSetupAddressHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 192.168.1.10:8080 or https://nest.example.com'**
+  String get serverSetupAddressHint;
+
+  /// No description provided for @serverSetupAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced options'**
+  String get serverSetupAdvanced;
+
+  /// No description provided for @serverSetupWsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Realtime URL (optional)'**
+  String get serverSetupWsLabel;
+
+  /// No description provided for @serverSetupWsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Derived from the server address by default'**
+  String get serverSetupWsHint;
+
+  /// No description provided for @serverSetupWebLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Share page URL (optional)'**
+  String get serverSetupWebLabel;
+
+  /// No description provided for @serverSetupWebHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Derived from the server address by default'**
+  String get serverSetupWebHint;
+
+  /// No description provided for @serverSetupConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Connect'**
+  String get serverSetupConnect;
+
+  /// No description provided for @serverSetupConnecting.
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get serverSetupConnecting;
+
+  /// No description provided for @serverSetupWillConnect.
+  ///
+  /// In en, this message translates to:
+  /// **'Will connect to: {url}'**
+  String serverSetupWillConnect(String url);
+
+  /// No description provided for @serverSetupHttpWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This is a plaintext HTTP connection; HTTPS is recommended for public networks'**
+  String get serverSetupHttpWarning;
+
+  /// No description provided for @serverSetupErrorInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'The address could not be parsed, please check and retry'**
+  String get serverSetupErrorInvalid;
+
+  /// No description provided for @serverSetupErrorHttpsOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'This build only allows HTTPS server addresses'**
+  String get serverSetupErrorHttpsOnly;
+
+  /// No description provided for @serverSetupErrorUnreachable.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the server, check the address and network'**
+  String get serverSetupErrorUnreachable;
+
+  /// No description provided for @serverSetupErrorTimeout.
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out, make sure the server is reachable'**
+  String get serverSetupErrorTimeout;
+
+  /// No description provided for @serverSetupErrorNotOmniNest.
+  ///
+  /// In en, this message translates to:
+  /// **'The target is not an OmniNest server'**
+  String get serverSetupErrorNotOmniNest;
+
+  /// No description provided for @serverSetupErrorRejected.
+  ///
+  /// In en, this message translates to:
+  /// **'The server returned an unexpected status, check the address'**
+  String get serverSetupErrorRejected;
+
+  /// No description provided for @profileSectionServer.
+  ///
+  /// In en, this message translates to:
+  /// **'Server & connection'**
+  String get profileSectionServer;
+
+  /// No description provided for @serverPanelCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current server'**
+  String get serverPanelCurrent;
+
+  /// No description provided for @serverPanelBadgeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get serverPanelBadgeCustom;
+
+  /// No description provided for @serverPanelBadgePreset.
+  ///
+  /// In en, this message translates to:
+  /// **'Preset (unmodified)'**
+  String get serverPanelBadgePreset;
+
+  /// No description provided for @serverPanelBadgeUnconfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Not configured'**
+  String get serverPanelBadgeUnconfigured;
+
+  /// No description provided for @serverPanelChange.
+  ///
+  /// In en, this message translates to:
+  /// **'Change server'**
+  String get serverPanelChange;
+
+  /// No description provided for @serverPanelChangeTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Change server?'**
+  String get serverPanelChangeTitle;
+
+  /// No description provided for @serverPanelChangeBody.
+  ///
+  /// In en, this message translates to:
+  /// **'You will be signed out and local session data cleared, then re-enter the server address.'**
+  String get serverPanelChangeBody;
+
+  /// No description provided for @serverPanelChangeConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out & change'**
+  String get serverPanelChangeConfirm;
+
+  /// No description provided for @serverPanelChangeCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get serverPanelChangeCancel;
 }
 
 class _AppLocalizationsDelegate

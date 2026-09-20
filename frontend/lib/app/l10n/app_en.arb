@@ -4489,5 +4489,41 @@
   "desktopCloseBehaviorAsk": "Ask every time",
   "desktopCloseBehaviorExit": "Exit directly",
   "trayShowMainWindow": "Show Main Window",
-  "trayQuit": "Quit"
+  "trayQuit": "Quit",
+  "serverSetupTitle": "Connect to your OmniNest",
+  "serverSetupSubtitle": "Enter your self-hosted server address; first-time setup starts here",
+  "serverSetupAddressLabel": "Server address",
+  "serverSetupAddressHint": "e.g. 192.168.1.10:8080 or https://nest.example.com",
+  "serverSetupAdvanced": "Advanced options",
+  "serverSetupWsLabel": "Realtime URL (optional)",
+  "serverSetupWsHint": "Derived from the server address by default",
+  "serverSetupWebLabel": "Share page URL (optional)",
+  "serverSetupWebHint": "Derived from the server address by default",
+  "serverSetupConnect": "Connect",
+  "serverSetupConnecting": "Connecting…",
+  "serverSetupWillConnect": "Will connect to: {url}",
+  "@serverSetupWillConnect": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "serverSetupHttpWarning": "This is a plaintext HTTP connection; HTTPS is recommended for public networks",
+  "serverSetupErrorInvalid": "The address could not be parsed, please check and retry",
+  "serverSetupErrorHttpsOnly": "This build only allows HTTPS server addresses",
+  "serverSetupErrorUnreachable": "Could not reach the server, check the address and network",
+  "serverSetupErrorTimeout": "Connection timed out, make sure the server is reachable",
+  "serverSetupErrorNotOmniNest": "The target is not an OmniNest server",
+  "serverSetupErrorRejected": "The server returned an unexpected status, check the address",
+  "profileSectionServer": "Server & connection",
+  "serverPanelCurrent": "Current server",
+  "serverPanelBadgeCustom": "Custom",
+  "serverPanelBadgePreset": "Preset (unmodified)",
+  "serverPanelBadgeUnconfigured": "Not configured",
+  "serverPanelChange": "Change server",
+  "serverPanelChangeTitle": "Change server?",
+  "serverPanelChangeBody": "You will be signed out and local session data cleared, then re-enter the server address.",
+  "serverPanelChangeConfirm": "Sign out & change",
+  "serverPanelChangeCancel": "Cancel"
 }

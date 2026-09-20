@@ -2,11 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 
 void main() {
-  test('environment has local defaults', () {
-    final environment = AppEnvironment.fromDefines();
-
-    expect(environment.apiBaseUrl, contains('/api/v1'));
-    expect(environment.wsBaseUrl, startsWith('ws://'));
+  test('无预置且无浏览器来源时返回 null（服务器未配置）', () {
+    expect(AppEnvironment.fromDefinesOrNull(), isNull);
   });
 
   test('web origin derives same-origin HTTPS endpoints', () {

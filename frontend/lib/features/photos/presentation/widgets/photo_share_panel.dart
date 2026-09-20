@@ -4,7 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -214,7 +214,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   /// 不依赖 Flutter SPA 部署；链接用路径形态携带令牌，避免地址栏暴露查询参数。
   /// 指向 API 地址会命中受保护接口返回 401。
   String _buildShareUrl(String token) {
-    final webBase = ref.read(appEnvironmentProvider).effectiveWebBaseUrl;
+    final webBase = ref.read(webShareBaseUrlProvider);
     return '$webBase/share/$token';
   }
 

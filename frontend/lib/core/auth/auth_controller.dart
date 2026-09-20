@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:omninest/app/environment.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/core/auth/auth_client.dart';
 import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/auth/auth_session_store.dart';
 import 'package:omninest/core/security/offline_data_lifecycle.dart';
+import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
@@ -24,7 +25,10 @@ final offlineDataInitializationProvider = FutureProvider<void>((ref) {
 });
 
 final authClientProvider = Provider<AuthClient>((ref) {
-  final environment = AppEnvironment.fromDefines();
+  final environment = ref.watch(appEnvironmentProvider);
+  if (environment == null) {
+    throw StateError('服务器地址未配置');
+  }
   final dio = Dio(
     BaseOptions(
       baseUrl: environment.apiBaseUrl,
@@ -190,14 +194,28 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
         }
         return null;
       }
-      final session = await ref
-          .read(authClientProvider)
-          .refresh(refreshToken: refreshToken);
+      final session = await _refreshOnReadyEnvironment(
+        refreshToken: refreshToken,
+      );
       await _saveSession(session);
       return _toState(session);
     } catch (_) {
       return null;
     }
+  }
+
+  /// 持有令牌的刷新前先等服务器配置就绪：自定义配置仍在加载时环境
+  /// 为空或为预置，贸然刷新会把回访用户误判为未登录并清掉会话。
+  /// 配置存储读取失败按未配置继续，刷新失败自然落到未登录态。
+  Future<AuthTokenResponse> _refreshOnReadyEnvironment({
+    required String refreshToken,
+  }) async {
+    try {
+      await ref.read(serverConfigProvider.future);
+    } catch (_) {
+      // 与 _refreshWithStoredToken 相同的容错口径。
+    }
+    return ref.read(authClientProvider).refresh(refreshToken: refreshToken);
   }
 
   Future<void> _saveSession(AuthTokenResponse session) {

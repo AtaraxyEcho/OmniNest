@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/realtime/realtime_api.dart';
@@ -25,13 +26,16 @@ final realtimeCoordinatorProvider = Provider<RealtimeCoordinator?>((ref) {
   if (userId == null) {
     return null;
   }
+  final environment = ref.watch(appEnvironmentProvider);
+  if (environment == null) {
+    return null;
+  }
   final apiClient = ref.watch(apiClientProvider);
   final accessToken = apiClient.currentAccessToken();
   if (accessToken == null || accessToken.isEmpty) {
     return null;
   }
 
-  final environment = ref.watch(appEnvironmentProvider);
   final platform = defaultTargetPlatform;
   final isMobile =
       !kIsWeb &&

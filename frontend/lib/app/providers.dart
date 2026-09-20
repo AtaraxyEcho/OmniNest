@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/connectivity_listener.dart';
-import 'package:omninest/app/environment.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/preferences/user_preferences_api.dart';
@@ -26,14 +26,14 @@ import 'package:omninest/features/reader/data/reader_local_progress.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
-final appEnvironmentProvider = Provider<AppEnvironment>(
-  (ref) => AppEnvironment.fromDefines(),
-);
-
 final apiClientProvider = Provider<ApiClient>((ref) {
+  final environment = ref.watch(appEnvironmentProvider);
+  if (environment == null) {
+    throw StateError('服务器地址未配置');
+  }
   final sessionStore = ref.watch(authSessionStoreProvider);
   return ApiClient(
-    ref.watch(appEnvironmentProvider),
+    environment,
     sessionStore: sessionStore,
     refreshSession:
         () => ref.read(authSessionProvider.notifier).refreshSession(),

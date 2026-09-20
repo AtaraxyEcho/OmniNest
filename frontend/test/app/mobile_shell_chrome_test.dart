@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/environment.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
@@ -61,6 +63,12 @@ void main() {
     );
     return ProviderScope(
       overrides: [
+        presetAppEnvironmentProvider.overrideWithValue(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
         mobileShellLocalBackdropActiveProvider.overrideWithValue(
           backdropActive,
         ),

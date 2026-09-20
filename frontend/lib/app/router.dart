@@ -1,11 +1,15 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/mobile_shell/mobile_activity_center_page.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/login_page.dart';
+import 'package:omninest/core/server/presentation/server_setup_page.dart';
+import 'package:omninest/core/server/server_config_controller.dart';
 import 'package:omninest/features/admin/domain/admin_console_access.dart';
 import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
@@ -60,27 +64,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.listen(initialSetupProvider, (previous, next) {
     authRefreshListenable.value++;
   });
+  ref.listen(serverConfigProvider, (previous, next) {
+    authRefreshListenable.value++;
+  });
   final router = GoRouter(
     navigatorKey: desktopCloseNavigatorKey,
     initialLocation: '/',
     refreshListenable: authRefreshListenable,
-    redirect: (context, state) {
-      final authState = ref.read(authSessionProvider);
-      final setupState = ref.read(initialSetupProvider);
-      return authRedirectPath(
-        isChecking: authState.isLoading,
-        isAuthenticated: authState.asData?.value.isAuthenticated ?? false,
-        isSetupChecking: setupState.isLoading,
-        setupRequired: setupState.asData?.value.setupRequired ?? false,
-        location: state.uri.toString(),
-        userRole: authState.asData?.value.user?.role,
-        userPermissions: authState.asData?.value.user?.permissions,
-      );
-    },
+    redirect: (context, state) => _redirect(ref, state),
     routes: [
       GoRoute(path: '/', redirect: (context, state) => '/portal'),
       _animatedRoute('/setup', (state) => const InitialSetupPage()),
       _animatedRoute('/login', (state) => const LoginPage()),
+      _animatedRoute('/server-setup', (state) => const ServerSetupPage()),
       _animatedRoute('/notifications', (state) => const NotificationPage()),
       _animatedRoute(
         '/profile/notifications',
@@ -390,6 +386,79 @@ MaterialPage<void> buildAppRoutePage({
   required Widget child,
 }) {
   return MaterialPage<void>(key: key, child: child);
+}
+
+/// 全局重定向：服务器配置门控优先于安装与登录门控。
+String? _redirect(Ref ref, GoRouterState state) {
+  final location = state.uri.toString();
+  final authState = ref.read(authSessionProvider);
+  final gate = serverGateRedirectPath(
+    isWeb: kIsWeb,
+    isConfigLoading: ref.read(serverConfigProvider).isLoading,
+    isConfigured: ref.read(appEnvironmentProvider) != null,
+    isAuthenticated: authState.asData?.value.isAuthenticated ?? false,
+    location: location,
+  );
+  if (gate != null) {
+    return gate;
+  }
+  final setupState = ref.read(initialSetupProvider);
+  return authRedirectPath(
+    isChecking: authState.isLoading,
+    isAuthenticated: authState.asData?.value.isAuthenticated ?? false,
+    isSetupChecking: setupState.isLoading,
+    setupRequired: setupState.asData?.value.setupRequired ?? false,
+    location: location,
+    userRole: authState.asData?.value.user?.role,
+    userPermissions: authState.asData?.value.user?.permissions,
+  );
+}
+
+/// 服务器配置门控决策；返回 null 表示放行进入后续安装/登录门控链。
+///
+/// 非 Web 端在服务器配置加载期间停泊在引导页，避免空环境下业务页面
+/// 瞬时构建；未配置进入 /server-setup 并保留 redirect 目标（配置完成后
+/// 经登录页续跳）；已配置后访问引导页则按认证状态回到登录或目标页；
+/// 携带 switch=1 的显式切换请求放行（设置页更换服务器入口使用，覆盖
+/// 预置存在时 clear 后回落预置导致引导页不可达的死角）。
+/// Web 恒有同源推导，不经过服务器门控。
+@visibleForTesting
+String? serverGateRedirectPath({
+  required bool isWeb,
+  required bool isConfigLoading,
+  required bool isConfigured,
+  required bool isAuthenticated,
+  required String location,
+}) {
+  final uri = Uri.parse(location);
+  final path = uri.path;
+  if (!isWeb && (isConfigLoading || !isConfigured)) {
+    return path == '/server-setup' ? null : _serverSetupLocation(uri);
+  }
+  if (path == '/server-setup') {
+    if (uri.queryParameters['switch'] == '1') {
+      return null;
+    }
+    final target = _safeRedirectTarget(uri.queryParameters['redirect']);
+    if (isAuthenticated) {
+      return target ?? '/portal';
+    }
+    return target == null
+        ? '/login'
+        : Uri(path: '/login', queryParameters: {'redirect': target}).toString();
+  }
+  return null;
+}
+
+String _serverSetupLocation(Uri uri) {
+  final target = uri.toString();
+  if (target == '/' || uri.path == '/server-setup' || uri.path == '/login') {
+    return '/server-setup';
+  }
+  return Uri(
+    path: '/server-setup',
+    queryParameters: {'redirect': target},
+  ).toString();
 }
 
 String? authRedirectPath({

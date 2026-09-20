@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
@@ -16,6 +17,7 @@ import 'package:omninest/features/photos/application/photo_backup_preferences.da
 import 'package:omninest/features/photos/presentation/widgets/battery_optimization_card.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_backup_enable_flow.dart';
 import 'package:omninest/features/profile/presentation/widgets/change_password_dialog.dart';
+import 'package:omninest/features/profile/presentation/widgets/profile_server_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
 
 /// 个人中心在移动端使用的单列信息架构。
@@ -166,6 +168,25 @@ class ProfileMobileContent extends ConsumerWidget {
               ),
             ],
           ),
+          if (!isWebPlatform) ...[
+            const SizedBox(height: MobileLayoutTokens.sectionGap),
+            MobileSettingsGroup(
+              title: l10n.profileSectionServer,
+              children: [
+                Consumer(
+                  builder: (context, tileRef, _) {
+                    final environment = tileRef.watch(appEnvironmentProvider);
+                    return MobileSettingsTile(
+                      icon: Icons.dns_rounded,
+                      title: l10n.serverPanelCurrent,
+                      subtitle: environment?.apiBaseUrl ?? '-',
+                      onTap: () => _showServer(context),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: MobileLayoutTokens.sectionGap),
           MobileSettingsGroup(
             title: l10n.profileSectionBackup,
@@ -430,6 +451,22 @@ class ProfileMobileContent extends ConsumerWidget {
               child: const SingleChildScrollView(
                 child: ProfileSessionManagementPanel(framed: false),
               ),
+            ),
+          ),
+    );
+  }
+
+  Future<void> _showServer(BuildContext context) {
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.mobileColors.surface,
+      showDragHandle: true,
+      builder:
+          (context) => const SafeArea(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.fromLTRB(20, 8, 20, 24),
+              child: ProfileServerPanel(),
             ),
           ),
     );

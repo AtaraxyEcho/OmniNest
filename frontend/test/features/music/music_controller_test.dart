@@ -6,6 +6,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
@@ -656,7 +657,15 @@ void main() {
   test('deleting track removes it from music state', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
-      overrides: [musicApiProvider.overrideWithValue(api)],
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        presetAppEnvironmentProvider.overrideWithValue(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      ],
     );
     addTearDown(container.dispose);
     await container.read(musicCenterControllerProvider.future);

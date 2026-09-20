@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:omninest/app/platform_origin_stub.dart'
     if (dart.library.js_interop) 'package:omninest/app/platform_origin_web.dart'
     as platform;
@@ -10,7 +9,11 @@ class AppEnvironment {
     this.webBaseUrl,
   });
 
-  factory AppEnvironment.fromDefines() {
+  /// 解析构建期预置（--dart-define）与浏览器同源来源。
+  ///
+  /// 返回 null 表示既无预置也无法同源推导：服务器未配置，由路由层
+  /// 引导进入首启配置页（此前 release 缺预置启动即抛错的行为废弃）。
+  static AppEnvironment? fromDefinesOrNull() {
     const configuredApiBaseUrl = String.fromEnvironment(
       'OMNINEST_API_BASE_URL',
     );
@@ -18,22 +21,16 @@ class AppEnvironment {
     const configuredWebBaseUrl = String.fromEnvironment(
       'OMNINEST_WEB_BASE_URL',
     );
-    // 桌面/移动 release 构建必须显式指定服务地址：静默回落 localhost 只会
-    // 表现为“连不上服务器”，fail-fast 让漏配在启动瞬间暴露。
-    // Web 端有同源推导（browserOrigin 非空），不受此约束。
-    if (kReleaseMode &&
-        configuredApiBaseUrl.isEmpty &&
-        _normalizeHttpOrigin(platform.getBrowserOrigin()) == null) {
-      throw StateError(
-        '缺少 OMNINEST_API_BASE_URL：桌面/移动 release 构建必须通过 '
-        '--dart-define=OMNINEST_API_BASE_URL=<服务端地址> 指定 API 基地址',
-      );
+    final browserOrigin = platform.getBrowserOrigin();
+    if (configuredApiBaseUrl.isEmpty &&
+        _normalizeHttpOrigin(browserOrigin) == null) {
+      return null;
     }
     return AppEnvironment.resolve(
       configuredApiBaseUrl: configuredApiBaseUrl,
       configuredWsBaseUrl: configuredWsBaseUrl,
       configuredWebBaseUrl: configuredWebBaseUrl,
-      browserOrigin: platform.getBrowserOrigin(),
+      browserOrigin: browserOrigin,
     );
   }
 

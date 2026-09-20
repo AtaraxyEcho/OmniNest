@@ -10064,4 +10064,103 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get trayQuit => 'Quit';
+
+  @override
+  String get serverSetupTitle => 'Connect to your OmniNest';
+
+  @override
+  String get serverSetupSubtitle =>
+      'Enter your self-hosted server address; first-time setup starts here';
+
+  @override
+  String get serverSetupAddressLabel => 'Server address';
+
+  @override
+  String get serverSetupAddressHint =>
+      'e.g. 192.168.1.10:8080 or https://nest.example.com';
+
+  @override
+  String get serverSetupAdvanced => 'Advanced options';
+
+  @override
+  String get serverSetupWsLabel => 'Realtime URL (optional)';
+
+  @override
+  String get serverSetupWsHint => 'Derived from the server address by default';
+
+  @override
+  String get serverSetupWebLabel => 'Share page URL (optional)';
+
+  @override
+  String get serverSetupWebHint => 'Derived from the server address by default';
+
+  @override
+  String get serverSetupConnect => 'Connect';
+
+  @override
+  String get serverSetupConnecting => 'Connecting…';
+
+  @override
+  String serverSetupWillConnect(String url) {
+    return 'Will connect to: $url';
+  }
+
+  @override
+  String get serverSetupHttpWarning =>
+      'This is a plaintext HTTP connection; HTTPS is recommended for public networks';
+
+  @override
+  String get serverSetupErrorInvalid =>
+      'The address could not be parsed, please check and retry';
+
+  @override
+  String get serverSetupErrorHttpsOnly =>
+      'This build only allows HTTPS server addresses';
+
+  @override
+  String get serverSetupErrorUnreachable =>
+      'Could not reach the server, check the address and network';
+
+  @override
+  String get serverSetupErrorTimeout =>
+      'Connection timed out, make sure the server is reachable';
+
+  @override
+  String get serverSetupErrorNotOmniNest =>
+      'The target is not an OmniNest server';
+
+  @override
+  String get serverSetupErrorRejected =>
+      'The server returned an unexpected status, check the address';
+
+  @override
+  String get profileSectionServer => 'Server & connection';
+
+  @override
+  String get serverPanelCurrent => 'Current server';
+
+  @override
+  String get serverPanelBadgeCustom => 'Custom';
+
+  @override
+  String get serverPanelBadgePreset => 'Preset (unmodified)';
+
+  @override
+  String get serverPanelBadgeUnconfigured => 'Not configured';
+
+  @override
+  String get serverPanelChange => 'Change server';
+
+  @override
+  String get serverPanelChangeTitle => 'Change server?';
+
+  @override
+  String get serverPanelChangeBody =>
+      'You will be signed out and local session data cleared, then re-enter the server address.';
+
+  @override
+  String get serverPanelChangeConfirm => 'Sign out & change';
+
+  @override
+  String get serverPanelChangeCancel => 'Cancel';
 }

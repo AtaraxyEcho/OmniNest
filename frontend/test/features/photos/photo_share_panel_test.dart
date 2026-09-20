@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
+import 'package:omninest/app/environment.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
@@ -36,7 +38,15 @@ Future<void> _pumpPanel(WidgetTester tester, PhotoRepository repository) async {
   addTearDown(tester.view.resetDevicePixelRatio);
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [photoRepositoryProvider.overrideWithValue(repository)],
+      overrides: [
+        photoRepositoryProvider.overrideWithValue(repository),
+        presetAppEnvironmentProvider.overrideWithValue(
+          const AppEnvironment(
+            apiBaseUrl: 'http://localhost:8080/api/v1',
+            wsBaseUrl: 'ws://localhost:8080/ws',
+          ),
+        ),
+      ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,

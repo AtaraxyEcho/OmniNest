@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/features/files/data/share_api.dart';
 import 'package:omninest/features/files/domain/public_share.dart';
 
@@ -24,7 +24,11 @@ class PublicShareService {
 
 /// 公开分享应用服务依赖注入入口。
 final publicShareServiceProvider = Provider<PublicShareService>((ref) {
-  final api = ShareApi(ref.watch(appEnvironmentProvider).apiBaseUrl);
+  final environment = ref.watch(appEnvironmentProvider);
+  if (environment == null) {
+    throw StateError('服务器地址未配置');
+  }
+  final api = ShareApi(environment.apiBaseUrl);
   ref.onDispose(api.close);
   return PublicShareService(api);
 });
