@@ -17,6 +17,7 @@ import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_image_cache.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
+import 'package:omninest/core/window/window_chrome_controller.dart';
 
 /// mock HTTP 返回的图片字节：由测试引擎现场生成并编码的合法 PNG。
 Uint8List? _servedImageBytes;
@@ -276,10 +277,78 @@ Future<void> _pumpSlideshow(WidgetTester tester, List<PhotoItem> photos) async {
       ),
     ),
   );
-  // bootstrap：两帧等待封面绘制 → 租约进入全屏 → 再等一帧对齐 surface →
-  // 才加载首图。与生产路径 endOfFrame 次数保持一致。
+  // bootstrap：home 路由过渡已完成 → 租约与入场扩缩同帧启动 → 再等一帧
+  // 对齐 surface → 才加载首图。与生产路径的帧序保持一致。
   await tester.pump();
   await tester.pump();
+  await tester.pump();
+}
+
+/// 探针：把窗口 chrome 状态镜像到 [hidden]，供测试在任意帧断言租约时机。
+class _WindowChromeProbe extends ConsumerWidget {
+  const _WindowChromeProbe({required this.hidden, required this.child});
+
+  final ValueNotifier<bool> hidden;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    hidden.value = ref.watch(windowChromeControllerProvider).chromeHidden;
+    return child;
+  }
+}
+
+/// 通过真实路由 push 挂载幻灯片页（复现生产入场过渡），并以探针暴露
+/// 沉浸租约状态。
+Future<void> _pumpSlideshowViaPush(
+  WidgetTester tester,
+  List<PhotoItem> photos,
+  ValueNotifier<bool> chromeHidden,
+) async {
+  tester.view.physicalSize = const Size(1280, 800);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        photoCenterControllerProvider.overrideWith(
+          () => _FakePhotoCenterController(),
+        ),
+        photoRepositoryProvider.overrideWithValue(_StubPhotoRepository(photos)),
+      ],
+      child: _WindowChromeProbe(
+        hidden: chromeHidden,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('en'),
+          theme: OmniNestTheme.from(AppThemePalette.dark),
+          home: Builder(
+            builder:
+                (context) => Center(
+                  child: TextButton(
+                    onPressed:
+                        () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            settings: const RouteSettings(
+                              name: 'slideshow-push',
+                            ),
+                            builder:
+                                (_) => PhotoSlideshowPage(
+                                  photos: photos,
+                                  source: PhotoBrowseSource.library,
+                                ),
+                          ),
+                        ),
+                    child: const Text('open-slideshow'),
+                  ),
+                ),
+          ),
+        ),
+      ),
+    ),
+  );
   await tester.pump();
 }
 
@@ -332,6 +401,9 @@ void main() {
 
       expect(find.byType(RawImage), findsWidgets);
       _expectNoTransparentLayer(tester);
+      // preview 升级等待入场扩缩动画结束（大图首绘避让原生吸附恢复期）。
+      await tester.pump(const Duration(milliseconds: 350));
+      await tester.pump();
       expect(_hasPreviewTierImage(tester), isTrue);
     });
   });
@@ -452,6 +524,50 @@ void main() {
       expect(identical(topBarBefore, topBarAfter), isTrue);
       expect(tester.takeException(), isNull);
       expect(find.byType(LinearProgressIndicator), findsWidgets);
+    });
+  });
+
+  testWidgets('原生沉浸租约等路由入场过渡完成后才申请', (tester) async {
+    _mockPathProvider();
+    final photos = [_photoWithUrl('photo-1')];
+    final chromeHidden = ValueNotifier<bool>(false);
+    addTearDown(chromeHidden.dispose);
+    await _mockNetworkImages(() async {
+      await _warmImageCache(tester, [
+        (photos[0], ImageQuality.thumbnail, 400),
+        (photos[0], ImageQuality.preview, _previewDecodeWidth),
+      ]);
+      await _pumpSlideshowViaPush(tester, photos, chromeHidden);
+      await tester.tap(find.text('open-slideshow'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(chromeHidden.value, isFalse, reason: '路由过渡未完成不得申请沉浸租约');
+      // 过渡时长随平台/主题而异，用状态探测推进到过渡完成，不硬编码时长。
+      for (var i = 0; i < 20 && chromeHidden.value == false; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(chromeHidden.value, isTrue, reason: '路由过渡完成后应申请沉浸租约');
+    });
+  });
+
+  testWidgets('路由过渡期内退出不申请沉浸租约', (tester) async {
+    _mockPathProvider();
+    final photos = [_photoWithUrl('photo-1')];
+    final chromeHidden = ValueNotifier<bool>(false);
+    addTearDown(chromeHidden.dispose);
+    await _mockNetworkImages(() async {
+      await _warmImageCache(tester, [
+        (photos[0], ImageQuality.thumbnail, 400),
+        (photos[0], ImageQuality.preview, _previewDecodeWidth),
+      ]);
+      await _pumpSlideshowViaPush(tester, photos, chromeHidden);
+      await tester.tap(find.text('open-slideshow'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      tester.state<NavigatorState>(find.byType(Navigator)).pop();
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pump();
+      expect(chromeHidden.value, isFalse, reason: '过渡期退出的页面不得申请沉浸租约');
     });
   });
 }

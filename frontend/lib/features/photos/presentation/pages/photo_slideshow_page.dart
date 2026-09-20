@@ -30,8 +30,9 @@ const _transitionCurve = Curves.easeOutCubic;
 ///
 /// Black full-bleed photos, dual-layer crossfade, segmented progress, collapsible
 /// thumb strip, info panel, keyboard and fullscreen. Chrome auto-hides after
-/// 3s idle; canvas tap toggles chrome. Native immersive starts only after the
-/// first frame paints to avoid a long black window during the monitor snap.
+/// 3s idle; canvas tap toggles chrome. Native immersive snap starts only after
+/// the route entrance transition settles, so the monitor snap's resize first
+/// frame never relayouts the page stack below (Windows black-flash source).
 class PhotoSlideshowPage extends ConsumerStatefulWidget {
   const PhotoSlideshowPage({
     required this.photos,
@@ -64,6 +65,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   late AnimationController _transitionController;
   late Animation<double> _transitionFade;
   WindowChromeLease? _windowChromeLease;
+
+  /// 入场扩缩动画结束信号：preview 大图原位升级等待它，避免大图首绘的
+  /// 纹理上传与原生吸附恢复期争抢光栅预算；页面销毁时兜底置位以释放等待方。
+  final Completer<void> _entrySettled = Completer<void>();
 
   /// 入场自绘扩缩：原生窗口切换为一步吸附，丝滑过渡由内容层缩放+淡入承担。
   late final AnimationController _entryController;
@@ -117,7 +122,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _entryController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
-    );
+    )..addStatusListener(_onEntryStatus);
     final entryCurve = CurvedAnimation(
       parent: _entryController,
       curve: Curves.easeOutCubic,
@@ -128,32 +133,32 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _entryFade = const AlwaysStoppedAnimation<double>(1);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      _entryController.forward();
       unawaited(_bootstrapSlideshow());
     });
   }
 
-  /// 先画封面/加载态，再进沉浸全屏，最后解码位图。
+  /// 先画封面/加载态，等路由入场过渡完成后再进沉浸全屏，最后解码位图。
   ///
-  /// 若等网络解码完成再切原生全屏，进入阶段会出现长时间黑窗；
-  /// 两次 endOfFrame 让 CachedNetworkImage 有机会先用内存缓存封面
-  /// 绘制一帧，再触发窗口吸附到显示器。
+  /// 吸附必须等过渡完成：过渡期间下层页面仍在舞台上，中途切换原生窗口
+  /// 几何会让新尺寸首帧叠加下层整树重排，Windows 上表现为约 1 秒黑屏卡顿。
+  /// 过渡完成后下层已 offstage（不布局不绘制），吸附首帧只需布局本页。
   Future<void> _bootstrapSlideshow() async {
-    // 进场即预热首图两档:取图/解码与原生全屏吸附并行。preview 档解码宽
-    // 绑定显示器物理尺寸(见 SlideshowImageCache),预解码即终档,吸附完成
-    // 时缩略图大概率已就绪、高清档已在途,消除进场后"等全宽重解码"的空窗。
+    // 进场即预热首图两档:取图/解码与路由过渡、原生全屏吸附并行。preview 档
+    // 解码宽绑定显示器物理尺寸(见 SlideshowImageCache),预解码即终档,吸附
+    // 完成时高清档大概率已在缓存中等待原位升级。
     unawaited(_prewarmInitialImage());
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
+    if (!await _waitForRouteTransition()) {
       return;
     }
-    await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
       return;
     }
     _windowChromeLease = ref
         .read(windowChromeControllerProvider.notifier)
         .acquireImmersive(owner: 'photos.slideshow');
+    // 入场扩缩与租约同刻启动：原生吸附的几何切换由内容层轻微扩缩掩盖
+    // （见 _entryScale），吸附空窗不裸露为黑闪。
+    _entryController.forward();
     // 租约触发原生 applyWindowChrome（style + SetWindowPos）后，
     // 再等一帧让 Flutter surface 按新客户区完成首帧，避免全屏黑屏。
     await WidgetsBinding.instance.endOfFrame;
@@ -161,6 +166,36 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       return;
     }
     await _loadInitialImage();
+  }
+
+  /// 等待路由入场过渡完成（completed）。
+  ///
+  /// 过渡期内页面被退出（动画走向 dismissed）时返回 false，调用方放弃
+  /// 沉浸租约申请；页面本身随即销毁，不会出现租约悬挂。
+  Future<bool> _waitForRouteTransition() {
+    final animation = ModalRoute.of(context)?.animation;
+    if (animation == null || animation.isCompleted) {
+      return Future<bool>.value(true);
+    }
+    if (animation.isDismissed) {
+      return Future<bool>.value(false);
+    }
+    final completer = Completer<bool>();
+    late final AnimationStatusListener listener;
+    listener = (AnimationStatus status) {
+      if (completer.isCompleted) {
+        return;
+      }
+      if (status == AnimationStatus.completed) {
+        completer.complete(true);
+      } else if (status == AnimationStatus.dismissed) {
+        completer.complete(false);
+      }
+    };
+    animation.addStatusListener(listener);
+    return completer.future.whenComplete(() {
+      animation.removeStatusListener(listener);
+    });
   }
 
   Future<void> _prewarmInitialImage() async {
@@ -179,6 +214,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   void _onProgressStatus(AnimationStatus status) {
     if (status == AnimationStatus.completed) _goNext();
+  }
+
+  /// 入场扩缩动画结束即置位 [_entrySettled]，放行 preview 大图原位升级。
+  void _onEntryStatus(AnimationStatus status) {
+    if (status == AnimationStatus.completed && !_entrySettled.isCompleted) {
+      _entrySettled.complete();
+    }
   }
 
   /// 过渡动画到达终点（completed）时同步清理离场层并恢复静止态。
@@ -211,6 +253,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _idleTimer?.cancel();
     _progressController.dispose();
     _transitionController.dispose();
+    // 入场结束信号兜底置位，释放仍在等待 preview 升级的异步链。
+    if (!_entrySettled.isCompleted) {
+      _entrySettled.complete();
+    }
     _entryController.dispose();
     _windowChromeLease?.release();
     // 位图本体归 ImageCache 所有（live 保活），页面销毁不 dispose；
@@ -296,7 +342,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 当前帧为缩略图档时，后台解码 preview 档并原位替换（渐进升级）。
   ///
   /// 解码期间可能已切到其他照片，回写前按照片 id 校验，避免旧图覆盖新帧；
-  /// 位图已缓存或与当前帧同源时直接跳过。
+  /// 位图已缓存或与当前帧同源时直接跳过。大图首次绘制的纹理上传较重，
+  /// 替换动作等待入场扩缩动画结束后执行，不与原生吸附恢复期争抢光栅预算。
   Future<void> _upgradeCurrentImage() async {
     final photo = _currentPhoto;
     if (!_hasImage(photo)) return;
@@ -306,6 +353,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       context,
     );
     if (!mounted || image == null) return;
+    await _entrySettled.future;
+    if (!mounted) return;
     final frame = _currentFrame;
     if (frame == null || frame.photo.id != photo.id) return;
     if (identical(frame.image, image)) return;
