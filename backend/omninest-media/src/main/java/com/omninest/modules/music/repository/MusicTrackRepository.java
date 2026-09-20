@@ -111,7 +111,7 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     );
 
     @Query("""
-            select track from MusicTrack track
+            select count(track) from MusicTrack track
             join FileNode file on track.fileNodeId = file.id
             where track.ownerUserId = :ownerUserId and file.deleted = false
             """)
