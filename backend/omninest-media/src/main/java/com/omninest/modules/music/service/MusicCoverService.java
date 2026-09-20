@@ -31,6 +31,12 @@ import org.springframework.web.multipart.MultipartFile;
 public class MusicCoverService {
     private static final long MAX_COVER_SIZE_BYTES = 8L * 1024 * 1024;
 
+    /**
+     * 流式读取防御上限。仅作恶意/异常资源护栏：刮削下载与派生存储
+     * 不经过上传入口的 8MB 校验，正常封面远小于此值。
+     */
+    private static final long MAX_STREAM_COVER_SIZE_BYTES = 32L * 1024 * 1024;
+
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
     private final FileMetadataQueryService fileMetadataQueryService;
@@ -62,7 +68,8 @@ public class MusicCoverService {
         fileQueryService.validateOwnedImage(ownerUserId, fileId);
         FileDescriptor node = fileMetadataQueryService.findActiveById(fileId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在"));
-        if (!NodeType.FILE.getValue().equals(node.nodeType()) || node.sizeBytes() > MAX_COVER_SIZE_BYTES) {
+        if (!NodeType.FILE.getValue().equals(node.nodeType())
+                || node.sizeBytes() > MAX_STREAM_COVER_SIZE_BYTES) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在");
         }
         String contentType = node.mimeType();

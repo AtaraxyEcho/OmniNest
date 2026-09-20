@@ -19,25 +19,32 @@ bool isMusicCoverApiPath(String url) => url.startsWith(_coverApiPathPrefix);
 /// 会话内存与浏览器 HTTP 缓存中存活，由响应的 immutable 缓存指令兜底。
 abstract final class MusicCoverCache {
   static CacheManager? _instance;
+  static Dio? _instanceDio;
   static Dio? _dio;
 
   /// 返回封面缓存管理器；首次访问时以当前 [configure] 注入的下载
   /// 客户端惰性构造——避免在应用启动路径上触碰文件系统，测试环境
-  /// 未渲染封面 API 路径时也不会触发平台插件调用。未注入时返回
-  /// null，调用方回退默认缓存路径（与历史行为一致，不阻塞渲染）。
+  /// 未渲染封面 API 路径时也不会触发平台插件调用。注入的 dio 引用
+  /// 变化（如运行时切换服务器地址）时重建实例，磁盘缓存按同一
+  /// cacheKey 保留。未注入时返回 null，调用方回退默认缓存路径
+  /// （与历史行为一致，不阻塞渲染）。
   static CacheManager? get maybeInstance {
     final dio = _dio;
     if (dio == null) {
       return null;
     }
-    return _instance ??= CacheManager(
-      Config(
-        'omninestMusicCovers',
-        maxNrOfCacheObjects: 400,
-        stalePeriod: const Duration(days: 30),
-        fileService: MusicCoverFileService(dio),
-      ),
-    );
+    if (_instance == null || !identical(_instanceDio, dio)) {
+      _instanceDio = dio;
+      _instance = CacheManager(
+        Config(
+          'omninestMusicCovers',
+          maxNrOfCacheObjects: 400,
+          stalePeriod: const Duration(days: 30),
+          fileService: MusicCoverFileService(dio),
+        ),
+      );
+    }
+    return _instance;
   }
 
   /// 记录封面缓存的下载客户端；[apiClientProvider] 重建时刷新引用。

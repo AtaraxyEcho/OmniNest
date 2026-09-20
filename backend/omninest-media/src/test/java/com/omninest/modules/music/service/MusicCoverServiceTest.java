@@ -101,10 +101,20 @@ class MusicCoverServiceTest {
     @Test
     void prepareCoverStreamRejectsOversizedCover() {
         when(fileMetadataQueryService.findActiveById(FILE_ID))
-                .thenReturn(Optional.of(imageDescriptor("image/png", 9L * 1024 * 1024)));
+                .thenReturn(Optional.of(imageDescriptor("image/png", 33L * 1024 * 1024)));
 
         assertThatThrownBy(() -> coverService.prepareCoverStream(OWNER_ID, FILE_ID))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    void prepareCoverStreamAllowsScrapedCoverAboveUploadLimit() {
+        when(fileMetadataQueryService.findActiveById(FILE_ID))
+                .thenReturn(Optional.of(imageDescriptor("image/png", 12L * 1024 * 1024)));
+
+        var descriptor = coverService.prepareCoverStream(OWNER_ID, FILE_ID);
+
+        assertThat(descriptor.sizeBytes()).isEqualTo(12L * 1024 * 1024);
     }
 
     @Test

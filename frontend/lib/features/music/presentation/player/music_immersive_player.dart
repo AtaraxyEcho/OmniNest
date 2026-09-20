@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -122,6 +123,8 @@ class _MusicImmersiveArtwork extends StatelessWidget {
   Widget build(BuildContext context) {
     final url = imageUrl?.trim();
     // 本地封面稳定 API 路径走专域缓存管理器；CDN 地址保持默认路径。
+    // Web 端默认 HtmlImage 渲染绕过 cacheManager 且按页面 origin 解析
+    // 相对 URL，跨源部署必须切 HttpGet 走管理器下载。
     final manager =
         url == null || !isMusicCoverApiPath(url)
             ? null
@@ -137,6 +140,10 @@ class _MusicImmersiveArtwork extends StatelessWidget {
               memCacheWidth: cacheWidth,
               memCacheHeight: cacheHeight,
               cacheManager: manager,
+              imageRenderMethodForWeb:
+                  manager == null
+                      ? ImageRenderMethodForWeb.HtmlImage
+                      : ImageRenderMethodForWeb.HttpGet,
               filterQuality: FilterQuality.medium,
               placeholder: (context, url) => fallback,
               errorWidget: (context, url, error) => fallback,

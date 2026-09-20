@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -119,7 +120,9 @@ class MusicDeckArtwork extends StatelessWidget {
         .round()
         .clamp(120, 1200);
     // 本地封面走稳定鉴权 API 路径时使用专域缓存管理器（dio 拼 baseUrl
-    // 并附带鉴权头）；CDN 地址与缓存未注入时保持默认路径。
+    // 并附带鉴权头）；CDN 地址与缓存未注入时保持默认路径。Web 端默认
+    // HtmlImage 渲染会绕过 cacheManager 并把相对 URL 按页面 origin 解析，
+    // 必须切到 HttpGet 走管理器下载，否则跨源部署下封面全部 404。
     final manager =
         isMusicCoverApiPath(source) ? MusicCoverCache.maybeInstance : null;
     return CachedNetworkImage(
@@ -130,6 +133,10 @@ class MusicDeckArtwork extends StatelessWidget {
       memCacheWidth: cacheWidth,
       maxWidthDiskCache: cacheWidth,
       cacheManager: manager,
+      imageRenderMethodForWeb:
+          manager == null
+              ? ImageRenderMethodForWeb.HtmlImage
+              : ImageRenderMethodForWeb.HttpGet,
       useOldImageOnUrlChange: true,
       fadeInDuration: const Duration(milliseconds: 160),
       fadeOutDuration: const Duration(milliseconds: 80),
