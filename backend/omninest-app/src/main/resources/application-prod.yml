@@ -49,6 +49,10 @@ photo:
     timeout-seconds: ${OMNINEST_PHOTO_AI_TIMEOUT_SECONDS:30}
     max-image-bytes: ${OMNINEST_PHOTO_AI_MAX_IMAGE_BYTES:67108864}
     max-response-bytes: ${OMNINEST_PHOTO_AI_MAX_RESPONSE_BYTES:1048576}
+  geo:
+    import:
+      # GeoNames 数据集目录；容器部署对应 omninest-geonames 卷，裸机部署指向宿主机目录。
+      dir: ${OMNINEST_GEO_IMPORT_DIR:/var/lib/omninest/geonames}
 
 file:
   local-media:

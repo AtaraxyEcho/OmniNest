@@ -9,6 +9,7 @@ RUN apt-get update && \
 RUN groupadd --system omninest && \
     useradd --system --gid omninest --home-dir /app --shell /usr/sbin/nologin omninest && \
     mkdir -p /app/logs /var/lib/omninest/lucene /var/lib/omninest/lucene-photo \
+        /var/lib/omninest/geonames \
         /mnt/local /mnt/imports /mnt/local-media /downloads && \
     chown -R omninest:omninest /app /var/lib/omninest /mnt /downloads
 

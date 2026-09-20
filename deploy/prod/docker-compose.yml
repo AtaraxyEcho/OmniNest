@@ -18,6 +18,7 @@ x-backend-environment: &backend-environment
   OMNINEST_SECURITY_JWT_SECRET: ${OMNINEST_SECURITY_JWT_SECRET:-change-me-omninest-local-jwt-secret-at-least-32-bytes}
   OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:-}
   OMNINEST_HTTPS_ENABLED: ${OMNINEST_HTTPS_ENABLED:-false}
+  OMNINEST_SECURITY_REFRESH_COOKIE_SAME_SITE: ${OMNINEST_SECURITY_REFRESH_COOKIE_SAME_SITE:-STRICT}
   OMNINEST_SECURITY_REGISTRATION_ENABLED: ${OMNINEST_SECURITY_REGISTRATION_ENABLED:-false}
   OMNINEST_SECURITY_TRUSTED_PROXIES: ${OMNINEST_SECURITY_TRUSTED_PROXIES:-${OMNINEST_NGINX_INTERNAL_IP:-172.30.0.10}}
   OMNINEST_SECURITY_ALLOWED_ORIGINS: ${OMNINEST_SECURITY_ALLOWED_ORIGINS:-http://localhost:3000}
@@ -49,6 +50,8 @@ x-backend-environment: &backend-environment
   OMNINEST_ARIA2_DOWNLOAD_ROOT: /downloads
   OMNINEST_SEARCH_INDEX_PATH: /var/lib/omninest/lucene
   OMNINEST_SEARCH_PHOTO_INDEX_PATH: /var/lib/omninest/lucene-photo
+  # GeoNames 离线逆地理编码数据集目录（omninest-geonames 卷；放入 dump 文件并重启即可自动导入）。
+  OMNINEST_GEO_IMPORT_DIR: ${OMNINEST_GEO_IMPORT_DIR:-/var/lib/omninest/geonames}
   OMNINEST_NETEASE_API_BASE_URL: http://netease-music-api:3000
   OMNINEST_PHOTO_AI_ENDPOINT: http://ai-sidecar:8090
   OMNINEST_PHOTO_AI_TIMEOUT_SECONDS: ${OMNINEST_PHOTO_AI_TIMEOUT_SECONDS:-30}
@@ -88,6 +91,7 @@ x-backend-service: &backend-service
   volumes:
     - omninest-search:/var/lib/omninest/lucene
     - omninest-search-photo:/var/lib/omninest/lucene-photo
+    - omninest-geonames:/var/lib/omninest/geonames
     - omninest-rclone-local:/mnt/local
     - omninest-rclone-imports:/mnt/imports
     - omninest-aria2:/downloads
@@ -458,6 +462,7 @@ volumes:
   omninest-ai-models:
   omninest-search:
   omninest-search-photo:
+  omninest-geonames:
   omninest-certbot-config:
   omninest-certbot-challenges:
   omninest-probe-tmp:

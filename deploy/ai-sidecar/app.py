@@ -23,7 +23,8 @@ face_app = None
 REQUIRED_FACE_MODULES = ("detection", "recognition")
 SIDECAR_TOKEN_HEADER = "X-OmniNest-Sidecar-Token"
 SIDECAR_SECRET = os.environ.get("OMNINEST_AI_SIDECAR_SECRET", "")
-MAX_IMAGE_BYTES = int(os.environ.get("AI_MAX_IMAGE_BYTES", str(32 * 1024 * 1024)))
+# 与后端 photo.ai.max-image-bytes 默认值（67108864）对齐；后端按同一上限做前置拒绝。
+MAX_IMAGE_BYTES = int(os.environ.get("AI_MAX_IMAGE_BYTES", str(64 * 1024 * 1024)))
 MAX_IMAGE_WIDTH = int(os.environ.get("AI_MAX_IMAGE_WIDTH", "30000"))
 MAX_IMAGE_HEIGHT = int(os.environ.get("AI_MAX_IMAGE_HEIGHT", "30000"))
 MAX_IMAGE_PIXELS = int(os.environ.get("AI_MAX_IMAGE_PIXELS", "100000000"))

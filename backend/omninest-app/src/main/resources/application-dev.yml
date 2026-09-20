@@ -52,7 +52,7 @@ photo:
   geo:
     import:
       # GeoNames dump 数据集目录；相对路径相对后端进程工作目录（backend/）解析。
-      dir: ../data/geonames
+      dir: ${OMNINEST_GEO_IMPORT_DIR:../data/geonames}
 
 file:
   local-media:
@@ -77,7 +77,8 @@ omninest:
     persistent-state-enabled: ${OMNINEST_SETUP_PERSISTENT_STATE_ENABLED:true}
     web-base-url: ${OMNINEST_SETUP_WEB_BASE_URL:http://localhost:3000}
   runtime:
-    embedded-worker-enabled: true
+    # 占位符桥接 .env 导入键（宽松绑定对大写下划线属性源不可靠），默认 dev 单进程内嵌 worker。
+    embedded-worker-enabled: ${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:true}
   security:
     jwt-secret: ${OMNINEST_SECURITY_JWT_SECRET:change-me-omninest-local-jwt-secret-at-least-32-bytes}
     credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}

@@ -106,14 +106,31 @@ class ApplicationEnvironmentContractTest {
         assertThat(common.getProperty("omninest.setup.enabled")).isNull();
 
         assertThat(dev.getProperty("spring.config.activate.on-profile")).isEqualTo("dev");
-        assertThat(dev.getProperty("omninest.runtime.embedded-worker-enabled")).isEqualTo(true);
-        assertThat(dev.getProperty("photo.geo.import.dir")).isEqualTo("../data/geonames");
+        Object devEmbeddedWorker = dev.getProperty("omninest.runtime.embedded-worker-enabled");
+        assertThat(devEmbeddedWorker).isEqualTo("${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:true}");
+        StandardEnvironment devEmbeddedDefaultEnvironment = new StandardEnvironment();
+        assertThat(devEmbeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(devEmbeddedWorker)))
+                .isEqualTo("true");
+        Object devGeoImportDir = dev.getProperty("photo.geo.import.dir");
+        assertThat(devGeoImportDir).isEqualTo("${OMNINEST_GEO_IMPORT_DIR:../data/geonames}");
+        assertThat(devEmbeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(devGeoImportDir)))
+                .isEqualTo("../data/geonames");
         assertThat(prod.getProperty("spring.config.activate.on-profile")).isEqualTo("prod");
         Object prodEmbeddedWorker = prod.getProperty("omninest.runtime.embedded-worker-enabled");
         assertThat(prodEmbeddedWorker).isEqualTo("${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:false}");
         StandardEnvironment embeddedDefaultEnvironment = new StandardEnvironment();
         assertThat(embeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(prodEmbeddedWorker)))
                 .isEqualTo("false");
+        Object prodGeoImportDir = prod.getProperty("photo.geo.import.dir");
+        assertThat(prodGeoImportDir).isEqualTo("${OMNINEST_GEO_IMPORT_DIR:/var/lib/omninest/geonames}");
+        assertThat(embeddedDefaultEnvironment.resolvePlaceholders(String.valueOf(prodGeoImportDir)))
+                .isEqualTo("/var/lib/omninest/geonames");
+        // web-base-url 的 dev/prod 默认值有意不同：dev 指向本机前端（分享链接便利），
+        // prod 留空回退同源托管形态，故不进入下方“同一变量和默认值”清单。
+        assertThat(dev.getProperty("omninest.setup.web-base-url"))
+                .isEqualTo("${OMNINEST_SETUP_WEB_BASE_URL:http://localhost:3000}");
+        assertThat(prod.getProperty("omninest.setup.web-base-url"))
+                .isEqualTo("${OMNINEST_SETUP_WEB_BASE_URL:}");
 
         List<String> synchronizedProperties = List.of(
                 "spring.datasource.url",
@@ -135,7 +152,6 @@ class ApplicationEnvironmentContractTest {
                 "omninest.setup.enabled",
                 "omninest.setup.token",
                 "omninest.setup.persistent-state-enabled",
-                "omninest.setup.web-base-url",
                 "omninest.security.jwt-secret",
                 "omninest.security.credential-encryption-key",
                 "omninest.security.registration-enabled",
