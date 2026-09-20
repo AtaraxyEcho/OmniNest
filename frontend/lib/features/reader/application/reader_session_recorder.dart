@@ -14,12 +14,15 @@ class ReaderSessionRecorder {
   /// 记录阅读会话。
   ///
   /// 会话只进入 ReaderSyncQueue，避免 SharedPreferences 与同步队列双写。
+  /// [activeReading] 为前台活跃阅读时长（剔除切后台挂机），由调用方
+  /// 通过生命周期边界累积；[sessionStart] 仅作为会话起点与幂等键素材。
   static void recordSession({
     required String itemId,
     required DateTime sessionStart,
+    required Duration activeReading,
   }) {
     final now = DateTime.now();
-    final duration = now.difference(sessionStart).inSeconds;
+    final duration = activeReading.inSeconds;
     if (duration < 10) return;
 
     final clientSessionId =
@@ -50,7 +53,9 @@ class ReaderSessionRecorder {
         endedAt: endedAt,
         durationSeconds: durationSeconds,
       );
-    } on Exception catch (e) {
+    } catch (e) {
+      // 队列未初始化等Error同样不能击穿退出路径：会话记录失败仅记录
+      // 调试日志，等待下一次会话补录。
       if (kDebugMode) {
         readerDebugLog('ReaderSessionRecorder: session enqueue failed: $e');
       }

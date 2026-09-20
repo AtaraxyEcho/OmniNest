@@ -77,6 +77,7 @@ class ReaderViewPage extends ConsumerStatefulWidget {
 
 class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     with
+        WidgetsBindingObserver,
         ReaderViewPageBuilders,
         ReaderViewPageSettingsMixin,
         ReaderViewPageControlsMixin,
@@ -198,7 +199,14 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   String? _lastLoadedChapterId;
 
   // ── 阅读会话 ──
-  late final DateTime _sessionStart = DateTime.now();
+  // 进入阅读页即计时：late final 会在首次读取（dispose）时才求值，
+  // 导致会话时长恒为 0，统计永不入队。
+  final DateTime _sessionStart = DateTime.now();
+
+  // 前台活跃阅读时长：切后台/窗口隐藏的挂机时间不计入阅读统计。
+  DateTime _lastResumedAt = DateTime.now();
+  Duration _accumulatedActive = Duration.zero;
+  bool _lifecycleReading = true;
 
   bool get _isPageMode => supportsPageMode && _settings.readingMode == 'page';
 
@@ -624,6 +632,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _chapterNavigationIntent =
         ReaderChapterNavigationIntent.intentForRouteEntry(widget.entry);
     _progressSync = ref.read(readerProgressSyncServiceProvider);
@@ -684,10 +693,33 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 仅以 paused（窗口隐藏/切后台）作为挂机边界：inactive 在桌面端
+    // 弹窗、失焦时也会触发，不计入会造成正常阅读被误伤。
+    if (state == AppLifecycleState.paused) {
+      if (_lifecycleReading) {
+        _accumulatedActive += DateTime.now().difference(_lastResumedAt);
+        _lifecycleReading = false;
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      if (!_lifecycleReading) {
+        _lastResumedAt = DateTime.now();
+        _lifecycleReading = true;
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     ReaderSessionRecorder.recordSession(
       itemId: widget.itemId,
       sessionStart: _sessionStart,
+      activeReading:
+          _accumulatedActive +
+          (_lifecycleReading
+              ? DateTime.now().difference(_lastResumedAt)
+              : Duration.zero),
     );
     // dispose 时用 localStorage 同步备份（不依赖 ref，不读 scroll controller 位置）。
     // _syncProgressSync 不能在此调用 — ref 已卸载，_bookProgress 会崩溃。
@@ -726,13 +758,18 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
           final totalChars =
               _contentLoader?.getByChapterId(_currentChapterId)?.totalChars ??
               0;
-          final progress =
+          // 上报口径必须是全书进度：章节内比例会在读到任意章尾时被
+          // 误判为整本完成。复用会话期间维护的防抖全书进度通知器。
+          final chapterProgress =
               totalChars > 0 ? (charOffset / totalChars).clamp(0.0, 1.0) : 0.0;
+          final notifierProgress = _bookProgressNotifier.value.clamp(0.0, 1.0);
+          final progress =
+              notifierProgress > 0 ? notifierProgress : chapterProgress;
           ReaderProgressBackupWeb.save(
             itemId: widget.itemId,
             chapterId: _currentChapterId,
             charOffset: charOffset,
-            chapterProgress: progress,
+            chapterProgress: chapterProgress,
           );
           // 退出时向服务端强制补报最终位置（节流不适用于离场）
           unawaited(

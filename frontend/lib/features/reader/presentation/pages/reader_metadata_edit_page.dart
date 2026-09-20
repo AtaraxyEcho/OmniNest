@@ -533,6 +533,8 @@ class _ReaderMetadataEditPageState
       if (!mounted) {
         return;
       }
+      // 新封面上传后旧字节缓存必须同步失效，否则 LRU 会继续命中旧图。
+      ReaderCoverByteCache.remove(widget.itemId);
       ref.invalidate(coverBytesProvider(widget.itemId));
       ref.invalidate(readerItemDetailProvider(widget.itemId));
       final l10n = AppLocalizations.of(context);
@@ -569,6 +571,8 @@ class _ReaderMetadataEditPageState
       if (!mounted) {
         return;
       }
+      // 新封面上传后旧字节缓存必须同步失效，否则 LRU 会继续命中旧图。
+      ReaderCoverByteCache.remove(widget.itemId);
       ref.invalidate(coverBytesProvider(widget.itemId));
       ref.invalidate(readerItemDetailProvider(widget.itemId));
       final l10n = AppLocalizations.of(context);

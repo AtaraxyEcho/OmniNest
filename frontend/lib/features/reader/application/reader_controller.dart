@@ -71,7 +71,12 @@ final readerStatsProvider = FutureProvider<ReaderReadingStats>((ref) async {
 final readerStatsOverviewProvider = FutureProvider<ReaderStatsOverview>((
   ref,
 ) async {
-  return ref.watch(readerApiProvider).getStatsOverview(days: 14);
+  // 读取前先重放离线队列：刚退出阅读页就查看统计时，本机会话
+  // 仍躺在队列里未上传，会呈现滞后一拍的旧数据。
+  final api = ref.watch(readerApiProvider);
+  await ReaderSyncQueue.retryFailed();
+  await ReaderSyncQueue.flush(api: api);
+  return api.getStatsOverview(days: 14);
 });
 
 /// 阅读中心控制器

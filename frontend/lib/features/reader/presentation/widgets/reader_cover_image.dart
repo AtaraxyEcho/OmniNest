@@ -53,6 +53,18 @@ class AuthCoverImage extends ConsumerWidget {
               width: effectiveWidth,
               height: effectiveHeight,
               cacheWidth: cacheWidth,
+              // 与 CachedNetworkImage 卡片的默认淡入过渡保持一致；
+              // 同步解码（缓存命中重挂）不做动画避免闪烁。
+              frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                if (wasSynchronouslyLoaded) {
+                  return child;
+                }
+                return AnimatedOpacity(
+                  opacity: frame == null ? 0 : 1,
+                  duration: const Duration(milliseconds: 300),
+                  child: child,
+                );
+              },
               errorBuilder: (_, _, _) => fallback ?? const SizedBox.shrink(),
             );
             if (borderRadius != null) {
@@ -64,13 +76,7 @@ class AuthCoverImage extends ConsumerWidget {
               () => SizedBox(
                 width: effectiveWidth,
                 height: effectiveHeight,
-                child: const Center(
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
-                ),
+                child: fallback ?? const SizedBox.shrink(),
               ),
           error: (_, _) => fallback ?? const SizedBox.shrink(),
         );

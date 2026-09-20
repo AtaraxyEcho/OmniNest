@@ -192,6 +192,9 @@ public final class ReaderDtos {
     public record CreateBookmarkRequest(
             @Min(value = 0, message = "charOffset 不能为负数")
             long charOffset,
+            // progressPercent 为必填：service 端直接 .max(BigDecimal.ZERO)，
+            // 缺参会 NPE 500（D-014），此处以校验注解提前拦截为 400。
+            @NotNull(message = "progressPercent 不能为空")
             @DecimalMin(value = "0.0", message = "progressPercent 不能小于 0")
             @DecimalMax(value = "1.0", message = "progressPercent 不能大于 1")
             BigDecimal progressPercent,
