@@ -57,30 +57,45 @@ OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心�
 
 <table>
   <tr>
-    <th>Portal 工作台</th>
-    <th>音乐播放</th>
+    <th>门户工作台</th>
+    <th>照片</th>
   </tr>
   <tr>
-    <td><img src="imgs/portal_page.png" alt="Portal 工作台" width="600"></td>
-    <td><img src="imgs/music_player_page.png" alt="音乐播放器" width="600"></td>
+    <td><img src="imgs/desktop/portal_home_page.png" alt="门户工作台" width="600"></td>
+    <td><img src="imgs/desktop/photos_home_page.png" alt="照片主页" width="600"></td>
+  </tr>
+  <tr>
+    <th>影视详情</th>
+    <th>音乐</th>
+  </tr>
+  <tr>
+    <td><img src="imgs/desktop/movies_detail_page.png" alt="影视详情" width="600"></td>
+    <td><img src="imgs/desktop/music_home_page.png" alt="音乐主页" width="600"></td>
   </tr>
   <tr>
     <th>阅读器</th>
+    <th>管理控制台</th>
+  </tr>
+  <tr>
+    <td><img src="imgs/desktop/reader_view_page.png" alt="阅读器" width="600"></td>
+    <td><img src="imgs/desktop/admin_console_home.png" alt="管理控制台" width="600"></td>
+  </tr>
+  <tr>
+    <th>照片幻灯片</th>
     <th>安装向导</th>
   </tr>
   <tr>
-    <td><img src="imgs/reader_view_page.png" alt="阅读器" width="600"></td>
-    <td><img src="imgs/setup_page.png" alt="安装向导" width="600"></td>
+    <td><img src="imgs/desktop/photos_slideshow_page.png" alt="照片幻灯片" width="600"></td>
+    <td><img src="imgs/desktop/setup_page.png" alt="安装向导" width="600"></td>
   </tr>
 </table>
 
-三端截图目录：
+截图目录：
 
-| 平台 | 目录 |
-| --- | --- |
-| Web | [imgs/web](imgs/web) |
-| Android | [imgs/android](imgs/android) |
-| Windows | [imgs/win](imgs/win) |
+| 平台 | 目录 | 说明 |
+| --- | --- | --- |
+| 桌面端 / Web | [imgs/desktop](imgs/desktop) | 覆盖门户、照片、影视、音乐、阅读、管理与安装向导等 22 张 |
+| Android | `imgs/mobile` | 建设中，截图将陆续补充 |
 
 ---
 
@@ -107,6 +122,12 @@ OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心�
 | **Android** | ✅ 推荐 / 已验证 | 紧凑导航与触控布局 |
 | **Windows** | ✅ 推荐 / 已验证 | 桌面窗口、键鼠操作 |
 | **iOS / macOS** | ⚠️ 不推荐 | 有 Flutter 工程适配，**未全量测试**，请自行验证后再用 |
+
+### 客户端获取与服务器配置
+
+- **Web**：随部署栈由 Nginx 托管，浏览器打开即用（同源连接后端）。
+- **Android / Windows**：安装包不内置服务器地址，**首次启动在引导页输入自托管服务器地址**（支持 `host`、`host:端口` 或完整地址），校验通过后进入登录或安装向导；已登录后可在“个人资料 → 服务器与连接”中更换。
+- 定制构建：`frontend/scripts/build_signed_*_release.ps1` 可选传 `-ApiBaseUrl` 预置服务器地址（家庭分发场景，升级换址随包传播），`-RequireHttps` 构建仅允许 HTTPS 地址的严格包。服务端不提供独立 jar，以 Docker 镜像发布（见 deploy/README.md）。
 
 ---
 

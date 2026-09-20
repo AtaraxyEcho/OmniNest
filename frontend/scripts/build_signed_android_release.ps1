@@ -1,12 +1,15 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^([0-9A-Fa-f]{2}:){31}[0-9A-Fa-f]{2}$|^[0-9A-Fa-f]{64}$')]
     [string]$ExpectedCertificateSha256,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
+    [AllowEmptyString()]
     [ValidatePattern('^https?://')]
-    [string]$ApiBaseUrl,
+    [string]$ApiBaseUrl = '',
+
+    [switch]$RequireHttps,
 
     [string]$FlutterCommand = '',
     [string]$JarsignerPath = '',
@@ -88,6 +91,9 @@ if ($env:OMNINEST_ALLOW_DEBUG_RELEASE_SIGNING -eq 'true') {
 }
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
+if ($RequireHttps -and $ApiBaseUrl -match '^http://') {
+    throw '-RequireHttps 与 http:// 开头的 -ApiBaseUrl 互斥：预置地址必须使用 HTTPS。'
+}
 $flutter = Resolve-FlutterCommand
 $jarsigner = Resolve-JavaTool -ToolName 'jarsigner' -ExplicitPath $JarsignerPath
 $keytool = Resolve-JavaTool -ToolName 'keytool' -ExplicitPath $KeytoolPath
@@ -98,11 +104,17 @@ $expectedFingerprint = $ExpectedCertificateSha256.Replace(':', '').ToUpperInvari
 
 Push-Location $projectRoot
 try {
-    # release 构建必须显式指定 API 基地址（environment.fromDefines 会 fail-fast）。
+    # ApiBaseUrl 可选：不传构建通用包（首启引导配置服务器），传入则作为预置地址。
+    $dartDefines = @()
+    if (-not [string]::IsNullOrWhiteSpace($ApiBaseUrl)) {
+        $dartDefines += "--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl"
+    }
+    if ($RequireHttps) {
+        $dartDefines += '--dart-define=OMNINEST_REQUIRE_HTTPS=true'
+    }
     Invoke-CheckedCommand -Command $flutter -Arguments @(
-        'build', 'appbundle', '--release', '--no-pub',
-        "--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl"
-    )
+        'build', 'appbundle', '--release', '--no-pub'
+    ) + $dartDefines
     if (-not (Test-Path -LiteralPath $bundle -PathType Leaf)) {
         throw "Android App Bundle was not found: $bundle"
     }

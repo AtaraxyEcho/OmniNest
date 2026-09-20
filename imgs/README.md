@@ -2,13 +2,12 @@
 
 文档与发布说明中的产品界面截图。
 
-| 目录 | 平台 |
-| --- | --- |
-| `web/` | 浏览器 Web 客户端 |
-| `android/` | Android 客户端 |
-| `win/` | Windows 桌面客户端 |
+| 目录 | 平台 | 说明 |
+| --- | --- | --- |
+| `desktop/` | 桌面端 / Web | 门户、照片、影视、音乐、阅读、管理控制台与安装向导等界面 |
+| `mobile/` | Android | 建设中，截图将陆续补充 |
 
-根目录下的 `portal_page.png`、`music_player_page.png` 等为功能界面示意，不区分运行平台。`omninest-logo.webp` 为项目标识（README 头图），属项目自有品牌素材，不适用下述 CC0 口径。
+根目录下的 `omninest-logo.webp` 为项目标识（README 头图），属项目自有品牌素材，不适用下述 CC0 口径。
 
 **素材与版权**
 

@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 网络安全策略（release/主线）：仅允许 HTTPS，明文流量一律拒绝。 -->
+<!-- 网络安全策略（release/主线）：放行明文流量以支持内网 http 自托管服务器（D1a）。
+     首启引导页对 http 地址给出风险提示；公网 HTTPS-only 定制构建用
+     -RequireHttps 在应用层拒绝 http，平台级 flavor 硬化留作后续可选。 -->
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[0-9A-Fa-f]{40}$')]
@@ -8,9 +8,12 @@ param(
     [ValidatePattern('^https?://')]
     [string]$TimestampUrl,
 
-    [Parameter(Mandatory = $true)]
+    [Parameter(Mandatory = $false)]
+    [AllowEmptyString()]
     [ValidatePattern('^https?://')]
-    [string]$ApiBaseUrl,
+    [string]$ApiBaseUrl = '',
+
+    [switch]$RequireHttps,
 
     [string]$FlutterCommand = '',
     [string]$SignToolPath = ''
@@ -88,17 +91,26 @@ if ($certificate.NotAfter -le (Get-Date)) {
 
 $flutter = Resolve-FlutterCommand
 $signTool = Resolve-SignTool
+if ($RequireHttps -and $ApiBaseUrl -match '^http://') {
+    throw '-RequireHttps 与 http:// 开头的 -ApiBaseUrl 互斥：预置地址必须使用 HTTPS。'
+}
 $executable = Join-Path $projectRoot 'build\windows\x64\runner\Release\omninest_frontend.exe'
 $manifestDirectory = Join-Path $projectRoot 'build\release-manifests'
 $manifestPath = Join-Path $manifestDirectory 'windows-release.json'
 
 Push-Location $projectRoot
 try {
-    # release 构建必须显式指定 API 基地址（environment.fromDefines 会 fail-fast）。
+    # ApiBaseUrl 可选：不传构建通用包（首启引导配置服务器），传入则作为预置地址。
+    $dartDefines = @()
+    if (-not [string]::IsNullOrWhiteSpace($ApiBaseUrl)) {
+        $dartDefines += "--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl"
+    }
+    if ($RequireHttps) {
+        $dartDefines += '--dart-define=OMNINEST_REQUIRE_HTTPS=true'
+    }
     Invoke-CheckedCommand -Command $flutter -Arguments @(
-        'build', 'windows', '--release', '--no-pub',
-        "--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl"
-    )
+        'build', 'windows', '--release', '--no-pub'
+    ) + $dartDefines
     if (-not (Test-Path -LiteralPath $executable -PathType Leaf)) {
         throw "Windows Release executable was not found: $executable"
     }

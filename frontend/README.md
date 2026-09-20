@@ -8,7 +8,7 @@ OmniNest Frontend 是基于 Flutter 的统一客户端。
 
 各平台共享同一套产品信息架构和业务状态，根据窗口尺寸、触控、鼠标和键盘输入调整布局与交互密度。
 
-**演示素材**：本仓库文档中的界面示意图与演示素材**均为 CC0 / 公有领域**资源（见根目录免责声明）。导入与截图请使用同类资源（例如 `D:\Development\Resource\CC0`），**请勿**使用受版权保护的内容。
+**演示素材**：本仓库文档中的界面示意图与演示素材**均为 CC0 / 公有领域**资源（见根目录免责声明）。导入与截图请使用同类资源（可在公有领域素材站点获取），**请勿**使用受版权保护的内容。
 
 根目录产品概览见 [../README.md](../README.md)，英文版见 [../README.en.md](../README.en.md)，后端服务、API 和存储边界见 [../backend/README.md](../backend/README.md)。
 
@@ -36,7 +36,7 @@ flutter build web --dart-define-from-file=env/dev.json 2>&1 | tee logs/flutter-b
 
 | 页面或路由 | 主要内容 |
 | --- | --- |
-| `/setup`、`/login` | 首次安装向导、登录和会话建立 |
+| `/server-setup`、`/setup`、`/login` | 首启服务器引导、首次安装向导、登录和会话建立 |
 | `/portal` | 动态背景、最近内容、通知、搜索和模块入口 |
 | `/files` | 文件目录、上传下载、预览、回收站和生命周期操作 |
 | `/photos` | 相册、时间线、图片详情、元数据、图像分析和分享 |
@@ -44,7 +44,7 @@ flutter build web --dart-define-from-file=env/dev.json 2>&1 | tee logs/flutter-b
 | `/music` | 本地/外部音乐、搜索、队列、歌词、封面和播放控制 |
 | `/reader` | 书籍/漫画书库、导入、目录、阅读、书签、批注和进度 |
 | `/admin/*` | 用户、角色权限、配置、任务、日志、会话和监控 |
-| `/profile` | 个人资料、主题、账号安全和个人偏好 |
+| `/profile` | 个人资料、主题、账号安全、服务器与连接和个人偏好 |
 | `/settings` | 兼容入口，重定向到个人中心的对应设置区域 |
 
 桌面端和 Web 以左侧导航与顶部工具栏为主，Android 使用紧凑导航和触控友好控件，但模块名称、权限边界和主要任务路径保持一致。`/photos/slideshow` 和公开分享路径属于 Photos 的辅助页面，Reader 的章节、漫画页面和文件导入路径由 Reader 内部路由继续承载。
@@ -97,7 +97,7 @@ flutter pub get
 test -f env/dev.json || cp env/dev.example.json env/dev.json
 ```
 
-`env/dev.json` 是编译期配置文件，应用不会自动读取它。启动或构建时必须显式使用 `--dart-define-from-file=env/dev.json`，或者分别传入 `--dart-define`。文件中的地址含义如下：
+`env/dev.json` 是编译期配置文件，应用不会自动读取它。启动或构建时建议使用 `--dart-define-from-file=env/dev.json`，或者分别传入 `--dart-define`。文件中的地址含义如下：
 
 ```json
 {
@@ -107,7 +107,7 @@ test -f env/dev.json || cp env/dev.example.json env/dev.json
 }
 ```
 
-Web 在没有传入地址时会使用当前浏览器 origin 推导同源 API 和 WebSocket；Android、Windows 和 macOS 没有浏览器 origin，未配置时会回退到 `localhost`。因此真机、局域网设备或其他电脑访问时，必须把配置中的主机改为设备能够访问的后端域名或 IP，且后端 CORS/HTTPS 配置要同时允许该来源。
+服务器地址的生效优先级为：首启引导页录入并保存的自定义地址 > 上述编译期预置 > 未配置。Web 恒用浏览器同源推导；Android、Windows 和 macOS 在既无预置也未自定义时进入首启引导页（`/server-setup`），输入 `host`、`host:端口` 或完整地址并探活通过后进入登录或安装向导，已登录后可在"个人资料 → 服务器与连接"中更换（会退出登录并清除本机会话）。预置地址不落库：升级换预置的安装包后，未自定义过的设备自动跟随新地址。真机、局域网设备或其他电脑访问时，预置中的主机必须是设备可达的后端域名或 IP，且后端 CORS 配置要允许该来源。
 
 ## 本地启动
 
@@ -154,6 +154,19 @@ flutter build macos --release --dart-define-from-file=env/dev.json
 ```
 
 `apk` 和 `appbundle` 用于 Android，`windows` 只能在 Windows 工具链上构建，`macos` 只能在 macOS 工具链上构建。当前仓库生成 Flutter 平台构建产物，未默认集成 Inno Setup、MSIX 或 macOS DMG/PKG 安装包流水线；终端分发需要另行处理平台签名、安装包和更新策略。
+
+### 发布签名脚本
+
+正式分发使用模块内签名脚本（签名环境变量与校验细节见脚本注释）：
+
+```powershell
+scripts/build_signed_android_release.ps1 -ExpectedCertificateSha256 <证书指纹> [-ApiBaseUrl https://nest.example.com] [-RequireHttps]
+scripts/build_signed_windows_release.ps1 -CertificateThumbprint <证书指纹> -TimestampUrl <时间戳服务> [-ApiBaseUrl https://nest.example.com] [-RequireHttps]
+```
+
+- `-ApiBaseUrl` 可选：不传构建**通用包**（首次启动在引导页配置服务器），传入则预置该地址——适合家庭分发，升级换址随新包自动传播。
+- `-RequireHttps` 构建**严格包**：应用拒绝所有 `http://` 服务器地址（含互斥校验），等价于 `--dart-define=OMNINEST_REQUIRE_HTTPS=true`，适合公网 HTTPS 部署。
+- Android 通用包放行明文 HTTP 以支持内网自托管（见 `android/app/src/main/res/xml/network_security_config.xml`），引导页对 http 地址展示风险提示。
 
 ## 开发规范
 

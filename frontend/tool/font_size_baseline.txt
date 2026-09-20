@@ -4,7 +4,6 @@
 lib/features/music/presentation/player/music_immersive_overlay.dart 1
 lib/features/music/presentation/player/music_visual_color_picker.dart 1
 lib/features/music/presentation/widgets/music_volume_button.dart 1
-lib/features/portal/presentation/widgets/weather_detail_dialog.dart 3
 lib/features/reader/presentation/pages/reader_admin_page.dart 5
 lib/features/reader/presentation/widgets/reader_image_preview.dart 1
 lib/features/reader/presentation/widgets/reader_import_section.dart 8

@@ -46,6 +46,12 @@ Please read this section before using OmniNest. **Using this software means you 
 - The Flutter tree contains iOS / macOS directories and adapters, but they have **not** received full testing equivalent to those three platforms. They are **not recommended** for production or critical use without your own validation.
 - Optional components such as virus scanning (ClamAV) and image analysis are **deployment choices** based on hardware and exposure. Typical 4C4G personal setups may disable scanning; public internet deployments should evaluate enabling it.
 
+### Getting the clients
+
+- **Web** is served by the deployment stack's Nginx and connects same-origin.
+- **Android / Windows** packages ship without a baked-in server address: on first launch a setup page asks for your self-hosted server address (`host`, `host:port`, or a full URL), validates it, then continues to login or the install wizard; signed-in users can change it under Profile → Server & connection.
+- Custom builds: `frontend/scripts/build_signed_*_release.ps1` accept an optional `-ApiBaseUrl` preset (family distribution; address changes propagate with app updates) and `-RequireHttps` for HTTPS-only strict builds. The server ships as Docker images only; there is no standalone jar (see deploy/README.md).
+
 ### Privacy and data
 
 - Data stays on **your** server and storage. Developers do **not** collect your library contents through this software.
@@ -58,23 +64,44 @@ Please read this section before using OmniNest. **Using this software means you 
 <table>
   <tr>
     <th>Portal workspace</th>
-    <th>Music player</th>
+    <th>Photos</th>
   </tr>
   <tr>
-    <td><img src="imgs/portal_page.png" alt="Portal workspace" width="600"></td>
-    <td><img src="imgs/music_player_page.png" alt="Music player" width="600"></td>
+    <td><img src="imgs/desktop/portal_home_page.png" alt="Portal workspace" width="600"></td>
+    <td><img src="imgs/desktop/photos_home_page.png" alt="Photos home" width="600"></td>
+  </tr>
+  <tr>
+    <th>Movie details</th>
+    <th>Music</th>
+  </tr>
+  <tr>
+    <td><img src="imgs/desktop/movies_detail_page.png" alt="Movie details" width="600"></td>
+    <td><img src="imgs/desktop/music_home_page.png" alt="Music home" width="600"></td>
   </tr>
   <tr>
     <th>Reader</th>
+    <th>Admin console</th>
+  </tr>
+  <tr>
+    <td><img src="imgs/desktop/reader_view_page.png" alt="Reader" width="600"></td>
+    <td><img src="imgs/desktop/admin_console_home.png" alt="Admin console" width="600"></td>
+  </tr>
+  <tr>
+    <th>Photo slideshow</th>
     <th>Setup wizard</th>
   </tr>
   <tr>
-    <td><img src="imgs/reader_view_page.png" alt="Reader" width="600"></td>
-    <td><img src="imgs/setup_page.png" alt="Setup wizard" width="600"></td>
+    <td><img src="imgs/desktop/photos_slideshow_page.png" alt="Photo slideshow" width="600"></td>
+    <td><img src="imgs/desktop/setup_page.png" alt="Setup wizard" width="600"></td>
   </tr>
 </table>
 
-Per-platform screenshot folders (fill in locally as needed): [imgs/web](imgs/web), [imgs/android](imgs/android), [imgs/win](imgs/win).
+Screenshot folders:
+
+| Platform | Folder | Notes |
+| --- | --- | --- |
+| Desktop / Web | [imgs/desktop](imgs/desktop) | 22 shots covering Portal, Photos, Movies, Music, Reader, Admin, and setup |
+| Android | `imgs/mobile` | Under construction; screenshots will be added over time |
 
 ---
 

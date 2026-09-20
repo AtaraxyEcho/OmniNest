@@ -13,13 +13,16 @@ void main() {
     expect(source, contains('OMNINEST_ANDROID_KEY_ALIAS'));
     expect(source, contains('OMNINEST_ANDROID_KEY_PASSWORD'));
     expect(source, contains('OMNINEST_ALLOW_DEBUG_RELEASE_SIGNING'));
-    // release 必须显式携带 API 基地址（environment.fromDefines fail-fast 契约）。
+    // ApiBaseUrl 可选：不传构建通用包（首启引导配置），传入则作为预置。
     expect(source, contains(r'[string]$ApiBaseUrl'));
+    expect(source, contains(r'[switch]$RequireHttps'));
+    expect(source, contains(r'--dart-define=OMNINEST_REQUIRE_HTTPS=true'));
+    expect(source, contains('-RequireHttps 与 http:// 开头的 -ApiBaseUrl 互斥'));
+    expect(source, contains("'build', 'appbundle', '--release', '--no-pub'"));
     expect(
       source,
-      contains("'build', 'appbundle', '--release', '--no-pub'"),
+      contains(r'--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl'),
     );
-    expect(source, contains(r'--dart-define=OMNINEST_API_BASE_URL=$ApiBaseUrl'));
     expect(source, contains("@('-verify', \$bundle)"));
     expect(source, contains("'-printcert'"));
     expect(source, contains("'-jarfile' \$bundle"));

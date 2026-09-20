@@ -24,7 +24,8 @@ docker compose up -d
 ```
 
 后端裸进程变量从 `backend/.env` 读取，模板位于 `backend/.env.example`。Compose 的
-`.env` 不会自动注入后端裸进程。
+`.env` 不会自动注入后端裸进程。各 `.env.example` 模板（本目录 `dev/`、`prod/` 与
+`backend/`）均提供英文版 `.env.en.example`，变量一致，仅注释语言不同。
 
 镜像定义统一位于 deploy 根目录的 `ai-sidecar/`、`backend/`、`netease-api/`。
 开发编排默认只构建图像分析侧车和网易云 API，后端仍由 Maven 或 IDE 运行；图像分析侧车
