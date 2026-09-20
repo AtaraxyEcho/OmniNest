@@ -151,6 +151,22 @@ class MusicApi {
     return _parseList(response.data, MusicTrack.fromJson, '歌单歌曲格式不正确');
   }
 
+  /// 获取专辑内全部曲目（碟号、音轨号排序）。
+  Future<List<MusicTrack>> albumTracks(String albumId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/albums/$albumId/tracks',
+    );
+    return _parseList(response.data, MusicTrack.fromJson, '专辑歌曲格式不正确');
+  }
+
+  /// 获取歌手内全部曲目（专辑名、碟号、音轨号排序）。
+  Future<List<MusicTrack>> artistTracks(String artistId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/artists/$artistId/tracks',
+    );
+    return _parseList(response.data, MusicTrack.fromJson, '歌手歌曲格式不正确');
+  }
+
   Future<MusicPlaylist> addPlaylistItems(
     String playlistId,
     List<String> trackIds,

@@ -161,6 +161,87 @@ class MusicPlayableItem {
   }
 }
 
+/// 播放队列来源类型。
+enum MusicQueueSourceKind { library, playlist, album, artist, transient }
+
+/// 播放队列来源引用，用于展示与跨设备按来源重建队列。
+class MusicQueueSource {
+  const MusicQueueSource({
+    this.kind = MusicQueueSourceKind.transient,
+    this.id,
+    this.title,
+    this.platforms,
+  });
+
+  /// 无明确来源：窗口快照即全部内容。
+  static const MusicQueueSource transient = MusicQueueSource();
+
+  final MusicQueueSourceKind kind;
+  final String? id;
+
+  /// 来源展示名（歌单/专辑/歌手名），诊断与可选 UI 副标题用。
+  final String? title;
+
+  /// 仅 library 来源：参与混合队列的来源平台标识集合。
+  final List<String>? platforms;
+
+  /// 纯本地曲库来源（支持惰性续页）。
+  factory MusicQueueSource.localLibrary() {
+    return const MusicQueueSource(
+      kind: MusicQueueSourceKind.library,
+      platforms: <String>['local'],
+    );
+  }
+
+  /// 判断来源是否可重建（transient 不可重建）。
+  bool get rebuildable => kind != MusicQueueSourceKind.transient;
+
+  /// 判断是否为纯本地 library 来源（可续页）。
+  bool get isPureLocalLibrary =>
+      kind == MusicQueueSourceKind.library &&
+      (platforms == null ||
+          platforms!.every((platform) => platform == 'local'));
+
+  String get identityKey =>
+      '${kind.name}|${id ?? ''}|${(platforms ?? const <String>[]).join(',')}';
+
+  factory MusicQueueSource.fromJson(Map<String, dynamic>? json) {
+    if (json == null) {
+      return MusicQueueSource.transient;
+    }
+    final kind = switch (json['kind']?.toString()) {
+      'library' => MusicQueueSourceKind.library,
+      'playlist' => MusicQueueSourceKind.playlist,
+      'album' => MusicQueueSourceKind.album,
+      'artist' => MusicQueueSourceKind.artist,
+      _ => MusicQueueSourceKind.transient,
+    };
+    final rawPlatforms = json['platforms'];
+    final platforms =
+        rawPlatforms is List && rawPlatforms.isNotEmpty
+            ? List<String>.unmodifiable(
+              rawPlatforms.map((platform) => platform.toString()),
+            )
+            : null;
+    return MusicQueueSource(
+      kind: kind,
+      id: json['id']?.toString(),
+      title: json['title']?.toString(),
+      platforms: platforms,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'kind': kind.name,
+      if (id != null) 'id': id,
+      if (title != null) 'title': title,
+      if (platforms != null && kind == MusicQueueSourceKind.library)
+        'platforms': platforms,
+    };
+  }
+}
+
 /// 可跨设备恢复的播放队列快照。
 class MusicPlaybackQueueSnapshot {
   const MusicPlaybackQueueSnapshot({
@@ -168,6 +249,8 @@ class MusicPlaybackQueueSnapshot {
     this.currentIndex = -1,
     this.repeatMode = 'off',
     this.shuffleEnabled = false,
+    this.source = MusicQueueSource.transient,
+    this.truncated = false,
     this.updatedAt,
   });
 
@@ -198,11 +281,18 @@ class MusicPlaybackQueueSnapshot {
       'one' => 'one',
       _ => 'off',
     };
+    final rawSource = json['source'];
     return MusicPlaybackQueueSnapshot(
       items: List<MusicPlayableItem>.unmodifiable(items),
       currentIndex: currentIndex,
       repeatMode: repeatMode,
       shuffleEnabled: json['shuffleEnabled'] == true,
+      source: MusicQueueSource.fromJson(
+        rawSource is Map
+            ? rawSource.map((key, value) => MapEntry(key.toString(), value))
+            : null,
+      ),
+      truncated: json['truncated'] == true,
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
     );
   }
@@ -211,6 +301,8 @@ class MusicPlaybackQueueSnapshot {
   final int currentIndex;
   final String repeatMode;
   final bool shuffleEnabled;
+  final MusicQueueSource source;
+  final bool truncated;
   final DateTime? updatedAt;
 
   MusicPlayableItem? get currentItem =>
@@ -224,6 +316,8 @@ class MusicPlaybackQueueSnapshot {
       'currentIndex': currentIndex,
       'repeatMode': repeatMode,
       'shuffleEnabled': shuffleEnabled,
+      'source': source.toJson(),
+      'truncated': truncated,
     };
   }
 

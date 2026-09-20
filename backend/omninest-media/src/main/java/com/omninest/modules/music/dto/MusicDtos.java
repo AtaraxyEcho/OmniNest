@@ -161,12 +161,23 @@ public final class MusicDtos {
     ) {
     }
 
+    /** 播放队列来源引用，用于跨设备按来源重建队列。 */
+    public record MusicQueueSourceDto(
+            @NotNull @Pattern(regexp = "library|playlist|album|artist|transient") String kind,
+            @Size(max = 64) String id,
+            @Size(max = 200) String title,
+            @Size(max = 4) List<@Size(max = 16) String> platforms
+    ) {
+    }
+
     /** 用户播放队列缓存响应。 */
     public record MusicPlaybackQueueDto(
             List<MusicPlaybackQueueItemDto> items,
             int currentIndex,
             String repeatMode,
             boolean shuffleEnabled,
+            MusicQueueSourceDto source,
+            boolean truncated,
             Instant updatedAt
     ) {
     }
@@ -176,7 +187,9 @@ public final class MusicDtos {
             @NotNull @Size(max = 100) List<@Valid MusicPlaybackQueueItemDto> items,
             @NotNull @Min(-1) @Max(99) Integer currentIndex,
             @NotBlank @Pattern(regexp = "off|all|one") String repeatMode,
-            @NotNull Boolean shuffleEnabled
+            @NotNull Boolean shuffleEnabled,
+            @Valid MusicQueueSourceDto source,
+            Boolean truncated
     ) {
     }
 

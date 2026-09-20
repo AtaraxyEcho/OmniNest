@@ -490,7 +490,15 @@ class _LibraryContent extends ConsumerWidget {
                 final items = _libraryItems(center, platform, sources);
                 ref
                     .read(musicCenterControllerProvider.notifier)
-                    .playItems(items, startIndex: index);
+                    .playItems(
+                      items,
+                      startIndex: index,
+                      source: MusicQueueSource(
+                        kind: MusicQueueSourceKind.library,
+                        platforms:
+                            sources.map((item) => item.apiValue).toList(),
+                      ),
+                    );
               },
               onToggleFavorite: _favoriteHandler(ref),
               onDelete: _deleteTrackHandler(context, ref),
@@ -763,6 +771,24 @@ class _CollectionDetail extends ConsumerWidget {
           false,
         ),
     };
+    final queueSource = switch (selection) {
+      LocalMusicDeckCollection(:final playlist) => MusicQueueSource(
+        kind: MusicQueueSourceKind.playlist,
+        id: playlist.id,
+        title: playlist.name,
+      ),
+      AlbumMusicDeckCollection(:final album) => MusicQueueSource(
+        kind: MusicQueueSourceKind.album,
+        id: album.id,
+        title: album.title,
+      ),
+      ArtistMusicDeckCollection(:final artist) => MusicQueueSource(
+        kind: MusicQueueSourceKind.artist,
+        id: artist.id,
+        title: artist.name,
+      ),
+      _ => const MusicQueueSource(),
+    };
     return Column(
       children: [
         _CollectionDetailHeader(
@@ -776,7 +802,7 @@ class _CollectionDetail extends ConsumerWidget {
                   ? null
                   : () => ref
                       .read(musicCenterControllerProvider.notifier)
-                      .playItems(items, startIndex: 0),
+                      .playItems(items, startIndex: 0, source: queueSource),
         ),
         const SizedBox(height: 18),
         if (selection case ArtistMusicDeckCollection(:final artist))
@@ -791,7 +817,11 @@ class _CollectionDetail extends ConsumerWidget {
                     onPlay:
                         (index) => ref
                             .read(musicCenterControllerProvider.notifier)
-                            .playItems(items, startIndex: index),
+                            .playItems(
+                              items,
+                              startIndex: index,
+                              source: queueSource,
+                            ),
                     onToggleFavorite: _favoriteHandler(ref),
                     onDelete: _deleteTrackHandler(context, ref),
                     onEnqueue: _enqueueTrackHandler(context, ref),

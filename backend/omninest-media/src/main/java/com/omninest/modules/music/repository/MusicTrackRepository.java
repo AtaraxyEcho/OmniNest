@@ -111,11 +111,47 @@ public interface MusicTrackRepository extends JpaRepository<MusicTrack, UUID> {
     );
 
     @Query("""
-            select count(track) from MusicTrack track
+            select track from MusicTrack track
             join FileNode file on track.fileNodeId = file.id
             where track.ownerUserId = :ownerUserId and file.deleted = false
             """)
     long countByOwnerUserId(@Param("ownerUserId") UUID ownerUserId);
+
+    /**
+     * 查询专辑内全部可见曲目，按碟号、音轨号、曲名排序。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param albumId 专辑 ID
+     * @return 专辑曲目
+     */
+    @Query("""
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.ownerUserId = :ownerUserId and track.albumId = :albumId and file.deleted = false
+            order by track.discNumber asc, track.trackNumber asc, track.title asc
+            """)
+    List<MusicTrack> findAlbumTracks(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("albumId") UUID albumId
+    );
+
+    /**
+     * 查询歌手内全部可见曲目，按专辑名、碟号、音轨号排序。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param artistId 歌手 ID
+     * @return 歌手曲目
+     */
+    @Query("""
+            select track from MusicTrack track
+            join FileNode file on track.fileNodeId = file.id
+            where track.ownerUserId = :ownerUserId and track.artistId = :artistId and file.deleted = false
+            order by track.albumTitle asc, track.discNumber asc, track.trackNumber asc, track.title asc
+            """)
+    List<MusicTrack> findArtistTracks(
+            @Param("ownerUserId") UUID ownerUserId,
+            @Param("artistId") UUID artistId
+    );
 
     long countByOwnerUserIdAndAlbumId(UUID ownerUserId, UUID albumId);
 

@@ -459,10 +459,20 @@ class _MusicImmersivePlayerStageState
       return;
     }
     setState(() => _deckIndex = index);
-    _runPlaybackCommand(
-      () => ref
-          .read(musicCenterControllerProvider.notifier)
-          .playTrack(tracks[index]),
-    );
+    _runPlaybackCommand(() async {
+      final controller = ref.read(musicCenterControllerProvider.notifier);
+      final state = ref.read(musicCenterControllerProvider).asData?.value;
+      final queue = state?.playbackItems ?? const [];
+      final trackId = tracks[index].id;
+      final queueIndex = queue.indexWhere(
+        (candidate) => candidate.track.id == trackId,
+      );
+      // 队列非空时按队列内跳播，保持"播放自"上下文不被曲库覆盖。
+      if (queue.isNotEmpty && queueIndex >= 0) {
+        await controller.playQueueIndex(queueIndex);
+      } else {
+        await controller.playTrack(tracks[index]);
+      }
+    });
   }
 }

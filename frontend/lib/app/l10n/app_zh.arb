@@ -3646,6 +3646,7 @@
   "filesOpDeleteFile": "删除文件",
   "musicQueueTitle": "播放队列",
   "musicQueueEmpty": "播放队列为空",
+  "musicQueueSourceLibrary": "本地曲库",
   "musicQueueClear": "清空队列",
   "musicPlayNext": "下一首播放",
   "musicQueueReorderHint": "拖动调整播放顺序",

@@ -15881,6 +15881,12 @@ abstract class AppLocalizations {
   /// **'Play queue is empty'**
   String get musicQueueEmpty;
 
+  /// No description provided for @musicQueueSourceLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Local library'**
+  String get musicQueueSourceLibrary;
+
   /// No description provided for @musicQueueClear.
   ///
   /// In en, this message translates to:

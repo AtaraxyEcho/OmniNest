@@ -115,6 +115,8 @@ class _MusicQueuePersistenceCoordinator {
       currentIndex: currentIndex,
       repeatMode: current.repeatMode.name,
       shuffleEnabled: current.shuffleEnabled,
+      source: current.queueSource,
+      truncated: queue.length > _cacheLimit,
       updatedAt: DateTime.now().toUtc(),
     );
     _latestSnapshot = snapshot;

@@ -8408,6 +8408,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicQueueEmpty => '播放队列为空';
 
   @override
+  String get musicQueueSourceLibrary => '本地曲库';
+
+  @override
   String get musicQueueClear => '清空队列';
 
   @override

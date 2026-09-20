@@ -160,6 +160,22 @@ public class MusicController {
                 result.getTotalElements()));
     }
 
+    @Operation(summary = "查询专辑全部曲目", description = "按碟号与音轨号返回专辑内全部可见曲目，用于播放队列按来源重建")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/music/albums/{albumId}/tracks")
+    ApiResponse<List<MusicTrackDto>> albumTracks(@PathVariable UUID albumId) {
+        return ApiResponse.success(musicLibraryService.albumTracks(
+                currentUserContext.requireCurrentUserId(), albumId));
+    }
+
+    @Operation(summary = "查询艺术家全部曲目", description = "按专辑名与碟号、音轨号返回艺术家全部可见曲目，用于播放队列按来源重建")
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @GetMapping("/api/v1/music/artists/{artistId}/tracks")
+    ApiResponse<List<MusicTrackDto>> artistTracks(@PathVariable UUID artistId) {
+        return ApiResponse.success(musicLibraryService.artistTracks(
+                currentUserContext.requireCurrentUserId(), artistId));
+    }
+
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/favorites")
     ApiResponse<List<MusicTrackDto>> favorites() {

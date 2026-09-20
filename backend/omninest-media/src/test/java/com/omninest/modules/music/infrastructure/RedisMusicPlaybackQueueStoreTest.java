@@ -73,6 +73,8 @@ class RedisMusicPlaybackQueueStoreTest {
                 0,
                 "off",
                 false,
+                null,
+                false,
                 Instant.parse("2026-07-22T07:00:00Z")
         );
     }

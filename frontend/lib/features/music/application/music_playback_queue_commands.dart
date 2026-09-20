@@ -14,20 +14,44 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       return;
     }
     final item = _itemForTrack(current, track);
-    final queue = _queueFor(current, item);
+    // 目标已在当前队列内：按队列内跳播处理，不重绑上下文，
+    // 防止恢复队列后按播放键把"播放自"上下文覆盖成曲库。
+    final inQueueIndex = current.playbackItems.indexWhere(
+      (candidate) => candidate.playableKey == item.playableKey,
+    );
+    if (inQueueIndex >= 0) {
+      await _playItemInQueue(current, current.playbackItems, inQueueIndex);
+      return;
+    }
+    final (queue, source) = _resolveQueueContext(current, item);
     final index = queue.indexWhere(
       (candidate) => candidate.playableKey == item.playableKey,
     );
-    await _playItemInQueue(current, queue, index < 0 ? 0 : index);
+    await _playItemInQueue(
+      current,
+      queue,
+      index < 0 ? 0 : index,
+      source: source,
+    );
+  }
+
+  /// 播放当前队列中的指定位置：不改变队列与来源，仅切换当前曲并入历史。
+  Future<void> playQueueIndex(int index) async {
+    final current = _currentState;
+    if (current == null || index < 0 || index >= current.playbackItems.length) {
+      return;
+    }
+    await _playItemInQueue(current, current.playbackItems, index);
   }
 
   /// 使用统一可播放对象替换当前队列并播放指定位置。
   ///
   /// [startIndex] 以调用方传入的原始列表为准取目标曲目，再按 key 在去重后的
-  /// 队列中定位，避免重复曲目导致起始位偏移。
+  /// 队列中定位，避免重复曲目导致起始位偏移。[source] 显式声明队列来源。
   Future<void> playItems(
     List<MusicPlayableItem> items, {
     int startIndex = 0,
+    MusicQueueSource source = MusicQueueSource.transient,
   }) async {
     final current = _currentState;
     if (current == null || items.isEmpty) {
@@ -47,11 +71,17 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     );
     final resolvedTarget = targetIndex < 0 ? 0 : targetIndex;
     if (current.shuffleEnabled &&
-        !_samePlayableKeySet(current.playbackItems, uniqueItems)) {
-      // 整队替换且 key 集合变化：按新队列重开一轮洗牌序。
+        (!_samePlayableKeySet(current.playbackItems, uniqueItems) ||
+            current.queueSource.identityKey != source.identityKey)) {
+      // 整队替换且 key 集合或来源变化：按新队列重开一轮洗牌序。
       _startShuffleRound(uniqueItems, uniqueItems[resolvedTarget].playableKey);
     }
-    await _playItemInQueue(current, uniqueItems, resolvedTarget);
+    await _playItemInQueue(
+      current,
+      uniqueItems,
+      resolvedTarget,
+      source: source,
+    );
   }
 
   /// 将可播放对象插入当前曲目之后（下一首播放），已存在时不重复添加。
@@ -171,23 +201,13 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     await setPlaying(!current.isPlaying);
   }
 
-  /// 按循环和随机模式播放下一项。
+  /// 按循环和随机模式播放下一项；清空后的队列不会复活。
   Future<void> nextTrack() async {
     final current = _currentState;
-    if (current == null) {
+    if (current == null || current.playbackItems.isEmpty) {
       return;
     }
-    final activeItem = current.activeItem;
-    if (current.playbackItems.isEmpty && activeItem == null) {
-      return;
-    }
-    final queue =
-        current.playbackItems.isEmpty
-            ? _queueFor(current, activeItem!)
-            : current.playbackItems;
-    if (queue.isEmpty) {
-      return;
-    }
+    final queue = current.playbackItems;
     if (current.repeatMode == MusicRepeatMode.one &&
         current.playbackIndex >= 0) {
       await _playItemInQueue(current, queue, current.playbackIndex);
@@ -206,6 +226,22 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       await _playItemInQueue(current, queue, nextIndex);
       return;
     }
+    // 队列末端：纯本地曲库来源先续页（F4 优先级：有页续播，无页才回绕）。
+    final extendApplicable =
+        current.queueSource.isPureLocalLibrary &&
+        current.hasMoreTracks &&
+        !_libraryFetchingMore;
+    if (extendApplicable) {
+      final extended = await _extendLibraryQueueIfPossible(current);
+      if (extended) {
+        final latest = _currentState;
+        if (latest != null && nextIndex < latest.playbackItems.length) {
+          await _playItemInQueue(latest, latest.playbackItems, nextIndex);
+        }
+      }
+      // 续页失败时 _appendLibraryPage 已停播并报错，不能用旧状态覆盖。
+      return;
+    }
     if (current.repeatMode == MusicRepeatMode.all) {
       await _playItemInQueue(current, queue, 0);
       return;
@@ -213,19 +249,29 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     _replaceState(current.copyWith(isPlaying: false));
   }
 
-  /// 洗牌推进：消费未播洗牌序；repeat=all 时耗尽后重生成一轮再消费。
+  /// 洗牌推进：消费未播洗牌序；repeat=all 时先尝试续页再重生成一轮。
   Future<bool> _nextShuffledTrack(
     MusicCenterState current,
     List<MusicPlayableItem> queue,
   ) async {
     if (_shuffleUpcoming.isEmpty && !_shuffleRoundConsumed) {
-      // 尚未开轮（如空队列复活路径）：按需生成。
+      // 尚未开轮（如恢复场景）：按需生成。
       _startShuffleRound(queue, current.currentItem?.playableKey);
     }
     if (await _consumeShuffleUpcoming(current, queue)) {
       return true;
     }
     if (current.repeatMode == MusicRepeatMode.all) {
+      if (await _extendLibraryQueueIfPossible(current)) {
+        final latest = _currentState;
+        if (latest != null) {
+          _startShuffleRound(
+            latest.playbackItems,
+            latest.currentItem?.playableKey,
+          );
+          return _consumeShuffleUpcoming(latest, latest.playbackItems);
+        }
+      }
       _startShuffleRound(queue, current.currentItem?.playableKey);
       return _consumeShuffleUpcoming(current, queue);
     }

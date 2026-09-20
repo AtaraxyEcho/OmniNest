@@ -133,6 +133,34 @@ public class MusicLibraryService {
                 .map(this::toAlbumDto);
     }
 
+    /**
+     * 查询用户专辑内全部曲目，用于播放队列按来源全量重建。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param albumId 专辑 ID
+     * @return 专辑曲目，按碟号、音轨号排序
+     */
+    @Transactional(readOnly = true)
+    public List<MusicTrackDto> albumTracks(UUID ownerUserId, UUID albumId) {
+        MusicAlbum album = albumRepository.findByIdAndOwnerUserId(albumId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在"));
+        return toTrackDtos(ownerUserId, trackRepository.findAlbumTracks(ownerUserId, album.getId()));
+    }
+
+    /**
+     * 查询用户歌手内全部曲目，用于播放队列按来源全量重建。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param artistId 歌手 ID
+     * @return 歌手曲目，按专辑名、碟号、音轨号排序
+     */
+    @Transactional(readOnly = true)
+    public List<MusicTrackDto> artistTracks(UUID ownerUserId, UUID artistId) {
+        MusicArtist artist = artistRepository.findByIdAndOwnerUserId(artistId, ownerUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在"));
+        return toTrackDtos(ownerUserId, trackRepository.findArtistTracks(ownerUserId, artist.getId()));
+    }
+
     @Transactional(readOnly = true)
     public Page<MusicArtistDto> artists(UUID ownerUserId, int page, int size, String sort) {
         return artistRepository

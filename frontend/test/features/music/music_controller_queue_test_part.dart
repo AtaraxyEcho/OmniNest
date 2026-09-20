@@ -807,6 +807,371 @@ List<MusicPlayableItem> _fourTrackItems(_FakeMusicApi api) {
   ];
 }
 
+void registerMusicQueueSourceTests() {
+  test('playTrack binds the library source outside detail sections', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .playTrack(api.track);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.queueSource.kind, MusicQueueSourceKind.library);
+    expect(state.queueSource.platforms, ['local']);
+    expect(state.playbackItems.map((item) => item.playableKey).toList(), [
+      'local:track-1',
+      'local:track-2',
+    ]);
+  });
+
+  test('playTrack inside playlist detail binds the playlist source', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    await controller.openPlaylist(api.playlist);
+    await controller.playTrack(api.secondTrack);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.queueSource.kind, MusicQueueSourceKind.playlist);
+    expect(state.queueSource.id, 'playlist-1');
+    expect(state.playbackItems.map((item) => item.playableKey).toList(), [
+      'local:track-1',
+      'local:track-2',
+    ]);
+    expect(state.playbackIndex, 1);
+  });
+
+  test('playTrack on a queued item keeps the bound queue and source', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    // 以歌单来源绑定单曲队列后，对队列内曲目按播放键不应重绑为曲库。
+    await controller.playItems(<MusicPlayableItem>[
+      MusicPlayableItem.local(api.track),
+    ], startIndex: 0, source: const MusicQueueSource(
+      kind: MusicQueueSourceKind.playlist,
+      id: 'playlist-1',
+      title: 'Road Trip',
+    ));
+    await controller.playTrack(api.track);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.queueSource.kind, MusicQueueSourceKind.playlist);
+    expect(state.playbackItems, hasLength(1));
+    expect(state.isPlaying, isTrue);
+  });
+
+  test('nextTrack crosses the loaded page boundary via lazy pagination',
+      () async {
+    final api = _FakeMusicApi();
+    for (var index = 0; index < 148; index++) {
+      api.libraryTracks.add(
+        MusicTrack(
+          id: 'bulk-$index',
+          fileNodeId: 'file-bulk-$index',
+          title: 'Bulk $index',
+          artistName: 'Bulk Artist',
+          albumTitle: 'Bulk Album',
+          format: 'mp3',
+          favorite: false,
+        ),
+      );
+    }
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    final state = await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+    final loadedItems =
+        state.tracks.map(MusicPlayableItem.local).toList(growable: false);
+
+    await controller.playItems(
+      loadedItems,
+      startIndex: 99,
+      source: MusicQueueSource.localLibrary(),
+    );
+    await controller.nextTrack();
+
+    final next = container.read(musicCenterControllerProvider).asData!.value;
+    expect(next.currentItem?.playableKey, 'local:bulk-98');
+    expect(next.playbackItems, hasLength(150));
+    expect(next.tracks, hasLength(150));
+    expect(next.hasMoreTracks, isFalse);
+    expect(next.isPlaying, isTrue);
+    expect(api.tracksPageRequests, [0, 1]);
+  });
+
+  test('page fetch failure stops playback without purging the queue',
+      () async {
+    final api = _FakeMusicApi();
+    for (var index = 0; index < 148; index++) {
+      api.libraryTracks.add(
+        MusicTrack(
+          id: 'bulk-$index',
+          fileNodeId: 'file-bulk-$index',
+          title: 'Bulk $index',
+          artistName: 'Bulk Artist',
+          albumTitle: 'Bulk Album',
+          format: 'mp3',
+          favorite: false,
+        ),
+      );
+    }
+    api.tracksPageErrors[1] = const AppException(
+      code: 'REQUEST_TIMEOUT',
+      message: '请求超时，请稍后重试',
+    );
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    final state = await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+    final loadedItems =
+        state.tracks.map(MusicPlayableItem.local).toList(growable: false);
+
+    await controller.playItems(
+      loadedItems,
+      startIndex: 99,
+      source: MusicQueueSource.localLibrary(),
+    );
+    await controller.nextTrack();
+
+    final next = container.read(musicCenterControllerProvider).asData!.value;
+    expect(next.currentItem?.playableKey, 'local:bulk-97');
+    expect(next.playbackItems, hasLength(100));
+    expect(next.isPlaying, isFalse);
+    expect(next.errorMessage, contains('REQUEST_TIMEOUT'));
+  });
+
+  test('clearQueue then nextTrack is a no-op', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    await controller.playTrack(api.track);
+    controller.clearQueue();
+    await controller.nextTrack();
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.playbackItems, isEmpty);
+    expect(state.currentItem?.playableKey, 'local:track-1');
+    expect(api.playbackPlanTrackIds, ['track-1']);
+  });
+
+  test('playQueueIndex jumps within the queue without changing source',
+      () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    await controller.playItems(
+      _fourTrackItems(api),
+      startIndex: 0,
+      source: const MusicQueueSource(
+        kind: MusicQueueSourceKind.playlist,
+        id: 'playlist-1',
+        title: 'Road Trip',
+      ),
+    );
+    await controller.playQueueIndex(3);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.playableKey, 'local:track-4');
+    expect(state.playbackIndex, 3);
+    expect(state.queueSource.kind, MusicQueueSourceKind.playlist);
+    expect(state.playbackItems, hasLength(4));
+  });
+
+  test('openAlbum fetches full album tracks from the source endpoint',
+      () async {
+    final api = _FakeMusicApi();
+    final albumTrack = MusicTrack(
+      id: 'album-only',
+      fileNodeId: 'file-album-only',
+      title: 'Deep Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'Unknown Album',
+      format: 'flac',
+      favorite: false,
+    );
+    api.albumTracksById['album-1'] = [albumTrack, api.track, api.secondTrack];
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    await controller.openAlbum(
+      const MusicAlbum(
+        id: 'album-1',
+        title: 'Unknown Album',
+        artistName: 'Omni Band',
+        trackCount: 3,
+      ),
+    );
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(api.albumTracksRequests, ['album-1']);
+    expect(state.selectedAlbumTracks.map((track) => track.id).toList(), [
+      'album-only',
+      'track-1',
+      'track-2',
+    ]);
+  });
+
+  test('startup rebuilds the playlist queue from the snapshot source',
+      () async {
+    final api = _FakeMusicApi();
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[MusicPlayableItem.local(api.secondTrack)],
+      currentIndex: 0,
+      source: const MusicQueueSource(
+        kind: MusicQueueSourceKind.playlist,
+        id: 'playlist-1',
+        title: 'Road Trip',
+      ),
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    expect(state.playbackItems.map((item) => item.playableKey).toList(), [
+      'local:track-1',
+      'local:track-2',
+    ]);
+    expect(state.playbackIndex, 1);
+    expect(state.queueSource.kind, MusicQueueSourceKind.playlist);
+    expect(state.currentItem?.playableKey, 'local:track-2');
+  });
+
+  test('startup falls back to the window snapshot when rebuild fails',
+      () async {
+    final api =
+        _FakeMusicApi()..playlistTracksError = const AppException(
+          code: '5001',
+          message: '歌单不存在',
+        );
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[MusicPlayableItem.local(api.secondTrack)],
+      currentIndex: 0,
+      source: const MusicQueueSource(
+        kind: MusicQueueSourceKind.playlist,
+        id: 'playlist-1',
+        title: 'Road Trip',
+      ),
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    expect(state.playbackItems.map((item) => item.playableKey), [
+      'local:track-2',
+    ]);
+    expect(state.queueSource.kind, MusicQueueSourceKind.transient);
+    expect(state.playbackIndex, 0);
+  });
+
+  test('startup locates the current key across sequential library pages',
+      () async {
+    final api = _FakeMusicApi();
+    for (var index = 0; index < 150; index++) {
+      api.libraryTracks.add(
+        MusicTrack(
+          id: 'bulk-$index',
+          fileNodeId: 'file-bulk-$index',
+          title: 'Bulk $index',
+          artistName: 'Bulk Artist',
+          albumTitle: 'Bulk Album',
+          format: 'mp3',
+          favorite: false,
+        ),
+      );
+    }
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[
+        MusicPlayableItem.local(api.libraryTracks[120]),
+      ],
+      currentIndex: 0,
+      source: MusicQueueSource.localLibrary(),
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    // fake 构造器自带 track-1/track-2，曲库共 152 首：页 0 = track-1、track-2、bulk-0..97。
+    expect(state.playbackItems, hasLength(152));
+    expect(state.playbackIndex, 120);
+    expect(state.currentItem?.playableKey, 'local:bulk-118');
+    expect(state.queueSource.isPureLocalLibrary, isTrue);
+    expect(state.tracks, hasLength(152));
+    expect(state.hasMoreTracks, isFalse);
+  });
+
+  test('snapshot without source stays transient', () async {
+    final api = _FakeMusicApi();
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[MusicPlayableItem.local(api.track)],
+      currentIndex: 0,
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    expect(state.queueSource.kind, MusicQueueSourceKind.transient);
+    expect(state.playbackItems, hasLength(1));
+  });
+}
+
 List<String> _shuffledKeys(List<String> keys, Random random) {
   final copy = List<String>.of(keys);
   for (var i = copy.length - 1; i > 0; i--) {

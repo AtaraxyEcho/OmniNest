@@ -22,10 +22,26 @@ Future<void> showMusicDeckQueue(BuildContext context) {
 class MusicDeckQueueSheet extends ConsumerWidget {
   const MusicDeckQueueSheet({super.key});
 
+  /// 来源副标题：命名来源显示名称，library 显示固定文案，transient 不显示。
+  String _queueSourceLabel(BuildContext context, MusicCenterState? music) {
+    final source = music?.queueSource;
+    if (source == null || source.kind == MusicQueueSourceKind.transient) {
+      return '';
+    }
+    if (source.kind == MusicQueueSourceKind.library) {
+      return AppLocalizations.of(context).musicQueueSourceLibrary;
+    }
+    return source.title ?? '';
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final music = ref.watch(musicCenterControllerProvider).asData?.value;
     final items = music?.playbackItems ?? const [];
+    final sourceLabel = _queueSourceLabel(context, music);
+    final countLabel = AppLocalizations.of(
+      context,
+    ).musicDeckTrackCount(items.length);
     return FractionallySizedBox(
       heightFactor: 0.72,
       child: Center(
@@ -69,9 +85,9 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            AppLocalizations.of(
-                              context,
-                            ).musicDeckTrackCount(items.length),
+                            sourceLabel.isEmpty
+                                ? countLabel
+                                : '$sourceLabel · $countLabel',
                             style: TextStyle(
                               color: context.musicColors.onSurfaceVariant,
                               fontSize: AppTypography.labelSmall,
@@ -174,13 +190,14 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                                 item: item,
                                 index: index,
                                 selected: selected,
-                                onTap: () {
-                                  ref
-                                      .read(
-                                        musicCenterControllerProvider.notifier,
-                                      )
-                                      .playItems(items, startIndex: index);
-                                },
+                                // 行点击按队列内跳播处理，不重置队列与来源。
+                                onTap:
+                                    () => ref
+                                        .read(
+                                          musicCenterControllerProvider
+                                              .notifier,
+                                        )
+                                        .playQueueIndex(index),
                                 onDismissed:
                                     () => ref
                                         .read(

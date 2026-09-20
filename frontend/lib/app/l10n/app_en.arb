@@ -3772,6 +3772,7 @@
   "filesOpDeleteFile": "Delete file",
   "musicQueueTitle": "Play Queue",
   "musicQueueEmpty": "Play queue is empty",
+  "musicQueueSourceLibrary": "Local library",
   "musicQueueClear": "Clear Queue",
   "musicPlayNext": "Play Next",
   "musicQueueReorderHint": "Drag to reorder the queue",

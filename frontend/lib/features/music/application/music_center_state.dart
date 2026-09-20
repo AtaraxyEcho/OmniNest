@@ -12,6 +12,29 @@ enum MusicSection {
 
 enum MusicRepeatMode { off, all, one }
 
+/// 播放域视图：刷新链路整体携带播放状态，避免逐字段穿参遗漏导致队列被静默重置。
+class MusicPlaybackView {
+  const MusicPlaybackView({
+    this.currentItem,
+    this.playbackPlan,
+    this.isPlaying = false,
+    this.playbackItems = const [],
+    this.playbackIndex = -1,
+    this.repeatMode = MusicRepeatMode.off,
+    this.shuffleEnabled = false,
+    this.queueSource = MusicQueueSource.transient,
+  });
+
+  final MusicPlayableItem? currentItem;
+  final MusicPlaybackPlan? playbackPlan;
+  final bool isPlaying;
+  final List<MusicPlayableItem> playbackItems;
+  final int playbackIndex;
+  final MusicRepeatMode repeatMode;
+  final bool shuffleEnabled;
+  final MusicQueueSource queueSource;
+}
+
 /// 汇总音乐曲库、播放队列和外部平台账号状态。
 class MusicCenterState {
   const MusicCenterState({
@@ -29,6 +52,7 @@ class MusicCenterState {
     this.playbackIndex = -1,
     this.repeatMode = MusicRepeatMode.off,
     this.shuffleEnabled = false,
+    this.queueSource = MusicQueueSource.transient,
     this.selectedPlaylist,
     this.selectedPlaylistTracks = const [],
     this.selectedAlbum,
@@ -57,6 +81,7 @@ class MusicCenterState {
   final int playbackIndex;
   final MusicRepeatMode repeatMode;
   final bool shuffleEnabled;
+  final MusicQueueSource queueSource;
   final MusicPlaylist? selectedPlaylist;
   final List<MusicTrack> selectedPlaylistTracks;
   final MusicAlbum? selectedAlbum;
@@ -71,6 +96,18 @@ class MusicCenterState {
   final PlatformUserInfo? qqUserInfo;
 
   bool get hasPlatformLoggedIn => neteaseUserInfo != null || qqUserInfo != null;
+
+  /// 播放域视图，供刷新链路整体携带播放状态。
+  MusicPlaybackView get playbackView => MusicPlaybackView(
+    currentItem: currentItem,
+    playbackPlan: playbackPlan,
+    isPlaying: isPlaying,
+    playbackItems: playbackItems,
+    playbackIndex: playbackIndex,
+    repeatMode: repeatMode,
+    shuffleEnabled: shuffleEnabled,
+    queueSource: queueSource,
+  );
 
   MusicTrack? get currentTrack => currentItem?.track;
 
@@ -96,6 +133,7 @@ class MusicCenterState {
     int? playbackIndex,
     MusicRepeatMode? repeatMode,
     bool? shuffleEnabled,
+    MusicQueueSource? queueSource,
     MusicPlaylist? selectedPlaylist,
     List<MusicTrack>? selectedPlaylistTracks,
     MusicAlbum? selectedAlbum,
@@ -135,6 +173,7 @@ class MusicCenterState {
       playbackIndex: playbackIndex ?? this.playbackIndex,
       repeatMode: repeatMode ?? this.repeatMode,
       shuffleEnabled: shuffleEnabled ?? this.shuffleEnabled,
+      queueSource: queueSource ?? this.queueSource,
       selectedPlaylist:
           clearSelectedPlaylist
               ? null

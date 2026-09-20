@@ -320,16 +320,24 @@ extension MusicLibraryContentCommands on MusicCenterController {
     );
   }
 
-  /// 打开专辑详情。
-  void openAlbum(MusicAlbum album) {
+  /// 打开专辑详情并全量加载专辑曲目（失败回退已加载页过滤子集）。
+  Future<void> openAlbum(MusicAlbum album) async {
     final current = _currentState;
     if (current == null) {
       return;
     }
-    final albumTracks =
+    var albumTracks =
         current.tracks
             .where((track) => track.albumTitle == album.title)
             .toList();
+    try {
+      final fetched = await _api.albumTracks(album.id);
+      if (fetched.isNotEmpty) {
+        albumTracks = fetched;
+      }
+    } on Exception {
+      // 全量拉取失败时回退客户端过滤子集。
+    }
     _replaceState(
       current.copyWith(
         section: MusicSection.albumDetail,
@@ -350,16 +358,24 @@ extension MusicLibraryContentCommands on MusicCenterController {
     );
   }
 
-  /// 打开歌手详情。
-  void openArtist(MusicArtist artist) {
+  /// 打开歌手详情并全量加载歌手曲目（失败回退已加载页过滤子集）。
+  Future<void> openArtist(MusicArtist artist) async {
     final current = _currentState;
     if (current == null) {
       return;
     }
-    final artistTracks =
+    var artistTracks =
         current.tracks
             .where((track) => track.artistName == artist.name)
             .toList();
+    try {
+      final fetched = await _api.artistTracks(artist.id);
+      if (fetched.isNotEmpty) {
+        artistTracks = fetched;
+      }
+    } on Exception {
+      // 全量拉取失败时回退客户端过滤子集。
+    }
     _replaceState(
       current.copyWith(
         section: MusicSection.artistDetail,

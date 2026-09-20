@@ -116,6 +116,7 @@ void main() {
   });
 
   registerMusicQueueTests();
+  registerMusicQueueSourceTests();
 
   test('scrape library passes force flag and records the job', () async {
     final api = _FakeMusicApi();
@@ -798,6 +799,8 @@ class _FakeMusicApi implements MusicApi {
   Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
 
   final tracksPageRequests = <int>[];
+  final tracksPageErrors = <int, Object>{};
+  Object? playlistTracksError;
 
   @override
   Future<MusicPagedResult<MusicTrack>> tracks({
@@ -806,6 +809,10 @@ class _FakeMusicApi implements MusicApi {
     String sort = 'title,asc',
   }) async {
     tracksPageRequests.add(page);
+    final error = tracksPageErrors[page];
+    if (error != null) {
+      throw error;
+    }
     final all = libraryTracks;
     final start = page * size;
     final items =
@@ -1069,11 +1076,31 @@ class _FakeMusicApi implements MusicApi {
   );
 
   @override
-  Future<List<MusicTrack>> playlistTracks(String playlistId) =>
-      Future.value([track, secondTrack]).then((tracks) {
-        loadedPlaylistIds.add(playlistId);
-        return tracks;
-      });
+  Future<List<MusicTrack>> playlistTracks(String playlistId) async {
+    loadedPlaylistIds.add(playlistId);
+    final error = playlistTracksError;
+    if (error != null) {
+      throw error;
+    }
+    return [track, secondTrack];
+  }
+
+  final albumTracksById = <String, List<MusicTrack>>{};
+  final artistTracksById = <String, List<MusicTrack>>{};
+  final albumTracksRequests = <String>[];
+  final artistTracksRequests = <String>[];
+
+  @override
+  Future<List<MusicTrack>> albumTracks(String albumId) async {
+    albumTracksRequests.add(albumId);
+    return albumTracksById[albumId] ?? const <MusicTrack>[];
+  }
+
+  @override
+  Future<List<MusicTrack>> artistTracks(String artistId) async {
+    artistTracksRequests.add(artistId);
+    return artistTracksById[artistId] ?? const <MusicTrack>[];
+  }
 
   @override
   Future<MusicPlaylist> removePlaylistItems(

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackQueueDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackQueueItemDto;
+import com.omninest.modules.music.dto.MusicDtos.MusicQueueSourceDto;
 import com.omninest.modules.music.dto.MusicDtos.SaveMusicPlaybackQueueRequest;
 import java.time.Instant;
 import java.util.List;
@@ -35,7 +36,7 @@ class MusicPlaybackQueueServiceTest {
 
         MusicPlaybackQueueDto saved = service.save(
                 OWNER_ID,
-                new SaveMusicPlaybackQueueRequest(List.of(item), 0, "all", true)
+                new SaveMusicPlaybackQueueRequest(List.of(item), 0, "all", true, null, null)
         );
 
         assertThat(saved.items()).containsExactly(item);
@@ -60,7 +61,7 @@ class MusicPlaybackQueueServiceTest {
 
         assertThatThrownBy(() -> service.save(
                 OWNER_ID,
-                new SaveMusicPlaybackQueueRequest(List.of(item), 0, "off", false)
+                new SaveMusicPlaybackQueueRequest(List.of(item), 0, "off", false, null, null)
         )).isInstanceOf(BusinessException.class);
     }
 
@@ -83,6 +84,8 @@ class MusicPlaybackQueueServiceTest {
                 119,
                 "all",
                 false,
+                null,
+                false,
                 Instant.now()
         );
         when(queueStore.find(OWNER_ID)).thenReturn(Optional.of(stored));
@@ -101,6 +104,63 @@ class MusicPlaybackQueueServiceTest {
 
         assertThat(loaded.items()).isEmpty();
         assertThat(loaded.currentIndex()).isEqualTo(-1);
+    }
+
+    @Test
+    void saveNormalizesQueueSourceAndTruncation() {
+        MusicPlaybackQueueItemDto item = onlineItem();
+
+        MusicPlaybackQueueDto saved = service.save(
+                OWNER_ID,
+                new SaveMusicPlaybackQueueRequest(
+                        List.of(item),
+                        0,
+                        "off",
+                        false,
+                        new MusicQueueSourceDto("playlist", "playlist-1", "Road Trip", List.of("local")),
+                        true
+                )
+        );
+
+        assertThat(saved.source()).isNotNull();
+        assertThat(saved.source().kind()).isEqualTo("playlist");
+        assertThat(saved.source().platforms()).isNull();
+        assertThat(saved.truncated()).isTrue();
+
+        MusicPlaybackQueueDto invalidKind = service.save(
+                OWNER_ID,
+                new SaveMusicPlaybackQueueRequest(
+                        List.of(item),
+                        0,
+                        "off",
+                        false,
+                        new MusicQueueSourceDto("bogus", null, null, null),
+                        null
+                )
+        );
+        assertThat(invalidKind.source()).isNull();
+        assertThat(invalidKind.truncated()).isFalse();
+    }
+
+    @Test
+    void loadNormalizesLibrarySourcePlatforms() {
+        MusicPlaybackQueueItemDto item = onlineItem();
+        MusicPlaybackQueueDto stored = new MusicPlaybackQueueDto(
+                List.of(item),
+                0,
+                "off",
+                false,
+                new MusicQueueSourceDto("library", null, null, List.of("local")),
+                true,
+                Instant.now()
+        );
+        when(queueStore.find(OWNER_ID)).thenReturn(Optional.of(stored));
+
+        MusicPlaybackQueueDto loaded = service.load(OWNER_ID);
+
+        assertThat(loaded.source()).isNotNull();
+        assertThat(loaded.source().platforms()).containsExactly("local");
+        assertThat(loaded.truncated()).isTrue();
     }
 
     private MusicPlaybackQueueItemDto onlineItem() {

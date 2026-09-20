@@ -1,6 +1,7 @@
 package com.omninest.modules.music.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,6 +16,10 @@ import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.music.config.MusicLibraryProperties;
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
+import com.omninest.modules.music.domain.MusicAlbum;
+import com.omninest.modules.music.domain.MusicArtist;
 import com.omninest.modules.music.domain.MusicPlayHistory;
 import com.omninest.modules.music.domain.MusicTrack;
 import com.omninest.modules.music.dto.MusicDtos.RecordMusicPlayHistoryRequest;
@@ -68,6 +73,57 @@ class MusicLibraryServiceTest {
             syncEventService,
             musicLibraryProperties
     );
+
+    @Test
+    void albumTracksReturnsOwnerScopedTracks() {
+        UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        MusicAlbum album = new MusicAlbum();
+        album.setId(albumId);
+        album.setOwnerUserId(OWNER_ID);
+        when(albumRepository.findByIdAndOwnerUserId(albumId, OWNER_ID)).thenReturn(Optional.of(album));
+        when(trackRepository.findAlbumTracks(OWNER_ID, albumId)).thenReturn(List.of(track()));
+
+        var tracks = libraryService.albumTracks(OWNER_ID, albumId);
+
+        assertThat(tracks).hasSize(1);
+        assertThat(tracks.get(0).id()).isEqualTo(TRACK_ID);
+    }
+
+    @Test
+    void albumTracksRejectsAlbumOfOtherOwner() {
+        UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
+        when(albumRepository.findByIdAndOwnerUserId(albumId, OWNER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> libraryService.albumTracks(OWNER_ID, albumId))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MEDIA_NOT_FOUND);
+    }
+
+    @Test
+    void artistTracksReturnsOwnerScopedTracks() {
+        UUID artistId = UUID.fromString("60000000-0000-0000-0000-000000000001");
+        MusicArtist artist = new MusicArtist();
+        artist.setId(artistId);
+        artist.setOwnerUserId(OWNER_ID);
+        when(artistRepository.findByIdAndOwnerUserId(artistId, OWNER_ID)).thenReturn(Optional.of(artist));
+        when(trackRepository.findArtistTracks(OWNER_ID, artistId)).thenReturn(List.of(track()));
+
+        var tracks = libraryService.artistTracks(OWNER_ID, artistId);
+
+        assertThat(tracks).hasSize(1);
+        assertThat(tracks.get(0).id()).isEqualTo(TRACK_ID);
+    }
+
+    private MusicTrack track() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setTitle("Night Drive");
+        track.setProviderMetadata(new LinkedHashMap<>());
+        return track;
+    }
 
     @Test
     void deleteTrackPermanentlyDeletesLinkedFile() {

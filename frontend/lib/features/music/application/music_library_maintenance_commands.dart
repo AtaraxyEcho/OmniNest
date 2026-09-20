@@ -13,13 +13,7 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
       final latest = await _api.scanJobStatus(job.id);
       final refreshed = await _loadState(
         section: current.section,
-        currentItem: current.currentItem,
-        playbackPlan: current.playbackPlan,
-        isPlaying: current.isPlaying,
-        playbackItems: current.playbackItems,
-        playbackIndex: current.playbackIndex,
-        repeatMode: current.repeatMode,
-        shuffleEnabled: current.shuffleEnabled,
+        playback: current.playbackView,
         lastScanJob: latest,
       );
       _replaceState(refreshed);
@@ -106,13 +100,7 @@ extension MusicLibraryMaintenanceCommands on MusicCenterController {
       final job = await _api.scrapeLibrary(force: force);
       final refreshed = await _loadState(
         section: current.section,
-        currentItem: current.currentItem,
-        playbackPlan: current.playbackPlan,
-        isPlaying: current.isPlaying,
-        playbackItems: current.playbackItems,
-        playbackIndex: current.playbackIndex,
-        repeatMode: current.repeatMode,
-        shuffleEnabled: current.shuffleEnabled,
+        playback: current.playbackView,
         lastScanJob: job,
       );
       _replaceState(refreshed);

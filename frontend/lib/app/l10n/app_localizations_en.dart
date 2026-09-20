@@ -8664,6 +8664,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicQueueEmpty => 'Play queue is empty';
 
   @override
+  String get musicQueueSourceLibrary => 'Local library';
+
+  @override
   String get musicQueueClear => 'Clear Queue';
 
   @override
