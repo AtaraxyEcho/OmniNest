@@ -84,37 +84,7 @@ class MusicDeckArtwork extends StatelessWidget {
           borderRadius: BorderRadius.circular(borderRadius),
           child: ColoredBox(
             color: colors.surfaceContainer,
-            child:
-                image ??
-                Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: <Color>[
-                            colors.surfaceContainer,
-                            colors.surfaceContainerHigh,
-                            Color.lerp(
-                              colors.surfaceContainerHigh,
-                              colors.primary,
-                              0.18,
-                            )!,
-                          ],
-                        ),
-                      ),
-                    ),
-                    Center(
-                      child: Icon(
-                        icon,
-                        color: colors.onSurface.withValues(alpha: 0.78),
-                        size: 36,
-                      ),
-                    ),
-                  ],
-                ),
+            child: image ?? _ArtworkFallback(icon: icon, size: 36),
           ),
         );
       },
@@ -158,26 +128,48 @@ class MusicDeckArtwork extends StatelessWidget {
       fadeInDuration: const Duration(milliseconds: 160),
       fadeOutDuration: const Duration(milliseconds: 80),
       filterQuality: FilterQuality.medium,
-      placeholder:
-          (context, url) => ColoredBox(
-            color: context.musicColors.surfaceContainer,
-            child: Center(
-              child: Icon(
-                icon,
-                color: context.musicColors.onSurfaceVariant,
-                size: 34,
-              ),
+      placeholder: (context, url) => _ArtworkFallback(icon: icon, size: 34),
+      errorWidget:
+          (context, url, error) => _ArtworkFallback(icon: icon, size: 34),
+    );
+  }
+}
+
+/// 封面占位/加载失败的艺术兜底：对角渐变提亮深色场景，
+/// 避免无封面歌单在玻璃叠层下呈现纯黑观感。
+class _ArtworkFallback extends StatelessWidget {
+  const _ArtworkFallback({required this.icon, required this.size});
+
+  final IconData icon;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.musicColors;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[
+                colors.surfaceContainer,
+                colors.surfaceContainerHigh,
+                Color.lerp(colors.surfaceContainerHigh, colors.primary, 0.18)!,
+              ],
             ),
           ),
-      errorWidget: (context, url, error) {
-        return Center(
+        ),
+        Center(
           child: Icon(
             icon,
-            color: context.musicColors.onSurfaceVariant,
-            size: 34,
+            color: colors.onSurface.withValues(alpha: 0.78),
+            size: size,
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 }
@@ -193,26 +185,31 @@ class MusicDeckSourceBadge extends StatelessWidget {
   final MusicPlatform platform;
   final bool overlay;
 
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final light = Theme.of(context).brightness == Brightness.light;
-    final label = musicDeckSourceLabel(l10n, platform);
-    final color = switch (platform) {
+  /// 常规徽章平台色：中性微底 + 平台色描边与文字的胶囊形态，
+  /// 识别由平台色承担，文字不再铺实底色块。
+  static Color badgeColor(MusicPlatform platform, bool light) {
+    return switch (platform) {
       MusicPlatform.local =>
-        light ? const Color(0xFF356F8A) : const Color(0xFF85D7DE),
+        light ? const Color(0xFF58605B) : const Color(0xFFC4CCC8),
       MusicPlatform.netease =>
         light ? const Color(0xFF9A3037) : const Color(0xFFF28C8C),
       MusicPlatform.qq =>
         light ? const Color(0xFF735A08) : const Color(0xFFF0CD76),
     };
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final light = Theme.of(context).brightness == Brightness.light;
+    final colors = context.musicColors;
+    final label = musicDeckSourceLabel(l10n, platform);
+    final color = badgeColor(platform, light);
     // 覆盖在封面等影像上时沿用近实底表面 + 平台色文字描边。
     if (overlay) {
       return DecoratedBox(
         decoration: BoxDecoration(
-          color: context.musicColors.surfaceContainerHigh.withValues(
-            alpha: 0.94,
-          ),
+          color: colors.surfaceContainerHigh.withValues(alpha: 0.94),
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: color.withValues(alpha: 0.46)),
         ),
@@ -229,23 +226,20 @@ class MusicDeckSourceBadge extends StatelessWidget {
         ),
       );
     }
-    // 常规徽章改为平台色实底 + 按亮度反差的前景文字：承载卡是低 alpha
-    // 玻璃且壁纸直透（浅色纱仅 4%-12%），此前的 0.14 alpha 底色与
-    // 0.32 描边在浅色壁纸上完全融入背景，是浅色模式不可读的根因。
-    final foreground = light ? Colors.white : const Color(0xFF12211E);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(4),
+        color: colors.onSurface.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.55)),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         child: Text(
           label,
           style: TextStyle(
-            color: foreground,
+            color: color,
             fontSize: AppTypography.labelSmall,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ),

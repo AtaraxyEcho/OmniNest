@@ -44,6 +44,9 @@ class MusicColors extends ThemeExtension<MusicColors> {
     required this.selectedBg,
     required this.selectedBorder,
     required this.selectedShadowColor,
+    // 曲目行状态：播放（持久激活）与悬停（瞬态浏览）必须满足权重阶梯
+    required this.playingRowBg,
+    required this.hoverBg,
     // 语义化覆盖层
     required this.overlay,
     required this.overlayLight,
@@ -95,6 +98,9 @@ class MusicColors extends ThemeExtension<MusicColors> {
   final Color selectedBg;
   final Color selectedBorder;
   final Color selectedShadowColor;
+  // 曲目行状态：播放行为持久激活态、悬停为瞬态反馈，强度阶梯 hoverBg < playingRowBg
+  final Color playingRowBg;
+  final Color hoverBg;
   // 语义化覆盖层
   final Color overlay;
   final Color overlayLight;
@@ -176,6 +182,10 @@ class MusicColors extends ThemeExtension<MusicColors> {
       selectedBg: base.selectedOverlay,
       selectedBorder: Color.lerp(Colors.transparent, base.primary, 0.3)!,
       selectedShadowColor: Color.lerp(Colors.transparent, base.primary, 0.2)!,
+      // 曲目行状态：播放行随明暗缩放主色强度（深色 24% / 浅色 14%），
+      // 悬停直接沿用全局悬停 tint，与专辑卡悬停语言保持一致。
+      playingRowBg: base.primary.withValues(alpha: light ? 0.14 : 0.24),
+      hoverBg: base.hoverOverlay,
       // 语义化覆盖层
       overlay: base.overlay,
       overlayLight: base.overlayLight,
@@ -227,6 +237,8 @@ class MusicColors extends ThemeExtension<MusicColors> {
     Color? selectedBg,
     Color? selectedBorder,
     Color? selectedShadowColor,
+    Color? playingRowBg,
+    Color? hoverBg,
     Color? overlay,
     Color? overlayLight,
     Color? shadow,
@@ -272,6 +284,8 @@ class MusicColors extends ThemeExtension<MusicColors> {
       selectedBg: selectedBg ?? this.selectedBg,
       selectedBorder: selectedBorder ?? this.selectedBorder,
       selectedShadowColor: selectedShadowColor ?? this.selectedShadowColor,
+      playingRowBg: playingRowBg ?? this.playingRowBg,
+      hoverBg: hoverBg ?? this.hoverBg,
       overlay: overlay ?? this.overlay,
       overlayLight: overlayLight ?? this.overlayLight,
       shadow: shadow ?? this.shadow,
@@ -335,6 +349,8 @@ class MusicColors extends ThemeExtension<MusicColors> {
       selectedBorder: Color.lerp(selectedBorder, other.selectedBorder, t)!,
       selectedShadowColor:
           Color.lerp(selectedShadowColor, other.selectedShadowColor, t)!,
+      playingRowBg: Color.lerp(playingRowBg, other.playingRowBg, t)!,
+      hoverBg: Color.lerp(hoverBg, other.hoverBg, t)!,
       overlay: Color.lerp(overlay, other.overlay, t)!,
       overlayLight: Color.lerp(overlayLight, other.overlayLight, t)!,
       shadow: Color.lerp(shadow, other.shadow, t)!,

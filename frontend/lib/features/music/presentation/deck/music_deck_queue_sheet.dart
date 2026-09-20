@@ -248,7 +248,8 @@ class _MusicQueueRow extends StatelessWidget {
       onDismissed: (_) => onDismissed(),
       child: ListTile(
         selected: selected,
-        selectedTileColor: colors.selectedBg,
+        // 与曲目行同一语义：正在播放行使用播放行背景，权重高于悬停反馈。
+        selectedTileColor: colors.playingRowBg,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         onTap: onTap,

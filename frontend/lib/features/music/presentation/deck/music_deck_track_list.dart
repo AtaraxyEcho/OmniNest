@@ -197,11 +197,13 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
         selected: widget.selected,
         label: '${track.title}, ${track.artistName}',
         child: Material(
+          // 播放行为持久激活态、悬停为瞬态反馈：hoverBg 弱于 playingRowBg，
+          // selected 分支优先于悬停，播放行不再被悬停实底冲淡。
           color:
               widget.selected
-                  ? colors.selectedBg
+                  ? colors.playingRowBg
                   : _hovered
-                  ? colors.surfaceContainerHigh
+                  ? colors.hoverBg
                   : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           child: InkWell(
