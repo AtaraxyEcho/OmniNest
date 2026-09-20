@@ -369,7 +369,10 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
 
   Future<void> _handleCompleted() async {
     await _persistCurrent(completed: true);
-    await ref.read(musicCenterControllerProvider.notifier).nextTrack();
+    // 自动推进：队尾遵循 repeat 语义；手动下一首才总是回绕。
+    await ref
+        .read(musicCenterControllerProvider.notifier)
+        .nextTrack(autoAdvance: true);
   }
 
   Future<void> _persistCurrent({bool completed = false}) {

@@ -202,7 +202,10 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
   }
 
   /// 按循环和随机模式播放下一项；清空后的队列不会复活。
-  Future<void> nextTrack() async {
+  ///
+  /// [autoAdvance] 表示曲目自然播完的自动推进：队尾遵循 repeat 语义（off 停播）。
+  /// 手动下一首（按钮/媒体键）总是回绕队首。
+  Future<void> nextTrack({bool autoAdvance = false}) async {
     final current = _currentState;
     if (current == null || current.playbackItems.isEmpty) {
       return;
@@ -214,10 +217,14 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       return;
     }
     if (current.shuffleEnabled && queue.length > 1) {
-      if (await _nextShuffledTrack(current, queue)) {
+      if (await _nextShuffledTrack(
+        current,
+        queue,
+        manualAdvance: !autoAdvance,
+      )) {
         return;
       }
-      // 洗牌序耗尽且无法重生成（repeat=off）：按停播收尾。
+      // 洗牌序耗尽且无法重生成（自动推进且 repeat=off）：按停播收尾。
       _replaceState(current.copyWith(isPlaying: false));
       return;
     }
@@ -233,27 +240,30 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
         !_libraryFetchingMore;
     if (extendApplicable) {
       final extended = await _extendLibraryQueueIfPossible(current);
-      if (extended) {
-        final latest = _currentState;
-        if (latest != null && nextIndex < latest.playbackItems.length) {
-          await _playItemInQueue(latest, latest.playbackItems, nextIndex);
-        }
+      if (!extended) {
+        // 续页失败时 _appendLibraryPage 已停播并报错，不能用旧状态覆盖。
+        return;
       }
-      // 续页失败时 _appendLibraryPage 已停播并报错，不能用旧状态覆盖。
-      return;
+      final latest = _currentState;
+      if (latest != null && nextIndex < latest.playbackItems.length) {
+        await _playItemInQueue(latest, latest.playbackItems, nextIndex);
+        return;
+      }
+      // 空页（hasMore 陈旧）：落入回绕判定。
     }
-    if (current.repeatMode == MusicRepeatMode.all) {
+    if (!autoAdvance || current.repeatMode == MusicRepeatMode.all) {
       await _playItemInQueue(current, queue, 0);
       return;
     }
     _replaceState(current.copyWith(isPlaying: false));
   }
 
-  /// 洗牌推进：消费未播洗牌序；repeat=all 时先尝试续页再重生成一轮。
+  /// 洗牌推进：消费未播洗牌序；repeat=all 或手动推进时先尝试续页再重生成一轮。
   Future<bool> _nextShuffledTrack(
     MusicCenterState current,
-    List<MusicPlayableItem> queue,
-  ) async {
+    List<MusicPlayableItem> queue, {
+    bool manualAdvance = false,
+  }) async {
     if (_shuffleUpcoming.isEmpty && !_shuffleRoundConsumed) {
       // 尚未开轮（如恢复场景）：按需生成。
       _startShuffleRound(queue, current.currentItem?.playableKey);
@@ -261,7 +271,7 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     if (await _consumeShuffleUpcoming(current, queue)) {
       return true;
     }
-    if (current.repeatMode == MusicRepeatMode.all) {
+    if (current.repeatMode == MusicRepeatMode.all || manualAdvance) {
       if (await _extendLibraryQueueIfPossible(current)) {
         final latest = _currentState;
         if (latest != null) {
@@ -380,21 +390,15 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       }
     }
     final previousIndex = current.playbackIndex - 1;
-    if (previousIndex >= 0) {
-      await _playItemInQueue(
-        current,
-        current.playbackItems,
-        previousIndex,
-        pushHistory: false,
-      );
-    } else if (current.repeatMode == MusicRepeatMode.all) {
-      await _playItemInQueue(
-        current,
-        current.playbackItems,
-        current.playbackItems.length - 1,
-        pushHistory: false,
-      );
-    }
+    // 手动上一首总是回绕：队首回退到队尾。
+    final wrappedIndex =
+        previousIndex >= 0 ? previousIndex : current.playbackItems.length - 1;
+    await _playItemInQueue(
+      current,
+      current.playbackItems,
+      wrappedIndex,
+      pushHistory: false,
+    );
   }
 
   /// 轮换播放循环模式。

@@ -28,6 +28,17 @@ void main() {
     expect(portalSource, isNot(contains('_PortalImmersiveButton')));
   });
 
+  test('沉浸封面卡片滑动循环导航不截断', () {
+    final source =
+        File(
+          'lib/features/music/presentation/player/music_immersive_player_stage.dart',
+        ).readAsStringSync();
+
+    // 末端/队首回绕用取模实现，禁止 clamp 截断。
+    expect(source, isNot(contains('clamp(0, tracks.length - 1)')));
+    expect(source, contains('(_deckIndex + delta) % tracks.length'));
+  });
+
   test('沉浸顶部只显示放大的歌曲信息', () {
     final source =
         File(

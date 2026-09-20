@@ -444,10 +444,12 @@ class _MusicImmersivePlayerStageState
   }
 
   void _stepDeck(List<MusicTrack> tracks, int delta) {
-    if (tracks.isEmpty) {
+    if (tracks.isEmpty || tracks.length == 1) {
       return;
     }
-    final nextIndex = (_deckIndex + delta).clamp(0, tracks.length - 1);
+    // 手动滑动循环导航：末端回绕队首，队首回绕队尾。
+    final nextIndex =
+        ((_deckIndex + delta) % tracks.length + tracks.length) % tracks.length;
     if (nextIndex == _deckIndex) {
       return;
     }

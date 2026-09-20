@@ -526,7 +526,7 @@ void registerMusicQueueTests() {
     );
   });
 
-  test('previous with empty history falls back to linear navigation', () async {
+  test('previous with empty history wraps at the queue head', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
       overrides: [musicApiProvider.overrideWithValue(api)],
@@ -536,18 +536,8 @@ void registerMusicQueueTests() {
     final controller = container.read(musicCenterControllerProvider.notifier);
     final items = _fourTrackItems(api);
 
+    // repeat=off 下手动上一首也总是回绕：队首回到队尾。
     await controller.playItems(items, startIndex: 0);
-    await controller.previousTrack();
-    expect(
-      container
-          .read(musicCenterControllerProvider)
-          .value!
-          .currentItem
-          ?.playableKey,
-      'local:track-1',
-    );
-
-    controller.toggleRepeatMode();
     await controller.previousTrack();
     expect(
       container
@@ -557,6 +547,96 @@ void registerMusicQueueTests() {
           ?.playableKey,
       'local:track-4',
     );
+
+    await controller.previousTrack();
+    expect(
+      container
+          .read(musicCenterControllerProvider)
+          .value!
+          .currentItem
+          ?.playableKey,
+      'local:track-3',
+    );
+  });
+
+  test(
+    'manual next wraps at the queue end regardless of repeat mode',
+    () async {
+      final api = _FakeMusicApi();
+      final container = ProviderContainer.test(
+        overrides: [musicApiProvider.overrideWithValue(api)],
+      );
+      addTearDown(container.dispose);
+      await container.read(musicCenterControllerProvider.future);
+      final controller = container.read(musicCenterControllerProvider.notifier);
+      final items = _fourTrackItems(api);
+
+      await controller.playItems(items, startIndex: 3);
+      await controller.nextTrack();
+
+      final state = container.read(musicCenterControllerProvider).value!;
+      expect(state.repeatMode, MusicRepeatMode.off);
+      expect(state.currentItem?.playableKey, 'local:track-1');
+      expect(state.playbackIndex, 0);
+      expect(state.isPlaying, isTrue);
+    },
+  );
+
+  test('auto advance at the queue end stops with repeat off', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+    final items = _fourTrackItems(api);
+
+    await controller.playItems(items, startIndex: 3);
+    await controller.nextTrack(autoAdvance: true);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.playableKey, 'local:track-4');
+    expect(state.isPlaying, isFalse);
+  });
+
+  test('manual shuffle next regenerates the round with repeat off', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    controller.random = Random(7);
+    await controller.playItems(_fourTrackItems(api), startIndex: 0);
+    controller.toggleShuffle();
+    final rng = Random(7);
+    final firstRound = _shuffledKeys(const [
+      'local:track-2',
+      'local:track-3',
+      'local:track-4',
+    ], rng);
+    // 播完一轮（自动推进语义下 repeat=off 会停，这里手动走完）。
+    for (var round = 0; round < firstRound.length; round++) {
+      await controller.nextTrack();
+    }
+    // 轮次耗尽后再手动下一首：重生成一轮（排除当前曲）并继续播放。
+    final secondRound = _shuffledKeys(
+      const [
+        'local:track-1',
+        'local:track-2',
+        'local:track-3',
+        'local:track-4',
+      ].where((key) => key != firstRound.last).toList(),
+      rng,
+    );
+    await controller.nextTrack();
+
+    final state = container.read(musicCenterControllerProvider).asData!.value;
+    expect(state.currentItem?.playableKey, secondRound.first);
+    expect(state.isPlaying, isTrue);
   });
 
   test('enqueue under shuffle becomes the next played key', () async {
