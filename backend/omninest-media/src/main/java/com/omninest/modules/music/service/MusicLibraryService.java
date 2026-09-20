@@ -41,6 +41,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -392,18 +393,45 @@ public class MusicLibraryService {
                 cutoff,
                 PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size))
         );
+        // 本地历史行写入时不存封面引用，按曲目实时解析（一次批量，避免逐行查询）。
+        Map<UUID, MusicTrack> localTracks = localTracksByIds(ownerUserId, result.getContent());
         return result.map(history -> new MusicPlayHistoryDto(
                 history.getPlayableKey(),
                 history.getTitle(),
                 history.getArtistName(),
                 history.getAlbumTitle(),
-                history.getCoverUrl(),
+                historyCoverUrl(history, localTracks),
                 history.getDurationSeconds(),
                 history.getPlayDuration(),
                 history.getPlatform(),
                 history.getExternalSongId(),
                 history.getPlayedAt()
         ));
+    }
+
+    private Map<UUID, MusicTrack> localTracksByIds(UUID ownerUserId, List<MusicPlayHistory> histories) {
+        List<UUID> trackIds = histories.stream()
+                .map(MusicPlayHistory::getTrackId)
+                .filter(Objects::nonNull)
+                .toList();
+        if (trackIds.isEmpty()) {
+            return Map.of();
+        }
+        return trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds)
+                .stream()
+                .collect(Collectors.toMap(MusicTrack::getId, track -> track));
+    }
+
+    /**
+     * 历史行封面取值：本地行从曲目实时解析（曲目可能已更换封面），
+     * 曲目已删除或在线行保留存量值（在线行为 CDN 地址，本地行为空）。
+     */
+    private String historyCoverUrl(MusicPlayHistory history, Map<UUID, MusicTrack> localTracks) {
+        if (history.getTrackId() == null) {
+            return history.getCoverUrl();
+        }
+        MusicTrack track = localTracks.get(history.getTrackId());
+        return track == null ? history.getCoverUrl() : coverUrlForTrack(track);
     }
 
     @Transactional(readOnly = true)
@@ -566,15 +594,26 @@ public class MusicLibraryService {
                 track.getLyricsRaw(),
                 track.getLyricsTranslation(),
                 track.getGenre(),
-                firstText(
-                        resolveCoverApiPath(track.getCoverFileId()),
-                        firstText(
-                                metadataText(track.getProviderMetadata(), "coverDataUrl"),
-                                metadataText(track.getProviderMetadata(), "coverUrl")
-                        )
-                ),
+                coverUrlForTrack(track),
                 favorite,
                 track.getUpdatedAt()
+        );
+    }
+
+    /**
+     * 本地曲目封面解析链：封面文件稳定 API 路径优先，缺省回退提供方
+     * 元数据（内嵌数据地址、外部链接）。
+     *
+     * @param track 曲目实体
+     * @return 封面地址，无可用来源时为空值
+     */
+    private String coverUrlForTrack(MusicTrack track) {
+        return firstText(
+                resolveCoverApiPath(track.getCoverFileId()),
+                firstText(
+                        metadataText(track.getProviderMetadata(), "coverDataUrl"),
+                        metadataText(track.getProviderMetadata(), "coverUrl")
+                )
         );
     }
 

@@ -3,6 +3,7 @@ package com.omninest.modules.music.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.eq;
@@ -224,6 +225,75 @@ class MusicLibraryServiceTest {
         assertThat(result.getContent().getFirst().title()).isEqualTo("Night Drive");
         assertThat(result.getContent().getFirst().playableKey()).isEqualTo("local:" + TRACK_ID);
         assertThat(result.getTotalElements()).isEqualTo(1);
+    }
+
+    @Test
+    void playHistoryResolvesLocalCoverFromTrack() {
+        MusicTrack track = new MusicTrack();
+        track.setId(TRACK_ID);
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(FILE_NODE_ID);
+        track.setCoverFileId(COVER_FILE_ID);
+        track.setTitle("Night Drive");
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setTrackId(TRACK_ID);
+        history.setPlayableKey("local:" + TRACK_ID);
+        history.setTitle("Night Drive");
+        history.setPlayedAt(Instant.now());
+        var pageable = PageRequest.of(0, 50);
+        when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
+        when(trackRepository.findByOwnerUserIdAndIdIn(eq(OWNER_ID), eq(List.of(TRACK_ID))))
+                .thenReturn(List.of(track));
+
+        var result = libraryService.playHistory(OWNER_ID, 0, 50);
+
+        assertThat(result.getContent().getFirst().coverUrl())
+                .isEqualTo("/api/v1/music/covers/" + COVER_FILE_ID);
+    }
+
+    @Test
+    void playHistoryKeepsNullCoverWhenTrackDeleted() {
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setTrackId(TRACK_ID);
+        history.setPlayableKey("local:" + TRACK_ID);
+        history.setTitle("Night Drive");
+        history.setPlayedAt(Instant.now());
+        var pageable = PageRequest.of(0, 50);
+        when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
+        when(trackRepository.findByOwnerUserIdAndIdIn(eq(OWNER_ID), eq(List.of(TRACK_ID))))
+                .thenReturn(List.of());
+
+        var result = libraryService.playHistory(OWNER_ID, 0, 50);
+
+        assertThat(result.getContent().getFirst().coverUrl()).isNull();
+    }
+
+    @Test
+    void playHistoryKeepsOnlineCoverSnapshot() {
+        MusicPlayHistory history = new MusicPlayHistory();
+        history.setOwnerUserId(OWNER_ID);
+        history.setPlayableKey("online:netease:song-1");
+        history.setPlatform("netease");
+        history.setExternalSongId("song-1");
+        history.setTitle("Online Track");
+        history.setCoverUrl("https://p1.music.126.net/cover.jpg");
+        history.setPlayedAt(Instant.now());
+        var pageable = PageRequest.of(0, 50);
+        when(playHistoryRepository.findByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
+                eq(OWNER_ID), ArgumentMatchers.any(Instant.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(history), pageable, 1));
+
+        var result = libraryService.playHistory(OWNER_ID, 0, 50);
+
+        assertThat(result.getContent().getFirst().coverUrl())
+                .isEqualTo("https://p1.music.126.net/cover.jpg");
+        verify(trackRepository, never()).findByOwnerUserIdAndIdIn(eq(OWNER_ID), ArgumentMatchers.anyList());
     }
 
     @Test
