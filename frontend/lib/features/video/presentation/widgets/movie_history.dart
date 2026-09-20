@@ -80,6 +80,7 @@ class HistorySection extends StatelessWidget {
             entries: [
               for (final item in items)
                 MovieRedesignHistoryEntry(
+                  videoItemId: item.videoItemId,
                   title: item.title,
                   subtitle: _subtitleOf(context, item),
                   timeText: movieRedesignRelativeTime(context, item.playedAt),

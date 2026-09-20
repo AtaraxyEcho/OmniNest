@@ -139,7 +139,7 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
             color: _hovered ? palette.foreground : palette.border,
           ),
         ),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: Clip.hardEdge,
         child: InkWell(
           onTap: widget.item.onPlay,
           child: Column(
@@ -154,7 +154,10 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                       duration: const Duration(milliseconds: 500),
                       curve: Curves.easeOut,
                       scale: _hovered ? 1.05 : 1.0,
-                      child: _ContinueImage(posterUrl: posterUrl),
+                      child: _ContinueImage(
+                        posterUrl: posterUrl,
+                        cacheKey: 'movie-poster:${data.id}',
+                      ),
                     ),
                     AnimatedOpacity(
                       duration: const Duration(milliseconds: 300),
@@ -237,9 +240,10 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
 }
 
 class _ContinueImage extends StatelessWidget {
-  const _ContinueImage({this.posterUrl});
+  const _ContinueImage({this.posterUrl, this.cacheKey});
 
   final String? posterUrl;
+  final String? cacheKey;
 
   @override
   Widget build(BuildContext context) {
@@ -249,6 +253,7 @@ class _ContinueImage extends StatelessWidget {
     }
     return MoviePosterImage(
       imageUrl: url,
+      cacheKey: cacheKey,
       cacheWidth: MoviePosterImage.decodeWidth(context, 140, cap: 420),
       fallback: const SizedBox.expand(),
     );

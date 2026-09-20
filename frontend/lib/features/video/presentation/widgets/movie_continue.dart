@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
@@ -7,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_common_widgets.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 
 String _formatProgress(int position, int duration) {
   String fmt(int seconds) {
@@ -80,7 +80,7 @@ class ContinueCard extends StatelessWidget {
             AspectRatio(
               aspectRatio: 16 / 9,
               child: Container(
-                clipBehavior: Clip.antiAlias,
+                clipBehavior: Clip.hardEdge,
                 decoration: BoxDecoration(
                   color: context.videoColors.surfaceContainerHighest,
                   borderRadius: BorderRadius.circular(6),
@@ -89,11 +89,10 @@ class ContinueCard extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     if (item.posterUrl != null)
-                      CachedNetworkImage(
-                        imageUrl: item.posterUrl!,
-                        fit: BoxFit.cover,
-                        memCacheWidth: 400,
-                        errorWidget: (ctx, url, err) => const SizedBox.shrink(),
+                      MoviePosterImage(
+                        imageUrl: item.posterUrl,
+                        cacheKey: 'movie-poster:${item.id}',
+                        cacheWidth: 400,
                       ),
                     // 渐变遮罩
                     DecoratedBox(

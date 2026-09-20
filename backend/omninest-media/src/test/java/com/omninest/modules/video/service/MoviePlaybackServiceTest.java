@@ -130,4 +130,40 @@ class MoviePlaybackServiceTest {
         assertThat(plan.positionSeconds()).isEqualTo(600);
         assertThat(plan.container()).isEqualTo("mp4");
     }
+
+    @Test
+    void matroskaAv1OpusPlaysDirectAsWebmFamily() {
+        MediaVideoItem movie = new MediaVideoItem();
+        movie.setId(MOVIE_ID);
+        movie.setOwnerUserId(OWNER_ID);
+        movie.setFileNodeId(FILE_ID);
+        movie.setContainerFormat("MATROSKA,WEBM");
+        movie.setVideoCodec("AV1");
+        movie.setAudioCodec("OPUS");
+        movie.setMetadataStatus("MATCHED");
+
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, MOVIE_ID)).thenReturn(movie);
+        when(mediaPlaybackTokenService.issue(OWNER_ID, MOVIE_ID)).thenReturn(
+                new MediaPlaybackTokenService.IssuedMediaToken(
+                        "media-token",
+                        Instant.parse("2026-05-21T11:00:00Z")
+                )
+        );
+        when(progressService.find(OWNER_ID, MediaPlaybackType.VIDEO, MOVIE_ID.toString()))
+                .thenReturn(Optional.empty());
+        when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, MOVIE_ID))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrl(OWNER_ID, FILE_ID)).thenReturn(new FileDownloadUrlDto(
+                FILE_ID,
+                "night.webm",
+                "http://localhost:9000/night.webm",
+                Instant.parse("2026-05-21T11:00:00Z")
+        ));
+
+        var plan = playbackService.playbackPlan(OWNER_ID, MOVIE_ID);
+
+        assertThat(plan.mode())
+                .as("matroska 容器中 av1+opus 属 WebM 家族，应直接播放")
+                .isEqualTo("DIRECT_PLAY");
+    }
 }

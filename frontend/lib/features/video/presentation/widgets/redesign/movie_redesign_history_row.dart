@@ -6,6 +6,7 @@ import 'package:omninest/features/video/presentation/widgets/movie_poster_image.
 /// 观看历史行数据：标题、副信息、缩略图与时间文案由调用方组装。
 class MovieRedesignHistoryEntry {
   const MovieRedesignHistoryEntry({
+    required this.videoItemId,
     required this.title,
     required this.subtitle,
     required this.timeText,
@@ -15,6 +16,7 @@ class MovieRedesignHistoryEntry {
     this.onDelete,
   });
 
+  final String videoItemId;
   final String title;
   final String subtitle;
   final String timeText;
@@ -40,7 +42,7 @@ class MovieRedesignHistoryList extends StatelessWidget {
         border: Border.all(color: palette.border),
         borderRadius: MovieRedesignPalette.borderRadius,
       ),
-      clipBehavior: Clip.antiAlias,
+      clipBehavior: Clip.hardEdge,
       child: Column(
         children: [
           for (var i = 0; i < entries.length; i++) ...[
@@ -90,7 +92,13 @@ class _MovieRedesignHistoryRowState extends State<MovieRedesignHistoryRow> {
                   child: SizedBox(
                     width: wide ? 56 : 48,
                     height: wide ? 40 : 32,
-                    child: _HistoryThumb(url: entry.thumbUrl),
+                    child: _HistoryThumb(
+                      url: entry.thumbUrl,
+                      cacheKey:
+                          entry.videoItemId.isEmpty
+                              ? null
+                              : 'movie-poster:${entry.videoItemId}',
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -169,9 +177,10 @@ class _MovieRedesignHistoryRowState extends State<MovieRedesignHistoryRow> {
 }
 
 class _HistoryThumb extends StatelessWidget {
-  const _HistoryThumb({this.url});
+  const _HistoryThumb({this.url, this.cacheKey});
 
   final String? url;
+  final String? cacheKey;
 
   @override
   Widget build(BuildContext context) {
@@ -181,6 +190,7 @@ class _HistoryThumb extends StatelessWidget {
     }
     return MoviePosterImage(
       imageUrl: url,
+      cacheKey: cacheKey,
       cacheWidth: MoviePosterImage.decodeWidth(context, 72, cap: 256),
       fallback: ColoredBox(color: context.movieRedesign.muted),
     );

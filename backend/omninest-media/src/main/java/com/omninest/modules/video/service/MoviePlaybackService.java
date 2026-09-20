@@ -262,6 +262,21 @@ public class MoviePlaybackService {
         String normalizedContainer = normalize(container);
         String normalizedVideo = normalize(videoCodec);
         String normalizedAudio = normalize(audioCodec);
+        // WebM 本是 Matroska 子集：Chrome/Edge 的解复用器可直接播放
+        // matroska 容器中的 av1/vp9/vp8 + opus/vorbis 轨道（按 video/webm 提供）。
+        // 此前仅因容器名 MATROSKA 落入转码流，Seek 精度受限（D-007）。
+        boolean webmFamily = normalizedContainer != null
+                && (normalizedContainer.contains("webm") || normalizedContainer.contains("matroska"));
+        boolean webmVideo = normalizedVideo != null
+                && (normalizedVideo.equals("av1")
+                        || normalizedVideo.equals("vp9")
+                        || normalizedVideo.equals("vp8"));
+        boolean webmAudio = normalizedAudio == null
+                || normalizedAudio.equals("opus")
+                || normalizedAudio.equals("vorbis");
+        if (webmFamily && webmVideo && webmAudio) {
+            return "DIRECT_PLAY";
+        }
         boolean directContainer = normalizedContainer == null
                 || normalizedContainer.equals("mp4")
                 || normalizedContainer.equals("m4v")

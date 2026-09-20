@@ -81,7 +81,6 @@ class MoviePlayerBottomBar extends StatelessWidget {
       right: 0,
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final viewport = MediaQuery.sizeOf(context);
           final textScale = MediaQuery.textScalerOf(context).scale(1);
           final controlMaxWidth = constraints.maxWidth;
           final density = _resolveDensity(controlMaxWidth, textScale);
@@ -90,22 +89,24 @@ class MoviePlayerBottomBar extends StatelessWidget {
             12.0,
             density == _MoviePlayerControlDensity.expanded ? 28.0 : 22.0,
           );
-          final proportionalBottomInset =
-              viewport.height *
+          // 桌面无边框/全屏贴底：不再按窗口高度百分比抬升（4K 下会把
+          // 底栏浮到离屏幕底很远）。系统安全区仅在非全屏时参与。
+          final mediaQuery = MediaQuery.of(context);
+          final systemBottom =
+              isFullscreen ? 0.0 : mediaQuery.viewPadding.bottom;
+          final bottomInset =
               switch ((isFullscreen, isMobile)) {
-                (true, true) => 0.035,
-                (true, false) => 0.06,
-                (false, true) => 0.012,
-                (false, false) => 0.018,
-              };
-          final bottomInset = proportionalBottomInset.clamp(
-            isMobile ? 8.0 : 12.0,
-            isFullscreen ? (isMobile ? 36.0 : 80.0) : (isMobile ? 18.0 : 28.0),
-          );
-          final topPadding = (viewport.height * (isFullscreen ? 0.032 : 0.024))
-              .clamp(24.0, 44.0);
+                (true, true) => 12.0,
+                (true, false) => 8.0,
+                (false, true) => 8.0,
+                (false, false) => 12.0,
+              } +
+              systemBottom;
+          final topPadding = (mediaQuery.size.height *
+                  (isFullscreen ? 0.028 : 0.024))
+              .clamp(20.0, 40.0);
 
-          // 渐变铺满含手势导航区，SafeArea 只避让控制内容。
+          // 渐变铺满窗口底缘；全屏时不叠 SafeArea，避免任务栏残留 padding。
           return DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
@@ -114,59 +115,56 @@ class MoviePlayerBottomBar extends StatelessWidget {
                 end: Alignment.bottomCenter,
               ),
             ),
-            child: SafeArea(
-              top: false,
-              child: SizedBox(
-                key: const Key('moviePlayerControlViewport'),
-                width: double.infinity,
-                child: AnimatedPadding(
-                  key: const Key('moviePlayerBottomBarContent'),
-                  duration:
-                      animationsDisabled
-                          ? Duration.zero
-                          : const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
-                  padding: EdgeInsets.fromLTRB(
-                    horizontalPadding,
-                    topPadding,
-                    horizontalPadding,
-                    _bottomPaddingFor(density) + bottomInset,
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      MoviePlayerProgressBar(
-                        polledPosition: polledPosition,
-                        durationSeconds: plan.durationSeconds,
-                        playerDuration: playerDuration,
-                        bufferProgress: bufferProgress,
-                        isSeeking: isSeeking,
-                        seekValue: seekValue,
-                        onSeekStart: onSeekStart,
-                        onSeeking: onSeeking,
-                        onSeekEnd: onSeekEnd,
-                        onMouseActivity: onMouseActivity,
-                        formatDuration: formatDuration,
-                      ),
-                      const SizedBox(height: 6),
-                      AnimatedSwitcher(
-                        duration:
-                            animationsDisabled
-                                ? Duration.zero
-                                : const Duration(milliseconds: 160),
-                        switchInCurve: Curves.easeOutCubic,
-                        switchOutCurve: Curves.easeInCubic,
-                        child: switch (density) {
-                          _MoviePlayerControlDensity.compact =>
-                            _buildCompactControls(context),
-                          _MoviePlayerControlDensity.medium =>
-                            _buildMediumControls(context),
-                          _MoviePlayerControlDensity.expanded =>
-                            _buildExpandedControls(context),
-                        },
-                      ),
-                    ],
-                  ),
+            child: SizedBox(
+              key: const Key('moviePlayerControlViewport'),
+              width: double.infinity,
+              child: AnimatedPadding(
+                key: const Key('moviePlayerBottomBarContent'),
+                duration:
+                    animationsDisabled
+                        ? Duration.zero
+                        : const Duration(milliseconds: 180),
+                curve: Curves.easeOutCubic,
+                padding: EdgeInsets.fromLTRB(
+                  horizontalPadding,
+                  topPadding,
+                  horizontalPadding,
+                  _bottomPaddingFor(density) + bottomInset,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    MoviePlayerProgressBar(
+                      polledPosition: polledPosition,
+                      durationSeconds: plan.durationSeconds,
+                      playerDuration: playerDuration,
+                      bufferProgress: bufferProgress,
+                      isSeeking: isSeeking,
+                      seekValue: seekValue,
+                      onSeekStart: onSeekStart,
+                      onSeeking: onSeeking,
+                      onSeekEnd: onSeekEnd,
+                      onMouseActivity: onMouseActivity,
+                      formatDuration: formatDuration,
+                    ),
+                    const SizedBox(height: 6),
+                    AnimatedSwitcher(
+                      duration:
+                          animationsDisabled
+                              ? Duration.zero
+                              : const Duration(milliseconds: 160),
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: switch (density) {
+                        _MoviePlayerControlDensity.compact =>
+                          _buildCompactControls(context),
+                        _MoviePlayerControlDensity.medium =>
+                          _buildMediumControls(context),
+                        _MoviePlayerControlDensity.expanded =>
+                          _buildExpandedControls(context),
+                      },
+                    ),
+                  ],
                 ),
               ),
             ),

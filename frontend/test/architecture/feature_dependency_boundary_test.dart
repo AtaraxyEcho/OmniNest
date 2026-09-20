@@ -23,7 +23,7 @@ const _allowedViolations = <String>{
   'OVERSIZED_SOURCE lib/features/reader/presentation/pages/reader_item_detail_page.dart lines=1216',
   'OVERSIZED_SOURCE lib/features/reader/presentation/pages/reader_view_page.dart lines=1286',
   'OVERSIZED_SOURCE lib/features/video/application/movie_controller.dart lines=1274',
-  'OVERSIZED_SOURCE lib/features/video/presentation/pages/movie_detail_page.dart lines=1384',
+  'OVERSIZED_SOURCE lib/features/video/presentation/pages/movie_detail_page.dart lines=1390',
   'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/profile/presentation/widgets/profile_two_factor_card.dart',
   'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/reader/presentation/pages/pdf_reader_page.dart',
   'PRESENTATION_IMPLEMENTATION_PROVIDER lib/features/video/presentation/widgets/redesign/movie_metadata_edit_drawer.dart',

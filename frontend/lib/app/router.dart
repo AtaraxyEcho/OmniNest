@@ -349,13 +349,18 @@ Widget _routeSurface(String path, Widget child) {
     return child;
   }
 
-  final policy =
-      path.startsWith('/photos') ||
-              path.startsWith('/shared/photos') ||
-              path.startsWith('/video') ||
-              path.startsWith('/reader')
-          ? AppBackdropPolicy.staticContent
-          : AppBackdropPolicy.work;
+  // 影视重设计页使用不透明主题底；继续叠加静态壁纸会在 Impeller
+  // 合成时出现对角线亮缝。照片/阅读仍保留静态背景快照。
+  final AppBackdropPolicy policy;
+  if (path.startsWith('/video')) {
+    policy = AppBackdropPolicy.work;
+  } else if (path.startsWith('/photos') ||
+      path.startsWith('/shared/photos') ||
+      path.startsWith('/reader')) {
+    policy = AppBackdropPolicy.staticContent;
+  } else {
+    policy = AppBackdropPolicy.work;
+  }
   return AppRouteSurface(owner: 'route:$path', policy: policy, child: child);
 }
 

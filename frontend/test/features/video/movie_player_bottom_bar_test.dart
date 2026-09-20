@@ -148,7 +148,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('fullscreen moves controls away from the screen edge', (
+  testWidgets('fullscreen keeps control bar pinned near the screen edge', (
     tester,
   ) async {
     await _pumpBottomBar(
@@ -185,12 +185,14 @@ void main() {
 
     expect(
       (fullscreenPadding.padding as EdgeInsets).bottom,
-      greaterThan((windowedPadding.padding as EdgeInsets).bottom),
+      // 全屏/无边框态控件应贴底，不再按 4K 高度比例抬升。
+      lessThanOrEqualTo((windowedPadding.padding as EdgeInsets).bottom + 4),
     );
     expect(windowedViewport.width, 1920);
     expect(fullscreenViewport.width, 1920);
     expect(1920 - fullscreenButtonRect.right, lessThan(80));
-    expect(1080 - fullscreenTransportRect.bottom, greaterThan(70));
+    // 控制条底部应贴近窗口底缘。
+    expect(1080 - fullscreenTransportRect.bottom, lessThan(40));
   });
 
   testWidgets('ultrawide fullscreen controls use the full viewport width', (

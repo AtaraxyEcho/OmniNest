@@ -53,6 +53,7 @@ class ContinueWatchingWidget extends StatelessWidget {
                           children: [
                             PortalMediaThumbnail(
                               imageUrl: item.posterUrl,
+                              cacheKey: 'portal-preview:video:${item.id}',
                               width: 40,
                               height: 56,
                               // 单维约束解码：高度主导槽位仅约束高度，

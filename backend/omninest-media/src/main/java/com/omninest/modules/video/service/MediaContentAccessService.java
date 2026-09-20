@@ -13,6 +13,7 @@ import com.omninest.modules.video.domain.MediaTvSeries;
 import com.omninest.modules.video.repository.ContentAssetRepository;
 import com.omninest.modules.video.repository.MediaTvSeriesRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -71,10 +72,38 @@ public class MediaContentAccessService {
     public FileContentResource openPlaybackContent(String token, UUID videoItemId) {
         MediaPlaybackTokenService.MediaGrant grant = tokenService.requireGrant(token, videoItemId);
         MediaVideoItem item = requireReadableVideo(grant.requesterUserId(), videoItemId);
-        return fileContentAccessService.openAuthorizedMediaResource(
+        FileContentResource content = fileContentAccessService.openAuthorizedMediaResource(
                 item.getFileNodeId(),
                 MediaContentPurpose.MEDIA_PLAYBACK
         );
+        return withWebmFamilyMimeType(item, content);
+    }
+
+    /// WebM 是 Matroska 子集：av1/vp9/vp8 + opus/vorbis 的 matroska 内容
+    /// 浏览器可直播，但按 x-matroska MIME 会被 video 元素拒绝；
+    /// 直播判定成立时统一改按 video/webm 提供（D-007）。
+    private FileContentResource withWebmFamilyMimeType(MediaVideoItem item, FileContentResource content) {
+        String container = item.getContainerFormat() == null
+                ? ""
+                : item.getContainerFormat().trim().toLowerCase(Locale.ROOT);
+        String video = item.getVideoCodec() == null
+                ? ""
+                : item.getVideoCodec().trim().toLowerCase(Locale.ROOT);
+        String audio = item.getAudioCodec() == null
+                ? ""
+                : item.getAudioCodec().trim().toLowerCase(Locale.ROOT);
+        boolean webmFamily = container.contains("webm") || container.contains("matroska");
+        boolean webmVideo = video.equals("av1") || video.equals("vp9") || video.equals("vp8");
+        boolean webmAudio = audio.isEmpty() || audio.equals("opus") || audio.equals("vorbis");
+        if (webmFamily && webmVideo && webmAudio && !"video/webm".equalsIgnoreCase(content.mimeType())) {
+            return new FileContentResource(
+                    content.resource(),
+                    content.fileName(),
+                    content.sizeBytes(),
+                    "video/webm"
+            );
+        }
+        return content;
     }
 
     /** 校验短期令牌并返回可读影片，用于转码流。 */

@@ -54,7 +54,7 @@ class _MovieRedesignCollectionCardState
             color: _hovered ? palette.foreground : palette.border,
           ),
         ),
-        clipBehavior: Clip.antiAlias,
+        clipBehavior: Clip.hardEdge,
         child: InkWell(
           onTap: data.onTap,
           child: Column(
@@ -70,7 +70,10 @@ class _MovieRedesignCollectionCardState
                       duration: const Duration(milliseconds: 500),
                       curve: Curves.easeOut,
                       scale: _hovered ? 1.05 : 1.0,
-                      child: _CollectionImage(url: data.coverUrl),
+                      child: _CollectionImage(
+                        url: data.coverUrl,
+                        cacheKey: 'movie-collection:${data.name}',
+                      ),
                     ),
                     const ColoredBox(color: Color(0x4D000000)),
                   ],
@@ -122,9 +125,10 @@ class _MovieRedesignCollectionCardState
 }
 
 class _CollectionImage extends StatelessWidget {
-  const _CollectionImage({this.url});
+  const _CollectionImage({this.url, this.cacheKey});
 
   final String? url;
+  final String? cacheKey;
 
   @override
   Widget build(BuildContext context) {
@@ -134,6 +138,7 @@ class _CollectionImage extends StatelessWidget {
     }
     return MoviePosterImage(
       imageUrl: coverUrl,
+      cacheKey: cacheKey,
       cacheWidth: MoviePosterImage.decodeWidth(context, 180, cap: 480),
       fallback: ColoredBox(color: context.movieRedesign.muted),
     );

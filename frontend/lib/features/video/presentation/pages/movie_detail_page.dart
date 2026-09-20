@@ -93,7 +93,13 @@ class _DarkScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(backgroundColor: MovieDetailTheme.background, body: child);
+    return ColoredBox(
+      color: MovieDetailTheme.background,
+      child: Scaffold(
+        backgroundColor: MovieDetailTheme.background,
+        body: ColoredBox(color: MovieDetailTheme.background, child: child),
+      ),
+    );
   }
 }
 
@@ -273,6 +279,7 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
           children: [
             _Backdrop(
               backdropUrl: item.backdropImageUrl ?? item.posterImageUrl,
+              backdropCacheKey: 'movie-backdrop:${item.id}',
               favorited: favorited,
               canEdit: canEdit && !_saving,
               editMode: _editMode,
@@ -351,6 +358,7 @@ class _Backdrop extends StatelessWidget {
     required this.favorited,
     required this.canEdit,
     required this.editMode,
+    required this.backdropCacheKey,
     required this.saving,
     required this.onBack,
     required this.onToggleEdit,
@@ -358,6 +366,7 @@ class _Backdrop extends StatelessWidget {
   });
 
   final String? backdropUrl;
+  final String? backdropCacheKey;
   final bool favorited;
   final bool canEdit;
   final bool editMode;
@@ -378,6 +387,7 @@ class _Backdrop extends StatelessWidget {
           if (backdropUrl != null && backdropUrl!.isNotEmpty)
             MoviePosterImage(
               imageUrl: backdropUrl,
+              cacheKey: backdropCacheKey,
               cacheWidth: MoviePosterImage.decodeWidth(
                 context,
                 MediaQuery.sizeOf(context).width,
@@ -549,7 +559,10 @@ class _PosterMetaRow extends StatelessWidget {
           decoration: BoxDecoration(
             border: Border.all(color: MovieDetailTheme.border),
           ),
-          child: _CoverImage(url: item.posterImageUrl),
+          child: _CoverImage(
+            url: item.posterImageUrl,
+            cacheKey: 'movie-poster:${item.id}',
+          ),
         ),
         const SizedBox(width: 24),
         Expanded(
@@ -639,9 +652,10 @@ class _PosterMetaRow extends StatelessWidget {
 }
 
 class _CoverImage extends StatelessWidget {
-  const _CoverImage({this.url});
+  const _CoverImage({this.url, this.cacheKey});
 
   final String? url;
+  final String? cacheKey;
 
   @override
   Widget build(BuildContext context) {
@@ -651,6 +665,7 @@ class _CoverImage extends StatelessWidget {
     }
     return MoviePosterImage(
       imageUrl: resolved,
+      cacheKey: cacheKey,
       cacheWidth: MoviePosterImage.decodeWidth(context, 160, cap: 480),
       alignment: Alignment.topCenter,
       fallback: const ColoredBox(color: MovieDetailTheme.surface),

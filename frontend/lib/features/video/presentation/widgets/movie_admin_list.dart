@@ -640,6 +640,7 @@ class _PosterThumb extends StatelessWidget {
           item.posterImageUrl != null
               ? MoviePosterImage(
                 imageUrl: item.posterImageUrl,
+                cacheKey: 'movie-poster:${item.id}',
                 cacheWidth: MoviePosterImage.decodeWidth(context, 44, cap: 176),
                 fallback: Icon(
                   Icons.movie_rounded,

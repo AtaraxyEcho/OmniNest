@@ -23,11 +23,37 @@ import 'package:omninest/features/video/presentation/widgets/redesign/movie_rede
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_section_header.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_time.dart';
 
-class MovieCenterPage extends ConsumerWidget {
+class MovieCenterPage extends ConsumerStatefulWidget {
   const MovieCenterPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MovieCenterPage> createState() => _MovieCenterPageState();
+}
+
+class _MovieCenterPageState extends ConsumerState<MovieCenterPage> {
+  // 进入页面的重进刷新节流：provider 常驻内存，posterUrl 是 2h/6h 的
+  // 临时地址，不刷新则过期后海报灰块；15s 内往返不重复拉取。
+  static DateTime? _lastEntryRefreshAt;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final now = DateTime.now();
+      final last = _lastEntryRefreshAt;
+      if (last != null && now.difference(last) < const Duration(seconds: 15)) {
+        return;
+      }
+      _lastEntryRefreshAt = now;
+      unawaited(ref.read(movieCenterControllerProvider.notifier).refresh());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(movieCenterControllerProvider);
     return state.when(
       data: (data) {

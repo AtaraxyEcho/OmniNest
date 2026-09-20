@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
+import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 
@@ -250,6 +251,7 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
           children: [
             _Backdrop(
               backdropUrl: series.backdropImageUrl ?? series.posterImageUrl,
+              backdropCacheKey: 'movie-series-backdrop:${series.id}',
               favorited: favorited,
               canEdit: canEdit && !_saving,
               editMode: _editMode,
@@ -337,6 +339,7 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
 class _Backdrop extends StatelessWidget {
   const _Backdrop({
     required this.backdropUrl,
+    required this.backdropCacheKey,
     required this.favorited,
     required this.canEdit,
     required this.editMode,
@@ -347,6 +350,7 @@ class _Backdrop extends StatelessWidget {
   });
 
   final String? backdropUrl;
+  final String? backdropCacheKey;
   final bool favorited;
   final bool canEdit;
   final bool editMode;
@@ -365,20 +369,12 @@ class _Backdrop extends StatelessWidget {
         fit: StackFit.expand,
         children: [
           if (backdropUrl != null && backdropUrl!.isNotEmpty)
-            Image.network(
-              backdropUrl!,
+            MoviePosterImage(
+              imageUrl: backdropUrl,
+              cacheKey: backdropCacheKey,
               fit: BoxFit.cover,
               alignment: Alignment.topCenter,
-              filterQuality: FilterQuality.medium,
-              errorBuilder:
-                  (context, error, stackTrace) =>
-                      const ColoredBox(color: MovieDetailTheme.surface),
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) {
-                  return child;
-                }
-                return const ColoredBox(color: MovieDetailTheme.surface);
-              },
+              fallback: const ColoredBox(color: MovieDetailTheme.surface),
             )
           else
             const ColoredBox(color: MovieDetailTheme.surface),
@@ -539,7 +535,10 @@ class _SeriesPosterMetaRow extends StatelessWidget {
           decoration: BoxDecoration(
             border: Border.all(color: MovieDetailTheme.border),
           ),
-          child: _CoverImage(url: series.posterImageUrl),
+          child: _CoverImage(
+            url: series.posterImageUrl,
+            cacheKey: 'movie-series-poster:${series.id}',
+          ),
         ),
         const SizedBox(width: 24),
         Expanded(
@@ -640,9 +639,10 @@ class _SeriesPosterMetaRow extends StatelessWidget {
 }
 
 class _CoverImage extends StatelessWidget {
-  const _CoverImage({this.url});
+  const _CoverImage({this.url, this.cacheKey});
 
   final String? url;
+  final String? cacheKey;
 
   @override
   Widget build(BuildContext context) {
@@ -650,20 +650,12 @@ class _CoverImage extends StatelessWidget {
     if (resolved == null || resolved.isEmpty) {
       return const ColoredBox(color: MovieDetailTheme.surface);
     }
-    return Image.network(
-      resolved,
+    return MoviePosterImage(
+      imageUrl: resolved,
+      cacheKey: cacheKey,
       fit: BoxFit.cover,
       alignment: Alignment.topCenter,
-      filterQuality: FilterQuality.medium,
-      errorBuilder:
-          (context, error, stackTrace) =>
-              const ColoredBox(color: MovieDetailTheme.surface),
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) {
-          return child;
-        }
-        return const ColoredBox(color: MovieDetailTheme.surface);
-      },
+      fallback: const ColoredBox(color: MovieDetailTheme.surface),
     );
   }
 }
@@ -1138,7 +1130,10 @@ class _EpisodeRow extends StatelessWidget {
                 height: 48,
                 child: Opacity(
                   opacity: 0.70,
-                  child: _CoverImage(url: episode.posterImageUrl),
+                  child: _CoverImage(
+                    url: episode.posterImageUrl,
+                    cacheKey: 'movie-episode-poster:${episode.id}',
+                  ),
                 ),
               ),
               const SizedBox(width: 16),

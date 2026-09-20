@@ -161,7 +161,9 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
             child: Material(
               color: palette.muted,
               borderRadius: MovieRedesignPalette.borderRadius,
-              clipBehavior: Clip.antiAlias,
+              // 2px 圆角下 hardEdge 足够；antiAlias 在 Impeller/OpenGLES
+              // 深色场景可能沿裁剪边产生对角线亮缝。
+              clipBehavior: Clip.hardEdge,
               child: InkWell(
                 onTap: data.onTap,
                 child: Stack(
@@ -171,7 +173,10 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                       duration: const Duration(milliseconds: 500),
                       curve: Curves.easeOut,
                       scale: _hovered ? 1.05 : 1.0,
-                      child: _PosterImage(posterUrl: data.posterUrl),
+                      child: _PosterImage(
+                        posterUrl: data.posterUrl,
+                        cacheKey: 'movie-poster:${data.id}',
+                      ),
                     ),
                     if (onPlay != null)
                       AnimatedOpacity(
@@ -335,9 +340,10 @@ class _PlayButton extends StatelessWidget {
 }
 
 class _PosterImage extends StatelessWidget {
-  const _PosterImage({this.posterUrl});
+  const _PosterImage({this.posterUrl, this.cacheKey});
 
   final String? posterUrl;
+  final String? cacheKey;
 
   @override
   Widget build(BuildContext context) {
@@ -349,6 +355,7 @@ class _PosterImage extends StatelessWidget {
     final cacheWidth = MoviePosterImage.decodeWidth(context, 220, cap: 640);
     return MoviePosterImage(
       imageUrl: url,
+      cacheKey: cacheKey,
       cacheWidth: cacheWidth,
       alignment: Alignment.topCenter,
       fallback: const SizedBox.expand(),

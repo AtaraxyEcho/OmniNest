@@ -98,12 +98,41 @@ class MediaContentAccessServiceTest {
         verify(libraryAccessService, never()).requireRead(any(), any());
     }
 
+    @Test
+    void webmFamilyMatroskaServedAsVideoWebm() {
+        MediaVideoItem item = item();
+        item.setOwnerUserId(USER_ID);
+        item.setLibrarySourceId(null);
+        item.setContainerFormat("matroska,webm");
+        item.setVideoCodec("av1");
+        item.setAudioCodec("opus");
+        when(tokenService.requireGrant("token", ITEM_ID)).thenReturn(new MediaPlaybackTokenService.MediaGrant(
+                USER_ID,
+                "VIDEO_ITEM",
+                ITEM_ID,
+                Instant.now().plusSeconds(60)
+        ));
+        when(videoItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
+        when(fileContentAccessService.openAuthorizedMediaResource(FILE_ID, com.omninest.modules.file.domain.MediaContentPurpose.MEDIA_PLAYBACK))
+                .thenReturn(new com.omninest.modules.file.dto.FileContentResource(
+                        new org.springframework.core.io.ByteArrayResource(new byte[0]),
+                        "night.webm",
+                        1L,
+                        "video/x-matroska"
+                ));
+
+        var content = service.openPlaybackContent("token", ITEM_ID);
+
+        assertThat(content.mimeType()).isEqualTo("video/webm");
+    }
+
     private MediaVideoItem item() {
         MediaVideoItem item = new MediaVideoItem();
         item.setId(ITEM_ID);
         item.setOwnerUserId(OWNER_ID);
         item.setMovieId(MOVIE_ID);
         item.setLibrarySourceId(SOURCE_ID);
+        item.setFileNodeId(FILE_ID);
         return item;
     }
 }

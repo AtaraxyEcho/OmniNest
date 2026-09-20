@@ -22,7 +22,10 @@ enum MoviePlayerKeyboardAction {
   escape,
 }
 
-/// 将键盘事件映射为播放器操作，Web 端保留浏览器的 F11 行为。
+/// 将键盘事件映射为播放器操作。
+///
+/// 桌面 F11 不在此映射：由 app.dart 的 HardwareKeyboard 全局 handler
+/// 统一分发无边框全屏，页面 Focus 再处理一次会导致 Windows 上双重 toggle。
 MoviePlayerKeyboardAction? resolveMoviePlayerKeyboardAction(
   LogicalKeyboardKey key, {
   required bool shiftPressed,
@@ -55,8 +58,9 @@ MoviePlayerKeyboardAction? resolveMoviePlayerKeyboardAction(
   if (key == LogicalKeyboardKey.keyC || key == LogicalKeyboardKey.keyS) {
     return MoviePlayerKeyboardAction.toggleSubtitle;
   }
-  if (key == LogicalKeyboardKey.keyF ||
-      (!isWeb && key == LogicalKeyboardKey.f11)) {
+  if (key == LogicalKeyboardKey.keyF) {
+    // F11 由 app.dart 的 HardwareKeyboard 全局 handler 统一分发。
+    // 播放器 Focus 若同时处理 F11，Windows 上会双重 toggle，表现为「按了没反应」。
     return MoviePlayerKeyboardAction.toggleFullscreen;
   }
   if (shiftPressed && key == LogicalKeyboardKey.comma) {

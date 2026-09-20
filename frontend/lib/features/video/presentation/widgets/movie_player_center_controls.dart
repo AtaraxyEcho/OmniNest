@@ -23,66 +23,69 @@ class MoviePlayerCenterControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 仅按钮区接收命中；空白处不拦截，点击落到画面层的播放/暂停手势。
     return Positioned.fill(
-      child: IgnorePointer(
-        ignoring: false,
-        child: Center(
-          child: StreamBuilder<bool>(
-            stream: playing,
-            initialData: false,
-            builder: (context, snapshot) {
-              final isPlaying = snapshot.data ?? false;
-              if (!isMobile && isPlaying) {
-                return const SizedBox.shrink();
-              }
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isMobile) ...[
+      child: Stack(
+        children: [
+          const Positioned.fill(child: SizedBox.expand()),
+          Center(
+            child: StreamBuilder<bool>(
+              stream: playing,
+              initialData: false,
+              builder: (context, snapshot) {
+                final isPlaying = snapshot.data ?? false;
+                if (!isMobile && isPlaying) {
+                  return const SizedBox.shrink();
+                }
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (isMobile) ...[
+                      MoviePlayerIconButton(
+                        icon: Icons.replay_10_rounded,
+                        tooltip: AppLocalizations.of(
+                          context,
+                        ).videoSeekBackwardSeconds(10),
+                        onPressed: onSeekBackward,
+                        size: 52,
+                        iconSize: 28,
+                        filled: true,
+                      ),
+                      const SizedBox(width: 24),
+                    ],
                     MoviePlayerIconButton(
-                      icon: Icons.replay_10_rounded,
-                      tooltip: AppLocalizations.of(
-                        context,
-                      ).videoSeekBackwardSeconds(10),
-                      onPressed: onSeekBackward,
-                      size: 52,
-                      iconSize: 28,
+                      icon:
+                          isPlaying
+                              ? Icons.pause_rounded
+                              : Icons.play_arrow_rounded,
+                      tooltip:
+                          isPlaying
+                              ? AppLocalizations.of(context).videoPause
+                              : AppLocalizations.of(context).videoPlay,
+                      onPressed: onPlayPause,
+                      size: isMobile ? 68 : 72,
+                      iconSize: isMobile ? 40 : 42,
                       filled: true,
                     ),
-                    const SizedBox(width: 24),
+                    if (isMobile) ...[
+                      const SizedBox(width: 24),
+                      MoviePlayerIconButton(
+                        icon: Icons.forward_10_rounded,
+                        tooltip: AppLocalizations.of(
+                          context,
+                        ).videoSeekForwardSeconds(10),
+                        onPressed: onSeekForward,
+                        size: 52,
+                        iconSize: 28,
+                        filled: true,
+                      ),
+                    ],
                   ],
-                  MoviePlayerIconButton(
-                    icon:
-                        isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                    tooltip:
-                        isPlaying
-                            ? AppLocalizations.of(context).videoPause
-                            : AppLocalizations.of(context).videoPlay,
-                    onPressed: onPlayPause,
-                    size: isMobile ? 68 : 72,
-                    iconSize: isMobile ? 40 : 42,
-                    filled: true,
-                  ),
-                  if (isMobile) ...[
-                    const SizedBox(width: 24),
-                    MoviePlayerIconButton(
-                      icon: Icons.forward_10_rounded,
-                      tooltip: AppLocalizations.of(
-                        context,
-                      ).videoSeekForwardSeconds(10),
-                      onPressed: onSeekForward,
-                      size: 52,
-                      iconSize: 28,
-                      filled: true,
-                    ),
-                  ],
-                ],
-              );
-            },
+                );
+              },
+            ),
           ),
-        ),
+        ],
       ),
     );
   }

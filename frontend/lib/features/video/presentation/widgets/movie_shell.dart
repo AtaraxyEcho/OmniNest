@@ -15,6 +15,8 @@ import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
+import 'package:omninest/features/backdrop/backdrop_ui.dart';
+import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_section_transition.dart';
@@ -176,82 +178,97 @@ class _MovieShellState extends ConsumerState<MovieShell> {
     // 跟踪初始切片
     _lastSection ??= effectiveSection;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // 托管态（手机/平板）一律走触屏布局：与 Music/Reader 同规则，
-        // 宽度只决定触屏内容网格的列数，不复用桌面侧栏与模块顶栏。
-        final hosted = MobileShellScope.isHosted(context);
-        final isWide =
-            !hosted && !ResponsiveBreakpoints.isCompact(constraints.maxWidth);
-        // 平板宽度（md~lg）下侧栏折叠为图标栏。
-        final sidebarCollapsed = isWide && constraints.maxWidth < 1024;
-        return Scaffold(
-          backgroundColor: context.movieRedesign.background,
-          body: Column(
-            children: [
-              if (isWide)
-                MovieTopBar(
-                  section: effectiveSection,
-                  showMenu: false,
-                  canManage: canManage,
-                  onSectionSelected: _onSectionSelected,
-                  trailing: widget.trailing,
-                  onRefresh: widget.onRefresh,
-                  userName: user?.displayName ?? user?.username ?? 'M',
-                ),
-              Expanded(
-                child:
-                    isWide
-                        ? Row(
-                          children: [
-                            MovieSidebar(
-                              section: effectiveSection,
-                              canManage: canManage,
-                              counts: widget.counts,
-                              collapsed: sidebarCollapsed,
-                              closeOnSelect: false,
-                              onSectionSelected: _onSectionSelected,
-                            ),
-                            Expanded(
-                              child: LayoutBuilder(
-                                builder: (context, contentConstraints) {
-                                  final pagePadding = movieRedesignPagePadding(
-                                    contentConstraints.maxWidth,
-                                  );
-                                  final content = MovieSectionTransition(
-                                    section: effectiveSection,
-                                    child: widget.child,
-                                  );
-                                  if (widget.childOwnsScroll) {
-                                    return Padding(
-                                      padding: pagePadding,
-                                      child: content,
-                                    );
-                                  }
-                                  return SingleChildScrollView(
-                                    padding: pagePadding.copyWith(bottom: 48),
-                                    child: content,
-                                  );
-                                },
-                              ),
-                            ),
-                          ],
-                        )
-                        : _MovieMobileShell(
+    return AppBackdropSceneScope(
+      // Movies 重设计使用不透明主题底（#0D0D0D）。注册隐藏背景策略，
+      // 避免 Portal 浅色壁纸与深色内容在 Impeller 合成时露出对角线亮缝。
+      owner: 'video.movie.shell',
+      policy: AppBackdropPolicy.work,
+      child: Builder(
+        builder: (context) {
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final hosted = MobileShellScope.isHosted(context);
+              final isWide =
+                  !hosted &&
+                  !ResponsiveBreakpoints.isCompact(constraints.maxWidth);
+              final sidebarCollapsed = isWide && constraints.maxWidth < 1024;
+              return Scaffold(
+                backgroundColor: context.movieRedesign.background,
+                body: ColoredBox(
+                  color: context.movieRedesign.background,
+                  child: Column(
+                    children: [
+                      if (isWide)
+                        MovieTopBar(
                           section: effectiveSection,
-                          onSectionSelected: _onSectionSelected,
+                          showMenu: false,
                           canManage: canManage,
-                          counts: widget.counts,
+                          onSectionSelected: _onSectionSelected,
+                          trailing: widget.trailing,
                           onRefresh: widget.onRefresh,
-                          onBack: _onBack,
-                          childOwnsScroll: widget.childOwnsScroll,
-                          child: widget.child,
+                          userName: user?.displayName ?? user?.username ?? 'M',
                         ),
-              ),
-            ],
-          ),
-        );
-      },
+                      Expanded(
+                        child:
+                            isWide
+                                ? Row(
+                                  children: [
+                                    MovieSidebar(
+                                      section: effectiveSection,
+                                      canManage: canManage,
+                                      counts: widget.counts,
+                                      collapsed: sidebarCollapsed,
+                                      closeOnSelect: false,
+                                      onSectionSelected: _onSectionSelected,
+                                    ),
+                                    Expanded(
+                                      child: LayoutBuilder(
+                                        builder: (context, contentConstraints) {
+                                          final pagePadding =
+                                              movieRedesignPagePadding(
+                                                contentConstraints.maxWidth,
+                                              );
+                                          final content =
+                                              MovieSectionTransition(
+                                                section: effectiveSection,
+                                                child: widget.child,
+                                              );
+                                          if (widget.childOwnsScroll) {
+                                            return Padding(
+                                              padding: pagePadding,
+                                              child: content,
+                                            );
+                                          }
+                                          return SingleChildScrollView(
+                                            padding: pagePadding.copyWith(
+                                              bottom: 48,
+                                            ),
+                                            child: content,
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                )
+                                : _MovieMobileShell(
+                                  section: effectiveSection,
+                                  onSectionSelected: _onSectionSelected,
+                                  canManage: canManage,
+                                  counts: widget.counts,
+                                  onRefresh: widget.onRefresh,
+                                  onBack: _onBack,
+                                  childOwnsScroll: widget.childOwnsScroll,
+                                  child: widget.child,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
     );
   }
 }

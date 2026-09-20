@@ -55,6 +55,7 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
         _toggleSubtitle(plan);
         break;
       case MoviePlayerKeyboardAction.toggleFullscreen:
+        // 键盘只走 F；F11 由 app.dart 全局 handler 处理，避免双重切换。
         _toggleFullscreen();
         break;
       case MoviePlayerKeyboardAction.speedDown:
@@ -116,14 +117,12 @@ extension _MoviePlayerPageInteractions on _MoviePlayerPageState {
   }
 
   void _handleSurfaceTap() {
-    if (!_showControls) {
-      _showControlsAndRestartTimer();
+    if (_controlPanelOpen) {
       return;
     }
-    if (_player.state.playing && !_controlPanelOpen) {
-      _hideTimer?.cancel();
-      _updateState(() => _showControls = false);
-    }
+    // 标准播放器手势：点击画面切换播放/暂停（有无控制栏均生效）。
+    unawaited(_requestPlayPause());
+    _showControlsAndRestartTimer();
   }
 
   void _handleSurfaceDoubleTap(TapDownDetails details, double width) {
