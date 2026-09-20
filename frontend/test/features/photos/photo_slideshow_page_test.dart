@@ -17,6 +17,7 @@ import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_image_cache.dart';
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 
 /// mock HTTP 返回的图片字节：由测试引擎现场生成并编码的合法 PNG。
@@ -568,6 +569,24 @@ void main() {
       await tester.pump(const Duration(milliseconds: 600));
       await tester.pump();
       expect(chromeHidden.value, isFalse, reason: '过渡期退出的页面不得申请沉浸租约');
+    });
+  });
+
+  testWidgets('加载层以模糊封面打底而非纯黑', (tester) async {
+    _mockPathProvider();
+    final photos = [_photoWithUrl('photo-1')];
+    final chromeHidden = ValueNotifier<bool>(false);
+    addTearDown(chromeHidden.dispose);
+    await _mockNetworkImages(() async {
+      await _pumpSlideshowViaPush(tester, photos, chromeHidden);
+      await tester.tap(find.text('open-slideshow'));
+      // 指针派发后路由内容在第二帧进树；此刻处于 loading 阶段：
+      // 有封面时必须由模糊封面占满画面，不得出现纯黑内容真空。
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(SlideshowLoadingStage), findsOneWidget);
+      expect(find.byType(SlideshowBlurredCover), findsOneWidget);
+      expect(tester.takeException(), isNull);
     });
   });
 }

@@ -18,6 +18,49 @@ class SlideFrame {
   final ui.Image? image;
 }
 
+/// 单张模糊封面：96px 超低分辨率缩略图放大拉伸（放大即强模糊）+ 压暗。
+///
+/// 加载层与 ready 背景层共用：同一缓存键（coverCacheKey@96）、同一观感，
+/// 进场前后画面连续，96px 解码毫秒级且无需额外预热。
+class SlideshowBlurredCover extends StatelessWidget {
+  const SlideshowBlurredCover({required this.photo, super.key});
+
+  final PhotoItem photo;
+
+  @override
+  Widget build(BuildContext context) {
+    final thumb = photo.coverUrl;
+    if (thumb == null || thumb.isEmpty) {
+      return const ColoredBox(color: Colors.black);
+    }
+    return RepaintBoundary(
+      child: Transform.scale(
+        scale: 1.12,
+        child: ImageFiltered(
+          imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
+                imageUrl: thumb,
+                cacheKey: photo.coverCacheKey,
+                memCacheWidth: 96,
+                fit: BoxFit.cover,
+                filterQuality: FilterQuality.medium,
+                fadeInDuration: Duration.zero,
+                errorWidget:
+                    (context, url, error) =>
+                        const ColoredBox(color: Colors.black),
+              ),
+              ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// 背景双层模糊：与前景同一过渡控制器同步交叉（Apple Photos 式氛围同步）。
 class SlideshowBackdropLayers extends StatelessWidget {
   const SlideshowBackdropLayers({
@@ -49,7 +92,7 @@ class SlideshowBackdropLayers extends StatelessWidget {
               Positioned.fill(
                 child: Opacity(
                   opacity: (1 - t).clamp(0.0, 1.0),
-                  child: _buildBlurredCover(leaving.photo),
+                  child: SlideshowBlurredCover(photo: leaving.photo),
                 ),
               ),
             Positioned.fill(
@@ -57,45 +100,12 @@ class SlideshowBackdropLayers extends StatelessWidget {
                 // 过渡控制器在静止态停在 0，入场层不透明度必须按过渡态门控，
                 // 否则首图与切换完成后都会以 opacity 0 渲染成黑屏。
                 opacity: transitioning ? t.clamp(0.0, 1.0) : 1.0,
-                child: _buildBlurredCover(entering.photo),
+                child: SlideshowBlurredCover(photo: entering.photo),
               ),
             ),
           ],
         );
       },
-    );
-  }
-
-  /// 单张模糊背景：96px 超低分辨率缩略图放大拉伸（放大即强模糊）+ 压暗。
-  Widget _buildBlurredCover(PhotoItem photo) {
-    final thumb = photo.coverUrl;
-    if (thumb == null || thumb.isEmpty) {
-      return const ColoredBox(color: Colors.black);
-    }
-    return RepaintBoundary(
-      child: Transform.scale(
-        scale: 1.12,
-        child: ImageFiltered(
-          imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CachedNetworkImage(
-                imageUrl: thumb,
-                cacheKey: photo.coverCacheKey,
-                memCacheWidth: 96,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.medium,
-                fadeInDuration: Duration.zero,
-                errorWidget:
-                    (context, url, error) =>
-                        const ColoredBox(color: Colors.black),
-              ),
-              ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }
@@ -151,7 +161,11 @@ class SlideshowSlideLayers extends StatelessWidget {
   }
 }
 
-/// 首屏加载层：内存/磁盘封面优先 + 无封面时的小型 spinner。
+/// 首屏加载层：有封面时以 96px 模糊封面打底（与 ready 背景层同键同观感），
+/// 消除进场期间的内容真空；仅无封面照片回退黑底小型 spinner。
+///
+/// 画质阶梯保持单调：96 模糊 → 400 缩略图 → preview 高清档，
+/// 不再出现"1280 清晰封面 → 400 糊图"的倒退闪烁。
 class SlideshowLoadingStage extends StatelessWidget {
   const SlideshowLoadingStage({required this.photo, super.key});
 
@@ -165,19 +179,7 @@ class SlideshowLoadingStage extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         if (hasCover)
-          CachedNetworkImage(
-            imageUrl: cover,
-            cacheKey: photo.coverCacheKey,
-            fit: BoxFit.cover,
-            memCacheWidth: 1280,
-            filterQuality: FilterQuality.medium,
-            fadeInDuration: Duration.zero,
-            fadeOutDuration: Duration.zero,
-            placeholder:
-                (context, url) => const ColoredBox(color: Colors.black),
-            errorWidget:
-                (context, url, error) => const ColoredBox(color: Colors.black),
-          )
+          SlideshowBlurredCover(photo: photo)
         else
           const ColoredBox(color: Colors.black),
         // Spinner only when there is no cover to show under it.

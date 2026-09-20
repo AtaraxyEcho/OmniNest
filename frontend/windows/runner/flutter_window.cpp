@@ -277,12 +277,14 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER |
                        SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOCOPYBITS);
     } else {
-      // SWP_NOCOPYBITS: do not blit stale pre-fullscreen bits into the new
-      // surface (classic black/white flash source on size-preserving copies).
+      // Keep the previous client content blitted during the monitor snap: the
+      // snap is deferred past the route transition so the first full-size
+      // frame arrives within a couple of vsyncs, and anchoring the old frame
+      // avoids a full-window black flash while the surface rebuilds. Regions
+      // not covered by the blit are filled by the black erase brush.
       SetWindowPos(hwnd, HWND_TOP, monitor.left, monitor.top,
                    monitor.right - monitor.left, monitor.bottom - monitor.top,
-                   SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW |
-                       SWP_NOCOPYBITS);
+                   SWP_NOOWNERZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
     }
     SyncFlutterViewChild();
     DwmFlush();
