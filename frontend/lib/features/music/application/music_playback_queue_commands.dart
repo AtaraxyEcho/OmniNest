@@ -45,11 +45,13 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     final targetIndex = uniqueItems.indexWhere(
       (candidate) => candidate.playableKey == startKey,
     );
-    await _playItemInQueue(
-      current,
-      uniqueItems,
-      targetIndex < 0 ? 0 : targetIndex,
-    );
+    final resolvedTarget = targetIndex < 0 ? 0 : targetIndex;
+    if (current.shuffleEnabled &&
+        !_samePlayableKeySet(current.playbackItems, uniqueItems)) {
+      // 整队替换且 key 集合变化：按新队列重开一轮洗牌序。
+      _startShuffleRound(uniqueItems, uniqueItems[resolvedTarget].playableKey);
+    }
+    await _playItemInQueue(current, uniqueItems, resolvedTarget);
   }
 
   /// 将可播放对象插入当前曲目之后（下一首播放），已存在时不重复添加。
@@ -64,6 +66,10 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     final items = [...current.playbackItems];
     final insertAt = (current.playbackIndex + 1).clamp(0, items.length);
     items.insert(insertAt, item);
+    if (current.shuffleEnabled) {
+      // 下一首播放语义：洗牌序队头同步插入。
+      _shuffleUpcoming.insert(0, item.playableKey);
+    }
     final next = current.copyWith(playbackItems: items);
     _replaceState(next);
     _queuePersistence.schedule(next);
@@ -86,6 +92,7 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       playbackItems: next,
       playbackIndex: nextIndex,
     );
+    _purgeShuffleKey(playableKey);
     _replaceState(nextState);
     _queuePersistence.schedule(nextState);
   }
@@ -101,6 +108,9 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       playbackIndex: -1,
       isPlaying: false,
     );
+    _shuffleUpcoming.clear();
+    _playHistory.clear();
+    _shuffleRoundConsumed = true;
     _replaceState(nextState);
     _queuePersistence.schedule(nextState);
   }
@@ -184,18 +194,11 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       return;
     }
     if (current.shuffleEnabled && queue.length > 1) {
-      final currentIndex =
-          current.playbackIndex >= 0 && current.playbackIndex < queue.length
-              ? current.playbackIndex
-              : queue.indexWhere(
-                (item) => item.playableKey == current.currentItem?.playableKey,
-              );
-      final nextIndexes = [
-        for (var index = 0; index < queue.length; index++)
-          if (index != currentIndex) index,
-      ];
-      final nextIndex = nextIndexes[random.nextInt(nextIndexes.length)];
-      await _playItemInQueue(current, queue, nextIndex);
+      if (await _nextShuffledTrack(current, queue)) {
+        return;
+      }
+      // 洗牌序耗尽且无法重生成（repeat=off）：按停播收尾。
+      _replaceState(current.copyWith(isPlaying: false));
       return;
     }
     final nextIndex = current.playbackIndex + 1;
@@ -210,20 +213,140 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     _replaceState(current.copyWith(isPlaying: false));
   }
 
-  /// 播放上一项，并在全列表循环时回到队尾。
+  /// 洗牌推进：消费未播洗牌序；repeat=all 时耗尽后重生成一轮再消费。
+  Future<bool> _nextShuffledTrack(
+    MusicCenterState current,
+    List<MusicPlayableItem> queue,
+  ) async {
+    if (_shuffleUpcoming.isEmpty && !_shuffleRoundConsumed) {
+      // 尚未开轮（如空队列复活路径）：按需生成。
+      _startShuffleRound(queue, current.currentItem?.playableKey);
+    }
+    if (await _consumeShuffleUpcoming(current, queue)) {
+      return true;
+    }
+    if (current.repeatMode == MusicRepeatMode.all) {
+      _startShuffleRound(queue, current.currentItem?.playableKey);
+      return _consumeShuffleUpcoming(current, queue);
+    }
+    return false;
+  }
+
+  /// 依次消费洗牌序，跳过已不在队列中的 key；耗尽即标记本轮结束。
+  Future<bool> _consumeShuffleUpcoming(
+    MusicCenterState current,
+    List<MusicPlayableItem> queue,
+  ) async {
+    while (_shuffleUpcoming.isNotEmpty) {
+      final key = _shuffleUpcoming.removeAt(0);
+      final index = queue.indexWhere((item) => item.playableKey == key);
+      if (index < 0) {
+        continue;
+      }
+      await _playItemInQueue(current, queue, index);
+      if (_shuffleUpcoming.isEmpty) {
+        _shuffleRoundConsumed = true;
+      }
+      return true;
+    }
+    _shuffleRoundConsumed = true;
+    return false;
+  }
+
+  /// 以 Fisher-Yates 生成洗牌未播序（排除当前曲）并开启新一轮。
+  void _startShuffleRound(List<MusicPlayableItem> queue, String? currentKey) {
+    final keys = <String>[
+      for (final item in queue)
+        if (item.playableKey != currentKey) item.playableKey,
+    ];
+    for (var i = keys.length - 1; i > 0; i--) {
+      final j = random.nextInt(i + 1);
+      final swapped = keys[i];
+      keys[i] = keys[j];
+      keys[j] = swapped;
+    }
+    _shuffleUpcoming
+      ..clear()
+      ..addAll(keys);
+    _shuffleRoundConsumed = false;
+  }
+
+  /// 将 key 从洗牌序与已播历史中剔除（移除/删除/跳过坏曲时调用）。
+  void _purgeShuffleKey(String playableKey) {
+    _shuffleUpcoming.remove(playableKey);
+    _playHistory.remove(playableKey);
+  }
+
+  /// 播放切换时维护洗牌序与历史：新曲移出未播序，被替换的当前曲入历史栈。
+  void _recordQueueTransitions(
+    MusicCenterState current,
+    MusicPlayableItem item, {
+    required bool pushHistory,
+  }) {
+    if (_shuffleUpcoming.remove(item.playableKey) && _shuffleUpcoming.isEmpty) {
+      _shuffleRoundConsumed = true;
+    }
+    final previousKey = current.currentItem?.playableKey;
+    if (!pushHistory ||
+        previousKey == null ||
+        previousKey == item.playableKey) {
+      return;
+    }
+    if (_playHistory.isNotEmpty && _playHistory.last == previousKey) {
+      return;
+    }
+    _playHistory.add(previousKey);
+    if (_playHistory.length > MusicCenterController._playHistoryLimit) {
+      _playHistory.removeAt(0);
+    }
+  }
+
+  bool _samePlayableKeySet(
+    List<MusicPlayableItem> left,
+    List<MusicPlayableItem> right,
+  ) {
+    if (left.length != right.length) {
+      return false;
+    }
+    final keys = left.map((item) => item.playableKey).toSet();
+    return right.every((item) => keys.contains(item.playableKey));
+  }
+
+  /// 播放上一项：优先沿已播历史回退，历史为空时按线性回退。
   Future<void> previousTrack() async {
     final current = _currentState;
     if (current == null || current.playbackItems.isEmpty) {
       return;
     }
+    while (_playHistory.isNotEmpty) {
+      final key = _playHistory.removeLast();
+      final index = current.playbackItems.indexWhere(
+        (item) => item.playableKey == key,
+      );
+      if (index >= 0) {
+        await _playItemInQueue(
+          current,
+          current.playbackItems,
+          index,
+          pushHistory: false,
+        );
+        return;
+      }
+    }
     final previousIndex = current.playbackIndex - 1;
     if (previousIndex >= 0) {
-      await _playItemInQueue(current, current.playbackItems, previousIndex);
+      await _playItemInQueue(
+        current,
+        current.playbackItems,
+        previousIndex,
+        pushHistory: false,
+      );
     } else if (current.repeatMode == MusicRepeatMode.all) {
       await _playItemInQueue(
         current,
         current.playbackItems,
         current.playbackItems.length - 1,
+        pushHistory: false,
       );
     }
   }
@@ -244,14 +367,23 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     _queuePersistence.schedule(nextState);
   }
 
-  /// 切换随机播放状态。
+  /// 切换随机播放状态；开启时按当前队列生成洗牌序，关闭时仅清空未播序。
   void toggleShuffle() {
     final current = _currentState;
     if (current == null) {
       return;
     }
-    final nextState = current.copyWith(shuffleEnabled: !current.shuffleEnabled);
+    final enabled = !current.shuffleEnabled;
+    final nextState = current.copyWith(shuffleEnabled: enabled);
     _replaceState(nextState);
+    if (enabled) {
+      _startShuffleRound(
+        nextState.playbackItems,
+        nextState.currentItem?.playableKey,
+      );
+    } else {
+      _shuffleUpcoming.clear();
+    }
     _queuePersistence.schedule(nextState);
   }
 }

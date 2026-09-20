@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -719,6 +720,24 @@ class _FakeMusicApi implements MusicApi {
     id: 'track-2',
     fileNodeId: 'file-2',
     title: 'Morning Ride',
+    artistName: 'Omni Band',
+    albumTitle: 'Unknown Album',
+    format: 'mp3',
+    favorite: false,
+  );
+  final thirdTrack = const MusicTrack(
+    id: 'track-3',
+    fileNodeId: 'file-3',
+    title: 'Evening Drive',
+    artistName: 'Omni Band',
+    albumTitle: 'Unknown Album',
+    format: 'mp3',
+    favorite: false,
+  );
+  final fourthTrack = const MusicTrack(
+    id: 'track-4',
+    fileNodeId: 'file-4',
+    title: 'Midnight Drive',
     artistName: 'Omni Band',
     albumTitle: 'Unknown Album',
     format: 'mp3',

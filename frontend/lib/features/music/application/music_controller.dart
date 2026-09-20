@@ -37,6 +37,18 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   @visibleForTesting
   Random random = Random();
 
+  /// 未播洗牌序（playableKey），洗牌开启时按轮次消费。
+  final List<String> _shuffleUpcoming = <String>[];
+
+  /// 已播历史栈，previousTrack 回退依据，超出上限丢弃栈底。
+  final List<String> _playHistory = <String>[];
+
+  /// 当前洗牌轮是否已耗尽；耗尽后仅 repeat=all 才重新生成。
+  bool _shuffleRoundConsumed = false;
+
+  /// 已播历史上限。
+  static const int _playHistoryLimit = 200;
+
   /// 曲库曲目分页大小，初始加载与增量加载保持一致。
   static const int musicLibraryPageSize = 100;
 
@@ -108,6 +120,9 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       _queuePersistence.dispose();
     });
     final loaded = await _loadState();
+    if (loaded.shuffleEnabled) {
+      _startShuffleRound(loaded.playbackItems, loaded.currentItem?.playableKey);
+    }
     if (_queuePersistence.restoreRequiresRemoteSync) {
       _queuePersistence.schedule(loaded, delay: Duration.zero);
     }
@@ -506,13 +521,15 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   Future<void> _playItemInQueue(
     MusicCenterState current,
     List<MusicPlayableItem> queue,
-    int index,
-  ) async {
+    int index, {
+    bool pushHistory = true,
+  }) async {
     if (queue.isEmpty || index < 0 || index >= queue.length) {
       return;
     }
     final generation = ++_playRequestGeneration;
     final item = queue[index];
+    _recordQueueTransitions(current, item, pushHistory: pushHistory);
     final pendingState = current.copyWith(
       currentItem: item,
       clearPlaybackPlan: true,
@@ -602,6 +619,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         remaining,
         nextIndex,
       );
+      _purgeShuffleKey(failedItem.playableKey);
       return;
     }
     final fallback = _resolveLocalFallback(
@@ -612,6 +630,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     );
     if (fallback != null && fallback.playableKey != failedItem.playableKey) {
       await _playItemInQueue(current, <MusicPlayableItem>[fallback], 0);
+      _purgeShuffleKey(failedItem.playableKey);
       return;
     }
     final failedState = current.copyWith(
