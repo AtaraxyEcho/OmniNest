@@ -1906,6 +1906,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filesCopiedClipboard => 'Copied to clipboard';
 
   @override
+  String get clipboardCopyFailed =>
+      'Copy failed, please select and copy manually';
+
+  @override
   String get filesPasswordLabel => 'Password';
 
   @override

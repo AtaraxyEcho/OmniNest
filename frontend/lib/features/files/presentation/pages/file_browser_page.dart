@@ -42,6 +42,7 @@ import 'package:omninest/features/files/presentation/widgets/external_storage_ac
 import 'package:omninest/features/files/presentation/widgets/share_link_sheet.dart';
 import 'package:omninest/features/files/presentation/widgets/upload_panel.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 
 part 'files_operation_l10n.dart';
 part 'file_browser_page_navigation.dart';

@@ -105,16 +105,27 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(NoHandlerFoundException.class)
     ResponseEntity<ApiResponse<Void>> handleNoHandlerFound(NoHandlerFoundException exception) {
-        log.warn("接口不存在: {} {}", exception.getHttpMethod(), exception.getRequestURL());
+        logUnknownPath(exception.getHttpMethod(), exception.getRequestURL());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(ErrorCode.NOT_FOUND, "接口不存在"));
     }
 
     @ExceptionHandler(NoResourceFoundException.class)
     ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException exception) {
-        log.warn("接口不存在: {} {}", exception.getHttpMethod(), exception.getResourcePath());
+        logUnknownPath(exception.getHttpMethod().name(), exception.getResourcePath());
         return ResponseEntity.status(HttpStatus.NOT_FOUND)
                 .body(ApiResponse.error(ErrorCode.NOT_FOUND, "接口不存在"));
+    }
+
+    // API 路径缺失是真实的接口契约信号，保持 WARN；
+    // 静态资源缺失（webapp 未部署、扫描器探测）降为 DEBUG，避免污染错误日志。
+    private void logUnknownPath(String method, String path) {
+        String normalized = path == null ? "" : path;
+        if (normalized.startsWith("/api/") || normalized.startsWith("api/")) {
+            log.warn("接口不存在: {} {}", method, normalized);
+        } else {
+            log.debug("资源不存在: {} {}", method, normalized);
+        }
     }
 
     @ExceptionHandler(AsyncRequestNotUsableException.class)

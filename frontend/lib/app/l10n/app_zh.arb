@@ -662,6 +662,7 @@
   "filesEnterPassword": "输入密码",
   "filesEnterCustomPassword": "请输入自定义密码",
   "filesCopiedClipboard": "已复制到剪贴板",
+  "clipboardCopyFailed": "复制失败，请手动选择复制",
   "filesPasswordLabel": "密码",
   "filesSharePasswordLabel": "密码: {password}",
   "@filesSharePasswordLabel": {

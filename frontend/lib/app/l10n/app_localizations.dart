@@ -3565,6 +3565,12 @@ abstract class AppLocalizations {
   /// **'Copied to clipboard'**
   String get filesCopiedClipboard;
 
+  /// No description provided for @clipboardCopyFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy failed, please select and copy manually'**
+  String get clipboardCopyFailed;
+
   /// No description provided for @filesPasswordLabel.
   ///
   /// In en, this message translates to:

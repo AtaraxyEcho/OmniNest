@@ -7,6 +7,7 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 
 /// 登录页两步验证面板：已启用用户输入验证码/备份码，强制角色未注册走注册引导向导。
 class LoginTwoFactorPanel extends ConsumerStatefulWidget {
@@ -432,12 +433,15 @@ class _LoginTwoFactorPanelState extends ConsumerState<LoginTwoFactorPanel> {
   }
 
   Future<void> _copyToClipboard(String value, AppLocalizations l10n) async {
-    await Clipboard.setData(ClipboardData(text: value));
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.twoFactorCopied)));
+    final copied = await copyTextToClipboard(value);
+    if (!mounted) {
+      return;
     }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed),
+      ),
+    );
   }
 }
 

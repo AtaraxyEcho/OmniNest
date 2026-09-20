@@ -1845,6 +1845,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get filesCopiedClipboard => '已复制到剪贴板';
 
   @override
+  String get clipboardCopyFailed => '复制失败，请手动选择复制';
+
+  @override
   String get filesPasswordLabel => '密码';
 
   @override

@@ -200,10 +200,13 @@ Future<void> _downloadFile(
   try {
     final url = await controller.downloadUrl(file);
     if (!messenger.mounted) return;
-    await Clipboard.setData(ClipboardData(text: url));
+    final copied = await copyTextToClipboard(url);
+    if (!messenger.mounted) return;
     messenger.showSnackBar(
       SnackBar(
-        content: Text(l10n.filesDownloadLinkCopied),
+        content: Text(
+          copied ? l10n.filesDownloadLinkCopied : l10n.clipboardCopyFailed,
+        ),
         behavior: SnackBarBehavior.floating,
       ),
     );

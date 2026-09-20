@@ -105,7 +105,11 @@ public class SecurityConfig {
                                 "/manifest.json",
                                 "/favicon.png",
                                 "/favicon.ico",
-                                "/version.json"
+                                "/version.json",
+                                // Web 端 drift 离线库经 Worker 无凭据拉取，必须匿名可达，
+                                // 否则数据库无法初始化（壁纸库面板永久加载中等级联故障）。
+                                "/drift_worker.js",
+                                "/sqlite3.wasm"
                         ).permitAll()
                         .requestMatchers("/assets/**", "/icons/**", "/canvaskit/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()

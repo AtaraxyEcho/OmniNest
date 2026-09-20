@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/features/files/application/share_link_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 
 /// 密码模式。
 enum _PasswordMode { custom, random }
@@ -509,12 +509,14 @@ class _ShareLinkSheetState extends ConsumerState<ShareLinkSheet> {
   Future<void> _copyToClipboard(String text) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = AppLocalizations.of(context);
-    await Clipboard.setData(ClipboardData(text: text));
+    final copied = await copyTextToClipboard(text);
     messenger
       ..clearSnackBars()
       ..showSnackBar(
         SnackBar(
-          content: Text(l10n.filesCopiedClipboard),
+          content: Text(
+            copied ? l10n.filesCopiedClipboard : l10n.clipboardCopyFailed,
+          ),
           duration: const Duration(seconds: 1),
         ),
       );

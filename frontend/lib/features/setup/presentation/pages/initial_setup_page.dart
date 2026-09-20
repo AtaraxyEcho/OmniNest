@@ -17,6 +17,7 @@ import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 
 class InitialSetupPage extends ConsumerStatefulWidget {
   const InitialSetupPage({super.key});
@@ -336,13 +337,16 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
         ),
         const SizedBox(height: 10),
         OutlinedButton.icon(
-          onPressed: () {
-            Clipboard.setData(ClipboardData(text: setup.secret));
-            if (mounted) {
-              ScaffoldMessenger.of(
-                context,
-              ).showSnackBar(SnackBar(content: Text(l10n.twoFactorCopied)));
-            }
+          onPressed: () async {
+            final copied = await copyTextToClipboard(setup.secret);
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
+                ),
+              ),
+            );
           },
           icon: const Icon(Icons.copy_rounded, size: 18),
           label: Text(l10n.twoFactorEnrollSecretLabel),
@@ -408,10 +412,19 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                 ),
                 const SizedBox(height: 14),
                 OutlinedButton.icon(
-                  onPressed: () {
-                    Clipboard.setData(ClipboardData(text: codes.join('\n')));
+                  onPressed: () async {
+                    final copied = await copyTextToClipboard(codes.join('\n'));
+                    if (!context.mounted) {
+                      return;
+                    }
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(l10n.twoFactorCopied)),
+                      SnackBar(
+                        content: Text(
+                          copied
+                              ? l10n.twoFactorCopied
+                              : l10n.clipboardCopyFailed,
+                        ),
+                      ),
                     );
                   },
                   icon: const Icon(Icons.copy_all_rounded, size: 18),

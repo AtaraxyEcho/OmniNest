@@ -223,7 +223,15 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
                 ),
                 FilledButton(
                   onPressed: () async {
-                    await Clipboard.setData(ClipboardData(text: url));
+                    final copied = await copyTextToClipboard(url);
+                    if (!copied) {
+                      if (dialogContext.mounted) {
+                        ScaffoldMessenger.of(dialogContext).showSnackBar(
+                          SnackBar(content: Text(l10n.clipboardCopyFailed)),
+                        );
+                      }
+                      return;
+                    }
                     if (dialogContext.mounted) {
                       Navigator.of(dialogContext).pop();
                     }

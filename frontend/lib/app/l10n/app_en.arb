@@ -773,6 +773,7 @@
   "filesEnterPassword": "Enter password",
   "filesEnterCustomPassword": "Please enter custom password",
   "filesCopiedClipboard": "Copied to clipboard",
+  "clipboardCopyFailed": "Copy failed, please select and copy manually",
   "filesPasswordLabel": "Password",
   "filesSharePasswordLabel": "Password: {password}",
   "@filesSharePasswordLabel": {

@@ -7,6 +7,7 @@ import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 
 final profileTwoFactorStatusProvider =
     FutureProvider.autoDispose<TwoFactorStatusData>(
@@ -319,11 +320,15 @@ class _TwoFactorEnableDialogState
   }
 
   Future<void> _copy(String value, AppLocalizations l10n) async {
-    await Clipboard.setData(ClipboardData(text: value));
+    final copied = await copyTextToClipboard(value);
     if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.twoFactorCopied)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            copied ? l10n.twoFactorCopied : l10n.clipboardCopyFailed,
+          ),
+        ),
+      );
     }
   }
 }

@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -16,6 +15,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
 import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/core/utils/clipboard_writer.dart';
 
 /// 照片分享侧栏：SHARE 眉题 + 预览卡 + LINK 复制 + 分享渠道宫格 + OPTIONS 开关。
 ///
@@ -147,8 +147,16 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   Future<void> _copyToClipboard() async {
     final url = _shareUrl;
     if (url == null || url.isEmpty) return;
-    await Clipboard.setData(ClipboardData(text: url));
+    final copied = await copyTextToClipboard(url);
     if (!mounted) return;
+    if (!copied) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context).clipboardCopyFailed),
+        ),
+      );
+      return;
+    }
     setState(() => _copied = true);
     _copyResetTimer?.cancel();
     _copyResetTimer = Timer(const Duration(seconds: 2), () {
