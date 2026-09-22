@@ -165,6 +165,8 @@ class AppBackdropAsset {
     this.durationMs,
     this.thumbnailPath,
     this.localVideoPath,
+    this.videoCodec,
+    this.webPlayable = true,
     this.missing = false,
     this.status = AppBackdropAssetStatus.ready,
   });
@@ -186,12 +188,21 @@ class AppBackdropAsset {
 
   /// 桌面/移动：本机缓存的视频路径;为空则用网络 path。
   final String? localVideoPath;
+
+  /// 服务端探测的视频编码名，图片与探测失败时为空。
+  final String? videoCodec;
+
+  /// 视频在 Web 客户端是否可解码；编码未知时按可播处理。
+  final bool webPlayable;
   final bool missing;
   final AppBackdropAssetStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
 
   bool get isVideo => mediaType == AppBackdropMediaType.video;
+
+  /// 视频已确认无法在 Web 客户端解码；编码未知时不视为不可播。
+  bool get isWebPlaybackUnsupported => isVideo && !webPlayable;
 
   /// 当前素材是否随应用安装包提供。
   bool get isBundled => sourceType == AppBackdropSourceType.bundled;
@@ -213,6 +224,8 @@ class AppBackdropAsset {
     int? durationMs,
     String? thumbnailPath,
     String? localVideoPath,
+    String? videoCodec,
+    bool? webPlayable,
     bool? missing,
     AppBackdropAssetStatus? status,
     DateTime? createdAt,
@@ -232,6 +245,8 @@ class AppBackdropAsset {
       durationMs: durationMs ?? this.durationMs,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
       localVideoPath: localVideoPath ?? this.localVideoPath,
+      videoCodec: videoCodec ?? this.videoCodec,
+      webPlayable: webPlayable ?? this.webPlayable,
       missing: missing ?? this.missing,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,

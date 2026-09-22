@@ -5866,6 +5866,32 @@ class $AppBackdropAssetsTable extends AppBackdropAssets
     type: DriftSqlType.int,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _videoCodecMeta = const VerificationMeta(
+    'videoCodec',
+  );
+  @override
+  late final GeneratedColumn<String> videoCodec = GeneratedColumn<String>(
+    'video_codec',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _webPlayableMeta = const VerificationMeta(
+    'webPlayable',
+  );
+  @override
+  late final GeneratedColumn<bool> webPlayable = GeneratedColumn<bool>(
+    'web_playable',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("web_playable" IN (0, 1))',
+    ),
+    defaultValue: const Constant(true),
+  );
   static const VerificationMeta _thumbnailPathMeta = const VerificationMeta(
     'thumbnailPath',
   );
@@ -5937,6 +5963,8 @@ class $AppBackdropAssetsTable extends AppBackdropAssets
     width,
     height,
     durationMs,
+    videoCodec,
+    webPlayable,
     thumbnailPath,
     missing,
     status,
@@ -6031,6 +6059,21 @@ class $AppBackdropAssetsTable extends AppBackdropAssets
       context.handle(
         _durationMsMeta,
         durationMs.isAcceptableOrUnknown(data['duration_ms']!, _durationMsMeta),
+      );
+    }
+    if (data.containsKey('video_codec')) {
+      context.handle(
+        _videoCodecMeta,
+        videoCodec.isAcceptableOrUnknown(data['video_codec']!, _videoCodecMeta),
+      );
+    }
+    if (data.containsKey('web_playable')) {
+      context.handle(
+        _webPlayableMeta,
+        webPlayable.isAcceptableOrUnknown(
+          data['web_playable']!,
+          _webPlayableMeta,
+        ),
       );
     }
     if (data.containsKey('thumbnail_path')) {
@@ -6130,6 +6173,15 @@ class $AppBackdropAssetsTable extends AppBackdropAssets
         DriftSqlType.int,
         data['${effectivePrefix}duration_ms'],
       ),
+      videoCodec: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}video_codec'],
+      ),
+      webPlayable:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.bool,
+            data['${effectivePrefix}web_playable'],
+          )!,
       thumbnailPath: attachedDatabase.typeMapping.read(
         DriftSqlType.string,
         data['${effectivePrefix}thumbnail_path'],
@@ -6198,6 +6250,12 @@ class AppBackdropAssetRow extends DataClass
   /// 视频时长，单位毫秒，非视频为空。
   final int? durationMs;
 
+  /// 服务端探测的视频编码名，图片与探测失败时为空。
+  final String? videoCodec;
+
+  /// 视频在 Web 客户端是否可解码，编码未知时按可播处理。
+  final bool webPlayable;
+
   /// 本机缩略图缓存路径。
   final String? thumbnailPath;
 
@@ -6224,6 +6282,8 @@ class AppBackdropAssetRow extends DataClass
     this.width,
     this.height,
     this.durationMs,
+    this.videoCodec,
+    required this.webPlayable,
     this.thumbnailPath,
     required this.missing,
     required this.status,
@@ -6252,6 +6312,10 @@ class AppBackdropAssetRow extends DataClass
     if (!nullToAbsent || durationMs != null) {
       map['duration_ms'] = Variable<int>(durationMs);
     }
+    if (!nullToAbsent || videoCodec != null) {
+      map['video_codec'] = Variable<String>(videoCodec);
+    }
+    map['web_playable'] = Variable<bool>(webPlayable);
     if (!nullToAbsent || thumbnailPath != null) {
       map['thumbnail_path'] = Variable<String>(thumbnailPath);
     }
@@ -6283,6 +6347,11 @@ class AppBackdropAssetRow extends DataClass
           durationMs == null && nullToAbsent
               ? const Value.absent()
               : Value(durationMs),
+      videoCodec:
+          videoCodec == null && nullToAbsent
+              ? const Value.absent()
+              : Value(videoCodec),
+      webPlayable: Value(webPlayable),
       thumbnailPath:
           thumbnailPath == null && nullToAbsent
               ? const Value.absent()
@@ -6311,6 +6380,8 @@ class AppBackdropAssetRow extends DataClass
       width: serializer.fromJson<int?>(json['width']),
       height: serializer.fromJson<int?>(json['height']),
       durationMs: serializer.fromJson<int?>(json['durationMs']),
+      videoCodec: serializer.fromJson<String?>(json['videoCodec']),
+      webPlayable: serializer.fromJson<bool>(json['webPlayable']),
       thumbnailPath: serializer.fromJson<String?>(json['thumbnailPath']),
       missing: serializer.fromJson<bool>(json['missing']),
       status: serializer.fromJson<String>(json['status']),
@@ -6333,6 +6404,8 @@ class AppBackdropAssetRow extends DataClass
       'width': serializer.toJson<int?>(width),
       'height': serializer.toJson<int?>(height),
       'durationMs': serializer.toJson<int?>(durationMs),
+      'videoCodec': serializer.toJson<String?>(videoCodec),
+      'webPlayable': serializer.toJson<bool>(webPlayable),
       'thumbnailPath': serializer.toJson<String?>(thumbnailPath),
       'missing': serializer.toJson<bool>(missing),
       'status': serializer.toJson<String>(status),
@@ -6353,6 +6426,8 @@ class AppBackdropAssetRow extends DataClass
     Value<int?> width = const Value.absent(),
     Value<int?> height = const Value.absent(),
     Value<int?> durationMs = const Value.absent(),
+    Value<String?> videoCodec = const Value.absent(),
+    bool? webPlayable,
     Value<String?> thumbnailPath = const Value.absent(),
     bool? missing,
     String? status,
@@ -6371,6 +6446,8 @@ class AppBackdropAssetRow extends DataClass
     width: width.present ? width.value : this.width,
     height: height.present ? height.value : this.height,
     durationMs: durationMs.present ? durationMs.value : this.durationMs,
+    videoCodec: videoCodec.present ? videoCodec.value : this.videoCodec,
+    webPlayable: webPlayable ?? this.webPlayable,
     thumbnailPath:
         thumbnailPath.present ? thumbnailPath.value : this.thumbnailPath,
     missing: missing ?? this.missing,
@@ -6397,6 +6474,10 @@ class AppBackdropAssetRow extends DataClass
       height: data.height.present ? data.height.value : this.height,
       durationMs:
           data.durationMs.present ? data.durationMs.value : this.durationMs,
+      videoCodec:
+          data.videoCodec.present ? data.videoCodec.value : this.videoCodec,
+      webPlayable:
+          data.webPlayable.present ? data.webPlayable.value : this.webPlayable,
       thumbnailPath:
           data.thumbnailPath.present
               ? data.thumbnailPath.value
@@ -6422,6 +6503,8 @@ class AppBackdropAssetRow extends DataClass
           ..write('width: $width, ')
           ..write('height: $height, ')
           ..write('durationMs: $durationMs, ')
+          ..write('videoCodec: $videoCodec, ')
+          ..write('webPlayable: $webPlayable, ')
           ..write('thumbnailPath: $thumbnailPath, ')
           ..write('missing: $missing, ')
           ..write('status: $status, ')
@@ -6444,6 +6527,8 @@ class AppBackdropAssetRow extends DataClass
     width,
     height,
     durationMs,
+    videoCodec,
+    webPlayable,
     thumbnailPath,
     missing,
     status,
@@ -6465,6 +6550,8 @@ class AppBackdropAssetRow extends DataClass
           other.width == this.width &&
           other.height == this.height &&
           other.durationMs == this.durationMs &&
+          other.videoCodec == this.videoCodec &&
+          other.webPlayable == this.webPlayable &&
           other.thumbnailPath == this.thumbnailPath &&
           other.missing == this.missing &&
           other.status == this.status &&
@@ -6484,6 +6571,8 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
   final Value<int?> width;
   final Value<int?> height;
   final Value<int?> durationMs;
+  final Value<String?> videoCodec;
+  final Value<bool> webPlayable;
   final Value<String?> thumbnailPath;
   final Value<bool> missing;
   final Value<String> status;
@@ -6502,6 +6591,8 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     this.width = const Value.absent(),
     this.height = const Value.absent(),
     this.durationMs = const Value.absent(),
+    this.videoCodec = const Value.absent(),
+    this.webPlayable = const Value.absent(),
     this.thumbnailPath = const Value.absent(),
     this.missing = const Value.absent(),
     this.status = const Value.absent(),
@@ -6521,6 +6612,8 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     this.width = const Value.absent(),
     this.height = const Value.absent(),
     this.durationMs = const Value.absent(),
+    this.videoCodec = const Value.absent(),
+    this.webPlayable = const Value.absent(),
     this.thumbnailPath = const Value.absent(),
     this.missing = const Value.absent(),
     this.status = const Value.absent(),
@@ -6547,6 +6640,8 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     Expression<int>? width,
     Expression<int>? height,
     Expression<int>? durationMs,
+    Expression<String>? videoCodec,
+    Expression<bool>? webPlayable,
     Expression<String>? thumbnailPath,
     Expression<bool>? missing,
     Expression<String>? status,
@@ -6566,6 +6661,8 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
       if (width != null) 'width': width,
       if (height != null) 'height': height,
       if (durationMs != null) 'duration_ms': durationMs,
+      if (videoCodec != null) 'video_codec': videoCodec,
+      if (webPlayable != null) 'web_playable': webPlayable,
       if (thumbnailPath != null) 'thumbnail_path': thumbnailPath,
       if (missing != null) 'missing': missing,
       if (status != null) 'status': status,
@@ -6587,6 +6684,8 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     Value<int?>? width,
     Value<int?>? height,
     Value<int?>? durationMs,
+    Value<String?>? videoCodec,
+    Value<bool>? webPlayable,
     Value<String?>? thumbnailPath,
     Value<bool>? missing,
     Value<String>? status,
@@ -6606,6 +6705,8 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
       width: width ?? this.width,
       height: height ?? this.height,
       durationMs: durationMs ?? this.durationMs,
+      videoCodec: videoCodec ?? this.videoCodec,
+      webPlayable: webPlayable ?? this.webPlayable,
       thumbnailPath: thumbnailPath ?? this.thumbnailPath,
       missing: missing ?? this.missing,
       status: status ?? this.status,
@@ -6651,6 +6752,12 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
     if (durationMs.present) {
       map['duration_ms'] = Variable<int>(durationMs.value);
     }
+    if (videoCodec.present) {
+      map['video_codec'] = Variable<String>(videoCodec.value);
+    }
+    if (webPlayable.present) {
+      map['web_playable'] = Variable<bool>(webPlayable.value);
+    }
     if (thumbnailPath.present) {
       map['thumbnail_path'] = Variable<String>(thumbnailPath.value);
     }
@@ -6686,6 +6793,8 @@ class AppBackdropAssetsCompanion extends UpdateCompanion<AppBackdropAssetRow> {
           ..write('width: $width, ')
           ..write('height: $height, ')
           ..write('durationMs: $durationMs, ')
+          ..write('videoCodec: $videoCodec, ')
+          ..write('webPlayable: $webPlayable, ')
           ..write('thumbnailPath: $thumbnailPath, ')
           ..write('missing: $missing, ')
           ..write('status: $status, ')
@@ -11935,6 +12044,8 @@ typedef $$AppBackdropAssetsTableCreateCompanionBuilder =
       Value<int?> width,
       Value<int?> height,
       Value<int?> durationMs,
+      Value<String?> videoCodec,
+      Value<bool> webPlayable,
       Value<String?> thumbnailPath,
       Value<bool> missing,
       Value<String> status,
@@ -11955,6 +12066,8 @@ typedef $$AppBackdropAssetsTableUpdateCompanionBuilder =
       Value<int?> width,
       Value<int?> height,
       Value<int?> durationMs,
+      Value<String?> videoCodec,
+      Value<bool> webPlayable,
       Value<String?> thumbnailPath,
       Value<bool> missing,
       Value<String> status,
@@ -12024,6 +12137,16 @@ class $$AppBackdropAssetsTableFilterComposer
 
   ColumnFilters<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get videoCodec => $composableBuilder(
+    column: $table.videoCodec,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get webPlayable => $composableBuilder(
+    column: $table.webPlayable,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -12117,6 +12240,16 @@ class $$AppBackdropAssetsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get videoCodec => $composableBuilder(
+    column: $table.videoCodec,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get webPlayable => $composableBuilder(
+    column: $table.webPlayable,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get thumbnailPath => $composableBuilder(
     column: $table.thumbnailPath,
     builder: (column) => ColumnOrderings(column),
@@ -12190,6 +12323,16 @@ class $$AppBackdropAssetsTableAnnotationComposer
 
   GeneratedColumn<int> get durationMs => $composableBuilder(
     column: $table.durationMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get videoCodec => $composableBuilder(
+    column: $table.videoCodec,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<bool> get webPlayable => $composableBuilder(
+    column: $table.webPlayable,
     builder: (column) => column,
   );
 
@@ -12268,6 +12411,8 @@ class $$AppBackdropAssetsTableTableManager
                 Value<int?> width = const Value.absent(),
                 Value<int?> height = const Value.absent(),
                 Value<int?> durationMs = const Value.absent(),
+                Value<String?> videoCodec = const Value.absent(),
+                Value<bool> webPlayable = const Value.absent(),
                 Value<String?> thumbnailPath = const Value.absent(),
                 Value<bool> missing = const Value.absent(),
                 Value<String> status = const Value.absent(),
@@ -12286,6 +12431,8 @@ class $$AppBackdropAssetsTableTableManager
                 width: width,
                 height: height,
                 durationMs: durationMs,
+                videoCodec: videoCodec,
+                webPlayable: webPlayable,
                 thumbnailPath: thumbnailPath,
                 missing: missing,
                 status: status,
@@ -12306,6 +12453,8 @@ class $$AppBackdropAssetsTableTableManager
                 Value<int?> width = const Value.absent(),
                 Value<int?> height = const Value.absent(),
                 Value<int?> durationMs = const Value.absent(),
+                Value<String?> videoCodec = const Value.absent(),
+                Value<bool> webPlayable = const Value.absent(),
                 Value<String?> thumbnailPath = const Value.absent(),
                 Value<bool> missing = const Value.absent(),
                 Value<String> status = const Value.absent(),
@@ -12324,6 +12473,8 @@ class $$AppBackdropAssetsTableTableManager
                 width: width,
                 height: height,
                 durationMs: durationMs,
+                videoCodec: videoCodec,
+                webPlayable: webPlayable,
                 thumbnailPath: thumbnailPath,
                 missing: missing,
                 status: status,

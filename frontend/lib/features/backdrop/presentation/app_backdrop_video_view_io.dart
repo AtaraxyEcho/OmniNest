@@ -16,6 +16,7 @@ class AppBackdropVideoView extends ConsumerStatefulWidget {
     required this.muted,
     this.fallbackSource,
     this.onSourceStale,
+    this.codecUnsupported = false,
     super.key,
   });
 
@@ -29,6 +30,9 @@ class AppBackdropVideoView extends ConsumerStatefulWidget {
 
   /// 主源打开失败时通知上层签名 URL 可能过期。
   final VoidCallback? onSourceStale;
+
+  /// 浏览器解码能力标记，仅 Web 实现使用；media_kit 不受该判定影响。
+  final bool codecUnsupported;
 
   @override
   ConsumerState<AppBackdropVideoView> createState() =>

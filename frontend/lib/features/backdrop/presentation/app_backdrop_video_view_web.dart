@@ -17,6 +17,7 @@ class AppBackdropVideoView extends StatefulWidget {
     required this.muted,
     this.fallbackSource,
     this.onSourceStale,
+    this.codecUnsupported = false,
     super.key,
   });
 
@@ -31,6 +32,9 @@ class AppBackdropVideoView extends StatefulWidget {
 
   /// 主源打开失败时通知上层签名 URL 可能过期。
   final VoidCallback? onSourceStale;
+
+  /// 服务端已判定浏览器无法解码该编码；置真时播放失败不再按签名过期处理，也不重试。
+  final bool codecUnsupported;
 
   @override
   State<AppBackdropVideoView> createState() => _AppBackdropVideoViewState();
@@ -134,6 +138,14 @@ class _AppBackdropVideoViewState extends State<AppBackdropVideoView> {
   }
 
   void _handleError(web.Event event) {
+    if (widget.codecUnsupported) {
+      // 编码已知不可播：重签和重试都只会重复同一失败，直接收敛到静态海报。
+      if (!_failed) {
+        setState(() => _failed = true);
+        devLog('背景视频编码浏览器不支持，跳过签名刷新与重试');
+      }
+      return;
+    }
     final fallback = widget.fallbackSource;
     if (_appliedSource != null &&
         fallback != null &&

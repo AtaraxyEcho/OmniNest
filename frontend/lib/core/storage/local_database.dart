@@ -52,7 +52,7 @@ class LocalDatabase extends _$LocalDatabase {
     : super(executor ?? connection.openConnection());
 
   @override
-  int get schemaVersion => 21;
+  int get schemaVersion => 22;
 
   Future<bool> _tableExists(Migrator migrator, String tableName) async {
     final rows =
@@ -279,6 +279,22 @@ class LocalDatabase extends _$LocalDatabase {
               )) {
             await migrator.database.customStatement(
               "ALTER TABLE app_backdrop_settings ADD COLUMN alignment TEXT NOT NULL DEFAULT 'center'",
+            );
+          }
+        }
+        // Schema v22：背景素材记录服务端探测的视频编码与 Web 可播判定。
+        if (from < 22) {
+          if (await _tableExists(migrator, 'app_backdrop_assets') &&
+              !await _columnExists(
+                migrator,
+                'app_backdrop_assets',
+                'video_codec',
+              )) {
+            await migrator.database.customStatement(
+              'ALTER TABLE app_backdrop_assets ADD COLUMN video_codec TEXT',
+            );
+            await migrator.database.customStatement(
+              'ALTER TABLE app_backdrop_assets ADD COLUMN web_playable INTEGER NOT NULL DEFAULT 1',
             );
           }
         }

@@ -8,6 +8,7 @@ import com.omninest.modules.backdrop.config.BackdropRuntimeConfigService;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
 import com.omninest.modules.backdrop.domain.BackdropAssetStatus;
 import com.omninest.modules.backdrop.domain.BackdropMediaType;
+import com.omninest.modules.backdrop.domain.BackdropWebPlaybackPolicy;
 import com.omninest.modules.backdrop.dto.BackdropDtos.BackdropAssetDto;
 import com.omninest.modules.backdrop.repository.BackdropAssetRepository;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
@@ -74,6 +75,7 @@ public class BackdropAssetService {
     private static final double THUMBNAIL_QUALITY = 0.82;
     private static final Duration VIDEO_THUMBNAIL_TIMEOUT = Duration.ofSeconds(30);
     private static final Duration VIDEO_PLAYBACK_ENCODE_TIMEOUT = Duration.ofSeconds(90);
+    private static final Duration VIDEO_CODEC_PROBE_TIMEOUT = Duration.ofSeconds(15);
     private static final Duration RESERVATION_TTL = Duration.ofHours(6);
     private static final Duration UPLOAD_RATE_WINDOW = Duration.ofHours(1);
 
@@ -367,12 +369,13 @@ public class BackdropAssetService {
      */
     private BackdropAsset finalizePublishedAsset(
             UUID ownerUserId, UUID assetId, UUID fileNodeId, UUID playbackFileId,
-            UUID thumbFileId, ImageDimensions dimensions) {
+            UUID thumbFileId, ImageDimensions dimensions, String videoCodec) {
         BackdropAsset asset = backdropAssetRepository.findById(assetId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
         asset.setFileNodeId(fileNodeId);
         asset.setPlaybackFileId(playbackFileId);
         asset.setThumbFileId(thumbFileId);
+        asset.setVideoCodec(videoCodec);
         asset.setStatus(BackdropAssetStatus.READY);
         if (dimensions != null) {
             asset.setWidth(dimensions.width());
@@ -399,7 +402,20 @@ public class BackdropAssetService {
 
     /**
      * 为视频生成 ≤1080p 播放衍生文件,降低客户端解码成本;失败不阻断上传。
+     *
+     * <p>当前有意不接线:壁纸按原片播放,见 {@code completeStagedAsset} 的 playbackFileId 传空。
+     * 保留该实现供后续按素材生成兼容版本时复用,删除前需先确认 Web 端兼容策略定稿。</p>
      */
+    /**
+     * 探测视频编码名，仅用于客户端 Web 端可播提示；图片与探测失败返回空，不影响发布结果。
+     */
+    private String probeVideoCodecForNotice(Path stagingFile, DetectedMedia media) {
+        if (media.mediaType() != BackdropMediaType.VIDEO) {
+            return null;
+        }
+        return videoThumbnailExtractor.probeVideoCodec(stagingFile, VIDEO_CODEC_PROBE_TIMEOUT).orElse(null);
+    }
+
     private UUID generateAndStorePlayback(
             UUID ownerUserId, UUID assetId, Path stagingFile, DetectedMedia media, UUID publishedNodeId) {
         if (media.mediaType() != BackdropMediaType.VIDEO) {
@@ -546,7 +562,9 @@ public class BackdropAssetService {
             // 不做服务端降质衍生:壁纸默认原片,由客户端可选本地缓存。
             UUID thumbNodeId = generateAndStoreThumbnail(
                     ownerUserId, assetId, stagingFile, media, publishedNodeId);
-            finalizePublishedAsset(ownerUserId, assetId, publishedNodeId, null, thumbNodeId, dimensions);
+            String videoCodec = probeVideoCodecForNotice(stagingFile, media);
+            finalizePublishedAsset(
+                    ownerUserId, assetId, publishedNodeId, null, thumbNodeId, dimensions, videoCodec);
             BackdropAsset asset = backdropAssetRepository.findById(assetId)
                     .orElseThrow(() -> new BusinessException(ErrorCode.BACKDROP_NOT_FOUND, "背景素材不存在"));
             storageQuotaService.settleReservation(RESERVATION_SOURCE_TYPE, assetId, asset.getFileSize());
@@ -720,7 +738,9 @@ public class BackdropAssetService {
                 asset.getHeight(),
                 asset.getDurationMs(),
                 asset.getFileSize(),
-                asset.getUpdatedAt()
+                asset.getUpdatedAt(),
+                asset.getVideoCodec(),
+                BackdropWebPlaybackPolicy.isWebPlayable(asset.getVideoCodec())
         );
     }
 

@@ -900,6 +900,7 @@
   "musicVisualizerActiveFontScale": "在读歌词字号",
   "musicVisualizerInactiveFontScale": "未读歌词字号",
   "musicLyricBackToCurrent": "回到当前播放",
+  "musicLyricRepeatVerse": "重复本句",
   "musicLyricCopied": "已复制该行歌词",
   "musicLyricCopyLine": "复制歌词",
   "musicLyricDelayLater": "歌词延后 0.1 秒",
@@ -1103,6 +1104,13 @@
   "portalLocalBackdropDeleteFailed": "删除失败，请稍后重试",
   "portalLocalBackdropQuotaExceeded": "背景素材数量或存储空间配额不足",
   "portalLocalBackdropUnsupportedFormat": "仅支持 JPG、PNG、WebP、GIF 图片或 MP4、WebM、MOV、M4V 视频",
+  "portalLocalBackdropWebUnsupportedBadge": "Web 不可播",
+  "portalLocalBackdropWebUnsupportedNotice": "「{title}」的视频编码浏览器可能无法播放，桌面端不受影响",
+  "@portalLocalBackdropWebUnsupportedNotice": {
+    "placeholders": {
+      "title": {}
+    }
+  },
   "portalLocalBackdropFileTooLarge": "背景素材文件过大",
   "portalLocalBackdropScanUnavailable": "安全扫描服务不可用，暂无法上传",
   "portalLocalBackdropMalwareDetected": "文件检测到安全威胁，已拒绝",

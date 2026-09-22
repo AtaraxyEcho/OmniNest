@@ -135,6 +135,7 @@ class AppBackdropSurface extends ConsumerWidget {
             playing: active && motionAllowed,
             muted: settings.videoMuted,
             onSourceStale: onSourceStale,
+            codecUnsupported: asset.isWebPlaybackUnsupported,
           ),
         ],
       );

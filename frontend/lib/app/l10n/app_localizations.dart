@@ -4483,6 +4483,12 @@ abstract class AppLocalizations {
   /// **'Back to current'**
   String get musicLyricBackToCurrent;
 
+  /// No description provided for @musicLyricRepeatVerse.
+  ///
+  /// In en, this message translates to:
+  /// **'Repeat this verse'**
+  String get musicLyricRepeatVerse;
+
   /// No description provided for @musicLyricCopied.
   ///
   /// In en, this message translates to:
@@ -5388,6 +5394,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV, M4V videos are supported'**
   String get portalLocalBackdropUnsupportedFormat;
+
+  /// No description provided for @portalLocalBackdropWebUnsupportedBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'No web playback'**
+  String get portalLocalBackdropWebUnsupportedBadge;
+
+  /// No description provided for @portalLocalBackdropWebUnsupportedNotice.
+  ///
+  /// In en, this message translates to:
+  /// **'\"{title}\" uses a video codec the browser may not play; desktop is unaffected'**
+  String portalLocalBackdropWebUnsupportedNotice(Object title);
 
   /// No description provided for @portalLocalBackdropFileTooLarge.
   ///

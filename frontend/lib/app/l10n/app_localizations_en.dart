@@ -2419,6 +2419,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicLyricBackToCurrent => 'Back to current';
 
   @override
+  String get musicLyricRepeatVerse => 'Repeat this verse';
+
+  @override
   String get musicLyricCopied => 'Lyric line copied';
 
   @override
@@ -2895,6 +2898,14 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get portalLocalBackdropUnsupportedFormat =>
       'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV, M4V videos are supported';
+
+  @override
+  String get portalLocalBackdropWebUnsupportedBadge => 'No web playback';
+
+  @override
+  String portalLocalBackdropWebUnsupportedNotice(Object title) {
+    return '\"$title\" uses a video codec the browser may not play; desktop is unaffected';
+  }
 
   @override
   String get portalLocalBackdropFileTooLarge => 'Backdrop file is too large';

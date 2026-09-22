@@ -39,6 +39,12 @@ class AppBackdropAssets extends Table {
   /// 视频时长，单位毫秒，非视频为空。
   IntColumn get durationMs => integer().nullable()();
 
+  /// 服务端探测的视频编码名，图片与探测失败时为空。
+  TextColumn get videoCodec => text().nullable()();
+
+  /// 视频在 Web 客户端是否可解码，编码未知时按可播处理。
+  BoolColumn get webPlayable => boolean().withDefault(const Constant(true))();
+
   /// 本机缩略图缓存路径。
   TextColumn get thumbnailPath => text().nullable()();
 

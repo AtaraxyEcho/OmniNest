@@ -143,6 +143,8 @@ class AppBackdropRepository {
             width: asset.width ?? existing?.width,
             height: asset.height ?? existing?.height,
             durationMs: asset.durationMs ?? existing?.durationMs,
+            videoCodec: asset.videoCodec ?? existing?.videoCodec,
+            webPlayable: asset.webPlayable,
             thumbnailPath:
                 (thumbUrl != null && thumbUrl.isNotEmpty)
                     ? thumbUrl
@@ -328,6 +330,8 @@ class AppBackdropRepository {
       width: row.width,
       height: row.height,
       durationMs: row.durationMs,
+      videoCodec: row.videoCodec,
+      webPlayable: row.webPlayable,
       thumbnailPath: row.thumbnailPath,
       missing: row.missing,
       status: AppBackdropAssetStatus.fromValue(row.status),
@@ -374,6 +378,8 @@ class AppBackdropRepository {
       width: Value(backdrop.width),
       height: Value(backdrop.height),
       durationMs: Value(backdrop.durationMs),
+      videoCodec: Value(backdrop.videoCodec),
+      webPlayable: Value(backdrop.webPlayable),
       thumbnailPath: Value(backdrop.thumbnailPath),
       missing: Value(backdrop.missing),
       status: Value(backdrop.status.value),

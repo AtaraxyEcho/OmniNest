@@ -268,6 +268,7 @@ CREATE TABLE "omni"."backdrop_assets" (
   "width" int4,
   "height" int4,
   "duration_ms" int4,
+  "video_codec" varchar(32),
   "file_size" int8 NOT NULL,
   "sha256" varchar(64) NOT NULL,
   "status" varchar(16) NOT NULL DEFAULT 'PROCESSING',
@@ -289,6 +290,7 @@ COMMENT ON COLUMN "omni"."backdrop_assets"."thumb_file_id" IS '缩略图文件�
 COMMENT ON COLUMN "omni"."backdrop_assets"."width" IS '客户端上报的展示宽度，非可信字段';
 COMMENT ON COLUMN "omni"."backdrop_assets"."height" IS '客户端上报的展示高度，非可信字段';
 COMMENT ON COLUMN "omni"."backdrop_assets"."duration_ms" IS '客户端上报的展示时长（毫秒），非可信字段';
+COMMENT ON COLUMN "omni"."backdrop_assets"."video_codec" IS '服务端 ffprobe 探测的视频编码名（如 h264/hevc），图片与探测失败时为空';
 COMMENT ON COLUMN "omni"."backdrop_assets"."file_size" IS '素材文件大小，单位字节';
 COMMENT ON COLUMN "omni"."backdrop_assets"."sha256" IS '服务端计算的SHA256，用户级去重键';
 COMMENT ON COLUMN "omni"."backdrop_assets"."status" IS '素材状态：PROCESSING / READY / FAILED';

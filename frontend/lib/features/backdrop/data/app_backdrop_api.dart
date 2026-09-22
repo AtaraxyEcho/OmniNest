@@ -20,6 +20,8 @@ class BackdropServerAsset {
     this.height,
     this.durationMs,
     this.updatedAt,
+    this.videoCodec,
+    this.webPlayable = true,
   });
 
   factory BackdropServerAsset.fromJson(Map<String, dynamic> json) {
@@ -42,6 +44,8 @@ class BackdropServerAsset {
       height: (json['height'] as num?)?.toInt(),
       durationMs: (json['durationMs'] as num?)?.toInt(),
       updatedAt: DateTime.tryParse(json['updatedAt']?.toString() ?? ''),
+      videoCodec: json['videoCodec']?.toString(),
+      webPlayable: json['webPlayable'] as bool? ?? true,
     );
   }
 
@@ -59,6 +63,12 @@ class BackdropServerAsset {
   final int? height;
   final int? durationMs;
   final DateTime? updatedAt;
+
+  /// 服务端探测的视频编码名，图片与探测失败时为空。
+  final String? videoCodec;
+
+  /// 视频在 Web 客户端是否可解码，编码未知时按可播处理。
+  final bool webPlayable;
 
   /// 是否处于可被选为当前背景的状态。
   bool get isSelectable => status == 'READY';

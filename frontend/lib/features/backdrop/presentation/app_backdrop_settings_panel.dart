@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_controls.dart';
@@ -289,6 +290,16 @@ class _AppBackdropSettingsContentState
                 ),
               ),
             ],
+            if (_webCodecNotice(l10n) != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                _webCodecNotice(l10n)!,
+                style: TextStyle(
+                  color: widget.palette.accentAlt,
+                  fontSize: AppTypography.bodySmall,
+                ),
+              ),
+            ],
             const SizedBox(height: 18),
             Expanded(
               child:
@@ -340,6 +351,24 @@ class _AppBackdropSettingsContentState
         ),
       ),
     );
+  }
+
+  /// Web 客户端下,当前选中素材的编码浏览器解不了时给出提示;桌面端不显示。
+  String? _webCodecNotice(AppLocalizations l10n) {
+    if (!isWebPlatform) {
+      return null;
+    }
+    final selectedId = widget.state.selectedBackdropId;
+    if (selectedId == null) {
+      return null;
+    }
+    final selected = widget.state.backdrops.where(
+      (backdrop) => backdrop.id == selectedId,
+    );
+    if (selected.isEmpty || !selected.single.isWebPlaybackUnsupported) {
+      return null;
+    }
+    return l10n.portalLocalBackdropWebUnsupportedNotice(selected.single.title);
   }
 
   /// 上传进行中/最近失败的用户反馈文案;无反馈时为空。
@@ -641,6 +670,15 @@ class _BackdropTile extends StatelessWidget {
     };
   }
 
+  /// 读屏标签追加 Web 解码限制,与角标共用同一平台门控。
+  String _tileSemanticsLabel(AppLocalizations l10n) {
+    final label = _tileLabel(l10n);
+    if (!isWebPlatform || !backdrop.isWebPlaybackUnsupported) {
+      return label;
+    }
+    return '$label，${l10n.portalLocalBackdropWebUnsupportedBadge}';
+  }
+
   Future<void> _confirmRemove(
     BuildContext context,
     AppLocalizations l10n,
@@ -683,7 +721,7 @@ class _BackdropTile extends StatelessWidget {
     return Semantics(
       button: true,
       selected: selected,
-      label: _tileLabel(l10n),
+      label: _tileSemanticsLabel(l10n),
       child: Material(
         color: Colors.transparent,
         child: InkWell(
@@ -761,6 +799,45 @@ class _BackdropTile extends StatelessWidget {
                       Icons.check_circle_rounded,
                       color: palette.accent,
                       size: 20,
+                    ),
+                  ),
+                if (isWebPlatform && backdrop.isWebPlaybackUnsupported)
+                  Positioned(
+                    right: 8,
+                    bottom: 8,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withValues(alpha: 0.55),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                size: 12,
+                                color: Colors.white.withValues(alpha: 0.92),
+                              ),
+                              const SizedBox(width: 3),
+                              Text(
+                                l10n.portalLocalBackdropWebUnsupportedBadge,
+                                style: TextStyle(
+                                  // 与标题同一规则:压在黑色遮罩上恒白。
+                                  color: Colors.white.withValues(alpha: 0.92),
+                                  fontSize: AppTypography.labelSmall,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
               ],

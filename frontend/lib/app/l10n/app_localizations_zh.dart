@@ -2342,6 +2342,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicLyricBackToCurrent => '回到当前播放';
 
   @override
+  String get musicLyricRepeatVerse => '重复本句';
+
+  @override
   String get musicLyricCopied => '已复制该行歌词';
 
   @override
@@ -2815,6 +2818,14 @@ class AppLocalizationsZh extends AppLocalizations {
   @override
   String get portalLocalBackdropUnsupportedFormat =>
       '仅支持 JPG、PNG、WebP、GIF 图片或 MP4、WebM、MOV、M4V 视频';
+
+  @override
+  String get portalLocalBackdropWebUnsupportedBadge => 'Web 不可播';
+
+  @override
+  String portalLocalBackdropWebUnsupportedNotice(Object title) {
+    return '「$title」的视频编码浏览器可能无法播放，桌面端不受影响';
+  }
 
   @override
   String get portalLocalBackdropFileTooLarge => '背景素材文件过大';

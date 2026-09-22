@@ -1026,6 +1026,7 @@
   "musicVisualizerActiveFontScale": "Active lyric size",
   "musicVisualizerInactiveFontScale": "Inactive lyric size",
   "musicLyricBackToCurrent": "Back to current",
+  "musicLyricRepeatVerse": "Repeat this verse",
   "musicLyricCopied": "Lyric line copied",
   "musicLyricCopyLine": "Copy lyric",
   "musicLyricDelayLater": "Delay lyrics by 0.1s",
@@ -1229,6 +1230,13 @@
   "portalLocalBackdropDeleteFailed": "Delete failed. Please try again later.",
   "portalLocalBackdropQuotaExceeded": "Backdrop count or storage quota exceeded",
   "portalLocalBackdropUnsupportedFormat": "Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV, M4V videos are supported",
+  "portalLocalBackdropWebUnsupportedBadge": "No web playback",
+  "portalLocalBackdropWebUnsupportedNotice": "\"{title}\" uses a video codec the browser may not play; desktop is unaffected",
+  "@portalLocalBackdropWebUnsupportedNotice": {
+    "placeholders": {
+      "title": {}
+    }
+  },
   "portalLocalBackdropFileTooLarge": "Backdrop file is too large",
   "portalLocalBackdropScanUnavailable": "Security scanning is unavailable, upload blocked",
   "portalLocalBackdropMalwareDetected": "Malware detected, upload rejected",

@@ -31,6 +31,8 @@ public final class BackdropDtos {
      * @param durationMs 客户端上报的展示时长(毫秒),非可信字段
      * @param fileSize 素材大小(字节)
      * @param updatedAt 素材最后更新时间
+     * @param videoCodec 服务端探测的视频编码名,图片与探测失败时为空
+     * @param webPlayable 视频在 Web 客户端是否可解码,编码未知时按可播处理
      */
     @Schema(description = "背景素材")
     public record BackdropAssetDto(
@@ -47,7 +49,9 @@ public final class BackdropDtos {
             @Schema(description = "展示高度") Integer height,
             @Schema(description = "展示时长(毫秒)") Integer durationMs,
             @Schema(description = "素材大小(字节)") long fileSize,
-            @Schema(description = "最后更新时间") Instant updatedAt
+            @Schema(description = "最后更新时间") Instant updatedAt,
+            @Schema(description = "视频编码名") String videoCodec,
+            @Schema(description = "Web 端是否可解码") boolean webPlayable
     ) {
     }
 

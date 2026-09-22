@@ -72,6 +72,10 @@ public class BackdropAsset {
     @Column(name = "duration_ms")
     private Integer durationMs;
 
+    /** 服务端 ffprobe 探测的视频编码名（如 h264/hevc）；图片与探测失败时为空。 */
+    @Column(name = "video_codec", length = 32)
+    private String videoCodec;
+
     /** 素材文件大小，单位字节，服务端计算。 */
     @Column(name = "file_size", nullable = false)
     private long fileSize;

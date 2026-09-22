@@ -31,6 +31,8 @@ public class BackdropVideoThumbnailExtractor {
     private static final String DOCKER_CONTAINER = "omninest-ffmpeg";
     private static final String DOCKER_PROBE_DIR = "/tmp/probe";
     private static final Duration COMMAND_CHECK_TIMEOUT = Duration.ofSeconds(10);
+    /** 编码名落库列长度上限，与 backdrop_assets.video_codec 保持一致。 */
+    private static final int PROBE_CODEC_MAX_LENGTH = 32;
 
     private final VideoProcessExecutor processExecutor;
     private final VideoSourceInputResolver sourceInputResolver;
@@ -74,11 +76,14 @@ public class BackdropVideoThumbnailExtractor {
 
     /**
      * 将视频缩放到壁纸播放用分辨率(最长边 ≤1920,高度 ≤1080),降低客户端解码压力。
-     * 源已足够小或 ffmpeg 不可用时返回空,调用方回退使用原始文件。
+     *
+     * <p>当前无调用方,与 {@code BackdropAssetService.generateAndStorePlayback} 一并保留待 Web 兼容策略定稿。
+     * 输入不做分辨率判断:只要本地 ffmpeg 可用就会重编码,因此调用方需自行决定是否值得跑。
+     * ffmpeg 不可用、产物为空或执行失败时返回空,调用方回退使用原始文件。</p>
      *
      * @param stagingFile 上传 staging 本地文件
      * @param timeout 转码超时
-     * @return 降分辨率 MP4 临时文件;无需缩放或失败时为空
+     * @return 降分辨率 MP4 临时文件;失败或不可用时为空
      */
     public Optional<Path> scaleForWallpaperPlayback(Path stagingFile, Duration timeout) {
         if (stagingFile == null || !Files.isRegularFile(stagingFile)) {
@@ -129,6 +134,50 @@ public class BackdropVideoThumbnailExtractor {
         }
     }
 
+    /**
+     * 探测视频首流编码名,用于判定 Web 客户端是否可解码。
+     *
+     * @param stagingFile 上传 staging 本地文件
+     * @param timeout 探测超时
+     * @return ffprobe 输出的编码名;不可用、超时或无输出时为空
+     */
+    public Optional<String> probeVideoCodec(Path stagingFile, Duration timeout) {
+        if (stagingFile == null || !Files.isRegularFile(stagingFile)) {
+            return Optional.empty();
+        }
+        if (!isLocalFfmpegAvailable()) {
+            return Optional.empty();
+        }
+        try {
+            VideoProcessExecutor.Result result = processExecutor.execute(List.of(
+                    "ffprobe",
+                    "-v", "error",
+                    "-select_streams", "v:0",
+                    "-show_entries", "stream=codec_name",
+                    "-of", "default=noprint_wrappers=1:nokey=1",
+                    stagingFile.toAbsolutePath().toString()
+            ), timeout);
+            if (!result.succeeded()) {
+                return Optional.empty();
+            }
+            String codec = result.output().lines()
+                    .map(String::trim)
+                    .filter(line -> !line.isEmpty())
+                    .findFirst()
+                    .orElse("");
+            return codec.isEmpty()
+                    ? Optional.empty()
+                    : Optional.of(codec.substring(0, Math.min(codec.length(), PROBE_CODEC_MAX_LENGTH)));
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("壁纸视频编码探测被中断: file={}", stagingFile.getFileName());
+            return Optional.empty();
+        } catch (IOException | RuntimeException ex) {
+            log.warn("壁纸视频编码探测失败: message={}", ex.getMessage());
+            return Optional.empty();
+        }
+    }
+
     private void deleteQuietly(Path file) {
         try {
             Files.deleteIfExists(file);
@@ -137,8 +186,7 @@ public class BackdropVideoThumbnailExtractor {
         }
     }
 
-    private Optional<Path> extractWithLocal(Path stagingFile, Duration timeout)
-            throws IOException, InterruptedException {
+    private Optional<Path> extractWithLocal(Path stagingFile, Duration timeout)            throws IOException, InterruptedException {
         Path output = Files.createTempFile("backdrop-frame-", ".jpg");
         try {
             List<String> command = new ArrayList<>();

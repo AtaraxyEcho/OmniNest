@@ -433,6 +433,77 @@ void main() {
       expect(state.settings.selectedBackdropId, bundledDefaultWallpaperId);
     });
   });
+
+  group('背景素材 Web 解码标记', () {
+    test('服务端字段缺失时按可播处理', () {
+      final asset = BackdropServerAsset.fromJson(const {
+        'id': 's1',
+        'title': 'clip',
+        'mediaType': 'video',
+        'status': 'READY',
+        'fileSize': 4096,
+      });
+
+      expect(asset.videoCodec, isNull);
+      expect(asset.webPlayable, isTrue);
+    });
+
+    test('解析服务端探测出的编码与可播判定', () {
+      final asset = BackdropServerAsset.fromJson(const {
+        'id': 's1',
+        'title': 'clip',
+        'mediaType': 'video',
+        'status': 'READY',
+        'fileSize': 4096,
+        'videoCodec': 'hevc',
+        'webPlayable': false,
+      });
+
+      expect(asset.videoCodec, 'hevc');
+      expect(asset.webPlayable, isFalse);
+    });
+
+    test('不可播判定只作用于视频素材', () {
+      AppBackdropAsset withFlags(AppBackdropMediaType type, bool webPlayable) =>
+          _backdrop(
+            'codec-case',
+          ).copyWith(mediaType: type, webPlayable: webPlayable);
+
+      expect(
+        withFlags(AppBackdropMediaType.video, false).isWebPlaybackUnsupported,
+        isTrue,
+      );
+      expect(
+        withFlags(AppBackdropMediaType.video, true).isWebPlaybackUnsupported,
+        isFalse,
+      );
+      expect(
+        withFlags(AppBackdropMediaType.image, false).isWebPlaybackUnsupported,
+        isFalse,
+      );
+    });
+
+    test('编码与可播标记随仓储往返保留', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      addTearDown(database.close);
+      final original = _backdrop('codec-row').copyWith(
+        mediaType: AppBackdropMediaType.video,
+        videoCodec: 'hevc',
+        webPlayable: false,
+      );
+
+      await repository.upsertBackdrops([original]);
+      final loaded = await repository.loadState();
+      final restored = loaded.backdrops.singleWhere(
+        (backdrop) => backdrop.id == 'codec-row',
+      );
+
+      expect(restored.videoCodec, 'hevc');
+      expect(restored.webPlayable, isFalse);
+      expect(restored.isWebPlaybackUnsupported, isTrue);
+    });
+  });
 }
 
 AppBackdropAsset _backdrop(String id) {
