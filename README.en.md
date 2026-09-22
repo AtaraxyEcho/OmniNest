@@ -48,9 +48,9 @@ Please read this section before using OmniNest. **Using this software means you 
 
 ### Third-party music platforms
 
-- This project is for **personal study and research only**; commercial and illegal use is prohibited. It does **not** provide VIP audio source cracking or services that bypass payment, membership, or audio-quality limits.
-- OmniNest is an **unofficial** open-source project, with **no affiliation, partnership, or authorization** with NetEase Cloud Music or its affiliates.
-- All content resources belong to their respective platform owners. You are responsible for complying with the platform's terms of service and copyright requirements, at your own risk.
+The built-in open-source music module of OmniNest is not an official client of NetEase Cloud Music, QQ Music, or Tencent Music Entertainment Group, and has no affiliation, partnership, or authorization with these platforms or their affiliates; platform names and trademarks are mentioned for identification only and belong to their respective owners.
+
+The platform integrations are for personal study and research, local client experience, and playback assistance with the user's own account, and must not be used for commercial or illegal purposes. The module stores and distributes no music content and provides no ability to bypass payment or membership restrictions or to crack audio quality. Users are responsible for complying with the corresponding platforms' user agreements, copyright rules, and membership terms; all content belongs to those platforms and their rights holders, and any risks arising from misuse are borne by the user.
 
 ### Getting the clients
 
