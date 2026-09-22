@@ -96,6 +96,7 @@ void main() {
       createdAt: DateTime(2024, 11, 12),
     );
     when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(() => repository.revokeAlbumShare(any())).thenAnswer((_) async {});
     when(
       () => repository.createPhotoShare(
         any(),
@@ -108,12 +109,23 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    // 打开面板不再自动创建链接：两条槽位均为未创建态，显式点击后才生成。
+    expect(find.text('永久链接'), findsOneWidget);
+    expect(find.text('限时链接'), findsOneWidget);
+    expect(find.text('未创建'), findsNWidgets(2));
+    await tester.tap(find.text('创建限时'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
     // 眉题与预览卡标题、地点角标（预览卡与 OPTIONS 副标签各一处）。
     expect(find.text('分享'), findsOneWidget);
     expect(find.text('Motion Shot'), findsOneWidget);
     expect(find.text('Bern'), findsNWidgets(2));
     // 链接基于前端站点地址（默认退化 origin），而非 API 地址；复制为手动操作。
-    expect(find.text('http://localhost:8080/#/shared/photos/item/tok-1'), findsOneWidget);
+    expect(
+      find.text('http://localhost:8080/#/shared/photos/item/tok-1'),
+      findsOneWidget,
+    );
     // 链接区复制 + 渠道宫格「复制链接」共用「复制」文案。
     expect(find.text('复制'), findsWidgets);
     expect(find.text('✓ 已复制'), findsNothing);
@@ -147,6 +159,7 @@ void main() {
       createdAt: DateTime(2024, 11, 12),
     );
     when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(() => repository.revokeAlbumShare(any())).thenAnswer((_) async {});
     when(
       () => repository.createPhotoShare(
         any(),
@@ -159,6 +172,11 @@ void main() {
     await _pumpPanel(tester, repository);
     await tester.pump();
     await tester.pump();
+
+    // 链接需显式创建后才可用于渠道分享。
+    await tester.tap(find.text('创建限时'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('微信'), findsOneWidget);
     expect(find.text('二维码'), findsNothing);
@@ -182,6 +200,7 @@ void main() {
       createdAt: DateTime(2024, 11, 12),
     );
     when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(() => repository.revokeAlbumShare(any())).thenAnswer((_) async {});
     when(
       () => repository.createPhotoShare(
         any(),
@@ -195,10 +214,17 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    await tester.tap(find.text('创建限时'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
     await tester.tap(find.text('二维码'));
     await tester.pumpAndSettle();
     expect(find.byType(QrImageView), findsOneWidget);
-    expect(find.text('http://localhost:8080/#/shared/photos/item/tok-1'), findsWidgets);
+    expect(
+      find.text('http://localhost:8080/#/shared/photos/item/tok-1'),
+      findsWidgets,
+    );
   }, variant: TargetPlatformVariant.only(TargetPlatform.windows));
 
   testWidgets('关闭包含位置信息开关后携带参数重建链接', (tester) async {
@@ -212,6 +238,7 @@ void main() {
       createdAt: DateTime(2024, 11, 12),
     );
     when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(() => repository.revokeAlbumShare(any())).thenAnswer((_) async {});
     when(
       () => repository.createPhotoShare(
         any(),
@@ -227,6 +254,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    await tester.tap(find.text('创建限时'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
     await tester.dragUntilVisible(
       find.text('包含位置信息'),
       find.byType(Scrollable).first,
@@ -234,6 +265,16 @@ void main() {
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('包含位置信息'));
+    await tester.pump();
+
+    // 设置变更只置脏：需显式点击更新链接才重建。
+    await tester.dragUntilVisible(
+      find.text('更新链接'),
+      find.byType(Scrollable).first,
+      const Offset(0, 120),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更新链接'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -263,6 +304,7 @@ void main() {
       createdAt: DateTime(2024, 11, 12),
     );
     when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(() => repository.revokeAlbumShare(any())).thenAnswer((_) async {});
     when(
       () => repository.createPhotoShare(
         any(),
@@ -276,6 +318,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    await tester.tap(find.text('创建限时'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
     await tester.dragUntilVisible(
       find.text('有效期'),
       find.byType(Scrollable).first,
@@ -285,6 +331,15 @@ void main() {
     await tester.tap(find.text('有效期'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('7天'));
+    await tester.pump();
+
+    await tester.dragUntilVisible(
+      find.text('更新链接'),
+      find.byType(Scrollable).first,
+      const Offset(0, 120),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更新链接'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -313,6 +368,7 @@ void main() {
       createdAt: DateTime(2024, 11, 12),
     );
     when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(() => repository.revokeAlbumShare(any())).thenAnswer((_) async {});
     when(
       () => repository.createPhotoShare(
         any(),
@@ -326,6 +382,10 @@ void main() {
     await tester.pump();
     await tester.pump();
 
+    await tester.tap(find.text('创建限时'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+
     await tester.dragUntilVisible(
       find.text('密码保护'),
       find.byType(Scrollable).first,
@@ -336,6 +396,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'secret123');
     await tester.tap(find.text('确认'));
+    await tester.pump();
+
+    await tester.dragUntilVisible(
+      find.text('更新链接'),
+      find.byType(Scrollable).first,
+      const Offset(0, 120),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('更新链接'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
@@ -352,9 +421,92 @@ void main() {
     expect(find.text('已启用'), findsOneWidget);
   });
 
+  testWidgets('打开面板复用已有有效链接，不重复创建', (tester) async {
+    final repository = _MockPhotoRepository();
+    final existing = PhotoShareLink(
+      id: 'share-9',
+      token: 'tok-9',
+      resourceType: 'PHOTO_ITEM',
+      resourceId: 'photo-1',
+      accessCount: 3,
+      createdAt: DateTime(2024, 11, 12),
+      expiresAt: DateTime.now().add(const Duration(days: 30)),
+    );
+    when(
+      () => repository.listPhotoShares(any()),
+    ).thenAnswer((_) async => [existing]);
+
+    await _pumpPanel(tester, repository);
+    await tester.pump();
+    await tester.pump();
+
+    // 已有有效链接直接展示（令牌由后端解密回传），且不得再创建新链接。
+    expect(
+      find.text('http://localhost:8080/#/shared/photos/item/tok-9'),
+      findsOneWidget,
+    );
+    expect(find.text('创建链接'), findsNothing);
+    verifyNever(
+      () => repository.createPhotoShare(
+        any(),
+        password: any(named: 'password'),
+        expiresAt: any(named: 'expiresAt'),
+        maxAccessCount: any(named: 'maxAccessCount'),
+      ),
+    );
+  });
+
+  testWidgets('永久与限时两槽位独立共存，创建限时不撤销永久', (tester) async {
+    final repository = _MockPhotoRepository();
+    final permanent = PhotoShareLink(
+      id: 'share-perm',
+      token: 'tok-perm',
+      resourceType: 'PHOTO_ITEM',
+      resourceId: 'photo-1',
+      accessCount: 0,
+      createdAt: DateTime(2024, 11, 12),
+    );
+    final timed = PhotoShareLink(
+      id: 'share-timed',
+      token: 'tok-timed',
+      resourceType: 'PHOTO_ITEM',
+      resourceId: 'photo-1',
+      accessCount: 0,
+      createdAt: DateTime(2024, 11, 13),
+      expiresAt: DateTime.now().add(const Duration(days: 30)),
+    );
+    when(
+      () => repository.listPhotoShares(any()),
+    ).thenAnswer((_) async => [permanent, timed]);
+
+    await _pumpPanel(tester, repository);
+    await tester.pump();
+    await tester.pump();
+
+    // 两条槽位各自展示自己的地址，无需请求创建。
+    expect(
+      find.text('http://localhost:8080/#/shared/photos/item/tok-perm'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('http://localhost:8080/#/shared/photos/item/tok-timed'),
+      findsOneWidget,
+    );
+    verifyNever(
+      () => repository.createPhotoShare(
+        any(),
+        password: any(named: 'password'),
+        expiresAt: any(named: 'expiresAt'),
+        maxAccessCount: any(named: 'maxAccessCount'),
+      ),
+    );
+    verifyNever(() => repository.revokeAlbumShare(any()));
+  });
+
   testWidgets('链接创建失败时在链接框内展示错误', (tester) async {
     final repository = _MockPhotoRepository();
     when(() => repository.listPhotoShares(any())).thenAnswer((_) async => []);
+    when(() => repository.revokeAlbumShare(any())).thenAnswer((_) async {});
     when(
       () => repository.createPhotoShare(
         any(),
@@ -365,6 +517,9 @@ void main() {
     ).thenThrow(Exception('boom'));
 
     await _pumpPanel(tester, repository);
+    await tester.tap(find.text('创建限时'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('创建分享链接失败'), findsOneWidget);
   });

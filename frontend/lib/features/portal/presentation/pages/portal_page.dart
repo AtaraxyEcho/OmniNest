@@ -8,6 +8,7 @@ import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
+import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_desktop_visual_shells.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_mobile_shell.dart';
 
@@ -58,6 +59,7 @@ class _PortalPageState extends ConsumerState<PortalPage>
             // 封面关键分区不受全量 30s 节流：模块往返后即使全量被
             // 节流跳过，迷你卡封面也能拿到现签 URL。
             unawaited(actions.refreshCoverSections());
+            _refreshPagedCards();
           }
         }
       }
@@ -80,6 +82,26 @@ class _PortalPageState extends ConsumerState<PortalPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       unawaited(ref.read(portalDashboardActionsProvider).maybeRefreshAll());
+    }
+  }
+
+  /// 分支重返时同步刷新分页列表卡：按已加载量对齐重拉第一页，
+  /// 列表长度不回跳；未挂载过的卡跳过。
+  void _refreshPagedCards() {
+    if (ref.exists(portalContinueWatchingProvider)) {
+      unawaited(ref.read(portalContinueWatchingProvider.notifier).refresh());
+    }
+    if (ref.exists(portalRecentPhotosProvider)) {
+      unawaited(ref.read(portalRecentPhotosProvider.notifier).refresh());
+    }
+    if (ref.exists(portalPlaybackQueueProvider)) {
+      unawaited(ref.read(portalPlaybackQueueProvider.notifier).refresh());
+    }
+    if (ref.exists(portalReaderShelfProvider)) {
+      unawaited(ref.read(portalReaderShelfProvider.notifier).refresh());
+    }
+    if (ref.exists(portalVideoPreviewProvider)) {
+      unawaited(ref.read(portalVideoPreviewProvider.notifier).refresh());
     }
   }
 

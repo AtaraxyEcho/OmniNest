@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/realtime_providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/features/notifications/application/notification_foreground_presenter.dart';
 import 'package:omninest/features/notifications/data/notification_api.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
 import 'package:omninest/core/log/dev_log.dart';
@@ -28,6 +30,10 @@ final notificationRealtimeSubscriptionProvider =
           if (inserted && !notification.read) {
             ref.read(unreadCountProvider.notifier).increment();
           }
+          // 转发到前台提示广播流，根部提示组件消费展示。
+          ref
+              .read(notificationForegroundEventControllerProvider)
+              .add(notification);
         } catch (_) {
           return;
         }
@@ -44,6 +50,7 @@ final unreadCountProvider = NotifierProvider<UnreadCountNotifier, int>(
 class UnreadCountNotifier extends Notifier<int> {
   @override
   int build() {
+    ref.watch(sessionEpochProvider);
     // 只跟随登录用户身份：同用户 token 刷新不重建，换号/登出重置计数。
     final userId = ref.watch(
       authSessionProvider.select((async) => async.asData?.value.user?.id),
@@ -115,7 +122,10 @@ final notificationControllerProvider =
 /// 通知控制器 — 管理通知列表状态
 class NotificationController extends Notifier<NotificationState> {
   @override
-  NotificationState build() => const NotificationState();
+  NotificationState build() {
+    ref.watch(sessionEpochProvider);
+    return const NotificationState();
+  }
 
   NotificationApi get _api => ref.read(notificationApiProvider);
 

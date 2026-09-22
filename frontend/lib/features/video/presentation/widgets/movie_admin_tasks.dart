@@ -15,10 +15,33 @@ class _MovieAdminTaskDialogState extends ConsumerState<_MovieAdminTaskDialog> {
   void initState() {
     super.initState();
     _refreshTimer = Timer.periodic(const Duration(seconds: 2), (_) {
-      ref
-          .read(movieCenterControllerProvider.notifier)
-          .refreshTasksForRealtime();
+      _handleRefreshTick();
     });
+  }
+
+  /// 仅存在非终态任务时继续轮询；realtime 已覆盖任务事件，轮询只作
+  /// 断线兜底，全部终态即停，避免对话框开着就持续请求。
+  void _handleRefreshTick() {
+    if (!mounted) {
+      return;
+    }
+    final tasks = ref.read(movieCenterControllerProvider).asData?.value.tasks;
+    // 任务列表尚未加载完成时保持轮询等待首份快照；已加载（含空列表）
+    // 且全部终态即停止，避免无任务或任务全部完成后仍持续请求。
+    if (tasks != null &&
+        tasks.every((task) => _isTerminalStatus(task.status))) {
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
+      return;
+    }
+    ref.read(movieCenterControllerProvider.notifier).refreshTasksForRealtime();
+  }
+
+  static bool _isTerminalStatus(String status) {
+    return switch (status.toUpperCase()) {
+      'COMPLETED' || 'FAILED' || 'CANCELLED' => true,
+      _ => false,
+    };
   }
 
   @override

@@ -314,12 +314,32 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       // Admin 作为 Portal 之上的独立路由节点（push 进入、pop 返回）。
       // 分区深链使用 /admin/:section（与 AdminSection.location 对齐）；
       // 路径段非法时 AdminSection.fromPathSegment 回落到 overview。
-      _animatedRoute('/admin', (state) => const AdminDashboardPage()),
-      _animatedRoute(
-        '/admin/:section',
-        (state) => AdminDashboardPage(
-          initialSectionSegment: state.pathParameters['section'],
-        ),
+      // 两条路由共用固定 pageKey：首次点击侧边栏（/admin → /admin/:section）
+      // 属跨路由跳转，若各自使用 location 派生的 pageKey，Navigator 会整页
+      // 替换并重跑 initState（表现为重新加载页面）；共用 key 后原地更新，
+      // 仅触发 didUpdateWidget 分区切换，与常驻分支模块行为一致。
+      GoRoute(
+        path: '/admin',
+        pageBuilder:
+            (context, state) => _materialTransition(
+              state,
+              _routeSurface('/admin', const AdminDashboardPage()),
+              pageKey: _adminPageKey,
+            ),
+      ),
+      GoRoute(
+        path: '/admin/:section',
+        pageBuilder:
+            (context, state) => _materialTransition(
+              state,
+              _routeSurface(
+                '/admin/:section',
+                AdminDashboardPage(
+                  initialSectionSegment: state.pathParameters['section'],
+                ),
+              ),
+              pageKey: _adminPageKey,
+            ),
       ),
     ],
   );
@@ -406,9 +426,16 @@ const Set<String> _shellOwnedPaths = <String>{
   '/reader/admin',
 };
 
+/// Admin 仪表盘两条路由共用的页面键，保证跨路由跳转原地更新。
+const LocalKey _adminPageKey = ValueKey<String>('admin-dashboard');
+
 /// 使用 Navigator 托管的页面过渡，避免动画监听器持有已失活的路由子树。
-MaterialPage<void> _materialTransition(GoRouterState state, Widget child) {
-  return buildAppRoutePage(key: state.pageKey, child: child);
+MaterialPage<void> _materialTransition(
+  GoRouterState state,
+  Widget child, {
+  LocalKey? pageKey,
+}) {
+  return buildAppRoutePage(key: pageKey ?? state.pageKey, child: child);
 }
 
 /// 构建由 Navigator 管理生命周期和平台过渡的应用页面。

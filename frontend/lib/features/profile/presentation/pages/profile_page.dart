@@ -16,6 +16,7 @@ import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/core/window/desktop_close_behavior_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
+import 'package:omninest/features/notifications/application/notification_foreground_presenter.dart';
 import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
 import 'package:omninest/features/notifications/application/notification_type_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
@@ -387,10 +388,18 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           ),
       data: (value) {
         _notificationPreferences ??= value;
-        return ProfileNotificationSettingsCard(
-          typesAsync: types,
-          prefs: _notificationPreferences!,
-          onChanged: _updateNotificationPreferences,
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _ForegroundToastToggleCard(),
+            const SizedBox(height: 16),
+            ProfileNotificationSettingsCard(
+              typesAsync: types,
+              prefs: _notificationPreferences!,
+              onChanged: _updateNotificationPreferences,
+            ),
+          ],
         );
       },
     );
@@ -412,5 +421,36 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+/// 前台新通知提示开关（设备级本地偏好，默认开启）。
+class _ForegroundToastToggleCard extends ConsumerWidget {
+  const _ForegroundToastToggleCard();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context);
+    final enabled = ref.watch(notificationForegroundToastEnabledProvider);
+    return WorkbenchPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: SwitchListTile(
+        value: enabled.asData?.value ?? true,
+        onChanged: (value) {
+          unawaited(
+            ref
+                .read(notificationForegroundPreferenceStoreProvider)
+                .saveEnabled(value)
+                .then((_) {
+                  if (context.mounted) {
+                    ref.invalidate(notificationForegroundToastEnabledProvider);
+                  }
+                }),
+          );
+        },
+        title: Text(l10n.notificationForegroundToastToggle),
+        subtitle: Text(l10n.notificationForegroundToastToggleSubtitle),
+      ),
+    );
   }
 }

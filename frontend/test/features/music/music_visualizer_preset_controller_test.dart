@@ -48,7 +48,10 @@ void main() {
     expect(preferences.visual.player.enabled, isFalse);
     expect(
       api.updates['music.player.visual.v1'],
-      containsPair('schemaVersion', 5),
+      containsPair(
+        'schemaVersion',
+        PortalMusicVisualizerPreferences.currentSchemaVersion,
+      ),
     );
     expect(api.deletedScopes, contains('portal.music_visualizer'));
     expect(api.values.containsKey('portal.music_visualizer'), isFalse);
@@ -96,7 +99,7 @@ void main() {
         'customPresets': <Map<String, dynamic>>[
           <String, dynamic>{
             'id': 'custom-test',
-            'player': <String, dynamic>{'audioBarEnabled': false},
+            'player': <String, dynamic>{'enabled': false},
           },
         ],
       }),
@@ -113,14 +116,13 @@ void main() {
     final migrated = await container.read(
       musicVisualizerPreferencesProvider.future,
     );
-    expect(migrated.visual.player.audioBarEnabled, isFalse);
+    expect(migrated.visual.player.enabled, isFalse);
 
     await container
         .read(musicVisualizerPreferencesProvider.notifier)
         .restoreDefaults();
     final restored = container.read(musicVisualizerPreferencesProvider).value!;
     expect(restored.visual.player.enabled, isTrue);
-    expect(restored.visual.player.audioBarEnabled, isTrue);
   });
 
   test('保存视觉设置同步到本地和远端', () async {
@@ -153,22 +155,21 @@ void main() {
     expect(api.updates['music.player.visual.v1']?['visual'], isA<Map>());
   });
 
-  test('歌词与音频条视觉参数可完整序列化', () {
+  test('歌词与播放器视觉参数可完整序列化', () {
     final preferences = PortalMusicVisualizerPreferences(
       visual: PortalMusicVisualizerSettings.defaults.copyWith(
         lyrics: PortalLyricVisualSettings.defaults.copyWith(
           visibleLines: 7,
           lineSpacing: 1.4,
-          activeColorValue: 0xFFB7FFE7,
-          readColorValue: 0xFF7098A0,
-          unreadColorValue: 0xFFFFFFFF,
+          fontSizePx: 20,
+          currentFontSizePx: 36,
+          currentPaint: const LyricPaint.vertical(0xFFB7FFE7, 0xFF7098A0),
+          inactivePaint: const LyricPaint.solid(0xFFFFFFFF),
           breathingEnabled: false,
-          glowIntensity: 1.6,
-          glowColorValue: 0xFF4AD5FF,
-          position: PortalLyricPosition.right,
+          layout: PortalMusicLayout.right,
         ),
         player: PortalGlassPlayerSettings.defaults.copyWith(
-          audioBarStyle: MusicAudioBarStyle.pulseDots,
+          volumeEnabled: false,
         ),
       ),
     );
@@ -177,20 +178,25 @@ void main() {
       preferences.toJson(),
     );
 
-    expect(restored.schemaVersion, 5);
+    expect(restored.schemaVersion, 13);
     expect(restored.visual.lyrics.visibleLines, 7);
     expect(restored.visual.lyrics.lineSpacing, 1.4);
-    expect(restored.visual.lyrics.activeColorValue, 0xFFB7FFE7);
-    expect(restored.visual.lyrics.readColorValue, 0xFF7098A0);
-    expect(restored.visual.lyrics.unreadColorValue, 0xFFFFFFFF);
+    expect(
+      restored.visual.lyrics.currentPaint.mode,
+      LyricPaintMode.verticalGradient,
+    );
+    expect(restored.visual.lyrics.currentPaint.colors, <int>[
+      0xFFB7FFE7,
+      0xFF7098A0,
+    ]);
+    expect(restored.visual.lyrics.inactivePaint.mode, LyricPaintMode.solid);
+    expect(restored.visual.lyrics.inactivePaint.primary, 0xFFFFFFFF);
     expect(restored.visual.lyrics.breathingEnabled, isFalse);
-    expect(restored.visual.lyrics.glowIntensity, 1.6);
-    expect(restored.visual.lyrics.glowColorValue, 0xFF4AD5FF);
-    expect(restored.visual.lyrics.position, PortalLyricPosition.right);
-    expect(restored.visual.player.audioBarStyle, MusicAudioBarStyle.pulseDots);
+    expect(restored.visual.lyrics.layout, PortalMusicLayout.right);
+    expect(restored.visual.player.volumeEnabled, isFalse);
   });
 
-  test('旧歌词颜色与镜像波形迁移到当前设置结构', () {
+  test('旧歌词颜色迁移到当前设置结构并丢弃音频条字段', () {
     final restored = PortalMusicVisualizerPreferences.fromJson(
       const <String, dynamic>{
         'schemaVersion': 4,
@@ -204,24 +210,49 @@ void main() {
       },
     );
 
-    expect(restored.schemaVersion, 5);
-    expect(restored.visual.lyrics.activeColorValue, 0xFFAABBCC);
+    expect(restored.schemaVersion, 13);
+    expect(restored.visual.lyrics.currentPaint.primary, 0xFFAABBCC);
     expect(
-      restored.visual.lyrics.unreadColorValue,
-      PortalLyricVisualSettings.defaults.unreadColorValue,
+      restored.visual.lyrics.inactivePaint.primary,
+      PortalLyricVisualSettings.defaults.inactivePaint.primary,
     );
-    expect(restored.visual.player.audioBarStyle, MusicAudioBarStyle.lineWave);
+    // 音频条已整体移除：旧字段被静默忽略，播放器退回默认设置。
+    expect(restored.visual.player.volumeEnabled, isTrue);
+    expect(restored.visual.player.progressEnabled, isTrue);
   });
 
-  test('默认频段响应强调低频并抑制高频抖动', () {
-    expect(PortalSpectrumVisualSettings.defaults.lowResponse, 1.08);
-    expect(PortalSpectrumVisualSettings.defaults.midResponse, 0.96);
-    expect(PortalSpectrumVisualSettings.defaults.highResponse, 0.82);
-    expect(MusicAudioBarStyle.values, <MusicAudioBarStyle>[
-      MusicAudioBarStyle.spectrumBars,
-      MusicAudioBarStyle.lineWave,
-      MusicAudioBarStyle.pulseDots,
+  test('v11 旧设置中的频响与封面元素字段被静默丢弃', () {
+    final restored = PortalMusicVisualizerPreferences.fromJson(
+      const <String, dynamic>{
+        'schemaVersion': 11,
+        'visual': <String, dynamic>{
+          'spectrum': <String, dynamic>{'lowResponse': 1.5},
+          'coverElements': <String, dynamic>{'originalCoverEnabled': true},
+          'lyrics': <String, dynamic>{'translationEnabled': false},
+          'player': <String, dynamic>{'enabled': false},
+        },
+      },
+    );
+
+    expect(restored.schemaVersion, 13);
+    // 频响与封面元素（含原始封面）已整体移除：字段不再存在，载入不报错；
+    // deckEnabled 为 v13 新增的堆叠卡片开关。
+    expect(restored.visual.lyrics.translationEnabled, isFalse);
+    expect(restored.visual.player.enabled, isFalse);
+    expect(restored.toJson()['visual'].keys, <String>[
+      'lyrics',
+      'player',
+      'deckEnabled',
     ]);
+  });
+
+  test('桌面布局预设按编辑器展示顺序排列：居左（默认）、居中、居右', () {
+    expect(PortalMusicLayout.values, <PortalMusicLayout>[
+      PortalMusicLayout.left,
+      PortalMusicLayout.center,
+      PortalMusicLayout.right,
+    ]);
+    expect(PortalLyricVisualSettings.defaults.layout, PortalMusicLayout.left);
   });
 }
 

@@ -8,6 +8,12 @@ const _retryableStatusCodes = {408, 429, 500, 502, 503, 504};
 /// 幂等 HTTP 方法集合，这些方法默认允许基于 HTTP 状态码重试。
 const _idempotentMethods = {'GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS'};
 
+/// 请求级开关：置为 `true` 时跳过"服务端错误重试"，只保留网络层重试。
+///
+/// 用于用户已确认的一次性动作（如断开平台连接）：这类请求服务端若返回 5xx，
+/// 重试既注定失败又会把等待时间放大为退避之和，体感是"点了很久没反应"。
+const skipServerErrorRetryKey = 'omninest.skipServerErrorRetry';
+
 /// Dio 请求重试拦截器。
 ///
 /// 对于幂等方法（GET/HEAD/PUT/DELETE/OPTIONS），在连接异常或可重试
@@ -84,6 +90,11 @@ class RetryInterceptor extends Interceptor {
 
     if (_isRetryableErrorType(err)) {
       return true;
+    }
+
+    // 显式声明"服务端错误不重试"的请求只走网络层重试。
+    if (request.extra[skipServerErrorRetryKey] == true) {
+      return false;
     }
 
     // HTTP 状态码重试需要通过上面的安全重试判定。

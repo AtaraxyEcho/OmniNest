@@ -25,4 +25,33 @@ void main() {
 
     expect(container.exists(adminConsoleSummaryProvider), isFalse);
   });
+
+  test('管理事件刷新已挂载的连接器 OAuth 应用缓存', () async {
+    var builds = 0;
+    final container = ProviderContainer(
+      overrides: [
+        adminConnectorOAuthAppsProvider.overrideWith((ref) async {
+          builds += 1;
+          return const [];
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(adminConnectorOAuthAppsProvider.future);
+    expect(builds, 1);
+
+    final handler = container.read(_handlerProvider);
+    final invalidation = RealtimeInvalidation(
+      key: 'admin-oauth-refresh',
+      scope: RealtimeScope.admin,
+      resourceType: '*',
+      revision: 2,
+      createdAt: DateTime.utc(2026, 9, 20),
+    );
+
+    final consumed = await handler.refresh([invalidation]);
+
+    expect(builds, 2);
+    expect(consumed, isFalse);
+  });
 }

@@ -6,7 +6,7 @@ const String _coverApiPathPrefix = '/api/v1/music/covers/';
 
 /// 判断地址是否为本地音乐封面的稳定鉴权 API 路径。
 ///
-/// 后端 DTO 返回相对路径；网易云、QQ 等外部 CDN 封面为绝对地址，
+/// 后端 DTO 返回相对路径；网易云等外部 CDN 封面为绝对地址，
 /// 天然不匹配本前缀，Authorization 头不会外发给第三方域名。
 bool isMusicCoverApiPath(String url) => url.startsWith(_coverApiPathPrefix);
 

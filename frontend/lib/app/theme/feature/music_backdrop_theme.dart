@@ -113,6 +113,19 @@ abstract final class MusicBackdropTheme {
       shadow: BackdropTranslucentColors.shadow,
       discBg: BackdropTranslucentColors.surfaceHighest,
       discCenter: BackdropTranslucentColors.surfaceHigh,
+      // 平台账号窗口必须与文本来自同一份已解析调色板。
+      //
+      // 浅色主题 + 深色壁纸时，本分支把 onSurface 反出为近白色；上一轮刻意让
+      // window*/field* 保持浅色实体底，于是出现"浅色底 + 白字"的内容全不可见。
+      // 正确做法是窗口也随之进入深色玻璃族：底深则字白可读，且与模块其他界面
+      // 观感一致；浅色无壁纸与深色主题的路径不受影响（各自 fromGlobal 分支已就绪）。
+      windowSurface: BackdropTranslucentColors.surfaceHigh,
+      windowCard: BackdropTranslucentColors.surfaceHighest,
+      fieldFill: BackdropTranslucentColors.surfaceLow,
+      fieldBorder: BackdropTranslucentColors.outlineVariant.withValues(
+        alpha: 0.5,
+      ),
+      scrim: const Color(0x66000000),
     );
   }
 }

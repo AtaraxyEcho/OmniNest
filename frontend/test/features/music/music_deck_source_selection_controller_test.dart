@@ -43,8 +43,8 @@ void main() {
       const MusicPlatformLibraryState(
         statuses: [
           MusicPlatformStatus(
-            platform: 'qq',
-            displayName: 'QQ Music',
+            platform: 'netease',
+            displayName: 'Netease Music',
             enabled: true,
             connected: true,
             capabilities: MusicPlatformCapabilities(),
@@ -54,7 +54,7 @@ void main() {
     );
 
     expect(container.read(musicDeckSourceSelectionProvider), {
-      MusicPlatform.qq,
+      MusicPlatform.netease,
     });
   });
 }

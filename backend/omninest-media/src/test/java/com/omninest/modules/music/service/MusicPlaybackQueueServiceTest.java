@@ -2,7 +2,10 @@ package com.omninest.modules.music.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * 验证播放队列校验和规范化规则。
@@ -166,6 +170,75 @@ class MusicPlaybackQueueServiceTest {
         assertThat(loaded.truncated()).isTrue();
     }
 
+    @Test
+    void removePlatformTracksDropsOnlyThatPlatformAndClearsCurrentItem() {
+        MusicPlaybackQueueItemDto local = localItem(1);
+        MusicPlaybackQueueDto stored = new MusicPlaybackQueueDto(
+                List.of(local, onlineItem(), onlineItem()),
+                1,
+                "all",
+                false,
+                new MusicQueueSourceDto("library", null, null, List.of("local", "netease")),
+                false,
+                Instant.now()
+        );
+        when(queueStore.find(OWNER_ID)).thenReturn(Optional.of(stored));
+
+        int removed = service.removePlatformTracks(OWNER_ID, "netease");
+
+        assertThat(removed).isEqualTo(2);
+        ArgumentCaptor<MusicPlaybackQueueDto> captor =
+                ArgumentCaptor.forClass(MusicPlaybackQueueDto.class);
+        verify(queueStore).save(eq(OWNER_ID), captor.capture());
+        MusicPlaybackQueueDto persisted = captor.getValue();
+        assertThat(persisted.items())
+                .extracting(MusicPlaybackQueueItemDto::playableKey)
+                .containsExactly(local.playableKey());
+        // 当前项被剔除：置为无当前曲，避免继续用已删除的凭据拉流。
+        assertThat(persisted.currentIndex()).isEqualTo(-1);
+        // 库来源的 platforms 同步摘除已断开平台，否则来源标签仍指向它。
+        assertThat(persisted.source()).isNotNull();
+        assertThat(persisted.source().platforms()).containsExactly("local");
+    }
+
+    @Test
+    void removePlatformTracksShiftsCurrentIndexWhenEarlierItemsRemoved() {
+        MusicPlaybackQueueDto stored = new MusicPlaybackQueueDto(
+                List.of(onlineItem(), localItem(1), localItem(2)),
+                1,
+                "off",
+                false,
+                null,
+                false,
+                Instant.now()
+        );
+        when(queueStore.find(OWNER_ID)).thenReturn(Optional.of(stored));
+
+        assertThat(service.removePlatformTracks(OWNER_ID, "netease")).isEqualTo(1);
+
+        ArgumentCaptor<MusicPlaybackQueueDto> captor =
+                ArgumentCaptor.forClass(MusicPlaybackQueueDto.class);
+        verify(queueStore).save(eq(OWNER_ID), captor.capture());
+        assertThat(captor.getValue().currentIndex()).isZero();
+    }
+
+    @Test
+    void removePlatformTracksSkipsWriteWhenNothingMatches() {
+        MusicPlaybackQueueDto stored = new MusicPlaybackQueueDto(
+                List.of(localItem(0)),
+                0,
+                "off",
+                false,
+                null,
+                false,
+                Instant.now()
+        );
+        when(queueStore.find(OWNER_ID)).thenReturn(Optional.of(stored));
+
+        assertThat(service.removePlatformTracks(OWNER_ID, "netease")).isZero();
+        verify(queueStore, never()).save(any(), any());
+    }
+
     private MusicPlaybackQueueItemDto onlineItem() {
         return new MusicPlaybackQueueItemDto(
                 "online:netease:188888",
@@ -175,6 +248,19 @@ class MusicPlaybackQueueServiceTest {
                 "https://example.com/cover.jpg",
                 180,
                 "mp3",
+                null
+        );
+    }
+
+    private MusicPlaybackQueueItemDto localItem(int index) {
+        return new MusicPlaybackQueueItemDto(
+                "local:10000000-0000-0000-0000-" + String.format("%012d", index),
+                "Local Song " + index,
+                "Local Artist",
+                "Local Album",
+                "",
+                200,
+                "flac",
                 null
         );
     }

@@ -128,6 +128,11 @@ class MusicScanJobController extends Notifier<MusicScanJobState> {
       state = MusicScanJobState(job: job, polling: !terminal);
       if (terminal) {
         _cancelTimer();
+        // 轮询终态即主动刷新曲库，不依赖 realtime 事件兜底；对齐导入
+        // 路径在导入完成后主动 refresh 的既有做法。
+        if (ref.exists(musicCenterControllerProvider)) {
+          unawaited(ref.read(musicCenterControllerProvider.notifier).refresh());
+        }
       }
     } on Exception catch (error) {
       if (_disposed || generation != _pollGeneration) {

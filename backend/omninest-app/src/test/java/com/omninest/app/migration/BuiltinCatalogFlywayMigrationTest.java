@@ -173,7 +173,7 @@ class BuiltinCatalogFlywayMigrationTest {
 
     @Test
     void catalogContainsCompleteRuntimeConfigurationDirectory() throws SQLException {
-        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(72);
+        Assertions.assertThat(countObjects("SELECT count(*) FROM omni.config_entries")).isEqualTo(68);
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM (
@@ -234,10 +234,6 @@ class BuiltinCatalogFlywayMigrationTest {
                         ('music.netease.enabled'),
                         ('music.netease.url'),
                         ('music.netease.hosts'),
-                        ('music.qq.enabled'),
-                        ('music.qq.u-url'),
-                        ('music.qq.c-url'),
-                        ('music.qq.hosts'),
                         ('photo.ai.enabled'),
                         ('photo.ai.url'),
                         ('photo.ai.timeout'),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'dart:math' as math;
 
 import 'package:dio/dio.dart';
@@ -31,6 +32,7 @@ final fileBrowserControllerProvider =
 
 /// 提供文件模块的存储摘要只读视图。
 final fileStorageStatsProvider = FutureProvider<FileStorageStats>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(fileApiProvider).storageStats();
 });
 
@@ -61,15 +63,20 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
   _pendingConflicts = {};
   Timer? _uploadQueuePollTimer;
   Timer? _importTaskPollTimer;
+  Timer? _offlineTaskPollTimer;
   int _externalBrowseRequestGeneration = 0;
 
   @override
   Future<FileBrowserState> build() async {
+    // 换号时以依赖变化语义重建，避免渲染上一账号的旧值。
+    ref.watch(sessionEpochProvider);
     ref.onDispose(() {
       _uploadQueuePollTimer?.cancel();
       _uploadQueuePollTimer = null;
       _importTaskPollTimer?.cancel();
       _importTaskPollTimer = null;
+      _offlineTaskPollTimer?.cancel();
+      _offlineTaskPollTimer = null;
     });
     final filesPage = await _repository.listFilesPage();
     final stats = await _repository.storageStats();
@@ -566,6 +573,7 @@ class FileBrowserController extends AsyncNotifier<FileBrowserState> {
         ),
       );
     });
+    _startOfflineTaskPolling();
   }
 
   Future<void> showExternalStorage() async {

@@ -752,6 +752,36 @@ abstract class AppLocalizations {
   /// **'New notifications will appear here'**
   String get notificationEmptyHint;
 
+  /// No description provided for @coreSignOutConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out?'**
+  String get coreSignOutConfirmTitle;
+
+  /// No description provided for @coreSignOutConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'You will need to sign in again to continue.'**
+  String get coreSignOutConfirmMessage;
+
+  /// No description provided for @notificationForegroundToastView.
+  ///
+  /// In en, this message translates to:
+  /// **'View'**
+  String get notificationForegroundToastView;
+
+  /// No description provided for @notificationForegroundToastToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'In-app new notification toasts'**
+  String get notificationForegroundToastToggle;
+
+  /// No description provided for @notificationForegroundToastToggleSubtitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show a lightweight toast when a notification arrives'**
+  String get notificationForegroundToastToggleSubtitle;
+
   /// No description provided for @notificationMarkAllRead.
   ///
   /// In en, this message translates to:
@@ -919,6 +949,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Account password was changed'**
   String get notificationTypePasswordChangedDesc;
+
+  /// No description provided for @notificationTypeSecurityThreat.
+  ///
+  /// In en, this message translates to:
+  /// **'Security Threat'**
+  String get notificationTypeSecurityThreat;
+
+  /// No description provided for @notificationTypeSecurityThreatDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'Suspicious file upload activity detected'**
+  String get notificationTypeSecurityThreatDesc;
+
+  /// No description provided for @notificationTypeSecurityScanFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Security Scan Failed'**
+  String get notificationTypeSecurityScanFailed;
+
+  /// No description provided for @notificationTypeSecurityScanFailedDesc.
+  ///
+  /// In en, this message translates to:
+  /// **'A file failed the security scan and was quarantined'**
+  String get notificationTypeSecurityScanFailedDesc;
 
   /// No description provided for @notificationTypesHeader.
   ///
@@ -4309,29 +4363,29 @@ abstract class AppLocalizations {
   /// **'Lyrics'**
   String get portalMusicVisualizerLyrics;
 
+  /// No description provided for @musicVisualizerLyricMode.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyric layout'**
+  String get musicVisualizerLyricMode;
+
+  /// No description provided for @musicVisualizerLyricModeScroll.
+  ///
+  /// In en, this message translates to:
+  /// **'Scrolling lyrics'**
+  String get musicVisualizerLyricModeScroll;
+
+  /// No description provided for @musicVisualizerLyricModeMultiline.
+  ///
+  /// In en, this message translates to:
+  /// **'Multi-line lyrics'**
+  String get musicVisualizerLyricModeMultiline;
+
   /// No description provided for @portalMusicVisualizerPlayer.
   ///
   /// In en, this message translates to:
   /// **'Player'**
   String get portalMusicVisualizerPlayer;
-
-  /// No description provided for @portalMusicVisualizerLow.
-  ///
-  /// In en, this message translates to:
-  /// **'Low'**
-  String get portalMusicVisualizerLow;
-
-  /// No description provided for @portalMusicVisualizerMid.
-  ///
-  /// In en, this message translates to:
-  /// **'Mid'**
-  String get portalMusicVisualizerMid;
-
-  /// No description provided for @portalMusicVisualizerHigh.
-  ///
-  /// In en, this message translates to:
-  /// **'High'**
-  String get portalMusicVisualizerHigh;
 
   /// No description provided for @portalMusicVisualizerCurrentFont.
   ///
@@ -4351,23 +4405,155 @@ abstract class AppLocalizations {
   /// **'Visible lines'**
   String get portalMusicVisualizerVisibleLines;
 
-  /// No description provided for @musicVisualizerLyricActiveColor.
+  /// No description provided for @musicVisualizerLyricCurrentColor.
   ///
   /// In en, this message translates to:
   /// **'Current line color'**
-  String get musicVisualizerLyricActiveColor;
+  String get musicVisualizerLyricCurrentColor;
 
-  /// No description provided for @musicVisualizerLyricReadColor.
+  /// No description provided for @musicVisualizerLyricInactiveColor.
   ///
   /// In en, this message translates to:
-  /// **'Played line color'**
-  String get musicVisualizerLyricReadColor;
+  /// **'Other lines color'**
+  String get musicVisualizerLyricInactiveColor;
 
-  /// No description provided for @musicVisualizerLyricUnreadColor.
+  /// No description provided for @musicVisualizerLyricFontSize.
   ///
   /// In en, this message translates to:
-  /// **'Upcoming line color'**
-  String get musicVisualizerLyricUnreadColor;
+  /// **'Lyric size'**
+  String get musicVisualizerLyricFontSize;
+
+  /// No description provided for @musicVisualizerUnitLines.
+  ///
+  /// In en, this message translates to:
+  /// **'lines'**
+  String get musicVisualizerUnitLines;
+
+  /// No description provided for @musicLyricSemanticsCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Current lyric: {text}'**
+  String musicLyricSemanticsCurrent(Object text);
+
+  /// No description provided for @musicVisualizerLyricOffset.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyric delay'**
+  String get musicVisualizerLyricOffset;
+
+  /// No description provided for @musicVisualizerLyricTranslation.
+  ///
+  /// In en, this message translates to:
+  /// **'Show translation'**
+  String get musicVisualizerLyricTranslation;
+
+  /// No description provided for @musicVisualizerLyricKaraokeFill.
+  ///
+  /// In en, this message translates to:
+  /// **'Word-by-word fill'**
+  String get musicVisualizerLyricKaraokeFill;
+
+  /// No description provided for @musicVisualizerLyricFocusAnchor.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus line position'**
+  String get musicVisualizerLyricFocusAnchor;
+
+  /// No description provided for @musicVisualizerLyricFocusBand.
+  ///
+  /// In en, this message translates to:
+  /// **'Focus band'**
+  String get musicVisualizerLyricFocusBand;
+
+  /// No description provided for @musicLyricBackToCurrent.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to current'**
+  String get musicLyricBackToCurrent;
+
+  /// No description provided for @musicLyricCopied.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyric line copied'**
+  String get musicLyricCopied;
+
+  /// No description provided for @musicLyricCopyLine.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy lyric'**
+  String get musicLyricCopyLine;
+
+  /// No description provided for @musicLyricDelayLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Delay lyrics by 0.1s'**
+  String get musicLyricDelayLater;
+
+  /// No description provided for @musicLyricAdvanceEarlier.
+  ///
+  /// In en, this message translates to:
+  /// **'Advance lyrics by 0.1s'**
+  String get musicLyricAdvanceEarlier;
+
+  /// No description provided for @musicLyricOffsetLater.
+  ///
+  /// In en, this message translates to:
+  /// **'Delay lyrics by 0.2s'**
+  String get musicLyricOffsetLater;
+
+  /// No description provided for @musicLyricOffsetEarlier.
+  ///
+  /// In en, this message translates to:
+  /// **'Advance lyrics by 0.2s'**
+  String get musicLyricOffsetEarlier;
+
+  /// No description provided for @musicLyricOffsetReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset lyric offset'**
+  String get musicLyricOffsetReset;
+
+  /// No description provided for @musicLyricOffsetDelayed.
+  ///
+  /// In en, this message translates to:
+  /// **'Delayed by {seconds}s'**
+  String musicLyricOffsetDelayed(Object seconds);
+
+  /// No description provided for @musicLyricOffsetAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced by {seconds}s'**
+  String musicLyricOffsetAdvanced(Object seconds);
+
+  /// No description provided for @musicVisualizerDeckToggle.
+  ///
+  /// In en, this message translates to:
+  /// **'Show cover deck'**
+  String get musicVisualizerDeckToggle;
+
+  /// No description provided for @musicLyricSyncBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'Synced lyrics'**
+  String get musicLyricSyncBadge;
+
+  /// No description provided for @musicSeekBack10.
+  ///
+  /// In en, this message translates to:
+  /// **'Back 10 seconds'**
+  String get musicSeekBack10;
+
+  /// No description provided for @musicSeekForward10.
+  ///
+  /// In en, this message translates to:
+  /// **'Forward 10 seconds'**
+  String get musicSeekForward10;
+
+  /// No description provided for @musicVisualizerLyricStyle.
+  ///
+  /// In en, this message translates to:
+  /// **'Lyric style'**
+  String get musicVisualizerLyricStyle;
 
   /// No description provided for @musicVisualizerLyricBreathing.
   ///
@@ -4381,65 +4567,29 @@ abstract class AppLocalizations {
   /// **'Line spacing'**
   String get musicVisualizerLyricLineSpacing;
 
-  /// No description provided for @musicVisualizerLyricGlowIntensity.
+  /// No description provided for @musicVisualizerLayout.
   ///
   /// In en, this message translates to:
-  /// **'Glow intensity'**
-  String get musicVisualizerLyricGlowIntensity;
+  /// **'Desktop layout'**
+  String get musicVisualizerLayout;
 
-  /// No description provided for @musicVisualizerLyricGlowColor.
-  ///
-  /// In en, this message translates to:
-  /// **'Glow color'**
-  String get musicVisualizerLyricGlowColor;
-
-  /// No description provided for @musicVisualizerLyricPosition.
-  ///
-  /// In en, this message translates to:
-  /// **'Lyric position'**
-  String get musicVisualizerLyricPosition;
-
-  /// No description provided for @musicVisualizerLyricPositionLeft.
+  /// No description provided for @musicVisualizerLayoutLeft.
   ///
   /// In en, this message translates to:
   /// **'Left'**
-  String get musicVisualizerLyricPositionLeft;
+  String get musicVisualizerLayoutLeft;
 
-  /// No description provided for @musicVisualizerLyricPositionCenter.
+  /// No description provided for @musicVisualizerLayoutCenter.
   ///
   /// In en, this message translates to:
   /// **'Center'**
-  String get musicVisualizerLyricPositionCenter;
+  String get musicVisualizerLayoutCenter;
 
-  /// No description provided for @musicVisualizerLyricPositionRight.
+  /// No description provided for @musicVisualizerLayoutRight.
   ///
   /// In en, this message translates to:
   /// **'Right'**
-  String get musicVisualizerLyricPositionRight;
-
-  /// No description provided for @musicVisualizerAudioBarStyle.
-  ///
-  /// In en, this message translates to:
-  /// **'Audio bar style'**
-  String get musicVisualizerAudioBarStyle;
-
-  /// No description provided for @musicVisualizerAudioBarSpectrum.
-  ///
-  /// In en, this message translates to:
-  /// **'Spectrum bars'**
-  String get musicVisualizerAudioBarSpectrum;
-
-  /// No description provided for @musicVisualizerAudioBarLine.
-  ///
-  /// In en, this message translates to:
-  /// **'Light trace'**
-  String get musicVisualizerAudioBarLine;
-
-  /// No description provided for @musicVisualizerAudioBarDots.
-  ///
-  /// In en, this message translates to:
-  /// **'Pulse dots'**
-  String get musicVisualizerAudioBarDots;
+  String get musicVisualizerLayoutRight;
 
   /// No description provided for @musicVisualizerColorHue.
   ///
@@ -4465,6 +4615,12 @@ abstract class AppLocalizations {
   /// **'Custom color'**
   String get musicVisualizerColorCustom;
 
+  /// No description provided for @musicVisualizerColorCustomStop.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom color · {stop}'**
+  String musicVisualizerColorCustomStop(Object stop);
+
   /// No description provided for @musicVisualizerColorHex.
   ///
   /// In en, this message translates to:
@@ -4477,23 +4633,41 @@ abstract class AppLocalizations {
   /// **'Reset to default'**
   String get musicVisualizerColorResetDefault;
 
-  /// No description provided for @portalMusicVisualizerLyricGlow.
+  /// No description provided for @musicVisualizerColorPaintMode.
   ///
   /// In en, this message translates to:
-  /// **'Lyric glow'**
-  String get portalMusicVisualizerLyricGlow;
+  /// **'Paint'**
+  String get musicVisualizerColorPaintMode;
 
-  /// No description provided for @portalMusicVisualizerOriginalCover.
+  /// No description provided for @musicVisualizerColorPaintSolid.
   ///
   /// In en, this message translates to:
-  /// **'Original cover'**
-  String get portalMusicVisualizerOriginalCover;
+  /// **'Solid'**
+  String get musicVisualizerColorPaintSolid;
 
-  /// No description provided for @portalMusicVisualizerCoverBorder.
+  /// No description provided for @musicVisualizerColorPaintGradient.
   ///
   /// In en, this message translates to:
-  /// **'Cover border'**
-  String get portalMusicVisualizerCoverBorder;
+  /// **'Vertical gradient'**
+  String get musicVisualizerColorPaintGradient;
+
+  /// No description provided for @musicVisualizerColorPaintStops.
+  ///
+  /// In en, this message translates to:
+  /// **'Gradient ends'**
+  String get musicVisualizerColorPaintStops;
+
+  /// No description provided for @musicVisualizerColorPaintTop.
+  ///
+  /// In en, this message translates to:
+  /// **'Top'**
+  String get musicVisualizerColorPaintTop;
+
+  /// No description provided for @musicVisualizerColorPaintBottom.
+  ///
+  /// In en, this message translates to:
+  /// **'Bottom'**
+  String get musicVisualizerColorPaintBottom;
 
   /// No description provided for @portalMusicVisualizerProgressControl.
   ///
@@ -4507,41 +4681,35 @@ abstract class AppLocalizations {
   /// **'Show bottom player'**
   String get musicVisualizerPlayerVisible;
 
-  /// No description provided for @musicVisualizerAudioBar.
+  /// No description provided for @musicVisualizerGroupDesktop.
   ///
   /// In en, this message translates to:
-  /// **'Show audio bars'**
-  String get musicVisualizerAudioBar;
+  /// **'Desktop immersive'**
+  String get musicVisualizerGroupDesktop;
 
-  /// No description provided for @musicVisualizerFrequencyResponse.
+  /// No description provided for @musicVisualizerGroupMobileLyrics.
   ///
   /// In en, this message translates to:
-  /// **'Audio bar frequency response'**
-  String get musicVisualizerFrequencyResponse;
+  /// **'Mobile lyric style'**
+  String get musicVisualizerGroupMobileLyrics;
 
-  /// No description provided for @musicVisualizerCoverSize.
+  /// No description provided for @musicVisualizerScopeDesktop.
   ///
   /// In en, this message translates to:
-  /// **'Cover size'**
-  String get musicVisualizerCoverSize;
+  /// **'Desktop'**
+  String get musicVisualizerScopeDesktop;
 
-  /// No description provided for @musicVisualizerCoverRadius.
+  /// No description provided for @musicVisualizerScopeMobile.
   ///
   /// In en, this message translates to:
-  /// **'Cover radius'**
-  String get musicVisualizerCoverRadius;
+  /// **'Mobile'**
+  String get musicVisualizerScopeMobile;
 
-  /// No description provided for @musicVisualizerCoverTilt.
+  /// No description provided for @musicVisualizerScopeAll.
   ///
   /// In en, this message translates to:
-  /// **'Cover tilt'**
-  String get musicVisualizerCoverTilt;
-
-  /// No description provided for @musicVisualizerHeroCoverOpacity.
-  ///
-  /// In en, this message translates to:
-  /// **'Hero cover opacity'**
-  String get musicVisualizerHeroCoverOpacity;
+  /// **'All devices'**
+  String get musicVisualizerScopeAll;
 
   /// No description provided for @portalReading.
   ///
@@ -6265,12 +6433,6 @@ abstract class AppLocalizations {
   /// **'NetEase Cloud Music'**
   String get adminConfigProviderNetease;
 
-  /// No description provided for @adminConfigProviderQqMusic.
-  ///
-  /// In en, this message translates to:
-  /// **'QQ Music'**
-  String get adminConfigProviderQqMusic;
-
   /// No description provided for @adminConfigProviderQWeather.
   ///
   /// In en, this message translates to:
@@ -6414,12 +6576,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enable NetEase Cloud Music'**
   String get adminConfigNeteaseEnabled;
-
-  /// No description provided for @adminConfigQqEnabled.
-  ///
-  /// In en, this message translates to:
-  /// **'Enable QQ Music'**
-  String get adminConfigQqEnabled;
 
   /// No description provided for @adminConfigQWeatherProjectId.
   ///
@@ -6576,24 +6732,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'NetEase playback hosts'**
   String get adminConfigNeteaseHosts;
-
-  /// No description provided for @adminConfigQqUUrl.
-  ///
-  /// In en, this message translates to:
-  /// **'QQ Music U endpoint'**
-  String get adminConfigQqUUrl;
-
-  /// No description provided for @adminConfigQqCUrl.
-  ///
-  /// In en, this message translates to:
-  /// **'QQ Music C endpoint'**
-  String get adminConfigQqCUrl;
-
-  /// No description provided for @adminConfigQqHosts.
-  ///
-  /// In en, this message translates to:
-  /// **'QQ Music playback hosts'**
-  String get adminConfigQqHosts;
 
   /// No description provided for @adminConfigQWeatherBaseUrl.
   ///
@@ -14165,6 +14303,30 @@ abstract class AppLocalizations {
   /// **'Existing Share Links'**
   String get photosExistingShareLinks;
 
+  /// No description provided for @photosShareRevokeAll.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all'**
+  String get photosShareRevokeAll;
+
+  /// No description provided for @photosShareRevokeAllConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear share links'**
+  String get photosShareRevokeAllConfirmTitle;
+
+  /// No description provided for @photosShareRevokeAllConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This revokes every active share link for this item; links already sent stop working immediately.'**
+  String get photosShareRevokeAllConfirmBody;
+
+  /// No description provided for @photosShareRevokeAllDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Revoked {count} links'**
+  String photosShareRevokeAllDone(Object count);
+
   /// No description provided for @photosShareAccessCount.
   ///
   /// In en, this message translates to:
@@ -14194,6 +14356,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Create Link'**
   String get photosCreateLink;
+
+  /// No description provided for @photosShareLinkUpdate.
+  ///
+  /// In en, this message translates to:
+  /// **'Update link'**
+  String get photosShareLinkUpdate;
+
+  /// No description provided for @photosShareSlotPermanent.
+  ///
+  /// In en, this message translates to:
+  /// **'Permanent link'**
+  String get photosShareSlotPermanent;
+
+  /// No description provided for @photosShareSlotTimed.
+  ///
+  /// In en, this message translates to:
+  /// **'Timed link'**
+  String get photosShareSlotTimed;
+
+  /// No description provided for @photosShareSlotEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Not created'**
+  String get photosShareSlotEmpty;
+
+  /// No description provided for @photosShareSlotCreatePermanent.
+  ///
+  /// In en, this message translates to:
+  /// **'Create permanent'**
+  String get photosShareSlotCreatePermanent;
+
+  /// No description provided for @photosShareSlotCreateTimed.
+  ///
+  /// In en, this message translates to:
+  /// **'Create timed'**
+  String get photosShareSlotCreateTimed;
 
   /// No description provided for @photosShareLinkCreated.
   ///
@@ -14386,12 +14584,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'NetEase'**
   String get musicDeckSourceNetease;
-
-  /// No description provided for @musicDeckSourceQq.
-  ///
-  /// In en, this message translates to:
-  /// **'QQ Music'**
-  String get musicDeckSourceQq;
 
   /// No description provided for @musicDailyRecommendationSection.
   ///
@@ -15071,59 +15263,17 @@ abstract class AppLocalizations {
   /// **'Generating QR code...'**
   String get musicPlatformQrGenerating;
 
+  /// No description provided for @musicPlatformQrPreparing.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing QR code…'**
+  String get musicPlatformQrPreparing;
+
   /// No description provided for @musicPlatformQrAction.
   ///
   /// In en, this message translates to:
   /// **'Scan QR Login'**
   String get musicPlatformQrAction;
-
-  /// No description provided for @musicPlatformQqName.
-  ///
-  /// In en, this message translates to:
-  /// **'QQ Music'**
-  String get musicPlatformQqName;
-
-  /// No description provided for @musicPlatformQqCookieRequired.
-  ///
-  /// In en, this message translates to:
-  /// **'Please paste your QQ Music cookie'**
-  String get musicPlatformQqCookieRequired;
-
-  /// No description provided for @musicPlatformQqVerifyFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Verification failed: {error}'**
-  String musicPlatformQqVerifyFailed(Object error);
-
-  /// No description provided for @musicPlatformQqCookieHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Log in at y.qq.com in your browser, then copy the full cookie and paste it below.'**
-  String get musicPlatformQqCookieHint;
-
-  /// No description provided for @musicPlatformQqCookieKeyHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Must include qm_keyst or qqmusic_key for playback.'**
-  String get musicPlatformQqCookieKeyHint;
-
-  /// No description provided for @musicPlatformQqCookiePlaceholder.
-  ///
-  /// In en, this message translates to:
-  /// **'Paste cookie here...'**
-  String get musicPlatformQqCookiePlaceholder;
-
-  /// No description provided for @musicPlatformQqVerifying.
-  ///
-  /// In en, this message translates to:
-  /// **'Verifying...'**
-  String get musicPlatformQqVerifying;
-
-  /// No description provided for @musicPlatformQqVerifyAction.
-  ///
-  /// In en, this message translates to:
-  /// **'Verify & Save'**
-  String get musicPlatformQqVerifyAction;
 
   /// No description provided for @musicPlatformAnonymousUser.
   ///
@@ -15148,6 +15298,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Logout'**
   String get musicPlatformLogout;
+
+  /// No description provided for @musicPlatformLogoutBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'Logging out…'**
+  String get musicPlatformLogoutBusy;
+
+  /// No description provided for @musicPlatformLogoutConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect this account?'**
+  String get musicPlatformLogoutConfirmTitle;
+
+  /// No description provided for @musicPlatformLogoutConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The connection and its cached playlists will be removed, and tracks of this platform will be dropped from the play queue.'**
+  String get musicPlatformLogoutConfirmMessage;
+
+  /// No description provided for @musicPlatformLogoutSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnected'**
+  String get musicPlatformLogoutSuccess;
+
+  /// No description provided for @musicPlatformLogoutQueuePurged.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No queued tracks needed removal} other{{count} queued track(s) from this platform were removed}}'**
+  String musicPlatformLogoutQueuePurged(num count);
 
   /// No description provided for @musicHistoryTitle.
   ///
@@ -17273,6 +17453,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Retry'**
   String get musicQrRetry;
+
+  /// No description provided for @musicQrRegenerate.
+  ///
+  /// In en, this message translates to:
+  /// **'Generate a new QR code'**
+  String get musicQrRegenerate;
 
   /// No description provided for @musicQrUnknownStatus.
   ///

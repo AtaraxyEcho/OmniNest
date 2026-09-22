@@ -3,8 +3,11 @@ package com.omninest.modules.video.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.messaging.QueueNames;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.StorageLocation;
 import com.omninest.modules.file.service.StorageLocationService;
+import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -52,6 +55,7 @@ public class VideoLibrarySourceService {
     private final TaskDispatchService taskDispatchService;
     private final MediaLibraryDiscoveryExecutor discoveryExecutor;
     private final MediaLibraryAccessService accessService;
+    private final MediaSyncEventService syncEventService;
 
     /** 查询用户影视库来源。 */
     @Transactional(readOnly = true)
@@ -81,7 +85,9 @@ public class VideoLibrarySourceService {
             storageLocationId = request.storageLocationId();
         }
         try {
-            return persistNewSource(operatorUserId, request, storageLocationId);
+            VideoLibrarySourceDto created = persistNewSource(operatorUserId, request, storageLocationId);
+            recordSourceEvent(operatorUserId, created.id());
+            return created;
         } catch (RuntimeException exception) {
             if (autoCreated != null) {
                 // 外层事务即将回滚；本次自动创建的位置在独立事务中按无引用条件清理，
@@ -144,6 +150,7 @@ public class VideoLibrarySourceService {
         }
         runRepository.deleteByLibrarySourceId(sourceId);
         sourceRepository.delete(source);
+        recordSourceEvent(operatorUserId, sourceId);
     }
 
     /** 更新用户影视库来源。 */
@@ -180,7 +187,9 @@ public class VideoLibrarySourceService {
         if (request.enabled() && "DISABLED".equals(source.getHealthStatus())) {
             source.setHealthStatus("AVAILABLE");
         }
-        return toDto(sourceRepository.save(source));
+        VideoLibrarySourceDto updated = toDto(sourceRepository.save(source));
+        recordSourceEvent(operatorUserId, sourceId);
+        return updated;
     }
 
     /**
@@ -241,7 +250,21 @@ public class VideoLibrarySourceService {
                 QueueNames.LOCAL_VIDEO_LIBRARY_SCAN_ROUTING_KEY,
                 event
         );
+        recordSourceEvent(operatorUserId, sourceId);
         return new ScrapeTaskDto(taskId, TaskStatus.QUEUED.getValue(), "媒体发现任务已进入队列");
+    }
+
+    /** 库源配置变更后发出 VIDEO_LIBRARY 事件，操作者其他设备的库源视图即时刷新。 */
+    private void recordSourceEvent(UUID operatorUserId, UUID sourceId) {
+        syncEventService.record(
+                operatorUserId,
+                SyncScope.VIDEO,
+                "VIDEO_LIBRARY",
+                sourceId == null ? null : sourceId.toString(),
+                SyncAction.UPDATED,
+                null,
+                Map.of()
+        );
     }
 
     /** Worker 执行媒体发现。 */

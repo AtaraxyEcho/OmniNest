@@ -6,6 +6,7 @@ final musicApiProvider = Provider<MusicApi>((ref) {
 
 /// 提供音乐模块的首页摘要只读视图。
 final musicDashboardProvider = FutureProvider<MusicDashboard>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(musicApiProvider).dashboard();
 });
 

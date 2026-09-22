@@ -8,12 +8,17 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
+import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
+import 'package:omninest/features/music/application/music_visualizer_preset_controller.dart';
+import 'package:omninest/features/music/data/music_local_preference_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
+import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_queue_sheet.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_lyrics.dart';
+import 'package:omninest/features/music/presentation/player/music_immersive_preset_editor.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 
@@ -30,12 +35,17 @@ class MusicMobileNowPlaying extends ConsumerStatefulWidget {
 
 class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
   late final PageController _pageController;
-  int _selectedView = 0;
+
+  /// 默认展示滚动歌词页（索引 1）；封面页为用户可切换的次视图。
+  int _selectedView = 1;
+
+  /// 歌词样式面板的即时预览（未保存前只作用于当前播放页）。
+  PortalMusicVisualizerSettings? _previewVisual;
 
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
+    _pageController = PageController(initialPage: _selectedView);
   }
 
   @override
@@ -49,8 +59,21 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
     final l10n = AppLocalizations.of(context);
     final center = ref.watch(musicCenterControllerProvider).asData?.value;
     final session = ref.watch(musicPlaybackSessionProvider);
+    final preferences =
+        ref.watch(musicVisualizerPreferencesProvider).asData?.value ??
+        const PortalMusicVisualizerPreferences();
+    final visual = _previewVisual ?? preferences.visual;
+    // 歌词形态是设备级偏好：移动端同样可切换（两种形态都文本居中）。
+    final lyricScrollMode =
+        ref.watch(musicLyricScrollModeProvider).asData?.value ??
+        MusicLocalPreferenceStore.defaultLyricScrollMode;
     final item = center?.currentItem;
     final track = item?.track ?? center?.activeTrack;
+    // 曲目级歌词延迟覆盖（设备本地）：仅在解析完成后生效，未设置时退回全局校准。
+    final trackOffsetMs =
+        track == null
+            ? null
+            : ref.watch(musicTrackLyricOffsetProvider(track.id)).asData?.value;
     final lyrics = track?.lyricLines ?? const <MusicLyricLine>[];
     // 下滑关闭：与 mini player 收起手势同阈值；页面内歌词区有自己的手势
     // 竞争，垂直拖拽仅在未被内层消费时触发。
@@ -94,6 +117,15 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                           ),
                         ),
                         _MobileHeaderButton(
+                          tooltip: l10n.musicVisualizerLyricStyle,
+                          icon: Icons.tune_rounded,
+                          onPressed:
+                              () => _openLyricStyle(
+                                visual: preferences.visual,
+                                lyricScrollMode: lyricScrollMode,
+                              ),
+                        ),
+                        _MobileHeaderButton(
                           tooltip: l10n.musicQueueTitle,
                           icon: Icons.queue_music_rounded,
                           onPressed: () => showMusicDeckQueue(context),
@@ -123,6 +155,14 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                                 MediaQuery.sizeOf(context).width < 390
                                     ? 0.86
                                     : 0.94,
+                            // 移动端两种形态都文本居中：窄屏长句折行后居中
+                            // 更贴近主流移动播放器排版。
+                            textAlign: TextAlign.center,
+                            blockAnchor: Alignment.center,
+                            lyricSettings: visual.lyrics,
+                            scrollMode: lyricScrollMode,
+                            trackOffsetMs: trackOffsetMs,
+                            onAdjustLyricOffset: _adjustTrackLyricOffset,
                             onTogglePlayback:
                                 () =>
                                     ref
@@ -209,6 +249,54 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
     );
   }
 
+  /// 打开歌词样式面板：移动端只展示歌词分区，形态开关写回设备级偏好，
+  /// 改动即时预览，确认后写入跨端视觉设置。
+  Future<void> _openLyricStyle({
+    required PortalMusicVisualizerSettings visual,
+    required bool lyricScrollMode,
+  }) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder:
+          (sheetContext) => Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(sheetContext).bottom,
+            ),
+            child: FractionallySizedBox(
+              heightFactor: 0.78,
+              child: MusicVisualEditorPanel(
+                key: const ValueKey('music-mobile-lyric-style'),
+                palette: MusicImmersivePalette.digital,
+                source: visual,
+                sections: const <MusicVisualEditorSection>{
+                  MusicVisualEditorSection.mobileLyrics,
+                },
+                lyricScrollMode: lyricScrollMode,
+                onLyricScrollModeChanged:
+                    (enabled) => ref
+                        .read(musicLyricScrollModeProvider.notifier)
+                        .setScrollMode(enabled),
+                onChanged: (next) => setState(() => _previewVisual = next),
+                onSave: (next) async {
+                  await ref
+                      .read(musicVisualizerPreferencesProvider.notifier)
+                      .saveVisual(next);
+                  if (sheetContext.mounted) {
+                    Navigator.of(sheetContext).pop(true);
+                  }
+                },
+                onClose: () => Navigator.of(sheetContext).pop(false),
+              ),
+            ),
+          ),
+    );
+    if (!mounted || saved != true) {
+      setState(() => _previewVisual = null);
+    }
+  }
+
   void _selectView(int index) {
     if (_selectedView == index) {
       return;
@@ -220,6 +308,23 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
         duration: const Duration(milliseconds: 240),
         curve: Curves.easeOutCubic,
       ),
+    );
+  }
+
+  /// 调整当前曲目的歌词延迟（行菜单触发）：写入曲目级设备本地覆盖。
+  void _adjustTrackLyricOffset(int deltaMs) {
+    if (!mounted) {
+      return;
+    }
+    final track =
+        ref.read(musicCenterControllerProvider).asData?.value.currentTrack;
+    if (track == null) {
+      return;
+    }
+    unawaited(
+      ref
+          .read(musicTrackLyricOffsetProvider(track.id).notifier)
+          .adjust(deltaMs),
     );
   }
 

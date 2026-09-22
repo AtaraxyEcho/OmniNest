@@ -324,6 +324,57 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     _startImportTaskPolling();
   }
 
+  void _startOfflineTaskPolling() {
+    final current = _currentState;
+    final shouldPoll =
+        current != null &&
+        current.section == FileManagerSection.offlineDownloads &&
+        current.offlineTasks.any(_isOfflineTaskActive);
+    if (!shouldPoll) {
+      _stopOfflineTaskPolling();
+      return;
+    }
+    _offlineTaskPollTimer ??= Timer.periodic(
+      const Duration(seconds: 2),
+      (_) => unawaited(_refreshOfflineTasksForPolling()),
+    );
+  }
+
+  void _stopOfflineTaskPolling() {
+    _offlineTaskPollTimer?.cancel();
+    _offlineTaskPollTimer = null;
+  }
+
+  Future<void> _refreshOfflineTasksForPolling() async {
+    final current = _currentState;
+    if (current == null ||
+        current.section != FileManagerSection.offlineDownloads) {
+      _stopOfflineTaskPolling();
+      return;
+    }
+    try {
+      final tasks = await _repository.listOfflineDownloads();
+      final latest = _currentState;
+      if (latest == null ||
+          latest.section != FileManagerSection.offlineDownloads) {
+        _stopOfflineTaskPolling();
+        return;
+      }
+      _emitState(latest.copyWith(offlineTasks: tasks));
+    } on Exception {
+      // 实时通道仍可继续推送状态，轮询失败不覆盖当前任务数据。
+    }
+    _startOfflineTaskPolling();
+  }
+
+  static bool _isOfflineTaskActive(OfflineDownloadTask task) {
+    return !const {
+      'CANCELLED',
+      'COMPLETED',
+      'FAILED',
+    }.contains(task.status.toUpperCase());
+  }
+
   void _startUploadQueuePolling() {
     final current = _currentState;
     if (current == null) {

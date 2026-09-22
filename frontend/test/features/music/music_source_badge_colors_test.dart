@@ -49,8 +49,6 @@ void main() {
         light ? const Color(0xFF58605B) : const Color(0xFFC4CCC8),
       MusicPlatform.netease =>
         light ? const Color(0xFF9A3037) : const Color(0xFFF28C8C),
-      MusicPlatform.qq =>
-        light ? const Color(0xFF735A08) : const Color(0xFFF0CD76),
     };
   }
 

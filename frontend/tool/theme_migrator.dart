@@ -10,7 +10,8 @@ void main() {
   // ─── 替换规则 ───
   // Video 模块
   final videoReplacements = <String, String>{
-    'movieSurfaceContainerHighest': 'context.videoColors.surfaceContainerHighest',
+    'movieSurfaceContainerHighest':
+        'context.videoColors.surfaceContainerHighest',
     'movieSurfaceContainerHigh': 'context.videoColors.surfaceContainerHigh',
     'movieSurfaceContainerLow': 'context.videoColors.surfaceContainerLow',
     'movieSurfaceContainer': 'context.videoColors.surfaceContainer',
@@ -29,7 +30,8 @@ void main() {
 
   // Reader 模块
   final readerReplacements = <String, String>{
-    'readerSurfaceContainerHighest': 'context.readerColors.surfaceContainerHighest',
+    'readerSurfaceContainerHighest':
+        'context.readerColors.surfaceContainerHighest',
     'readerSurfaceContainerHigh': 'context.readerColors.surfaceContainerHigh',
     'readerSurfaceContainerLow': 'context.readerColors.surfaceContainerLow',
     'readerSurfaceContainer': 'context.readerColors.surfaceContainer',
@@ -47,7 +49,8 @@ void main() {
 
   // Photos 模块
   final photosReplacements = <String, String>{
-    'photosSurfaceContainerHighest': 'context.photosColors.surfaceContainerHighest',
+    'photosSurfaceContainerHighest':
+        'context.photosColors.surfaceContainerHighest',
     'photosSurfaceContainerHigh': 'context.photosColors.surfaceContainerHigh',
     'photosSurfaceContainerLow': 'context.photosColors.surfaceContainerLow',
     'photosSurfaceContainer': 'context.photosColors.surfaceContainer',
@@ -66,7 +69,8 @@ void main() {
 
   // Music 模块
   final musicReplacements = <String, String>{
-    'MusicColors.surfaceContainerHigh': 'context.musicColors.surfaceContainerHigh',
+    'MusicColors.surfaceContainerHigh':
+        'context.musicColors.surfaceContainerHigh',
     'MusicColors.surfaceContainer': 'context.musicColors.surfaceContainer',
     'MusicColors.background': 'context.musicColors.background',
     'MusicColors.surface': 'context.musicColors.surface',
@@ -87,11 +91,11 @@ void main() {
 
   // ─── 排除的文件 ───
   final excludeFiles = {
-    'movie_shell.dart',           // 定义颜色常量
-    'movie_styles.dart',          // 顶层函数，无 context
-    'reader_styles.dart',         // 定义颜色常量
-    'photos_styles.dart',         // 定义颜色常量
-    'music_colors.dart',          // 定义颜色常量
+    'movie_shell.dart', // 定义颜色常量
+    'movie_styles.dart', // 顶层函数，无 context
+    'reader_styles.dart', // 定义颜色常量
+    'photos_styles.dart', // 定义颜色常量
+    'music_colors.dart', // 定义颜色常量
     'movie_theme_colors.dart',
     'reader_theme_colors.dart',
     'photos_theme_colors.dart',
@@ -125,20 +129,22 @@ void main() {
     final moduleDir = Directory('${base.path}/$moduleName/presentation');
     if (!moduleDir.existsSync()) continue;
 
-    final files = moduleDir
-        .listSync(recursive: true)
-        .whereType<File>()
-        .where((f) => f.path.endsWith('.dart'))
-        .where((f) => !excludeFiles.any((ex) => f.path.endsWith(ex)))
-        .toList();
+    final files =
+        moduleDir
+            .listSync(recursive: true)
+            .whereType<File>()
+            .where((f) => f.path.endsWith('.dart'))
+            .where((f) => !excludeFiles.any((ex) => f.path.endsWith(ex)))
+            .toList();
 
     for (final file in files) {
       var content = file.readAsStringSync();
       var changed = false;
 
       // 第一轮：替换颜色常量（最长匹配优先）
-      final sortedKeys = replacements.keys.toList()
-        ..sort((a, b) => b.length.compareTo(a.length));
+      final sortedKeys =
+          replacements.keys.toList()
+            ..sort((a, b) => b.length.compareTo(a.length));
 
       for (final key in sortedKeys) {
         if (content.contains(key)) {
@@ -164,8 +170,11 @@ void main() {
         if (line.contains(RegExp(r'\bconst\s'))) {
           var hasThemeColor = false;
           for (var j = i; j < i + 15 && j < lines.length; j++) {
-            if (lines[j].contains(RegExp(
-                r'context\.(musicColors|videoColors|readerColors|photosColors)'))) {
+            if (lines[j].contains(
+              RegExp(
+                r'context\.(musicColors|videoColors|readerColors|photosColors)',
+              ),
+            )) {
               hasThemeColor = true;
               break;
             }

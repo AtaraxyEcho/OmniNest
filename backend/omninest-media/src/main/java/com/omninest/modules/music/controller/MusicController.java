@@ -36,7 +36,6 @@ import com.omninest.modules.music.dto.OnlineMusicDtos.MusicPlatformStatusDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlinePlaylistDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlineTrackDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.PlatformUserInfo;
-import com.omninest.modules.music.dto.OnlineMusicDtos.QqCredentialRequest;
 import com.omninest.modules.music.dto.OnlineMusicDtos.QrLoginSession;
 import com.omninest.modules.music.dto.OnlineMusicDtos.QrLoginStatus;
 import com.omninest.modules.music.service.LrclibLyricsService;
@@ -552,21 +551,16 @@ public class MusicController {
         ));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
-    @PostMapping("/api/v1/music/platforms/qq/credentials")
-    ApiResponse<PlatformUserInfo> saveQqCredentials(@Valid @RequestBody QqCredentialRequest request) {
-        return ApiResponse.success(musicPlatformAccountService.applyQqCookie(
-                currentUserContext.requireCurrentUserId(),
-                request.cookie()
-        ));
-    }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
     @DeleteMapping("/api/v1/music/platforms/{platform}/connection")
     ApiResponse<Void> disconnectPlatform(@PathVariable @Size(max = 32) String platform) {
-        UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        musicPlatformAccountService.disconnect(ownerUserId, platform);
-        musicPlatformService.invalidateDailyRecommendations(ownerUserId, platform);
+        // 平台派生状态（每日推荐缓存、播放队列条目、登录会话）的清理已收编在
+        // service 内，保证与 DELETE / POST 两个注销入口行为一致。
+        musicPlatformAccountService.disconnect(
+                currentUserContext.requireCurrentUserId(),
+                platform
+        );
         return ApiResponse.success();
     }
 
@@ -647,14 +641,6 @@ public class MusicController {
         ));
     }
 
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
-    @PostMapping("/api/v1/music/platform/qq/login/cookie")
-    ApiResponse<PlatformUserInfo> applyQqCookie(@Valid @RequestBody QqCredentialRequest request) {
-        return ApiResponse.success(musicPlatformAccountService.applyQqCookie(
-                currentUserContext.requireCurrentUserId(),
-                request.cookie()
-        ));
-    }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
     @PostMapping("/api/v1/music/platform/{platform}/logout")

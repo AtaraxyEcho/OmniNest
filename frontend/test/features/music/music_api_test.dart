@@ -174,11 +174,7 @@ void main() {
     );
     final api = MusicApi(_apiClient(adapter));
 
-    final plan = await api.onlinePlaybackPlan(
-      'netease',
-      'song-1',
-      mediaMid: 'media-1',
-    );
+    final plan = await api.onlinePlaybackPlan('netease', 'song-1');
 
     expect(adapter.lastMethod, 'GET');
     expect(adapter.lastPath, '/music/online/playback-plan');
@@ -186,36 +182,12 @@ void main() {
       'platform': 'netease',
       'songId': 'song-1',
       'quality': 'exhigh',
-      'mediaMid': 'media-1',
     });
     expect(
       plan.url,
       'http://localhost:8080/api/v1/music/playback/sessions/session-2/stream?token=xyz',
     );
     expect(plan.format, 'mp3');
-  });
-
-  test('QQ platform login sends cookie in a structured request body', () async {
-    final adapter = _CapturingHttpClientAdapter(
-      body: {
-        'code': 200,
-        'message': 'success',
-        'data': {
-          'platform': 'qq',
-          'userId': 'user-1',
-          'nickname': 'Music User',
-          'avatarUrl': null,
-          'vip': false,
-        },
-      },
-    );
-    final api = MusicApi(_apiClient(adapter));
-
-    await api.applyQqCookie('uin=o123; qm_keyst=secret');
-
-    expect(adapter.lastMethod, 'POST');
-    expect(adapter.lastPath, '/music/platforms/qq/credentials');
-    expect(adapter.lastData, {'cookie': 'uin=o123; qm_keyst=secret'});
   });
 
   test('platform status maps connection and capability metadata', () async {
@@ -331,22 +303,45 @@ void main() {
     expect(adapter.lastPath, '/music/platforms/netease/liked-tracks');
   });
 
-  test('platform lyrics prefer synchronized lyrics', () async {
-    final adapter = _CapturingHttpClientAdapter(
-      body: {
-        'code': 200,
-        'message': 'success',
-        'data': {'plainLyrics': 'Cloud', 'syncedLyrics': '[00:01.00]Cloud'},
-      },
-    );
-    final api = MusicApi(_apiClient(adapter));
+  test(
+    'platform lyrics prefer synchronized lyrics and pass word payload through',
+    () async {
+      final adapter = _CapturingHttpClientAdapter(
+        body: {
+          'code': 200,
+          'message': 'success',
+          'data': {
+            'plainLyrics': 'Cloud',
+            'syncedLyrics': '[00:01.00]Cloud',
+            'wordLyrics': '[1000,2000](1000,500,0)Cloud',
+          },
+        },
+      );
+      final api = MusicApi(_apiClient(adapter));
 
-    final lyrics = await api.platformTrackLyrics('netease', 'song-1');
+      final lyrics = await api.platformTrackLyrics('netease', 'song-1');
 
-    expect(adapter.lastMethod, 'GET');
-    expect(adapter.lastPath, '/music/platforms/netease/tracks/song-1/lyrics');
-    expect(lyrics?.lyrics, '[00:01.00]Cloud');
-  });
+      expect(adapter.lastMethod, 'GET');
+      expect(adapter.lastPath, '/music/platforms/netease/tracks/song-1/lyrics');
+      expect(lyrics?.lyrics, '[00:01.00]Cloud');
+      expect(lyrics?.words, '[1000,2000](1000,500,0)Cloud');
+
+      // 平台不提供逐字载荷时为 null，调用方退回行级显示。
+      final plainAdapter = _CapturingHttpClientAdapter(
+        body: {
+          'code': 200,
+          'message': 'success',
+          'data': {'syncedLyrics': '[00:01.00]Cloud'},
+        },
+      );
+      final plainApi = MusicApi(_apiClient(plainAdapter));
+      final plainLyrics = await plainApi.platformTrackLyrics(
+        'netease',
+        'song-1',
+      );
+      expect(plainLyrics?.words, isNull);
+    },
+  );
 
   test('QR login and disconnect use canonical platform paths', () async {
     final createAdapter = _CapturingHttpClientAdapter(
@@ -391,17 +386,15 @@ void main() {
     expect(disconnectAdapter.lastPath, '/music/platforms/netease/connection');
   });
 
-  test('online track reads QQ media id from provider metadata', () {
+  test('online track reads media id from provider metadata', () {
     final track = OnlineTrack.fromJson({
-      'platform': 'qq',
+      'platform': 'netease',
       'songId': 'song-mid',
       'title': 'Night Drive',
       'artistName': 'Omni Band',
-      'extra': {'mediaMid': 'media-mid'},
     });
 
     expect(track.songId, 'song-mid');
-    expect(track.mediaMid, 'media-mid');
   });
 
   test('QR login status does not retain a response cookie', () {
@@ -705,22 +698,20 @@ void main() {
     final api = MusicApi(_apiClient(adapter));
 
     await api.recordPlayableHistory(
-      playableKey: 'online:qq:song-2',
+      playableKey: 'online:netease:song-2',
       title: 'Cloud Song',
       artistName: 'Cloud Artist',
       albumTitle: 'Cloud Album',
       coverUrl: 'https://example.com/cover.jpg',
       durationSeconds: 180,
-      mediaMid: 'media-2',
     );
 
     expect(adapter.lastMethod, 'POST');
     expect(adapter.lastPath, '/music/play-history');
     expect(
       (adapter.lastData as Map<String, dynamic>)['playableKey'],
-      'online:qq:song-2',
+      'online:netease:song-2',
     );
-    expect((adapter.lastData as Map<String, dynamic>)['mediaMid'], 'media-2');
   });
 
   test('daily recommendation uses platform endpoint and maps tracks', () async {
@@ -802,11 +793,10 @@ void main() {
       final api = MusicApi(_apiClient(adapter));
       final item = MusicPlayableItem.online(
         const OnlineTrack(
-          platform: 'qq',
+          platform: 'netease',
           songId: 'song-2',
           title: 'Cloud Song',
           artistName: 'Cloud Artist',
-          mediaMid: 'media-2',
         ),
       );
 
@@ -818,8 +808,7 @@ void main() {
       expect(adapter.lastPath, '/music/playback-queue');
       final data = adapter.lastData as Map<String, dynamic>;
       final savedItem = (data['items'] as List).single as Map<String, dynamic>;
-      expect(savedItem['playableKey'], 'online:qq:song-2');
-      expect(savedItem['mediaMid'], 'media-2');
+      expect(savedItem['playableKey'], 'online:netease:song-2');
       expect(savedItem.containsKey('url'), isFalse);
       expect(data.containsKey('updatedAt'), isFalse);
     },

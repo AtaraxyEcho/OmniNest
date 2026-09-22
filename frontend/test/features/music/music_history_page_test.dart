@@ -66,6 +66,51 @@ void main() {
     expect(next.hasMore, isFalse);
     expect(api.requestedPages, [0, 1]);
   });
+
+  testWidgets('重进历史页时已有缓存则补发一次第一页刷新', (tester) async {
+    final api = _HistoryApiStub();
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        musicPlaybackQueueStoreProvider.overrideWithValue(_MemoryStore()),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicHistoryControllerProvider.future);
+    expect(api.requestedPages, [0]);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const MusicHistoryPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(api.requestedPages.take(2), [0, 0]);
+  });
+
+  test('refresh 失败时保留已渲染数据', () async {
+    final api = _HistoryApiStub();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicHistoryControllerProvider.future);
+
+    api.failNextRefresh = true;
+    await container.read(musicHistoryControllerProvider.notifier).refresh();
+
+    final state = container.read(musicHistoryControllerProvider).asData!.value;
+    expect(state.groups, hasLength(2));
+    expect(state.errorMessage, isNull);
+  });
 }
 
 class _MemoryStore implements MusicPlaybackQueueStore {
@@ -81,6 +126,7 @@ class _MemoryStore implements MusicPlaybackQueueStore {
 
 class _HistoryApiStub implements MusicApi {
   final requestedPages = <int>[];
+  bool failNextRefresh = false;
   // 固定为「今天中午 / 昨天 / 前天」，避免贴近午夜时 now-2h 落入昨日导致分组与预期不符。
   late final DateTime todayNoon = () {
     final n = DateTime.now();
@@ -136,6 +182,10 @@ class _HistoryApiStub implements MusicApi {
     int page = 0,
     int size = 50,
   }) async {
+    if (failNextRefresh) {
+      failNextRefresh = false;
+      throw Exception('network down');
+    }
     requestedPages.add(page);
     final items = _page(page);
     return MusicPagedResult<MusicPlayHistoryEntry>(

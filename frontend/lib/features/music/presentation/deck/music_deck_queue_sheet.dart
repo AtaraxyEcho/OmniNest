@@ -19,8 +19,68 @@ Future<void> showMusicDeckQueue(BuildContext context) {
   );
 }
 
-class MusicDeckQueueSheet extends ConsumerWidget {
+class MusicDeckQueueSheet extends ConsumerStatefulWidget {
   const MusicDeckQueueSheet({super.key});
+
+  @override
+  ConsumerState<MusicDeckQueueSheet> createState() =>
+      _MusicDeckQueueSheetState();
+}
+
+class _MusicDeckQueueSheetState extends ConsumerState<MusicDeckQueueSheet> {
+  final ScrollController _scrollController = ScrollController();
+
+  /// 队列行固定高度与列表顶部内边距：自动滚动定位与列表共用同一组常量。
+  static const double _rowExtent = 62;
+  static const double _listTopPadding = 6;
+
+  /// 是否已执行过"滚动到当前播放行"：每次打开面板只定位一次。
+  bool _scrolledToCurrent = false;
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  /// 打开面板后把当前播放行滚动到可视区中央；无当前曲目时不滚动。
+  void _scrollToCurrentRow(
+    List<MusicPlayableItem> items,
+    MusicCenterState? music,
+  ) {
+    if (_scrolledToCurrent || items.isEmpty) {
+      return;
+    }
+    final currentKey = music?.currentItem?.playableKey;
+    final index = items.indexWhere((item) => item.playableKey == currentKey);
+    if (index < 0) {
+      return;
+    }
+    _scrolledToCurrent = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollController.hasClients) {
+        return;
+      }
+      final position = _scrollController.position;
+      final target =
+          _listTopPadding +
+          index * _rowExtent +
+          _rowExtent / 2 -
+          position.viewportDimension / 2;
+      _scrollController.jumpTo(
+        target
+            .clamp(position.minScrollExtent, position.maxScrollExtent)
+            .toDouble(),
+      );
+    });
+  }
+
+  /// 队列行的"下一首播放"：把该行移动到当前曲目之后。
+  void _playNext(MusicPlayableItem item) {
+    ref
+        .read(musicCenterControllerProvider.notifier)
+        .moveToPlayNext(item.playableKey);
+  }
 
   /// 来源副标题：命名来源显示名称，library 显示固定文案，transient 不显示。
   String _queueSourceLabel(BuildContext context, MusicCenterState? music) {
@@ -35,13 +95,14 @@ class MusicDeckQueueSheet extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final music = ref.watch(musicCenterControllerProvider).asData?.value;
     final items = music?.playbackItems ?? const [];
     final sourceLabel = _queueSourceLabel(context, music);
     final countLabel = AppLocalizations.of(
       context,
     ).musicDeckTrackCount(items.length);
+    _scrollToCurrentRow(items, music);
     return FractionallySizedBox(
       heightFactor: 0.72,
       child: Center(
@@ -162,8 +223,14 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                             ),
                           )
                           : ReorderableListView.builder(
-                            itemExtent: 62,
-                            padding: const EdgeInsets.fromLTRB(12, 6, 12, 16),
+                            scrollController: _scrollController,
+                            itemExtent: _rowExtent,
+                            padding: const EdgeInsets.fromLTRB(
+                              12,
+                              _listTopPadding,
+                              12,
+                              16,
+                            ),
                             buildDefaultDragHandles: false,
                             onReorderItem: (oldIndex, adjustedIndex) {
                               devLog(
@@ -198,6 +265,8 @@ class MusicDeckQueueSheet extends ConsumerWidget {
                                               .notifier,
                                         )
                                         .playQueueIndex(index),
+                                onPlayNext:
+                                    selected ? null : () => _playNext(item),
                                 onDismissed:
                                     () => ref
                                         .read(
@@ -224,6 +293,7 @@ class _MusicQueueRow extends StatelessWidget {
     required this.index,
     required this.selected,
     required this.onTap,
+    required this.onPlayNext,
     required this.onDismissed,
     super.key,
   });
@@ -232,6 +302,9 @@ class _MusicQueueRow extends StatelessWidget {
   final int index;
   final bool selected;
   final VoidCallback onTap;
+
+  /// "下一首播放"回调：当前播放行为 null（按钮置灰）。
+  final VoidCallback? onPlayNext;
   final VoidCallback onDismissed;
 
   @override
@@ -288,6 +361,20 @@ class _MusicQueueRow extends StatelessWidget {
           children: [
             if (selected)
               Icon(Icons.graphic_eq_rounded, size: 16, color: colors.primary),
+            // 下一首播放：把该行移动到当前曲目之后（当前行置灰）。
+            IconButton(
+              tooltip: l10n.musicPlayNext,
+              visualDensity: VisualDensity.compact,
+              onPressed: onPlayNext,
+              icon: Icon(
+                Icons.queue_music_rounded,
+                size: 18,
+                color:
+                    onPlayNext == null
+                        ? colors.onSurfaceVariant.withValues(alpha: 0.30)
+                        : colors.onSurfaceVariant.withValues(alpha: 0.75),
+              ),
+            ),
             ReorderableDragStartListener(
               index: index,
               child: Semantics(

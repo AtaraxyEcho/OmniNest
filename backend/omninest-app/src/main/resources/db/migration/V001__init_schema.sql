@@ -2309,6 +2309,7 @@ CREATE TABLE "omni"."share_links" (
   "resource_type" varchar(32) NOT NULL,
   "resource_id" uuid NOT NULL,
   "token_hash" varchar(128) NOT NULL,
+  "token_cipher" text,
   "password_hash" varchar(255),
   "expires_at" timestamptz(6),
   "max_access_count" int4,
@@ -2326,6 +2327,7 @@ COMMENT ON COLUMN "omni"."share_links"."owner_user_id" IS '所属用户ID，关�
 COMMENT ON COLUMN "omni"."share_links"."resource_type" IS '资源类型';
 COMMENT ON COLUMN "omni"."share_links"."resource_id" IS '资源ID';
 COMMENT ON COLUMN "omni"."share_links"."token_hash" IS '分享令牌哈希';
+COMMENT ON COLUMN "omni"."share_links"."token_cipher" IS '分享令牌密文，供所有者重新展示链接地址';
 COMMENT ON COLUMN "omni"."share_links"."password_hash" IS '访问密码哈希';
 COMMENT ON COLUMN "omni"."share_links"."expires_at" IS '过期时间';
 COMMENT ON COLUMN "omni"."share_links"."max_access_count" IS '最大访问次数';

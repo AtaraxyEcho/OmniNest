@@ -8,17 +8,39 @@ import 'package:omninest/features/profile/application/profile_controller.dart';
 import 'package:omninest/features/profile/domain/user_session.dart';
 
 /// 展示并管理当前用户的活跃登录会话。
-class ProfileSessionManagementPanel extends ConsumerWidget {
+class ProfileSessionManagementPanel extends ConsumerStatefulWidget {
   const ProfileSessionManagementPanel({this.framed = true, super.key});
 
   final bool framed;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<ProfileSessionManagementPanel> createState() =>
+      _ProfileSessionManagementPanelState();
+}
+
+class _ProfileSessionManagementPanelState
+    extends ConsumerState<ProfileSessionManagementPanel> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      // 首次挂载时初始构建仍在飞行，跳过避免双请求；重进面板时失效缓存取新。
+      final current = ref.read(userSessionsProvider);
+      if (!current.isLoading) {
+        ref.invalidate(userSessionsProvider);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final content = _SessionContent(
       sessionsAsync: ref.watch(userSessionsProvider),
     );
-    if (!framed) {
+    if (!widget.framed) {
       return Padding(padding: const EdgeInsets.all(20), child: content);
     }
     return WorkbenchPanel(padding: const EdgeInsets.all(24), child: content);

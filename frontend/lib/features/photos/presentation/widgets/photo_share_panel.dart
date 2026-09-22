@@ -14,6 +14,7 @@ import 'package:omninest/features/photos/platform/photo_share_channel.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_share_dialog.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/utils/clipboard_writer.dart';
 
@@ -41,18 +42,27 @@ class PhotoSharePanel extends ConsumerStatefulWidget {
 }
 
 class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
-  String? _shareUrl;
   bool _creating = false;
   String? _error;
   bool _copied = false;
   bool _includeLocation = true;
   bool _originalQuality = true;
 
-  /// 分享设置：有效期档位（1d/7d/30d/never）与访问密码；变更即重建链接。
+  /// 分享设置：有效期档位（1d/7d/30d/never）与访问密码。
+  /// 变更只置脏，不再自动重建链接——由用户点击创建/更新链接时生效。
   String _expiryOption = '30d';
   String? _password;
   Timer? _copyResetTimer;
-  String? _loadedForPhotoId;
+
+  /// 两条规范槽位（按链接的 expiresAt 区分）：永久与限时。
+  /// 各自独立存在，创建某槽不撤销另一槽；空值表示该槽尚未创建。
+  PhotoShareLink? _permanentShare;
+  PhotoShareLink? _timedShare;
+  String? _permanentUrl;
+  String? _timedUrl;
+
+  /// 设置已变更、尚未应用到链接。
+  bool _settingsDirty = false;
 
   @override
   void initState() {
@@ -60,7 +70,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     if (widget.visible) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
-          unawaited(_ensureShareLink());
+          unawaited(_loadShareState());
         }
       });
     }
@@ -70,15 +80,18 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   void didUpdateWidget(PhotoSharePanel oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.visible && !oldWidget.visible) {
-      unawaited(_ensureShareLink());
+      unawaited(_loadShareState());
     }
     if (widget.photo.id != oldWidget.photo.id) {
-      _shareUrl = null;
-      _loadedForPhotoId = null;
+      _permanentShare = null;
+      _timedShare = null;
+      _permanentUrl = null;
+      _timedUrl = null;
+      _settingsDirty = false;
       _error = null;
       _copied = false;
       if (widget.visible) {
-        unawaited(_ensureShareLink());
+        unawaited(_loadShareState());
       }
     }
   }
@@ -89,24 +102,92 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     super.dispose();
   }
 
-  /// 创建分享链接。后端只存 token 哈希，明文仅创建时返回一次；
-  /// 打开/重建面板时撤销该照片仍有效旧链，再新建，避免僵尸链接堆积。
-  Future<void> _ensureShareLink() async {
+  /// 打开/切换照片时加载分享状态。
+  ///
+  /// 打开面板不创建链接：已有仍有效的链接按槽位复用展示（令牌由后端解密
+  /// 回传，可长期复制同一地址），空槽由用户显式点击创建。
+  Future<void> _loadShareState() async {
     final photoId = widget.photo.id;
-    if (_creating || (_loadedForPhotoId == photoId && _shareUrl != null)) {
+    setState(() {
+      _creating = false;
+      _error = null;
+    });
+    List<PhotoShareLink> shares;
+    try {
+      shares = await ref
+          .read(photoCenterControllerProvider.notifier)
+          .listPhotoShares(photoId);
+    } on Exception {
+      if (!mounted || photoId != widget.photo.id) return;
+      setState(
+        () => _error = AppLocalizations.of(context).photosShareLinkFailed,
+      );
       return;
     }
+    if (!mounted || photoId != widget.photo.id) return;
+    final permanent = _pickReusableShare(shares, permanent: true);
+    final timed = _pickReusableShare(shares, permanent: false);
+    setState(() {
+      _settingsDirty = false;
+      _permanentShare = permanent;
+      _timedShare = timed;
+      _permanentUrl = null;
+      _timedUrl = null;
+    });
+    final permanentUrl =
+        permanent == null ? null : await _buildShareUrl(permanent.token);
+    if (!mounted || photoId != widget.photo.id) return;
+    final timedUrl = timed == null ? null : await _buildShareUrl(timed.token);
+    if (!mounted || photoId != widget.photo.id) return;
+    setState(() {
+      _permanentUrl = permanentUrl;
+      _timedUrl = timedUrl;
+    });
+  }
+
+  /// 从列表中挑选某槽位可复用的链接：未过期、未耗尽且带明文令牌的最新一条。
+  ///
+  /// 槽位按链接是否设置过期时间区分：永久槽对应 expiresAt 为空。
+  PhotoShareLink? _pickReusableShare(
+    List<PhotoShareLink> shares, {
+    required bool permanent,
+  }) {
+    for (final share in shares) {
+      if (share.isExpired || share.isExhausted) {
+        continue;
+      }
+      if ((share.expiresAt == null) != permanent) {
+        continue;
+      }
+      // 后端未回传令牌（历史链接）时无法展示地址，视为不可复用。
+      if (share.token.isEmpty) {
+        continue;
+      }
+      return share;
+    }
+    return null;
+  }
+
+  /// 创建或更新指定槽位的链接。
+  ///
+  /// 只在用户显式点击时触发；仅替换同一槽位的既有链接，另一槽位不受影响，
+  /// 因此不需要"清空全部"即可维持一永久一限时两条链接。
+  Future<void> _createOrReplaceSlot({required bool permanent}) async {
+    final photoId = widget.photo.id;
     setState(() {
       _creating = true;
       _error = null;
     });
     try {
       final controller = ref.read(photoCenterControllerProvider.notifier);
-      await _revokeActivePhotoShares(controller, photoId);
+      final existing = permanent ? _permanentShare : _timedShare;
+      if (existing != null) {
+        await controller.revokeAlbumShare(existing.id);
+      }
       final link = await controller.createPhotoShare(
         photoId,
         password: _password,
-        expiresAt: resolveShareExpiry(_expiryOption),
+        expiresAt: permanent ? null : resolveShareExpiry(_expiryOption),
         includeLocation: _includeLocation,
         originalQuality: _originalQuality,
       );
@@ -114,8 +195,14 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       final shareUrl = await _buildShareUrl(link.token);
       if (!mounted || photoId != widget.photo.id) return;
       setState(() {
-        _shareUrl = shareUrl;
-        _loadedForPhotoId = photoId;
+        if (permanent) {
+          _permanentShare = link;
+          _permanentUrl = shareUrl;
+        } else {
+          _timedShare = link;
+          _timedUrl = shareUrl;
+        }
+        _settingsDirty = false;
         _creating = false;
       });
     } on Exception catch (error) {
@@ -127,27 +214,46 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     }
   }
 
-  /// 撤销该照片仍有效的分享链，避免每次打开面板堆积僵尸链接。
-  Future<void> _revokeActivePhotoShares(
-    PhotoCenterController controller,
-    String photoId,
-  ) async {
-    try {
-      final existing = await controller.listPhotoShares(photoId);
-      for (final share in existing) {
-        if (!share.isExpired && !share.isExhausted) {
-          await controller.revokeAlbumShare(share.id);
-        }
-      }
-    } on Exception {
-      // 撤销失败不阻断创建；管理入口仍可手动撤销。
+  /// 删除指定槽位的链接（撤销后该槽回到未创建态）。
+  Future<void> _removeSlot({required bool permanent}) async {
+    final photoId = widget.photo.id;
+    final existing = permanent ? _permanentShare : _timedShare;
+    if (existing == null) {
+      return;
     }
+    setState(() => _creating = true);
+    try {
+      await ref
+          .read(photoCenterControllerProvider.notifier)
+          .revokeAlbumShare(existing.id);
+    } on Exception catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _creating = false;
+        _error = describeShareError(error);
+      });
+      return;
+    }
+    if (!mounted || photoId != widget.photo.id) return;
+    setState(() {
+      if (permanent) {
+        _permanentShare = null;
+        _permanentUrl = null;
+      } else {
+        _timedShare = null;
+        _timedUrl = null;
+      }
+      _creating = false;
+    });
   }
 
-  Future<void> _copyToClipboard() async {
-    final url = _shareUrl;
-    if (url == null || url.isEmpty) return;
-    final copied = await copyTextToClipboard(url);
+  /// 渠道分享/二维码使用的地址：优先限时槽，其次永久槽。
+  String? get _activeUrl => _timedUrl ?? _permanentUrl;
+
+  Future<void> _copyToClipboard({String? url}) async {
+    final target = url ?? _activeUrl;
+    if (target == null || target.isEmpty) return;
+    final copied = await copyTextToClipboard(target);
     if (!mounted) return;
     if (!copied) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -166,44 +272,14 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
     });
   }
 
-  /// 按当前有效期/密码设置重建链接并复制；用户在 OPTIONS 变更设置时触发。
-  Future<void> _recreateLink() async {
-    final photoId = widget.photo.id;
-    setState(() {
-      _creating = true;
-      _error = null;
-    });
-    try {
-      final controller = ref.read(photoCenterControllerProvider.notifier);
-      await _revokeActivePhotoShares(controller, photoId);
-      final link = await controller.createPhotoShare(
-        photoId,
-        password: _password,
-        expiresAt: resolveShareExpiry(_expiryOption),
-        includeLocation: _includeLocation,
-        originalQuality: _originalQuality,
-      );
-      if (!mounted || photoId != widget.photo.id) return;
-      final shareUrl = await _buildShareUrl(link.token);
-      if (!mounted || photoId != widget.photo.id) return;
-      setState(() {
-        _shareUrl = shareUrl;
-        _creating = false;
-      });
-    } on Exception {
-      if (!mounted) return;
-      setState(() {
-        _creating = false;
-        _error = AppLocalizations.of(context).photosShareLinkFailed;
-      });
-    }
-  }
-
+  /// 开关密码：只修改设置并置脏，由用户点击创建/更新链接时生效。
   Future<void> _togglePassword(bool enable, AppLocalizations l10n) async {
     if (!enable) {
       if (_password == null) return;
-      _password = null;
-      await _recreateLink();
+      setState(() {
+        _password = null;
+        _settingsDirty = true;
+      });
       return;
     }
     final password = await showFramePromptDialog(
@@ -214,8 +290,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       confirmLabel: l10n.coreConfirm,
     );
     if (!mounted || password == null || password.isEmpty) return;
-    _password = password;
-    await _recreateLink();
+    setState(() {
+      _password = password;
+      _settingsDirty = true;
+    });
   }
 
   String describeShareError(Object error) {
@@ -315,6 +393,13 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
 
   Widget _buildPreviewCard(String? location) {
     final cover = widget.photo.coverUrl;
+    // 预览卡仅 130 高、宽度受面板约束：按实际显示宽度解码，
+    // 避免小尺寸卡片触发全分辨率封面解码。
+    final size = MediaQuery.sizeOf(context);
+    final cardWidth =
+        size.width < photoPanelCompactBreakpoint
+            ? size.width
+            : photoInfoPanelWidth;
     return ClipRRect(
       borderRadius: BorderRadius.circular(8),
       child: SizedBox(
@@ -328,6 +413,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
               CachedNetworkImage(
                 imageUrl: cover,
                 cacheKey: widget.photo.coverCacheKey,
+                memCacheWidth: thumbnailDecodeWidth(
+                  cardWidth,
+                  MediaQuery.devicePixelRatioOf(context),
+                ),
                 fit: BoxFit.cover,
                 fadeInDuration: Duration.zero,
                 errorWidget: (context, url, error) => const SizedBox.shrink(),
@@ -364,7 +453,6 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   }
 
   Widget _buildLinkSection(AppLocalizations l10n) {
-    final copied = _copied;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -377,6 +465,69 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           ),
         ),
         const SizedBox(height: 8),
+        // 两条规范槽位：永久与限时。各自独立创建/删除，互不撤销。
+        _buildSlotRow(
+          l10n,
+          permanent: true,
+          label: l10n.photosShareSlotPermanent,
+          share: _permanentShare,
+          url: _permanentUrl,
+        ),
+        const SizedBox(height: 8),
+        _buildSlotRow(
+          l10n,
+          permanent: false,
+          label: l10n.photosShareSlotTimed,
+          share: _timedShare,
+          url: _timedUrl,
+        ),
+        if (_error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _error!,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: AppTypography.labelSmall,
+            ),
+          ),
+        ],
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: _openManageDialog,
+          child: Text(
+            l10n.photosShareManage,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.40),
+              fontSize: AppTypography.labelSmall,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// 单个槽位行：有链接时展示地址与复制/删除，无链接时提供显式创建入口。
+  Widget _buildSlotRow(
+    AppLocalizations l10n, {
+    required bool permanent,
+    required String label,
+    required PhotoShareLink? share,
+    required String? url,
+  }) {
+    final copied = _copied && url != null && url == _activeUrl;
+    final hasLink = share != null && url != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.45),
+            fontSize: AppTypography.labelSmall,
+            letterSpacing: 0.04,
+          ),
+        ),
+        const SizedBox(height: 4),
         Row(
           children: [
             Expanded(
@@ -393,66 +544,113 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                   ),
                 ),
                 child: Text(
-                  _error ?? (_creating || _shareUrl == null ? '…' : _shareUrl!),
+                  url ?? l10n.photosShareSlotEmpty,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color:
-                        _error != null
-                            ? Theme.of(context).colorScheme.error
-                            : Colors.white.withValues(alpha: 0.50),
+                    color: Colors.white.withValues(alpha: 0.50),
                     fontSize: AppTypography.bodySmall,
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 8),
-            TextButton(
-              onPressed:
-                  (_creating || _shareUrl == null || _error != null)
-                      ? null
-                      : () => unawaited(_copyToClipboard()),
-              style: TextButton.styleFrom(
-                backgroundColor:
-                    copied
-                        ? const Color(0x264ADE80)
-                        : Colors.white.withValues(alpha: 0.10),
-                foregroundColor:
-                    copied
-                        ? const Color(0xFF4ADE80)
-                        : Colors.white.withValues(alpha: 0.80),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  side: BorderSide(
-                    color:
-                        copied
-                            ? const Color(0x4D4ADE80)
-                            : Colors.white.withValues(alpha: 0.10),
+            if (hasLink) ...[
+              TextButton(
+                onPressed:
+                    _creating
+                        ? null
+                        : () => unawaited(_copyToClipboard(url: url)),
+                style: TextButton.styleFrom(
+                  backgroundColor:
+                      copied
+                          ? const Color(0x264ADE80)
+                          : Colors.white.withValues(alpha: 0.10),
+                  foregroundColor:
+                      copied
+                          ? const Color(0xFF4ADE80)
+                          : Colors.white.withValues(alpha: 0.80),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color:
+                          copied
+                              ? const Color(0x4D4ADE80)
+                              : Colors.white.withValues(alpha: 0.10),
+                    ),
+                  ),
+                  minimumSize: const Size(56, 36),
+                ),
+                child: Text(
+                  copied ? l10n.photosShareCopied : l10n.photosShareCopy,
+                  style: const TextStyle(
+                    fontSize: AppTypography.bodySmall,
+                    letterSpacing: 0.04,
                   ),
                 ),
-                minimumSize: const Size(60, 36),
               ),
+              IconButton(
+                tooltip: l10n.coreDelete,
+                onPressed:
+                    _creating
+                        ? null
+                        : () => unawaited(_removeSlot(permanent: permanent)),
+                icon: Icon(
+                  Icons.delete_outline,
+                  size: 18,
+                  color: Colors.white.withValues(alpha: 0.45),
+                ),
+              ),
+            ] else
+              TextButton(
+                onPressed:
+                    _creating
+                        ? null
+                        : () => unawaited(
+                          _createOrReplaceSlot(permanent: permanent),
+                        ),
+                style: TextButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.10),
+                  foregroundColor: Colors.white.withValues(alpha: 0.80),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    side: BorderSide(
+                      color: Colors.white.withValues(alpha: 0.10),
+                    ),
+                  ),
+                  minimumSize: const Size(56, 36),
+                ),
+                child: Text(
+                  permanent
+                      ? l10n.photosShareSlotCreatePermanent
+                      : l10n.photosShareSlotCreateTimed,
+                  style: const TextStyle(
+                    fontSize: AppTypography.bodySmall,
+                    letterSpacing: 0.04,
+                  ),
+                ),
+              ),
+          ],
+        ),
+        // 设置（密码/有效期/隐私）变更后按当前设置重建该槽链接。
+        if (hasLink && _settingsDirty)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed:
+                  _creating
+                      ? null
+                      : () =>
+                          unawaited(_createOrReplaceSlot(permanent: permanent)),
               child: Text(
-                copied ? l10n.photosShareCopied : l10n.photosShareCopy,
-                style: const TextStyle(
-                  fontSize: AppTypography.bodySmall,
-                  letterSpacing: 0.04,
+                l10n.photosShareLinkUpdate,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.60),
+                  fontSize: AppTypography.labelSmall,
                 ),
               ),
             ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        TextButton(
-          onPressed: _openManageDialog,
-          child: Text(
-            l10n.photosShareManage,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.40),
-              fontSize: AppTypography.labelSmall,
-            ),
           ),
-        ),
       ],
     );
   }
@@ -474,26 +672,19 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           (shareId) => ref
               .read(photoCenterControllerProvider.notifier)
               .revokeAlbumShare(shareId),
+      onRevokeAll:
+          () => ref
+              .read(photoCenterControllerProvider.notifier)
+              .revokeAllPhotoShares(widget.photo.id),
     );
     if (!mounted) return;
-    // 对话框内可能已撤销链接：以最新列表为准同步面板，
-    // 全部撤销后清空缓存链接，面板回到创建态而不是继续展示失效 URL。
-    try {
-      final latest = await controller.listPhotoShares(widget.photo.id);
-      if (!mounted) return;
-      if (latest.isEmpty) {
-        setState(() {
-          _shareUrl = null;
-          _loadedForPhotoId = null;
-        });
-      }
-    } on Exception {
-      // 刷新失败不影响后续创建流程
-    }
-    if (result == null || !mounted) {
+    if (result == null) {
+      // 对话框内可能已撤销/清空链接：重新加载槽位状态。
+      await _loadShareState();
       return;
     }
-    // 在管理对话框里新建了链接（密码留空 = 显式创建无密码链接）后，刷新面板链接显示。
+    // 在管理对话框里新建了链接（密码留空 = 显式创建无密码链接）：
+    // 按"限时"语义创建并归入限时槽，刷新面板显示。
     final (password, expiryOption) = result;
     try {
       final link = await ref
@@ -509,10 +700,11 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
       final shareUrl = await _buildShareUrl(link.token);
       if (!mounted) return;
       setState(() {
-        _shareUrl = shareUrl;
+        _timedShare = link;
+        _timedUrl = shareUrl;
         _error = null;
       });
-      unawaited(_copyToClipboard());
+      await _copyToClipboard(url: shareUrl);
     } on Exception {
       if (!mounted) return;
       setState(() {
@@ -568,7 +760,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
                   targets[i].$2,
                   targets[i].$3,
                   targets[i].$4,
-                  enabled: _shareUrl != null,
+                  enabled: _activeUrl != null,
                 ),
               ),
             ],
@@ -579,7 +771,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   }
 
   Future<void> _shareViaSystem(AppLocalizations l10n) async {
-    final url = _shareUrl;
+    final url = _activeUrl;
     if (url == null || url.isEmpty) {
       return;
     }
@@ -610,7 +802,7 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
   }
 
   void _showQrCode(AppLocalizations l10n) {
-    final url = _shareUrl;
+    final url = _activeUrl;
     if (!mounted) {
       return;
     }
@@ -715,8 +907,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           value: _expiryOption,
           onSelected: (value) {
             if (value == _expiryOption) return;
-            setState(() => _expiryOption = value);
-            unawaited(_recreateLink());
+            setState(() {
+              _expiryOption = value;
+              _settingsDirty = true;
+            });
           },
         ),
         const SizedBox(height: 8),
@@ -736,8 +930,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           value: _includeLocation,
           onChanged: (v) {
             if (v == _includeLocation) return;
-            setState(() => _includeLocation = v);
-            unawaited(_recreateLink());
+            setState(() {
+              _includeLocation = v;
+              _settingsDirty = true;
+            });
           },
         ),
         const SizedBox(height: 8),
@@ -747,8 +943,10 @@ class _PhotoSharePanelState extends ConsumerState<PhotoSharePanel> {
           value: _originalQuality,
           onChanged: (v) {
             if (v == _originalQuality) return;
-            setState(() => _originalQuality = v);
-            unawaited(_recreateLink());
+            setState(() {
+              _originalQuality = v;
+              _settingsDirty = true;
+            });
           },
         ),
       ],

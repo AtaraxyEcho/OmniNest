@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:omninest/core/device/playback_device_identity.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/retry_interceptor.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
@@ -270,7 +271,7 @@ class MusicApi {
     required String albumTitle,
     required String coverUrl,
     required int? durationSeconds,
-    String? mediaMid,
+
     int playDuration = 0,
   }) async {
     await apiClient.dio.post<Map<String, dynamic>>(
@@ -283,7 +284,6 @@ class MusicApi {
         'albumTitle': albumTitle,
         'coverUrl': coverUrl,
         'durationSeconds': durationSeconds,
-        if (mediaMid != null && mediaMid.isNotEmpty) 'mediaMid': mediaMid,
       },
     );
   }
@@ -447,7 +447,7 @@ class MusicApi {
     return MusicTrack.fromJson(parseData(response.data));
   }
 
-  /// 在线搜索（网易云/QQ音乐）
+  /// 在线搜索（网易云）
   Future<List<OnlineTrack>> onlineSearch(
     String query, {
     int limit = 20,
@@ -473,7 +473,7 @@ class MusicApi {
   Future<MusicPlaybackPlan> onlinePlaybackPlan(
     String platform,
     String songId, {
-    String? mediaMid,
+
     String quality = 'exhigh',
   }) async {
     final params = <String, String>{
@@ -481,9 +481,7 @@ class MusicApi {
       'songId': songId,
       'quality': quality,
     };
-    if (mediaMid != null && mediaMid.isNotEmpty) {
-      params['mediaMid'] = mediaMid;
-    }
+
     final resp = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/online/playback-plan',
       queryParameters: params,
@@ -540,7 +538,7 @@ class MusicApi {
     return DailyRecommendedTracks.fromJson(parseData(response.data));
   }
 
-  /// 获取外部平台歌词（原文与独立译文）。
+  /// 获取外部平台歌词（原文、独立译文与逐字载荷）。
   Future<MusicPlatformLyrics?> platformTrackLyrics(
     String platform,
     String songId,
@@ -559,11 +557,18 @@ class MusicApi {
     if (primary == null) {
       return null;
     }
+    // 逐字是可选载荷：后端在平台不提供（或附加接口失败）时为 null，
+    // 在此统一归一为空，调用方只判断 null。
     return MusicPlatformLyrics(
       lyrics: primary,
-      translation:
-          translated == null || translated.trim().isEmpty ? null : translated,
+      translation: _nonBlank(translated),
+      words: _nonBlank(data['wordLyrics']?.toString()),
     );
+  }
+
+  static String? _nonBlank(String? value) {
+    final trimmed = value?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
   }
 
   /// 生成网易云 QR 登录
@@ -582,18 +587,15 @@ class MusicApi {
     return QrLoginStatus.fromJson(parseData(resp.data));
   }
 
-  /// QQ 音乐 Cookie 注入
-  Future<PlatformUserInfo> applyQqCookie(String cookie) async {
-    final resp = await apiClient.dio.post<Map<String, dynamic>>(
-      '/music/platforms/qq/credentials',
-      data: <String, dynamic>{'cookie': cookie},
-    );
-    return PlatformUserInfo.fromJson(parseData(resp.data));
-  }
-
   /// 平台登出
+  ///
+  /// 标记为"服务端错误不重试"：断开连接是用户已确认的一次性动作，服务端 5xx 时
+  /// 重试注定失败，却会把等待时间放大为退避之和（默认 2 次重试共 1s + 2s）。
   Future<void> platformLogout(String platform) async {
-    await apiClient.dio.delete('/music/platforms/$platform/connection');
+    await apiClient.dio.delete(
+      '/music/platforms/$platform/connection',
+      options: Options(extra: <String, dynamic>{skipServerErrorRetryKey: true}),
+    );
   }
 
   /// 获取平台登录信息

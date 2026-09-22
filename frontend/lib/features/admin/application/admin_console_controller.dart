@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/admin/data/admin_console_api.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
@@ -17,6 +18,7 @@ class AdminConsoleController extends AsyncNotifier<AdminConsoleSummary> {
 
   @override
   Future<AdminConsoleSummary> build() {
+    ref.watch(sessionEpochProvider);
     return _api.summary();
   }
 

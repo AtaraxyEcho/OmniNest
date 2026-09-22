@@ -15,12 +15,14 @@ import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
+import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_paged_list_card.dart';
+import 'package:omninest/features/portal/presentation/widgets/portal_media_thumbnail.dart';
 import 'package:omninest/features/portal/presentation/widgets/storage_overview_widget.dart';
-import 'package:omninest/features/portal/presentation/widgets/continue_watching_widget.dart';
 import 'package:omninest/features/portal/presentation/widgets/now_playing_widget.dart';
 import 'package:omninest/features/portal/presentation/widgets/reading_progress_widget.dart';
-import 'package:omninest/features/portal/presentation/widgets/recent_photos_widget.dart';
 import 'package:omninest/features/portal/presentation/widgets/weather_detail_dialog.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_weather_profile.dart';
 import 'package:go_router/go_router.dart';
@@ -31,8 +33,6 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
-import 'package:omninest/features/photos/domain/photo.dart';
-import 'package:omninest/features/portal/presentation/widgets/portal_media_thumbnail.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
@@ -75,7 +75,6 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
       return _HostedPortalContent(onRefresh: _onRefresh);
     }
     final storageStats = ref.watch(portalStorageStatsProvider);
-    final movieDashboard = ref.watch(portalMovieDashboardProvider);
     final musicSnapshot = ref.watch(portalMusicSnapshotProvider);
     final photoDashboard = ref.watch(portalPhotoDashboardProvider);
     final readerDashboard = ref.watch(portalReaderDashboardProvider);
@@ -237,19 +236,15 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
                           'continue-watching',
                           3,
                           mobileSurface(
-                            movieDashboard.when(
-                              data:
-                                  (d) => ContinueWatchingWidget(
-                                    items: d.continueWatching,
-                                  ),
-                              loading: () => const _SkeletonCard(height: 100),
-                              error:
-                                  (_, _) => _ErrorCard(
-                                    message: l10n.portalLoadMovieFailed,
-                                    onRetry:
-                                        () =>
-                                            retry(PortalDashboardSection.video),
-                                  ),
+                            PortalPagedListCard<MovieContinueWatching>(
+                              provider: portalContinueWatchingProvider,
+                              headerIcon: Icons.movie_outlined,
+                              headerTitle: l10n.portalContinueWatching,
+                              openRoute: '/video',
+                              emptyMessage: l10n.portalNoWatchingContent,
+                              rowBuilder:
+                                  (item) =>
+                                      _PortalContinueWatchingRow(item: item),
                             ),
                           ),
                         ),
@@ -324,22 +319,16 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
                           entrance(
                             'hosted-recent-photos',
                             6,
-                            photoDashboard.when(
-                              data:
-                                  (d) => mobileSurface(
-                                    RecentPhotosWidget(
-                                      photos: d.recentPhotos.take(3).toList(),
-                                    ),
-                                  ),
-                              loading: () => const _SkeletonCard(height: 100),
-                              error:
-                                  (_, _) => _ErrorCard(
-                                    message: l10n.portalLoadPhotoFailed,
-                                    onRetry:
-                                        () => retry(
-                                          PortalDashboardSection.photos,
-                                        ),
-                                  ),
+                            mobileSurface(
+                              PortalPagedListCard<PhotoItem>(
+                                provider: portalRecentPhotosProvider,
+                                headerIcon: Icons.photo_outlined,
+                                headerTitle: l10n.portalRecentPhotos,
+                                openRoute: '/photos',
+                                emptyMessage: l10n.portalNoPhotos,
+                                rowBuilder:
+                                    (item) => _PortalRecentPhotoRow(item: item),
+                              ),
                             ),
                           ),
                         ] else ...[
@@ -385,22 +374,16 @@ class _PortalMobileShellState extends ConsumerState<PortalMobileShell> {
                           entrance(
                             'recent-photos',
                             6,
-                            photoDashboard.when(
-                              data:
-                                  (d) => mobileSurface(
-                                    RecentPhotosWidget(
-                                      photos: d.recentPhotos.take(3).toList(),
-                                    ),
-                                  ),
-                              loading: () => const _SkeletonCard(height: 100),
-                              error:
-                                  (_, _) => _ErrorCard(
-                                    message: l10n.portalLoadPhotoFailed,
-                                    onRetry:
-                                        () => retry(
-                                          PortalDashboardSection.photos,
-                                        ),
-                                  ),
+                            mobileSurface(
+                              PortalPagedListCard<PhotoItem>(
+                                provider: portalRecentPhotosProvider,
+                                headerIcon: Icons.photo_outlined,
+                                headerTitle: l10n.portalRecentPhotos,
+                                openRoute: '/photos',
+                                emptyMessage: l10n.portalNoPhotos,
+                                rowBuilder:
+                                    (item) => _PortalRecentPhotoRow(item: item),
+                              ),
                             ),
                           ),
                         ],
@@ -568,6 +551,118 @@ class _PortalInlineRetry extends StatelessWidget {
         ),
         TextButton(onPressed: onRetry, child: Text(l10n.coreRetry)),
       ],
+    );
+  }
+}
+
+/// 继续观看行：点击进入对应影片，视觉与原预览卡行一致。
+class _PortalContinueWatchingRow extends StatelessWidget {
+  const _PortalContinueWatchingRow({required this.item});
+
+  final MovieContinueWatching item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => context.push('/video/${item.id}'),
+        child: Row(
+          children: [
+            PortalMediaThumbnail(
+              imageUrl: item.posterUrl,
+              cacheKey: 'portal-preview:video:${item.id}',
+              width: 40,
+              height: 56,
+              // 单维约束解码：高度主导槽位仅约束高度，海报真实纵横比
+              // 由 cover 裁切保持。
+              cacheHeight: 168,
+              borderRadius: BorderRadius.circular(4),
+              fallback: Container(
+                color: theme.colorScheme.surfaceContainerHighest,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: LinearProgressIndicator(
+                      value: item.progressPercent / 100,
+                      minHeight: 3,
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${item.progressPercent.round()}%',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 最近照片行：方形缩略图加标题，点击进入相册。
+class _PortalRecentPhotoRow extends StatelessWidget {
+  const _PortalRecentPhotoRow({required this.item});
+
+  final PhotoItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final title = item.title;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: () => context.go('/photos'),
+        child: Row(
+          children: [
+            SizedBox.square(
+              dimension: 44,
+              child: PortalMediaThumbnail(
+                imageUrl: item.coverUrl,
+                cacheKey: 'portal-preview:photo:${item.id}',
+                cacheWidth: 132,
+                borderRadius: BorderRadius.circular(6),
+                fallback: Container(
+                  color: theme.colorScheme.surfaceContainerHighest,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                title.isEmpty ? item.id : title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -130,7 +130,7 @@ void main() {
       lease.release();
       await Future<void>.delayed(Duration.zero);
       allowChromeEnter.complete();
-      await controller.pendingApply;
+      await controller.applied;
 
       expect(calls.last, 'chrome:false:false');
       // 退出窗口态由原生 applyWindowChrome 内部恢复 placement，Dart 不再二次下发。
@@ -176,7 +176,7 @@ void main() {
       );
 
       final lease = controller.acquireImmersive(owner: 'photos.slideshow');
-      await controller.pendingApply;
+      await controller.applied;
       // 全屏应用期间禁止写入窗口样式，否则客户区内缩露出白边。
       expect(resizableCalls, isEmpty);
       // Windows 走原子 applyWindowChrome，全屏后做一次几何断言。
@@ -185,7 +185,7 @@ void main() {
 
       lease.release();
       await Future<void>.delayed(Duration.zero);
-      await controller.pendingApply;
+      await controller.applied;
       // 回到窗口态后一次性补上可缩放性恢复，且恰一次。
       expect(resizableCalls, [true]);
     },

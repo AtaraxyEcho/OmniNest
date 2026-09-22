@@ -32,6 +32,25 @@ void main() {
       'newPassword': 'new-password',
     });
   });
+
+  test('关闭两步验证接受 Void 响应（data 为空不再报响应格式错误）', () async {
+    final adapter = _CapturingHttpClientAdapter();
+    final api = MeApi(
+      ApiClient(
+        const AppEnvironment(
+          apiBaseUrl: 'http://localhost:8080/api/v1',
+          wsBaseUrl: 'ws://localhost:8080/ws',
+        ),
+        httpClientAdapter: adapter,
+      ),
+    );
+
+    await api.twoFactorDisable(password: 'correct-password');
+
+    expect(adapter.lastMethod, 'POST');
+    expect(adapter.lastPath, '/me/2fa/disable');
+    expect(adapter.lastData, {'password': 'correct-password'});
+  });
 }
 
 class _CapturingHttpClientAdapter implements HttpClientAdapter {

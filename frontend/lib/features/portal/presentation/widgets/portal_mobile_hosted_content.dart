@@ -355,7 +355,7 @@ class _PortalPrimaryAction extends StatelessWidget {
   }
 }
 
-class _PortalContinueStrip extends StatelessWidget {
+class _PortalContinueStrip extends ConsumerWidget {
   const _PortalContinueStrip({
     required this.movie,
     required this.music,
@@ -369,7 +369,7 @@ class _PortalContinueStrip extends StatelessWidget {
   final ValueChanged<PortalDashboardSection> onRetry;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final items = <_PortalContinueItem>[];
     final movieData = movie.asData?.value;
     final readerData = reader.asData?.value;
@@ -419,7 +419,13 @@ class _PortalContinueStrip extends StatelessWidget {
             imageUrl: track.coverUrl,
             progress: null,
             icon: Icons.music_note_outlined,
-            route: '/music/now-playing',
+            // 点击就地切歌（与音乐页最近列表同语义），停留门户由
+            // 正在播放卡反映状态；进入音乐模块走快捷入口。
+            onTap: () {
+              unawaited(
+                ref.read(portalMusicActionsProvider).playRecentTrack(track.id),
+              );
+            },
             shape: _PortalContinueMediaShape.square,
           ),
         );
@@ -507,7 +513,8 @@ class _PortalContinueItem {
     required this.imageUrl,
     required this.progress,
     required this.icon,
-    required this.route,
+    this.route,
+    this.onTap,
     required this.shape,
     this.readerItemId,
   });
@@ -520,7 +527,12 @@ class _PortalContinueItem {
   final String? readerItemId;
   final double? progress;
   final IconData icon;
-  final String route;
+
+  /// 点击跳转路由；与 [onTap] 二选一，音乐等就地操作的条目只提供 onTap。
+  final String? route;
+
+  /// 就地点击回调；优先于 [route]。
+  final VoidCallback? onTap;
   final _PortalContinueMediaShape shape;
 }
 
@@ -548,7 +560,7 @@ class _PortalContinueTile extends StatelessWidget {
     return SizedBox(
       width: 248,
       child: MobilePressable(
-        onTap: () => context.push(item.route),
+        onTap: item.onTap ?? () => context.push(item.route ?? '/portal'),
         semanticLabel: item.title,
         child: DecoratedBox(
           decoration: BoxDecoration(

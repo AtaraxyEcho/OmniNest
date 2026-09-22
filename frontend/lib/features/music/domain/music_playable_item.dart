@@ -3,8 +3,7 @@ import 'package:omninest/features/music/domain/music_models.dart';
 /// 音乐内容来源平台。
 enum MusicPlatform {
   local('local'),
-  netease('netease'),
-  qq('qq');
+  netease('netease');
 
   const MusicPlatform(this.apiValue);
 
@@ -39,15 +38,10 @@ final class LocalMusicRef extends MusicPlayableRef {
 
 /// 外部平台曲目引用。
 final class OnlineMusicRef extends MusicPlayableRef {
-  const OnlineMusicRef({
-    required this.platform,
-    required this.songId,
-    this.mediaMid,
-  });
+  const OnlineMusicRef({required this.platform, required this.songId});
 
   final MusicPlatform platform;
   final String songId;
-  final String? mediaMid;
 
   @override
   String get playableKey => 'online:${platform.apiValue}:$songId';
@@ -68,11 +62,7 @@ class MusicPlayableItem {
     String format = 'AUDIO',
   }) {
     final platform = MusicPlatform.fromApiValue(onlineTrack.platform);
-    final ref = OnlineMusicRef(
-      platform: platform,
-      songId: onlineTrack.songId,
-      mediaMid: onlineTrack.mediaMid,
-    );
+    final ref = OnlineMusicRef(platform: platform, songId: onlineTrack.songId);
     return MusicPlayableItem(
       ref: ref,
       track: MusicTrack(
@@ -125,7 +115,6 @@ class MusicPlayableItem {
       ref: OnlineMusicRef(
         platform: MusicPlatform.fromApiValue(parts[1]),
         songId: parts[2],
-        mediaMid: json['mediaMid']?.toString(),
       ),
       track: track,
     );
@@ -144,10 +133,6 @@ class MusicPlayableItem {
 
   /// 转换为不包含凭据和临时播放地址的队列快照。
   Map<String, dynamic> toQueueJson() {
-    final mediaMid = switch (ref) {
-      OnlineMusicRef(:final mediaMid) => mediaMid,
-      LocalMusicRef() => null,
-    };
     return <String, dynamic>{
       'playableKey': playableKey,
       'title': track.title,
@@ -156,7 +141,6 @@ class MusicPlayableItem {
       'coverUrl': track.coverUrl ?? '',
       'durationSeconds': track.durationSeconds,
       'format': track.format,
-      if (mediaMid != null && mediaMid.isNotEmpty) 'mediaMid': mediaMid,
     };
   }
 }

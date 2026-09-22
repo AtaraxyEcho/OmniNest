@@ -2,9 +2,12 @@ package com.omninest.modules.video.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.dto.MovieDtos.SubtitleTrackDto;
@@ -14,6 +17,7 @@ import com.omninest.modules.video.repository.MediaSubtitleTrackRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +40,7 @@ public class SubtitleManagementService {
     private final FileQueryService fileQueryService;
     private final MediaContentAccessService mediaContentAccessService;
     private final MediaPlaybackTokenService mediaPlaybackTokenService;
+    private final MediaSyncEventService syncEventService;
 
     @Transactional(readOnly = true)
     public List<SubtitleTrackDto> list(UUID ownerUserId, UUID videoItemId) {
@@ -70,6 +75,7 @@ public class SubtitleManagementService {
         track.setTrackKind(request.kind() != null ? request.kind() : "SUBTITLE");
         track.setSortOrder(maxOrder + 1);
         subtitleTrackRepository.save(track);
+        recordSubtitleEvent(ownerUserId, videoItemId);
         return toDto(ownerUserId, track);
     }
 
@@ -86,6 +92,7 @@ public class SubtitleManagementService {
             track.setTrackKind(request.kind());
         }
         subtitleTrackRepository.save(track);
+        recordSubtitleEvent(ownerUserId, track.getVideoItemId());
         return toDto(ownerUserId, track);
     }
 
@@ -93,6 +100,20 @@ public class SubtitleManagementService {
     public void delete(UUID ownerUserId, UUID subtitleId) {
         MediaSubtitleTrack track = findTrack(ownerUserId, subtitleId);
         subtitleTrackRepository.delete(track);
+        recordSubtitleEvent(ownerUserId, track.getVideoItemId());
+    }
+
+    /** 字幕轨道增删改后按所属影片发出 VIDEO 作用域失效事件，resourceId 固定为影片 ID。 */
+    private void recordSubtitleEvent(UUID ownerUserId, UUID videoItemId) {
+        syncEventService.record(
+                ownerUserId,
+                SyncScope.VIDEO,
+                "VIDEO_ITEM",
+                videoItemId == null ? null : videoItemId.toString(),
+                SyncAction.UPDATED,
+                null,
+                Map.of()
+        );
     }
 
     private MediaSubtitleTrack findTrack(UUID ownerUserId, UUID subtitleId) {

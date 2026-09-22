@@ -26,6 +26,9 @@ class ReaderSyncHandler implements RealtimeScopeHandler {
     if (auxiliary.isNotEmpty && ref.exists(readerStatsProvider)) {
       refreshes.add(ref.refresh(readerStatsProvider.future));
     }
+    if (auxiliary.isNotEmpty && ref.exists(readerStatsOverviewProvider)) {
+      refreshes.add(ref.refresh(readerStatsOverviewProvider.future));
+    }
     for (final invalidation in auxiliary) {
       final resourceId = invalidation.resourceId;
       if (resourceId == null) continue;
@@ -44,7 +47,8 @@ class ReaderSyncHandler implements RealtimeScopeHandler {
     }
     await Future.wait(refreshes);
     _auxiliaryRevisions.markCompleted(auxiliary);
-    if (!ref.exists(readerCenterControllerProvider)) return false;
+    // 阅读模块未激活时直接消费失效记录，首次打开自取最新。
+    if (!ref.exists(readerCenterControllerProvider)) return true;
     await ref.read(readerCenterControllerProvider.future);
     await ref
         .read(readerCenterControllerProvider.notifier)

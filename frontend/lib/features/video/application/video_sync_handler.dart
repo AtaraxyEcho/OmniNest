@@ -36,6 +36,14 @@ class VideoSyncHandler implements RealtimeScopeHandler {
       if (resourceId == null) continue;
       _refreshMountedDetails(resourceId, refreshes);
     }
+    // 库源配置变更（VIDEO_LIBRARY 事件）时刷新挂载中的库源列表；
+    // 该 provider 为 autoDispose，仅在存储管理界面打开期间存在。
+    final librarySourcesChanged = auxiliary.any(
+      (invalidation) => invalidation.resourceType == 'VIDEO_LIBRARY',
+    );
+    if (librarySourcesChanged && ref.exists(videoLibrarySourcesProvider)) {
+      refreshes.add(ref.refresh(videoLibrarySourcesProvider.future));
+    }
     await Future.wait(refreshes);
     _auxiliaryRevisions.markCompleted(auxiliary);
     // 影视中心从未激活时无状态可刷，首次打开自取最新数据。
@@ -99,6 +107,8 @@ class VideoTaskSyncHandler implements RealtimeScopeHandler {
           'TASK_WEB_OPTIMIZE',
           'TASK_MEDIA_SCAN',
           'TASK_MEDIA_SCRAPE',
+          'TASK_LOCAL_VIDEO_LIBRARY_DISCOVERY',
+          'TASK_LOCAL_VIDEO_LIBRARY_APPLY',
         }.contains(invalidation.resourceType);
   }
 

@@ -92,6 +92,9 @@ class AdminSyncHandler implements RealtimeScopeHandler {
     if (ref.exists(adminExternalStorageProvider)) {
       refreshes.add(ref.refresh(adminExternalStorageProvider.future));
     }
+    if (ref.exists(adminConnectorOAuthAppsProvider)) {
+      refreshes.add(ref.refresh(adminConnectorOAuthAppsProvider.future));
+    }
     if (ref.exists(adminSessionsProvider)) {
       refreshes.add(ref.refresh(adminSessionsProvider.future));
     }

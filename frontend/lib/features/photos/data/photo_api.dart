@@ -506,6 +506,22 @@ class PhotoApi {
     parseEnvelope(response.data);
   }
 
+  /// 清空指定照片的全部有效分享链接，返回撤销条数。
+  Future<int> revokeAllPhotoShares(String photoId) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/photos/$photoId/share',
+    );
+    return (parseData(response.data) as num?)?.toInt() ?? 0;
+  }
+
+  /// 清空指定相册的全部有效分享链接，返回撤销条数。
+  Future<int> revokeAllAlbumShares(String albumId) async {
+    final response = await apiClient.dio.delete<Map<String, dynamic>>(
+      '/photos/albums/$albumId/share',
+    );
+    return (parseData(response.data) as num?)?.toInt() ?? 0;
+  }
+
   /// 创建单张照片分享链接
   Future<PhotoShareLink> createPhotoShare(
     String photoId, {

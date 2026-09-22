@@ -3,9 +3,11 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
-/// 阅读条目封面：真实封面优先，无封面时按条目标题生成纸感配色封面。
+/// 阅读条目封面：真实封面整卡纯净渲染；无封面（含封面拉取失败回退）时
+/// 按条目标题生成纸感配色封面。
 ///
 /// 生成封面参考编辑风设计：深色底 + 左侧书脊线 + 顶部“文/漫”字标 + 衬线标题。
+/// 真实封面上不再叠加任何生成封面元素，标题与作者由卡片下方的文字区承载。
 enum ReaderCoverSize { grid, small, row, large }
 
 class ReaderBookCover extends StatelessWidget {
@@ -23,6 +25,41 @@ class ReaderBookCover extends StatelessWidget {
     (Color(0xFF1A1A2C), Color(0xFF3A3A6E)),
   ];
 
+  @override
+  Widget build(BuildContext context) {
+    final palette = _palettes[item.title.hashCode.abs() % _palettes.length];
+    final generated = _GeneratedCoverChrome(
+      item: item,
+      size: size,
+      background: palette.$1,
+      accent: palette.$2,
+    );
+    if (!item.hasCover) {
+      return generated;
+    }
+    // 加载中与拉取失败时退化为生成封面观感，避免空白卡片。
+    return AuthCoverImage(
+      itemId: item.id,
+      fit: BoxFit.cover,
+      fallback: generated,
+    );
+  }
+}
+
+/// 无封面条目的生成式封面：书脊线 + 顶部字标 + 底部标题作者。
+class _GeneratedCoverChrome extends StatelessWidget {
+  const _GeneratedCoverChrome({
+    required this.item,
+    required this.size,
+    required this.background,
+    required this.accent,
+  });
+
+  final ReaderItem item;
+  final ReaderCoverSize size;
+  final Color background;
+  final Color accent;
+
   static const Color _coverText = Color(0xFFEEEDE9);
 
   bool get _showTitle => size != ReaderCoverSize.row;
@@ -32,21 +69,12 @@ class ReaderBookCover extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final palette = _palettes[item.title.hashCode.abs() % _palettes.length];
-    final background = palette.$1;
-    final accent = palette.$2;
     final isLarge = size == ReaderCoverSize.large;
     return DecoratedBox(
       decoration: BoxDecoration(color: background),
       child: Stack(
         fit: StackFit.expand,
         children: [
-          if (item.hasCover)
-            AuthCoverImage(
-              itemId: item.id,
-              fit: BoxFit.cover,
-              fallback: const SizedBox.shrink(),
-            ),
           // 左侧书脊线
           Positioned(
             left: 0,

@@ -3,6 +3,7 @@ package com.omninest.modules.file.service;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.CredentialCipher;
 import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.dto.ResourceShareLinkDto;
 import com.omninest.modules.file.dto.ShareAccessSessionDto;
@@ -33,6 +34,7 @@ public class ResourceShareLinkService {
     private final PasswordEncoder passwordEncoder;
     private final ShareAccessSessionService shareAccessSessionService;
     private final RateLimitService rateLimitService;
+    private final CredentialCipher credentialCipher;
 
     /**
      * 校验密码并创建短期会话，不消费分享访问次数。
@@ -203,6 +205,8 @@ public class ResourceShareLinkService {
         share.setResourceType(resourceType);
         share.setResourceId(resourceId);
         share.setTokenHash(sha256(rawToken));
+        // 密文令牌支持所有者日后重新复制链接地址；公开校验仍是哈希比对。
+        share.setTokenCipher(credentialCipher.encrypt(rawToken));
         share.setExpiresAt(expiresAt);
         share.setMaxAccessCount(maxAccessCount);
         share.setIncludeLocation(includeLocation);
@@ -214,18 +218,41 @@ public class ResourceShareLinkService {
     }
 
     /**
-     * 列出所有者指定资源的分享链接。
+     * 列出所有者指定资源仍有效的分享链接。
+     *
+     * 已撤销（{@code disabledAt} 非空）的链接不返回：撤销是软删除，公开访问
+     * 依据同一字段拒绝，管理界面同样不应再显示它们。资源级链接数量级很小，
+     * 在此过滤即可，无需新增仓储查询方法。
+     *
+     * 令牌以密文回传解密后的明文，使所有者能重新复制既有链接地址；公开访问
+     * 路径不经过本方法，不暴露令牌。
      *
      * @param ownerUserId 所有者用户 ID
      * @param resourceId 资源 ID
-     * @return 分享链接描述符列表
+     * @return 仍有效的分享链接描述符列表
      */
     @Transactional(readOnly = true)
     public List<ResourceShareLinkDto> list(UUID ownerUserId, UUID resourceId) {
         return shareLinkRepository.findByOwnerUserIdAndResourceIdIn(ownerUserId, List.of(resourceId))
                 .stream()
-                .map(link -> toDto(link, null))
+                .filter(link -> link.getDisabledAt() == null)
+                .map(link -> toDto(link, revealToken(link)))
                 .toList();
+    }
+
+    /**
+     * 解密链接的明文令牌；历史数据或密钥不可用时返回 null，调用方按"无地址"处理。
+     */
+    private String revealToken(ShareLink link) {
+        String cipher = link.getTokenCipher();
+        if (cipher == null || cipher.isBlank()) {
+            return null;
+        }
+        try {
+            return credentialCipher.decrypt(cipher);
+        } catch (RuntimeException error) {
+            return null;
+        }
     }
 
     /**
@@ -240,6 +267,25 @@ public class ResourceShareLinkService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "分享链接不存在"));
         share.setDisabledAt(Instant.now());
         shareLinkRepository.save(share);
+    }
+
+    /**
+     * 一次性撤销指定资源的全部有效分享链接。
+     *
+     * 单条批量更新为全有或全无，因此结果是撤销条数而非逐项状态。
+     * 调用方必须已完成资源归属校验：批量更新按资源 ID 生效，不重复校验所有者。
+     *
+     * @param resourceId 资源 ID
+     * @return 被撤销的链接条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int revokeAll(UUID resourceId) {
+        List<ShareLink> active = shareLinkRepository.findByResourceIdAndDisabledAtIsNull(resourceId);
+        if (active.isEmpty()) {
+            return 0;
+        }
+        shareLinkRepository.disableByResourceId(resourceId, Instant.now());
+        return active.size();
     }
 
     /**

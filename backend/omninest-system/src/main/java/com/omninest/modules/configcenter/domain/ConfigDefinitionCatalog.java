@@ -59,6 +59,10 @@ public final class ConfigDefinitionCatalog {
             "music.platform.qq.u-url",
             "music.platform.qq.c-url",
             "music.platform.qq.playback-host-suffixes",
+            "music.qq.enabled",
+            "music.qq.u-url",
+            "music.qq.c-url",
+            "music.qq.hosts",
             "photo.ai.endpoint",
             "photo.ai.timeout-seconds",
             "photo.backup.enabled",
@@ -215,14 +219,6 @@ public final class ConfigDefinitionCatalog {
                 "config.integration.netease.baseUrl", "网易云音乐 API 地址", false, 512));
         add(values, string("music.netease.hosts", "music.126.net,music.163.com", "music", ConfigSurface.INTEGRATION,
                 "config.integration.netease.hosts", "网易云音乐播放域名后缀", false, 512));
-        add(values, bool("music.qq.enabled", true, "music", ConfigSurface.INTEGRATION,
-                "config.integration.qq.enabled", "QQ 音乐平台开关"));
-        add(values, string("music.qq.u-url", "https://u.y.qq.com/cgi-bin/musicu.fcg", "music",
-                ConfigSurface.INTEGRATION, "config.integration.qq.uUrl", "QQ 音乐 U 接口地址", false, 512));
-        add(values, string("music.qq.c-url", "https://c.y.qq.com", "music", ConfigSurface.INTEGRATION,
-                "config.integration.qq.cUrl", "QQ 音乐 C 接口地址", false, 512));
-        add(values, string("music.qq.hosts", "qqmusic.qq.com", "music", ConfigSurface.INTEGRATION,
-                "config.integration.qq.hosts", "QQ 音乐播放域名后缀", false, 512));
 
         add(values, bool("photo.ai.enabled", true, "photo", ConfigSurface.INTEGRATION,
                 "config.integration.photoAi.enabled", "是否启用图像分析"));

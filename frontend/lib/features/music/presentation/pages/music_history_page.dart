@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -12,11 +14,27 @@ import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 
 /// 音乐播放历史页面，按日期分组展示并支持触底加载。
-class MusicHistoryPage extends ConsumerWidget {
+class MusicHistoryPage extends ConsumerStatefulWidget {
   const MusicHistoryPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MusicHistoryPage> createState() => _MusicHistoryPageState();
+}
+
+class _MusicHistoryPageState extends ConsumerState<MusicHistoryPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      unawaited(ref.read(musicHistoryControllerProvider.notifier).refresh());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final history = ref.watch(musicHistoryControllerProvider);
     final l10n = AppLocalizations.of(context);
     return Theme(

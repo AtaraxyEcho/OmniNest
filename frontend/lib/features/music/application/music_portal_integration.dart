@@ -103,6 +103,50 @@ class MusicPortalActions {
     return _ref.read(musicCenterControllerProvider.notifier).nextTrack();
   }
 
+  /// 从最近列表的指定曲目开始播放（与音乐页最近列表同语义：以完整
+  /// 最近列表为队列、点击项为起点）。供 Portal 卡片就地切歌，不导航
+  /// 离开门户；曲目不在最近列表中时静默忽略。
+  Future<void> playRecentTrack(String trackId) {
+    final recent =
+        _ref.read(musicCenterControllerProvider).asData?.value.recentItems ??
+        const <MusicPlayableItem>[];
+    final startIndex = recentItemsIndexOf(recent, trackId);
+    if (startIndex < 0) {
+      return Future<void>.value();
+    }
+    return _ref
+        .read(musicCenterControllerProvider.notifier)
+        .playItems(recent, startIndex: startIndex);
+  }
+
+  /// 在最近列表中定位曲目下标；不存在返回 -1。
+  @visibleForTesting
+  static int recentItemsIndexOf(
+    List<MusicPlayableItem> recent,
+    String trackId,
+  ) {
+    for (var i = 0; i < recent.length; i++) {
+      if (recent[i].track.id == trackId) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  /// 从播放队列的指定位置开始播放（供 Portal 队列卡就地切歌）；
+  /// 下标越界时静默忽略。
+  Future<void> playQueueAt(int index) {
+    final queue =
+        _ref.read(musicCenterControllerProvider).asData?.value.playbackItems ??
+        const <MusicPlayableItem>[];
+    if (index < 0 || index >= queue.length) {
+      return Future<void>.value();
+    }
+    return _ref
+        .read(musicCenterControllerProvider.notifier)
+        .playItems(queue, startIndex: index);
+  }
+
   Future<void> syncPlayback() {
     return _ref
         .read(musicPlaybackSessionProvider.notifier)

@@ -310,8 +310,10 @@ class _DailyRecommendationSection extends ConsumerWidget {
                             .retry(),
               ),
           loading: () => const _DailyRecommendationSkeleton(),
-          // provider 因依赖状态重建时保留旧数据，避免封面卡闪烁加载。
-          skipLoadingOnReload: true,
+          // 不开启「reload 期间保留旧值」：isReloading 的唯一来源是会话世代
+          // 变化（换号），此时必须显示骨架而非上一账号数据；同账号刷新
+          // 走 invalidate（isRefreshing），默认 skipLoadingOnRefresh 已
+          // 保证不闪骨架。
         ),
       ],
     );

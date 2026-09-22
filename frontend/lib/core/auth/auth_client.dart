@@ -113,6 +113,12 @@ class AuthClient {
     return AuthTokenResponse.fromJson(_unwrap(body));
   }
 
+  /// 拉取当前用户资料；头像/显示名在其他设备变更后的实时重拉入口。
+  Future<UserProfile> currentUser() async {
+    final response = await _dio.get<Map<String, dynamic>>('/me');
+    return UserProfile.fromJson(_unwrap(response.data));
+  }
+
   /// 修改当前用户密码。
   Future<void> changePassword({
     required String oldPassword,

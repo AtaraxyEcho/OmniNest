@@ -671,6 +671,14 @@ public class PhotoLibraryController {
         return ApiResponse.success();
     }
 
+    @Operation(summary = "清空相册分享链接", description = "撤销该相册全部有效分享链接，返回撤销条数")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @DeleteMapping("/api/v1/photos/albums/{albumId}/share")
+    ApiResponse<Integer> revokeAllAlbumShares(@PathVariable UUID albumId) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(albumService.revokeAllAlbumShares(userId, albumId));
+    }
+
     @Operation(summary = "访问分享相册", description = "通过分享令牌访问共享相册，可选密码验证")
     @PostMapping("/api/v1/public/photos/share/{token}/authorize")
     ApiResponse<ShareAccessSessionDto> authorizeSharedAlbum(
@@ -712,6 +720,14 @@ public class PhotoLibraryController {
     ApiResponse<List<PhotoShareLinkDto>> listPhotoShares(@PathVariable UUID photoId) {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(albumService.listPhotoShares(userId, photoId));
+    }
+
+    @Operation(summary = "清空照片分享链接", description = "撤销该照片全部有效分享链接，返回撤销条数")
+    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @DeleteMapping("/api/v1/photos/{photoId}/share")
+    ApiResponse<Integer> revokeAllPhotoShares(@PathVariable UUID photoId) {
+        UUID userId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(albumService.revokeAllPhotoShares(userId, photoId));
     }
 
     @Operation(summary = "访问分享照片", description = "通过分享令牌发起共享单张照片会话，可选密码验证")

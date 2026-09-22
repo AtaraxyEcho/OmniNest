@@ -197,13 +197,11 @@ class ConfigCenterServiceTest {
     void initDefaultsDoesNotRewriteDeletedMasterSwitches() {
         ConfigEntry master = entry("music.platform.online.enabled", "false", "BOOLEAN", "music", "HOT");
         ConfigEntry netease = entry("music.platform.netease.enabled", "true", "BOOLEAN", "music", "HOT");
-        ConfigEntry qq = entry("music.platform.qq.enabled", "true", "BOOLEAN", "music", "HOT");
         when(configEntryRepository.findByConfigKey(ArgumentMatchers.anyString())).thenAnswer(invocation -> {
             String key = invocation.getArgument(0);
             return switch (key) {
                 case "music.platform.online.enabled" -> Optional.of(master);
                 case "music.platform.netease.enabled" -> Optional.of(netease);
-                case "music.platform.qq.enabled" -> Optional.of(qq);
                 default -> Optional.empty();
             };
         });
@@ -215,7 +213,6 @@ class ConfigCenterServiceTest {
 
         assertThat(master.getConfigValue()).isEqualTo("false");
         assertThat(netease.getConfigValue()).isEqualTo("true");
-        assertThat(qq.getConfigValue()).isEqualTo("true");
     }
 
     @Test

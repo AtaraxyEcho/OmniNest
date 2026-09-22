@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'dart:typed_data';
 
 import 'package:file_selector/file_selector.dart';
@@ -71,6 +72,8 @@ class PhotoCenterController extends AsyncNotifier<PhotoCenterState>
 
   @override
   Future<PhotoCenterState> build() async {
+    // 换号时以依赖变化语义重建，避免渲染上一账号的旧值。
+    ref.watch(sessionEpochProvider);
     ref.onDispose(() {
       _searchDebounce?.cancel();
       _importRefreshEpoch++;

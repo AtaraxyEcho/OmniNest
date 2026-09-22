@@ -7,6 +7,7 @@ import 'package:omninest/features/admin/admin_dashboard.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
+import 'package:omninest/features/portal/application/portal_paged_cards.dart';
 import 'package:omninest/features/portal/portal_weather.dart';
 import 'package:omninest/features/portal/domain/portal_focus_models.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
@@ -236,6 +237,38 @@ final portalDashboardRealtimeBinderProvider = Provider.autoDispose<void>((ref) {
         final section = _sectionForScope(scope);
         if (section != null) {
           unawaited(actions.retry(section));
+        }
+        // 分页列表卡随脏作用域按已加载量对齐重拉。
+        switch (scope) {
+          case RealtimeScope.video:
+            if (ref.exists(portalContinueWatchingProvider)) {
+              unawaited(
+                ref.read(portalContinueWatchingProvider.notifier).refresh(),
+              );
+            }
+            if (ref.exists(portalVideoPreviewProvider)) {
+              unawaited(
+                ref.read(portalVideoPreviewProvider.notifier).refresh(),
+              );
+            }
+          case RealtimeScope.photos:
+            if (ref.exists(portalRecentPhotosProvider)) {
+              unawaited(
+                ref.read(portalRecentPhotosProvider.notifier).refresh(),
+              );
+            }
+          case RealtimeScope.music:
+            if (ref.exists(portalPlaybackQueueProvider)) {
+              unawaited(
+                ref.read(portalPlaybackQueueProvider.notifier).refresh(),
+              );
+            }
+          case RealtimeScope.reader:
+            if (ref.exists(portalReaderShelfProvider)) {
+              unawaited(ref.read(portalReaderShelfProvider.notifier).refresh());
+            }
+          default:
+            break;
         }
       }
     });

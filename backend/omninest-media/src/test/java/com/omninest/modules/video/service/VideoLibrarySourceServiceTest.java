@@ -3,7 +3,9 @@ package com.omninest.modules.video.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -13,8 +15,11 @@ import static org.mockito.Mockito.when;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.StorageLocation;
 import com.omninest.modules.file.service.StorageLocationService;
+import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.VideoLibrarySource;
@@ -56,6 +61,7 @@ class VideoLibrarySourceServiceTest {
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final MediaLibraryDiscoveryExecutor discoveryExecutor = mock(MediaLibraryDiscoveryExecutor.class);
     private final MediaLibraryAccessService accessService = mock(MediaLibraryAccessService.class);
+    private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final VideoLibrarySourceService service = new VideoLibrarySourceService(
             sourceRepository,
             runRepository,
@@ -66,8 +72,30 @@ class VideoLibrarySourceServiceTest {
             taskRecordService,
             taskDispatchService,
             discoveryExecutor,
-            accessService
+            accessService,
+            syncEventService
     );
+
+    @Test
+    void deleteEmitsVideoLibraryEventForOperatorDevices() {
+        VideoLibrarySource source = source("COMPLETED");
+        when(accessService.requireManage(OWNER_ID, SOURCE_ID)).thenReturn(source);
+        when(videoItemRepository.countByLibrarySourceId(SOURCE_ID)).thenReturn(0L);
+        when(runRepository.findAllByLibrarySourceId(SOURCE_ID)).thenReturn(List.of());
+
+        service.delete(OWNER_ID, SOURCE_ID);
+
+        verify(sourceRepository).delete(source);
+        verify(syncEventService).record(
+                eq(OWNER_ID),
+                eq(SyncScope.VIDEO),
+                eq("VIDEO_LIBRARY"),
+                eq(SOURCE_ID.toString()),
+                eq(SyncAction.UPDATED),
+                isNull(),
+                anyMap()
+        );
+    }
 
     @Test
     void scanPersistsTaskAndOutboxWithoutScanningOnRequestThread() {

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
@@ -74,7 +75,10 @@ void main() {
             .transform
             .getMaxScaleOnAxis();
     expect(find.byType(InkWell), findsNothing);
-    expect(find.byType(ShaderMask), findsNothing);
+    expect(
+      find.byKey(const ValueKey('music-lyric-text-gradient')),
+      findsNothing,
+    );
 
     await tester.pump(const Duration(milliseconds: 700));
 
@@ -96,26 +100,33 @@ void main() {
             )
             .transform
             .getTranslation();
-    expect(
-      brightStyle.shadows!.first.blurRadius,
-      greaterThan(quietStyle.shadows!.first.blurRadius),
-    );
+    // 呼吸只做缩放与上移（默认在读色为白色，颜色呼吸不可见）。
+    expect(brightStyle.color, quietStyle.color);
     expect(brightScale, greaterThan(quietScale + 0.025));
     expect(brightScale, lessThan(quietScale + 0.05));
     expect(motion.y, lessThan(-1.5));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('矮窗口自动降级为单行歌词且不产生布局溢出', (tester) async {
+  testWidgets('整页模式按可用高度决定可见行数且不产生布局溢出', (tester) async {
     final player = _FakeMusicAudioPlayback(
       initialPosition: const Duration(seconds: 20),
     );
     addTearDown(player.dispose);
-    await tester.pumpWidget(_lyricsApp(player: player, height: 180));
 
+    // 极矮窗口：行高由内容决定，只容得下一行时自动降级为单行。
+    await tester.pumpWidget(_lyricsApp(player: player, height: 60));
     expect(find.text('Lyric 20'), findsOneWidget);
     expect(find.text('Lyric 19'), findsNothing);
     expect(find.text('Lyric 21'), findsNothing);
+    expect(tester.takeException(), isNull);
+
+    // 常规矮窗口：容得下多行时按可用高度显示，不再强制单行。
+    // 重建后需等 AnimatedSwitcher 退场结束，否则同一行会有新旧两份。
+    await tester.pumpWidget(_lyricsApp(player: player, height: 220));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('Lyric 20'), findsOneWidget);
+    expect(find.text('Lyric 19'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -130,8 +141,7 @@ void main() {
         settings: PortalLyricVisualSettings.defaults.copyWith(
           visibleLines: 1,
           breathingEnabled: false,
-          activeColorValue: 0xFF73E6C4,
-          shadowEnabled: false,
+          currentPaint: const LyricPaint.solid(0xFF73E6C4),
         ),
       ),
     );
@@ -151,11 +161,12 @@ void main() {
 
     expect(laterScale, initialScale);
     expect(style.color, const Color(0xFF73E6C4));
+    // 溢光已整体移除：歌词不再使用 Shadow。
     expect(style.shadows, isNull);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('已读和未读歌词使用各自调色盘颜色', (tester) async {
+  testWidgets('在读行与非当前句使用各自调色盘颜色', (tester) async {
     final player = _FakeMusicAudioPlayback(
       initialPosition: const Duration(seconds: 20),
     );
@@ -165,26 +176,25 @@ void main() {
         player: player,
         settings: PortalLyricVisualSettings.defaults.copyWith(
           breathingEnabled: false,
-          readColorValue: 0xFF4A7890,
-          unreadColorValue: 0xFFFFF2D0,
+          currentPaint: const LyricPaint.solid(0xFF4A7890),
+          inactivePaint: const LyricPaint.solid(0xFFFFF2D0),
         ),
       ),
     );
 
-    final readStyle = tester.widget<Text>(find.text('Lyric 19')).style!;
-    final unreadStyle = tester.widget<Text>(find.text('Lyric 21')).style!;
-    expect(
-      readStyle.color,
-      const Color(
-        0xFF4A7890,
-      ).withValues(alpha: PortalLyricVisualSettings.defaults.inactiveOpacity),
-    );
-    expect(
-      unreadStyle.color,
-      const Color(
-        0xFFFFF2D0,
-      ).withValues(alpha: PortalLyricVisualSettings.defaults.inactiveOpacity),
-    );
+    final currentStyle =
+        tester
+            .widget<Text>(find.byKey(const ValueKey('music-lyric-active')))
+            .style!;
+    final pastStyle = tester.widget<Text>(find.text('Lyric 19')).style!;
+    final upcomingStyle = tester.widget<Text>(find.text('Lyric 21')).style!;
+    final expectedInactive = const Color(
+      0xFFFFF2D0,
+    ).withValues(alpha: PortalLyricVisualSettings.defaults.inactiveOpacity);
+    // 当前行满亮用在读色；已唱行与未唱行共用非当前句色并压暗。
+    expect(currentStyle.color, const Color(0xFF4A7890));
+    expect(pastStyle.color, expectedInactive);
+    expect(upcomingStyle.color, expectedInactive);
     expect(tester.takeException(), isNull);
   });
 }
@@ -203,6 +213,9 @@ Widget _lyricsApp({
   );
   return MaterialApp(
     theme: ThemeData.dark(),
+    locale: const Locale('zh'),
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
       body: SizedBox(
         height: height,
@@ -212,7 +225,11 @@ Widget _lyricsApp({
           track: _track,
           lyrics: lyrics,
           scale: 1,
-          lyricSettings: settings,
+          lyricSettings: settings ?? PortalLyricVisualSettings.defaults,
+          // 多行歌词形态：滚动形态与文本排列改为组件参数（设备级偏好 + 端形态）。
+          scrollMode: false,
+          textAlign: TextAlign.left,
+          blockAnchor: Alignment.center,
           onTogglePlayback: () {},
           onPrevious: () {},
           onNext: () {},
@@ -314,4 +331,20 @@ class _SilentSpectrumListenable implements ValueListenable<MusicSpectrumFrame> {
 
   @override
   void removeListener(VoidCallback listener) {}
+}
+
+/// 供探针测试复用的构建入口。
+class LyricsAppProbe {
+  const LyricsAppProbe(this.widget);
+  final Widget widget;
+}
+
+LyricsAppProbe buildLyricsAppProbe() {
+  return LyricsAppProbe(
+    _lyricsApp(
+      player: _FakeMusicAudioPlayback(
+        initialPosition: const Duration(seconds: 10),
+      ),
+    ),
+  );
 }

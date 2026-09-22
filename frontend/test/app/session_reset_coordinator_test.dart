@@ -3,8 +3,13 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/session/session_reset_coordinator.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
+import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/files/application/file_browser_controller.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
+import 'package:omninest/features/music/application/music_history_controller.dart';
+import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/features/portal/application/portal_paged_cards.dart';
+import 'package:omninest/features/reader/domain/reader_item.dart';
 
 class _ControllableAuthSessionNotifier extends AuthSessionNotifier {
   @override
@@ -22,6 +27,18 @@ class _ControllableAuthSessionNotifier extends AuthSessionNotifier {
 
   void signOut() {
     state = const AsyncData(AuthSessionState.unauthenticated());
+  }
+}
+
+class _CountingMusicHistoryNotifier extends MusicHistoryController {
+  _CountingMusicHistoryNotifier(this.onBuild);
+
+  final void Function() onBuild;
+
+  @override
+  Future<MusicHistoryState> build() async {
+    onBuild();
+    return const MusicHistoryState();
   }
 }
 
@@ -134,4 +151,106 @@ void main() {
     await container.read(fileStorageStatsProvider.future);
     expect(statsBuilds, 3);
   });
+
+  test(
+    'account switch resets music history and connector oauth caches',
+    () async {
+      var historyBuilds = 0;
+      var oauthBuilds = 0;
+      final container = ProviderContainer.test(
+        overrides: [
+          authSessionProvider.overrideWith(
+            _ControllableAuthSessionNotifier.new,
+          ),
+          musicHistoryControllerProvider.overrideWith(
+            () => _CountingMusicHistoryNotifier(() => historyBuilds += 1),
+          ),
+          adminConnectorOAuthAppsProvider.overrideWith((ref) async {
+            oauthBuilds += 1;
+            return const [];
+          }),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.read(sessionResetCoordinatorProvider);
+      final auth =
+          container.read(authSessionProvider.notifier)
+              as _ControllableAuthSessionNotifier;
+      await container.read(authSessionProvider.future);
+
+      auth.signInAs('user-a');
+      await container.read(musicHistoryControllerProvider.future);
+      await container.read(adminConnectorOAuthAppsProvider.future);
+      expect(historyBuilds, 1);
+      expect(oauthBuilds, 1);
+
+      // 换号后播放历史与连接器 OAuth 缓存不得跨账号残留。
+      auth.signInAs('user-b');
+      await container.read(musicHistoryControllerProvider.future);
+      await container.read(adminConnectorOAuthAppsProvider.future);
+      expect(historyBuilds, 2);
+      expect(oauthBuilds, 2);
+    },
+  );
+
+  test('account switch resets portal paged card caches', () async {
+    var photosBuilds = 0;
+    var shelfBuilds = 0;
+    final container = ProviderContainer.test(
+      overrides: [
+        authSessionProvider.overrideWith(_ControllableAuthSessionNotifier.new),
+        portalRecentPhotosProvider.overrideWith(
+          () => _CountingPortalPhotosController(() => photosBuilds += 1),
+        ),
+        portalReaderShelfProvider.overrideWith(
+          () => _CountingPortalShelfController(() => shelfBuilds += 1),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    container.read(sessionResetCoordinatorProvider);
+    final auth =
+        container.read(authSessionProvider.notifier)
+            as _ControllableAuthSessionNotifier;
+    await container.read(authSessionProvider.future);
+
+    auth.signInAs('user-a');
+    await container.read(portalRecentPhotosProvider.future);
+    await container.read(portalReaderShelfProvider.future);
+    expect(photosBuilds, 1);
+    expect(shelfBuilds, 1);
+
+    // 门户卡片缓存用户内容（照片/书架），换号后不得残留。
+    auth.signInAs('user-b');
+    await container.read(portalRecentPhotosProvider.future);
+    await container.read(portalReaderShelfProvider.future);
+    expect(photosBuilds, 2);
+    expect(shelfBuilds, 2);
+  });
+}
+
+class _CountingPortalPhotosController extends PortalRecentPhotosController {
+  _CountingPortalPhotosController(this.onBuild);
+
+  final void Function() onBuild;
+
+  @override
+  Future<PortalPagedListState<PhotoItem>> build() async {
+    onBuild();
+    return PortalPagedListState<PhotoItem>();
+  }
+}
+
+class _CountingPortalShelfController extends PortalReaderShelfController {
+  _CountingPortalShelfController(this.onBuild);
+
+  final void Function() onBuild;
+
+  @override
+  Future<PortalPagedListState<ReaderItem>> build() async {
+    onBuild();
+    return PortalPagedListState<ReaderItem>();
+  }
 }

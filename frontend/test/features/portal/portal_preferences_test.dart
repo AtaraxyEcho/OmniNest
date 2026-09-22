@@ -3,16 +3,12 @@ import 'package:omninest/features/music/music_portal.dart';
 
 void main() {
   group('PortalMusicVisualizerPreferences', () {
-    test('默认使用单一视觉设置并开启播放器与音频条', () {
+    test('默认使用单一视觉设置并开启播放器', () {
       const preferences = PortalMusicVisualizerPreferences();
 
-      expect(preferences.visual.spectrum.lowResponse, 1.08);
-      expect(preferences.visual.coverElements.originalCoverEnabled, isFalse);
-      expect(preferences.visual.coverElements.borderEnabled, isFalse);
-      expect(preferences.visual.coverElements.opacity, 1);
-      expect(preferences.visual.coverElements.tiltDegrees, 0);
       expect(preferences.visual.player.enabled, isTrue);
-      expect(preferences.visual.player.audioBarEnabled, isTrue);
+      // 桌面播放详情页默认布局居左（用户确认的默认构图）。
+      expect(preferences.visual.lyrics.layout, PortalMusicLayout.left);
       expect(preferences.toJson(), isNot(contains('selectedPresetId')));
       expect(preferences.toJson(), isNot(contains('customPresets')));
     });
@@ -20,13 +16,9 @@ void main() {
     test('单一视觉设置支持序列化', () {
       final preferences = PortalMusicVisualizerPreferences(
         visual: PortalMusicVisualizerSettings.defaults.copyWith(
-          coverElements: PortalCoverElementSettings.defaults.copyWith(
-            opacity: 1,
-            tiltDegrees: 7,
-          ),
-          player: PortalGlassPlayerSettings.defaults.copyWith(
-            enabled: false,
-            audioBarEnabled: false,
+          player: PortalGlassPlayerSettings.defaults.copyWith(enabled: false),
+          lyrics: PortalLyricVisualSettings.defaults.copyWith(
+            layout: PortalMusicLayout.right,
           ),
         ),
       );
@@ -39,10 +31,8 @@ void main() {
         restored.schemaVersion,
         PortalMusicVisualizerPreferences.currentSchemaVersion,
       );
-      expect(restored.visual.coverElements.opacity, 1);
-      expect(restored.visual.coverElements.tiltDegrees, 7);
       expect(restored.visual.player.enabled, isFalse);
-      expect(restored.visual.player.audioBarEnabled, isFalse);
+      expect(restored.visual.lyrics.layout, PortalMusicLayout.right);
     });
 
     test('旧自定义预设迁移为单一视觉设置', () {
@@ -59,35 +49,48 @@ void main() {
         },
       );
 
-      expect(restored.visual.spectrum.lowResponse, 1.4);
+      // 频响已整体移除：旧键静默丢弃，播放器开关照常迁移。
       expect(restored.visual.player.enabled, isFalse);
-      expect(restored.visual.player.audioBarEnabled, isTrue);
+      expect(restored.visual.lyrics.layout, PortalMusicLayout.left);
     });
 
-    test('旧视觉设置缺少 Hero 封面透明度时使用默认值', () {
+    test('旧歌词位置按镜像迁移到桌面布局', () {
+      final mirrored = PortalMusicVisualizerPreferences.fromJson(
+        const <String, dynamic>{
+          'visual': <String, dynamic>{
+            'lyrics': <String, dynamic>{'position': 'left'},
+          },
+        },
+      );
+      final centered = PortalMusicVisualizerPreferences.fromJson(
+        const <String, dynamic>{
+          'visual': <String, dynamic>{
+            'lyrics': <String, dynamic>{'position': 'center'},
+          },
+        },
+      );
+
+      // 旧"歌词居左"= 卡组居右，与旧语义互为镜像。
+      expect(mirrored.visual.lyrics.layout, PortalMusicLayout.right);
+      expect(centered.visual.lyrics.layout, PortalMusicLayout.center);
+    });
+
+    test('旧设置中的频响与封面元素字段被静默丢弃', () {
       final restored = PortalMusicVisualizerPreferences.fromJson(
         const <String, dynamic>{
           'visual': <String, dynamic>{
+            'spectrum': <String, dynamic>{'lowResponse': 1.5},
             'coverElements': <String, dynamic>{'originalCoverEnabled': true},
           },
         },
       );
 
-      expect(restored.visual.coverElements.originalCoverEnabled, isTrue);
-      expect(restored.visual.coverElements.opacity, 1);
-      expect(restored.visual.coverElements.tiltDegrees, 0);
-    });
-
-    test('封面倾斜角度读取时限制在编辑器范围内', () {
-      final restored = PortalMusicVisualizerPreferences.fromJson(
-        const <String, dynamic>{
-          'visual': <String, dynamic>{
-            'coverElements': <String, dynamic>{'tiltDegrees': 90},
-          },
-        },
-      );
-
-      expect(restored.visual.coverElements.tiltDegrees, 12);
+      // 封面元素（含原始封面）与频响已整体移除：字段不再存在，载入不报错。
+      expect(restored.toJson()['visual'].keys, <String>[
+        'lyrics',
+        'player',
+        'deckEnabled',
+      ]);
     });
   });
 }

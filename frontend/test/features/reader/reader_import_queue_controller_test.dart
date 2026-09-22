@@ -6,6 +6,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/data/file_api.dart';
@@ -166,6 +168,60 @@ void main() {
     expect(container.read(readerImportQueueProvider), isEmpty);
     expect(readerApi.importedKinds, isEmpty);
   });
+
+  test('换号取消进行中的上传并清空队列', () async {
+    final mediaService = _AccountSwitchMediaImportService();
+    final readerApi = _ReaderApiStub();
+    final container = _container(
+      mediaService: mediaService,
+      readerApi: readerApi,
+    );
+    addTearDown(container.dispose);
+    final auth =
+        container.read(authSessionProvider.notifier)
+            as _ControllableAuthNotifier;
+    await container.read(authSessionProvider.future);
+    auth.signInAs('user-a');
+
+    final controller = container.read(readerImportQueueProvider.notifier);
+    controller.enqueue(<XFile>[_memoryFile('account-switch.epub')]);
+    await mediaService.uploadStarted.future;
+    expect(container.read(readerImportQueueProvider), isNotEmpty);
+
+    auth.signInAs('user-b');
+
+    await mediaService.cancelSignalled.future;
+    await _waitUntil(() => container.read(readerImportQueueProvider).isEmpty);
+    expect(readerApi.importedKinds, isEmpty);
+  });
+
+  test('换号后重新解析导入目录', () async {
+    final mediaService = _CountingDirectoryMediaImportService();
+    final readerApi = _ReaderApiStub();
+    final container = _container(
+      mediaService: mediaService,
+      readerApi: readerApi,
+    );
+    addTearDown(container.dispose);
+    final auth =
+        container.read(authSessionProvider.notifier)
+            as _ControllableAuthNotifier;
+    await container.read(authSessionProvider.future);
+    auth.signInAs('user-a');
+
+    container.read(readerImportQueueProvider.notifier).enqueue(<XFile>[
+      _memoryFile('user-a.epub'),
+    ]);
+    await _waitUntil(() => container.read(readerImportQueueProvider).isEmpty);
+    expect(mediaService.ensureDirectoryCalls, 1);
+
+    auth.signInAs('user-b');
+    container.read(readerImportQueueProvider.notifier).enqueue(<XFile>[
+      _memoryFile('user-b.epub'),
+    ]);
+    await _waitUntil(() => container.read(readerImportQueueProvider).isEmpty);
+    expect(mediaService.ensureDirectoryCalls, 2);
+  });
 }
 
 ProviderContainer _container({
@@ -174,12 +230,28 @@ ProviderContainer _container({
 }) {
   final container = ProviderContainer(
     overrides: [
+      authSessionProvider.overrideWith(_ControllableAuthNotifier.new),
       mediaImportServiceProvider.overrideWithValue(mediaService),
       readerApiProvider.overrideWithValue(readerApi),
     ],
   );
   container.listen(readerImportQueueProvider, (_, _) {}, fireImmediately: true);
   return container;
+}
+
+class _ControllableAuthNotifier extends AuthSessionNotifier {
+  @override
+  Future<AuthSessionState> build() async =>
+      const AuthSessionState.unauthenticated();
+
+  void signInAs(String userId) {
+    state = AsyncData(
+      AuthSessionState(
+        user: UserProfile(id: userId, username: userId, role: 'MEMBER'),
+        expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      ),
+    );
+  }
 }
 
 XFile _memoryFile(String name) {
@@ -316,6 +388,48 @@ class _CancellableMediaImportService extends _ImmediateMediaImportService {
     await cancelled.future;
     cancellationToken?.throwIfCancelled();
     throw StateError('cancellation signal was not propagated');
+  }
+}
+
+class _AccountSwitchMediaImportService extends _ImmediateMediaImportService {
+  final Completer<void> uploadStarted = Completer<void>();
+  final Completer<void> cancelSignalled = Completer<void>();
+
+  @override
+  Future<ImportedMediaFile> importFile({
+    required XFile file,
+    required String parentId,
+    String? spaceType,
+    FileUploadPolicy? policy,
+    required bool reuseExistingFiles,
+    ImportProgressCallback? onProgress,
+    MediaImportCancellationToken? cancellationToken,
+  }) async {
+    final cancelled = Completer<void>();
+    cancellationToken?.addListener(() {
+      if (!cancelSignalled.isCompleted) {
+        cancelSignalled.complete();
+      }
+      cancelled.complete();
+    });
+    uploadStarted.complete();
+    await cancelled.future;
+    cancellationToken?.throwIfCancelled();
+    throw StateError('cancellation signal was not propagated');
+  }
+}
+
+class _CountingDirectoryMediaImportService
+    extends _ImmediateMediaImportService {
+  int ensureDirectoryCalls = 0;
+
+  @override
+  Future<String?> ensureDefaultDirectory({
+    required String directoryName,
+    String? spaceType,
+  }) async {
+    ensureDirectoryCalls += 1;
+    return 'reader-folder-$ensureDirectoryCalls';
   }
 }
 

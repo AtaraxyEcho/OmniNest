@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -58,35 +61,42 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
   @override
   Widget build(BuildContext context) {
     final stateAsync = ref.watch(readerCenterControllerProvider);
-    return ReaderPageScaffold(
-      target: ReaderPageTarget.library,
-      onRefresh: _onRefresh,
-      header:
-          stateAsync.asData?.value == null
-              ? null
-              : _LibraryHeader(
-                itemCount: stateAsync.asData!.value.visibleItems.length,
-                searchController: _searchController,
-                segment: stateAsync.asData!.value.librarySegment,
-                onSearchChanged: (value) {
-                  ref
-                      .read(readerCenterControllerProvider.notifier)
-                      .setSearchQuery(value);
-                },
-                onSegmentChanged:
-                    (segment) => ref
+    return ModuleEntryRefreshListener(
+      modulePath: '/reader',
+      onRefresh:
+          () => unawaited(
+            ref.read(readerCenterControllerProvider.notifier).refresh(),
+          ),
+      child: ReaderPageScaffold(
+        target: ReaderPageTarget.library,
+        onRefresh: _onRefresh,
+        header:
+            stateAsync.asData?.value == null
+                ? null
+                : _LibraryHeader(
+                  itemCount: stateAsync.asData!.value.visibleItems.length,
+                  searchController: _searchController,
+                  segment: stateAsync.asData!.value.librarySegment,
+                  onSearchChanged: (value) {
+                    ref
                         .read(readerCenterControllerProvider.notifier)
-                        .selectLibrarySegment(segment),
-              ),
-      child: ReaderParseFeedback(
-        child: stateAsync.when(
-          data: _buildContent,
-          error:
-              (error, stackTrace) => AppErrorView(
-                message: describeUserFacingError(error).displayMessage,
-                onRetry: () => ref.invalidate(readerCenterControllerProvider),
-              ),
-          loading: () => const AppLoading.grid(gridAspectRatio: 0.72),
+                        .setSearchQuery(value);
+                  },
+                  onSegmentChanged:
+                      (segment) => ref
+                          .read(readerCenterControllerProvider.notifier)
+                          .selectLibrarySegment(segment),
+                ),
+        child: ReaderParseFeedback(
+          child: stateAsync.when(
+            data: _buildContent,
+            error:
+                (error, stackTrace) => AppErrorView(
+                  message: describeUserFacingError(error).displayMessage,
+                  onRetry: () => ref.invalidate(readerCenterControllerProvider),
+                ),
+            loading: () => const AppLoading.grid(gridAspectRatio: 0.72),
+          ),
         ),
       ),
     );

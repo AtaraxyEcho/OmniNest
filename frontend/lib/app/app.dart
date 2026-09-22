@@ -16,6 +16,7 @@ import 'package:omninest/app/desktop_tray_locale_binding.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/app/router.dart';
+import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/app/session/session_reset_coordinator.dart';
 import 'package:omninest/app/app_scroll_behavior.dart';
 import 'package:omninest/app/sync/app_sync_coordinator.dart';
@@ -27,6 +28,7 @@ import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_host.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
+import 'package:omninest/features/notifications/presentation/widgets/notification_foreground_toast.dart';
 import 'package:omninest/core/deep_link/deep_link_service.dart';
 import 'package:omninest/features/tasks/application/task_notification_service.dart';
 
@@ -94,6 +96,24 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
       locale: Locale(languageCode),
       routerConfig: router,
       builder: (context, child) {
+        // 认证门控：登出瞬间路由 gate 经 listenable 转发，其页面替换晚于
+        // 渲染帧，旧受保护页面会闪现一帧。此处按「已确定未认证 + 当前
+        // 路径非公开」在根 builder 同帧遮挡，先于路由替换生效。
+        final session = ref.watch(authSessionProvider);
+        final sessionValue = session.asData?.value;
+        final definitelySignedOut =
+            sessionValue != null && !sessionValue.isAuthenticated;
+        final currentPath = router.routeInformationProvider.value.uri.path;
+        if (definitelySignedOut &&
+            gatesUnauthenticatedRender(
+              isAuthenticated: false,
+              path: currentPath,
+            )) {
+          return ColoredBox(
+            color: Theme.of(context).colorScheme.surface,
+            child: const Center(child: AppLoading()),
+          );
+        }
         final mediaQuery = MediaQuery.of(context);
         final systemScaler = mediaQuery.textScaler;
         final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -128,7 +148,9 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
         );
         return FontScaleScope(
           systemScaler: systemScaler,
-          child: DesktopFormMinWidth(mobileForm: mobileForm, child: content),
+          child: NotificationForegroundToast(
+            child: DesktopFormMinWidth(mobileForm: mobileForm, child: content),
+          ),
         );
       },
     );
@@ -151,4 +173,22 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
       ref.read(windowChromeControllerProvider.notifier).toggleFullscreen(),
     );
   }
+}
+
+/// 根 builder 的未认证渲染门控：与 router 的公开路径口径保持一致
+/// （登录/安装/引导/分享页公开），其余路径在已确定未认证时不渲染。
+@visibleForTesting
+bool gatesUnauthenticatedRender({
+  required bool isAuthenticated,
+  required String path,
+}) {
+  if (isAuthenticated) {
+    return false;
+  }
+  return !(path == '/login' ||
+      path == '/setup' ||
+      path == '/server-setup' ||
+      path == '/boot' ||
+      path.startsWith('/shared/photos/') ||
+      path.startsWith('/s/'));
 }

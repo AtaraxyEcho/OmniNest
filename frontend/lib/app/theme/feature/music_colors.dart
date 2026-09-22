@@ -57,6 +57,12 @@ class MusicColors extends ThemeExtension<MusicColors> {
     required this.star,
     required this.discBg,
     required this.discCenter,
+    // 平台账号窗口专用色阶
+    required this.windowSurface,
+    required this.windowCard,
+    required this.fieldFill,
+    required this.fieldBorder,
+    required this.scrim,
   });
 
   final Color surface;
@@ -111,6 +117,13 @@ class MusicColors extends ThemeExtension<MusicColors> {
   final Color star;
   final Color discBg;
   final Color discCenter;
+  // 平台账号窗口专用色阶：浅色下必须形成"窗口底 > 卡片 > 输入框"的可见层级，
+  // 不能沿用随品牌色 lerp 的通用 surface 链（三层亮度差不足 4%，层级读不出来）。
+  final Color windowSurface;
+  final Color windowCard;
+  final Color fieldFill;
+  final Color fieldBorder;
+  final Color scrim;
 
   /// 从全局主题色派生 Music 模块专属色
   ///
@@ -143,6 +156,21 @@ class MusicColors extends ThemeExtension<MusicColors> {
               0.08,
             )!
             : base.surfaceContainerHigh;
+    // 窗口链条按亮度分别取值：浅色直接取标准容器阶梯（白底窗口 + 浅灰卡片 +
+    // 白底输入框 + 实描边），深色沿用原合成结果，保证深色观感不回退。
+    final windowSurface = light ? base.surfaceContainerLowest : base.surface;
+    final windowCard =
+        light
+            ? base.surfaceContainerLow
+            : Color.lerp(base.surface, base.surfaceContainer, 0.6)!;
+    final fieldFill =
+        light
+            ? base.surfaceContainerLowest
+            : Color.lerp(windowCard, base.surface, 0.6)!;
+    final fieldBorder =
+        light
+            ? base.outlineVariant.withValues(alpha: 0.9)
+            : base.outlineVariant.withValues(alpha: 0.25);
     return MusicColors(
       surface: surface,
       background: background,
@@ -196,6 +224,11 @@ class MusicColors extends ThemeExtension<MusicColors> {
       star: base.star,
       discBg: base.surfaceContainerHighest,
       discCenter: base.surfaceContainerHigh,
+      windowSurface: windowSurface,
+      windowCard: windowCard,
+      fieldFill: fieldFill,
+      fieldBorder: fieldBorder,
+      scrim: light ? const Color(0x33000000) : const Color(0x66000000),
     );
   }
 
@@ -248,6 +281,11 @@ class MusicColors extends ThemeExtension<MusicColors> {
     Color? star,
     Color? discBg,
     Color? discCenter,
+    Color? windowSurface,
+    Color? windowCard,
+    Color? fieldFill,
+    Color? fieldBorder,
+    Color? scrim,
   }) {
     return MusicColors(
       surface: surface ?? this.surface,
@@ -295,6 +333,11 @@ class MusicColors extends ThemeExtension<MusicColors> {
       star: star ?? this.star,
       discBg: discBg ?? this.discBg,
       discCenter: discCenter ?? this.discCenter,
+      windowSurface: windowSurface ?? this.windowSurface,
+      windowCard: windowCard ?? this.windowCard,
+      fieldFill: fieldFill ?? this.fieldFill,
+      fieldBorder: fieldBorder ?? this.fieldBorder,
+      scrim: scrim ?? this.scrim,
     );
   }
 
@@ -360,6 +403,11 @@ class MusicColors extends ThemeExtension<MusicColors> {
       star: Color.lerp(star, other.star, t)!,
       discBg: Color.lerp(discBg, other.discBg, t)!,
       discCenter: Color.lerp(discCenter, other.discCenter, t)!,
+      windowSurface: Color.lerp(windowSurface, other.windowSurface, t)!,
+      windowCard: Color.lerp(windowCard, other.windowCard, t)!,
+      fieldFill: Color.lerp(fieldFill, other.fieldFill, t)!,
+      fieldBorder: Color.lerp(fieldBorder, other.fieldBorder, t)!,
+      scrim: Color.lerp(scrim, other.scrim, t)!,
     );
   }
 }

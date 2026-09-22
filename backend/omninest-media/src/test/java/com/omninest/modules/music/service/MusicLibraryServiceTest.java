@@ -377,12 +377,12 @@ class MusicLibraryServiceTest {
     void recentItemsRestoreOnlineTrackSnapshot() {
         MusicPlayHistory history = new MusicPlayHistory();
         history.setOwnerUserId(OWNER_ID);
-        history.setPlayableKey("online:qq:song-2");
-        history.setPlatform("qq");
+        history.setPlayableKey("online:netease:song-2");
+        history.setPlatform("netease");
         history.setExternalSongId("song-2");
-        history.setTitle("QQ Song");
-        history.setArtistName("QQ Artist");
-        history.setCoverUrl("https://example.com/qq.jpg");
+        history.setTitle("Online Song");
+        history.setArtistName("Online Artist");
+        history.setCoverUrl("https://example.com/netease.jpg");
         history.setPlayedAt(Instant.parse("2026-07-12T01:00:00Z"));
         when(playHistoryRepository
                 .findTop50ByOwnerUserIdAndPlayedAtGreaterThanEqualOrderByPlayedAtDesc(
@@ -395,7 +395,7 @@ class MusicLibraryServiceTest {
         var recent = libraryService.recentItems(OWNER_ID);
 
         assertThat(recent).hasSize(1);
-        assertThat(recent.getFirst().playableKey()).isEqualTo("online:qq:song-2");
-        assertThat(recent.getFirst().onlineTrack().title()).isEqualTo("QQ Song");
+        assertThat(recent.getFirst().playableKey()).isEqualTo("online:netease:song-2");
+        assertThat(recent.getFirst().onlineTrack().title()).isEqualTo("Online Song");
     }
 }

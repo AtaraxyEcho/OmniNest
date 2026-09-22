@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -49,6 +50,11 @@ final readerImportQueueProvider =
     );
 
 /// 阅读上传流程由 application 层持有，页面离开不会造成失效的 WidgetRef 访问。
+///
+/// 队列生命周期跟随登录账号：上传请求由当前会话 token 承载，换号后继续
+/// 执行会把前一账号选择的文件导入新账号书架，因此在账号身份变化时取消
+/// 全部进行中的本地任务并清空队列。已提交到服务端的任务不受影响，由后端
+/// 按提交账号继续执行。
 class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
   static const int _maxConcurrentImports = 3;
   final Map<String, XFile> _files = <String, XFile>{};
@@ -60,9 +66,39 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
       <String, Completer<void>>{};
   Future<String?>? _readerDirectory;
   int _sequence = 0;
+  String? _sessionUserId;
 
   @override
-  List<ReaderImportJob> build() => const <ReaderImportJob>[];
+  List<ReaderImportJob> build() {
+    final userId = ref.watch(
+      authSessionProvider.select((value) => value.asData?.value.user?.id),
+    );
+    if (_sessionUserId != userId) {
+      _sessionUserId = userId;
+      _cancelAllJobs();
+    }
+    return const <ReaderImportJob>[];
+  }
+
+  /// 取消全部进行中的本地导入任务并清空队列簿记；不触碰服务端任务。
+  void _cancelAllJobs() {
+    for (final token in _cancellations.values) {
+      token.cancel();
+    }
+    _cancellations.clear();
+    for (final waiter in _completionWaiters.values) {
+      if (!waiter.isCompleted) {
+        waiter.complete();
+      }
+    }
+    _completionWaiters.clear();
+    _pendingIds.clear();
+    _runningIds.clear();
+    _files.clear();
+    // 目录 ID 属前一账号个人空间，换号后必须重新解析，避免新账号
+    // 携旧目录 ID 发起上传。
+    _readerDirectory = null;
+  }
 
   void enqueue(List<XFile> files) {
     if (files.isEmpty) return;

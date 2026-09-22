@@ -10,6 +10,7 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.authorization.AuthorizationDeniedException;
+import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.validation.BindException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -148,6 +149,22 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(AsyncRequestNotUsableException.class)
     void handleAsyncRequestNotUsable(AsyncRequestNotUsableException exception) {
         log.debug("客户端已断开异步请求: {}", exception.getMessage());
+    }
+
+    /**
+     * 事务传播状态错误是编程错误而非运行环境故障。
+     *
+     * <p>典型场景：以 {@code Propagation.MANDATORY} 声明的记录器被无事务的调用方调用，
+     * 抛出 {@code IllegalTransactionStateException}。此类错误若混入"未知系统异常"难以定位，
+     * 因此单独打点，响应体与通用分支保持一致，避免向前端泄露内部实现。</p>
+     */
+    @ExceptionHandler(IllegalTransactionStateException.class)
+    ResponseEntity<ApiResponse<Void>> handleIllegalTransactionState(
+            IllegalTransactionStateException exception
+    ) {
+        log.error("事务传播状态错误，请核查调用方事务边界: message={}", exception.getMessage(), exception);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.error(ErrorCode.INTERNAL_ERROR, "系统繁忙，请稍后重试"));
     }
 
     @ExceptionHandler(Exception.class)

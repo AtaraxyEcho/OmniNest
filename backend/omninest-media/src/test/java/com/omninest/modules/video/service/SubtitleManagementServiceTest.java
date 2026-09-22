@@ -10,11 +10,14 @@ import static org.mockito.Mockito.when;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.dto.MovieDtos.SubtitleTrackDto;
@@ -27,6 +30,10 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 
 /**
  * SubtitleManagementService 单元测试。
@@ -45,6 +52,7 @@ class SubtitleManagementServiceTest {
     private FileQueryService fileQueryService;
     private MediaContentAccessService mediaContentAccessService;
     private MediaPlaybackTokenService mediaPlaybackTokenService;
+    private MediaSyncEventService syncEventService;
 
     private SubtitleManagementService service;
 
@@ -56,6 +64,7 @@ class SubtitleManagementServiceTest {
         fileQueryService = mock(FileQueryService.class);
         mediaContentAccessService = mock(MediaContentAccessService.class);
         mediaPlaybackTokenService = mock(MediaPlaybackTokenService.class);
+        syncEventService = mock(MediaSyncEventService.class);
 
         service = new SubtitleManagementService(
                 subtitleTrackRepository,
@@ -63,7 +72,8 @@ class SubtitleManagementServiceTest {
                 fileLifecycleGuard,
                 fileQueryService,
                 mediaContentAccessService,
-                mediaPlaybackTokenService
+                mediaPlaybackTokenService,
+                syncEventService
         );
         when(fileLifecycleGuard.requireOwnedWritable(OWNER_ID, FILE_NODE_ID))
                 .thenReturn(subtitleFile("subtitle.srt", "application/x-subrip", 1024));
@@ -145,6 +155,36 @@ class SubtitleManagementServiceTest {
         assertThat(saved.getLanguage()).isEqualTo("ja");
         assertThat(saved.getLabel()).isEqualTo("日本語字幕");
         assertThat(saved.getSortOrder()).isEqualTo(2);
+
+        // 上传成功后按所属影片发出 VIDEO 作用域失效事件。
+        verify(syncEventService).record(
+                eq(OWNER_ID),
+                eq(SyncScope.VIDEO),
+                eq("VIDEO_ITEM"),
+                eq(VIDEO_ITEM_ID.toString()),
+                eq(SyncAction.UPDATED),
+                isNull(),
+                anyMap()
+        );
+    }
+
+    @Test
+    void deleteSubtitle_emitsVideoItemEventWithVideoItemId() {
+        MediaSubtitleTrack track = subtitleTrack(SUBTITLE_TRACK_ID, "zh", "中文字幕", 1);
+        when(subtitleTrackRepository.findById(SUBTITLE_TRACK_ID)).thenReturn(Optional.of(track));
+
+        service.delete(OWNER_ID, SUBTITLE_TRACK_ID);
+
+        verify(subtitleTrackRepository).delete(track);
+        verify(syncEventService).record(
+                eq(OWNER_ID),
+                eq(SyncScope.VIDEO),
+                eq("VIDEO_ITEM"),
+                eq(VIDEO_ITEM_ID.toString()),
+                eq(SyncAction.UPDATED),
+                isNull(),
+                anyMap()
+        );
     }
 
     @Test

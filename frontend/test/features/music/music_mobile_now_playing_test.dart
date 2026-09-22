@@ -13,9 +13,10 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_overlay.dart';
+import 'package:omninest/features/music/presentation/player/music_immersive_preset_editor.dart';
 
 void main() {
-  testWidgets('移动端播放详情支持封面歌词切换并适配短横屏', (tester) async {
+  testWidgets('移动端播放详情默认滚动歌词并可切换封面（含短横屏适配）', (tester) async {
     final player = _FakeMusicAudioPlayback();
     addTearDown(player.dispose);
     addTearDown(() {
@@ -29,10 +30,26 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 20));
 
-    expect(find.text('Mobile Track'), findsNWidgets(2));
+    // 默认落在滚动歌词页：当前行与歌词页签可见，封面页未构建。
+    expect(find.text('Mobile Track'), findsAtLeastNWidgets(1));
+    expect(find.byType(PageView), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('music-lyric-active')),
+      findsOneWidget,
+    );
+    expect(find.text('Current lyric'), findsOneWidget);
+    expect(find.byIcon(Icons.lyrics_outlined), findsOneWidget);
+    expect(find.byType(MusicDeckArtwork), findsNothing);
+
+    // 切到封面页：封面卡与播放控制出现，背景仍为动态壁纸透出。
+    await tester.tap(find.byIcon(Icons.album_outlined));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+
     expect(find.byIcon(Icons.shuffle_rounded), findsOneWidget);
     expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
-    expect(find.byType(PageView), findsOneWidget);
+    expect(find.byType(MusicDeckArtwork), findsAtLeastNWidgets(1));
     // 背景改为动态壁纸透出：不再有专辑图模糊底图与重遮罩色层。
     expect(find.byType(ImageFiltered), findsNothing);
     expect(
@@ -49,8 +66,6 @@ void main() {
       ),
       findsNothing,
     );
-    // 封面卡保留，模糊底图键不再出现。
-    expect(find.byType(MusicDeckArtwork), findsAtLeastNWidgets(1));
     expect(
       find.byWidgetPredicate(
         (widget) =>
@@ -61,22 +76,27 @@ void main() {
       ),
       findsNothing,
     );
-
-    await tester.drag(find.byType(PageView), const Offset(-360, 0));
-    await tester.pump(const Duration(milliseconds: 360));
-
-    expect(
-      find.byKey(const ValueKey<String>('music-lyric-active')),
-      findsOneWidget,
+    // 移动端歌词样式入口：面板只含歌词分区，不暴露封面/播放器视觉编辑。
+    expect(find.byIcon(Icons.tune_rounded), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.tune_rounded));
+    await tester.pumpAndSettle();
+    final panel = tester.widget<MusicVisualEditorPanel>(
+      find.byKey(const ValueKey('music-mobile-lyric-style')),
     );
-    expect(find.text('Current lyric'), findsOneWidget);
+    expect(panel.sections, const <MusicVisualEditorSection>{
+      MusicVisualEditorSection.mobileLyrics,
+    });
+    expect(find.text('歌词显示模式'), findsOneWidget);
+    expect(find.text('原始封面'), findsNothing);
+    expect(find.text('显示底部播放器'), findsNothing);
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('歌词显示模式'), findsNothing);
 
-    await tester.tap(find.byIcon(Icons.album_outlined));
-    await tester.pump(const Duration(milliseconds: 280));
+    // 短横屏切换不抛异常。
     tester.view.physicalSize = const Size(700, 400);
     await tester.pump();
-
-    expect(find.text('Mobile Track'), findsNWidgets(2));
+    expect(find.text('Mobile Track'), findsAtLeastNWidgets(1));
     expect(tester.takeException(), isNull);
   });
 }
@@ -105,6 +125,7 @@ Widget _testApp(MusicAudioPlayback player) {
     ],
     child: MaterialApp(
       theme: ThemeData.dark().copyWith(splashFactory: NoSplash.splashFactory),
+      locale: const Locale('zh'),
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: MusicImmersiveOverlay(onClose: () {}),

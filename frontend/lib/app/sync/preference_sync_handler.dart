@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/appearance/application/font_scale_controller.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
 import 'package:omninest/core/realtime/realtime_scope_handler.dart';
 import 'package:omninest/features/music/application/music_visualizer_preset_controller.dart';
@@ -23,6 +24,7 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
     readerPreferenceScope,
     notificationPreferenceScope,
     musicVisualizerPreferenceScope,
+    userProfileSyncTarget,
   };
 
   final Ref ref;
@@ -105,6 +107,9 @@ class PreferenceSyncHandler implements RealtimeScopeHandler {
         await ref
             .read(musicVisualizerPreferencesProvider.notifier)
             .refreshFromRemote();
+        return true;
+      case userProfileSyncTarget:
+        await ref.read(authSessionProvider.notifier).reloadProfile();
         return true;
       default:
         return true;

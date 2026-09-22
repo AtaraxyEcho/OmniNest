@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,7 @@ import 'package:omninest/features/photos/presentation/pages/photo_slideshow_imag
 import 'package:omninest/features/photos/presentation/pages/photo_slideshow_page.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_overlays.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 
 /// mock HTTP 返回的图片字节：由测试引擎现场生成并编码的合法 PNG。
@@ -551,6 +553,84 @@ void main() {
     });
   });
 
+  testWidgets('桌面端吸附前先压暗到全黑并在全屏首帧后淡回', (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    _mockPathProvider();
+    final photos = [_photoWithUrl('photo-1')];
+    final chromeHidden = ValueNotifier<bool>(false);
+    addTearDown(chromeHidden.dispose);
+    try {
+      await _mockNetworkImages(() async {
+        await _warmImageCache(tester, [
+          (photos[0], ImageQuality.thumbnail, 400),
+          (photos[0], ImageQuality.preview, _previewDecodeWidth),
+        ]);
+        await _pumpSlideshowViaPush(tester, photos, chromeHidden);
+        await tester.tap(find.text('open-slideshow'));
+        await tester.pump();
+        await tester.pump();
+
+        final dipFinder = find.byKey(slideshowDipOverlayKey);
+        expect(dipFinder, findsOneWidget, reason: '桌面端应挂黑场遮罩');
+        double dipOpacity() =>
+            tester.widget<FadeTransition>(dipFinder).opacity.value;
+
+        // 路由过渡期内：黑场未启动。
+        expect(chromeHidden.value, isFalse);
+        expect(dipOpacity(), 0);
+
+        // 推进到吸附发生的那一帧：吸附必须落在黑场底部（压暗已完成），
+        // 否则原生交换链重建的黑帧会裸露。
+        double? dipAtSnap;
+        for (var i = 0; i < 200 && chromeHidden.value == false; i++) {
+          await tester.pump(const Duration(milliseconds: 16));
+          if (chromeHidden.value) {
+            dipAtSnap = dipOpacity();
+          }
+        }
+        expect(chromeHidden.value, isTrue, reason: '压暗完成后应申请沉浸租约');
+        expect(dipAtSnap, isNotNull);
+        expect(dipAtSnap!, greaterThan(0.95), reason: '吸附发生在黑场未满时，交换链重建黑帧会裸露');
+
+        // 全屏首帧后黑场反向淡回透明：必须是多帧渐变。曾出现淡入被
+        // 表面重建吞掉、黑场"一瞬间直接消失"的观感问题。
+        final samples = <double>[];
+        for (var i = 0; i < 40 && dipOpacity() > 0; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+          samples.add(dipOpacity());
+        }
+        expect(dipOpacity(), 0, reason: '内容应在全屏上淡回，黑场退回透明');
+        expect(
+          samples.where((value) => value > 0 && value < 1).length,
+          greaterThanOrEqualTo(2),
+          reason: '黑场淡回应有多个中间帧，而非一帧内直接消失',
+        );
+        expect(tester.takeException(), isNull);
+      });
+    } finally {
+      // 框架在测试体结束前校验 foundation 调试变量已复位，不可只用 tearDown。
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('非桌面端不引入黑场遮罩', (tester) async {
+    _mockPathProvider();
+    final photos = [_photoWithUrl('photo-1')];
+    final chromeHidden = ValueNotifier<bool>(false);
+    addTearDown(chromeHidden.dispose);
+    await _mockNetworkImages(() async {
+      await _pumpSlideshowViaPush(tester, photos, chromeHidden);
+      await tester.tap(find.text('open-slideshow'));
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(slideshowDipOverlayKey),
+        findsNothing,
+        reason: '非桌面端无原生窗口几何切换，不应插入黑场',
+      );
+    });
+  });
+
   testWidgets('路由过渡期内退出不申请沉浸租约', (tester) async {
     _mockPathProvider();
     final photos = [_photoWithUrl('photo-1')];
@@ -588,5 +668,35 @@ void main() {
       expect(find.byType(SlideshowBlurredCover), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
+  });
+
+  testWidgets('缩略图条瓦片按瓦片尺寸解码而非全分辨率', (tester) async {
+    final photos = [for (var i = 1; i <= 6; i++) _photoWithUrl('photo-$i')];
+    // 独立挂载缩略图条：只断言解码宽度声明，不经过页面 bootstrap。
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SlideshowThumbnailStrip(
+            photos: photos,
+            current: 0,
+            onTap: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final tiles = find.descendant(
+      of: find.byType(SlideshowThumbnailStrip),
+      matching: find.byType(CachedNetworkImage),
+    );
+    expect(tiles, findsWidgets);
+    final expected = thumbnailDecodeWidth(72, tester.view.devicePixelRatio);
+    for (final widget in tester.widgetList<CachedNetworkImage>(tiles)) {
+      expect(
+        widget.memCacheWidth,
+        expected,
+        reason: '瓦片未按 72px 瓦片宽解码，将按全分辨率解码封面',
+      );
+    }
   });
 }

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
@@ -95,13 +98,25 @@ class _MusicCenterPageState extends ConsumerState<MusicCenterPage> {
       ),
     );
     if (MobileShellScope.isHosted(context)) {
-      return content;
+      return _withEntryRefresh(content);
     }
     return AppBackdropSceneScope(
       owner: 'music.center',
       policy: AppBackdropPolicy.musicDeck,
       pathPrefix: '/music',
-      child: content,
+      child: _withEntryRefresh(content),
+    );
+  }
+
+  /// 重进音乐分支时节流刷新曲库数据，保留播放器与队列状态。
+  Widget _withEntryRefresh(Widget child) {
+    return ModuleEntryRefreshListener(
+      modulePath: '/music',
+      onRefresh:
+          () => unawaited(
+            ref.read(musicCenterControllerProvider.notifier).refresh(),
+          ),
+      child: child,
     );
   }
 

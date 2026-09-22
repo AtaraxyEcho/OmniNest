@@ -120,6 +120,10 @@ void main() {
         File(
           'lib/features/portal/presentation/widgets/portal_desktop_quick_actions.dart',
         ).readAsStringSync();
+    final pagedCardsSource =
+        File(
+          'lib/features/portal/application/portal_paged_cards.dart',
+        ).readAsStringSync();
 
     expect(dataSource, contains('portalMusicSnapshotProvider'));
     expect(dataSource, contains('featuredTrack'));
@@ -127,9 +131,15 @@ void main() {
     expect(integrationSource, contains('center.playbackItems[index]'));
     expect(integrationSource, contains('primaryItem?.track'));
     expect(stageSource, contains('state!.playbackQueue'));
-    expect(previewSource, contains('snapshot.queuePreview'));
+    // 预览统一升级为分页网格：音乐队列、影视继续观看、最近照片与
+    // 书架浏览共用 _PortalPagedPreviewGrid 虚拟化滚动。
+    expect(pagedCardsSource, contains('.playbackItems'));
+    expect(pagedCardsSource, contains('PortalPlaybackQueueController'));
+    expect(pagedCardsSource, contains('PortalReaderShelfController'));
     expect(previewSource, contains('_PortalMusicFocusPreview'));
-    expect(previewSource, contains('_PortalFocusPreviewWaterfall'));
+    expect(previewSource, contains('_PortalPagedPreviewGrid'));
+    expect(previewSource, contains('playQueueAt'));
+    expect(previewSource, contains('portalReaderShelfProvider'));
   });
 
   test('移动端 Portal 音乐卡片使用统一播放会话', () {

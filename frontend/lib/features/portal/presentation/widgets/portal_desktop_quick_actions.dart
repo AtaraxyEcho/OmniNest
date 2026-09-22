@@ -17,27 +17,93 @@ class _PortalFocusQuickActions extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final systemAction = _resolveSystemAction(context);
     final immersiveAction = _resolveImmersiveAction(context);
-    final musicEntries = _musicEntries();
+    final l10n = AppLocalizations.of(context);
     final maxWidth = item.module == PortalFocusModule.music ? 720.0 : 760.0;
-    final preview =
-        item.module == PortalFocusModule.music
-            ? _PortalModulePreviewShell(
-              palette: palette,
-              title: item.heroEyebrow ?? item.title,
-              systemAction: systemAction,
-              secondaryAction: immersiveAction,
-              child: _PortalMusicFocusPreview(
-                palette: palette,
-                entries: musicEntries,
-                onOpenQueue: () => showMusicDeckQueue(context),
-              ),
-            )
-            : _PortalFocusPreviewPanel(
-              palette: palette,
-              item: item,
-              data: data,
-              systemAction: systemAction,
-            );
+    // video/photos/reader 的预览升级为分页浏览网格（首屏 10 条 + 无感
+    // 续载），与音乐队列卡同一套分页基建。
+    final preview = switch (item.module) {
+      PortalFocusModule.music => _PortalModulePreviewShell(
+        palette: palette,
+        title: item.heroEyebrow ?? item.title,
+        systemAction: systemAction,
+        secondaryAction: immersiveAction,
+        child: _PortalMusicFocusPreview(
+          palette: palette,
+          onOpenQueue: () => showMusicDeckQueue(context),
+        ),
+      ),
+      PortalFocusModule.video => _PortalModulePagedPreview<
+        PortalVideoPreviewItem
+      >(
+        palette: palette,
+        item: item,
+        systemAction: systemAction,
+        provider: portalVideoPreviewProvider,
+        entryBuilder:
+            (video, index) => _PortalFocusPreviewEntry(
+              icon:
+                  video.isContinueWatching
+                      ? Icons.play_circle_rounded
+                      : Icons.movie_rounded,
+              title: video.title,
+              subtitle:
+                  video.isContinueWatching
+                      ? '${video.progressPercent!.clamp(0, 100).round()}% · ${l10n.portalContinueWatching}'
+                      : (video.secondaryText ?? ''),
+              route: video.route,
+              module: PortalFocusModule.video,
+              imageUrl: video.posterUrl,
+              cacheKey: 'portal-preview:video:${video.id}',
+            ),
+      ),
+      PortalFocusModule.photos => _PortalModulePagedPreview<PhotoItem>(
+        palette: palette,
+        item: item,
+        systemAction: systemAction,
+        provider: portalRecentPhotosProvider,
+        entryBuilder:
+            (photo, index) => _PortalFocusPreviewEntry(
+              icon: Icons.photo_rounded,
+              title: photo.title,
+              subtitle: photo.format.toUpperCase(),
+              route: '/photos/${photo.id}',
+              module: PortalFocusModule.photos,
+              imageUrl: photo.coverUrl,
+              cacheKey: 'portal-preview:photos:${photo.id}',
+            ),
+      ),
+      PortalFocusModule.reader => _PortalModulePagedPreview<ReaderItem>(
+        palette: palette,
+        item: item,
+        systemAction: systemAction,
+        provider: portalReaderShelfProvider,
+        entryBuilder:
+            (readerItem, index) => _PortalFocusPreviewEntry(
+              icon:
+                  readerItem.isComic
+                      ? Icons.auto_stories_rounded
+                      : Icons.menu_book_rounded,
+              title: readerItem.title,
+              subtitle:
+                  readerItem.currentChapterTitle?.isNotEmpty == true
+                      ? readerItem.currentChapterTitle!
+                      : readerItem.authorName ?? l10n.portalDockReading,
+              route:
+                  readerItem.isComic
+                      ? '/reader/comics/${readerItem.id}/read'
+                      : '/reader/items/${readerItem.id}',
+              module: PortalFocusModule.reader,
+              imageUrl: readerItem.coverUrl,
+              readerItemId: readerItem.hasCover ? readerItem.id : null,
+            ),
+      ),
+      _ => _PortalFocusPreviewPanel(
+        palette: palette,
+        item: item,
+        data: data,
+        systemAction: systemAction,
+      ),
+    };
     return Align(
       alignment: Alignment.topLeft,
       child: ConstrainedBox(
@@ -45,28 +111,6 @@ class _PortalFocusQuickActions extends ConsumerWidget {
         child: SizedBox(width: double.infinity, child: preview),
       ),
     );
-  }
-
-  List<_PortalFocusPreviewEntry> _musicEntries() {
-    final snapshot = data.music.asData?.value;
-    if (snapshot == null) {
-      return const <_PortalFocusPreviewEntry>[];
-    }
-    final entries = <_PortalFocusPreviewEntry>[];
-    for (final track in snapshot.queuePreview) {
-      entries.add(
-        _PortalFocusPreviewEntry(
-          icon: Icons.music_note_rounded,
-          title: track.title,
-          subtitle: track.artistName,
-          route: '/music',
-          module: PortalFocusModule.music,
-          imageUrl: track.coverUrl,
-          cacheKey: 'portal-preview:music:${track.id}',
-        ),
-      );
-    }
-    return entries;
   }
 
   _PortalHeroAction _resolveSystemAction(BuildContext context) {
@@ -123,19 +167,17 @@ class _PortalFocusQuickActions extends ConsumerWidget {
   }
 }
 
-class _PortalMusicFocusPreview extends StatelessWidget {
+class _PortalMusicFocusPreview extends ConsumerWidget {
   const _PortalMusicFocusPreview({
     required this.palette,
-    required this.entries,
     required this.onOpenQueue,
   });
 
   final PortalVisualPalette palette;
-  final List<_PortalFocusPreviewEntry> entries;
   final VoidCallback onOpenQueue;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final miniPlayer = MusicDeckMiniPlayer(
       compact: true,
       palette: MusicMiniPlayerPalette(
@@ -148,14 +190,33 @@ class _PortalMusicFocusPreview extends StatelessWidget {
       embedded: true,
       onOpenQueue: onOpenQueue,
     );
-    if (entries.isEmpty) {
+    // 队列卡数据就绪且有内容时展示虚拟化队列网格；加载中或队列为空
+    // 时仅保留迷你播放器。
+    final hasQueue =
+        ref.watch(portalPlaybackQueueProvider).asData?.value.items.isNotEmpty ==
+        true;
+    if (!hasQueue) {
       return miniPlayer;
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final waterfall = _PortalFocusPreviewWaterfall(
+        final grid = _PortalPagedPreviewGrid<MusicPlayableItem>(
           palette: palette,
-          entries: entries,
+          provider: portalPlaybackQueueProvider,
+          entryBuilder:
+              (item, index) => _PortalFocusPreviewEntry(
+                icon: Icons.music_note_rounded,
+                title: item.track.title,
+                subtitle: item.track.artistName,
+                route: '/music',
+                module: PortalFocusModule.music,
+                imageUrl: item.track.coverUrl,
+                cacheKey: 'portal-preview:music:${item.track.id}',
+                onTap:
+                    () => unawaited(
+                      ref.read(musicPortalActionsProvider).playQueueAt(index),
+                    ),
+              ),
         );
         if (!constraints.maxHeight.isFinite) {
           return Column(
@@ -163,7 +224,7 @@ class _PortalMusicFocusPreview extends StatelessWidget {
             children: [
               miniPlayer,
               const SizedBox(height: 10),
-              SizedBox(height: 320, child: waterfall),
+              SizedBox(height: 320, child: grid),
             ],
           );
         }
@@ -171,10 +232,212 @@ class _PortalMusicFocusPreview extends StatelessWidget {
           children: [
             miniPlayer,
             const SizedBox(height: 10),
-            Expanded(child: waterfall),
+            Expanded(child: grid),
           ],
         );
       },
+    );
+  }
+}
+
+/// 通用分页预览网格：GridView 虚拟化滚动，滚到距底约一行高度时静默
+/// 追加下一页；复用专注预览卡片视觉。音乐队列、影视继续观看、最近
+/// 照片与书架浏览共用。
+class _PortalPagedPreviewGrid<T> extends ConsumerStatefulWidget {
+  const _PortalPagedPreviewGrid({
+    required this.palette,
+    required this.provider,
+    required this.entryBuilder,
+  });
+
+  final PortalVisualPalette palette;
+  final AsyncNotifierProvider<
+    PortalPagedListController<T>,
+    PortalPagedListState<T>
+  >
+  provider;
+
+  final _PortalFocusPreviewEntry Function(T item, int index) entryBuilder;
+
+  @override
+  ConsumerState<_PortalPagedPreviewGrid<T>> createState() =>
+      _PortalPagedPreviewGridState<T>();
+}
+
+class _PortalPagedPreviewGridState<T>
+    extends ConsumerState<_PortalPagedPreviewGrid<T>> {
+  final ScrollController _scrollController = ScrollController();
+  static const double _loadMoreRemainingExtent = 240;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_handleScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_handleScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    if (position.maxScrollExtent - position.pixels <=
+        _loadMoreRemainingExtent) {
+      unawaited(ref.read(widget.provider.notifier).loadMore());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(widget.provider);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width =
+            constraints.maxWidth.isFinite && constraints.maxWidth > 0
+                ? constraints.maxWidth
+                : 560.0;
+        final columns =
+            width >= 620
+                ? 4
+                : width >= 420
+                ? 3
+                : width >= 280
+                ? 2
+                : 1;
+        final spacing =
+            columns == 1
+                ? 0.0
+                : columns >= 3
+                ? 12.0
+                : 10.0;
+        final rawCardWidth = (width - spacing * (columns - 1)) / columns;
+        final cardWidth =
+            rawCardWidth
+                .clamp(math.min(112.0, width), columns == 1 ? width : 176.0)
+                .toDouble();
+        final cardHeight = (cardWidth * 1.32).clamp(150.0, 232.0).toDouble();
+        return state.maybeWhen(
+          data: (value) {
+            if (value.items.isEmpty) {
+              return const SizedBox.shrink();
+            }
+            final showFooter = value.hasMore || value.loadingMore;
+            return GridView.builder(
+              controller: _scrollController,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: columns,
+                mainAxisSpacing: spacing,
+                crossAxisSpacing: spacing,
+                childAspectRatio: cardWidth / cardHeight,
+              ),
+              itemCount: value.items.length + (showFooter ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (index >= value.items.length) {
+                  if (value.errorMessage != null) {
+                    return Center(
+                      child: TextButton(
+                        onPressed:
+                            () => unawaited(
+                              ref.read(widget.provider.notifier).loadMore(),
+                            ),
+                        child: Text(AppLocalizations.of(context).coreRetry),
+                      ),
+                    );
+                  }
+                  return const Center(
+                    child: SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  );
+                }
+                return _PortalFocusPreviewCard(
+                  palette: widget.palette,
+                  entry: widget.entryBuilder(value.items[index], index),
+                  width: cardWidth,
+                  height: cardHeight,
+                );
+              },
+            );
+          },
+          orElse:
+              () => const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ),
+        );
+      },
+    );
+  }
+}
+
+/// 模块分页预览外壳：模块预览壳 + 分页网格 + 空态回落。
+class _PortalModulePagedPreview<T> extends ConsumerWidget {
+  const _PortalModulePagedPreview({
+    required this.palette,
+    required this.item,
+    required this.systemAction,
+    required this.provider,
+    required this.entryBuilder,
+  });
+
+  final PortalVisualPalette palette;
+  final PortalFocusItem item;
+  final _PortalHeroAction systemAction;
+  final AsyncNotifierProvider<
+    PortalPagedListController<T>,
+    PortalPagedListState<T>
+  >
+  provider;
+  final _PortalFocusPreviewEntry Function(T item, int index) entryBuilder;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(provider);
+    return _PortalModulePreviewShell(
+      palette: palette,
+      title: item.heroEyebrow ?? item.title,
+      systemAction: systemAction,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final grid = _PortalPagedPreviewGrid<T>(
+            palette: palette,
+            provider: provider,
+            entryBuilder: entryBuilder,
+          );
+          // 三态分流：加载中给轻量占位（避免把首帧的 AsyncLoading 当成
+          // 空态闪一次“暂无内容”文案）；有数据才起网格；空数据保留空态。
+          final child = switch (state) {
+            AsyncData(:final value) when value.items.isNotEmpty =>
+              constraints.maxHeight.isFinite
+                  ? grid
+                  : SizedBox(height: 360, child: grid),
+            AsyncData() => _PortalFocusEmptyPreview(
+              palette: palette,
+              item: item,
+            ),
+            AsyncError() => _PortalFocusEmptyPreview(
+              palette: palette,
+              item: item,
+            ),
+            _ => const Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            ),
+          };
+          return child;
+        },
+      ),
     );
   }
 }
@@ -194,139 +457,14 @@ class _PortalFocusPreviewPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final entries = switch (item.module) {
-      PortalFocusModule.reader => _readerEntries(context),
-      PortalFocusModule.video => _videoEntries(context),
-      PortalFocusModule.photos => _photoEntries(context),
-      PortalFocusModule.files ||
-      PortalFocusModule.weather ||
-      PortalFocusModule.tasks ||
-      PortalFocusModule.admin ||
-      PortalFocusModule.music => const <_PortalFocusPreviewEntry>[],
-    };
-    if (entries.isEmpty) {
-      return _PortalModulePreviewShell(
-        palette: palette,
-        title: item.heroEyebrow ?? item.title,
-        systemAction: systemAction,
-        child: _PortalFocusEmptyPreview(palette: palette, item: item),
-      );
-    }
+    // reader/video/photos 已升级为分页浏览网格；其余模块（文件/天气/
+    // 任务/管理）无列表预览，展示模块空预览。
     return _PortalModulePreviewShell(
       palette: palette,
       title: item.heroEyebrow ?? item.title,
       systemAction: systemAction,
-      child: _PortalFocusPreviewWaterfall(palette: palette, entries: entries),
+      child: _PortalFocusEmptyPreview(palette: palette, item: item),
     );
-  }
-
-  List<_PortalFocusPreviewEntry> _readerEntries(BuildContext context) {
-    final dashboard = data.readerDashboard.asData?.value;
-    if (dashboard == null) {
-      return const [];
-    }
-    final seen = <String>{};
-    final items = <ReaderItem>[
-      ...dashboard.continueReading,
-      ...dashboard.recentItems,
-    ].where((readerItem) => seen.add(readerItem.id)).take(6);
-    return [
-      for (final readerItem in items)
-        _PortalFocusPreviewEntry(
-          icon:
-              readerItem.isComic
-                  ? Icons.auto_stories_rounded
-                  : Icons.menu_book_rounded,
-          title: readerItem.title,
-          subtitle:
-              readerItem.currentChapterTitle?.isNotEmpty == true
-                  ? readerItem.currentChapterTitle!
-                  : readerItem.authorName ??
-                      AppLocalizations.of(context).portalDockReading,
-          route:
-              readerItem.isComic
-                  ? '/reader/comics/${readerItem.id}/read'
-                  : '/reader/items/${readerItem.id}',
-          module: PortalFocusModule.reader,
-          imageUrl: readerItem.coverUrl,
-          readerItemId: readerItem.hasCover ? readerItem.id : null,
-        ),
-    ];
-  }
-
-  List<_PortalFocusPreviewEntry> _videoEntries(BuildContext context) {
-    final dashboard = data.movieDashboard.asData?.value;
-    if (dashboard == null) {
-      return const [];
-    }
-    final entries = <_PortalFocusPreviewEntry>[];
-    final seen = <String>{};
-    final recentById = {
-      for (final movie in dashboard.recentlyAdded) movie.id: movie,
-    };
-    for (final watching in dashboard.continueWatching) {
-      if (!seen.add(watching.id)) {
-        continue;
-      }
-      final matchedMovie = recentById[watching.id];
-      entries.add(
-        _PortalFocusPreviewEntry(
-          icon: Icons.play_circle_rounded,
-          title: watching.title,
-          subtitle:
-              '${watching.progressPercent.clamp(0, 100).round()}% · ${AppLocalizations.of(context).portalContinueWatching}',
-          route: '/video/${watching.id}/play',
-          module: PortalFocusModule.video,
-          imageUrl:
-              watching.posterUrl ??
-              matchedMovie?.posterImageUrl ??
-              matchedMovie?.backdropImageUrl,
-          cacheKey: 'portal-preview:video:${watching.id}',
-        ),
-      );
-      if (entries.length >= 6) {
-        return entries;
-      }
-    }
-    for (final movie in dashboard.recentlyAdded) {
-      if (!seen.add(movie.id)) {
-        continue;
-      }
-      entries.add(
-        _PortalFocusPreviewEntry(
-          icon: Icons.movie_rounded,
-          title: movie.title,
-          subtitle: movie.year,
-          route: '/video/${movie.id}',
-          module: PortalFocusModule.video,
-          imageUrl: movie.posterImageUrl ?? movie.backdropImageUrl,
-          cacheKey: 'portal-preview:video:${movie.id}',
-        ),
-      );
-      if (entries.length >= 6) {
-        return entries;
-      }
-    }
-    return entries;
-  }
-
-  List<_PortalFocusPreviewEntry> _photoEntries(BuildContext context) {
-    final dashboard = data.photoDashboard.asData?.value;
-    if (dashboard == null) {
-      return const [];
-    }
-    return [
-      for (final photo in dashboard.recentPhotos.take(6))
-        _PortalFocusPreviewEntry(
-          icon: Icons.photo_rounded,
-          title: photo.title,
-          subtitle: photo.format.toUpperCase(),
-          route: '/photos/${photo.id}',
-          module: PortalFocusModule.photos,
-          imageUrl: photo.coverUrl,
-          cacheKey: 'portal-preview:photos:${photo.id}',
-        ),
-    ];
   }
 }
 
@@ -340,6 +478,7 @@ class _PortalFocusPreviewEntry {
     this.imageUrl,
     this.readerItemId,
     this.cacheKey,
+    this.onTap,
   });
 
   final IconData icon;
@@ -352,6 +491,9 @@ class _PortalFocusPreviewEntry {
 
   /// 稳定缓存键（内容标识构造），与签名 URL 解耦。
   final String? cacheKey;
+
+  /// 就地点击回调；优先于 [route] 导航（播放队列等就地操作场景）。
+  final VoidCallback? onTap;
 }
 
 class _PortalModulePreviewShell extends StatelessWidget {
@@ -432,84 +574,6 @@ class _PortalModulePreviewShell extends StatelessWidget {
           return shell;
         }
         return SizedBox(height: constraints.maxHeight, child: shell);
-      },
-    );
-  }
-}
-
-class _PortalFocusPreviewWaterfall extends StatelessWidget {
-  const _PortalFocusPreviewWaterfall({
-    required this.palette,
-    required this.entries,
-  });
-
-  final PortalVisualPalette palette;
-  final List<_PortalFocusPreviewEntry> entries;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final width =
-            constraints.maxWidth.isFinite && constraints.maxWidth > 0
-                ? constraints.maxWidth
-                : 560.0;
-        final availableHeight =
-            constraints.maxHeight.isFinite ? constraints.maxHeight : 360.0;
-        final columns =
-            width >= 620
-                ? 4
-                : width >= 420
-                ? 3
-                : width >= 280
-                ? 2
-                : 1;
-        final viewportHeight =
-            availableHeight.isFinite && availableHeight > 0
-                ? availableHeight
-                : 360.0;
-        final spacing =
-            columns == 1
-                ? 0.0
-                : columns >= 3
-                ? 12.0
-                : 10.0;
-        final rawCardWidth = (width - spacing * (columns - 1)) / columns;
-        final minCardWidth = math.min(112.0, width);
-        final maxCardWidth = columns == 1 ? width : 176.0;
-        final cardWidth =
-            rawCardWidth.clamp(minCardWidth, maxCardWidth).toDouble();
-        final maxCardHeight =
-            availableHeight.isFinite && availableHeight > 0
-                ? math.min(232.0, viewportHeight)
-                : 232.0;
-        final minCardHeight = math.min(150.0, maxCardHeight);
-        final cardHeight =
-            (cardWidth * 1.32).clamp(minCardHeight, maxCardHeight).toDouble();
-        return SizedBox(
-          height: viewportHeight,
-          child: SingleChildScrollView(
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Wrap(
-                alignment: WrapAlignment.start,
-                runAlignment: WrapAlignment.start,
-                crossAxisAlignment: WrapCrossAlignment.start,
-                spacing: spacing,
-                runSpacing: spacing,
-                children: [
-                  for (final entry in entries)
-                    _PortalFocusPreviewCard(
-                      palette: palette,
-                      entry: entry,
-                      width: cardWidth,
-                      height: cardHeight,
-                    ),
-                ],
-              ),
-            ),
-          ),
-        );
       },
     );
   }
@@ -603,6 +667,10 @@ class _PortalFocusPreviewCard extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(8),
         onTap: () {
+          if (entry.onTap != null) {
+            entry.onTap!();
+            return;
+          }
           // Admin 用 push 保留 Portal shell 状态（返回时 pop）。
           if (entry.route == '/admin') {
             context.push(entry.route);

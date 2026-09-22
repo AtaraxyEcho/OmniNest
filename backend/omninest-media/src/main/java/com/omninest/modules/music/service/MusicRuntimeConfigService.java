@@ -32,13 +32,8 @@ public class MusicRuntimeConfigService extends BaseRuntimeConfigService {
     public static final String NETEASE_BASE_URL = "music.netease.url";
     private static final String NETEASE_HOSTS = "music.netease.hosts";
 
-    // QQ 音乐
-    public static final String QQ_MUSIC_ENABLED = "music.qq.enabled";
     private static final String DEFAULT_MUSICBRAINZ_USER_AGENT = "OmniNest/0.1.0 (music@omninest.local)";
     private static final String DEFAULT_NETEASE_BASE_URL = "http://localhost:3001";
-    private static final String QQ_U_URL = "music.qq.u-url";
-    private static final String QQ_C_URL = "music.qq.c-url";
-    private static final String QQ_HOSTS = "music.qq.hosts";
     private static final String ONLINE_ENABLED = "music.online.enabled";
 
     private final MusicProviderProperties deploymentProperties;
@@ -132,22 +127,6 @@ public class MusicRuntimeConfigService extends BaseRuntimeConfigService {
         return 100L;
     }
 
-    /** QQ 音乐平台开关。 */
-    public boolean qqMusicEnabled() {
-        return booleanWithLegacy(QQ_MUSIC_ENABLED, "music.platform.qq.enabled", true);
-    }
-
-    /** QQ 音乐 u.y.qq.com API 地址。 */
-    public String qqMusicUUrl() {
-        return stringWithLegacy(QQ_U_URL, "music.platform.qq.u-url",
-                "https://u.y.qq.com/cgi-bin/musicu.fcg");
-    }
-
-    /** QQ 音乐 c.y.qq.com API 地址。 */
-    public String qqMusicCUrl() {
-        return stringWithLegacy(QQ_C_URL, "music.platform.qq.c-url", "https://c.y.qq.com");
-    }
-
     /**
      * 返回指定音乐平台明确配置的可信访问地址。
      *
@@ -161,9 +140,6 @@ public class MusicRuntimeConfigService extends BaseRuntimeConfigService {
         String normalizedPlatform = normalizePlatform(sourcePlatform);
         if ("netease".equals(normalizedPlatform) && neteaseEnabled()) {
             return List.of(neteaseBaseUrl());
-        }
-        if ("qq".equals(normalizedPlatform) && qqMusicEnabled()) {
-            return List.of(qqMusicUUrl(), qqMusicCUrl());
         }
         return List.of();
     }
@@ -183,9 +159,6 @@ public class MusicRuntimeConfigService extends BaseRuntimeConfigService {
         if ("netease".equals(normalizedPlatform) && neteaseEnabled()) {
             configuredValue = stringWithLegacy(NETEASE_HOSTS,
                     "music.platform.netease.playback-host-suffixes", "music.126.net,music.163.com");
-        } else if ("qq".equals(normalizedPlatform) && qqMusicEnabled()) {
-            configuredValue = stringWithLegacy(QQ_HOSTS,
-                    "music.platform.qq.playback-host-suffixes", "qqmusic.qq.com");
         } else {
             return List.of();
         }

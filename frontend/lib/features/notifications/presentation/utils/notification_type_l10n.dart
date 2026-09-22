@@ -12,6 +12,8 @@ String notificationTypeLabel(String typeCode, AppLocalizations l10n) {
     'QUOTA_WARNING' => l10n.notificationTypeStorageWarning,
     'NEW_DEVICE_LOGIN' => l10n.notificationTypeNewDeviceLogin,
     'PASSWORD_CHANGED' => l10n.notificationTypePasswordChanged,
+    'SECURITY_THREAT' => l10n.notificationTypeSecurityThreat,
+    'SECURITY_SCAN_FAILED' => l10n.notificationTypeSecurityScanFailed,
     _ => typeCode,
   };
 }
@@ -28,6 +30,8 @@ String? notificationTypeDescription(String typeCode, AppLocalizations l10n) {
     'QUOTA_WARNING' => l10n.notificationTypeStorageWarningDesc,
     'NEW_DEVICE_LOGIN' => l10n.notificationTypeNewDeviceLoginDesc,
     'PASSWORD_CHANGED' => l10n.notificationTypePasswordChangedDesc,
+    'SECURITY_THREAT' => l10n.notificationTypeSecurityThreatDesc,
+    'SECURITY_SCAN_FAILED' => l10n.notificationTypeSecurityScanFailedDesc,
     _ => null,
   };
 }

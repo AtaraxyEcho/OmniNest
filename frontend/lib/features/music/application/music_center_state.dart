@@ -64,7 +64,6 @@ class MusicCenterState {
     this.lastScanJob,
     this.errorMessage,
     this.neteaseUserInfo,
-    this.qqUserInfo,
   });
 
   final MusicDashboard dashboard;
@@ -93,9 +92,8 @@ class MusicCenterState {
   final MusicScanJob? lastScanJob;
   final String? errorMessage;
   final PlatformUserInfo? neteaseUserInfo;
-  final PlatformUserInfo? qqUserInfo;
 
-  bool get hasPlatformLoggedIn => neteaseUserInfo != null || qqUserInfo != null;
+  bool get hasPlatformLoggedIn => neteaseUserInfo != null;
 
   /// 播放域视图，供刷新链路整体携带播放状态。
   MusicPlaybackView get playbackView => MusicPlaybackView(
@@ -151,9 +149,7 @@ class MusicCenterState {
     String? errorMessage,
     bool clearError = false,
     PlatformUserInfo? neteaseUserInfo,
-    PlatformUserInfo? qqUserInfo,
     bool clearNeteaseUserInfo = false,
-    bool clearQqUserInfo = false,
   }) {
     return MusicCenterState(
       dashboard: dashboard ?? this.dashboard,
@@ -200,7 +196,6 @@ class MusicCenterState {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       neteaseUserInfo:
           clearNeteaseUserInfo ? null : neteaseUserInfo ?? this.neteaseUserInfo,
-      qqUserInfo: clearQqUserInfo ? null : qqUserInfo ?? this.qqUserInfo,
     );
   }
 }

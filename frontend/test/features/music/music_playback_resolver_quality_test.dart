@@ -73,7 +73,6 @@ class _QualityRecordingApi implements MusicApi {
   Future<MusicPlaybackPlan> onlinePlaybackPlan(
     String platform,
     String songId, {
-    String? mediaMid,
     String quality = 'exhigh',
   }) async {
     onlineQualityRequests.add(quality);

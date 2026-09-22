@@ -230,6 +230,32 @@ public class PhotoAlbumService {
     }
 
     /**
+     * 一次性撤销相册的全部有效分享链接。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param albumId 相册 ID
+     * @return 被撤销的链接条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int revokeAllAlbumShares(UUID ownerUserId, UUID albumId) {
+        requireAlbum(ownerUserId, albumId);
+        return resourceShareLinkService.revokeAll(albumId);
+    }
+
+    /**
+     * 一次性撤销单张照片的全部有效分享链接。
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param photoId 照片 ID
+     * @return 被撤销的链接条数
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public int revokeAllPhotoShares(UUID ownerUserId, UUID photoId) {
+        requirePhoto(ownerUserId, photoId);
+        return resourceShareLinkService.revokeAll(photoId);
+    }
+
+    /**
      * 创建单张照片分享链接。
      */
     @Transactional(rollbackFor = Exception.class)

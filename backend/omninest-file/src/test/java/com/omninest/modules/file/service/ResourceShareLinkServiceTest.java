@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,8 +15,10 @@ import com.omninest.modules.file.repository.ShareLinkRepository;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.ratelimit.RateLimitService;
+import com.omninest.common.security.CredentialCipher;
 import java.time.Instant;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -37,11 +40,13 @@ class ResourceShareLinkServiceTest {
     private final PasswordEncoder passwordEncoder = mock(PasswordEncoder.class);
     private final ShareAccessSessionService sessionService = new ShareAccessSessionService();
     private final RateLimitService rateLimitService = mock(RateLimitService.class);
+    private final CredentialCipher credentialCipher = mock(CredentialCipher.class);
     private final ResourceShareLinkService service = new ResourceShareLinkService(
             shareLinkRepository,
             passwordEncoder,
             sessionService,
-            rateLimitService
+            rateLimitService,
+            credentialCipher
     );
 
     /**
@@ -52,6 +57,7 @@ class ResourceShareLinkServiceTest {
         when(rateLimitService.tryAcquire(anyString(), org.mockito.ArgumentMatchers.anyInt(), any(Duration.class)))
                 .thenReturn(true);
         when(passwordEncoder.encode("secret")).thenReturn("encoded");
+        when(credentialCipher.encrypt(anyString())).thenReturn("v1:cipher");
         when(shareLinkRepository.save(any(ShareLink.class))).thenAnswer(invocation -> {
             ShareLink share = invocation.getArgument(0);
             share.setId(SHARE_ID);
@@ -65,6 +71,7 @@ class ResourceShareLinkServiceTest {
         ArgumentCaptor<ShareLink> captor = ArgumentCaptor.forClass(ShareLink.class);
         verify(shareLinkRepository).save(captor.capture());
         assertThat(captor.getValue().getTokenHash()).hasSize(64).isNotEqualTo(result.token());
+        assertThat(captor.getValue().getTokenCipher()).isEqualTo("v1:cipher");
         assertThat(captor.getValue().getPasswordHash()).isEqualTo("encoded");
     }
 
@@ -129,5 +136,91 @@ class ResourceShareLinkServiceTest {
         assertThatThrownBy(() -> service.requireSession("raw-token", "session", "PHOTO_ALBUM"))
                 .isInstanceOf(BusinessException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.RATE_LIMITED);
+    }
+
+    /**
+     * 撤销是软删除：列表必须过滤已撤销链接，否则管理界面删除后重开仍显示。
+     */
+    @Test
+    void listExcludesRevokedLinks() {
+        ShareLink active = shareLink(SHARE_ID, null);
+        ShareLink revoked = shareLink(
+                UUID.fromString("30000000-0000-0000-0000-000000000002"),
+                Instant.parse("2026-07-20T00:00:00Z"));
+        when(shareLinkRepository.findByOwnerUserIdAndResourceIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of(active, revoked));
+
+        var result = service.list(OWNER_ID, RESOURCE_ID);
+
+        assertThat(result).extracting(dto -> dto.id()).containsExactly(SHARE_ID);
+    }
+
+    /**
+     * 一键清空：撤销资源全部有效链接并返回条数。
+     */
+    @Test
+    void revokeAllDisablesEveryActiveLink() {
+        when(shareLinkRepository.findByResourceIdAndDisabledAtIsNull(RESOURCE_ID))
+                .thenReturn(List.of(shareLink(SHARE_ID, null),
+                        shareLink(UUID.fromString("30000000-0000-0000-0000-000000000003"), null)));
+
+        int revoked = service.revokeAll(RESOURCE_ID);
+
+        assertThat(revoked).isEqualTo(2);
+        verify(shareLinkRepository).disableByResourceId(eq(RESOURCE_ID), any(Instant.class));
+    }
+
+    /**
+     * 没有有效链接时不应触发批量更新（避免无谓写库）。
+     */
+    @Test
+    void revokeAllSkipsUpdateWhenNothingActive() {
+        when(shareLinkRepository.findByResourceIdAndDisabledAtIsNull(RESOURCE_ID))
+                .thenReturn(List.of());
+
+        int revoked = service.revokeAll(RESOURCE_ID);
+
+        assertThat(revoked).isZero();
+        verify(shareLinkRepository, never()).disableByResourceId(any(UUID.class), any(Instant.class));
+    }
+
+    /**
+     * 列表回传解密后的明文令牌，供所有者重新复制既有链接地址。
+     */
+    @Test
+    void listRevealsDecryptedToken() {
+        ShareLink share = shareLink(SHARE_ID, null);
+        share.setTokenCipher("v1:cipher");
+        when(shareLinkRepository.findByOwnerUserIdAndResourceIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of(share));
+        when(credentialCipher.decrypt("v1:cipher")).thenReturn("raw-token");
+
+        var result = service.list(OWNER_ID, RESOURCE_ID);
+
+        assertThat(result).extracting(dto -> dto.token()).containsExactly("raw-token");
+    }
+
+    /**
+     * 历史链接没有密文时回传空令牌，不得因解密失败阻断列表。
+     */
+    @Test
+    void listToleratesLinkWithoutCipher() {
+        when(shareLinkRepository.findByOwnerUserIdAndResourceIdIn(eq(OWNER_ID), any()))
+                .thenReturn(List.of(shareLink(SHARE_ID, null)));
+
+        var result = service.list(OWNER_ID, RESOURCE_ID);
+
+        assertThat(result).extracting(dto -> dto.token()).containsExactly((String) null);
+    }
+
+    private ShareLink shareLink(UUID id, Instant disabledAt) {
+        ShareLink share = new ShareLink();
+        share.setId(id);
+        share.setOwnerUserId(OWNER_ID);
+        share.setResourceType("PHOTO_ALBUM");
+        share.setResourceId(RESOURCE_ID);
+        share.setDisabledAt(disabledAt);
+        share.setCreatedAt(Instant.parse("2026-07-19T00:00:00Z"));
+        return share;
     }
 }

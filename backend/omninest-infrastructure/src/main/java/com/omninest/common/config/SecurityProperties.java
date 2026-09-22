@@ -26,6 +26,8 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
 
     private Duration refreshTokenTtl = Duration.ofDays(30);
 
+    private Duration refreshSessionMaxLifetime = Duration.ofDays(90);
+
     private boolean refreshCookieSecure = false;
 
     private String refreshCookieSameSite = "Strict";
@@ -63,6 +65,11 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
     @Override
     public Duration refreshTokenTtl() {
         return refreshTokenTtl;
+    }
+
+    @Override
+    public Duration refreshSessionMaxLifetime() {
+        return refreshSessionMaxLifetime;
     }
 
     @Override

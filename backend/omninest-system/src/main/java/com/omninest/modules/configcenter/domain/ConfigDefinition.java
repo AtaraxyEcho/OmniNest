@@ -45,8 +45,6 @@ public record ConfigDefinition(
             "music.musicbrainz.url",
             "music.musicbrainz.cover-url",
             "music.netease.url",
-            "music.qq.u-url",
-            "music.qq.c-url",
             "photo.ai.url",
             "weather.qweather.url"
     );

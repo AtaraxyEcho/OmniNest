@@ -1,8 +1,25 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_portal_integration.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
+
+class _RecentItemsCenter extends MusicCenterController {
+  _RecentItemsCenter(this.recent);
+
+  final List<MusicPlayableItem> recent;
+
+  @override
+  Future<MusicCenterState> build() async => MusicCenterState(
+    dashboard: MusicDashboard.empty(),
+    tracks: const <MusicTrack>[],
+    albums: const <MusicAlbum>[],
+    artists: const <MusicArtist>[],
+    playlists: const <MusicPlaylist>[],
+    recentItems: recent,
+  );
+}
 
 void main() {
   test('Portal 音乐投影限制列表容量并保留当前播放信息', () {
@@ -83,6 +100,35 @@ void main() {
     expect(snapshot.featuredAlbum?.title, '专辑');
     expect(snapshot.activeTrack, isNull);
     expect(snapshot.isPlaying, isFalse);
+  });
+
+  test('recentItemsIndexOf 按曲目 ID 定位最近列表下标', () {
+    final items = <MusicPlayableItem>[
+      MusicPlayableItem.local(_track('a')),
+      MusicPlayableItem.local(_track('b')),
+      MusicPlayableItem.local(_track('c')),
+    ];
+
+    expect(MusicPortalActions.recentItemsIndexOf(items, 'b'), 1);
+    expect(MusicPortalActions.recentItemsIndexOf(items, 'missing'), -1);
+    expect(MusicPortalActions.recentItemsIndexOf(const [], 'a'), -1);
+  });
+
+  test('playRecentTrack 对不在最近列表的曲目静默忽略', () async {
+    final items = <MusicPlayableItem>[MusicPlayableItem.local(_track('a'))];
+    final container = ProviderContainer(
+      overrides: [
+        musicCenterControllerProvider.overrideWith(
+          () => _RecentItemsCenter(items),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final actions = container.read(musicPortalActionsProvider);
+
+    // 不抛异常且不触发真实播放链路即为通过（命中 -1 短路）。
+    await actions.playRecentTrack('missing');
   });
 }
 

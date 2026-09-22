@@ -73,4 +73,129 @@ void main() {
     );
     expect(track.genre, 'Pop');
   });
+
+  test('parses netease yrc word timeline into line-relative words', () {
+    // 文档样例：行头毫秒绝对时间，词元 (词起始,词时长,0)文本；
+    // 16210+670=16880 恰为下一词起点，按毫秒实现。
+    const yrc =
+        '[16210,3460](16210,670,0)还(16880,410,0)没'
+        '\n[20000,1000](20000,500,0)好';
+    final lines = parseMusicLyrics(
+      '[00:16.210]还没\n[00:20.00]好',
+      wordLyrics: yrc,
+    );
+
+    expect(lines, hasLength(2));
+    expect(lines[0].words, hasLength(2));
+    expect(lines[0].words[0].offset, Duration.zero);
+    expect(lines[0].words[0].duration, const Duration(milliseconds: 670));
+    expect(lines[0].words[0].text, '还');
+    // 词起始换算为相对行首：16880 - 16210 = 670ms。
+    expect(lines[0].words[1].offset, const Duration(milliseconds: 670));
+    expect(lines[0].words[1].duration, const Duration(milliseconds: 410));
+    expect(lines[0].words[1].text, '没');
+    expect(lines[0].wordsEnd, const Duration(milliseconds: 1080));
+    expect(lines[1].words.single.text, '好');
+  });
+
+  test(
+    'yrc metadata line is skipped and unknown lines fall back to empty words',
+    () {
+      const yrc =
+          '{"t":0,"c":[{"tx":"作词"}]}'
+          '\n[1000,2000](1000,500,0)可识别'
+          '\n没有行头的乱码行'
+          '\n[3000,2000]()'
+          '\n[abc,def](1000,500,0)坏行头';
+      final wordsByLine = parseMusicLyricWords(yrc);
+
+      // 元数据行与无法识别的行被跳过，只有合法行产生词表。
+      expect(wordsByLine, hasLength(1));
+      expect(wordsByLine[const Duration(seconds: 1)]!.single.text, '可识别');
+
+      // 整段无法识别时返回空表，行级歌词不带词级数据。
+      expect(parseMusicLyricWords('完全无法解析'), isEmpty);
+      final lines = parseMusicLyrics('[00:01.00]Hello', wordLyrics: '完全无法解析');
+      expect(lines.single.words, isEmpty);
+    },
+  );
+
+  test(
+    'word timeline mounts by exact timestamp first then nearest within tolerance',
+    () {
+      const raw = '[00:01.00]One\n[00:02.00]Two\n[00:05.00]Three';
+      const yrc =
+          '[1000,500](1000,500,0)A'
+          '\n[2300,500](2300,500,0)B'
+          '\n[9000,500](9000,500,0)C';
+      final lines = parseMusicLyrics(raw, wordLyrics: yrc);
+
+      // 精确匹配。
+      expect(lines[0].words.single.text, 'A');
+      // 300ms 容差内就近挂载（2300 → 2000）。
+      expect(lines[1].words.single.text, 'B');
+      // 超出 500ms 容差：不挂载。
+      expect(lines[2].words, isEmpty);
+    },
+  );
+
+  test(
+    'fill progress follows completed word duration, not linear line time',
+    () {
+      // 行内词级仅覆盖前 0.4s：0.2s 处填充 = 0.2/0.4 = 50%，
+      // 若按 1s 行时长线性插值只会是 20%——锚定"真实词时间轴"行为。
+      const line = MusicLyricLine(
+        position: Duration(seconds: 3),
+        text: 'Lyric',
+        words: [
+          MusicLyricWord(
+            offset: Duration.zero,
+            duration: Duration(milliseconds: 400),
+            text: 'Lyric',
+          ),
+        ],
+      );
+      expect(line.fillProgressAt(Duration.zero), 0.0);
+      expect(line.fillProgressAt(const Duration(milliseconds: 200)), 0.5);
+      expect(line.fillProgressAt(const Duration(milliseconds: 400)), 1.0);
+      // 词级覆盖结束后的行内剩余时间保持满格。
+      expect(line.fillProgressAt(const Duration(milliseconds: 900)), 1.0);
+      // 行首之前不产生进度。
+      expect(line.fillProgressAt(const Duration(milliseconds: -100)), 0.0);
+
+      // 词间停顿不产生进度：两个词之间有空隙时，填充在空隙处保持。
+      const gapped = MusicLyricLine(
+        position: Duration.zero,
+        text: 'AB',
+        words: [
+          MusicLyricWord(
+            offset: Duration.zero,
+            duration: Duration(milliseconds: 100),
+            text: 'A',
+          ),
+          MusicLyricWord(
+            offset: Duration(milliseconds: 500),
+            duration: Duration(milliseconds: 100),
+            text: 'B',
+          ),
+        ],
+      );
+      // 0.3s：第一词唱完（100/200=50%），第二词未开始——停在 50%。
+      expect(gapped.fillProgressAt(const Duration(milliseconds: 300)), 0.5);
+      // 0.55s：第二词唱到一半（100+50）/200 = 75%。
+      expect(
+        gapped.fillProgressAt(const Duration(milliseconds: 550)),
+        closeTo(0.75, 0.001),
+      );
+
+      // 无词级数据：返回 null（不填充）。
+      expect(
+        const MusicLyricLine(
+          position: Duration.zero,
+          text: 'L',
+        ).fillProgressAt(Duration.zero),
+        isNull,
+      );
+    },
+  );
 }

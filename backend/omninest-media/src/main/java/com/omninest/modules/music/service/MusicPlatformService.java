@@ -93,7 +93,7 @@ public class MusicPlatformService {
      * @param ownerUserId 当前用户 ID
      * @param platformValue 平台 API 标识
      * @param songId 平台曲目 ID
-     * @param mediaMid QQ 音乐媒体 ID
+     * @param mediaMid 预留的媒体 ID 扩展参数（当前平台不使用）
      * @param quality 请求音质
      * @return 播放地址结果
      */
@@ -291,7 +291,6 @@ public class MusicPlatformService {
         }
         return switch (provider.platform()) {
             case NETEASE -> configService.neteaseEnabled();
-            case QQ -> configService.qqMusicEnabled();
         };
     }
 

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/module_entry_refresh_listener.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
@@ -295,27 +296,36 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
         });
       }
     }
-    return filesState.when(
-      data: (state) {
-        _lastSection ??= state.section;
-        return _FileManagerShell(
-          state: state,
-          onBack: _onBack,
-          onSectionChanged: _onSectionChanged,
-          mobileHomeOpen: _mobileHomeOpen,
-          onOpenMobileSection: _openMobileSection,
-        );
-      },
-      error:
-          (error, stackTrace) => Scaffold(
-            body: AppErrorView(
-              message: AppLocalizations.of(
-                context,
-              ).localizeUserFacing(describeUserFacingError(error)),
-              onRetry: () => ref.invalidate(fileBrowserControllerProvider),
-            ),
+    return ModuleEntryRefreshListener(
+      modulePath: '/files',
+      onRefresh:
+          () => unawaited(
+            ref
+                .read(fileBrowserControllerProvider.notifier)
+                .refreshForRealtime(),
           ),
-      loading: () => const Scaffold(body: AppLoading()),
+      child: filesState.when(
+        data: (state) {
+          _lastSection ??= state.section;
+          return _FileManagerShell(
+            state: state,
+            onBack: _onBack,
+            onSectionChanged: _onSectionChanged,
+            mobileHomeOpen: _mobileHomeOpen,
+            onOpenMobileSection: _openMobileSection,
+          );
+        },
+        error:
+            (error, stackTrace) => Scaffold(
+              body: AppErrorView(
+                message: AppLocalizations.of(
+                  context,
+                ).localizeUserFacing(describeUserFacingError(error)),
+                onRetry: () => ref.invalidate(fileBrowserControllerProvider),
+              ),
+            ),
+        loading: () => const Scaffold(body: AppLoading()),
+      ),
     );
   }
 }

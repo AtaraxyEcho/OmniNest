@@ -195,6 +195,14 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
   Future<void> revokeAlbumShare(String shareId) =>
       _repo.revokeAlbumShare(shareId);
 
+  /// 清空相册全部有效分享链接，返回撤销条数
+  Future<int> revokeAllAlbumShares(String albumId) =>
+      _repo.revokeAllAlbumShares(albumId);
+
+  /// 清空照片全部有效分享链接，返回撤销条数
+  Future<int> revokeAllPhotoShares(String photoId) =>
+      _repo.revokeAllPhotoShares(photoId);
+
   /// 创建单张照片分享链接
   Future<PhotoShareLink> createPhotoShare(
     String photoId, {

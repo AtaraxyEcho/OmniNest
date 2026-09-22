@@ -17,6 +17,7 @@ import com.omninest.modules.music.dto.OnlineMusicDtos.PlatformUserInfo;
 import com.omninest.modules.music.service.MusicPlatformCredentialService;
 import com.omninest.modules.music.service.MusicRuntimeConfigService;
 import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -254,6 +255,112 @@ class NeteaseMusicProxyTest {
     }
 
     @Test
+    void lyricsIncludeWordLevelPayloadFromExtraEndpoint() throws IOException {
+        AtomicReference<String> extraLyricsRequest = new AtomicReference<>();
+        HttpServer server = startLyricServer(extraLyricsRequest, exchange ->
+                writeJson(exchange, "{\"yrc\":{\"lyric\":\"[16210,3460](16210,670,0)还(16880,410,0)没\"}}"));
+        try {
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                    lyricConfigService(server),
+                    mock(MusicPlatformCredentialService.class)
+            );
+
+            var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
+
+            assertThat(lyrics.syncedLyrics()).isEqualTo("[00:01.00]line");
+            assertThat(lyrics.translatedLyrics()).isEqualTo("[00:01.00]translation");
+            assertThat(lyrics.wordLyrics()).isEqualTo("[16210,3460](16210,670,0)还(16880,410,0)没");
+            assertThat(extraLyricsRequest.get()).contains("/lyric/new").contains("id=song-1");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void lyricsKeepLineLevelResultWhenExtraEndpointConnectionFails() throws IOException {
+        AtomicReference<String> extraLyricsRequest = new AtomicReference<>();
+        // 直接关闭连接：客户端读取响应时抛 IOException，逐字载荷降级为不可用。
+        HttpServer server = startLyricServer(extraLyricsRequest, HttpExchange::close);
+        try {
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                    lyricConfigService(server),
+                    mock(MusicPlatformCredentialService.class)
+            );
+
+            var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
+
+            assertThat(lyrics.syncedLyrics()).isEqualTo("[00:01.00]line");
+            assertThat(lyrics.translatedLyrics()).isEqualTo("[00:01.00]translation");
+            assertThat(lyrics.wordLyrics()).isNull();
+            assertThat(extraLyricsRequest.get()).isNotNull();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void lyricsKeepLineLevelResultWhenExtraEndpointReturnsServerError() throws IOException {
+        AtomicReference<String> extraLyricsRequest = new AtomicReference<>();
+        HttpServer server = startLyricServer(extraLyricsRequest, exchange -> writeStatus(exchange, 500));
+        try {
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                    lyricConfigService(server),
+                    mock(MusicPlatformCredentialService.class)
+            );
+
+            var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
+
+            assertThat(lyrics.syncedLyrics()).isEqualTo("[00:01.00]line");
+            assertThat(lyrics.translatedLyrics()).isEqualTo("[00:01.00]translation");
+            assertThat(lyrics.wordLyrics()).isNull();
+            assertThat(extraLyricsRequest.get()).isNotNull();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void lyricsKeepLineLevelResultWhenExtraEndpointBodyIsMalformed() throws IOException {
+        AtomicReference<String> extraLyricsRequest = new AtomicReference<>();
+        HttpServer server = startLyricServer(extraLyricsRequest, exchange ->
+                writeJson(exchange, "{\"yrc\":"));
+        try {
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                    lyricConfigService(server),
+                    mock(MusicPlatformCredentialService.class)
+            );
+
+            var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
+
+            assertThat(lyrics.syncedLyrics()).isEqualTo("[00:01.00]line");
+            assertThat(lyrics.wordLyrics()).isNull();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void lyricsMarkWordPayloadUnavailableWhenFieldsAreMissingOrBlank() throws IOException {
+        AtomicReference<String> extraLyricsRequest = new AtomicReference<>();
+        HttpServer server = startLyricServer(extraLyricsRequest, exchange ->
+                writeJson(exchange, "{\"yrc\":{\"lyric\":\"   \"}}"));
+        try {
+            NeteaseMusicProxy localProxy = new NeteaseMusicProxy(
+                    lyricConfigService(server),
+                    mock(MusicPlatformCredentialService.class)
+            );
+
+            var lyrics = localProxy.getLyrics(UUID.randomUUID(), "song-1");
+
+            assertThat(lyrics.syncedLyrics()).isEqualTo("[00:01.00]line");
+            assertThat(lyrics.translatedLyrics()).isEqualTo("[00:01.00]translation");
+            assertThat(lyrics.wordLyrics()).isNull();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void confirmedQrLoginSavesCookieAndDefersProfileFetch() throws IOException {
         MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
         MusicPlatformCredentialService credentialService = mock(MusicPlatformCredentialService.class);
@@ -355,6 +462,47 @@ class NeteaseMusicProxyTest {
         try (OutputStream responseBody = exchange.getResponseBody()) {
             responseBody.write(body);
         }
+    }
+
+    private static void writeStatus(HttpExchange exchange, int status) throws IOException {
+        exchange.sendResponseHeaders(status, -1);
+        exchange.close();
+    }
+
+    /**
+     * 启动仅服务歌词接口的本地 HTTP 服务：/lyric 固定返回行级歌词，/lyric/new 由调用方决定响应。
+     *
+     * @param extraLyricsRequest 记录 /lyric/new 实际请求地址
+     * @param extraLyricsHandler /lyric/new 响应处理
+     * @return 已启动的服务
+     */
+    private static HttpServer startLyricServer(
+            AtomicReference<String> extraLyricsRequest,
+            HttpHandler extraLyricsHandler
+    ) throws IOException {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/", exchange -> {
+            if ("/lyric/new".equals(exchange.getRequestURI().getPath())) {
+                extraLyricsRequest.set(exchange.getRequestURI().toString());
+                extraLyricsHandler.handle(exchange);
+                return;
+            }
+            writeJson(exchange, """
+                    {"lrc":{"lyric":"[00:01.00]line"},"tlyric":{"lyric":"[00:01.00]translation"}}
+                    """);
+        });
+        server.start();
+        return server;
+    }
+
+    private static MusicRuntimeConfigService lyricConfigService(HttpServer server) {
+        MusicRuntimeConfigService configService = mock(MusicRuntimeConfigService.class);
+        when(configService.onlineEnabled()).thenReturn(true);
+        when(configService.neteaseEnabled()).thenReturn(true);
+        when(configService.neteaseBaseUrl()).thenReturn(
+                "http://127.0.0.1:" + server.getAddress().getPort()
+        );
+        return configService;
     }
 
     private static MusicPlatformCredential credential(String externalUserId) {

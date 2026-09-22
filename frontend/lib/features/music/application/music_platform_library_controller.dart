@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -85,6 +86,7 @@ class MusicPlatformLibraryController
 
   @override
   Future<MusicPlatformLibraryState> build() {
+    ref.watch(sessionEpochProvider);
     ref.onDispose(() => _preloadGeneration++);
     return _load();
   }

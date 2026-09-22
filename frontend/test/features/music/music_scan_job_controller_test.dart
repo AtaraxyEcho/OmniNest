@@ -52,6 +52,56 @@ void main() {
       expect(api.statusRequests.length, before);
     });
   });
+
+  testWidgets('扫描轮询到终态后主动刷新曲库中心', (tester) async {
+    final api = _ScanApiStub();
+    var centerRefreshes = 0;
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicCenterControllerProvider.overrideWith(
+          () => _SpyMusicCenterController(() => centerRefreshes += 1),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.runAsync(() async {
+      container.listen(musicScanJobControllerProvider, (previous, next) {});
+      await container.read(musicCenterControllerProvider.future);
+      expect(centerRefreshes, 0);
+
+      final notifier = container.read(musicScanJobControllerProvider.notifier);
+      await notifier.startScan();
+      await Future<void>.delayed(const Duration(milliseconds: 2200));
+      await Future<void>.delayed(const Duration(milliseconds: 2200));
+
+      final done = container.read(musicScanJobControllerProvider);
+      expect(done.job?.status, 'COMPLETED');
+      expect(done.polling, isFalse);
+      expect(centerRefreshes, 1);
+    });
+  });
+}
+
+class _SpyMusicCenterController extends MusicCenterController {
+  _SpyMusicCenterController(this.onRefresh);
+
+  final void Function() onRefresh;
+
+  @override
+  Future<MusicCenterState> build() async => MusicCenterState(
+    dashboard: MusicDashboard.empty(),
+    tracks: const <MusicTrack>[],
+    albums: const <MusicAlbum>[],
+    artists: const <MusicArtist>[],
+    playlists: const <MusicPlaylist>[],
+  );
+
+  @override
+  Future<void> refresh() async {
+    onRefresh();
+  }
 }
 
 class _ScanApiStub implements MusicApi {

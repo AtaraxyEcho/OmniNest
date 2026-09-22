@@ -135,6 +135,11 @@
   "notificationNoTitle": "无标题",
   "notificationEmpty": "暂无通知",
   "notificationEmptyHint": "新通知会实时推送到这里",
+  "coreSignOutConfirmTitle": "确认退出登录？",
+  "coreSignOutConfirmMessage": "退出后需要重新输入账号密码才能继续使用。",
+  "notificationForegroundToastView": "查看",
+  "notificationForegroundToastToggle": "新通知前台提示",
+  "notificationForegroundToastToggleSubtitle": "通知到达时在页面底部弹出轻量提示",
   "notificationMarkAllRead": "全部已读",
   "notificationDelete": "删除通知",
   "notificationClearAll": "清空通知",
@@ -163,6 +168,10 @@
   "notificationTypeNewDeviceLoginDesc": "检测到新设备登录",
   "notificationTypePasswordChanged": "密码已修改",
   "notificationTypePasswordChangedDesc": "账户密码已成功修改",
+  "notificationTypeSecurityThreat": "安全威胁",
+  "notificationTypeSecurityThreatDesc": "检测到可疑的文件上传行为",
+  "notificationTypeSecurityScanFailed": "安全扫描失败",
+  "notificationTypeSecurityScanFailedDesc": "文件未能通过安全扫描，已被隔离",
   "notificationTypesHeader": "通知类型",
   "notificationTimeNow": "刚刚",
   "notificationTimeMinutes": "{n}分钟前",
@@ -866,45 +875,84 @@
   "portalMusicVisualizerSave": "保存视觉",
   "portalMusicVisualizerResetDefault": "恢复默认",
   "portalMusicVisualizerLyrics": "歌词",
+  "musicVisualizerLyricMode": "歌词显示模式",
+  "musicVisualizerLyricModeScroll": "滚动歌词",
+  "musicVisualizerLyricModeMultiline": "多行歌词",
   "portalMusicVisualizerPlayer": "播放器",
-  "portalMusicVisualizerLow": "低频",
-  "portalMusicVisualizerMid": "中频",
-  "portalMusicVisualizerHigh": "高频",
   "portalMusicVisualizerCurrentFont": "当前句字号",
   "portalMusicVisualizerInactiveOpacity": "非当前句透明度",
   "portalMusicVisualizerVisibleLines": "可见行数",
-  "musicVisualizerLyricActiveColor": "当前歌词颜色",
-  "musicVisualizerLyricReadColor": "已读歌词颜色",
-  "musicVisualizerLyricUnreadColor": "未读歌词颜色",
+  "musicVisualizerLyricCurrentColor": "在读歌词颜色",
+  "musicVisualizerLyricInactiveColor": "非当前句歌词颜色",
+  "musicVisualizerLyricFontSize": "歌词字号",
+  "musicVisualizerUnitLines": "行",
+  "musicLyricSemanticsCurrent": "当前歌词：{text}",
+  "@musicLyricSemanticsCurrent": {
+    "placeholders": {
+      "text": {}
+    }
+  },
+  "musicVisualizerLyricOffset": "歌词延迟",
+  "musicVisualizerLyricTranslation": "显示译文",
+  "musicVisualizerLyricKaraokeFill": "逐字填充",
+  "musicVisualizerLyricFocusAnchor": "焦点行位置",
+  "musicVisualizerLyricFocusBand": "焦点带高亮",
+  "musicLyricBackToCurrent": "回到当前播放",
+  "musicLyricCopied": "已复制该行歌词",
+  "musicLyricCopyLine": "复制歌词",
+  "musicLyricDelayLater": "歌词延后 0.1 秒",
+  "musicLyricAdvanceEarlier": "歌词提前 0.1 秒",
+  "musicLyricOffsetLater": "歌词延后 0.2 秒",
+  "musicLyricOffsetEarlier": "歌词提前 0.2 秒",
+  "musicLyricOffsetReset": "重置歌词偏移",
+  "musicLyricOffsetDelayed": "延后 {seconds} 秒",
+  "@musicLyricOffsetDelayed": {
+    "placeholders": {
+      "seconds": {}
+    }
+  },
+  "musicLyricOffsetAdvanced": "提前 {seconds} 秒",
+  "@musicLyricOffsetAdvanced": {
+    "placeholders": {
+      "seconds": {}
+    }
+  },
+  "musicVisualizerDeckToggle": "显示堆叠卡片",
+  "musicLyricSyncBadge": "同步歌词",
+  "musicSeekBack10": "后退 10 秒",
+  "musicSeekForward10": "前进 10 秒",
+  "musicVisualizerLyricStyle": "歌词样式",
   "musicVisualizerLyricBreathing": "歌词呼吸效果",
   "musicVisualizerLyricLineSpacing": "歌词行距",
-  "musicVisualizerLyricGlowIntensity": "溢光强度",
-  "musicVisualizerLyricGlowColor": "溢光颜色",
-  "musicVisualizerLyricPosition": "歌词位置",
-  "musicVisualizerLyricPositionLeft": "左侧",
-  "musicVisualizerLyricPositionCenter": "居中",
-  "musicVisualizerLyricPositionRight": "右侧",
-  "musicVisualizerAudioBarStyle": "音频条样式",
-  "musicVisualizerAudioBarSpectrum": "频谱柱",
-  "musicVisualizerAudioBarLine": "流光曲线",
-  "musicVisualizerAudioBarDots": "脉冲点阵",
+  "musicVisualizerLayout": "桌面布局",
+  "musicVisualizerLayoutLeft": "居左",
+  "musicVisualizerLayoutCenter": "居中",
+  "musicVisualizerLayoutRight": "居右",
   "musicVisualizerColorHue": "色相",
   "musicVisualizerColorPreset": "预设颜色",
   "musicVisualizerColorTheme": "主题配色",
   "musicVisualizerColorCustom": "自定义颜色",
+  "musicVisualizerColorCustomStop": "自定义颜色 · {stop}",
+  "@musicVisualizerColorCustomStop": {
+    "placeholders": {
+      "stop": {}
+    }
+  },
   "musicVisualizerColorHex": "HEX 色值",
   "musicVisualizerColorResetDefault": "恢复默认色",
-  "portalMusicVisualizerLyricGlow": "歌词溢光",
-  "portalMusicVisualizerOriginalCover": "原始封面",
-  "portalMusicVisualizerCoverBorder": "封面边框",
+  "musicVisualizerColorPaintMode": "颜色画法",
+  "musicVisualizerColorPaintSolid": "纯色",
+  "musicVisualizerColorPaintGradient": "上下渐变",
+  "musicVisualizerColorPaintStops": "渐变两端",
+  "musicVisualizerColorPaintTop": "上色",
+  "musicVisualizerColorPaintBottom": "下色",
   "portalMusicVisualizerProgressControl": "进度条",
   "musicVisualizerPlayerVisible": "显示底部播放器",
-  "musicVisualizerAudioBar": "显示音频条",
-  "musicVisualizerFrequencyResponse": "音频条频率响应",
-  "musicVisualizerCoverSize": "封面尺寸",
-  "musicVisualizerCoverRadius": "封面圆角",
-  "musicVisualizerCoverTilt": "封面倾斜角度",
-  "musicVisualizerHeroCoverOpacity": "Hero 封面不透明度",
+  "musicVisualizerGroupDesktop": "桌面沉浸",
+  "musicVisualizerGroupMobileLyrics": "移动端歌词样式",
+  "musicVisualizerScopeDesktop": "桌面",
+  "musicVisualizerScopeMobile": "移动端",
+  "musicVisualizerScopeAll": "通用",
   "portalReading": "在读",
   "portalNoReadingBook": "暂无在读书籍",
   "portalRecentPhotos": "最近照片",
@@ -1321,7 +1369,6 @@
   "adminConfigProviderGoogleBooks": "Google Books",
   "adminConfigProviderOpenLibrary": "Open Library",
   "adminConfigProviderNetease": "网易云音乐",
-  "adminConfigProviderQqMusic": "QQ 音乐",
   "adminConfigProviderQWeather": "和风天气",
   "adminConfigManage": "管理设置",
   "adminConfigSecretConfigured": "敏感凭据已配置，原值不会回显",
@@ -1351,7 +1398,6 @@
   "adminConfigTmdbAdult": "包含成人内容",
   "adminConfigPhotoAiEnabled": "启用图像分析",
   "adminConfigNeteaseEnabled": "启用网易云音乐",
-  "adminConfigQqEnabled": "启用 QQ 音乐",
   "adminConfigQWeatherProjectId": "项目 ID",
   "adminConfigQWeatherCredentialId": "凭据 ID",
   "adminConfigQWeatherPrivateKey": "Ed25519 私钥",
@@ -1378,9 +1424,6 @@
   "adminConfigPhotoAiEndpoint": "图像分析服务地址",
   "adminConfigNeteaseBaseUrl": "网易云音乐服务地址",
   "adminConfigNeteaseHosts": "网易云播放域名",
-  "adminConfigQqUUrl": "QQ 音乐 U 接口地址",
-  "adminConfigQqCUrl": "QQ 音乐 C 接口地址",
-  "adminConfigQqHosts": "QQ 音乐播放域名",
   "adminConfigQWeatherBaseUrl": "和风天气服务地址",
   "adminConfigWeatherLocation": "天气位置",
   "adminConfigPhotoAiTimeout": "图像分析请求超时",
@@ -3220,6 +3263,15 @@
   "photosShareExpiry30d": "30天",
   "photosShareExpiryNever": "永不过期",
   "photosExistingShareLinks": "现有分享链接",
+  "photosShareRevokeAll": "清空全部",
+  "photosShareRevokeAllConfirmTitle": "清空分享链接",
+  "photosShareRevokeAllConfirmBody": "将撤销该内容当前全部有效分享链接，已发出的链接会立即失效。",
+  "photosShareRevokeAllDone": "已撤销 {count} 条链接",
+  "@photosShareRevokeAllDone": {
+    "placeholders": {
+      "count": {}
+    }
+  },
   "photosShareAccessCount": "访问 {count} 次",
   "@photosShareAccessCount": {
     "placeholders": {
@@ -3235,6 +3287,12 @@
     }
   },
   "photosCreateLink": "创建链接",
+  "photosShareLinkUpdate": "更新链接",
+  "photosShareSlotPermanent": "永久链接",
+  "photosShareSlotTimed": "限时链接",
+  "photosShareSlotEmpty": "未创建",
+  "photosShareSlotCreatePermanent": "创建永久",
+  "photosShareSlotCreateTimed": "创建限时",
   "photosShareLinkCreated": "分享链接已创建: {link}",
   "@photosShareLinkCreated": {
     "placeholders": {
@@ -3287,7 +3345,6 @@
   "musicDeckSources": "来源",
   "musicDeckSourceLocal": "本地",
   "musicDeckSourceNetease": "网易云",
-  "musicDeckSourceQq": "QQ 音乐",
   "musicDailyRecommendationSection": "今日推荐",
   "musicDailyRecommendationTitle": "每日推荐歌曲",
   "musicDailyRecommendationTrackCount": "共 {count} 首 · 每日更新",
@@ -3452,20 +3509,8 @@
   "musicPlatformNeteaseName": "网易云音乐",
   "musicPlatformNeteaseQrHint": "使用网易云音乐 App 扫码登录",
   "musicPlatformQrGenerating": "正在生成二维码…",
+  "musicPlatformQrPreparing": "正在准备二维码…",
   "musicPlatformQrAction": "扫码登录",
-  "musicPlatformQqName": "QQ 音乐",
-  "musicPlatformQqCookieRequired": "请粘贴 QQ 音乐 Cookie",
-  "musicPlatformQqVerifyFailed": "验证失败：{error}",
-  "@musicPlatformQqVerifyFailed": {
-    "placeholders": {
-      "error": {}
-    }
-  },
-  "musicPlatformQqCookieHint": "请先在浏览器登录 y.qq.com，再复制完整 Cookie 粘贴到下方。",
-  "musicPlatformQqCookieKeyHint": "必须包含 qm_keyst 或 qqmusic_key 才能播放。",
-  "musicPlatformQqCookiePlaceholder": "在此粘贴 Cookie…",
-  "musicPlatformQqVerifying": "正在验证…",
-  "musicPlatformQqVerifyAction": "验证并保存",
   "musicPlatformAnonymousUser": "用户",
   "musicPlatformVipBadge": "VIP",
   "musicPlatformUserId": "ID: {userId}",
@@ -3475,6 +3520,18 @@
     }
   },
   "musicPlatformLogout": "退出登录",
+  "musicPlatformLogoutBusy": "正在退出…",
+  "musicPlatformLogoutConfirmTitle": "确认断开该账号？",
+  "musicPlatformLogoutConfirmMessage": "将删除平台连接与已缓存的歌单，并移除播放队列中来自该平台的曲目。",
+  "musicPlatformLogoutSuccess": "已断开连接",
+  "musicPlatformLogoutQueuePurged": "已移除播放队列中 {count} 首来自该平台的曲目",
+  "@musicPlatformLogoutQueuePurged": {
+    "placeholders": {
+      "count": {
+        "type": "num"
+      }
+    }
+  },
   "musicHistoryTitle": "播放历史",
   "musicHistoryEmpty": "最近 7 天没有播放记录",
   "musicHistoryLoadMore": "加载更多",
@@ -4063,6 +4120,7 @@
   "musicQrExpired": "二维码已过期，请重新发起登录获取新二维码。",
   "musicQrStatusFailed": "登录状态刷新失败，请检查网络后重试。",
   "musicQrRetry": "重试",
+  "musicQrRegenerate": "重新生成二维码",
   "musicQrUnknownStatus": "状态：{status}",
   "@musicQrUnknownStatus": {
     "placeholders": {

@@ -472,8 +472,11 @@ class WindowChromeController extends Notifier<WindowChromeState> {
     }
   }
 
-  @visibleForTesting
-  Future<void> get pendingApply => _applyQueue;
+  /// 等待已排队的窗口状态变更全部应用完成（含原生通道往返与几何自愈）。
+  ///
+  /// 原生吸附期间引擎重建渲染表面、不产帧：调用方据此把视觉过渡安排在
+  /// 吸附落定之后，避免动画帧被吞掉。队列内部已消化错误，不会抛出。
+  Future<void> get applied => _applyQueue;
 }
 
 class _WindowChromeRequest {

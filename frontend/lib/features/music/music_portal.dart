@@ -14,8 +14,8 @@ export 'package:omninest/features/music/application/music_portal_integration.dar
         musicPortalSnapshotProvider;
 export 'package:omninest/features/music/domain/music_visualizer_preset.dart'
     show
-        PortalCoverElementSettings,
         PortalGlassPlayerSettings,
         PortalLyricVisualSettings,
+        PortalMusicLayout,
         PortalMusicVisualizerPreferences,
         PortalMusicVisualizerSettings;

@@ -137,20 +137,77 @@ void main() {
     );
     expect(button.onPressed, isNull);
   });
+
+  testWidgets('行内下一首播放把曲目移动到当前曲目之后且当前行置灰', (tester) async {
+    final harness = await _pumpQueueSheet(tester);
+
+    final playNextButtons = find.byIcon(Icons.queue_music_rounded);
+    expect(playNextButtons, findsNWidgets(3));
+
+    // 当前行（首行 Alpha）的下一首播放按钮置灰。
+    final currentRowButton = tester.widget<IconButton>(
+      find
+          .ancestor(
+            of: playNextButtons.at(0),
+            matching: find.byType(IconButton),
+          )
+          .first,
+    );
+    expect(currentRowButton.onPressed, isNull);
+
+    // 点击队尾 Gamma 行：Gamma 移动到当前曲目之后。
+    await tester.tap(playNextButtons.at(2));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 250));
+
+    final state = harness.container.read(musicCenterControllerProvider);
+    expect(state.asData!.value.playbackItems.map((item) => item.track.title), [
+      'Queue Alpha',
+      'Queue Gamma',
+      'Queue Beta',
+    ]);
+  });
+
+  testWidgets('打开面板自动滚动到当前播放行', (tester) async {
+    final longTracks = List<MusicTrack>.generate(12, (index) {
+      return MusicTrack(
+        id: 'track-${index + 1}',
+        fileNodeId: 'file-${index + 1}',
+        title: 'Track $index',
+        artistName: 'Artist',
+        albumTitle: 'Album',
+        format: 'mp3',
+        favorite: false,
+      );
+    });
+    await _pumpQueueSheet(tester, tracks: longTracks, currentIndex: 8);
+
+    final list = tester.widget<ReorderableListView>(
+      find.byType(ReorderableListView),
+    );
+    final offset = list.scrollController!.offset;
+    expect(offset, greaterThan(0));
+    // 当前行已进入视口（懒加载列表只构建可见行）。
+    expect(find.text('Track 8'), findsOneWidget);
+  });
 }
 
 Future<_QueueSheetHarness> _pumpQueueSheet(
   WidgetTester tester, {
   bool snapshotItems = true,
+  List<MusicTrack>? tracks,
+  int currentIndex = 0,
 }) async {
+  final queueTracks = tracks ?? _tracks;
   final api = _StubMusicApi(
     queueSnapshot: MusicPlaybackQueueSnapshot(
       items:
           snapshotItems
-              ? _tracks.map(MusicPlayableItem.local).toList(growable: false)
+              ? queueTracks.map(MusicPlayableItem.local).toList(growable: false)
               : const <MusicPlayableItem>[],
-      currentIndex: 0,
+      currentIndex: currentIndex,
     ),
+    libraryTracks: queueTracks,
   );
   final container = ProviderContainer.test(
     overrides: [
@@ -199,9 +256,12 @@ class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
 }
 
 class _StubMusicApi implements MusicApi {
-  _StubMusicApi({required this.queueSnapshot});
+  _StubMusicApi({required this.queueSnapshot, this.libraryTracks = _tracks});
 
   MusicPlaybackQueueSnapshot queueSnapshot;
+
+  /// 曲库曲目：快照恢复会按曲库解析本地曲目，需与快照曲目 ID 一致。
+  List<MusicTrack> libraryTracks = _tracks;
 
   @override
   Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
@@ -211,7 +271,7 @@ class _StubMusicApi implements MusicApi {
     int page = 0,
     int size = 100,
     String sort = 'title,asc',
-  }) async => MusicPagedResult<MusicTrack>(items: _tracks);
+  }) async => MusicPagedResult<MusicTrack>(items: libraryTracks);
 
   @override
   Future<MusicPagedResult<MusicAlbum>> albums({

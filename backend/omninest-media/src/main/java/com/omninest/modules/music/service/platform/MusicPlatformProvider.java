@@ -19,7 +19,7 @@ public interface MusicPlatformProvider {
     /**
      * 平台名称标识。
      *
-     * @return 平台标识，如 "netease" 或 "qq"
+     * @return 平台标识，如 "netease"
      */
     MusicPlatform platform();
 
@@ -45,7 +45,7 @@ public interface MusicPlatformProvider {
      *
      * @param ownerUserId 当前用户 ID
      * @param songId   平台歌曲ID
-     * @param mediaMid 媒体ID（QQ音乐专用）
+     * @param mediaMid 预留的媒体 ID 扩展参数（当前平台不使用）
      * @param quality  请求音质等级
      * @return 播放URL结果
      */
@@ -121,13 +121,36 @@ public interface MusicPlatformProvider {
     /**
      * 歌词结果。
      *
-     * @param plainLyrics 纯文本歌词（无独立翻译时作为译文回退）
-     * @param syncedLyrics 同步歌词（LRC 格式）
-     * @param translatedLyrics 独立翻译歌词，与同步歌词按时间轴行对齐
+     * <p>各字段均为平台原始载荷，后端不做词级解析，格式由客户端按平台约定处理
+     * （网易云逐字为 {@code yrc} 结构 {@code [行起始,行时长](词起始,词时长,0)词…}）。</p>
+     *
+     * <p>回退契约：平台不支持、附加接口失败或响应字段缺失时，对应字段为 {@code null}，表示"不可用"，
+     * 调用方应回退到行级歌词；本记录不抛异常，也不做非空校验，所有字段都必须按可空处理。</p>
+     *
+     * @param plainLyrics 纯文本歌词（无独立翻译时作为译文回退），不可用时为 null
+     * @param syncedLyrics 同步歌词（LRC 格式），不可用时为 null
+     * @param translatedLyrics 独立翻译歌词（LRC 格式，与同步歌词按时间轴行对齐），不可用时为 null
+     * @param wordLyrics 逐字歌词原始载荷（网易云 yrc），由客户端解析，不可用时为 null
      */
-    record LyricsResult(String plainLyrics, String syncedLyrics, String translatedLyrics) {
+    record LyricsResult(
+            String plainLyrics,
+            String syncedLyrics,
+            String translatedLyrics,
+            String wordLyrics
+    ) {
         public LyricsResult(String plainLyrics, String syncedLyrics) {
-            this(plainLyrics, syncedLyrics, null);
+            this(plainLyrics, syncedLyrics, null, null);
+        }
+
+        /**
+         * 含行级歌词与翻译的便捷构造，逐字标记为不可用。
+         *
+         * @param plainLyrics 纯文本歌词
+         * @param syncedLyrics 同步歌词（LRC 格式）
+         * @param translatedLyrics 独立翻译歌词（LRC 格式）
+         */
+        public LyricsResult(String plainLyrics, String syncedLyrics, String translatedLyrics) {
+            this(plainLyrics, syncedLyrics, translatedLyrics, null);
         }
     }
 }

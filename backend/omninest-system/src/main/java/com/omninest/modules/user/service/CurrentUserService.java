@@ -10,6 +10,10 @@ import com.omninest.common.security.MalwareScanGateway.Status;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.common.sync.SyncAction;
+import com.omninest.common.sync.SyncEventCommand;
+import com.omninest.common.sync.SyncScope;
+import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.domain.AuthUser;
@@ -52,6 +56,7 @@ public class CurrentUserService {
     private final SessionRevocationService sessionRevocationService;
     private final ReadThroughCache readThroughCache;
     private final MalwareScanGateway malwareScanGateway;
+    private final UserSyncEventRecorder syncEventRecorder;
 
     private static final long MAX_AVATAR_SIZE = 5L * 1024 * 1024;
 
@@ -149,6 +154,17 @@ public class CurrentUserService {
         readThroughCache.invalidate("omninest:user:profile:" + userId);
 
         log.info("头像已上传: userId={}, assetType=AVATAR", userId);
+
+        // 同一用户其他设备的会话资料（头像/显示名）经偏好作用域事件即时重拉。
+        syncEventRecorder.record(new SyncEventCommand(
+                userId,
+                SyncScope.PREFERENCES,
+                "USER_PROFILE",
+                "USER_PROFILE",
+                SyncAction.UPDATED,
+                null,
+                Map.of()
+        ));
 
         // 返回 presigned 下载 URL
         return objectStorageClient.createDownloadUrl(storageKey, Duration.ofHours(24)).toString();

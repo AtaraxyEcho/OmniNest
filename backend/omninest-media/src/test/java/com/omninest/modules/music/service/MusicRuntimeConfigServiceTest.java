@@ -67,24 +67,10 @@ class MusicRuntimeConfigServiceTest {
     }
 
     @Test
-    void includesVersionedQqEndpointsWhenPlatformIsEnabled() {
-        values.put(MusicRuntimeConfigService.QQ_MUSIC_ENABLED, "true");
-
-        assertThat(configService.trustedPlatformUrls("qq")).containsExactly(
-                "https://u.y.qq.com/cgi-bin/musicu.fcg",
-                "https://c.y.qq.com"
-        );
-    }
-
-    @Test
     void readsEditableProviderSettingsFromRuntimeCatalog() {
         values.put(MusicRuntimeConfigService.MUSICBRAINZ_BASE_URL, "https://musicbrainz.example/ws/2");
-        values.put("music.platform.qq.u-url", "https://qq-u.example/api");
-        values.put("music.platform.qq.c-url", "https://qq-c.example/api");
 
         assertThat(configService.musicBrainzBaseUrl()).isEqualTo("https://musicbrainz.example/ws/2");
-        assertThat(configService.qqMusicUUrl()).isEqualTo("https://qq-u.example/api");
-        assertThat(configService.qqMusicCUrl()).isEqualTo("https://qq-c.example/api");
     }
 
     @Test
@@ -123,20 +109,6 @@ class MusicRuntimeConfigServiceTest {
 
         assertThat(configService.trustedPlaybackHostSuffixes("NETEASE"))
                 .containsExactly("music.126.net", "music.163.com");
-    }
-
-    @Test
-    void doesNotExposeAnotherPlatformsPlaybackHosts() {
-        values.put(MusicRuntimeConfigService.QQ_MUSIC_ENABLED, "false");
-
-        assertThat(configService.trustedPlaybackHostSuffixes("qq")).isEmpty();
-    }
-
-    @Test
-    void fallsBackToLegacyQqEnabledKeyDuringMigration() {
-        values.put("music.platform.qq.enabled", "false");
-
-        assertThat(configService.qqMusicEnabled()).isFalse();
     }
 
     private MusicRuntimeConfigService createService() {

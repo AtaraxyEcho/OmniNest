@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,6 +39,7 @@ final readerDataManagerProvider = Provider<ReaderDataManager>((ref) {
 
 /// 仪表盘数据
 final readerDashboardProvider = FutureProvider<ReaderDashboard>((ref) async {
+  ref.watch(sessionEpochProvider);
   return ref.watch(readerApiProvider).dashboard();
 });
 
@@ -61,6 +63,7 @@ final readerItemDetailProvider = FutureProvider.autoDispose
 
 /// 阅读统计（读取前先重放离线队列，保证进度上传后再统计）
 final readerStatsProvider = FutureProvider<ReaderReadingStats>((ref) async {
+  ref.watch(sessionEpochProvider);
   final api = ref.watch(readerApiProvider);
   await ReaderSyncQueue.retryFailed();
   await ReaderSyncQueue.flush(api: api);
@@ -71,6 +74,7 @@ final readerStatsProvider = FutureProvider<ReaderReadingStats>((ref) async {
 final readerStatsOverviewProvider = FutureProvider<ReaderStatsOverview>((
   ref,
 ) async {
+  ref.watch(sessionEpochProvider);
   // 读取前先重放离线队列：刚退出阅读页就查看统计时，本机会话
   // 仍躺在队列里未上传，会呈现滞后一拍的旧数据。
   final api = ref.watch(readerApiProvider);
@@ -182,6 +186,8 @@ class ReaderCenterController extends AsyncNotifier<ReaderCenterState> {
 
   @override
   Future<ReaderCenterState> build() async {
+    // 换号时以依赖变化语义重建，避免渲染上一账号的旧值。
+    ref.watch(sessionEpochProvider);
     return _loadState();
   }
 

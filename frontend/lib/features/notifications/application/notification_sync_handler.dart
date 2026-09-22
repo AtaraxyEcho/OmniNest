@@ -23,7 +23,8 @@ class NotificationSyncHandler implements RealtimeScopeHandler {
       await ref.read(unreadCountProvider.notifier).refresh();
     }
     _countRevisions.markCompleted(countPending);
-    if (!ref.exists(notificationControllerProvider)) return false;
+    // 通知模块未激活时直接消费失效记录，首次打开自取最新。
+    if (!ref.exists(notificationControllerProvider)) return true;
     await ref
         .read(notificationControllerProvider.notifier)
         .refreshForRealtime();

@@ -10,6 +10,10 @@ bool _isRemovedConfigKey(String key) {
     'music.metadata-providers.enabled',
     'music.metadata-provider.musicbrainz.request-delay-ms',
     'music.platform.netease.request-delay-ms',
+    'music.qq.enabled',
+    'music.qq.u-url',
+    'music.qq.c-url',
+    'music.qq.hosts',
     'media.subtitle.key',
     'media.subtitle.opensubtitles-api-key',
     'photo.geo.cache-enabled',
@@ -55,9 +59,6 @@ int _configGroupOrder(AdminConfigEntry entry) {
   }
   if (_startsWithAny(key, const ['music.netease', 'music.platform.netease'])) {
     return 5;
-  }
-  if (_startsWithAny(key, const ['music.qq', 'music.platform.qq'])) {
-    return 6;
   }
   if (key.startsWith('weather.qweather')) {
     return 7;
@@ -115,9 +116,6 @@ String _configGroup(AppLocalizations l10n, AdminConfigEntry entry) {
     'music.platform.netease',
   ])) {
     return l10n.adminConfigProviderNetease;
-  }
-  if (_startsWithAny(entry.key, const ['music.qq', 'music.platform.qq'])) {
-    return l10n.adminConfigProviderQqMusic;
   }
   if (entry.key.startsWith('weather.qweather')) {
     return l10n.adminConfigProviderQWeather;
@@ -222,14 +220,6 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
         'music.netease.hosts': l10n.adminConfigNeteaseHosts,
         'music.platform.netease.playback-host-suffixes':
             l10n.adminConfigNeteaseHosts,
-        'music.qq.enabled': l10n.adminConfigQqEnabled,
-        'music.platform.qq.enabled': l10n.adminConfigQqEnabled,
-        'music.qq.u-url': l10n.adminConfigQqUUrl,
-        'music.platform.qq.u-url': l10n.adminConfigQqUUrl,
-        'music.qq.c-url': l10n.adminConfigQqCUrl,
-        'music.platform.qq.c-url': l10n.adminConfigQqCUrl,
-        'music.qq.hosts': l10n.adminConfigQqHosts,
-        'music.platform.qq.playback-host-suffixes': l10n.adminConfigQqHosts,
         'photo.ai.enabled': l10n.adminConfigPhotoAiEnabled,
         'photo.ai.url': l10n.adminConfigPhotoAiEndpoint,
         'photo.ai.endpoint': l10n.adminConfigPhotoAiEndpoint,
@@ -312,7 +302,6 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
     'config.integration.tmdb.includeAdult' => l10n.adminConfigTmdbAdult,
     'config.integration.photoAi.enabled' => l10n.adminConfigPhotoAiEnabled,
     'config.integration.netease.enabled' => l10n.adminConfigNeteaseEnabled,
-    'config.integration.qq.enabled' => l10n.adminConfigQqEnabled,
     'config.integration.qweather.projectId' =>
       l10n.adminConfigQWeatherProjectId,
     'config.integration.qweather.credentialId' =>
@@ -340,10 +329,6 @@ String _configDescription(AppLocalizations l10n, AdminConfigEntry entry) {
         'weather.qweather.base-url': l10n.adminConfigEndpointDescription,
         'music.netease.url': l10n.adminConfigEndpointDescription,
         'music.platform.netease.base-url': l10n.adminConfigEndpointDescription,
-        'music.qq.u-url': l10n.adminConfigEndpointDescription,
-        'music.platform.qq.u-url': l10n.adminConfigEndpointDescription,
-        'music.qq.c-url': l10n.adminConfigEndpointDescription,
-        'music.platform.qq.c-url': l10n.adminConfigEndpointDescription,
         'photo.ai.url': l10n.adminConfigEndpointDescription,
         'photo.ai.endpoint': l10n.adminConfigEndpointDescription,
         'reader.gbooks.url': l10n.adminConfigEndpointDescription,
@@ -420,9 +405,6 @@ String _configDescription(AppLocalizations l10n, AdminConfigEntry entry) {
             l10n.adminConfigEndpointDescription,
         'music.netease.hosts': l10n.adminConfigHostSuffixesDescription,
         'music.platform.netease.playback-host-suffixes':
-            l10n.adminConfigHostSuffixesDescription,
-        'music.qq.hosts': l10n.adminConfigHostSuffixesDescription,
-        'music.platform.qq.playback-host-suffixes':
             l10n.adminConfigHostSuffixesDescription,
         'log-retention.enabled': l10n.adminConfigLogRetentionEnabledDescription,
         'log-retention.retention-days':

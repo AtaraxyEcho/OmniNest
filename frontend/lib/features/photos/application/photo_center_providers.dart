@@ -13,6 +13,7 @@ class PhotoDashboardController extends AsyncNotifier<PhotoDashboard> {
 
   @override
   Future<PhotoDashboard> build() async {
+    ref.watch(sessionEpochProvider);
     final dashboard = await ref.watch(photoRepositoryProvider).dashboard();
     return _withoutRemovedPhotos(dashboard);
   }

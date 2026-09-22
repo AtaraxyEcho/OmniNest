@@ -246,6 +246,14 @@ class PhotoRepositoryImpl implements PhotoRepository {
       _api.revokeAlbumShare(shareId);
 
   @override
+  Future<int> revokeAllAlbumShares(String albumId) =>
+      _api.revokeAllAlbumShares(albumId);
+
+  @override
+  Future<int> revokeAllPhotoShares(String photoId) =>
+      _api.revokeAllPhotoShares(photoId);
+
+  @override
   Future<PhotoShareLink> createPhotoShare(
     String photoId, {
     String? password,

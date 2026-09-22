@@ -10,14 +10,14 @@ class ConfigDefinitionCatalogTest {
     void catalogContainsOnlyTheApprovedRuntimeSettings() {
         var definitions = ConfigDefinitionCatalog.definitions();
 
-        assertThat(definitions).hasSize(72);
+        assertThat(definitions).hasSize(68);
         assertThat(definitions).extracting(ConfigDefinition::key).doesNotHaveDuplicates();
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.GENERAL)
                 .hasSize(33);
         assertThat(definitions)
                 .filteredOn(definition -> definition.surface() == ConfigSurface.INTEGRATION)
-                .hasSize(39);
+                .hasSize(35);
     }
 
     @Test
@@ -42,8 +42,9 @@ class ConfigDefinitionCatalogTest {
         assertThat(ConfigDefinitionCatalog.find("weather.qweather.url")).isPresent();
         assertThat(ConfigDefinitionCatalog.find("weather.location")).isPresent();
         assertThat(ConfigDefinitionCatalog.find("music.netease.url")).isPresent();
-        assertThat(ConfigDefinitionCatalog.find("music.qq.u-url")).isPresent();
-        assertThat(ConfigDefinitionCatalog.find("music.qq.c-url")).isPresent();
+        // QQ 音乐平台已下线：相关配置项不再出现在目录中。
+        assertThat(ConfigDefinitionCatalog.find("music.qq.u-url")).isEmpty();
+        assertThat(ConfigDefinitionCatalog.find("music.qq.c-url")).isEmpty();
     }
 
     @Test

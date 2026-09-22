@@ -9,6 +9,7 @@ import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// 公开共享相册页面（无需登录）
 class PhotoSharedAlbumPage extends ConsumerStatefulWidget {
@@ -355,6 +356,16 @@ class _SharedAlbumContent extends StatelessWidget {
                                 photo.hasCover
                                     ? CachedNetworkImage(
                                       imageUrl: photo.coverUrl!,
+                                      // 网格瓦片按实际列宽解码：公开相册页
+                                      // 在宽屏下同时可见数十张，全分辨率解码
+                                      // 会造成明显滚动与首帧卡顿。
+                                      memCacheWidth: thumbnailDecodeWidth(
+                                        (constraints.maxWidth -
+                                                48 -
+                                                8 * (columns - 1)) /
+                                            columns,
+                                        MediaQuery.devicePixelRatioOf(context),
+                                      ),
                                       fit: BoxFit.cover,
                                       placeholder:
                                           (context, url) => Container(

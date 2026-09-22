@@ -7,6 +7,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
+import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
 
 /// 幻灯片帧：页面上的一层画面（照片 + 已解码位图）。
 ///
@@ -613,6 +614,13 @@ class SlideshowThumbnailStrip extends StatelessWidget {
                             // 否则每次令牌刷新都会产生整套重复缓存条目，
                             // 快速挤爆 Web 端内存图片缓存预算。
                             cacheKey: 'slideshow-thumb:${photo.id}',
+                            // 按 72px 瓦片实际尺寸解码：全分辨率封面在宽屏下
+                            // 一屏可见数十张，解码与纹理上传会阻塞光栅线程数
+                            // 百毫秒（曾把进场吸附的黑窗拉到一秒）。
+                            memCacheWidth: thumbnailDecodeWidth(
+                              72,
+                              MediaQuery.devicePixelRatioOf(context),
+                            ),
                             fit: BoxFit.cover,
                             fadeInDuration: Duration.zero,
                             errorWidget:

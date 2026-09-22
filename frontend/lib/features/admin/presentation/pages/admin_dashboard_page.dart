@@ -38,6 +38,9 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   void initState() {
     super.initState();
     _section = AdminSection.fromPathSegment(widget.initialSectionSegment);
+    // 进入即查由页面挂载统一承担：失效目标分区常驻缓存；未创建的
+    // provider 失效为空操作，挂载后仅取数一次。
+    ref.read(adminSectionRefreshProvider).invalidate(_section);
   }
 
   @override
@@ -47,6 +50,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
       final next = AdminSection.fromPathSegment(widget.initialSectionSegment);
       if (next != _section) {
         setState(() => _section = next);
+        ref.read(adminSectionRefreshProvider).invalidate(next);
       }
     }
   }
@@ -55,13 +59,20 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     if (section == _section) {
       return;
     }
-    setState(() => _section = section);
-    // 同步 URL，便于刷新/分享保持分区。
     final target = section.location;
     final uri = GoRouterState.of(context).uri.toString();
-    if (uri != target) {
-      context.go(target);
+    if (uri == target) {
+      // URL 已与目标一致（深链回绕）：本地切分区并失效缓存。
+      setState(() => _section = section);
+      ref.read(adminSectionRefreshProvider).invalidate(section);
+      return;
     }
+    // 分区切换与缓存失效统一由路由驱动（initState/didUpdateWidget）。
+    // 首次点击跨 /admin → /admin/:section 路由会整页替换：若此处先
+    // setState，退出中的旧页与进入的新页会各挂载一次目标分区，
+    // autoDispose 分区（tasks/logs/sessions 及存储子列表）被创建
+    // 两次，形成首次点击的二次加载。
+    context.go(target);
   }
 
   @override
@@ -92,6 +103,19 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
   }
 }
 
+class _MonitoringSectionBody extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // watch 轮询器以在其挂载期间保活；分区卸载即停止轮询。
+    ref.watch(adminMonitoringPollerProvider);
+    return _AsyncStateBuilder<AdminMonitoringView>(
+      state: ref.watch(adminMonitoringProvider),
+      onRetry: () => ref.invalidate(adminMonitoringProvider),
+      builder: (view) => AdminMonitoringPage(view: view),
+    );
+  }
+}
+
 class _AdminSectionBody extends ConsumerWidget {
   const _AdminSectionBody({required this.section});
 
@@ -106,11 +130,7 @@ class _AdminSectionBody extends ConsumerWidget {
       AdminSection.users => _UserStateBuilder(
         builder: (state) => AdminUsersPage(state: state),
       ),
-      AdminSection.monitoring => _AsyncStateBuilder<AdminMonitoringView>(
-        state: ref.watch(adminMonitoringProvider),
-        onRetry: () => ref.invalidate(adminMonitoringProvider),
-        builder: (view) => AdminMonitoringPage(view: view),
-      ),
+      AdminSection.monitoring => _MonitoringSectionBody(),
       AdminSection.logs => const AdminLogsPage(),
       AdminSection.tasks => const AdminTasksPage(),
       AdminSection.roles => _AsyncStateBuilder<AdminRoleManagementView>(
@@ -193,6 +213,10 @@ class _AsyncStateBuilder<T> extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return state.when(
+      // 分区切换失效与监控轮询走 invalidate（isRefreshing），默认
+      // skipLoadingOnRefresh 已保留已渲染内容不闪 loading；也不开启
+      // 「reload 期间保留旧值」——isReloading 仅在换号世代变化时出现，
+      // 此时必须显示 loading 而非上一账号数据。
       data: builder,
       error:
           (error, stackTrace) => AppErrorView(

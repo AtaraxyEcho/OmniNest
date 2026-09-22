@@ -13,6 +13,7 @@ class MusicTrack {
     this.fileSize,
     this.lyricsRaw,
     this.lyricsTranslation,
+    this.lyricsWords,
     this.genre,
     this.coverUrl,
     this.updatedAt,
@@ -53,6 +54,12 @@ class MusicTrack {
 
   /// 歌词译文（独立于原文的 LRC 或纯文本），由在线平台提供。
   final String? lyricsTranslation;
+
+  /// 逐字歌词载荷（网易云 `yrc`），由在线平台提供。
+  ///
+  /// 只在内存中随曲目对象流转：本地曲库与后端 DTO 都没有该字段，
+  /// 换曲或重启后重新按需拉取。
+  final String? lyricsWords;
   final String? genre;
   final String? coverUrl;
   final bool favorite;
@@ -78,13 +85,17 @@ class MusicTrack {
     return parts.isEmpty ? format.toUpperCase() : parts.join(' / ');
   }
 
-  List<MusicLyricLine> get lyricLines =>
-      parseMusicLyrics(lyricsRaw, translation: lyricsTranslation);
+  List<MusicLyricLine> get lyricLines => parseMusicLyrics(
+    lyricsRaw,
+    translation: lyricsTranslation,
+    wordLyrics: lyricsWords,
+  );
 
   MusicTrack copyWith({
     bool? favorite,
     String? lyricsRaw,
     String? lyricsTranslation,
+    String? lyricsWords,
     String? genre,
   }) {
     return MusicTrack(
@@ -100,6 +111,7 @@ class MusicTrack {
       fileSize: fileSize,
       lyricsRaw: lyricsRaw ?? this.lyricsRaw,
       lyricsTranslation: lyricsTranslation ?? this.lyricsTranslation,
+      lyricsWords: lyricsWords ?? this.lyricsWords,
       genre: genre ?? this.genre,
       coverUrl: coverUrl,
       favorite: favorite ?? this.favorite,
@@ -108,39 +120,101 @@ class MusicTrack {
   }
 }
 
+/// 词级时间片：相对所在行起始位置的偏移与时长。
+///
+/// 网易云 `yrc` 的逐字数据用绝对毫秒表达行与词的时间，解析后统一换算成
+/// "相对行首"，渲染层只关心行内进度。
+class MusicLyricWord {
+  const MusicLyricWord({
+    required this.offset,
+    required this.duration,
+    required this.text,
+  });
+
+  /// 相对所在行起始位置的偏移。
+  final Duration offset;
+  final Duration duration;
+  final String text;
+
+  Duration get end => offset + duration;
+}
+
 class MusicLyricLine {
   const MusicLyricLine({
     required this.position,
     required this.text,
     this.translation,
+    this.words = const <MusicLyricWord>[],
   });
 
   final Duration position;
   final String text;
+
+  /// 译文行（按时间戳就近对齐）。
   final String? translation;
+
+  /// 词级时间轴：为空表示只有行级时间戳（本地 LRC 或平台未返回逐字数据）。
+  ///
+  /// 词级数据缺失时渲染层按"行时长线性估算"回退填充，不再整行读色。
+  final List<MusicLyricWord> words;
+
+  /// 词级数据的结束时间（相对行首）；无词级数据时为 null。
+  Duration? get wordsEnd => words.isEmpty ? null : words.last.end;
+
+  /// 行内时间 [withinLine] 对应的逐字填充比例（0..1）＝已完成词时长 / 总词时长。
+  ///
+  /// 无词级数据或总词时长为 0 时返回 null；渲染层在 null 时按行时长
+  /// 线性估算填充，保证行级歌词也有填充反馈。
+  double? fillProgressAt(Duration withinLine) {
+    if (words.isEmpty) {
+      return null;
+    }
+    var completed = Duration.zero;
+    var total = Duration.zero;
+    for (final word in words) {
+      total += word.duration;
+      if (withinLine <= word.offset) {
+        continue;
+      }
+      final end = word.offset + word.duration;
+      completed += withinLine >= end ? word.duration : withinLine - word.offset;
+    }
+    if (total <= Duration.zero) {
+      return null;
+    }
+    return (completed.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0);
+  }
 }
 
-/// 解析歌词原文；[translation] 为独立译文（LRC 或纯文本），按时间戳就近对齐。
-List<MusicLyricLine> parseMusicLyrics(String? raw, {String? translation}) {
+/// 解析歌词原文。
+///
+/// [translation] 为独立译文（LRC 或纯文本），按时间戳就近对齐；[wordLyrics]
+/// 为平台逐字载荷（网易云 `yrc`），逐行匹配后挂到对应行的 [MusicLyricLine.words] 上。
+List<MusicLyricLine> parseMusicLyrics(
+  String? raw, {
+  String? translation,
+  String? wordLyrics,
+}) {
   if (raw == null || raw.trim().isEmpty) {
     return const [];
   }
   final lines = <MusicLyricLine>[];
   final timestampPattern = RegExp(r'\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]');
   final translationByPosition = _parseTranslationTimestamps(translation);
-  String? translationFor(Duration position) {
-    if (translationByPosition.isEmpty) {
+  final wordsByPosition = parseMusicLyricWords(wordLyrics);
+  String? nearestText(Map<Duration, String> table, Duration position) {
+    if (table.isEmpty) {
       return null;
     }
     // 优先精确毫秒匹配，其次取与原文时间差最小且不超过容差的译文行。
-    final exact = translationByPosition[position];
+    final exact = table[position];
     if (exact != null) {
       return exact;
     }
     const tolerance = Duration(milliseconds: 500);
     String? best;
     Duration? bestDistance;
-    for (final entry in translationByPosition.entries) {
+    for (final entry in table.entries) {
       final distance = (entry.key - position).abs();
       if (distance <= tolerance &&
           (bestDistance == null || distance < bestDistance)) {
@@ -174,13 +248,102 @@ List<MusicLyricLine> parseMusicLyrics(String? raw, {String? translation}) {
         MusicLyricLine(
           position: position,
           text: text,
-          translation: translationFor(position),
+          translation: nearestText(translationByPosition, position),
+          words: _nearestWords(wordsByPosition, position),
         ),
       );
     }
   }
   lines.sort((left, right) => left.position.compareTo(right.position));
   return lines;
+}
+
+/// 解析逐字歌词载荷（网易云 `yrc`），返回"行起始时间 → 词列表"。
+///
+/// 行头为 `[行起始,行时长]`（毫秒，绝对时间），词元为 `(词起始,词时长,0)文本`，
+/// 词时长按毫秒。开头的 `{"t":0,…}` 元数据行没有行头，天然被跳过；
+/// 无法识别的行会被跳过；整段无法识别时返回空表，调用方退回行级显示。
+Map<Duration, List<MusicLyricWord>> parseMusicLyricWords(String? raw) {
+  final result = <Duration, List<MusicLyricWord>>{};
+  if (raw == null || raw.trim().isEmpty) {
+    return result;
+  }
+  final lineHeader = RegExp(r'^\[(\d+),(\d+)\]');
+  final yrcWord = RegExp(r'\((\d+),(\d+),\d+\)([^()]*)');
+  for (final rawLine in raw.split(RegExp(r'\r?\n'))) {
+    final line = rawLine.trim();
+    final header = lineHeader.firstMatch(line);
+    if (header == null) {
+      continue;
+    }
+    final startMs = int.tryParse(header.group(1) ?? '');
+    if (startMs == null) {
+      continue;
+    }
+    final body = line.substring(header.end);
+    final words = <MusicLyricWord>[];
+    for (final match in yrcWord.allMatches(body)) {
+      _addWord(words, match.group(3), match.group(1), match.group(2), startMs);
+    }
+    if (words.isEmpty) {
+      continue;
+    }
+    final position = Duration(milliseconds: startMs);
+    result.putIfAbsent(
+      position,
+      () => List<MusicLyricWord>.unmodifiable(words),
+    );
+  }
+  return result;
+}
+
+void _addWord(
+  List<MusicLyricWord> words,
+  String? text,
+  String? startMs,
+  String? durationMs,
+  int lineStartMs,
+) {
+  final start = int.tryParse(startMs ?? '');
+  if (start == null || text == null) {
+    return;
+  }
+  final duration = int.tryParse(durationMs ?? '') ?? 0;
+  // 词时间戳是绝对时间：换算成相对行首，负值（异常数据）按 0 处理。
+  final offset = start - lineStartMs;
+  words.add(
+    MusicLyricWord(
+      offset: Duration(milliseconds: offset < 0 ? 0 : offset),
+      duration: Duration(milliseconds: duration < 0 ? 0 : duration),
+      text: text,
+    ),
+  );
+}
+
+/// 就近挂载词级数据：行起始时间精确匹配优先，其次 500ms 容差内取最近一行。
+List<MusicLyricWord> _nearestWords(
+  Map<Duration, List<MusicLyricWord>> table,
+  Duration position,
+) {
+  if (table.isEmpty) {
+    return const <MusicLyricWord>[];
+  }
+  final exact = table[position];
+  if (exact != null) {
+    return exact;
+  }
+  const tolerance = Duration(milliseconds: 500);
+  List<MusicLyricWord>? best;
+  Duration? bestDistance;
+  for (final entry in table.entries) {
+    final distance = (entry.key - position).abs();
+    if (distance <= tolerance &&
+        (bestDistance == null || distance < bestDistance)) {
+      bestDistance = distance;
+      best = entry.value;
+    }
+  }
+  return best ?? const <MusicLyricWord>[];
 }
 
 /// 解析译文时间轴；纯文本译文返回空表（逐行文本交给行级回退处理）。
@@ -660,7 +823,7 @@ Map<String, dynamic> _asMap(dynamic value) {
   return Map<String, dynamic>.from(value);
 }
 
-/// 在线搜索曲目（来自网易云/QQ音乐）
+/// 在线搜索曲目（来自网易云）
 class OnlineTrack {
   const OnlineTrack({
     required this.platform,
@@ -671,7 +834,7 @@ class OnlineTrack {
     this.coverUrl = '',
     this.durationSeconds,
     this.quality,
-    this.mediaMid,
+
     this.extra = const {},
   });
 
@@ -683,7 +846,7 @@ class OnlineTrack {
   final String coverUrl;
   final int? durationSeconds;
   final String? quality;
-  final String? mediaMid;
+
   final Map<String, dynamic> extra;
 
   String get durationText {
@@ -707,7 +870,7 @@ class OnlineTrack {
       coverUrl: json['coverUrl']?.toString() ?? '',
       durationSeconds: _nullableInt(json['durationSeconds']),
       quality: json['quality']?.toString(),
-      mediaMid: json['mediaMid']?.toString() ?? extra['mediaMid']?.toString(),
+
       extra: extra,
     );
   }
@@ -1014,12 +1177,19 @@ class MusicPagedResult<T> {
   bool get hasMore => (page + 1) * size < totalElements;
 }
 
-/// 在线平台歌词：原文与独立译文。
+/// 在线平台歌词：原文、独立译文与逐字载荷。
 class MusicPlatformLyrics {
-  const MusicPlatformLyrics({required this.lyrics, this.translation});
+  const MusicPlatformLyrics({
+    required this.lyrics,
+    this.translation,
+    this.words,
+  });
 
   final String lyrics;
   final String? translation;
+
+  /// 逐字歌词原始载荷（网易云 `yrc`），平台不提供时为 null。
+  final String? words;
 }
 
 /// Lrclib 歌词搜索候选结果。

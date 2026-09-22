@@ -37,9 +37,9 @@ class MusicOnlineSourceUrlPolicyTest {
         ));
         Mockito.when(configService.trustedPlaybackHostSuffixes("netease"))
                 .thenReturn(List.of("music.126.net", "music.163.com"));
-        Mockito.when(configService.trustedPlatformUrls("qq")).thenReturn(List.of());
-        Mockito.when(configService.trustedPlaybackHostSuffixes("qq"))
-                .thenReturn(List.of("qqmusic.qq.com"));
+        Mockito.when(configService.trustedPlatformUrls("legacy")).thenReturn(List.of());
+        Mockito.when(configService.trustedPlaybackHostSuffixes("legacy"))
+                .thenReturn(List.of("legacy-music-cdn.example.com"));
         Mockito.when(hostAddressResolver.resolve(Mockito.anyString()))
                 .thenReturn(addresses("192.168.1.206"));
     }
@@ -102,7 +102,7 @@ class MusicOnlineSourceUrlPolicyTest {
         Mockito.when(hostAddressResolver.resolve("m701.music.126.net"))
                 .thenReturn(addresses("198.18.0.122", "fdfe:dcba:9876::69"));
 
-        assertThatThrownBy(() -> policy.requireAllowed("qq", source))
+        assertThatThrownBy(() -> policy.requireAllowed("legacy", source))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("内网地址");
     }

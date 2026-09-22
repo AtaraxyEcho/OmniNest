@@ -81,13 +81,17 @@ class PhotoSyncHandler implements RealtimeScopeHandler {
     if (!ref.mounted) {
       return false;
     }
+    // 相册模块未激活时直接消费失效记录，首次打开自取最新。
     if (!ref.exists(photoCenterControllerProvider)) {
-      return false;
+      return true;
     }
     _auxiliaryRevisions.markCompleted(auxiliary);
     await ref.read(photoCenterControllerProvider.future);
-    if (!ref.mounted || !ref.exists(photoCenterControllerProvider)) {
+    if (!ref.mounted) {
       return false;
+    }
+    if (!ref.exists(photoCenterControllerProvider)) {
+      return true;
     }
     await ref.read(photoCenterControllerProvider.notifier).refreshForRealtime();
     if (!ref.mounted) {

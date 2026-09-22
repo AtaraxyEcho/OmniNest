@@ -1,14 +1,19 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
+import 'dart:math' as math;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
+import 'package:omninest/features/admin/application/admin_console_controller.dart';
+import 'package:omninest/features/admin/application/admin_user_controller.dart';
 import 'package:omninest/features/admin/data/admin_operations_api.dart';
 import 'package:omninest/features/admin/domain/admin_analytics.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
 import 'package:omninest/features/admin/domain/admin_paging.dart';
+import 'package:omninest/features/admin/domain/admin_section.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 
@@ -29,10 +34,55 @@ final adminOperationsApiProvider = Provider<AdminOperationsApi>((ref) {
   return AdminOperationsApi(ref.watch(apiClientProvider));
 });
 
+/// Admin 分区切换进入即查的失效器。
+///
+/// 分区数据 provider 为常驻缓存且侧栏切换不失效，切回分区会一直显示旧
+/// 数据。tasks/logs/sessions 为 autoDispose family，子树卸载即销毁、重进
+/// 天然新查，无需处理。storage 分区复用合并刷新，避免与挂载创建流程
+/// 同帧多次 rebuild。
+final adminSectionRefreshProvider = Provider<AdminSectionRefresher>((ref) {
+  return AdminSectionRefresher(ref);
+});
+
+class AdminSectionRefresher {
+  AdminSectionRefresher(this._ref);
+
+  final Ref _ref;
+
+  /// 失效切入党区的常驻缓存 provider，下次挂载即重新请求。
+  void invalidate(AdminSection section) {
+    switch (section) {
+      case AdminSection.overview:
+        _ref.invalidate(adminConsoleControllerProvider);
+      case AdminSection.users:
+        _ref.invalidate(adminUserControllerProvider);
+      case AdminSection.monitoring:
+        _ref.invalidate(adminMonitoringProvider);
+      case AdminSection.roles:
+        _ref.invalidate(adminRolesProvider);
+      case AdminSection.config:
+        _ref.invalidate(adminConfigsProvider);
+      case AdminSection.storage:
+        _ref.invalidate(adminStorageProvider);
+        _ref
+            .read(adminOperationsActionsProvider)
+            .scheduleStorageRelatedRefresh();
+      case AdminSection.externalStorage:
+        _ref.invalidate(adminExternalStorageProvider);
+      case AdminSection.logs:
+      case AdminSection.tasks:
+      case AdminSection.sessions:
+        break;
+    }
+  }
+}
+
 /// 提供管理模块的系统摘要只读视图。
 ///
 /// 无管理台入口权限时不请求后端，直接返回空摘要，避免 MEMBER 在 Portal 产生 403。
 final adminConsoleSummaryProvider = FutureProvider<AdminConsoleSummary>((ref) {
+  ref.watch(sessionEpochProvider);
+
   if (!ref.watch(canAccessAdminConsoleProvider)) {
     return AdminConsoleSummary.empty();
   }
@@ -40,10 +90,14 @@ final adminConsoleSummaryProvider = FutureProvider<AdminConsoleSummary>((ref) {
 });
 
 final adminRolesProvider = FutureProvider<AdminRoleManagementView>((ref) {
+  ref.watch(sessionEpochProvider);
+
   return ref.watch(adminOperationsApiProvider).roles();
 });
 
 final adminConfigsProvider = FutureProvider<AdminConfigManagementView>((ref) {
+  ref.watch(sessionEpochProvider);
+
   return ref.watch(adminOperationsApiProvider).configs();
 });
 
@@ -54,6 +108,8 @@ final adminConfigHistoryProvider = FutureProvider.autoDispose
     });
 
 final adminTasksProvider = FutureProvider<AdminTaskManagementView>((ref) {
+  ref.watch(sessionEpochProvider);
+
   return ref.watch(adminOperationsApiProvider).tasks();
 });
 
@@ -73,10 +129,14 @@ final adminTaskPageProvider = FutureProvider.autoDispose
     });
 
 final adminDlqProvider = FutureProvider<List<AdminDlqTask>>((ref) {
+  ref.watch(sessionEpochProvider);
+
   return ref.watch(adminOperationsApiProvider).listDlq();
 });
 
 final adminLogsProvider = FutureProvider<AdminLogManagementView>((ref) {
+  ref.watch(sessionEpochProvider);
+
   return ref.watch(adminOperationsApiProvider).logs();
 });
 
@@ -95,10 +155,42 @@ final adminLogPageProvider = FutureProvider.autoDispose
     });
 
 final adminMonitoringProvider = FutureProvider<AdminMonitoringView>((ref) {
+  ref.watch(sessionEpochProvider);
+
   return ref.watch(adminOperationsApiProvider).monitoring();
 });
 
+/// 监控分区挂载期间的准实时轮询间隔；4C4G 自托管画像取保守端，可调。
+const Duration adminMonitoringPollInterval = Duration(seconds: 10);
+
+/// 监控分区准实时轮询器：autoDispose，分区页面挂载期间保持 watch 即存活，
+/// 卸载（AnimatedSwitcher 切走）即停。错误时退避（连续错误数 ×2，封顶
+/// 6 个间隔），恢复成功即回到基础间隔；配合分区渲染的保数据刷新，
+/// 轮询期间不闪 loading。
+final adminMonitoringPollerProvider = Provider.autoDispose<void>((ref) {
+  Timer? timer;
+  var consecutiveErrors = 0;
+  ref.listen<AsyncValue<AdminMonitoringView>>(adminMonitoringProvider, (
+    previous,
+    next,
+  ) {
+    consecutiveErrors = next.hasError ? consecutiveErrors + 1 : 0;
+  });
+
+  void tick() {
+    ref.invalidate(adminMonitoringProvider);
+    final backoffMultiplier =
+        consecutiveErrors == 0 ? 1 : math.min(consecutiveErrors * 2, 6);
+    timer = Timer(adminMonitoringPollInterval * backoffMultiplier, tick);
+  }
+
+  timer = Timer(adminMonitoringPollInterval, tick);
+  ref.onDispose(() => timer?.cancel());
+});
+
 final adminStorageProvider = FutureProvider<AdminStorageManagementView>((ref) {
+  ref.watch(sessionEpochProvider);
+
   return ref.watch(adminOperationsApiProvider).storage();
 });
 
@@ -114,15 +206,19 @@ final adminMountDirectoriesProvider = FutureProvider.autoDispose
 final adminExternalStorageProvider = FutureProvider<AdminExternalStorageView>((
   ref,
 ) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(adminOperationsApiProvider).externalStorage();
 });
 
 final adminConnectorOAuthAppsProvider =
     FutureProvider<List<AdminConnectorOAuthApp>>((ref) {
+      ref.watch(sessionEpochProvider);
       return ref.watch(adminOperationsApiProvider).listConnectorOAuthApps();
     });
 
 final adminSessionsProvider = FutureProvider<AdminSessionManagementView>((ref) {
+  ref.watch(sessionEpochProvider);
+
   return ref.watch(adminOperationsApiProvider).allSessions();
 });
 

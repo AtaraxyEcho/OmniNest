@@ -1,6 +1,7 @@
 package com.omninest.modules.music.dto;
 
 import com.omninest.modules.music.service.platform.MusicPlatformCapabilities;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
@@ -99,18 +100,6 @@ public final class OnlineMusicDtos {
         public DailyRecommendedTracksDto {
             tracks = tracks == null ? List.of() : List.copyOf(tracks);
         }
-    }
-
-    /**
-     * QQ 音乐 Cookie 登录请求。
-     *
-     * @param cookie 平台 Cookie
-     */
-    public record QqCredentialRequest(
-            @NotBlank(message = "QQ音乐Cookie不能为空")
-            @Size(max = 8192, message = "QQ音乐Cookie长度不能超过8192字符")
-            String cookie
-    ) {
     }
 
     /**

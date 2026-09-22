@@ -70,3 +70,31 @@ class MusicImmersiveMotion {
     return disabled ? Duration.zero : value;
   }
 }
+
+/// 视觉编辑面板控件的生效范围徽标：提示该参数作用于桌面端、移动端
+/// 还是两端通用，避免出现"调了没反应"的参数。
+class MusicVisualScopeBadge extends StatelessWidget {
+  const MusicVisualScopeBadge({
+    required this.palette,
+    required this.label,
+    super.key,
+  });
+
+  final MusicImmersivePalette palette;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: palette.muted, fontSize: 10, height: 1.4),
+      ),
+    );
+  }
+}

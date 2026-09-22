@@ -199,9 +199,10 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             return new LyricsResult(null, null);
         }
         try {
+            String cookie = cookie(ownerUserId);
             String path = "/lyric?id=" + songId
                     + "&timestamp=" + System.currentTimeMillis();
-            JSONObject json = requestJson(path, cookie(ownerUserId));
+            JSONObject json = requestJson(path, cookie);
             if (json == null) {
                 return new LyricsResult(null, null);
             }
@@ -211,8 +212,15 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             // 翻译歌词（LRC 格式带时间戳，与同步歌词行对齐）
             JSONObject tlyricObj = json.getJSONObject("tlyric");
             String translatedLyrics = tlyricObj != null ? tlyricObj.getString("lyric") : null;
-            log.info("网易云歌词获取完成: songId={}, hasLyrics={}", songId, syncedLyrics != null);
-            return new LyricsResult(null, syncedLyrics, translatedLyrics);
+            // 逐字歌词来自附加接口，失败时降级为不可用，不影响行级歌词
+            String wordLyrics = fetchWordLyrics(songId, cookie);
+            log.info(
+                    "网易云歌词获取完成: songId={}, hasLyrics={}, hasWordLyrics={}",
+                    songId,
+                    syncedLyrics != null,
+                    wordLyrics != null
+            );
+            return new LyricsResult(null, syncedLyrics, translatedLyrics, wordLyrics);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
             log.warn("网易云歌词请求被中断: songId={}", songId);
@@ -221,6 +229,46 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
             log.warn("网易云歌词异常: songId={}, message={}", songId, ex.getMessage());
             return new LyricsResult(null, null);
         }
+    }
+
+    /**
+     * 通过附加接口 /lyric/new 获取逐字歌词（yrc）原始载荷。
+     *
+     * <p>该接口属附加能力：请求失败、响应非法或字段缺失时返回 null，
+     * 不得抛出异常影响行级歌词结果。</p>
+     *
+     * @param songId 平台歌曲 ID
+     * @param cookie 平台凭据 Cookie，可为 null
+     * @return 逐字歌词（yrc.lyric），不可用时为 null
+     */
+    private String fetchWordLyrics(String songId, String cookie) {
+        try {
+            String path = "/lyric/new?id=" + songId
+                    + "&timestamp=" + System.currentTimeMillis();
+            JSONObject json = requestJson(path, cookie);
+            if (json == null) {
+                return null;
+            }
+            JSONObject yrcObj = json.getJSONObject("yrc");
+            return blankToNull(yrcObj == null ? null : yrcObj.getString("lyric"));
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            log.warn("网易云逐字歌词请求被中断: songId={}", songId);
+            return null;
+        } catch (IOException | RuntimeException ex) {
+            log.warn("网易云逐字歌词请求失败: songId={}, message={}", songId, ex.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 空白字符串归一为 null，保持"null 表示不可用"的统一约定。
+     *
+     * @param value 原始字段值
+     * @return 去掉首尾空白后非空的原始值，空白时为 null
+     */
+    private String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
     }
 
     @Override
@@ -633,24 +681,36 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
     }
 
     private NeteaseApiResponse request(String path, String cookie) throws IOException, InterruptedException {
-        String baseUrl = trimTrailingSlash(configService.neteaseBaseUrl());
-        URI uri = URI.create(baseUrl + path);
-        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(uri)
+        HttpRequest.Builder requestBuilder = HttpRequest.newBuilder(requestUri(path))
                 .timeout(REQUEST_TIMEOUT)
                 .header("Accept", "application/json")
                 .header("Referer", "https://music.163.com/")
                 .header("User-Agent", USER_AGENT)
                 .GET();
+        attachCookie(requestBuilder, cookie);
+        return execute(requestBuilder.build());
+    }
+
+    private URI requestUri(String path) {
+        return URI.create(trimTrailingSlash(configService.neteaseBaseUrl()) + path);
+    }
+
+    private void attachCookie(HttpRequest.Builder requestBuilder, String cookie) {
         if (cookie != null && !cookie.isBlank()) {
             String normalizedCookie = normalizeCookieHeader(cookie);
             if (!normalizedCookie.isBlank()) {
                 requestBuilder.header("Cookie", normalizedCookie);
             }
         }
-        HttpResponse<String> response = httpClient.send(requestBuilder.build(),
-                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+    }
+
+    private NeteaseApiResponse execute(HttpRequest request) throws IOException, InterruptedException {
+        HttpResponse<String> response = httpClient.send(
+                request,
+                HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)
+        );
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            log.warn("网易云API请求失败: status={}, uri={}", response.statusCode(), uri);
+            log.warn("网易云API请求失败: status={}, uri={}", response.statusCode(), request.uri());
             return new NeteaseApiResponse(null, "");
         }
         return new NeteaseApiResponse(

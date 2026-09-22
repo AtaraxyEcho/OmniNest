@@ -10,33 +10,30 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
-import 'package:omninest/app/widgets/app_dropdown.dart';
-import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/log/dev_log.dart';
-import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
-import 'package:omninest/features/music/application/music_spectrum_analyzer.dart';
 import 'package:omninest/features/music/application/music_visualizer_preset_controller.dart';
 import 'package:omninest/features/music/data/music_cover_cache.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
+import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
+import 'package:omninest/features/music/presentation/player/music_immersive_layout_spec.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_lyrics.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_queue_sheet.dart';
+import 'package:omninest/features/music/presentation/player/music_immersive_preset_editor.dart';
 import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
-import 'package:omninest/features/music/presentation/player/music_visual_color_picker.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
+import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 
 part 'music_immersive_cover_deck.dart';
-part 'music_immersive_cover_plane.dart';
-part 'music_immersive_audio_bar.dart';
 part 'music_immersive_controls.dart';
+part 'music_immersive_deck_spec.dart';
 part 'music_immersive_player_stage.dart';
-part 'music_immersive_preset_editor.dart';
 part 'music_immersive_track_header.dart';
 
 /// Music 模块拥有的桌面数字沉浸播放器。
@@ -52,9 +49,15 @@ class MusicImmersivePlayer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _MusicImmersivePlayerStage(
-      palette: palette,
-      reservedTopInset: reservedTopInset,
+    // 沉浸层全屏遮盖了 beneath 的门户内容：用 BlockSemantics 把被遮盖内容
+    // 排除出辅助功能树。否则隐藏的门户语义树（数百节点）仍随每次语义更新
+    // 重新序列化，触发 Windows 辅助功能桥 "Nodes left pending by the
+    // update" 失败；本层的可交互语义（顶栏、Dock、视觉编辑）全部保留。
+    return BlockSemantics(
+      child: _MusicImmersivePlayerStage(
+        palette: palette,
+        reservedTopInset: reservedTopInset,
+      ),
     );
   }
 }
@@ -66,10 +69,16 @@ class _ImmersiveLyrics extends StatelessWidget {
     required this.track,
     required this.lyrics,
     required this.scale,
+    required this.blockAnchor,
+    required this.textAlign,
     required this.onTogglePlayback,
     required this.onPrevious,
     required this.onNext,
     this.lyricSettings,
+    this.lyricSpec,
+    this.lyricScrollMode = true,
+    this.trackOffsetMs,
+    this.onAdjustLyricOffset,
   });
 
   final MusicImmersivePalette palette;
@@ -77,10 +86,26 @@ class _ImmersiveLyrics extends StatelessWidget {
   final MusicTrack? track;
   final List<MusicLyricLine> lyrics;
   final double scale;
+
+  /// 文字块锚点：两侧布局贴左基线，居中布局居中。
+  final Alignment blockAnchor;
+
+  /// 居中锚点下的文本排列：两侧布局左对齐，居中布局居中。
+  final TextAlign textAlign;
   final PortalLyricVisualSettings? lyricSettings;
+
+  /// 复刻参数（由舞台按布局解析）：字号、行距与上下渐隐按样例取值。
+  final MusicLyricSpec? lyricSpec;
   final VoidCallback onTogglePlayback;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
+
+  /// 桌面端歌词形态由布局唯一决定：两侧滚动、居中固定窗口。
+  final bool lyricScrollMode;
+
+  /// 曲目级歌词延迟覆盖（设备本地）与菜单微调回调，透传给歌词组件。
+  final int? trackOffsetMs;
+  final void Function(int deltaMs)? onAdjustLyricOffset;
 
   @override
   Widget build(BuildContext context) {
@@ -91,6 +116,12 @@ class _ImmersiveLyrics extends StatelessWidget {
       lyrics: lyrics,
       scale: scale,
       lyricSettings: lyricSettings,
+      lyricSpec: lyricSpec,
+      scrollMode: lyricScrollMode,
+      trackOffsetMs: trackOffsetMs,
+      onAdjustLyricOffset: onAdjustLyricOffset,
+      textAlign: textAlign,
+      blockAnchor: blockAnchor,
       onTogglePlayback: onTogglePlayback,
       onPrevious: onPrevious,
       onNext: onNext,
@@ -105,7 +136,6 @@ class _MusicImmersiveArtwork extends StatelessWidget {
     this.fit = BoxFit.cover,
     this.width,
     this.height,
-    this.borderRadius,
     this.cacheWidth,
     this.cacheHeight,
   });
@@ -115,7 +145,6 @@ class _MusicImmersiveArtwork extends StatelessWidget {
   final BoxFit fit;
   final double? width;
   final double? height;
-  final BorderRadius? borderRadius;
   final int? cacheWidth;
   final int? cacheHeight;
 
@@ -148,9 +177,6 @@ class _MusicImmersiveArtwork extends StatelessWidget {
               placeholder: (context, url) => fallback,
               errorWidget: (context, url, error) => fallback,
             );
-    if (borderRadius == null) {
-      return child;
-    }
-    return ClipRRect(borderRadius: borderRadius!, child: child);
+    return child;
   }
 }

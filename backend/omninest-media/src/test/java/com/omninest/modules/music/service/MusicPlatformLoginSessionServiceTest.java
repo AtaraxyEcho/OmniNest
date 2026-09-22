@@ -1,5 +1,6 @@
 package com.omninest.modules.music.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -36,6 +37,37 @@ class MusicPlatformLoginSessionServiceTest {
                 OWNER_ID,
                 Duration.ofMinutes(5)
         );
+    }
+
+    @Test
+    void registerClearsDisconnectedMarkForNewSession() {
+        service.register(OWNER_ID, MusicPlatform.NETEASE, LOGIN_KEY);
+
+        // 重新发起登录必须清除断开标记，否则新会话的确认会被误判为"迟到的旧确认"。
+        verify(ownershipRegistry).remove(
+                "omninest:integration:music:disconnected:netease:" + OWNER_ID
+        );
+    }
+
+    @Test
+    void markDisconnectedOutlivesConfirmedMarkWindow() {
+        service.markDisconnected(OWNER_ID, MusicPlatform.NETEASE);
+
+        verify(ownershipRegistry).register(
+                "omninest:integration:music:disconnected:netease:" + OWNER_ID,
+                OWNER_ID,
+                Duration.ofMinutes(15)
+        );
+    }
+
+    @Test
+    void isDisconnectedReflectsMarkPresence() {
+        when(ownershipRegistry.findOwner(
+                "omninest:integration:music:disconnected:netease:" + OWNER_ID
+        )).thenReturn(Optional.of(OWNER_ID));
+
+        assertThat(service.isDisconnected(OWNER_ID, MusicPlatform.NETEASE)).isTrue();
+        assertThat(service.isDisconnected(OTHER_USER_ID, MusicPlatform.NETEASE)).isFalse();
     }
 
     @Test

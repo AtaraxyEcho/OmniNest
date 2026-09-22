@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -112,6 +113,8 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
 
   @override
   Future<MusicCenterState> build() async {
+    // 换号时以依赖变化语义重建，避免渲染上一账号的旧值。
+    ref.watch(sessionEpochProvider);
     _controllerDisposed = false;
     final ownerId = await ref.read(musicPlaybackQueueOwnerIdProvider.future);
     final api = ref.read(musicApiProvider);
@@ -133,6 +136,14 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     }
     if (_queuePersistence.restoreRequiresRemoteSync) {
       _queuePersistence.schedule(loaded, delay: Duration.zero);
+    }
+    // 恢复的会话不经过播放请求路径：在线曲目恢复后歌词为空，
+    // 此处补拉一次，与主动播放时的行为一致。
+    final restoredItem = loaded.currentItem;
+    if (restoredItem != null &&
+        restoredItem.ref is OnlineMusicRef &&
+        restoredItem.track.lyricsRaw?.isNotEmpty != true) {
+      unawaited(_loadOnlineLyrics(restoredItem, _playRequestGeneration));
     }
     return loaded;
   }
@@ -445,7 +456,6 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       selectedArtistTracks: resolvedArtistTracks,
       lastScanJob: lastScanJob,
       neteaseUserInfo: platformInfo['netease'],
-      qqUserInfo: platformInfo['qq'],
       errorMessage: _partialErrors.isEmpty ? null : _partialErrors.join('；'),
     );
   }
@@ -755,10 +765,6 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   }
 
   Future<void> _recordPlayableHistory(MusicPlayableItem item) async {
-    final mediaMid = switch (item.ref) {
-      OnlineMusicRef(:final mediaMid) => mediaMid,
-      LocalMusicRef() => null,
-    };
     try {
       await _api.recordPlayableHistory(
         playableKey: item.playableKey,
@@ -767,7 +773,6 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         albumTitle: item.track.albumTitle,
         coverUrl: item.track.coverUrl ?? '',
         durationSeconds: item.track.durationSeconds,
-        mediaMid: mediaMid,
       );
     } on Object catch (error) {
       _partialErrors.add(describeUserFacingError(error).message);
@@ -791,11 +796,13 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       if (current?.currentItem?.playableKey != item.playableKey) {
         return;
       }
-      // 原文与译文双轨保存：译文为空时行级 translation 全部为 null。
+      // 原文、译文与逐字三轨保存：译文为空时行级 translation 全部为 null，
+      // 逐字为空时词级 words 全部为空，渲染层退回行级显示。
       final updatedItem = item.copyWith(
         track: item.track.copyWith(
           lyricsRaw: result.lyrics,
           lyricsTranslation: result.translation,
+          lyricsWords: result.words,
         ),
       );
       state = AsyncData(

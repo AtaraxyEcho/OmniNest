@@ -23,9 +23,8 @@ void main() {
 
   test('在线曲目保留平台歌曲标识和媒体标识', () {
     const track = OnlineTrack(
-      platform: 'qq',
+      platform: 'netease',
       songId: 'song-1',
-      mediaMid: 'media-1',
       title: 'Online Song',
       artistName: 'Online Artist',
       albumTitle: 'Online Album',
@@ -35,10 +34,9 @@ void main() {
     final item = MusicPlayableItem.online(track);
     final ref = item.ref as OnlineMusicRef;
 
-    expect(ref.platform, MusicPlatform.qq);
+    expect(ref.platform, MusicPlatform.netease);
     expect(ref.songId, 'song-1');
-    expect(ref.mediaMid, 'media-1');
-    expect(item.playableKey, 'online:qq:song-1');
+    expect(item.playableKey, 'online:netease:song-1');
     expect(item.track.id, item.playableKey);
   });
 

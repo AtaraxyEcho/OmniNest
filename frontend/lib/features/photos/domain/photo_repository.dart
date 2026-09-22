@@ -198,6 +198,12 @@ abstract interface class PhotoRepository {
   /// 撤销分享链接
   Future<void> revokeAlbumShare(String shareId);
 
+  /// 清空相册的全部有效分享链接，返回撤销条数
+  Future<int> revokeAllAlbumShares(String albumId);
+
+  /// 清空单张照片的全部有效分享链接，返回撤销条数
+  Future<int> revokeAllPhotoShares(String photoId);
+
   /// 创建单张照片分享链接
   Future<PhotoShareLink> createPhotoShare(
     String photoId, {

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
@@ -83,6 +84,7 @@ class AdminUserController extends AsyncNotifier<AdminUserState> {
 
   @override
   Future<AdminUserState> build() async {
+    ref.watch(sessionEpochProvider);
     final result = await _api.listUsers(page: 0, size: _pageSize);
     _page = 1;
     _hasMore = result.items.length < result.total;

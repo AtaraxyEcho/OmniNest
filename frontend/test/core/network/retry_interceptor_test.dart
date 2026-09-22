@@ -12,11 +12,15 @@ void main() {
     dio.interceptors.add(interceptor);
   });
 
-  RequestOptions getOptions({String method = 'GET'}) {
+  RequestOptions getOptions({
+    String method = 'GET',
+    Map<String, dynamic>? extra,
+  }) {
     return RequestOptions(
       path: '/test',
       baseUrl: 'https://example.com',
       method: method,
+      extra: extra ?? <String, dynamic>{},
     );
   }
 
@@ -25,8 +29,9 @@ void main() {
     int? statusCode,
     String method = 'GET',
     Map<String, dynamic>? headers,
+    Map<String, dynamic>? extra,
   }) {
-    final options = getOptions(method: method);
+    final options = getOptions(method: method, extra: extra);
     options.headers.addAll(headers ?? const <String, dynamic>{});
     Response<dynamic>? response;
     if (statusCode != null) {
@@ -198,6 +203,42 @@ void main() {
 
       await interceptor.onError(exception, handler);
 
+      expect(exception.requestOptions.extra['retryCount'], 1);
+    });
+
+    test(
+      'skips 5xx retry when the request opts out of server-error retry',
+      () async {
+        final handler = _TestErrorHandler();
+        final exception = buildException(
+          type: DioExceptionType.badResponse,
+          statusCode: 500,
+          method: 'DELETE',
+          extra: <String, dynamic>{skipServerErrorRetryKey: true},
+        );
+
+        await interceptor.onError(exception, handler);
+
+        // 用户已确认的一次性动作：服务端 5xx 重试注定失败，只会把等待时间
+        // 放大成退避之和（1s + 2s），因此这里必须直接失败而不是重试。
+        expect(handler.nextCount, 1);
+        expect(handler.resolveCount, 0);
+        expect(exception.requestOptions.extra['retryCount'], isNull);
+      },
+    );
+
+    test('opt-out still retries network level failures', () async {
+      final handler = _TestErrorHandler();
+      final exception = buildException(
+        type: DioExceptionType.connectionTimeout,
+        method: 'DELETE',
+        extra: <String, dynamic>{skipServerErrorRetryKey: true},
+      );
+
+      await interceptor.onError(exception, handler);
+
+      // 连接层失败与业务语义无关：仍然重试。
+      expect(handler.resolveCount + handler.nextCount, 1);
       expect(exception.requestOptions.extra['retryCount'], 1);
     });
   });

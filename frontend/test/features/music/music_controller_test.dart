@@ -111,7 +111,7 @@ void main() {
     expect(state.currentItem?.playableKey, 'online:netease:188888');
     expect(state.currentTrack?.title, 'Cloud Song');
     expect(state.playbackPlan?.url, 'http://localhost/online-track.mp3');
-    expect(api.onlinePlaybackRequests, ['netease:188888:']);
+    expect(api.onlinePlaybackRequests, ['netease:188888']);
     expect(api.playbackPlanTrackIds, isEmpty);
   });
 
@@ -297,7 +297,7 @@ void main() {
 
       expect(state.currentItem?.playableKey, 'local:track-2');
       expect(state.playbackPlan?.trackId, 'track-2');
-      expect(api.onlinePlaybackRequests, ['netease:deleted-song:']);
+      expect(api.onlinePlaybackRequests, ['netease:deleted-song']);
       expect(api.playbackPlanTrackIds, ['track-2']);
       expect(state.errorMessage, isNull);
     },
@@ -314,9 +314,9 @@ void main() {
             )
             ..recentEntries = [
               MusicRecentEntry(
-                playableKey: 'online:qq:temporary-song',
+                playableKey: 'online:netease:temporary-song',
                 onlineTrack: const OnlineTrack(
-                  platform: 'qq',
+                  platform: 'netease',
                   songId: 'temporary-song',
                   title: 'Temporary Song',
                   artistName: 'Online Artist',
@@ -331,7 +331,7 @@ void main() {
 
       final state = await container.read(musicCenterControllerProvider.future);
 
-      expect(state.currentItem?.playableKey, 'online:qq:temporary-song');
+      expect(state.currentItem?.playableKey, 'online:netease:temporary-song');
       expect(state.playbackPlan, isNull);
       expect(state.errorMessage, contains('REQUEST_TIMEOUT'));
       expect(api.playbackPlanTrackIds, isEmpty);
@@ -568,7 +568,7 @@ void main() {
       ]);
       expect(state.playbackIndex, 0);
       expect(state.isPlaying, isTrue);
-      expect(api.onlinePlaybackRequests, ['netease:deleted-song:']);
+      expect(api.onlinePlaybackRequests, ['netease:deleted-song']);
       expect(api.playbackPlanTrackIds.last, 'track-2');
     },
   );
@@ -867,12 +867,12 @@ class _FakeMusicApi implements MusicApi {
     if (failingPlaylistPlatforms.contains(platform)) {
       throw StateError('$platform playlist failure');
     }
-    if (platform == 'qq') {
+    if (platform == 'netease') {
       return const <OnlinePlaylist>[
         OnlinePlaylist(
-          platform: 'qq',
-          playlistId: 'qq-list-1',
-          name: 'QQ Collection',
+          platform: 'netease',
+          playlistId: 'netease-list-1',
+          name: 'Netease Collection',
         ),
       ];
     }
@@ -960,7 +960,6 @@ class _FakeMusicApi implements MusicApi {
     required String albumTitle,
     required String coverUrl,
     required int? durationSeconds,
-    String? mediaMid,
     int playDuration = 0,
   }) async {
     recordedHistoryKeys.add(playableKey);
@@ -1272,10 +1271,9 @@ class _FakeMusicApi implements MusicApi {
   Future<MusicPlaybackPlan> onlinePlaybackPlan(
     String platform,
     String songId, {
-    String? mediaMid,
     String quality = 'exhigh',
   }) async {
-    onlinePlaybackRequests.add('$platform:$songId:${mediaMid ?? ''}');
+    onlinePlaybackRequests.add('$platform:$songId');
     final error = onlinePlaybackError;
     if (error != null) {
       throw error;
@@ -1295,11 +1293,6 @@ class _FakeMusicApi implements MusicApi {
   @override
   Future<QrLoginStatus> checkNeteaseQrLogin(String key) async {
     return QrLoginStatus.fromJson(const <String, dynamic>{});
-  }
-
-  @override
-  Future<PlatformUserInfo> applyQqCookie(String cookie) async {
-    return PlatformUserInfo.fromJson(const <String, dynamic>{});
   }
 
   @override

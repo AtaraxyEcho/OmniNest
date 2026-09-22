@@ -508,6 +508,72 @@ class AuthServiceTest {
         }
 
         @Test
+        @DisplayName("刷新滑动续期：会话有效期顺延至不活跃窗口且与令牌截止一致")
+        void refreshSlidesSessionExpiryToInactivityWindow() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.MEMBER, "file:read"));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId()))
+                    .thenReturn(Optional.of(user));
+            AuthActiveSession session = activeSession(user.getId());
+            session.setIssuedAt(Instant.now().minus(Duration.ofHours(1)));
+            session.setExpiresAt(Instant.now().plus(Duration.ofDays(1)));
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+            when(sessionRevocationService.isRevoked(any(), any())).thenReturn(false);
+
+            service.refresh("refresh-token");
+
+            assertThat(session.getExpiresAt())
+                    .isAfter(Instant.now().plus(Duration.ofDays(29)))
+                    .isBefore(Instant.now().plus(Duration.ofDays(31)));
+            assertThat(jwtEncoder.claimsFor("refresh").getExpiresAt()).isEqualTo(session.getExpiresAt());
+        }
+
+        @Test
+        @DisplayName("刷新续期受会话绝对寿命上限钳制")
+        void refreshClampsSessionExpiryToAbsoluteCap() {
+            when(authenticationTokenPolicy.refreshSessionMaxLifetime()).thenReturn(Duration.ofDays(90));
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.MEMBER, "file:read"));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId()))
+                    .thenReturn(Optional.of(user));
+            AuthActiveSession session = activeSession(user.getId());
+            session.setIssuedAt(Instant.now().minus(Duration.ofDays(80)));
+            session.setExpiresAt(Instant.now().plus(Duration.ofDays(5)));
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+            when(sessionRevocationService.isRevoked(any(), any())).thenReturn(false);
+
+            service.refresh("refresh-token");
+
+            Instant cap = session.getIssuedAt().plus(Duration.ofDays(90));
+            assertThat(session.getExpiresAt()).isEqualTo(cap);
+            assertThat(jwtEncoder.claimsFor("refresh").getExpiresAt()).isEqualTo(cap);
+        }
+
+        @Test
+        @DisplayName("刷新不收缩既有有效期：上限已被越过时保持原截止自然到期")
+        void refreshKeepsExistingExpiryWhenCapAlreadyPassed() {
+            when(authenticationTokenPolicy.refreshSessionMaxLifetime()).thenReturn(Duration.ofDays(90));
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.MEMBER, "file:read"));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId()))
+                    .thenReturn(Optional.of(user));
+            AuthActiveSession session = activeSession(user.getId());
+            session.setIssuedAt(Instant.now().minus(Duration.ofDays(89)));
+            Instant existingExpiry = Instant.now().plus(Duration.ofDays(5));
+            session.setExpiresAt(existingExpiry);
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+            when(sessionRevocationService.isRevoked(any(), any())).thenReturn(false);
+
+            service.refresh("refresh-token");
+
+            assertThat(session.getExpiresAt()).isEqualTo(existingExpiry);
+            assertThat(jwtEncoder.claimsFor("refresh").getExpiresAt()).isEqualTo(existingExpiry);
+        }
+
+        @Test
         @DisplayName("刷新失败：会话已被撤销")
         void refreshFailsWhenSessionRevoked() {
             AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
@@ -565,6 +631,44 @@ class AuthServiceTest {
             assertThatThrownBy(() -> service.refresh("refresh-token"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("活动会话已过期");
+        }
+
+        @Test
+        @DisplayName("刷新续期活动会话注册表：同平台互斥键随会话一起滑动")
+        void refreshRenewsActiveSessionRegistry() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            user.getRoles().add(role(Roles.MEMBER, "file:read"));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId()))
+                    .thenReturn(Optional.of(user));
+            AuthActiveSession session = activeSession(user.getId());
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+            when(sessionRevocationService.isRevoked(any(), any())).thenReturn(false);
+
+            service.refresh("refresh-token");
+
+            verify(activeSessionRegistry).register(
+                    user.getId(),
+                    "web",
+                    session.getId(),
+                    Duration.ofDays(30)
+            );
+        }
+
+        @Test
+        @DisplayName("刷新失败：会话过期时不得续期注册表或产生其他副作用")
+        void refreshDoesNotTouchRegistryWhenSessionExpired() {
+            AuthUser user = localUser("admin", new BCryptPasswordEncoder().encode("pass"));
+            AuthActiveSession session = activeSession(user.getId());
+            session.setExpiresAt(Instant.now().minusSeconds(1));
+            when(authUserRepository.findWithRolesAndPermissionsById(user.getId())).thenReturn(Optional.of(user));
+            when(activeSessionRepository.findByIdAndUserId(session.getId(), user.getId()))
+                    .thenReturn(Optional.of(session));
+
+            assertThatThrownBy(() -> service.refresh("refresh-token"))
+                    .isInstanceOf(BusinessException.class)
+                    .hasMessageContaining("活动会话已过期");
+            verifyNoInteractions(activeSessionRegistry);
         }
 
         @Test

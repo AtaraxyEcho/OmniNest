@@ -2,7 +2,7 @@ part of 'music_controller_test.dart';
 
 void registerMusicPlatformTests() {
   test(
-    'platform library preserves successful sources after partial failure',
+    'platform library preloads playlist tracks after entering music',
     () async {
       final api =
           _FakeMusicApi()
@@ -10,45 +10,6 @@ void registerMusicPlatformTests() {
               MusicPlatformStatus(
                 platform: 'netease',
                 displayName: 'NetEase Cloud Music',
-                enabled: true,
-                connected: true,
-                capabilities: MusicPlatformCapabilities(
-                  search: true,
-                  playlists: true,
-                  likedTracks: true,
-                ),
-              ),
-              MusicPlatformStatus(
-                platform: 'qq',
-                displayName: 'QQ Music',
-                enabled: true,
-                connected: true,
-                capabilities: MusicPlatformCapabilities(playlists: true),
-              ),
-            ]
-            ..failingPlaylistPlatforms.add('netease');
-      final container = ProviderContainer.test(
-        overrides: [musicApiProvider.overrideWithValue(api)],
-      );
-      addTearDown(container.dispose);
-
-      final state = await container.read(musicPlatformLibraryProvider.future);
-
-      expect(state.playlistsByPlatform['qq']?.single.name, 'QQ Collection');
-      expect(state.likedTracksByPlatform['netease']?.single.songId, 'liked-1');
-      expect(state.failures, contains('netease:playlists'));
-    },
-  );
-
-  test(
-    'platform library preloads playlist tracks after entering music',
-    () async {
-      final api =
-          _FakeMusicApi()
-            ..platformStatuses = const <MusicPlatformStatus>[
-              MusicPlatformStatus(
-                platform: 'qq',
-                displayName: 'QQ Music',
                 enabled: true,
                 connected: true,
                 capabilities: MusicPlatformCapabilities(playlists: true),
@@ -62,10 +23,10 @@ void registerMusicPlatformTests() {
       await Future<void>.delayed(const Duration(milliseconds: 10));
 
       final state = container.read(musicPlatformLibraryProvider).value!;
-      expect(api.platformPlaylistTrackRequests, ['qq:qq-list-1']);
+      expect(api.platformPlaylistTrackRequests, ['netease:netease-list-1']);
       expect(
-        state.coverUrlForPlaylist(state.playlistsByPlatform['qq']!.single),
-        'https://example.com/qq-cover.jpg',
+        state.coverUrlForPlaylist(state.playlistsByPlatform['netease']!.single),
+        'https://example.com/netease-cover.jpg',
       );
     },
   );

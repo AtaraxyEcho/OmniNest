@@ -3,123 +3,70 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  test('封面点阵渲染管线已移除并保留原封面底板', () {
-    final oldPipeline = File(
-      'lib/features/music/presentation/player/music_immersive_cover_field.dart',
-    );
+  test('封面元素渲染管线（含原始封面）已整体删除', () {
     final stageSource =
         File(
           'lib/features/music/presentation/player/music_immersive_player_stage.dart',
         ).readAsStringSync();
-    final planeSource =
-        File(
-          'lib/features/music/presentation/player/music_immersive_cover_plane.dart',
-        ).readAsStringSync();
-    final performancePipeline = File(
-      'lib/features/music/presentation/player/music_immersive_performance_budget.dart',
-    );
-    final editorSource =
-        File(
-          'lib/features/music/presentation/player/music_immersive_preset_editor.dart',
-        ).readAsStringSync();
-
-    expect(oldPipeline.existsSync(), isFalse);
-    expect(stageSource, contains('_DigitalImmersiveCoverPlane'));
-    expect(stageSource, isNot(contains('_DigitalImmersiveCoverParticleField')));
-    expect(planeSource, contains('_MusicImmersiveArtwork'));
-    expect(planeSource, isNot(contains('drawRawAtlas')));
-    expect(planeSource, isNot(contains('_DigitalCoverParticle')));
-    expect(performancePipeline.existsSync(), isFalse);
-    expect(editorSource, isNot(contains('_draft.coverParticles')));
-  });
-
-  test('沉浸背景不再绘制全屏节拍闪光和低频光圈', () {
-    final backgroundPipeline = File(
-      'lib/features/music/presentation/player/music_immersive_particles.dart',
-    );
-    final presetSource =
-        File(
-          'lib/features/music/domain/music_visualizer_preset.dart',
-        ).readAsStringSync();
-    final editorSource =
-        File(
-          'lib/features/music/presentation/player/music_immersive_preset_editor.dart',
-        ).readAsStringSync();
-
-    expect(backgroundPipeline.existsSync(), isFalse);
-    expect(presetSource, isNot(contains('beatFlashEnabled')));
-    expect(presetSource, isNot(contains('lowPulseEnabled')));
-    expect(editorSource, isNot(contains('portalMusicVisualizerBeatFlash')));
-    expect(editorSource, isNot(contains('portalMusicVisualizerLowPulse')));
-  });
-
-  test('视觉编辑器不再包含预设、舞台和平台档位', () {
-    final modelSource =
-        File(
-          'lib/features/music/domain/music_visualizer_preset.dart',
-        ).readAsStringSync();
-    final editorSource =
-        File(
-          'lib/features/music/presentation/player/music_immersive_preset_editor.dart',
-        ).readAsStringSync();
-    final stageSource =
-        File(
-          'lib/features/music/presentation/player/music_immersive_player_stage.dart',
-        ).readAsStringSync();
-
-    expect(modelSource, isNot(contains('PortalStageVisualSettings')));
-    expect(modelSource, isNot(contains('PortalPlatformVisualProfile')));
-    expect(modelSource, isNot(contains('builtIns')));
-    expect(editorSource, isNot(contains('VisualizerPreset')));
-    expect(editorSource, isNot(contains('portalMusicVisualizerStage')));
-    expect(editorSource, isNot(contains('portalMusicVisualizerPlatform')));
-    expect(stageSource, contains('_MusicImmersiveAudioBar'));
-    expect(stageSource, contains('visual.player.enabled'));
-    expect(stageSource, contains('visual.player.audioBarEnabled'));
-  });
-
-  test('频谱绘制不再触发封面和音频条组件逐帧重建', () {
     final playerSource =
         File(
-          'lib/features/music/application/music_audio_playback.dart',
-        ).readAsStringSync();
-    final stageSource =
-        File(
-          'lib/features/music/presentation/player/music_immersive_player_stage.dart',
-        ).readAsStringSync();
-    final audioBarSource =
-        File(
-          'lib/features/music/presentation/player/music_immersive_audio_bar.dart',
-        ).readAsStringSync();
-    final coverSource =
-        File(
-          'lib/features/music/presentation/player/music_immersive_cover_plane.dart',
+          'lib/features/music/presentation/player/music_immersive_player.dart',
         ).readAsStringSync();
 
-    expect(playerSource, contains('setFftSmoothing(0)'));
-    expect(audioBarSource, contains('super(repaint: spectrum)'));
-    expect(audioBarSource, isNot(contains('ValueListenableBuilder')));
-    expect(audioBarSource, contains('final active = frame.active'));
-    expect(audioBarSource, isNot(contains('required this.isPlaying')));
-    expect(coverSource, contains('super(repaint: spectrum)'));
-    expect(stageSource, isNot(contains('animation: spectrumFeed')));
+    // 渲染文件已删除，舞台与播放器不再有封面底板与频谱接线。
+    expect(
+      File(
+        'lib/features/music/presentation/player/music_immersive_cover_plane.dart',
+      ).existsSync(),
+      isFalse,
+    );
+    expect(stageSource, isNot(contains('_DigitalImmersiveCoverPlane')));
+    expect(stageSource, isNot(contains('coverElements')));
+    expect(stageSource, isNot(contains('spectrumFeed')));
+    expect(playerSource, isNot(contains('music_immersive_cover_plane')));
+    expect(playerSource, isNot(contains('musicSpectrumFeedProvider')));
   });
 
-  test('主封面默认正放并支持统一调整封面和边框倾斜角度', () {
+  test('视觉设置模型不再包含频响与封面元素字段', () {
     final modelSource =
         File(
           'lib/features/music/domain/music_visualizer_preset.dart',
         ).readAsStringSync();
-    final coverSource =
+    final editorSource =
         File(
-          'lib/features/music/presentation/player/music_immersive_cover_plane.dart',
+          'lib/features/music/presentation/player/music_immersive_preset_editor.dart',
         ).readAsStringSync();
 
-    expect(modelSource, contains('tiltDegrees: 0'));
-    expect(coverSource, contains('visual.coverElements.tiltDegrees'));
-    expect(coverSource, contains('canvas.rotate(tiltRadians)'));
-    expect(coverSource, isNot(contains('rotateX(')));
-    expect(coverSource, isNot(contains('rotateY(')));
+    expect(modelSource, isNot(contains('PortalSpectrumVisualSettings')));
+    expect(modelSource, isNot(contains('PortalCoverElementSettings')));
+    expect(modelSource, isNot(contains("json?['coverElements']")));
+    expect(modelSource, contains('static const int currentSchemaVersion = 13'));
+    // 编辑面板不再有封面与频响分区。
+    expect(editorSource, isNot(contains('MusicVisualEditorSection.cover')));
+    expect(editorSource, isNot(contains('MusicVisualEditorSection.spectrum')));
+    expect(editorSource, isNot(contains('_draft.coverElements')));
+    expect(editorSource, isNot(contains('_draft.spectrum')));
+    // 音频条整体移除：模型不再保留样式枚举，面板不再有音频条文案。
+    expect(modelSource, isNot(contains('MusicAudioBarStyle')));
+    expect(editorSource, isNot(contains('musicVisualizerAudioBar')));
+  });
+
+  test('桌面沉浸面板只注入桌面分组且不再有无效分区引用', () {
+    final stageSource =
+        File(
+          'lib/features/music/presentation/player/music_immersive_player_stage.dart',
+        ).readAsStringSync();
+    final mobileSource =
+        File(
+          'lib/features/music/presentation/player/music_mobile_now_playing.dart',
+        ).readAsStringSync();
+
+    expect(stageSource, contains('MusicVisualEditorSection.desktop'));
+    expect(
+      stageSource,
+      isNot(contains('MusicVisualEditorSection.mobileLyrics')),
+    );
+    expect(mobileSource, contains('MusicVisualEditorSection.mobileLyrics'));
   });
 
   test('Portal 沉浸模式为顶部栏预留视觉编辑空间', () {

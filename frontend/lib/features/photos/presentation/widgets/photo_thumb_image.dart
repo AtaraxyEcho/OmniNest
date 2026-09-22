@@ -61,9 +61,7 @@ class PhotoThumbImage extends ConsumerWidget {
             // 图片流回调（可发生于 build 期）中直接改写 provider 状态。
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (context.mounted) {
-                ref
-                    .read(photoCoverRecoveryProvider.notifier)
-                    .reportFailure();
+                ref.read(photoCoverRecoveryProvider.notifier).reportFailure();
               }
             });
           },

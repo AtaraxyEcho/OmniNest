@@ -35,7 +35,7 @@ void registerMusicQueueTests() {
     expect(state.currentItem?.playableKey, 'online:netease:188888');
     expect(state.repeatMode, MusicRepeatMode.all);
     expect(state.shuffleEnabled, isTrue);
-    expect(api.onlinePlaybackRequests, ['netease:188888:']);
+    expect(api.onlinePlaybackRequests, ['netease:188888']);
   });
 
   test(

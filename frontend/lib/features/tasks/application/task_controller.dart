@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/tasks/data/task_api.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
@@ -15,13 +16,17 @@ final taskListProvider = NotifierProvider<TaskListNotifier, List<TaskRecord>>(
 final activeTaskSummaryProvider = FutureProvider<ActiveTaskSummary>((
   ref,
 ) async {
+  ref.watch(sessionEpochProvider);
   final tasks = await ref.watch(taskApiProvider).list(page: 0, size: 100);
   return ActiveTaskSummary.fromRecords(tasks);
 });
 
 class TaskListNotifier extends Notifier<List<TaskRecord>> {
   @override
-  List<TaskRecord> build() => [];
+  List<TaskRecord> build() {
+    ref.watch(sessionEpochProvider);
+    return [];
+  }
 
   int _page = 0;
   bool _hasMore = true;

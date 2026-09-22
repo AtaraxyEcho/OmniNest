@@ -16,6 +16,7 @@ import com.omninest.common.security.Roles;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.user.domain.AuthActiveSession;
 import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
@@ -51,10 +52,11 @@ class CurrentUserServiceTest {
         return null;
     });
     private final MalwareScanGateway malwareScanGateway = mock(MalwareScanGateway.class);
+    private final UserSyncEventRecorder syncEventRecorder = mock(UserSyncEventRecorder.class);
     private final CurrentUserService service = new CurrentUserService(
             authUserRepository, activeSessionRepository, currentUserContext, passwordEncoder,
             new PasswordPolicy(), objectStorageClient, objectStorageBuckets, notificationService, sessionRevocationService,
-            readThroughCache, malwareScanGateway);
+            readThroughCache, malwareScanGateway, syncEventRecorder);
 
     @Test
     void returnsCurrentUserFromSecurityContextUserId() {

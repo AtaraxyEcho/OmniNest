@@ -10,8 +10,7 @@ import java.util.Locale;
  * @author OmniNest
  */
 public enum MusicPlatform {
-    NETEASE("netease", "网易云音乐"),
-    QQ("qq", "QQ音乐");
+    NETEASE("netease", "网易云音乐");
 
     private final String apiValue;
     private final String displayName;

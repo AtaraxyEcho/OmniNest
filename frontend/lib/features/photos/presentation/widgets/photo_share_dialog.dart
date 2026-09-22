@@ -17,6 +17,7 @@ Future<(String, String)?> showPhotoShareDialog(
   required String title,
   required List<PhotoShareLink> shares,
   required Future<void> Function(String shareId) onRevoke,
+  Future<int> Function()? onRevokeAll,
 }) async {
   String expiryOption = 'never';
   final remainingShares = [...shares];
@@ -124,15 +125,71 @@ Future<(String, String)?> showPhotoShareDialog(
                               // 现有链接
                               if (remainingShares.isNotEmpty) ...[
                                 const SizedBox(height: 16),
-                                Text(
-                                  AppLocalizations.of(
-                                    ctx,
-                                  ).photosExistingShareLinks,
-                                  style: TextStyle(
-                                    color: ctx.frameColors.sub,
-                                    fontSize: AppTypography.bodySmall,
-                                    fontWeight: FontWeight.w700,
-                                  ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        AppLocalizations.of(
+                                          ctx,
+                                        ).photosExistingShareLinks,
+                                        style: TextStyle(
+                                          color: ctx.frameColors.sub,
+                                          fontSize: AppTypography.bodySmall,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    // 一键清空：撤销该内容全部有效链接（二次确认）。
+                                    if (onRevokeAll != null)
+                                      TextButton(
+                                        onPressed: () async {
+                                          final confirmed =
+                                              await showFrameConfirmDialog(
+                                                context,
+                                                title:
+                                                    AppLocalizations.of(
+                                                      context,
+                                                    ).photosShareRevokeAllConfirmTitle,
+                                                body:
+                                                    AppLocalizations.of(
+                                                      context,
+                                                    ).photosShareRevokeAllConfirmBody,
+                                                confirmLabel:
+                                                    AppLocalizations.of(
+                                                      context,
+                                                    ).photosShareRevokeAll,
+                                                destructive: true,
+                                              );
+                                          if (!confirmed || !ctx.mounted) {
+                                            return;
+                                          }
+                                          try {
+                                            await onRevokeAll();
+                                          } on Exception catch (error) {
+                                            setDialogState(() {
+                                              revokeError =
+                                                  describeUserFacingError(
+                                                    error,
+                                                  ).displayMessage;
+                                            });
+                                            return;
+                                          }
+                                          setDialogState(() {
+                                            revokeError = null;
+                                            remainingShares.clear();
+                                          });
+                                        },
+                                        child: Text(
+                                          AppLocalizations.of(
+                                            ctx,
+                                          ).photosShareRevokeAll,
+                                          style: TextStyle(
+                                            color: const Color(0xFFEF4444),
+                                            fontSize: AppTypography.labelSmall,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
                                 ),
                                 const SizedBox(height: 8),
                                 if (revokeError != null) ...[

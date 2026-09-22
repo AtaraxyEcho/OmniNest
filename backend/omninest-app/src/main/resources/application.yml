@@ -66,8 +66,8 @@ spring:
       connect-timeout: 3s
   servlet:
     multipart:
-      max-file-size: 128MB
-      max-request-size: 128MB
+      max-file-size: 512MB
+      max-request-size: 512MB
   threads:
     virtual:
       enabled: true
@@ -153,6 +153,7 @@ omninest:
     credential-encryption-key-version: 1
     access-token-ttl: 30m
     refresh-token-ttl: 30d
+    refresh-session-max-lifetime: 90d
     allow-credentials: true
     content-security-policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
     permissions-policy: "camera=(), microphone=(), geolocation=(), payment=()"

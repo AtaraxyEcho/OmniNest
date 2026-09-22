@@ -377,6 +377,10 @@ class _AlbumDetailBodyState extends ConsumerState<_AlbumDetailBody> {
           (shareId) => ref
               .read(photoCenterControllerProvider.notifier)
               .revokeAlbumShare(shareId),
+      onRevokeAll:
+          () => ref
+              .read(photoCenterControllerProvider.notifier)
+              .revokeAllAlbumShares(albumId),
     );
 
     if (!context.mounted) return;

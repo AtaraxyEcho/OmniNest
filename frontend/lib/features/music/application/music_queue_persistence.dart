@@ -7,6 +7,12 @@ extension MusicQueuePersistenceActions on MusicCenterController {
 }
 
 extension _MusicQueueRestore on MusicCenterController {
+  /// 从持久化快照恢复队列。
+  ///
+  /// 这里**不**按"平台是否已连接"过滤在线曲目：`platformInfo` 在"未连接"与"请求失败"
+  /// 两种情况下都返回 null，按它过滤会在瞬时故障时静默丢弃用户队列。平台断开后的清理
+  /// 由注销流程的确定性剔除 + 远端回写完成（远端较新时本地会整体采用远端快照），
+  /// 多端场景同样覆盖。
   List<MusicPlayableItem> _restorePlaybackQueue(
     MusicPlaybackQueueSnapshot snapshot,
     List<MusicTrack> tracks,

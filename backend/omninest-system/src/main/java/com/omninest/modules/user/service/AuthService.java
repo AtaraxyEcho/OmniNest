@@ -413,8 +413,42 @@ public class AuthService {
             throw new BusinessException(ErrorCode.UNAUTHORIZED, "会话已在其他设备登录");
         }
         session.setLastActiveAt(now);
+        slideSessionExpiry(session, now);
         activeSessionRepository.save(session);
-        return issueToken(toDto(profile), sessionId);
+        // 活动会话注册表键与滑动会话同步续期：登录时写入的 TTL 不续写会在
+        // 第 30 天先于会话失效，导致同平台互斥查不到旧会话。
+        activeSessionRegistry.register(
+                userId,
+                session.getClientPlatform(),
+                sessionId,
+                authenticationTokenPolicy.refreshTokenTtl()
+        );
+        return issueToken(toDto(profile), sessionId, session.getExpiresAt());
+    }
+
+    /**
+     * 刷新时滑动续期会话有效期：不活跃窗口取刷新令牌 TTL，同时不得超过
+     * 自会话签发起算的绝对寿命上限。有效期只延长不收缩，策略上限被调小
+     * 或旧会话已越过上限时保持既有截止时间自然到期，不把在线用户立即踢下线。
+     *
+     * @param session 待续期的活动会话
+     * @param now 当前时间
+     */
+    private void slideSessionExpiry(AuthActiveSession session, Instant now) {
+        Duration maxLifetime = authenticationTokenPolicy.refreshSessionMaxLifetime();
+        Instant candidate = now.plus(authenticationTokenPolicy.refreshTokenTtl());
+        if (maxLifetime != null && !maxLifetime.isNegative() && !maxLifetime.isZero()) {
+            Instant anchor = session.getIssuedAt() != null ? session.getIssuedAt() : session.getCreatedAt();
+            if (anchor != null) {
+                Instant cap = anchor.plus(maxLifetime);
+                if (cap.isBefore(candidate)) {
+                    candidate = cap;
+                }
+            }
+        }
+        if (candidate.isAfter(session.getExpiresAt())) {
+            session.setExpiresAt(candidate);
+        }
     }
 
     /**
@@ -447,14 +481,26 @@ public class AuthService {
         if (activeSessionRepository.findByIdAndUserId(sessionId, userId).isEmpty()) {
             return;
         }
-        sessionRevocationService.revokeSession(userId, sessionId, Duration.ofDays(30));
+        sessionRevocationService.revokeSession(userId, sessionId, authenticationTokenPolicy.refreshTokenTtl());
         activeSessionRepository.revokeBySessionId(sessionId, "用户退出登录");
     }
 
     private AuthTokenResponse issueToken(AuthUserDto user, UUID sessionId) {
+        return issueToken(user, sessionId, Instant.now().plus(authenticationTokenPolicy.refreshTokenTtl()));
+    }
+
+    /**
+     * 签发访问与刷新令牌。刷新路径传入会话行实际截止时间，保证 JWT 过期
+     * 声明、Web 端 Cookie Max-Age 与服务端会话有效期三者一致。
+     *
+     * @param user 用户信息
+     * @param sessionId 会话标识
+     * @param refreshExpiresAt 刷新令牌截止时间
+     * @return 令牌响应
+     */
+    private AuthTokenResponse issueToken(AuthUserDto user, UUID sessionId, Instant refreshExpiresAt) {
         Instant now = Instant.now();
         Instant accessExpiresAt = now.plus(authenticationTokenPolicy.accessTokenTtl());
-        Instant refreshExpiresAt = now.plus(authenticationTokenPolicy.refreshTokenTtl());
         String accessToken = encodeToken(user, sessionId, now, accessExpiresAt, "access", true);
         String refreshToken = encodeToken(user, sessionId, now, refreshExpiresAt, "refresh", false);
         return new AuthTokenResponse(

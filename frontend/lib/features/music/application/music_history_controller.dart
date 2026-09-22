@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/music/data/music_api.dart';
@@ -76,6 +77,7 @@ class MusicHistoryController extends AsyncNotifier<MusicHistoryState> {
 
   @override
   Future<MusicHistoryState> build() async {
+    ref.watch(sessionEpochProvider);
     try {
       final page = await _api().playHistory(page: 0, size: _pageSize);
       final next = _mergeGroups(const [], page.items);
@@ -136,6 +138,32 @@ class MusicHistoryController extends AsyncNotifier<MusicHistoryState> {
           ),
         );
       }
+    }
+  }
+
+  /// 重进历史页与播放历史实时事件触发的保数据刷新：后台拉取第一页，
+  /// 成功后整体替换并回到首页游标；失败时保留已渲染数据不打断页面。
+  /// 首次构建仍在加载时跳过，避免与初始请求叠加。
+  Future<void> refresh() async {
+    if (state.isLoading) {
+      return;
+    }
+    try {
+      final page = await _api().playHistory(page: 0, size: _pageSize);
+      if (!ref.mounted) {
+        return;
+      }
+      final next = _mergeGroups(const [], page.items);
+      state = AsyncData(
+        MusicHistoryState(
+          groups: next,
+          totalElements: page.totalElements,
+          loadedCount: page.items.length,
+          nextPage: page.page + 1,
+        ),
+      );
+    } on Exception {
+      return;
     }
   }
 

@@ -15,12 +15,7 @@ void main() {
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
         home: const Scaffold(
-          body: Center(
-            child: TextButton(
-              onPressed: null,
-              child: Text('占位'),
-            ),
-          ),
+          body: Center(child: TextButton(onPressed: null, child: Text('占位'))),
         ),
       ),
     );

@@ -46,6 +46,12 @@ Please read this section before using OmniNest. **Using this software means you 
 - The Flutter tree contains iOS / macOS directories and adapters, but they have **not** received full testing equivalent to those three platforms. They are **not recommended** for production or critical use without your own validation.
 - Optional components such as virus scanning (ClamAV) and image analysis are **deployment choices** based on hardware and exposure. Typical 4C4G personal setups may disable scanning; public internet deployments should evaluate enabling it.
 
+### Third-party music platforms
+
+- This project is for **personal study and research only**; commercial and illegal use is prohibited. It does **not** provide VIP audio source cracking or services that bypass payment, membership, or audio-quality limits.
+- OmniNest is an **unofficial** open-source project, with **no affiliation, partnership, or authorization** with NetEase Cloud Music or its affiliates.
+- All content resources belong to their respective platform owners. You are responsible for complying with the platform's terms of service and copyright requirements, at your own risk.
+
 ### Getting the clients
 
 - **Web** is served by the deployment stack's Nginx and connects same-origin.
@@ -56,6 +62,8 @@ Please read this section before using OmniNest. **Using this software means you 
 
 - Data stays on **your** server and storage. Developers do **not** collect your library contents through this software.
 - You are responsible for complying with applicable laws regarding personal data and online services.
+
+> Privacy notice: [`PRIVACY.en.md`](./PRIVACY.en.md). Third-party licensing and attribution: [`NOTICE.md`](./NOTICE.md).
 
 ---
 

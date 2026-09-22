@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:omninest/app/session/session_epoch.dart';
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,6 +34,7 @@ final moviePlaybackServiceProvider = Provider<MoviePlaybackService>((ref) {
 
 /// 提供影视模块的首页摘要只读视图。
 final movieDashboardProvider = FutureProvider<MovieDashboard>((ref) {
+  ref.watch(sessionEpochProvider);
   return ref.watch(movieApiProvider).dashboard();
 });
 
@@ -408,6 +410,8 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
 
   @override
   Future<MovieCenterState> build() async {
+    // 换号时以依赖变化语义重建，避免渲染上一账号的旧值。
+    ref.watch(sessionEpochProvider);
     final loaded = await _loadState();
     final section = _pendingSection ?? ref.read(movieCenterSectionProvider);
     _pendingSection = null;

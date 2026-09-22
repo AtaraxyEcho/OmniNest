@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:omninest/app/session/session_epoch.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -20,6 +21,7 @@ class MusicDailyRecommendationController
 
   @override
   Future<DailyRecommendedTracks?> build() async {
+    ref.watch(sessionEpochProvider);
     // 只订阅"网易云推荐是否可见"这一布尔结果，避免平台曲库其它
     // 字段（歌单/喜欢曲目缓存）变化时连带重建本 provider。
     final neteaseVisible = ref.watch(

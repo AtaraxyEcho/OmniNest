@@ -157,9 +157,6 @@ public class MusicStreamGatewayService {
         if (lower.contains("music.163.com") || lower.contains("music.126.net")) {
             return "https://music.163.com/";
         }
-        if (lower.contains("y.qq.com") || lower.contains("qqmusic.qq.com")) {
-            return "https://y.qq.com/";
-        }
         String scheme = uri.getScheme() == null ? "https" : uri.getScheme();
         String host = uri.getHost() == null ? "" : uri.getHost();
         return scheme + "://" + host + "/";

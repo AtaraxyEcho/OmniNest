@@ -34,6 +34,10 @@ public class ShareLink {
     @Column(name = "token_hash", nullable = false, length = 128)
     private String tokenHash;
 
+    /** 分享令牌密文：仅供所有者重新展示链接地址，公开校验仍以哈希为准。 */
+    @Column(name = "token_cipher", columnDefinition = "text")
+    private String tokenCipher;
+
     @Column(name = "password_hash", length = 255)
     private String passwordHash;
 

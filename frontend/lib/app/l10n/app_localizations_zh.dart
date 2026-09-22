@@ -350,6 +350,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get notificationEmptyHint => '新通知会实时推送到这里';
 
   @override
+  String get coreSignOutConfirmTitle => '确认退出登录？';
+
+  @override
+  String get coreSignOutConfirmMessage => '退出后需要重新输入账号密码才能继续使用。';
+
+  @override
+  String get notificationForegroundToastView => '查看';
+
+  @override
+  String get notificationForegroundToastToggle => '新通知前台提示';
+
+  @override
+  String get notificationForegroundToastToggleSubtitle => '通知到达时在页面底部弹出轻量提示';
+
+  @override
   String get notificationMarkAllRead => '全部已读';
 
   @override
@@ -432,6 +447,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get notificationTypePasswordChangedDesc => '账户密码已成功修改';
+
+  @override
+  String get notificationTypeSecurityThreat => '安全威胁';
+
+  @override
+  String get notificationTypeSecurityThreatDesc => '检测到可疑的文件上传行为';
+
+  @override
+  String get notificationTypeSecurityScanFailed => '安全扫描失败';
+
+  @override
+  String get notificationTypeSecurityScanFailedDesc => '文件未能通过安全扫描，已被隔离';
 
   @override
   String get notificationTypesHeader => '通知类型';
@@ -2253,16 +2280,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalMusicVisualizerLyrics => '歌词';
 
   @override
+  String get musicVisualizerLyricMode => '歌词显示模式';
+
+  @override
+  String get musicVisualizerLyricModeScroll => '滚动歌词';
+
+  @override
+  String get musicVisualizerLyricModeMultiline => '多行歌词';
+
+  @override
   String get portalMusicVisualizerPlayer => '播放器';
-
-  @override
-  String get portalMusicVisualizerLow => '低频';
-
-  @override
-  String get portalMusicVisualizerMid => '中频';
-
-  @override
-  String get portalMusicVisualizerHigh => '高频';
 
   @override
   String get portalMusicVisualizerCurrentFont => '当前句字号';
@@ -2274,13 +2301,85 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalMusicVisualizerVisibleLines => '可见行数';
 
   @override
-  String get musicVisualizerLyricActiveColor => '当前歌词颜色';
+  String get musicVisualizerLyricCurrentColor => '在读歌词颜色';
 
   @override
-  String get musicVisualizerLyricReadColor => '已读歌词颜色';
+  String get musicVisualizerLyricInactiveColor => '非当前句歌词颜色';
 
   @override
-  String get musicVisualizerLyricUnreadColor => '未读歌词颜色';
+  String get musicVisualizerLyricFontSize => '歌词字号';
+
+  @override
+  String get musicVisualizerUnitLines => '行';
+
+  @override
+  String musicLyricSemanticsCurrent(Object text) {
+    return '当前歌词：$text';
+  }
+
+  @override
+  String get musicVisualizerLyricOffset => '歌词延迟';
+
+  @override
+  String get musicVisualizerLyricTranslation => '显示译文';
+
+  @override
+  String get musicVisualizerLyricKaraokeFill => '逐字填充';
+
+  @override
+  String get musicVisualizerLyricFocusAnchor => '焦点行位置';
+
+  @override
+  String get musicVisualizerLyricFocusBand => '焦点带高亮';
+
+  @override
+  String get musicLyricBackToCurrent => '回到当前播放';
+
+  @override
+  String get musicLyricCopied => '已复制该行歌词';
+
+  @override
+  String get musicLyricCopyLine => '复制歌词';
+
+  @override
+  String get musicLyricDelayLater => '歌词延后 0.1 秒';
+
+  @override
+  String get musicLyricAdvanceEarlier => '歌词提前 0.1 秒';
+
+  @override
+  String get musicLyricOffsetLater => '歌词延后 0.2 秒';
+
+  @override
+  String get musicLyricOffsetEarlier => '歌词提前 0.2 秒';
+
+  @override
+  String get musicLyricOffsetReset => '重置歌词偏移';
+
+  @override
+  String musicLyricOffsetDelayed(Object seconds) {
+    return '延后 $seconds 秒';
+  }
+
+  @override
+  String musicLyricOffsetAdvanced(Object seconds) {
+    return '提前 $seconds 秒';
+  }
+
+  @override
+  String get musicVisualizerDeckToggle => '显示堆叠卡片';
+
+  @override
+  String get musicLyricSyncBadge => '同步歌词';
+
+  @override
+  String get musicSeekBack10 => '后退 10 秒';
+
+  @override
+  String get musicSeekForward10 => '前进 10 秒';
+
+  @override
+  String get musicVisualizerLyricStyle => '歌词样式';
 
   @override
   String get musicVisualizerLyricBreathing => '歌词呼吸效果';
@@ -2289,34 +2388,16 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicVisualizerLyricLineSpacing => '歌词行距';
 
   @override
-  String get musicVisualizerLyricGlowIntensity => '溢光强度';
+  String get musicVisualizerLayout => '桌面布局';
 
   @override
-  String get musicVisualizerLyricGlowColor => '溢光颜色';
+  String get musicVisualizerLayoutLeft => '居左';
 
   @override
-  String get musicVisualizerLyricPosition => '歌词位置';
+  String get musicVisualizerLayoutCenter => '居中';
 
   @override
-  String get musicVisualizerLyricPositionLeft => '左侧';
-
-  @override
-  String get musicVisualizerLyricPositionCenter => '居中';
-
-  @override
-  String get musicVisualizerLyricPositionRight => '右侧';
-
-  @override
-  String get musicVisualizerAudioBarStyle => '音频条样式';
-
-  @override
-  String get musicVisualizerAudioBarSpectrum => '频谱柱';
-
-  @override
-  String get musicVisualizerAudioBarLine => '流光曲线';
-
-  @override
-  String get musicVisualizerAudioBarDots => '脉冲点阵';
+  String get musicVisualizerLayoutRight => '居右';
 
   @override
   String get musicVisualizerColorHue => '色相';
@@ -2331,19 +2412,33 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicVisualizerColorCustom => '自定义颜色';
 
   @override
+  String musicVisualizerColorCustomStop(Object stop) {
+    return '自定义颜色 · $stop';
+  }
+
+  @override
   String get musicVisualizerColorHex => 'HEX 色值';
 
   @override
   String get musicVisualizerColorResetDefault => '恢复默认色';
 
   @override
-  String get portalMusicVisualizerLyricGlow => '歌词溢光';
+  String get musicVisualizerColorPaintMode => '颜色画法';
 
   @override
-  String get portalMusicVisualizerOriginalCover => '原始封面';
+  String get musicVisualizerColorPaintSolid => '纯色';
 
   @override
-  String get portalMusicVisualizerCoverBorder => '封面边框';
+  String get musicVisualizerColorPaintGradient => '上下渐变';
+
+  @override
+  String get musicVisualizerColorPaintStops => '渐变两端';
+
+  @override
+  String get musicVisualizerColorPaintTop => '上色';
+
+  @override
+  String get musicVisualizerColorPaintBottom => '下色';
 
   @override
   String get portalMusicVisualizerProgressControl => '进度条';
@@ -2352,22 +2447,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicVisualizerPlayerVisible => '显示底部播放器';
 
   @override
-  String get musicVisualizerAudioBar => '显示音频条';
+  String get musicVisualizerGroupDesktop => '桌面沉浸';
 
   @override
-  String get musicVisualizerFrequencyResponse => '音频条频率响应';
+  String get musicVisualizerGroupMobileLyrics => '移动端歌词样式';
 
   @override
-  String get musicVisualizerCoverSize => '封面尺寸';
+  String get musicVisualizerScopeDesktop => '桌面';
 
   @override
-  String get musicVisualizerCoverRadius => '封面圆角';
+  String get musicVisualizerScopeMobile => '移动端';
 
   @override
-  String get musicVisualizerCoverTilt => '封面倾斜角度';
-
-  @override
-  String get musicVisualizerHeroCoverOpacity => 'Hero 封面不透明度';
+  String get musicVisualizerScopeAll => '通用';
 
   @override
   String get portalReading => '在读';
@@ -3289,9 +3381,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminConfigProviderNetease => '网易云音乐';
 
   @override
-  String get adminConfigProviderQqMusic => 'QQ 音乐';
-
-  @override
   String get adminConfigProviderQWeather => '和风天气';
 
   @override
@@ -3364,9 +3453,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminConfigNeteaseEnabled => '启用网易云音乐';
-
-  @override
-  String get adminConfigQqEnabled => '启用 QQ 音乐';
 
   @override
   String get adminConfigQWeatherProjectId => '项目 ID';
@@ -3445,15 +3531,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminConfigNeteaseHosts => '网易云播放域名';
-
-  @override
-  String get adminConfigQqUUrl => 'QQ 音乐 U 接口地址';
-
-  @override
-  String get adminConfigQqCUrl => 'QQ 音乐 C 接口地址';
-
-  @override
-  String get adminConfigQqHosts => 'QQ 音乐播放域名';
 
   @override
   String get adminConfigQWeatherBaseUrl => '和风天气服务地址';
@@ -7489,6 +7566,20 @@ class AppLocalizationsZh extends AppLocalizations {
   String get photosExistingShareLinks => '现有分享链接';
 
   @override
+  String get photosShareRevokeAll => '清空全部';
+
+  @override
+  String get photosShareRevokeAllConfirmTitle => '清空分享链接';
+
+  @override
+  String get photosShareRevokeAllConfirmBody => '将撤销该内容当前全部有效分享链接，已发出的链接会立即失效。';
+
+  @override
+  String photosShareRevokeAllDone(Object count) {
+    return '已撤销 $count 条链接';
+  }
+
+  @override
   String photosShareAccessCount(Object count) {
     return '访问 $count 次';
   }
@@ -7506,6 +7597,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get photosCreateLink => '创建链接';
+
+  @override
+  String get photosShareLinkUpdate => '更新链接';
+
+  @override
+  String get photosShareSlotPermanent => '永久链接';
+
+  @override
+  String get photosShareSlotTimed => '限时链接';
+
+  @override
+  String get photosShareSlotEmpty => '未创建';
+
+  @override
+  String get photosShareSlotCreatePermanent => '创建永久';
+
+  @override
+  String get photosShareSlotCreateTimed => '创建限时';
 
   @override
   String photosShareLinkCreated(Object link) {
@@ -7610,9 +7719,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicDeckSourceNetease => '网易云';
-
-  @override
-  String get musicDeckSourceQq => 'QQ 音乐';
 
   @override
   String get musicDailyRecommendationSection => '今日推荐';
@@ -7975,35 +8081,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicPlatformQrGenerating => '正在生成二维码…';
 
   @override
+  String get musicPlatformQrPreparing => '正在准备二维码…';
+
+  @override
   String get musicPlatformQrAction => '扫码登录';
-
-  @override
-  String get musicPlatformQqName => 'QQ 音乐';
-
-  @override
-  String get musicPlatformQqCookieRequired => '请粘贴 QQ 音乐 Cookie';
-
-  @override
-  String musicPlatformQqVerifyFailed(Object error) {
-    return '验证失败：$error';
-  }
-
-  @override
-  String get musicPlatformQqCookieHint =>
-      '请先在浏览器登录 y.qq.com，再复制完整 Cookie 粘贴到下方。';
-
-  @override
-  String get musicPlatformQqCookieKeyHint =>
-      '必须包含 qm_keyst 或 qqmusic_key 才能播放。';
-
-  @override
-  String get musicPlatformQqCookiePlaceholder => '在此粘贴 Cookie…';
-
-  @override
-  String get musicPlatformQqVerifying => '正在验证…';
-
-  @override
-  String get musicPlatformQqVerifyAction => '验证并保存';
 
   @override
   String get musicPlatformAnonymousUser => '用户';
@@ -8018,6 +8099,24 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicPlatformLogout => '退出登录';
+
+  @override
+  String get musicPlatformLogoutBusy => '正在退出…';
+
+  @override
+  String get musicPlatformLogoutConfirmTitle => '确认断开该账号？';
+
+  @override
+  String get musicPlatformLogoutConfirmMessage =>
+      '将删除平台连接与已缓存的歌单，并移除播放队列中来自该平台的曲目。';
+
+  @override
+  String get musicPlatformLogoutSuccess => '已断开连接';
+
+  @override
+  String musicPlatformLogoutQueuePurged(num count) {
+    return '已移除播放队列中 $count 首来自该平台的曲目';
+  }
 
   @override
   String get musicHistoryTitle => '播放历史';
@@ -9167,6 +9266,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicQrRetry => '重试';
+
+  @override
+  String get musicQrRegenerate => '重新生成二维码';
 
   @override
   String musicQrUnknownStatus(String status) {

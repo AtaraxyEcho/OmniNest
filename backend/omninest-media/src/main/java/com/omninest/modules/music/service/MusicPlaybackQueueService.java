@@ -5,6 +5,7 @@ import com.omninest.modules.music.dto.MusicDtos.MusicPlaybackQueueItemDto;
 import com.omninest.modules.music.dto.MusicDtos.MusicQueueSourceDto;
 import com.omninest.modules.music.dto.MusicDtos.SaveMusicPlaybackQueueRequest;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -68,6 +69,95 @@ public class MusicPlaybackQueueService {
         );
         queueStore.save(ownerUserId, snapshot);
         return snapshot;
+    }
+
+    /**
+     * 剔除队列中属于指定平台的在线曲目，并回存。
+     *
+     * <p>用于平台账号断开后清理队列：队列条目没有独立的平台字段，平台信息由
+     * {@code playableKey} 的 {@code online:{platform}:{songId}} 前缀承载，因此按前缀判定。
+     * 若被剔除的条目原本是当前播放项，则把当前项置为 -1（无当前曲）；库来源的
+     * {@code platforms} 清单同步摘除该平台，避免来源标签仍指向已断开平台。</p>
+     *
+     * @param ownerUserId 当前用户标识
+     * @param platformValue 平台 API 标识
+     * @return 实际剔除的条目数，队列无变化时返回 0 且不写库
+     */
+    public int removePlatformTracks(UUID ownerUserId, String platformValue) {
+        if (platformValue == null || platformValue.isBlank()) {
+            return 0;
+        }
+        MusicPlaybackQueueDto current = load(ownerUserId);
+        if (current.items().isEmpty()) {
+            return 0;
+        }
+        String prefix = "online:" + platformValue + ":";
+        List<MusicPlaybackQueueItemDto> remaining = new ArrayList<>(current.items().size());
+        int currentIndex = current.currentIndex();
+        int removed = 0;
+        int removedBeforeCurrent = 0;
+        boolean currentRemoved = false;
+        for (int index = 0; index < current.items().size(); index++) {
+            MusicPlaybackQueueItemDto item = current.items().get(index);
+            if (item.playableKey().startsWith(prefix)) {
+                removed++;
+                if (index < currentIndex) {
+                    removedBeforeCurrent++;
+                } else if (index == currentIndex) {
+                    currentRemoved = true;
+                }
+                continue;
+            }
+            remaining.add(item);
+        }
+        if (removed == 0) {
+            return 0;
+        }
+        queueStore.save(ownerUserId, new MusicPlaybackQueueDto(
+                List.copyOf(remaining),
+                shiftedIndex(currentIndex, removedBeforeCurrent, currentRemoved, remaining.size()),
+                current.repeatMode(),
+                current.shuffleEnabled(),
+                stripPlatform(current.source(), platformValue),
+                current.truncated(),
+                Instant.now()
+        ));
+        return removed;
+    }
+
+    /**
+     * 计算剔除后的当前项下标：当前项被剔除时返回 -1，其前的条目被剔除时整体前移。
+     */
+    private int shiftedIndex(
+            int currentIndex,
+            int removedBeforeCurrent,
+            boolean currentRemoved,
+            int remainingSize
+    ) {
+        if (currentIndex < 0 || currentRemoved) {
+            return -1;
+        }
+        int shifted = currentIndex - removedBeforeCurrent;
+        if (shifted >= remainingSize) {
+            return remainingSize == 0 ? -1 : remainingSize - 1;
+        }
+        return shifted;
+    }
+
+    /**
+     * 从库来源的 {@code platforms} 清单中摘除指定平台。
+     */
+    private MusicQueueSourceDto stripPlatform(MusicQueueSourceDto source, String platformValue) {
+        if (source == null || source.platforms() == null) {
+            return source;
+        }
+        List<String> platforms = source.platforms().stream()
+                .filter(platform -> !platformValue.equals(platform))
+                .toList();
+        if (platforms.size() == source.platforms().size()) {
+            return source;
+        }
+        return new MusicQueueSourceDto(source.kind(), source.id(), source.title(), platforms);
     }
 
     private MusicPlaybackQueueDto normalize(MusicPlaybackQueueDto snapshot) {

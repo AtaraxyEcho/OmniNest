@@ -105,6 +105,48 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     _queuePersistence.schedule(next);
   }
 
+  /// 将队列内的曲目移动到当前曲目之后（下一首播放）。
+  ///
+  /// 与 [enqueue] 的插播语义一致（当前曲目之后插入 + 洗牌序队头同步），
+  /// 但目标已在队列内：按位移动且不清除已播历史（上一首仍可回退到它）。
+  void moveToPlayNext(String playableKey) {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    final index = current.playbackItems.indexWhere(
+      (candidate) => candidate.playableKey == playableKey,
+    );
+    // 不在队列内或已是当前曲目：无从"下一首"。
+    if (index < 0 || index == current.playbackIndex) {
+      return;
+    }
+    if (current.shuffleEnabled) {
+      // 洗牌模式下实际播放序由洗牌序决定：把该曲目同步到未播序队头即可，
+      // 线性队列保持原位（展示顺序与播放索引都不变，无需重排与持久化）。
+      _shuffleUpcoming
+        ..remove(playableKey)
+        ..insert(0, playableKey);
+      return;
+    }
+    if (index == current.playbackIndex + 1) {
+      return;
+    }
+    final items = [...current.playbackItems];
+    final item = items.removeAt(index);
+    final insertAt = (current.playbackIndex + 1).clamp(0, items.length);
+    items.insert(insertAt, item);
+    final activeIndex = items.indexWhere(
+      (candidate) => candidate.playableKey == current.currentItem?.playableKey,
+    );
+    final next = current.copyWith(
+      playbackItems: items,
+      playbackIndex: activeIndex,
+    );
+    _replaceState(next);
+    _queuePersistence.schedule(next);
+  }
+
   /// 从当前队列移除指定对象，但不停止正在播放的音频。
   void removeFromQueue(String playableKey) {
     final current = _currentState;
@@ -143,6 +185,56 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     _shuffleRoundConsumed = true;
     _replaceState(nextState);
     _queuePersistence.schedule(nextState);
+  }
+
+  /// 剔除队列中属于指定平台的在线曲目（平台账号断开后调用）。
+  ///
+  /// 与 [clearQueue] 的差异：只清该平台条目，本地曲目保持原序；当前项命中时同时清空
+  /// 当前曲目与播放计划并停播，避免继续用已删除的凭据拉流。最后回写持久化，
+  /// 防止重启后与远端旧队列合并复活。
+  ///
+  /// @return 实际剔除的曲目数，供界面提示使用。
+  int purgePlatformQueueItems(String platform) {
+    final current = _currentState;
+    if (current == null || current.playbackItems.isEmpty) {
+      return 0;
+    }
+    final removedKeys = <String>[];
+    final remaining = <MusicPlayableItem>[];
+    for (final item in current.playbackItems) {
+      final ref = item.ref;
+      if (ref is OnlineMusicRef && ref.platform.apiValue == platform) {
+        removedKeys.add(item.playableKey);
+        continue;
+      }
+      remaining.add(item);
+    }
+    if (removedKeys.isEmpty) {
+      return 0;
+    }
+    final activeKey = current.currentItem?.playableKey;
+    final activeRemoved = activeKey != null && removedKeys.contains(activeKey);
+    final nextIndex =
+        activeRemoved
+            ? -1
+            : remaining.indexWhere((item) => item.playableKey == activeKey);
+    final nextState = current.copyWith(
+      playbackItems: remaining,
+      playbackIndex: nextIndex,
+      isPlaying: activeRemoved ? false : current.isPlaying,
+      clearCurrentTrack: activeRemoved,
+    );
+    for (final key in removedKeys) {
+      _purgeShuffleKey(key);
+    }
+    if (activeRemoved) {
+      _shuffleUpcoming.clear();
+      _playHistory.clear();
+      _shuffleRoundConsumed = true;
+    }
+    _replaceState(nextState);
+    _queuePersistence.schedule(nextState);
+    return removedKeys.length;
   }
 
   /// 调整统一播放队列顺序。

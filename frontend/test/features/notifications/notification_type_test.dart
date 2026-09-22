@@ -40,7 +40,7 @@ void main() {
     });
 
     test('fallbackTypes contains all supported default types', () {
-      expect(NotificationTypeConfig.fallbackTypes, hasLength(9));
+      expect(NotificationTypeConfig.fallbackTypes, hasLength(11));
       expect(
         NotificationTypeConfig.fallbackTypes.map((t) => t.typeCode),
         containsAll([
@@ -53,6 +53,8 @@ void main() {
           'QUOTA_WARNING',
           'NEW_DEVICE_LOGIN',
           'PASSWORD_CHANGED',
+          'SECURITY_THREAT',
+          'SECURITY_SCAN_FAILED',
         ]),
       );
     });

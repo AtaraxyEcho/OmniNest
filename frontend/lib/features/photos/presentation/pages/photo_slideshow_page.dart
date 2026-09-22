@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
+import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -25,6 +26,14 @@ const _slideshowInterval = Duration(seconds: 5);
 const _transitionDuration = Duration(milliseconds: 450);
 const _idleHideDuration = Duration(seconds: 3);
 const _transitionCurve = Curves.easeOutCubic;
+
+/// 黑场压暗时长（桌面端吸附前）；淡回内容使用 [_dipFadeInDuration]。
+const _dipOutDuration = Duration(milliseconds: 160);
+const _dipFadeInDuration = Duration(milliseconds: 450);
+
+/// 黑场遮罩标识：测试据此断言压暗与原生吸附的先后关系。
+@visibleForTesting
+const slideshowDipOverlayKey = ValueKey<String>('slideshow-dip-overlay');
 
 /// Fullscreen immersive slideshow (design: Photos Management UI Design).
 ///
@@ -74,6 +83,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   late final AnimationController _entryController;
   late final Animation<double> _entryScale;
   late final Animation<double> _entryFade;
+
+  /// 黑场控制器（桌面端）：压暗到全黑后才吸附原生窗口，交换链重建的
+  /// 黑帧因此落入设计内的黑场；全屏首帧后再淡回内容。
+  late final AnimationController _dipController;
+  late final Animation<double> _dipOpacity;
 
   /// 解码位图缓存：位图本体归 ImageCache 所有（live 保活），本页持窗口引用。
   late final SlideshowImageCache _imageCache = SlideshowImageCache();
@@ -131,6 +145,16 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     // 仅做轻微 scale，保证切换过程中画面始终可见。
     _entryScale = Tween<double>(begin: 0.96, end: 1).animate(entryCurve);
     _entryFade = const AlwaysStoppedAnimation<double>(1);
+    // 压暗快、淡回慢：吸附发生在黑场底部，返回时留足淡入观感。
+    _dipController = AnimationController(
+      vsync: this,
+      duration: _dipOutDuration,
+      reverseDuration: _dipFadeInDuration,
+    );
+    _dipOpacity = CurvedAnimation(
+      parent: _dipController,
+      curve: Curves.easeInOut,
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_bootstrapSlideshow());
@@ -142,6 +166,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 吸附必须等过渡完成：过渡期间下层页面仍在舞台上，中途切换原生窗口
   /// 几何会让新尺寸首帧叠加下层整树重排，Windows 上表现为约 1 秒黑屏卡顿。
   /// 过渡完成后下层已 offstage（不布局不绘制），吸附首帧只需布局本页。
+  /// 桌面端吸附前先压暗到全黑（黑场）：原生交换链重建的黑帧量级由引擎
+  /// 决定、应用层无法消除，落在设计内的黑场里即不可见。
   Future<void> _bootstrapSlideshow() async {
     // 进场即预热首图两档:取图/解码与路由过渡、原生全屏吸附并行。preview 档
     // 解码宽绑定显示器物理尺寸(见 SlideshowImageCache),预解码即终档,吸附
@@ -153,19 +179,52 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     if (!mounted) {
       return;
     }
+    if (!await _dipToBlack()) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
     _windowChromeLease = ref
         .read(windowChromeControllerProvider.notifier)
         .acquireImmersive(owner: 'photos.slideshow');
-    // 入场扩缩与租约同刻启动：原生吸附的几何切换由内容层轻微扩缩掩盖
-    // （见 _entryScale），吸附空窗不裸露为黑闪。
-    _entryController.forward();
-    // 租约触发原生 applyWindowChrome（style + SetWindowPos）后，
-    // 再等一帧让 Flutter surface 按新客户区完成首帧，避免全屏黑屏。
+    if (isDesktopPlatform) {
+      // 原生吸附期间引擎重建渲染表面、不产帧：必须等吸附落定（含几何自愈与
+      // DwmFlush 往返）再开始淡入，否则淡入的前半段被吞掉，黑场在观感上表现
+      // 为"一瞬间直接消失"。上限 400ms 兜底：原生通道无回包时不能停在黑场。
+      try {
+        await ref
+            .read(windowChromeControllerProvider.notifier)
+            .applied
+            .timeout(const Duration(milliseconds: 400), onTimeout: () {});
+      } on Exception catch (error) {
+        devLog('Window chrome apply wait failed: $error');
+      }
+      if (!mounted) {
+        return;
+      }
+    }
+    // 等新客户区首帧呈现后再放行淡入。
     await WidgetsBinding.instance.endOfFrame;
     if (!mounted) {
       return;
     }
+    // 吸附落定后的首帧起：内容轻微扩缩 + 黑场反向淡回（见 _entryScale），
+    // 二者同刻收尾，整体读作一次连续的"暗 → 吸附 → 亮"。
+    _entryController.forward();
+    unawaited(_dipController.reverse());
     await _loadInitialImage();
+  }
+
+  /// 桌面端吸附前压暗到全黑；非桌面端无原生窗口几何切换，不做黑场。
+  ///
+  /// 页面在压暗途中退出时等待链随 State 一并回收，返回 false 放弃吸附。
+  Future<bool> _dipToBlack() async {
+    if (!isDesktopPlatform) {
+      return true;
+    }
+    await _dipController.forward(from: 0);
+    return mounted;
   }
 
   /// 等待路由入场过渡完成（completed）。
@@ -258,6 +317,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       _entrySettled.complete();
     }
     _entryController.dispose();
+    _dipController.dispose();
     _windowChromeLease?.release();
     // 位图本体归 ImageCache 所有（live 保活），页面销毁不 dispose；
     // 窗口引用随 State 释放，后台完成的解码因 _disposed 守卫不再写回。
@@ -703,121 +763,129 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
             behavior: HitTestBehavior.opaque,
             onTap: _toggleControls,
             onHorizontalDragEnd: _onHorizontalDragEnd,
-            child: FadeTransition(
-              opacity: _entryFade,
-              child: ScaleTransition(
-                scale: _entryScale,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    switch (_phase) {
-                      SlideshowPhase.loading => SlideshowLoadingStage(
-                        photo: photo,
-                      ),
-                      SlideshowPhase.failed => SlideshowErrorRetry(
-                        onRetry: () => unawaited(_retryInitialLoad()),
-                      ),
-                      SlideshowPhase.ready => Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          SlideshowBackdropLayers(
-                            transition: _transitionFade,
-                            transitioning: _transitioning,
-                            leavingFrame: _leavingFrame,
-                            enteringFrame: _currentFrame,
-                          ),
-                          SlideshowSlideLayers(
-                            transition: _transitionFade,
-                            transitioning: _transitioning,
-                            leavingFrame: _leavingFrame,
-                            enteringFrame: _currentFrame,
-                          ),
-                        ],
-                      ),
-                    },
-                    SlideshowGradients(visible: showControls),
-                    PhotoSlideshowTopBar(
-                      photo: photo,
-                      current: _current,
-                      total: _photos.length,
-                      visible: showControls,
-                      showInfo: _showInfo,
-                      showShare: _showShare,
-                      onClose: () => Navigator.of(context).maybePop(),
-                      onToggleFavorite: () => _toggleFavorite(photo),
-                      onToggleShare:
-                          () => setState(() {
-                            _showShare = !_showShare;
-                            if (_showShare) _showInfo = false;
-                          }),
-                      onDownload: () => unawaited(_downloadPhoto(photo)),
-                      onToggleInfo:
-                          () => setState(() => _showInfo = !_showInfo),
-                      onFullscreen: _toggleFullscreen,
-                    ),
-                    if (_photos.length > 1) ...[
-                      SlideshowArrow(
-                        right: false,
-                        visible: showControls,
-                        onTap: _goPrev,
-                      ),
-                      SlideshowArrow(
-                        right: true,
-                        visible: showControls,
-                        onTap: _goNext,
-                      ),
-                    ],
-                    SlideshowBottomArea(
-                      photo: photo,
-                      visible: showControls,
-                      isPlaying: _isPlaying,
-                      thumbnailsVisible: _thumbnailsVisible,
-                      onTogglePlay: _togglePlay,
-                      onToggleThumbnails:
-                          () => setState(
-                            () => _thumbnailsVisible = !_thumbnailsVisible,
-                          ),
-                      segments: SlideshowSegments(
-                        count: _photos.length,
-                        current: _current,
-                        isPlaying: _isPlaying,
-                        progress: _progressController,
-                        onTap: (index) => unawaited(_goTo(index)),
-                      ),
-                      thumbnailStrip: SlideshowThumbnailStrip(
-                        photos: _photos,
-                        current: _current,
-                        onTap: (index) => unawaited(_goTo(index)),
-                      ),
-                    ),
-                    // 面板 scrim 在侧栏之下（zIndex 语义），点击空白处同时收起。
-                    if (_showInfo || _showShare)
-                      Positioned.fill(
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.opaque,
-                          onTap:
-                              () => setState(() {
-                                _showInfo = false;
-                                _showShare = false;
-                              }),
-                        ),
-                      ),
-                    _buildInfoPanel(context, photo),
-                    PhotoSharePanel(
-                      visible: _showShare,
-                      photo: photo,
-                      onDone:
-                          () => setState(() {
-                            _showShare = false;
-                          }),
-                    ),
-                  ],
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                FadeTransition(
+                  opacity: _entryFade,
+                  child: ScaleTransition(
+                    scale: _entryScale,
+                    child: _buildStage(context, photo, showControls),
+                  ),
                 ),
-              ),
+                // 黑场遮罩（桌面端）：吸附前压暗到全黑，使原生交换链重建的
+                // 黑帧落入设计内的黑场；全屏首帧后反向淡回。非桌面端无原生
+                // 窗口几何切换，不引入多余黑场。
+                if (isDesktopPlatform)
+                  IgnorePointer(
+                    child: FadeTransition(
+                      key: slideshowDipOverlayKey,
+                      opacity: _dipOpacity,
+                      child: const ColoredBox(color: Colors.black),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  /// 舞台内容（照片层、控件与面板）：由 build 挂入场扩缩与黑场之下。
+  Widget _buildStage(BuildContext context, PhotoItem photo, bool showControls) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        switch (_phase) {
+          SlideshowPhase.loading => SlideshowLoadingStage(photo: photo),
+          SlideshowPhase.failed => SlideshowErrorRetry(
+            onRetry: () => unawaited(_retryInitialLoad()),
+          ),
+          SlideshowPhase.ready => Stack(
+            fit: StackFit.expand,
+            children: [
+              SlideshowBackdropLayers(
+                transition: _transitionFade,
+                transitioning: _transitioning,
+                leavingFrame: _leavingFrame,
+                enteringFrame: _currentFrame,
+              ),
+              SlideshowSlideLayers(
+                transition: _transitionFade,
+                transitioning: _transitioning,
+                leavingFrame: _leavingFrame,
+                enteringFrame: _currentFrame,
+              ),
+            ],
+          ),
+        },
+        SlideshowGradients(visible: showControls),
+        PhotoSlideshowTopBar(
+          photo: photo,
+          current: _current,
+          total: _photos.length,
+          visible: showControls,
+          showInfo: _showInfo,
+          showShare: _showShare,
+          onClose: () => Navigator.of(context).maybePop(),
+          onToggleFavorite: () => _toggleFavorite(photo),
+          onToggleShare:
+              () => setState(() {
+                _showShare = !_showShare;
+                if (_showShare) _showInfo = false;
+              }),
+          onDownload: () => unawaited(_downloadPhoto(photo)),
+          onToggleInfo: () => setState(() => _showInfo = !_showInfo),
+          onFullscreen: _toggleFullscreen,
+        ),
+        if (_photos.length > 1) ...[
+          SlideshowArrow(right: false, visible: showControls, onTap: _goPrev),
+          SlideshowArrow(right: true, visible: showControls, onTap: _goNext),
+        ],
+        SlideshowBottomArea(
+          photo: photo,
+          visible: showControls,
+          isPlaying: _isPlaying,
+          thumbnailsVisible: _thumbnailsVisible,
+          onTogglePlay: _togglePlay,
+          onToggleThumbnails:
+              () => setState(() => _thumbnailsVisible = !_thumbnailsVisible),
+          segments: SlideshowSegments(
+            count: _photos.length,
+            current: _current,
+            isPlaying: _isPlaying,
+            progress: _progressController,
+            onTap: (index) => unawaited(_goTo(index)),
+          ),
+          thumbnailStrip: SlideshowThumbnailStrip(
+            photos: _photos,
+            current: _current,
+            onTap: (index) => unawaited(_goTo(index)),
+          ),
+        ),
+        // 面板 scrim 在侧栏之下（zIndex 语义），点击空白处同时收起。
+        if (_showInfo || _showShare)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap:
+                  () => setState(() {
+                    _showInfo = false;
+                    _showShare = false;
+                  }),
+            ),
+          ),
+        _buildInfoPanel(context, photo),
+        PhotoSharePanel(
+          visible: _showShare,
+          photo: photo,
+          onDone:
+              () => setState(() {
+                _showShare = false;
+              }),
+        ),
+      ],
     );
   }
 

@@ -83,6 +83,10 @@ class AuthSessionState {
   bool get isAuthenticated => user != null;
 }
 
+/// 用户资料实时事件的目标标识（后端头像/资料变更按 PREFERENCES 作用域
+/// 发出，resourceId 固定为该值）。
+const userProfileSyncTarget = 'USER_PROFILE';
+
 class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
   static const _refreshCheckInterval = Duration(seconds: 30);
   static const _refreshAhead = Duration(minutes: 2);
@@ -119,6 +123,26 @@ class AuthSessionNotifier extends AsyncNotifier<AuthSessionState> {
         devLog('会话恢复超时或失败: ${error.runtimeType}');
       }
       return const SessionRefreshResult.transient();
+    }
+  }
+
+  /// 其他设备变更资料（头像/显示名）后经 PREFERENCES 实时事件重拉并
+  /// 就地更新会话资料；令牌与过期时间保持不变，瞬时失败静默保留旧值。
+  Future<void> reloadProfile() async {
+    final current = state.asData?.value;
+    if (current == null || current.user == null) {
+      return;
+    }
+    try {
+      final profile = await ref.read(authClientProvider).currentUser();
+      if (!ref.mounted) {
+        return;
+      }
+      state = AsyncData(
+        AuthSessionState(user: profile, expiresAt: current.expiresAt),
+      );
+    } on Exception {
+      return;
     }
   }
 

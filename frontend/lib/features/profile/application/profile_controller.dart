@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:omninest/app/session/session_epoch.dart';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
@@ -73,5 +74,6 @@ final isAdminProvider = Provider<bool>((ref) {
 
 /// 当前用户活跃会话列表 Provider。
 final userSessionsProvider = FutureProvider<List<UserSession>>((ref) async {
+  ref.watch(sessionEpochProvider);
   return ref.watch(profileRepositoryProvider).getSessions();
 });

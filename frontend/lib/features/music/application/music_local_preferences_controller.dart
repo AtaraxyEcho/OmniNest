@@ -43,3 +43,62 @@ class MusicLocalPreferencesController extends AsyncNotifier<String> {
     ref.read(musicPlaybackSessionProvider).player.setRelativePlaySpeed(speed);
   }
 }
+
+/// 歌词滚动模式（设备级偏好）：桌面端在编辑视觉中切换，移动端恒用滚动。
+/// 独立于跨端同步的视觉设置，避免桌面与窄屏设备互相覆盖。
+final musicLyricScrollModeProvider =
+    AsyncNotifierProvider<MusicLyricScrollModeController, bool>(
+      MusicLyricScrollModeController.new,
+    );
+
+class MusicLyricScrollModeController extends AsyncNotifier<bool> {
+  @override
+  Future<bool> build() {
+    return ref.read(musicLocalPreferenceStoreProvider).loadLyricScrollMode();
+  }
+
+  Future<void> setScrollMode(bool enabled) async {
+    await ref
+        .read(musicLocalPreferenceStoreProvider)
+        .saveLyricScrollMode(enabled);
+    state = AsyncData(enabled);
+  }
+}
+
+/// 曲目级歌词延迟（设备本地，毫秒）：仅覆盖当前曲目，null 表示未设置，
+/// 生效优先级高于全局视觉设置里的 offsetMs。按曲目 family 隔离。
+final musicTrackLyricOffsetProvider =
+    AsyncNotifierProvider.family<MusicTrackLyricOffsetController, int?, String>(
+      MusicTrackLyricOffsetController.new,
+    );
+
+class MusicTrackLyricOffsetController extends AsyncNotifier<int?> {
+  MusicTrackLyricOffsetController(this.trackId);
+
+  final String trackId;
+
+  @override
+  Future<int?> build() {
+    return ref
+        .read(musicLocalPreferenceStoreProvider)
+        .loadLyricOffsetMs(trackId);
+  }
+
+  /// 调整该曲目的歌词延迟并写入设备本地存储；范围与全局延迟一致（±1000ms）。
+  Future<void> adjust(int deltaMs) async {
+    final current = state.asData?.value ?? await future ?? 0;
+    final next = (current + deltaMs).clamp(-1000, 1000).toInt();
+    state = AsyncData(next);
+    await ref
+        .read(musicLocalPreferenceStoreProvider)
+        .saveLyricOffsetMs(trackId, next);
+  }
+
+  /// 清零该曲目的歌词延迟（用户在歌词列头部点击重置）。
+  Future<void> resetToZero() async {
+    state = const AsyncData(0);
+    await ref
+        .read(musicLocalPreferenceStoreProvider)
+        .saveLyricOffsetMs(trackId, 0);
+  }
+}

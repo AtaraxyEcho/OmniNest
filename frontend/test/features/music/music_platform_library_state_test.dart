@@ -32,16 +32,16 @@ void main() {
 
   test('第一首歌曲没有封面时回退到平台歌单封面', () {
     const playlist = OnlinePlaylist(
-      platform: 'qq',
+      platform: 'netease',
       playlistId: 'playlist-2',
       name: 'Daily',
       coverUrl: 'https://example.com/playlist.jpg',
     );
     const state = MusicPlatformLibraryState(
       playlistTracks: <String, List<OnlineTrack>>{
-        'qq:playlist-2': <OnlineTrack>[
+        'netease:playlist-2': <OnlineTrack>[
           OnlineTrack(
-            platform: 'qq',
+            platform: 'netease',
             songId: 'song-2',
             title: 'Track',
             artistName: 'Artist',

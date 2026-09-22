@@ -357,6 +357,24 @@ class AppLocalizationsEn extends AppLocalizations {
   String get notificationEmptyHint => 'New notifications will appear here';
 
   @override
+  String get coreSignOutConfirmTitle => 'Sign out?';
+
+  @override
+  String get coreSignOutConfirmMessage =>
+      'You will need to sign in again to continue.';
+
+  @override
+  String get notificationForegroundToastView => 'View';
+
+  @override
+  String get notificationForegroundToastToggle =>
+      'In-app new notification toasts';
+
+  @override
+  String get notificationForegroundToastToggleSubtitle =>
+      'Show a lightweight toast when a notification arrives';
+
+  @override
   String get notificationMarkAllRead => 'Mark all read';
 
   @override
@@ -447,6 +465,20 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get notificationTypePasswordChangedDesc =>
       'Account password was changed';
+
+  @override
+  String get notificationTypeSecurityThreat => 'Security Threat';
+
+  @override
+  String get notificationTypeSecurityThreatDesc =>
+      'Suspicious file upload activity detected';
+
+  @override
+  String get notificationTypeSecurityScanFailed => 'Security Scan Failed';
+
+  @override
+  String get notificationTypeSecurityScanFailedDesc =>
+      'A file failed the security scan and was quarantined';
 
   @override
   String get notificationTypesHeader => 'Notification Types';
@@ -2325,16 +2357,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalMusicVisualizerLyrics => 'Lyrics';
 
   @override
+  String get musicVisualizerLyricMode => 'Lyric layout';
+
+  @override
+  String get musicVisualizerLyricModeScroll => 'Scrolling lyrics';
+
+  @override
+  String get musicVisualizerLyricModeMultiline => 'Multi-line lyrics';
+
+  @override
   String get portalMusicVisualizerPlayer => 'Player';
-
-  @override
-  String get portalMusicVisualizerLow => 'Low';
-
-  @override
-  String get portalMusicVisualizerMid => 'Mid';
-
-  @override
-  String get portalMusicVisualizerHigh => 'High';
 
   @override
   String get portalMusicVisualizerCurrentFont => 'Current line size';
@@ -2346,13 +2378,85 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalMusicVisualizerVisibleLines => 'Visible lines';
 
   @override
-  String get musicVisualizerLyricActiveColor => 'Current line color';
+  String get musicVisualizerLyricCurrentColor => 'Current line color';
 
   @override
-  String get musicVisualizerLyricReadColor => 'Played line color';
+  String get musicVisualizerLyricInactiveColor => 'Other lines color';
 
   @override
-  String get musicVisualizerLyricUnreadColor => 'Upcoming line color';
+  String get musicVisualizerLyricFontSize => 'Lyric size';
+
+  @override
+  String get musicVisualizerUnitLines => 'lines';
+
+  @override
+  String musicLyricSemanticsCurrent(Object text) {
+    return 'Current lyric: $text';
+  }
+
+  @override
+  String get musicVisualizerLyricOffset => 'Lyric delay';
+
+  @override
+  String get musicVisualizerLyricTranslation => 'Show translation';
+
+  @override
+  String get musicVisualizerLyricKaraokeFill => 'Word-by-word fill';
+
+  @override
+  String get musicVisualizerLyricFocusAnchor => 'Focus line position';
+
+  @override
+  String get musicVisualizerLyricFocusBand => 'Focus band';
+
+  @override
+  String get musicLyricBackToCurrent => 'Back to current';
+
+  @override
+  String get musicLyricCopied => 'Lyric line copied';
+
+  @override
+  String get musicLyricCopyLine => 'Copy lyric';
+
+  @override
+  String get musicLyricDelayLater => 'Delay lyrics by 0.1s';
+
+  @override
+  String get musicLyricAdvanceEarlier => 'Advance lyrics by 0.1s';
+
+  @override
+  String get musicLyricOffsetLater => 'Delay lyrics by 0.2s';
+
+  @override
+  String get musicLyricOffsetEarlier => 'Advance lyrics by 0.2s';
+
+  @override
+  String get musicLyricOffsetReset => 'Reset lyric offset';
+
+  @override
+  String musicLyricOffsetDelayed(Object seconds) {
+    return 'Delayed by ${seconds}s';
+  }
+
+  @override
+  String musicLyricOffsetAdvanced(Object seconds) {
+    return 'Advanced by ${seconds}s';
+  }
+
+  @override
+  String get musicVisualizerDeckToggle => 'Show cover deck';
+
+  @override
+  String get musicLyricSyncBadge => 'Synced lyrics';
+
+  @override
+  String get musicSeekBack10 => 'Back 10 seconds';
+
+  @override
+  String get musicSeekForward10 => 'Forward 10 seconds';
+
+  @override
+  String get musicVisualizerLyricStyle => 'Lyric style';
 
   @override
   String get musicVisualizerLyricBreathing => 'Lyric breathing';
@@ -2361,34 +2465,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicVisualizerLyricLineSpacing => 'Line spacing';
 
   @override
-  String get musicVisualizerLyricGlowIntensity => 'Glow intensity';
+  String get musicVisualizerLayout => 'Desktop layout';
 
   @override
-  String get musicVisualizerLyricGlowColor => 'Glow color';
+  String get musicVisualizerLayoutLeft => 'Left';
 
   @override
-  String get musicVisualizerLyricPosition => 'Lyric position';
+  String get musicVisualizerLayoutCenter => 'Center';
 
   @override
-  String get musicVisualizerLyricPositionLeft => 'Left';
-
-  @override
-  String get musicVisualizerLyricPositionCenter => 'Center';
-
-  @override
-  String get musicVisualizerLyricPositionRight => 'Right';
-
-  @override
-  String get musicVisualizerAudioBarStyle => 'Audio bar style';
-
-  @override
-  String get musicVisualizerAudioBarSpectrum => 'Spectrum bars';
-
-  @override
-  String get musicVisualizerAudioBarLine => 'Light trace';
-
-  @override
-  String get musicVisualizerAudioBarDots => 'Pulse dots';
+  String get musicVisualizerLayoutRight => 'Right';
 
   @override
   String get musicVisualizerColorHue => 'Hue';
@@ -2403,19 +2489,33 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicVisualizerColorCustom => 'Custom color';
 
   @override
+  String musicVisualizerColorCustomStop(Object stop) {
+    return 'Custom color · $stop';
+  }
+
+  @override
   String get musicVisualizerColorHex => 'HEX value';
 
   @override
   String get musicVisualizerColorResetDefault => 'Reset to default';
 
   @override
-  String get portalMusicVisualizerLyricGlow => 'Lyric glow';
+  String get musicVisualizerColorPaintMode => 'Paint';
 
   @override
-  String get portalMusicVisualizerOriginalCover => 'Original cover';
+  String get musicVisualizerColorPaintSolid => 'Solid';
 
   @override
-  String get portalMusicVisualizerCoverBorder => 'Cover border';
+  String get musicVisualizerColorPaintGradient => 'Vertical gradient';
+
+  @override
+  String get musicVisualizerColorPaintStops => 'Gradient ends';
+
+  @override
+  String get musicVisualizerColorPaintTop => 'Top';
+
+  @override
+  String get musicVisualizerColorPaintBottom => 'Bottom';
 
   @override
   String get portalMusicVisualizerProgressControl => 'Progress bar';
@@ -2424,22 +2524,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicVisualizerPlayerVisible => 'Show bottom player';
 
   @override
-  String get musicVisualizerAudioBar => 'Show audio bars';
+  String get musicVisualizerGroupDesktop => 'Desktop immersive';
 
   @override
-  String get musicVisualizerFrequencyResponse => 'Audio bar frequency response';
+  String get musicVisualizerGroupMobileLyrics => 'Mobile lyric style';
 
   @override
-  String get musicVisualizerCoverSize => 'Cover size';
+  String get musicVisualizerScopeDesktop => 'Desktop';
 
   @override
-  String get musicVisualizerCoverRadius => 'Cover radius';
+  String get musicVisualizerScopeMobile => 'Mobile';
 
   @override
-  String get musicVisualizerCoverTilt => 'Cover tilt';
-
-  @override
-  String get musicVisualizerHeroCoverOpacity => 'Hero cover opacity';
+  String get musicVisualizerScopeAll => 'All devices';
 
   @override
   String get portalReading => 'Reading';
@@ -3386,9 +3483,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get adminConfigProviderNetease => 'NetEase Cloud Music';
 
   @override
-  String get adminConfigProviderQqMusic => 'QQ Music';
-
-  @override
   String get adminConfigProviderQWeather => 'QWeather';
 
   @override
@@ -3465,9 +3559,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminConfigNeteaseEnabled => 'Enable NetEase Cloud Music';
-
-  @override
-  String get adminConfigQqEnabled => 'Enable QQ Music';
 
   @override
   String get adminConfigQWeatherProjectId => 'Project ID';
@@ -3547,15 +3638,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminConfigNeteaseHosts => 'NetEase playback hosts';
-
-  @override
-  String get adminConfigQqUUrl => 'QQ Music U endpoint';
-
-  @override
-  String get adminConfigQqCUrl => 'QQ Music C endpoint';
-
-  @override
-  String get adminConfigQqHosts => 'QQ Music playback hosts';
 
   @override
   String get adminConfigQWeatherBaseUrl => 'QWeather service URL';
@@ -7716,6 +7798,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get photosExistingShareLinks => 'Existing Share Links';
 
   @override
+  String get photosShareRevokeAll => 'Clear all';
+
+  @override
+  String get photosShareRevokeAllConfirmTitle => 'Clear share links';
+
+  @override
+  String get photosShareRevokeAllConfirmBody =>
+      'This revokes every active share link for this item; links already sent stop working immediately.';
+
+  @override
+  String photosShareRevokeAllDone(Object count) {
+    return 'Revoked $count links';
+  }
+
+  @override
   String photosShareAccessCount(Object count) {
     return 'Accessed $count times';
   }
@@ -7733,6 +7830,24 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get photosCreateLink => 'Create Link';
+
+  @override
+  String get photosShareLinkUpdate => 'Update link';
+
+  @override
+  String get photosShareSlotPermanent => 'Permanent link';
+
+  @override
+  String get photosShareSlotTimed => 'Timed link';
+
+  @override
+  String get photosShareSlotEmpty => 'Not created';
+
+  @override
+  String get photosShareSlotCreatePermanent => 'Create permanent';
+
+  @override
+  String get photosShareSlotCreateTimed => 'Create timed';
 
   @override
   String photosShareLinkCreated(Object link) {
@@ -7837,9 +7952,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicDeckSourceNetease => 'NetEase';
-
-  @override
-  String get musicDeckSourceQq => 'QQ Music';
 
   @override
   String get musicDailyRecommendationSection => 'Recommended today';
@@ -8221,36 +8333,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicPlatformQrGenerating => 'Generating QR code...';
 
   @override
+  String get musicPlatformQrPreparing => 'Preparing QR code…';
+
+  @override
   String get musicPlatformQrAction => 'Scan QR Login';
-
-  @override
-  String get musicPlatformQqName => 'QQ Music';
-
-  @override
-  String get musicPlatformQqCookieRequired =>
-      'Please paste your QQ Music cookie';
-
-  @override
-  String musicPlatformQqVerifyFailed(Object error) {
-    return 'Verification failed: $error';
-  }
-
-  @override
-  String get musicPlatformQqCookieHint =>
-      'Log in at y.qq.com in your browser, then copy the full cookie and paste it below.';
-
-  @override
-  String get musicPlatformQqCookieKeyHint =>
-      'Must include qm_keyst or qqmusic_key for playback.';
-
-  @override
-  String get musicPlatformQqCookiePlaceholder => 'Paste cookie here...';
-
-  @override
-  String get musicPlatformQqVerifying => 'Verifying...';
-
-  @override
-  String get musicPlatformQqVerifyAction => 'Verify & Save';
 
   @override
   String get musicPlatformAnonymousUser => 'User';
@@ -8265,6 +8351,30 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicPlatformLogout => 'Logout';
+
+  @override
+  String get musicPlatformLogoutBusy => 'Logging out…';
+
+  @override
+  String get musicPlatformLogoutConfirmTitle => 'Disconnect this account?';
+
+  @override
+  String get musicPlatformLogoutConfirmMessage =>
+      'The connection and its cached playlists will be removed, and tracks of this platform will be dropped from the play queue.';
+
+  @override
+  String get musicPlatformLogoutSuccess => 'Disconnected';
+
+  @override
+  String musicPlatformLogoutQueuePurged(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count queued track(s) from this platform were removed',
+      zero: 'No queued tracks needed removal',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get musicHistoryTitle => 'Play History';
@@ -9457,6 +9567,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicQrRetry => 'Retry';
+
+  @override
+  String get musicQrRegenerate => 'Generate a new QR code';
 
   @override
   String musicQrUnknownStatus(String status) {

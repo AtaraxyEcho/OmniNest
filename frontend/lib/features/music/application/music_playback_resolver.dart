@@ -54,13 +54,12 @@ class MusicPlaybackResolver {
   Future<MusicPlaybackPlan> _resolveUncached(MusicPlayableItem item) async {
     final plan = switch (item.ref) {
       LocalMusicRef(:final trackId) => _api.playbackPlan(trackId),
-      OnlineMusicRef(:final platform, :final songId, :final mediaMid) => _api
-          .onlinePlaybackPlan(
-            platform.apiValue,
-            songId,
-            mediaMid: mediaMid,
-            quality: _preferredOnlineQuality?.call() ?? 'exhigh',
-          ),
+      OnlineMusicRef(:final platform, :final songId) => _api.onlinePlaybackPlan(
+        platform.apiValue,
+        songId,
+
+        quality: _preferredOnlineQuality?.call() ?? 'exhigh',
+      ),
     };
     final resolved = await plan;
     return resolved.copyWith(

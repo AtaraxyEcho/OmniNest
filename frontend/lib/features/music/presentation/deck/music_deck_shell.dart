@@ -83,7 +83,11 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
           (currentChild, previousChildren) => Stack(
             fit: StackFit.expand,
             children: <Widget>[
-              ...previousChildren,
+              // 退场子树已被替换、正在淡出后销毁：其语义节点与入场子树在同一批
+              // 更新中被移除，会让 Windows 辅助功能桥报 "will not be in the tree"。
+              // 这里只排除正在销毁的旧子树，当前子树的语义不受影响。
+              for (final child in previousChildren)
+                ExcludeSemantics(child: child),
               if (currentChild != null) currentChild,
             ],
           ),
@@ -346,18 +350,15 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                     onPressed: _openMobileSearch,
                     icon: const Icon(Icons.search_rounded),
                   ),
-                  _MobileSourceFilterButton(
-                    sources: sources,
-                    availableSources: _availableSources(),
-                    onToggle: _toggleSource,
-                  ),
+                  // 移动端不提供音源筛选（筛选为桌面悬浮控件职责）；
+                  // 仅保留平台账号管理，连接状态经徽标提示。
                   IconButton(
                     tooltip: l10n.musicDeckManageAccounts,
                     onPressed: _openAccounts,
                     icon: Badge(
                       isLabelVisible:
                           (platform?.connectedStatuses.length ?? 0) > 0,
-                      child: const Icon(Icons.cloud_outlined),
+                      child: const Icon(Icons.manage_accounts_rounded),
                     ),
                   ),
                 ],
@@ -525,8 +526,8 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
     if (!mounted) {
       return;
     }
-    // 关闭面板同样走完整刷新链（资料 + 曲库失效），覆盖 QQ Cookie 注入、
-    // 断开平台等未走 QR 确认路径的账号变更。
+    // 关闭面板同样走完整刷新链（资料 + 曲库失效），覆盖断开平台等
+    // 未走 QR 确认路径的账号变更。
     final musicController = ref.read(musicCenterControllerProvider.notifier);
     unawaited(musicController.refreshAfterPlatformChange());
   }
@@ -644,37 +645,6 @@ class _TopAction extends StatelessWidget {
       tooltip: tooltip,
       onPressed: onPressed,
       icon: Icon(icon, color: context.musicColors.onSurface, size: 19),
-    );
-  }
-}
-
-class _MobileSourceFilterButton extends StatelessWidget {
-  const _MobileSourceFilterButton({
-    required this.sources,
-    required this.availableSources,
-    required this.onToggle,
-  });
-
-  final Set<MusicPlatform> sources;
-  final List<MusicPlatform> availableSources;
-  final ValueChanged<MusicPlatform> onToggle;
-
-  @override
-  Widget build(BuildContext context) {
-    return PopupMenuButton<MusicPlatform>(
-      tooltip: AppLocalizations.of(context).musicDeckSources,
-      onSelected: onToggle,
-      itemBuilder:
-          (context) => availableSources
-              .map(
-                (source) => CheckedPopupMenuItem<MusicPlatform>(
-                  value: source,
-                  checked: sources.contains(source),
-                  child: MusicDeckSourceBadge(platform: source),
-                ),
-              )
-              .toList(growable: false),
-      icon: const Icon(Icons.tune_rounded, size: 20),
     );
   }
 }

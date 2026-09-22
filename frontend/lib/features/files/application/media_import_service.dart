@@ -17,6 +17,10 @@ import 'package:omninest/core/log/dev_log.dart';
 typedef ImportProgressCallback =
     void Function(String fileName, int uploadedBytes, int totalBytes);
 
+/// 安全扫描晋升等待护栏。大文件经 ClamAV 全量扫描可能远超 30 分钟，
+/// 收紧该值会把正常扫描误判为超时，因此保持 90 分钟仅作活性护栏。
+const Duration securityScanWaitTimeout = Duration(minutes: 90);
+
 /// 单个媒体文件上传完成后的稳定标识。
 class ImportedMediaFile {
   const ImportedMediaFile({
@@ -520,10 +524,10 @@ class MediaImportService {
         message: '安全扫描未完成，文件已保留；请稍后在书库查看或重新导入',
       );
     }
-    // 扫描时限护栏 30 分钟 + 重试窗口，超时按扫描失败处理。
+    // 扫描时限护栏（securityScanWaitTimeout，90 分钟）+ 重试窗口，超时按扫描失败处理。
     final task = await _taskApi.waitForTerminal(
       taskId,
-      timeout: const Duration(minutes: 90),
+      timeout: securityScanWaitTimeout,
       interval: const Duration(seconds: 3),
     );
     if (kDebugMode) {

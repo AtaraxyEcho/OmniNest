@@ -9,6 +9,7 @@ import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
+import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/core/widgets/hover_scale.dart';
 
 /// 右上角头像下拉菜单组件。
@@ -191,12 +192,7 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
                   label: l10n.coreSignOut,
                   destructive: true,
                   onTap:
-                      () => _closeAndRun(
-                        () =>
-                            ref
-                                .read(authSessionProvider.notifier)
-                                .clearSession(),
-                      ),
+                      () => _closeAndRun(() => _confirmSignOut(context, l10n)),
                 ),
               ],
             ),
@@ -204,6 +200,27 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
         );
       },
     );
+  }
+
+  /// 登出属破坏性操作：二次确认后才清除会话。面板已先行关闭，
+  /// 对话框挂在宿主 context 上。
+  Future<void> _confirmSignOut(
+    BuildContext context,
+    AppLocalizations l10n,
+  ) async {
+    if (!mounted) {
+      return;
+    }
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title: l10n.coreSignOutConfirmTitle,
+      message: l10n.coreSignOutConfirmMessage,
+      confirmLabel: l10n.coreSignOut,
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    await ref.read(authSessionProvider.notifier).clearSession();
   }
 }
 
