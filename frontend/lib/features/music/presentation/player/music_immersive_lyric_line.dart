@@ -244,8 +244,8 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     );
   }
 
-  /// 按指定画法渲染整行：上下渐变必须逐行各自作用，共用会让译文整行
-  /// 落在渐变的下半段。
+  /// 按指定画法渲染整行：上下渐变经逐行重复着色器作用，折行的每一行
+  /// 与译文行各自完整走一遍渐变，不共享渐变区间。
   Widget _buildPaintedLine(
     double fontSize, {
     required bool active,
@@ -278,20 +278,34 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
               ]
               : null,
     );
-    Widget paint(Widget child, {Key? maskKey, List<Color>? colors}) {
+    Widget paint(
+      Widget child, {
+      Key? maskKey,
+      List<Color>? colors,
+      required TextStyle style,
+    }) {
       if (!resolved.gradient) {
         return child;
       }
+      final lineHeight = (style.fontSize ?? 14) * (style.height ?? 1.2);
       return ShaderMask(
         // 每行文本各自一个遮罩，键必须唯一（同一 Column 的兄弟节点不允许重键）。
         key: maskKey ?? const ValueKey('music-lyric-text-gradient'),
         blendMode: BlendMode.srcIn,
-        shaderCallback:
-            (bounds) => LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: colors ?? resolved.main,
-            ).createShader(bounds),
+        shaderCallback: (bounds) {
+          // 上下渐变按可视行重复：折行的每一行与译文行各自完整走一遍
+          // 渐变，而不是整块文本共用一个渐变区间。
+          final raw = bounds.height / lineHeight;
+          final lines = math.max(1, raw.round());
+          final period = bounds.height / lines;
+          return ui.Gradient.linear(
+            bounds.topLeft,
+            bounds.topLeft + Offset(0, period),
+            colors ?? resolved.main,
+            null,
+            TileMode.repeated,
+          );
+        },
         child: child,
       );
     }
@@ -313,9 +327,9 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
               fillKey: const ValueKey('music-lyric-word-fill'),
               layeredKey: const ValueKey('music-lyric-word-fill-layered'),
               activePaint: (gradient: resolved.gradient, colors: resolved.main),
-              inactivePaint: _fillInactivePaint(translation: false),
+              inactivePaint: _fillInactivePaint(),
             )
-            : paint(text);
+            : paint(text, style: textStyle);
 
     final translation =
         widget.settings.translationEnabled ? _translationText : null;
@@ -355,26 +369,14 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       strutStyle: _strutFor(extraStyle),
       style: extraStyle,
     );
-    // 译文与原文共用同一填充比例，在读时同步点亮。
-    final translationChild =
-        fillEnabled
-            ? _buildFilledText(
-              translationText,
-              fillKey: const ValueKey('music-lyric-translation-word-fill'),
-              layeredKey: const ValueKey(
-                'music-lyric-translation-word-fill-layered',
-              ),
-              activePaint: (
-                gradient: resolved.gradient,
-                colors: resolved.translation,
-              ),
-              inactivePaint: _fillInactivePaint(translation: true),
-            )
-            : paint(
-              translationText,
-              maskKey: const ValueKey('music-lyric-translation-gradient'),
-              colors: resolved.translation,
-            );
+    // 译文不做逐字填充：主流方案仅原文参与卡拉OK推进，译文跟随在读行
+    // 整行切换读色（在读色 / 非当前句色，含上下渐变画法）。
+    final translationChild = paint(
+      translationText,
+      maskKey: const ValueKey('music-lyric-translation-gradient'),
+      colors: resolved.translation,
+      style: extraStyle,
+    );
     // 原文与译文共用同一侧基线：左对齐按起始边，居中按中心，右对齐按末端。
     final crossAxisAlignment =
         widget.textAlign == TextAlign.center
@@ -400,6 +402,14 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
   }
 
   /// 逐字填充的单行渲染：已唱部分用读色、未唱部分用非当前句色。
+  ///
+  /// 渐变与填充都以"可视行"为单位：原文折行后按排版度量切分为逐行渲染，
+  /// 每个可视行各自套完整的上下渐变，填充按行宽加权顺序推进（第一行
+  /// 填满后第二行才开始），不再整块文本共用一道渐变与一道填充边界。
+  /// 遮罩内为文字加上下墨迹边距，使遮罩矩形覆盖 y / g 等下伸字形；
+  /// 在读/非当前句两层使用同一墨迹边距与样式，且每层只包一次边距，
+  /// 字形完全对齐。行状态切换为原地更新（无 AnimatedSwitcher 交叉
+  /// 淡化），不会出现双份叠字。
   Widget _buildFilledText(
     Text text, {
     required Key fillKey,
@@ -407,24 +417,239 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     required ({bool gradient, List<Color> colors}) activePaint,
     required ({bool gradient, List<Color> colors}) inactivePaint,
   }) {
-    final solidPair = !activePaint.gradient && !inactivePaint.gradient;
+    final data = text.data ?? '';
+    if (data.isEmpty) {
+      return const SizedBox.shrink();
+    }
     final baseStyle = text.style!;
-    final inactiveText = Text(
-      text.data ?? '',
-      maxLines: text.maxLines,
-      overflow: text.overflow,
-      textAlign: text.textAlign,
-      strutStyle: text.strutStyle,
+    final inkPad = (baseStyle.fontSize ?? 14) * 0.14;
+    // 行号后缀键从基础键的字符串值派生：直接插值 Key 对象会混入其
+    // toString 的类型与哈希片段，导致测试无法按可预期键名定位。
+    final fillKeyBase = fillKey is ValueKey<String> ? fillKey.value : 'fill';
+    final layeredKeyBase =
+        layeredKey is ValueKey<String> ? layeredKey.value : 'layered';
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final layout = _resolveFillLines(
+          context,
+          data,
+          DefaultTextStyle.of(context).style,
+          baseStyle,
+          text.strutStyle,
+          text.textAlign ?? TextAlign.start,
+          text.maxLines ?? 1,
+          constraints.maxWidth,
+        );
+        return SizedBox(
+          width: layout.widest,
+          height: 2 * inkPad + layout.tops.last + layout.heights.last,
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              for (var index = 0; index < layout.lines.length; index++)
+                Positioned(
+                  top: inkPad + layout.tops[index],
+                  left: 0,
+                  right: 0,
+                  height: layout.heights[index] + 2 * inkPad,
+                  child: _buildFilledLineSlice(
+                    index: index,
+                    lineText: layout.lines[index],
+                    baseStyle: baseStyle,
+                    strutStyle: text.strutStyle,
+                    textAlign: text.textAlign ?? TextAlign.start,
+                    inkPad: inkPad,
+                    lineHeight: layout.heights[index],
+                    boxWidth: layout.widest,
+                    glyphLeft: layout.lefts[index],
+                    glyphWidth: layout.widths[index],
+                    consumedBefore: layout.consumed[index],
+                    totalGlyphWidth: layout.totalWidth,
+                    fillKey:
+                        index == 0
+                            ? fillKey
+                            : ValueKey<String>('$fillKeyBase-$index'),
+                    layeredKey:
+                        index == 0
+                            ? layeredKey
+                            : ValueKey<String>('$layeredKeyBase-$index'),
+                    activePaint: activePaint,
+                    inactivePaint: inactivePaint,
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 逐行填充布局的缓存：同一文本、样式与宽度约束下避免每帧重新排版。
+  _FillLineLayout? _fillLineLayoutCache;
+
+  /// 用与真实排版相同的输入度量原文折行：可视行子串、行盒位置与行宽。
+  ///
+  /// 度量样式必须与环境 DefaultTextStyle 合并（字体族等继承属性影响折行），
+  /// 行宽按裁剪后的子串实测（行尾空白不参与），填充边界按行宽加权推进。
+  _FillLineLayout _resolveFillLines(
+    BuildContext context,
+    String text,
+    TextStyle ambientStyle,
+    TextStyle style,
+    StrutStyle? strutStyle,
+    TextAlign textAlign,
+    int maxLines,
+    double maxWidth,
+  ) {
+    final scaler = MediaQuery.textScalerOf(context);
+    final effectiveStyle = ambientStyle.merge(style);
+    final cacheKey = Object.hash(
+      text,
+      maxWidth,
+      effectiveStyle.fontSize,
+      effectiveStyle.height,
+      effectiveStyle.fontWeight,
+      effectiveStyle.fontFamily,
+      scaler.toString(),
+      maxLines,
+    );
+    final cached = _fillLineLayoutCache;
+    if (cached != null && cached.cacheKey == cacheKey) {
+      return cached;
+    }
+    final direction = Directionality.of(context);
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: effectiveStyle),
+      textAlign: textAlign,
+      textDirection: direction,
+      textScaler: scaler,
+      strutStyle: strutStyle,
+      maxLines: maxLines,
+    )..layout(maxWidth: maxWidth);
+    final metrics = painter.computeLineMetrics();
+    final lines = <String>[];
+    final tops = <double>[];
+    final heights = <double>[];
+    final widths = <double>[];
+    var start = 0;
+    var top = 0.0;
+    for (final metric in metrics) {
+      if (start >= text.length) {
+        break;
+      }
+      final range = painter.getLineBoundary(TextPosition(offset: start));
+      final end = range.end.clamp(start + 1, text.length);
+      final piece = text.substring(start, end).trim();
+      start = end;
+      if (piece.isEmpty) {
+        continue;
+      }
+      final piecePainter = TextPainter(
+        text: TextSpan(text: piece, style: effectiveStyle),
+        textDirection: direction,
+        textScaler: scaler,
+        strutStyle: strutStyle,
+      )..layout();
+      lines.add(piece);
+      tops.add(top);
+      heights.add(metric.height);
+      widths.add(piecePainter.width);
+      top += metric.height;
+      piecePainter.dispose();
+    }
+    painter.dispose();
+    final widest = widths.fold(0.0, math.max);
+    final lefts = <double>[];
+    for (final width in widths) {
+      double left;
+      if (textAlign == TextAlign.center) {
+        left = (widest - width) / 2;
+      } else if (textAlign == TextAlign.right || textAlign == TextAlign.end) {
+        left = widest - width;
+      } else {
+        left = 0;
+      }
+      lefts.add(math.max(0.0, left));
+    }
+    final consumed = <double>[];
+    var sum = 0.0;
+    for (final width in widths) {
+      consumed.add(sum);
+      sum += width;
+    }
+    final layout = _FillLineLayout(
+      cacheKey: cacheKey,
+      lines: lines,
+      tops: tops,
+      heights: heights,
+      lefts: lefts,
+      widths: widths,
+      consumed: consumed,
+      totalWidth: sum,
+      widest: widest,
+    );
+    _fillLineLayoutCache = layout;
+    return layout;
+  }
+
+  /// 单个可视行的填充渲染：底层整行非当前句色、顶层在读色按该行边界
+  /// 裁切；上下渐变在该行行盒内完整走一遍。
+  Widget _buildFilledLineSlice({
+    required int index,
+    required String lineText,
+    required TextStyle baseStyle,
+    required StrutStyle? strutStyle,
+    required TextAlign textAlign,
+    required double inkPad,
+    required double lineHeight,
+    required double boxWidth,
+    required double glyphLeft,
+    required double glyphWidth,
+    required double consumedBefore,
+    required double totalGlyphWidth,
+    required Key fillKey,
+    required Key layeredKey,
+    required ({bool gradient, List<Color> colors}) activePaint,
+    required ({bool gradient, List<Color> colors}) inactivePaint,
+  }) {
+    final solidPair = !activePaint.gradient && !inactivePaint.gradient;
+    final inkPadding = EdgeInsets.symmetric(vertical: inkPad);
+    final activeLineText = Text(
+      lineText,
+      key: index == 0 ? const ValueKey('music-lyric-active') : null,
+      maxLines: 1,
+      overflow: TextOverflow.visible,
+      textAlign: textAlign,
+      strutStyle: strutStyle,
+      style: baseStyle.copyWith(
+        color: activePaint.gradient ? Colors.white : activePaint.colors.first,
+      ),
+    );
+    final inactiveLineText = Text(
+      lineText,
+      maxLines: 1,
+      overflow: TextOverflow.visible,
+      textAlign: textAlign,
+      strutStyle: strutStyle,
       style: baseStyle.copyWith(
         color:
             inactivePaint.gradient ? Colors.white : inactivePaint.colors.first,
       ),
     );
-    Widget maskHorizontal(Widget child) {
+    Widget fillMask(Widget child) {
       return AnimatedBuilder(
         animation: widget.fillAnimation!,
-        builder: (context, _) {
+        builder: (context, child) {
           final fraction = widget.fillAnimation!.value.clamp(0.0, 1.0);
+          // 填充按行宽加权顺序推进：整段已唱宽度扣减前面各行后得到本行
+          // 局部进度，边界换算到行盒坐标。
+          final consumed = (fraction * totalGlyphWidth - consumedBefore).clamp(
+            0.0,
+            glyphWidth,
+          );
+          final progress = glyphWidth <= 0 ? 0.0 : consumed / glyphWidth;
+          final boundary =
+              (glyphLeft + progress * glyphWidth) / math.max(boxWidth, 1);
           // 纯色组合：单层 srcIn 遮罩直接替换颜色——左在读色、右非当前句色
           final maskColors =
               solidPair
@@ -449,32 +674,53 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: maskColors,
-                  stops: <double>[0.0, fraction, fraction, 1.0],
+                  stops: <double>[0.0, boundary, boundary, 1.0],
                 ).createShader(bounds),
+            // 墨迹边距由调用方包一次：此处再包会与双层分支的内层边距叠加，
+            // 在读层整体下移一个边距，两层字形错位形成"叠字"。
             child: child,
           );
         },
+        child: child,
       );
     }
 
     if (solidPair) {
-      // 单层横向遮罩：左在读色、右非当前句色。
-      return maskHorizontal(text);
+      // 单层横向遮罩：左在读色、右非当前句色；文字只包一次墨迹边距。
+      return fillMask(
+        _paintLineVertical(
+          Padding(padding: inkPadding, child: activeLineText),
+          activePaint,
+          inkPad,
+          lineHeight,
+        ),
+      );
     }
-    // 双层叠加：底层整行非当前句色，顶层在读色按边界裁切。
+    // 双层叠加：底层整行非当前句色，顶层在读色按边界裁切；两层使用同一
+    // 墨迹边距，保证字形完全对齐。
     return Stack(
       children: [
-        _paintVertical(inactiveText, inactivePaint),
-        maskHorizontal(_paintVertical(text, activePaint)),
+        _paintLineVertical(
+          Padding(padding: inkPadding, child: inactiveLineText),
+          inactivePaint,
+          inkPad,
+          lineHeight,
+        ),
+        fillMask(
+          _paintLineVertical(
+            Padding(padding: inkPadding, child: activeLineText),
+            activePaint,
+            inkPad,
+            lineHeight,
+          ),
+        ),
       ],
     );
   }
 
   /// 逐字填充的未唱色：复刻形态优先取用户非当前句色，通用形态取用户
   /// 非当前句色，默认双色回落样例常量。
-  ({bool gradient, List<Color> colors}) _fillInactivePaint({
-    required bool translation,
-  }) {
+  ({bool gradient, List<Color> colors}) _fillInactivePaint() {
     final spec = widget.spec;
     if (spec == null) {
       final legacy = _resolveColors(active: false);
@@ -489,16 +735,16 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
         ],
       );
     }
-    return (
-      gradient: false,
-      colors: <Color>[translation ? spec.translationColor : spec.textColor],
-    );
+    return (gradient: false, colors: <Color>[spec.textColor]);
   }
 
-  /// 按颜色画法渲染文本：上下渐变套 srcIn 竖向遮罩，纯色直接着色。
-  Widget _paintVertical(
+  /// 逐行上下渐变：渐变只在该可视行的行盒内走完一遍，[textTop] 为行内
+  /// 文字区距行盒顶部的墨迹边距，[textHeight] 为行盒高。
+  Widget _paintLineVertical(
     Widget child,
     ({bool gradient, List<Color> colors}) resolved,
+    double textTop,
+    double textHeight,
   ) {
     if (!resolved.gradient) {
       return child;
@@ -506,11 +752,13 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     return ShaderMask(
       blendMode: BlendMode.srcIn,
       shaderCallback:
-          (bounds) => LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: resolved.colors,
-          ).createShader(bounds),
+          (bounds) => ui.Gradient.linear(
+            Offset(bounds.left, bounds.top + textTop),
+            Offset(bounds.left, bounds.top + textTop + textHeight),
+            resolved.colors,
+            null,
+            TileMode.clamp,
+          ),
       child: child,
     );
   }
@@ -521,12 +769,16 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
   }
 
   /// 在读行的底衬与左侧强调条；居中布局两者都不做时返回 null。
+  /// 底衬背景可经视觉设置开关关闭（只保留左侧强调条）。
   BoxDecoration? get _activeLineDecoration {
     final spec = widget.spec;
     if (spec == null) {
       return null;
     }
-    final background = spec.activeLineBackgroundColor;
+    final background =
+        widget.settings.activeLineBackgroundEnabled
+            ? spec.activeLineBackgroundColor
+            : null;
     final accent = spec.activeLineAccentColor;
     if (background == null && accent == null) {
       return null;
@@ -658,6 +910,49 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       _breathingController.repeat(reverse: true);
     }
   }
+}
+
+/// 折行填充的逐行度量：可视行子串、行盒几何与行宽权重。
+///
+/// [cacheKey] 覆盖文本、样式与宽度约束，命中时跳过重新排版。
+class _FillLineLayout {
+  const _FillLineLayout({
+    required this.cacheKey,
+    required this.lines,
+    required this.tops,
+    required this.heights,
+    required this.lefts,
+    required this.widths,
+    required this.consumed,
+    required this.totalWidth,
+    required this.widest,
+  });
+
+  final Object cacheKey;
+
+  /// 每个可视行的裁剪后子串。
+  final List<String> lines;
+
+  /// 每行行盒相对首行顶部的纵向偏移。
+  final List<double> tops;
+
+  /// 每行行盒高度（strut 强制一致）。
+  final List<double> heights;
+
+  /// 每行字形起点在行盒内的横向偏移（随文本排列对齐）。
+  final List<double> lefts;
+
+  /// 每行实测字形宽度。
+  final List<double> widths;
+
+  /// 每行之前所有行的字形宽度累计，用于把整段填充比例换算到本行。
+  final List<double> consumed;
+
+  /// 全部可视行的字形宽度合计。
+  final double totalWidth;
+
+  /// 最宽可视行的宽度（行盒宽度）。
+  final double widest;
 }
 
 /// 焦点带：在读行背后的一层低强度横向提亮，向两端淡出。

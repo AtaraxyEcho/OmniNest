@@ -504,19 +504,31 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       MusicRepeatMode.all => MusicRepeatMode.one,
       MusicRepeatMode.one => MusicRepeatMode.off,
     };
-    final nextState = current.copyWith(repeatMode: next);
+    // 循环类模式与随机播放互斥：进入循环档时关闭随机，避免双模式叠加。
+    final nextState = current.copyWith(
+      repeatMode: next,
+      shuffleEnabled:
+          next == MusicRepeatMode.off ? current.shuffleEnabled : false,
+    );
     _replaceState(nextState);
+    if (!nextState.shuffleEnabled) {
+      _shuffleUpcoming.clear();
+    }
     _queuePersistence.schedule(nextState);
   }
 
   /// 切换随机播放状态；开启时按当前队列生成洗牌序，关闭时仅清空未播序。
+  /// 开启随机会退出循环类模式，保证播放模式互斥。
   void toggleShuffle() {
     final current = _currentState;
     if (current == null) {
       return;
     }
     final enabled = !current.shuffleEnabled;
-    final nextState = current.copyWith(shuffleEnabled: enabled);
+    final nextState = current.copyWith(
+      shuffleEnabled: enabled,
+      repeatMode: enabled ? MusicRepeatMode.off : current.repeatMode,
+    );
     _replaceState(nextState);
     if (enabled) {
       _startShuffleRound(
@@ -524,6 +536,42 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
         nextState.currentItem?.playableKey,
       );
     } else {
+      _shuffleUpcoming.clear();
+    }
+    _queuePersistence.schedule(nextState);
+  }
+
+  /// 单按钮轮换播放模式：顺序 → 随机 → 循环 → 顺序。
+  ///
+  /// 三种模式互斥（随机与循环不再同时生效）；旧的单曲循环状态在轮换时
+  /// 归一到顺序档。
+  void cyclePlayMode() {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    final MusicCenterState nextState;
+    if (current.shuffleEnabled) {
+      // 随机 → 循环（列表循环）。
+      nextState = current.copyWith(
+        shuffleEnabled: false,
+        repeatMode: MusicRepeatMode.all,
+      );
+    } else {
+      nextState = switch (current.repeatMode) {
+        // 顺序 → 随机。
+        MusicRepeatMode.off || MusicRepeatMode.one => current.copyWith(
+          shuffleEnabled: true,
+          repeatMode: MusicRepeatMode.off,
+        ),
+        // 循环 → 顺序。
+        MusicRepeatMode.all => current.copyWith(
+          repeatMode: MusicRepeatMode.off,
+        ),
+      };
+    }
+    _replaceState(nextState);
+    if (!nextState.shuffleEnabled) {
       _shuffleUpcoming.clear();
     }
     _queuePersistence.schedule(nextState);

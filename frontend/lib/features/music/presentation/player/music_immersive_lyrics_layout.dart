@@ -22,10 +22,17 @@ class _MusicLyricsLayout {
   Object? _metricsKey;
   double? _blockWidthValue;
   int _maxTextLines = 1;
+  int _maxTranslationLines = 1;
 
   /// 统一块宽：滚动形态返回实测值（含 1px 舍入保护），其余返回 null
   /// （各行按内容收窄）。
   double? get blockWidth => _blockWidthValue;
+
+  /// 全部歌词按基准字号渲染时的最大折行数（含测量上限截断）。
+  int get maxTextLines => _maxTextLines;
+
+  /// 译文行的最大折行数。
+  int get maxTranslationLines => _maxTranslationLines;
 
   /// 测量词表排版：整块宽度、逐行宽度与最大折行数，命中缓存时跳过。
   void syncMetrics({
@@ -81,6 +88,7 @@ class _MusicLyricsLayout {
         spec?.translationLineHeight ?? _translationLineHeight;
     var widest = 0.0;
     var maxLines = 1;
+    var maxTranslationLineCount = 1;
     for (final line in lyrics) {
       // 逐行按最宽字重测量：滚动形态在读行是 w800、其余 w500，
       // 取两者较大值可同时覆盖填充遮罩的实测边界。
@@ -124,23 +132,29 @@ class _MusicLyricsLayout {
         maxLines = math.max(maxLines, lines);
       }
       final translation = line.translation?.trim();
-      final translationWidth =
-          translation == null || translation.isEmpty
-              ? 0.0
-              : _measureText(
-                translation,
-                fontSize: translationFont,
-                fontWeight: spec?.translationFontWeight ?? FontWeight.w600,
-                maxWidth: availableWidth,
-                textDirection: textDirection,
-                ambientStyle: ambientStyle,
-                textScaler: textScaler,
-                height: translationHeight,
-              ).$1;
+      var translationWidth = 0.0;
+      if (translation != null && translation.isNotEmpty) {
+        final measured = _measureText(
+          translation,
+          fontSize: translationFont,
+          fontWeight: spec?.translationFontWeight ?? FontWeight.w600,
+          maxWidth: availableWidth,
+          textDirection: textDirection,
+          ambientStyle: ambientStyle,
+          textScaler: textScaler,
+          height: translationHeight,
+        );
+        translationWidth = measured.$1;
+        maxTranslationLineCount = math.max(
+          maxTranslationLineCount,
+          measured.$2,
+        );
+      }
       widest = math.max(widest, math.max(mainWidth, translationWidth));
     }
     _metricsKey = key;
     _maxTextLines = maxLines;
+    _maxTranslationLines = maxTranslationLineCount;
     // +1 为舍入保护：文字宽度与容器宽度相等时，浮点误差会让最后一字折行。
     _blockWidthValue =
         !scrollMode || widest <= 0
@@ -156,16 +170,32 @@ class _MusicLyricsLayout {
     required int extraLineCount,
     MusicLyricSpec? spec,
   }) {
-    // 复刻形态：行高与行距完全取自样例，不再受用户字号设置影响。
+    // 复刻形态：行高与行距完全取自样例，但按实测折行数预留高度，避免
+    // 长句折行后溢出行槽。
     if (spec != null) {
-      final content =
+      final mainLines = math.max(1, _maxTextLines);
+      final mainBox = math.max(
+        spec.activeFontSize * spec.activeLineHeight * mainLines,
+        spec.fontSize * spec.lineHeight * mainLines,
+      );
+      final transLines = math.max(1, _maxTranslationLines);
+      final translationBox =
           extraLineCount > 0
-              ? spec.contentHeight()
-              : math.max(
-                spec.activeFontSize * spec.activeLineHeight,
-                spec.fontSize * spec.lineHeight,
-              );
-      return (content + spec.lineGap).clamp(24.0, 260.0).toDouble();
+              ? math.max(
+                spec.activeTranslationFontSize *
+                    spec.activeTranslationLineHeight *
+                    transLines,
+                spec.translationFontSize *
+                    spec.translationLineHeight *
+                    transLines,
+              )
+              : 0.0;
+      // 逐字填充遮罩内含墨迹边距（覆盖 y/g 等下伸字形），行槽相应增加。
+      final fillPad =
+          settings.wordFillEnabled ? 2 * spec.activeFontSize * 0.14 : 0.0;
+      return (mainBox + translationBox + fillPad + spec.lineGap)
+          .clamp(24.0, 480.0)
+          .toDouble();
     }
     final baseFont = lineFontSize(
       settings,
@@ -177,9 +207,11 @@ class _MusicLyricsLayout {
       active: true,
       scrollMode: scrollMode,
     );
-    // 附加行逐行占用同样的高度与间距。
+    // 附加行按实测折行数预留同样的高度与间距。
+    final transLines = math.max(1, _maxTranslationLines);
     double extraReserve(double font) =>
         extraLineCount *
+        transLines *
         (font * _translationFontScale * _translationLineHeight +
             _translationGap);
     // 折行数取最坏一行：行槽等高，长句折行后不能压到相邻行。
@@ -188,9 +220,12 @@ class _MusicLyricsLayout {
       activeFont * _lyricLineHeight * mainLines + extraReserve(activeFont),
       baseFont * _lyricLineHeight * mainLines + extraReserve(baseFont),
     );
+    // 逐字填充遮罩内含墨迹边距（覆盖 y/g 等下伸字形），行槽相应增加；
+    // 另加 2px 余量吸收 strut 与字体真实行高的亚像素差。
+    final fillPad = settings.wordFillEnabled ? 2 * activeFont * 0.14 : 0.0;
     // 行距 1.0 = 行间保留一个字高的空隙；只作用于空隙，不放大整行高度。
     final gap = baseFont * settings.lineSpacing;
-    return (content + gap).clamp(24.0, 220.0).toDouble();
+    return (content + fillPad + gap + 2).clamp(24.0, 320.0).toDouble();
   }
 
   /// 单行字号：px 即最终字号；多行形态的在读行用独立 px。

@@ -74,7 +74,8 @@ class MusicPlaybackServiceTest {
                 "/api/v1/music/playback/sessions/session-1/stream?token=token",
                 expiresAt,
                 245,
-                "flac"
+                "flac",
+                null
         ));
 
         var plan = playbackService.playbackPlan(OWNER_ID, TRACK_ID);
@@ -106,7 +107,8 @@ class MusicPlaybackServiceTest {
                 "/api/v1/music/playback/sessions/session-2/stream?token=token",
                 Instant.parse("2026-05-21T11:00:00Z"),
                 null,
-                "mp3"
+                "mp3",
+                "high"
         ));
 
         var plan = playbackService.onlinePlaybackPlan(OWNER_ID, "netease", "song-1", "media-1", "high");
@@ -114,6 +116,7 @@ class MusicPlaybackServiceTest {
         assertThat(plan.trackId()).isNull();
         assertThat(plan.url()).isEqualTo("/api/v1/music/playback/sessions/session-2/stream?token=token");
         assertThat(plan.format()).isEqualTo("mp3");
+        assertThat(plan.quality()).isEqualTo("high");
     }
 
     @Test

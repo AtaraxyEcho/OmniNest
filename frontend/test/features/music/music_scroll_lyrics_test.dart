@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -293,6 +294,9 @@ void main() {
     );
 
     // 多行歌词形态忽略宿主的排列，一律文本居中（固定窗口没有列表）。
+    // 在读行字号更大时长句会折行，填充管线按可视行切片渲染，整句文本
+    // 不再对应单个 Text：对齐断言改为按行切片定位（每行在行盒内居中，
+    // 与整块居中一致）。
     await tester.pumpWidget(
       _lyricsApp(
         player: player,
@@ -302,9 +306,14 @@ void main() {
       ),
     );
     await _advance(tester);
-    expect(tester.widget<Text>(find.text(long)).textAlign, TextAlign.center);
+    expect(
+      tester
+          .widget<Text>(find.byKey(const ValueKey('music-lyric-active')))
+          .textAlign,
+      TextAlign.center,
+    );
     final box = tester.getRect(find.byType(MusicImmersiveLyrics));
-    expect(tester.getCenter(find.text(long)).dx, box.center.dx);
+    expect(tester.getCenter(find.textContaining('这一句明显')).dx, box.center.dx);
   });
 
   testWidgets('歌词区上下边缘做渐隐处理，避免被顶栏底栏硬切', (tester) async {
@@ -443,17 +452,16 @@ void main() {
     );
     await tester.pump();
 
-    // 双层填充画法会叠加未唱层与读色层，文本各出现两次。
+    // 原文走双层填充画法（未唱层 + 读色层，文本出现两次）；
+    // 译文不参与逐字填充，仅整行套自己的竖向渐变遮罩。
     expect(find.text('Hello world'), findsNWidgets(2));
-    expect(find.text('你好世界'), findsNWidgets(2));
-    // 原文与译文各自一个渐变遮罩（读行经逐字填充的双层画法各自套竖向渐变）：
-    // 共用会让译文整行落在渐变下半段。
+    expect(find.text('你好世界'), findsOneWidget);
     expect(
       find.byKey(const ValueKey('music-lyric-word-fill-layered')),
       findsOneWidget,
     );
     expect(
-      find.byKey(const ValueKey('music-lyric-translation-word-fill-layered')),
+      find.byKey(const ValueKey('music-lyric-translation-gradient')),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -781,6 +789,186 @@ void main() {
     expect(find.byKey(const ValueKey('music-lyric-active')), findsOneWidget);
   });
 
+  testWidgets('双层填充画法两层文字完全对齐（墨迹边距不得叠加）', (tester) async {
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 3),
+    );
+    addTearDown(player.dispose);
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        wordTimeline: true,
+        settings: PortalLyricVisualSettings.defaults.copyWith(
+          currentPaint: const LyricPaint.vertical(0xFFFF0000, 0xFF0000FF),
+        ),
+      ),
+    );
+    await _advance(tester);
+    player.emit(const Duration(milliseconds: 3200));
+    await tester.pump();
+
+    expect(
+      find.byKey(const ValueKey('music-lyric-word-fill-layered')),
+      findsOneWidget,
+    );
+    // 双层画法渲染两份同文文本：底层非当前句色与顶层读色。若某一层
+    // 重复包墨迹边距，其字形会整体下移（回归表现为"叠字"）。
+    final tops =
+        tester
+            .renderObjectList<RenderParagraph>(find.text('Lyric 3'))
+            .map((paragraph) => paragraph.localToGlobal(Offset.zero).dy)
+            .toList();
+    expect(tops.length, 2);
+    expect((tops.first - tops.last).abs(), lessThan(0.5));
+  });
+
+  testWidgets('折行在读行按可视行切片渲染且行盒顺序堆叠', (tester) async {
+    // Ahem 字体每字形宽 = 字号：48px 下 "AAAA AAAA AAAA AAAA"（912px）
+    // 超出 800px 视口，折为 "AAAA AAAA AAAA"（768px）+ "AAAA"（192px）。
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 1),
+    );
+    addTearDown(player.dispose);
+    final lyrics = <MusicLyricLine>[
+      const MusicLyricLine(position: Duration.zero, text: 'X'),
+      const MusicLyricLine(
+        position: Duration(seconds: 1),
+        text: 'AAAA AAAA AAAA AAAA',
+      ),
+      const MusicLyricLine(position: Duration(seconds: 2), text: 'X'),
+    ];
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        lyrics: lyrics,
+        fontFamily: 'Ahem',
+        settings: PortalLyricVisualSettings.defaults.copyWith(
+          fontSizePx: 48,
+          currentFontSizePx: 48,
+        ),
+      ),
+    );
+    await _advance(tester);
+
+    expect(find.text('AAAA AAAA AAAA'), findsOneWidget);
+    expect(find.text('AAAA'), findsOneWidget);
+    final firstTop = tester.getTopLeft(find.text('AAAA AAAA AAAA')).dy;
+    final secondTop = tester.getTopLeft(find.text('AAAA')).dy;
+    // 行盒按 strut 行高顺序堆叠，不重叠、不错位。
+    expect(secondTop - firstTop, closeTo(48 * 1.18, 0.5));
+  });
+
+  testWidgets('渐变在读行折行时每个可视行各自挂填充遮罩', (tester) async {
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 1),
+    );
+    addTearDown(player.dispose);
+    final lyrics = <MusicLyricLine>[
+      const MusicLyricLine(position: Duration.zero, text: 'X'),
+      const MusicLyricLine(
+        position: Duration(seconds: 1),
+        text: 'AAAA AAAA AAAA AAAA',
+      ),
+      const MusicLyricLine(position: Duration(seconds: 2), text: 'X'),
+    ];
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        lyrics: lyrics,
+        fontFamily: 'Ahem',
+        settings: PortalLyricVisualSettings.defaults.copyWith(
+          fontSizePx: 48,
+          currentFontSizePx: 48,
+          currentPaint: const LyricPaint.vertical(0xFFB7FFE7, 0xFF7098A0),
+        ),
+      ),
+    );
+    await _advance(tester);
+
+    // 双层画法逐行挂载：首行沿用基础键，其余行带行号后缀。
+    expect(
+      find.byKey(const ValueKey('music-lyric-word-fill-layered')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('music-lyric-word-fill-layered-1')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('折行逐字填充按行宽加权顺序推进（首行未满次行不动）', (tester) async {
+    // 行时长 1s，位置进行到 50%：整段已唱宽度 = 0.5 ×（768 + 192）= 480px，
+    // 全部落在首行（宽 768px），次行局部进度为 0，不得提前点亮。
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 1),
+    );
+    addTearDown(player.dispose);
+    final lyrics = <MusicLyricLine>[
+      const MusicLyricLine(position: Duration.zero, text: 'X'),
+      const MusicLyricLine(
+        position: Duration(seconds: 1),
+        text: 'AAAA AAAA AAAA AAAA',
+      ),
+      const MusicLyricLine(position: Duration(seconds: 2), text: 'X'),
+    ];
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        lyrics: lyrics,
+        fontFamily: 'Ahem',
+        settings: PortalLyricVisualSettings.defaults.copyWith(
+          fontSizePx: 48,
+          currentFontSizePx: 48,
+        ),
+      ),
+    );
+    await _advance(tester);
+    player.emit(const Duration(milliseconds: 1500));
+    await tester.pump();
+
+    // 次行行盒存在且保持未唱（切分行渲染本身保证了逐行推进的边界来源，
+    // 行盒堆叠回归由上一条测试锚定）。
+    expect(find.text('AAAA'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('折行逐字填充与逐行渐变的视觉基线', (tester) async {
+    // 渐变每个可视行完整走一遍、填充按行宽加权顺序推进：渲染结果以
+    // 黄金文件锚定，回归时先核对折行边界与填充边界位置是否漂移。
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 1),
+    );
+    addTearDown(player.dispose);
+    final lyrics = <MusicLyricLine>[
+      const MusicLyricLine(position: Duration.zero, text: 'X'),
+      const MusicLyricLine(
+        position: Duration(seconds: 1),
+        text: 'AAAA AAAA AAAA AAAA',
+      ),
+      const MusicLyricLine(position: Duration(seconds: 2), text: 'X'),
+    ];
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        lyrics: lyrics,
+        fontFamily: 'Ahem',
+        settings: PortalLyricVisualSettings.defaults.copyWith(
+          fontSizePx: 48,
+          currentFontSizePx: 48,
+          currentPaint: const LyricPaint.vertical(0xFFB7FFE7, 0xFF7098A0),
+        ),
+      ),
+    );
+    await _advance(tester);
+    player.emit(const Duration(milliseconds: 1500));
+    await tester.pump();
+
+    await expectLater(
+      find.byType(MusicImmersiveLyrics),
+      matchesGoldenFile('goldens/music_lyric_fill_wrapped_gradient.png'),
+    );
+  });
+
   testWidgets('居左/居中/居右锚点下填充遮罩都按当前行挂载', (tester) async {
     final player = _FakeMusicAudioPlayback(
       initialPosition: const Duration(seconds: 3),
@@ -965,6 +1153,7 @@ Widget _lyricsApp({
   int? trackOffsetMs,
   void Function(int deltaMs)? onAdjustLyricOffset,
   MusicLyricSpec? spec,
+  String? fontFamily,
 }) {
   final lines =
       lyrics ??
@@ -994,6 +1183,29 @@ Widget _lyricsApp({
             );
           })
           : lines;
+  // 测试字体度量决定折行位置：传入 fontFamily 时用固定度量的 Ahem
+  // 字体（每字形宽 = 字号），让折行断言可以精确预判。
+  final body = SizedBox(
+    height: height,
+    child: MusicImmersiveLyrics(
+      palette: MusicImmersivePalette.digital,
+      player: player,
+      track: _track,
+      lyrics: resolvedLines,
+      scale: 1,
+      lyricSettings: settings,
+      lyricSpec: spec,
+      trackOffsetMs: trackOffsetMs,
+      onAdjustLyricOffset: onAdjustLyricOffset,
+      // 滚动歌词形态、文本排列与块锚点由宿主传入（设备级偏好 + 端形态 + 歌词位置）。
+      scrollMode: scrollMode,
+      textAlign: textAlign,
+      blockAnchor: blockAnchor,
+      onTogglePlayback: () {},
+      onPrevious: () {},
+      onNext: () {},
+    ),
+  );
   return MaterialApp(
     theme: ThemeData.dark(),
     // 歌词区包含本地化文案（"回到当前播放"），测试宿主需要提供委派，
@@ -1002,27 +1214,17 @@ Widget _lyricsApp({
     localizationsDelegates: AppLocalizations.localizationsDelegates,
     supportedLocales: AppLocalizations.supportedLocales,
     home: Scaffold(
-      body: SizedBox(
-        height: height,
-        child: MusicImmersiveLyrics(
-          palette: MusicImmersivePalette.digital,
-          player: player,
-          track: _track,
-          lyrics: resolvedLines,
-          scale: 1,
-          lyricSettings: settings,
-          lyricSpec: spec,
-          trackOffsetMs: trackOffsetMs,
-          onAdjustLyricOffset: onAdjustLyricOffset,
-          // 滚动歌词形态、文本排列与块锚点由宿主传入（设备级偏好 + 端形态 + 歌词位置）。
-          scrollMode: scrollMode,
-          textAlign: textAlign,
-          blockAnchor: blockAnchor,
-          onTogglePlayback: () {},
-          onPrevious: () {},
-          onNext: () {},
-        ),
-      ),
+      body:
+          fontFamily == null
+              ? body
+              : DefaultTextStyle(
+                style: TextStyle(
+                  fontFamily: fontFamily,
+                  fontSize: 16,
+                  color: Colors.white,
+                ),
+                child: body,
+              ),
     ),
   );
 }

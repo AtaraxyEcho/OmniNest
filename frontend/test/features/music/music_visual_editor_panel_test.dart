@@ -61,10 +61,14 @@ void main() {
     expect(find.text('歌词行距'), findsOneWidget);
     // 滑杆必须带具体数值与单位（默认值：字号 18px、行距 1.00×、透明度 50%）。
     expect(find.text('18 px'), findsOneWidget);
-    expect(find.text('1.00×'), findsOneWidget);
+    // 行距与在读/未读字号缩放默认均为 1.00×，共三个滑杆。
+    expect(find.text('1.00×'), findsNWidgets(3));
     expect(find.text('50%'), findsOneWidget);
     // 堆叠卡片开关在桌面组可见（默认开启）。
     expect(find.text('显示堆叠卡片'), findsOneWidget);
+    // 在读/未读字号缩放滑杆（桌面组专属）。
+    expect(find.text('在读歌词字号'), findsOneWidget);
+    expect(find.text('未读歌词字号'), findsOneWidget);
   });
 
   testWidgets('多行歌词形态只显示多行歌词的参数', (tester) async {

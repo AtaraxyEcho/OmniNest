@@ -121,7 +121,7 @@ public class MusicPlaybackSessionService {
         sessionStore.save(session);
         String token = tokenService.sign(sessionId, expiresAt);
         String url = "/api/v1/music/playback/sessions/" + sessionId + "/stream?token=" + token;
-        return new MusicPlaybackPlanDto(trackId, url, expiresAt, durationSeconds, format);
+        return new MusicPlaybackPlanDto(trackId, url, expiresAt, durationSeconds, format, null);
     }
 
     private Instant resolveExpiresAt(Instant sourceExpiresAt) {

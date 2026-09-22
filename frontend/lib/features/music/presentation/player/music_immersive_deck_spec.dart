@@ -2,10 +2,18 @@ part of 'music_immersive_player.dart';
 
 /// 卡组列底部的「音频参数胶囊」。
 class _DigitalDeckSpecCapsule extends StatelessWidget {
-  const _DigitalDeckSpecCapsule({required this.track, required this.scale});
+  const _DigitalDeckSpecCapsule({
+    required this.track,
+    required this.scale,
+    this.servedQualityLabel,
+  });
 
   final MusicTrack? track;
   final double scale;
+
+  /// 在线曲目播放计划携带的、平台实际签发的音质档位（已本地化）；
+  /// 本地曲目的真实采样率/码率经 [MusicTrack.qualityText] 展示。
+  final String? servedQualityLabel;
 
   /// 无损容器集合：用于把格式映射到既有的音质文案。
   static const Set<String> _losslessFormats = <String>{
@@ -23,10 +31,13 @@ class _DigitalDeckSpecCapsule extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
     final format = track?.format.trim() ?? '';
     final normalized = format.toLowerCase();
+    // 右侧状态胶囊优先展示平台实际签发的音质档位；本地曲目按容器格式
+    // 映射为无损/普通。
     final quality =
-        _losslessFormats.contains(normalized)
+        servedQualityLabel ??
+        (_losslessFormats.contains(normalized)
             ? l10n.musicQualityLossless
-            : l10n.musicQualityStandard;
+            : l10n.musicQualityStandard);
     // 第二行优先展示真实音频参数（采样率 / 码率，扫描元数据写入），
     // 缺失时回落到容器格式。
     final specText =

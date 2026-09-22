@@ -149,16 +149,109 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
 
   /// 后排卡片的显式命中条：只覆盖在读卡右缘到该档右缘之间的露出带。
   ///
-  /// 两侧布局每档只露出窄边，在读卡的投影又会盖住大半，仅靠变换后的命中测试
+  /// 侧布局每档只露出窄边，在读卡的投影又会盖住大半，仅靠变换后的命中测试
   /// 几乎点不到，因此补一段透明命中区。命中条与对应的档位卡共享悬停键：
   /// 命中条悬停时直接点亮该卡（样例的悬停拉出反馈），点击仍由命中条选中。
   /// 命中条不与在读卡重叠。
   List<Widget> _buildCardHitStrips(Size stageSize) {
-    if (widget.layout != PortalMusicLayout.left &&
-        widget.layout != PortalMusicLayout.right) {
-      // 居中布局两侧位移很大（±125/±230），后卡本来就大面积露出。
-      return const <Widget>[];
+    switch (widget.layout) {
+      case PortalMusicLayout.left:
+      case PortalMusicLayout.right:
+        return _buildSideLayoutHitStrips(stageSize);
+      case PortalMusicLayout.center:
+        // 居中布局：透视变换下的命中测试有偏差，侧卡的露出带同样用命中条
+        // 兜底（悬停拉出 + 点击切换），否则只能靠拖拽换卡。
+        return _buildCenterHitStrips(stageSize);
     }
+  }
+
+  /// 居中布局的命中条：按各侧卡露出带逐条布置（左右各两条，外层优先）。
+  List<Widget> _buildCenterHitStrips(Size stageSize) {
+    final scale = widget.scale;
+    final centerX = stageSize.width / 2;
+    final activeSize = resolveMusicDeckCard(widget.layout, 0).size * scale;
+    final heroLeft = centerX - activeSize / 2;
+    final heroRight = centerX + activeSize / 2;
+    Widget strip({
+      required Key key,
+      required double left,
+      required double width,
+      required double top,
+      required double height,
+      required VoidCallback onTap,
+      required ValueChanged<bool> onHover,
+    }) {
+      return Positioned(
+        key: key,
+        left: left,
+        width: width,
+        top: top,
+        height: height,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => onHover(true),
+          onExit: (_) => onHover(false),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: onTap,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      );
+    }
+
+    final strips = <Widget>[];
+    // 左右两侧各自从最外档向内推进，命中条之间互不重叠。
+    for (final side in <int>[-1, 1]) {
+      var innerEdge = side < 0 ? heroLeft : heroRight;
+      for (final slot in <int>[side * 2, side]) {
+        final index = _resolveSlotIndex(slot);
+        if (index == null) {
+          continue;
+        }
+        final spec = resolveMusicDeckCard(widget.layout, slot);
+        final cardCenterX = centerX + spec.offset.dx * scale;
+        final cardSize = spec.size * scale;
+        final cardLeft = cardCenterX - cardSize / 2;
+        final cardRight = cardCenterX + cardSize / 2;
+        final double bandLeft;
+        final double bandRight;
+        if (side < 0) {
+          bandLeft = cardLeft;
+          bandRight = innerEdge;
+        } else {
+          bandLeft = innerEdge;
+          bandRight = cardRight;
+        }
+        innerEdge = side < 0 ? cardLeft : cardRight;
+        final bandWidth = bandRight - bandLeft;
+        if (bandWidth <= 0) {
+          continue;
+        }
+        final cardTop =
+            stageSize.height / 2 + spec.offset.dy * scale - cardSize / 2;
+        strips.add(
+          strip(
+            key: ValueKey('deck-hit-strip-$slot'),
+            left: bandLeft,
+            width: bandWidth,
+            top: cardTop,
+            height: cardSize,
+            onTap: () => widget.onSelected(index),
+            onHover:
+                (hovered) => _onCardHoverChanged(
+                  _deckCardHoverKey(index, slot),
+                  hovered,
+                ),
+          ),
+        );
+      }
+    }
+    return strips;
+  }
+
+  /// 两侧布局（居左/居右）的命中条。
+  List<Widget> _buildSideLayoutHitStrips(Size stageSize) {
     final scale = widget.scale;
     final inset = musicDeckStageInset(widget.layout) * scale;
     final activeSize = resolveMusicDeckCard(widget.layout, 0).size * scale;

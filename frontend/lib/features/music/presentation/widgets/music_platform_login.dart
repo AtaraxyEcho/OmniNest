@@ -8,7 +8,8 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login_form.dart';
 
-/// 平台登录底部弹出面板（浅色模式按样例渲染为白色磨砂抽屉）。
+/// 平台登录底部弹出面板（跟随宿主主题：浅色实体、深色实体、浅色 + 动态壁纸的
+/// 烟熏玻璃三种场景都使用 Music 已解析色阶）。
 ///
 /// 只保留扫码登录：手机号（密码 / 短信验证码）与邮箱登录已下线。
 /// 面板不再承载文本输入，无需处理键盘占位。
@@ -24,11 +25,14 @@ class PlatformLoginSheet extends ConsumerWidget {
   /// 浅色模式抽屉底色：样例 `bg-white/90` 的白色磨砂。
   static const Color _lightSheetFill = Color(0xF2FFFFFF);
 
-  /// 品牌图标底座：样例 `bg-neutral-900` 的深色圆角块。
-  static const Color _brandTileColor = Color(0xFF17181B);
+  /// 品牌图标底座：样例 `bg-neutral-900` 的深色圆角块，仅用于浅色模式。
+  static const Color _lightBrandTileColor = Color(0xFF17181B);
 
   static Future<void> show(BuildContext context) {
     final colors = context.musicColors;
+    // 底部弹窗挂在导航器的 Overlay 上，不会自动继承 Music 页面局部的已解析主题，
+    // 因此显式承接宿主主题：深色主题得到深色抽屉，浅色 + 动态壁纸得到烟熏玻璃。
+    final hostTheme = Theme.of(context);
     return showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
@@ -36,7 +40,7 @@ class PlatformLoginSheet extends ConsumerWidget {
       // 显式承接主题遮罩：窗口自身不透明，缺少遮罩时浅色下会和宿主页面糊在一起。
       barrierColor: colors.scrim,
       useSafeArea: true,
-      builder: (_) => const PlatformLoginSheet(),
+      builder: (_) => Theme(data: hostTheme, child: const PlatformLoginSheet()),
     );
   }
 
@@ -166,12 +170,15 @@ class _LoginSheetChrome extends StatelessWidget {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: PlatformLoginSheet._brandTileColor,
+                        color:
+                            isLight
+                                ? PlatformLoginSheet._lightBrandTileColor
+                                : colors.onSurface.withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.cloud_rounded,
-                        color: Colors.white,
+                        color: isLight ? Colors.white : colors.onSurface,
                         size: 20,
                       ),
                     ),

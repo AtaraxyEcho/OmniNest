@@ -49,7 +49,8 @@ public final class MusicDtos {
             String url,
             Instant expiresAt,
             Integer durationSeconds,
-            String format
+            String format,
+            String quality
     ) {
     }
 

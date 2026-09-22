@@ -509,6 +509,7 @@ class MusicPlaybackPlan {
     this.expiresAt,
     this.durationSeconds,
     this.format,
+    this.quality,
   });
 
   factory MusicPlaybackPlan.fromJson(Map<String, dynamic> json) {
@@ -518,6 +519,7 @@ class MusicPlaybackPlan {
       expiresAt: _parseDateTime(json['expiresAt']),
       durationSeconds: _nullableInt(json['durationSeconds']),
       format: json['format']?.toString(),
+      quality: json['quality']?.toString(),
     );
   }
 
@@ -527,12 +529,17 @@ class MusicPlaybackPlan {
   final int? durationSeconds;
   final String? format;
 
+  /// 在线曲目由平台实际签发的音质档位（如 lossless / exhigh）；
+  /// 本地曲目为 null（真实采样率/码率在曲目元数据上）。
+  final String? quality;
+
   MusicPlaybackPlan copyWith({
     String? trackId,
     String? url,
     DateTime? expiresAt,
     int? durationSeconds,
     String? format,
+    String? quality,
   }) {
     return MusicPlaybackPlan(
       trackId: trackId ?? this.trackId,
@@ -540,6 +547,7 @@ class MusicPlaybackPlan {
       expiresAt: expiresAt ?? this.expiresAt,
       durationSeconds: durationSeconds ?? this.durationSeconds,
       format: format ?? this.format,
+      quality: quality ?? this.quality,
     );
   }
 }

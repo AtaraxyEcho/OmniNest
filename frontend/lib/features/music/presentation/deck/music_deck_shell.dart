@@ -113,12 +113,18 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                   key: const ValueKey<String>('music-deck-system'),
                   autofocus: true,
                   onKeyEvent: _handleKeyEvent,
-                  child: Scaffold(
-                    backgroundColor: Colors.transparent,
-                    body:
-                        compact
-                            ? _buildMobile(context, platform, sources)
-                            : _buildDesktop(context, platform, sources),
+                  child: BlockSemantics(
+                    // Music 模块整页遮盖下层路由（门户）：把被遮盖内容的
+                    // 语义整体排除，避免其数百节点随每次语义更新重新序列
+                    // 化，触发 Windows 辅助功能桥 "will not be in the tree"
+                    // 的更新失败。
+                    child: Scaffold(
+                      backgroundColor: Colors.transparent,
+                      body:
+                          compact
+                              ? _buildMobile(context, platform, sources)
+                              : _buildDesktop(context, platform, sources),
+                    ),
                   ),
                 ),
               ),

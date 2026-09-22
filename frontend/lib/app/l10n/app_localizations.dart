@@ -4435,12 +4435,6 @@ abstract class AppLocalizations {
   /// **'Current lyric: {text}'**
   String musicLyricSemanticsCurrent(Object text);
 
-  /// No description provided for @musicVisualizerLyricOffset.
-  ///
-  /// In en, this message translates to:
-  /// **'Lyric delay'**
-  String get musicVisualizerLyricOffset;
-
   /// No description provided for @musicVisualizerLyricTranslation.
   ///
   /// In en, this message translates to:
@@ -4464,6 +4458,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Focus band'**
   String get musicVisualizerLyricFocusBand;
+
+  /// No description provided for @musicVisualizerActiveBackground.
+  ///
+  /// In en, this message translates to:
+  /// **'Active line backdrop'**
+  String get musicVisualizerActiveBackground;
+
+  /// No description provided for @musicVisualizerActiveFontScale.
+  ///
+  /// In en, this message translates to:
+  /// **'Active lyric size'**
+  String get musicVisualizerActiveFontScale;
+
+  /// No description provided for @musicVisualizerInactiveFontScale.
+  ///
+  /// In en, this message translates to:
+  /// **'Inactive lyric size'**
+  String get musicVisualizerInactiveFontScale;
 
   /// No description provided for @musicLyricBackToCurrent.
   ///
@@ -16000,6 +16012,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Shuffle'**
   String get musicShuffle;
+
+  /// No description provided for @musicPlayModeSequential.
+  ///
+  /// In en, this message translates to:
+  /// **'Sequential playback'**
+  String get musicPlayModeSequential;
 
   /// No description provided for @musicRepeatOff.
   ///

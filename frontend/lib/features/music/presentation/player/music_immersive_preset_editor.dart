@@ -242,6 +242,60 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                                         ),
                                       ),
                                 ),
+                              // 在读行底衬背景（样例黑色高亮带）开关。
+                              _VisualSwitch(
+                                palette: _editorPalette(context),
+                                label: l10n.musicVisualizerActiveBackground,
+                                value:
+                                    _draft.lyrics.activeLineBackgroundEnabled,
+                                scopeLabel: l10n.musicVisualizerScopeDesktop,
+                                onChanged:
+                                    (value) => _update(
+                                      _draft.copyWith(
+                                        lyrics: _draft.lyrics.copyWith(
+                                          activeLineBackgroundEnabled: value,
+                                        ),
+                                      ),
+                                    ),
+                              ),
+                              // 在读/未读字号缩放：乘在样例字号上，行槽
+                              // 高度按折行与缩放自适应。
+                              _VisualSlider(
+                                palette: _editorPalette(context),
+                                label: l10n.musicVisualizerActiveFontScale,
+                                value: _draft.lyrics.activeFontScale,
+                                min: 0.6,
+                                max: 1.6,
+                                divisions: 10,
+                                valueSuffix: '×',
+                                scopeLabel: l10n.musicVisualizerScopeDesktop,
+                                onChanged:
+                                    (value) => _update(
+                                      _draft.copyWith(
+                                        lyrics: _draft.lyrics.copyWith(
+                                          activeFontScale: value,
+                                        ),
+                                      ),
+                                    ),
+                              ),
+                              _VisualSlider(
+                                palette: _editorPalette(context),
+                                label: l10n.musicVisualizerInactiveFontScale,
+                                value: _draft.lyrics.inactiveFontScale,
+                                min: 0.6,
+                                max: 1.6,
+                                divisions: 10,
+                                valueSuffix: '×',
+                                scopeLabel: l10n.musicVisualizerScopeDesktop,
+                                onChanged:
+                                    (value) => _update(
+                                      _draft.copyWith(
+                                        lyrics: _draft.lyrics.copyWith(
+                                          inactiveFontScale: value,
+                                        ),
+                                      ),
+                                    ),
+                              ),
                               // 歌词颜色在桌面复刻形态同样生效：改色后覆盖
                               // 样例常量，恢复默认（纯白）回落样例色。
                               MusicVisualPaintField(
@@ -280,26 +334,8 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                                       ),
                                     ),
                               ),
-                              _VisualSlider(
-                                palette: _editorPalette(context),
-                                label: l10n.musicVisualizerLyricOffset,
-                                value: _draft.lyrics.offsetMs.toDouble(),
-                                min: -500,
-                                max: 500,
-                                divisions: 20,
-                                displayAsInteger: true,
-                                valueSigned: true,
-                                valueSuffix: ' ms',
-                                scopeLabel: l10n.musicVisualizerScopeAll,
-                                onChanged:
-                                    (value) => _update(
-                                      _draft.copyWith(
-                                        lyrics: _draft.lyrics.copyWith(
-                                          offsetMs: value.round(),
-                                        ),
-                                      ),
-                                    ),
-                              ),
+                              // 歌词时间轴校准滑杆已移除：校准入口统一收敛
+                              // 到居右布局歌词列顶部的 ±0.2s 按钮与行菜单。
                             ],
                             // 堆叠卡片开关：与歌词相互独立，控制封面卡组
                             // 及其下方音频参数胶囊的显隐。
@@ -766,7 +802,6 @@ class _VisualSlider extends StatelessWidget {
     this.displayAsInteger = false,
     this.valueSuffix = '',
     this.valuePercent = false,
-    this.valueSigned = false,
     this.scopeLabel,
   });
 
@@ -778,14 +813,11 @@ class _VisualSlider extends StatelessWidget {
   final int? divisions;
   final bool displayAsInteger;
 
-  /// 数值单位后缀（如 ` px`、` ms`、`×`、`%`）。
+  /// 数值单位后缀（如 ` px`、`×`、`%`）。
   final String valueSuffix;
 
   /// 按百分比显示（0–1 的设置值 × 100）。
   final bool valuePercent;
-
-  /// 正数带 `+` 号（延迟校准一类的双向量）。
-  final bool valueSigned;
   final ValueChanged<double> onChanged;
 
   /// 生效范围徽标文案（桌面/移动端/通用），为空时不渲染徽标。
@@ -798,10 +830,9 @@ class _VisualSlider extends StatelessWidget {
         displayAsInteger
             ? scaled.round().toString()
             : scaled.toStringAsFixed(2);
-    final sign = valueSigned && scaled > 0 ? '+' : '';
     // 百分比自带 % 单位，调用方无需重复传后缀。
     final suffix = valuePercent ? '%$valueSuffix' : valueSuffix;
-    final display = '$sign$number$suffix';
+    final display = '$number$suffix';
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(

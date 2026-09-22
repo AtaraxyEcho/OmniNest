@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_playback_queue_store.dart';
@@ -19,7 +21,7 @@ void main() {
     api = _StubMusicApi();
   });
 
-  Future<ProviderContainer> pumpSheet(WidgetTester tester) async {
+  ProviderContainer createSheetContainer() {
     final container = ProviderContainer.test(
       overrides: [
         musicApiProvider.overrideWithValue(api),
@@ -30,6 +32,11 @@ void main() {
       ],
     );
     addTearDown(container.dispose);
+    return container;
+  }
+
+  Future<ProviderContainer> pumpSheet(WidgetTester tester) async {
+    final container = createSheetContainer();
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
@@ -43,6 +50,35 @@ void main() {
     );
     await tester.pumpAndSettle();
     return container;
+  }
+
+  /// 从宿主页面调用 `PlatformLoginSheet.show` 打开窗口：弹窗挂在导航器 Overlay 上，
+  /// 只有显式承接宿主主题才能复现浅色 / 深色 / 壁纸三种真实渲染路径。
+  Future<void> pumpHostedSheet(WidgetTester tester, ThemeData theme) async {
+    final container = createSheetContainer();
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: theme,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: Scaffold(
+            body: Builder(
+              builder:
+                  (context) => TextButton(
+                    onPressed: () => PlatformLoginSheet.show(context),
+                    child: const Text('open-accounts'),
+                  ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('open-accounts'));
+    await tester.pumpAndSettle();
   }
 
   testWidgets('登录面板只保留扫码登录，不再提供手机号与邮箱入口', (tester) async {
@@ -77,6 +113,47 @@ void main() {
     // 收尾：卸载面板触发轮询取消，再走完已排定的计时器，避免遗留 pending Timer。
     await tester.pumpWidget(const SizedBox.shrink());
     await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('二维码展示期间常驻刷新入口，点击后重新申请会话', (tester) async {
+    await pumpSheet(tester);
+    await tester.tap(find.byKey(MusicPlatformQrPanel.startButtonKey));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(api.qrSessionRequests, hasLength(1));
+
+    // 等待扫码态也必须能主动换码：不能只等会话超时后才出现刷新遮罩。
+    expect(find.byKey(MusicPlatformQrPanel.refreshButtonKey), findsOneWidget);
+    await tester.tap(find.byKey(MusicPlatformQrPanel.refreshButtonKey));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(api.qrSessionRequests, hasLength(2));
+    expect(find.byKey(MusicPlatformQrPanel.qrContainerKey), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 3));
+  });
+
+  testWidgets('宿主深色主题时窗口跟随深色，不再强制浅色抽屉', (tester) async {
+    await pumpHostedSheet(tester, OmniNestTheme.dark());
+
+    final sheetContext = tester.element(find.byType(MusicPlatformQrPanel));
+    final colors = sheetContext.musicColors;
+    expect(Theme.of(sheetContext).brightness, Brightness.dark);
+    // 深色抽屉：底为深色、正文为浅色，二者反色即回归此前"强制浅色渲染"的缺陷。
+    expect(colors.windowSurface.computeLuminance(), lessThan(0.2));
+    expect(colors.onSurface.computeLuminance(), greaterThan(0.7));
+  });
+
+  testWidgets('宿主浅色主题时窗口保持浅色实体底', (tester) async {
+    await pumpHostedSheet(tester, OmniNestTheme.light());
+
+    final sheetContext = tester.element(find.byType(MusicPlatformQrPanel));
+    final colors = sheetContext.musicColors;
+    expect(Theme.of(sheetContext).brightness, Brightness.light);
+    expect(colors.windowSurface.computeLuminance(), greaterThan(0.9));
+    expect(colors.onSurface.computeLuminance(), lessThan(0.3));
   });
 
   testWidgets('未登录时不展示断开入口', (tester) async {

@@ -160,9 +160,22 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       await pause();
       return;
     }
-    if (_url == normalized && _handle != null && !_opening) {
+    if (_url == normalized && _source != null && !_opening) {
+      // 同一地址重复打开：
+      // - 句柄仍有效：直接切换播放/暂停。
+      // - 句柄已失效（上一首播放完毕后 SoLoud 回收了 voice，句柄未再更新）：
+      //   声源仍在，直接从头上重新起播，避免对失效句柄操作报错。
+      final handle = _handle;
+      if (handle != null) {
+        if (play) {
+          await this.play();
+        } else {
+          await pause();
+        }
+        return;
+      }
       if (play) {
-        await this.play();
+        await _restartSource(_source!);
       } else {
         await pause();
       }
@@ -219,8 +232,32 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _soLoud.setPause(handle, false);
       _state = _state.copyWith(playing: true);
       _startTicker();
+    } on SoLoudSoundHandleNotFoundCppException {
+      // 句柄已在 C++ 侧失效（上一条音轨播完、声源被回收等）：丢弃死句柄，
+      // 由播放会话按需重新 openUrl 起播，而不是反复对死句柄操作报错。
+      _handle = null;
+      _log('SoLoud 句柄已失效，等待重新加载音源', playbackFailure: true);
     } on Exception catch (error) {
       _log('SoLoud 播放失败: $error', playbackFailure: true);
+    }
+  }
+
+  /// 从当前声源的起点重新起播（用于播放完毕后重放同一地址）。
+  Future<void> _restartSource(AudioSource source) async {
+    try {
+      final handle = _soLoud.play(
+        source,
+        volume: (_state.volume / 100).clamp(0.0, 1.0),
+        paused: false,
+      );
+      _handle = handle;
+      _bindSoundEvents(source, handle);
+      _completedEmitted = false;
+      _state = _state.copyWith(playing: true, position: Duration.zero);
+      _positionController.add(Duration.zero);
+      _startTicker();
+    } on Exception catch (error) {
+      _log('SoLoud 重新起播失败: $error', playbackFailure: true);
     }
   }
 
@@ -237,6 +274,8 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _state = _state.copyWith(playing: false);
       _spectrumSampler.reset();
       _emitPosition();
+    } on SoLoudSoundHandleNotFoundCppException {
+      _handle = null;
     } on Exception catch (error) {
       _log('SoLoud 暂停失败: $error');
     }
@@ -257,6 +296,9 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _completedEmitted = false;
       _state = _state.copyWith(position: target);
       _positionController.add(target);
+    } on SoLoudSoundHandleNotFoundCppException {
+      _handle = null;
+      _log('SoLoud 句柄已失效，跳转被忽略');
     } on Exception catch (error) {
       _log('SoLoud 跳转失败: $error');
     }
@@ -274,6 +316,8 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     }
     try {
       _soLoud.setVolume(handle, next / 100);
+    } on SoLoudSoundHandleNotFoundCppException {
+      _handle = null;
     } on Exception catch (error) {
       _log('SoLoud 音量设置失败: $error');
     }
@@ -290,6 +334,8 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     }
     try {
       _soLoud.setRelativePlaySpeed(handle, next);
+    } on SoLoudSoundHandleNotFoundCppException {
+      _handle = null;
     } on Exception catch (error) {
       _log('SoLoud 倍速设置失败: $error');
     }
@@ -419,6 +465,9 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       return;
     }
     _completedEmitted = true;
+    // 播放结束（或被 SoLoud 判定句柄失效）后句柄即不可再用，丢弃之；
+    // 声源保留，便于重放同一地址时直接起播。
+    _handle = null;
     _state = _state.copyWith(playing: false);
     _spectrumSampler.reset();
     _completedController.add(true);

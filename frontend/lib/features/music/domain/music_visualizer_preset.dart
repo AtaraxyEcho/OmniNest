@@ -131,6 +131,9 @@ class PortalLyricVisualSettings {
     required this.focusAnchor,
     required this.focusBandEnabled,
     required this.layout,
+    this.activeLineBackgroundEnabled = true,
+    this.activeFontScale = 1,
+    this.inactiveFontScale = 1,
   });
 
   factory PortalLyricVisualSettings.fromJson(Map<String, dynamic>? json) {
@@ -181,6 +184,19 @@ class PortalLyricVisualSettings {
       focusBandEnabled:
           json['focusBandEnabled'] as bool? ?? defaults.focusBandEnabled,
       layout: _parseLayout(json['layout'], legacyPosition: json['position']),
+      // 在读行底衬背景（样例的黑色高亮带）开关，默认开启。
+      activeLineBackgroundEnabled:
+          json['activeLineBackgroundEnabled'] as bool? ?? true,
+      activeFontScale:
+          _readDouble(
+            json['activeFontScale'],
+            defaults.activeFontScale,
+          ).clamp(0.6, 1.6).toDouble(),
+      inactiveFontScale:
+          _readDouble(
+            json['inactiveFontScale'],
+            defaults.inactiveFontScale,
+          ).clamp(0.6, 1.6).toDouble(),
     );
   }
 
@@ -285,6 +301,15 @@ class PortalLyricVisualSettings {
   /// 移动端播放页不使用该字段）。
   final PortalMusicLayout layout;
 
+  /// 在读行底衬背景（样例的黑色高亮带）开关：关闭后只保留左侧强调条。
+  final bool activeLineBackgroundEnabled;
+
+  /// 在读行文字缩放（乘在样例字号上）：1.0 为样例原值。
+  final double activeFontScale;
+
+  /// 未读行文字缩放（乘在样例字号上）：1.0 为样例原值。
+  final double inactiveFontScale;
+
   PortalLyricVisualSettings copyWith({
     bool? enabled,
     bool? translationEnabled,
@@ -301,6 +326,9 @@ class PortalLyricVisualSettings {
     double? focusAnchor,
     bool? focusBandEnabled,
     PortalMusicLayout? layout,
+    bool? activeLineBackgroundEnabled,
+    double? activeFontScale,
+    double? inactiveFontScale,
   }) {
     return PortalLyricVisualSettings(
       enabled: enabled ?? this.enabled,
@@ -318,6 +346,10 @@ class PortalLyricVisualSettings {
       focusAnchor: focusAnchor ?? this.focusAnchor,
       focusBandEnabled: focusBandEnabled ?? this.focusBandEnabled,
       layout: layout ?? this.layout,
+      activeLineBackgroundEnabled:
+          activeLineBackgroundEnabled ?? this.activeLineBackgroundEnabled,
+      activeFontScale: activeFontScale ?? this.activeFontScale,
+      inactiveFontScale: inactiveFontScale ?? this.inactiveFontScale,
     );
   }
 
@@ -338,6 +370,9 @@ class PortalLyricVisualSettings {
       'focusAnchor': focusAnchor,
       'focusBandEnabled': focusBandEnabled,
       'layout': layout.name,
+      'activeLineBackgroundEnabled': activeLineBackgroundEnabled,
+      'activeFontScale': activeFontScale,
+      'inactiveFontScale': inactiveFontScale,
     };
   }
 }
@@ -448,7 +483,7 @@ class PortalMusicVisualizerPreferences {
     this.visual = PortalMusicVisualizerSettings.defaults,
   });
 
-  static const int currentSchemaVersion = 13;
+  static const int currentSchemaVersion = 15;
 
   factory PortalMusicVisualizerPreferences.fromJson(Map<String, dynamic> json) {
     final visual = _readMap(json['visual']) ?? _readLegacyVisual(json);

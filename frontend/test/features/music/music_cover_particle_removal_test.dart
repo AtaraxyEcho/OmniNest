@@ -1,4 +1,4 @@
-import 'dart:io';
+﻿import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -40,7 +40,7 @@ void main() {
     expect(modelSource, isNot(contains('PortalSpectrumVisualSettings')));
     expect(modelSource, isNot(contains('PortalCoverElementSettings')));
     expect(modelSource, isNot(contains("json?['coverElements']")));
-    expect(modelSource, contains('static const int currentSchemaVersion = 13'));
+    expect(modelSource, contains('static const int currentSchemaVersion = 15'));
     // 编辑面板不再有封面与频响分区。
     expect(editorSource, isNot(contains('MusicVisualEditorSection.cover')));
     expect(editorSource, isNot(contains('MusicVisualEditorSection.spectrum')));

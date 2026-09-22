@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -156,6 +157,47 @@ void main() {
       await settleFirstPoll();
 
       verify(() => api.createNeteaseQrLogin()).called(1);
+      notifier.cancel();
+    },
+  );
+
+  test(
+    'regenerate takes over polling and discards the abandoned session',
+    () async {
+      var sessions = 0;
+      when(() => api.createNeteaseQrLogin()).thenAnswer((_) async {
+        sessions++;
+        return QrLoginSession(
+          loginKey: 'key-$sessions',
+          qrImageBase64: qrBase64(),
+        );
+      });
+      // 旧 loginKey 的在途响应在换码之后才返回，必须被丢弃。
+      final staleResponse = Completer<QrLoginStatus>();
+      when(
+        () => api.checkNeteaseQrLogin('key-1'),
+      ).thenAnswer((_) => staleResponse.future);
+      when(
+        () => api.checkNeteaseQrLogin('key-2'),
+      ).thenAnswer((_) async => const QrLoginStatus(status: 'pending'));
+      final container = createContainer();
+      final notifier = container.read(platformQrSessionProvider.notifier);
+
+      await notifier.start();
+      await settleFirstPoll();
+      expect(container.read(platformQrSessionProvider).loginKey, 'key-1');
+
+      // 等待扫码态主动换码：新会话必须接管轮询，旧会话的 expired 不能覆盖新码。
+      await notifier.regenerate();
+      staleResponse.complete(const QrLoginStatus(status: 'expired'));
+      await settleFirstPoll();
+
+      final state = container.read(platformQrSessionProvider);
+      expect(state.loginKey, 'key-2');
+      expect(state.status, PlatformQrDisplayStatus.waiting);
+      expect(state.canRegenerate, isFalse);
+      verify(() => api.checkNeteaseQrLogin('key-2')).called(1);
+
       notifier.cancel();
     },
   );

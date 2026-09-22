@@ -1018,11 +1018,13 @@
       "text": {}
     }
   },
-  "musicVisualizerLyricOffset": "Lyric delay",
   "musicVisualizerLyricTranslation": "Show translation",
   "musicVisualizerLyricKaraokeFill": "Word-by-word fill",
   "musicVisualizerLyricFocusAnchor": "Focus line position",
   "musicVisualizerLyricFocusBand": "Focus band",
+  "musicVisualizerActiveBackground": "Active line backdrop",
+  "musicVisualizerActiveFontScale": "Active lyric size",
+  "musicVisualizerInactiveFontScale": "Inactive lyric size",
   "musicLyricBackToCurrent": "Back to current",
   "musicLyricCopied": "Lyric line copied",
   "musicLyricCopyLine": "Copy lyric",
@@ -3808,6 +3810,7 @@
   "musicQueueReorderHint": "Drag to reorder the queue",
   "musicPlayNextAdded": "Added to play queue",
   "musicShuffle": "Shuffle",
+  "musicPlayModeSequential": "Sequential playback",
   "musicRepeatOff": "Sequential",
   "musicRepeatAll": "Loop All",
   "musicRepeatOne": "Loop Single",

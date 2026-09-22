@@ -892,11 +892,13 @@
       "text": {}
     }
   },
-  "musicVisualizerLyricOffset": "歌词延迟",
   "musicVisualizerLyricTranslation": "显示译文",
   "musicVisualizerLyricKaraokeFill": "逐字填充",
   "musicVisualizerLyricFocusAnchor": "焦点行位置",
   "musicVisualizerLyricFocusBand": "焦点带高亮",
+  "musicVisualizerActiveBackground": "在读行背景",
+  "musicVisualizerActiveFontScale": "在读歌词字号",
+  "musicVisualizerInactiveFontScale": "未读歌词字号",
   "musicLyricBackToCurrent": "回到当前播放",
   "musicLyricCopied": "已复制该行歌词",
   "musicLyricCopyLine": "复制歌词",
@@ -3682,6 +3684,7 @@
   "musicQueueReorderHint": "拖动调整播放顺序",
   "musicPlayNextAdded": "已加入播放队列",
   "musicShuffle": "随机播放",
+  "musicPlayModeSequential": "顺序播放",
   "musicRepeatOff": "顺序播放",
   "musicRepeatAll": "列表循环",
   "musicRepeatOne": "单曲循环",

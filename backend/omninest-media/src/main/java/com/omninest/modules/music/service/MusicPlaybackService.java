@@ -90,12 +90,21 @@ public class MusicPlaybackService {
             throw new BusinessException(ErrorCode.BAD_REQUEST, message);
         }
         String sourcePlatform = MusicPlatform.fromApiValue(platform).apiValue();
-        return playbackSessionService.createOnlinePlan(
+        MusicPlaybackPlanDto plan = playbackSessionService.createOnlinePlan(
                 ownerUserId,
                 sourcePlatform,
                 result.url(),
                 null,
                 result.format()
+        );
+        // 平台实际签发的音质档位随计划下发，供客户端音频参数胶囊展示。
+        return new MusicPlaybackPlanDto(
+                plan.trackId(),
+                plan.url(),
+                plan.expiresAt(),
+                plan.durationSeconds(),
+                plan.format(),
+                result.quality()
         );
     }
 

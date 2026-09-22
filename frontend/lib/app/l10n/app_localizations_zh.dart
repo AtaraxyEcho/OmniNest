@@ -2318,9 +2318,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get musicVisualizerLyricOffset => '歌词延迟';
-
-  @override
   String get musicVisualizerLyricTranslation => '显示译文';
 
   @override
@@ -2331,6 +2328,15 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicVisualizerLyricFocusBand => '焦点带高亮';
+
+  @override
+  String get musicVisualizerActiveBackground => '在读行背景';
+
+  @override
+  String get musicVisualizerActiveFontScale => '在读歌词字号';
+
+  @override
+  String get musicVisualizerInactiveFontScale => '未读歌词字号';
 
   @override
   String get musicLyricBackToCurrent => '回到当前播放';
@@ -8471,6 +8477,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicShuffle => '随机播放';
+
+  @override
+  String get musicPlayModeSequential => '顺序播放';
 
   @override
   String get musicRepeatOff => '顺序播放';

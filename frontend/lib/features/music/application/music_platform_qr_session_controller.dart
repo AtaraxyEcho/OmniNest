@@ -124,9 +124,13 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
   static const int maximumConsecutiveFailures = 5;
 
   bool _cancelled = true;
-  bool _loopActive = false;
   bool _completed = false;
   int _consecutiveFailures = 0;
+
+  /// 轮询世代：每次发起或换码时自增。旧会话的在途响应回来后发现世代已变即丢弃，
+  /// 不会把废弃二维码的状态写回当前面板。
+  int _generation = 0;
+  bool _polling = false;
 
   @override
   PlatformQrSessionState build() {
@@ -141,7 +145,7 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
   /// 已有未过期会话时只恢复轮询，不重新申请——面板关闭再打开不应浪费一次会话，
   /// 用户手上可能还拿着同一张二维码。
   Future<void> start() async {
-    if (_loopActive) {
+    if (_polling) {
       return;
     }
     _cancelled = false;
@@ -162,11 +166,13 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
     }
   }
 
-  /// 二维码过期或失败后就地换码。
+  /// 换一张二维码：过期或失败后重试，也可在等待扫码时由用户主动换码。
   Future<void> regenerate() async {
     if (state.regenerating || _completed) {
       return;
     }
+    // 先废弃当前轮询：否则旧 loginKey 会在换码后继续把状态写回面板。
+    _invalidatePolling();
     _cancelled = false;
     final requested = await _requestSession(regenerating: true);
     if (!requested || _cancelled) {
@@ -188,7 +194,14 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
     _cancelled = true;
     _completed = false;
     _consecutiveFailures = 0;
+    _invalidatePolling();
     state = const PlatformQrSessionState();
+  }
+
+  /// 让归属当前世代的轮询循环在下一个检查点退出，并释放循环归属。
+  void _invalidatePolling() {
+    _generation++;
+    _polling = false;
   }
 
   Future<bool> _requestSession({required bool regenerating}) async {
@@ -219,13 +232,14 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
   }
 
   Future<void> _runPolling(String loginKey) async {
-    if (_loopActive || _cancelled || _completed) {
+    final generation = ++_generation;
+    if (_cancelled || _completed) {
       return;
     }
-    _loopActive = true;
+    _polling = true;
     final startedAt = DateTime.now();
     try {
-      while (!_cancelled && !_completed) {
+      while (generation == _generation && !_cancelled && !_completed) {
         if (DateTime.now().difference(startedAt) >= maximumPollingDuration) {
           _applyStatus(PlatformQrDisplayStatus.expired);
           return;
@@ -234,7 +248,7 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
           final status = await ref
               .read(musicApiProvider)
               .checkNeteaseQrLogin(loginKey);
-          if (_cancelled || _completed) {
+          if (generation != _generation || _cancelled || _completed) {
             return;
           }
           _consecutiveFailures = 0;
@@ -261,7 +275,7 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
               );
           }
         } on Object catch (error) {
-          if (_cancelled) {
+          if (generation != _generation || _cancelled) {
             return;
           }
           _consecutiveFailures++;
@@ -282,7 +296,9 @@ class PlatformQrSessionController extends Notifier<PlatformQrSessionState> {
         await Future<void>.delayed(Duration(seconds: seconds));
       }
     } finally {
-      _loopActive = false;
+      if (generation == _generation) {
+        _polling = false;
+      }
     }
   }
 

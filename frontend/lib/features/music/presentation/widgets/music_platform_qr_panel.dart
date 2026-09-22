@@ -9,7 +9,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_platform_qr_session_controller.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login_controls.dart';
 
-/// 账号窗口内的内联二维码登录面板（浅色模式按样例渲染取景框与遮罩）。
+/// 账号窗口内的内联二维码登录面板（配色随宿主主题，浅色与深色共用同一套色阶）。
 ///
 /// 纯展示组件：不持有轮询或网络调用，状态与命令都来自
 /// [platformQrSessionProvider]（application 层）。面板自持的唯一资源是
@@ -17,6 +17,7 @@ import 'package:omninest/features/music/presentation/widgets/music_platform_logi
 ///
 /// 默认只展示"扫码登录"入口：二维码需请求平台会话才能生成，属于有成本的
 /// 外部调用，且一次会话只有 5 分钟有效期，进入窗口就自动拉取会浪费会话时长。
+/// 二维码展示期间常驻刷新入口，用户可随时换码，不必等待会话超时。
 class MusicPlatformQrPanel extends ConsumerStatefulWidget {
   const MusicPlatformQrPanel({super.key});
 
@@ -30,6 +31,10 @@ class MusicPlatformQrPanel extends ConsumerStatefulWidget {
   /// 二维码容器的测试键。
   @visibleForTesting
   static const qrContainerKey = Key('platformQrContainer');
+
+  /// 常驻刷新入口的测试键。
+  @visibleForTesting
+  static const refreshButtonKey = Key('platformQrRefreshButton');
 
   @override
   ConsumerState<MusicPlatformQrPanel> createState() =>
@@ -62,6 +67,11 @@ class _MusicPlatformQrPanelState extends ConsumerState<MusicPlatformQrPanel>
     super.dispose();
   }
 
+  /// 换码命令走 initState 保存的 notifier，事件回调内不再查 `ref`。
+  void _regenerateSession() {
+    unawaited(_sessionNotifier.regenerate());
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -70,6 +80,11 @@ class _MusicPlatformQrPanelState extends ConsumerState<MusicPlatformQrPanel>
     final hasQr =
         session.loginKey != null &&
         session.status != PlatformQrDisplayStatus.idle;
+    // 过期与失败态已在取景框遮罩内提供就地刷新，其余状态在二维码下方常驻刷新入口：
+    // 用户不必等到会话超时也能换码（例如手机不在身边或识别失败）。
+    final refreshLivesInOverlay =
+        session.status == PlatformQrDisplayStatus.expired ||
+        session.status == PlatformQrDisplayStatus.error;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -84,13 +99,29 @@ class _MusicPlatformQrPanelState extends ConsumerState<MusicPlatformQrPanel>
         if (!hasQr) ...[
           _QrEntry(session: session, onStart: () => _sessionNotifier.start()),
         ] else ...[
-          Center(child: _QrFrame(session: session, laser: _laserController)),
+          Center(
+            child: _QrFrame(
+              session: session,
+              laser: _laserController,
+              onRegenerate: _regenerateSession,
+            ),
+          ),
           const SizedBox(height: kMusicPlatformBlockGap),
           if (session.status == PlatformQrDisplayStatus.starting ||
               session.status == PlatformQrDisplayStatus.unknown)
             _QrStatusLine(session: session),
           if (session.status == PlatformQrDisplayStatus.waiting)
             _QrWaitingHint(),
+          if (!refreshLivesInOverlay) ...[
+            const SizedBox(height: kMusicPlatformFieldGap),
+            Center(
+              child: _QrRefreshButton(
+                key: MusicPlatformQrPanel.refreshButtonKey,
+                session: session,
+                onRegenerate: _regenerateSession,
+              ),
+            ),
+          ],
         ],
       ],
     );
@@ -183,10 +214,15 @@ class _QrEntry extends StatelessWidget {
 /// 已扫码 / 过期 / 失败时整面覆盖状态遮罩（样例 `qr-confirmed-state` 与
 /// `qr-mask`）。
 class _QrFrame extends StatelessWidget {
-  const _QrFrame({required this.session, required this.laser});
+  const _QrFrame({
+    required this.session,
+    required this.laser,
+    required this.onRegenerate,
+  });
 
   final PlatformQrSessionState session;
   final AnimationController laser;
+  final VoidCallback onRegenerate;
 
   static const double _framePadding = 14;
 
@@ -333,7 +369,10 @@ class _QrFrame extends StatelessWidget {
                 ),
                 if (session.canRegenerate) ...[
                   const SizedBox(height: 10),
-                  _QrOverlayRefreshButton(session: session),
+                  _QrRefreshButton(
+                    session: session,
+                    onRegenerate: onRegenerate,
+                  ),
                 ],
               ],
             ),
@@ -405,25 +444,29 @@ class _QrFrame extends StatelessWidget {
   }
 }
 
-/// 已过期 / 失败遮罩内的就地刷新按钮（样例 `点击刷新`）。
-class _QrOverlayRefreshButton extends ConsumerWidget {
-  const _QrOverlayRefreshButton({required this.session});
+/// 换码操作按钮：二维码下方常驻，过期 / 失败时也用作遮罩内的就地刷新。
+class _QrRefreshButton extends StatelessWidget {
+  const _QrRefreshButton({
+    required this.session,
+    required this.onRegenerate,
+    super.key,
+  });
 
   final PlatformQrSessionState session;
+  final VoidCallback onRegenerate;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final colors = context.musicColors;
     final isLight = Theme.of(context).brightness == Brightness.light;
+    // 申请中不允许再次换码：并发请求只有最后一次有效，期间的点击只会造成空转。
+    final disabled =
+        session.regenerating ||
+        session.status == PlatformQrDisplayStatus.starting;
     return InkWell(
       borderRadius: BorderRadius.circular(999),
-      onTap:
-          session.regenerating
-              ? null
-              : () => unawaited(
-                ref.read(platformQrSessionProvider.notifier).regenerate(),
-              ),
+      onTap: disabled ? null : onRegenerate,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
         decoration: BoxDecoration(
@@ -449,13 +492,19 @@ class _QrOverlayRefreshButton extends ConsumerWidget {
                 : Icon(
                   Icons.refresh_rounded,
                   size: 13,
-                  color: colors.onSurfaceVariant,
+                  color:
+                      disabled
+                          ? colors.onSurfaceVariant.withValues(alpha: 0.5)
+                          : colors.onSurfaceVariant,
                 ),
             const SizedBox(width: 5),
             Text(
               l10n.musicQrRegenerate,
               style: TextStyle(
-                color: colors.onSurfaceVariant,
+                color:
+                    disabled
+                        ? colors.onSurfaceVariant.withValues(alpha: 0.5)
+                        : colors.onSurfaceVariant,
                 fontSize: AppTypography.bodySmall,
                 fontWeight: FontWeight.w600,
               ),
@@ -550,11 +599,17 @@ class _QrStatusLine extends StatelessWidget {
 
 /// 二维码位图：只在会话换码时重新解析。
 ///
+/// 白底不随主题改变：二维码需要浅色衬底才能被镜头识别，深色主题下同样保留白卡，
+/// 外框与遮罩负责贴合深色观感。
+///
 /// `gaplessPlayback` 保证换码期间旧图保留到新图就绪，避免出现一帧白屏闪烁。
 class _QrImage extends StatelessWidget {
   const _QrImage({required this.session});
 
   final PlatformQrSessionState session;
+
+  /// 白卡上的占位图标色：取中性灰，保证在固定白底上可读。
+  static const Color _placeholderColor = Color(0xFF8A8A8E);
 
   @override
   Widget build(BuildContext context) {
@@ -570,7 +625,7 @@ class _QrImage extends StatelessWidget {
                 ? const Icon(
                   Icons.qr_code_rounded,
                   size: 56,
-                  color: Colors.grey,
+                  color: _placeholderColor,
                 )
                 : Image.memory(
                   bytes,

@@ -1063,16 +1063,26 @@ double musicLyricLineOpacity(MusicLyricSpec spec, int relative) {
 }
 
 /// 解析某布局的歌词区复刻参数（按 [scale] 等比换算）。
-MusicLyricSpec resolveMusicLyricSpec(PortalMusicLayout layout, double scale) {
+///
+/// [activeFontScale] / [inactiveFontScale] 为用户在视觉编辑中调整的字号
+/// 缩放（1.0 = 样例原值），分别作用于在读与未读的全部文字尺寸。
+MusicLyricSpec resolveMusicLyricSpec(
+  PortalMusicLayout layout,
+  double scale, {
+  double activeFontScale = 1,
+  double inactiveFontScale = 1,
+}) {
   final isCenter = layout == PortalMusicLayout.center;
   double px(double value) => value * scale;
+  double pxInactive(double value) => value * scale * inactiveFontScale;
+  double pxActive(double value) => value * scale * activeFontScale;
   return MusicLyricSpec(
-    fontSize: px(isCenter ? 14 : 18),
-    activeFontSize: px(isCenter ? 18 : 44),
+    fontSize: pxInactive(isCenter ? 14 : 18),
+    activeFontSize: pxActive(isCenter ? 18 : 44),
     lineHeight: isCenter ? 20 / 14 : 26 / 18,
     activeLineHeight: isCenter ? 26 / 18 : 52 / 44,
-    translationFontSize: px(isCenter ? 11 : 12),
-    activeTranslationFontSize: px(isCenter ? 12 : 16),
+    translationFontSize: pxInactive(isCenter ? 11 : 12),
+    activeTranslationFontSize: pxActive(isCenter ? 12 : 16),
     translationLineHeight: isCenter ? 14 / 11 : 18 / 12,
     activeTranslationLineHeight: isCenter ? 18 / 12 : 24 / 16,
     translationGap: px(isCenter ? 2 : 4),
@@ -1346,10 +1356,16 @@ class MusicCenterLayoutFrame {
   });
 
   /// 按基准尺寸推导居中布局。
+  ///
+  /// [deckEnabled] 为 false 时（用户关闭堆叠卡片）跳过卡组与曲目信息带，
+  /// 歌词窗口（连同其头部带）在内容区内水平与垂直双居中。
+  /// [lyricHeaderHeight] 为歌词窗口上方元信息带预留高度（居右布局样例）。
   factory MusicCenterLayoutFrame.resolve(
     Size size, {
     double? topPadding,
     double? headerHeight,
+    bool deckEnabled = true,
+    double lyricHeaderHeight = 0,
   }) {
     final scale = musicLayoutScale(size);
     final pagePadding = kMusicLayoutPagePadding * scale;
@@ -1386,6 +1402,34 @@ class MusicCenterLayoutFrame {
       contentMaxWidth,
       contentRect.height,
     );
+    final lyricWidth = math.min(576 * scale, centeredContent.width).toDouble();
+    final lyricLeft =
+        centeredContent.left + (centeredContent.width - lyricWidth) / 2;
+    if (!deckEnabled) {
+      // 无卡组：歌词头部带 + 歌词窗口在内容区内双居中。
+      final stackHeight = lyricHeaderHeight + 120 * scale;
+      final top =
+          centeredContent.top +
+          math.max(0.0, (centeredContent.height - stackHeight) / 2).toDouble();
+      return MusicCenterLayoutFrame(
+        scale: scale,
+        deck: MusicDeckStageGeometry.resolveCenter(
+          contentRect: centeredContent,
+          top: top,
+          height: 0,
+          scale: scale,
+        ),
+        metaRect: Rect.zero,
+        lyricRect: Rect.fromLTWH(
+          lyricLeft,
+          top + lyricHeaderHeight,
+          lyricWidth,
+          120 * scale,
+        ),
+        headerTop: headerTop,
+        headerHeight: resolvedHeaderHeight,
+      );
+    }
     // 窗口过矮时卡组容器跟随收缩，保证曲目信息与歌词窗口仍在窗口内。
     final deckHeight =
         math
@@ -1404,9 +1448,6 @@ class MusicCenterLayoutFrame {
       height: deckHeight,
       scale: scale,
     );
-    final lyricWidth = math.min(576 * scale, centeredContent.width).toDouble();
-    final lyricLeft =
-        centeredContent.left + (centeredContent.width - lyricWidth) / 2;
     return MusicCenterLayoutFrame(
       scale: scale,
       deck: deck,

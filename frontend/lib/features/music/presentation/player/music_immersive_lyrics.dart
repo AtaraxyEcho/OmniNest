@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' as math;
+import 'dart:ui' as ui show Gradient;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -264,9 +265,12 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
                 (spec?.fixedWindowLines ?? 0) > 0
                     ? spec!.fixedWindowLines
                     : settings.visibleLines.clamp(1, 9).toInt();
+            // 极矮窗口容不下单个行槽时，把行槽钳制到可用高度以内：
+            // 行内容（文字盒）仍远小于行槽，只是留白被压缩，不会溢出。
+            final effectiveSlot = math.min(slotHeight, availableHeight);
             final maxLinesByHeight = math.max(
               1,
-              (availableHeight / slotHeight).floor(),
+              (availableHeight / effectiveSlot).floor(),
             );
             final resolvedVisibleLines =
                 math.min(requestedLines, maxLinesByHeight).clamp(1, 9).toInt();
@@ -283,7 +287,7 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
                       )
                         _buildSlot(
                           _activeIndex - resolvedVisibleLines ~/ 2 + offset,
-                          slotHeight,
+                          effectiveSlot,
                           settings,
                         ),
                     ],
@@ -574,48 +578,18 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
       onTap: () => _seekTo(index),
       onMenu: (position) => _showLineMenu(index, position),
     );
-    final lineContent = AnimatedSwitcher(
-      duration: MusicImmersiveMotion.duration(
-        context,
-        const Duration(milliseconds: 240),
+    // 行状态切换（在读 ⇆ 非当前句）必须原地更新：逐字填充让两份文本
+    // 视觉可区分（在读色 + 填充边界 vs 非当前句色），若走 AnimatedSwitcher
+    // 交叉淡化，新旧两份同文异色副本会在淡化期间错位堆叠（"叠字"）。
+    // 换行的滚动动效由跟随滚动动画承担，行内不再叠加二次动画。
+    final lineContent = KeyedSubtree(
+      key: ValueKey<String>(
+        'music-lyric-slot-${widget.track?.id}-$index-$active',
       ),
-      reverseDuration: MusicImmersiveMotion.duration(
-        context,
-        const Duration(milliseconds: 160),
-      ),
-      switchInCurve: Curves.easeOutCubic,
-      switchOutCurve: Curves.easeInCubic,
-      layoutBuilder: (currentChild, previousChildren) {
-        return Stack(
-          alignment: Alignment.center,
-          clipBehavior: Clip.none,
-          children: [
-            ...previousChildren,
-            if (currentChild != null) currentChild,
-          ],
-        );
-      },
-      transitionBuilder: (child, animation) {
-        final slide = Tween<Offset>(
-          begin: const Offset(0, 0.16),
-          end: Offset.zero,
-        ).animate(animation);
-        final scale = Tween<double>(begin: 0.96, end: 1).animate(animation);
-        return FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: slide,
-            child: ScaleTransition(scale: scale, child: child),
-          ),
-        );
-      },
-      child: KeyedSubtree(
-        key: ValueKey<String>(
-          'music-lyric-slot-${widget.track?.id}-$index-$active',
-        ),
-        child: lyricLine,
-      ),
+      child: lyricLine,
     );
+    // 行槽高度已包含内容裕量与行距；极矮窗口下由 multiline 分支把行槽
+    // 钳制到可用高度以内，保证不产生 RenderFlex 溢出。
     return SizedBox(height: height, child: lineContent);
   }
 
@@ -638,15 +612,15 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
     _syncFill(position);
   }
 
-  /// 当前行逐字填充动画：滚动形态、填充开关开启、播放中且当前行可估算
-  /// 进度（词级数据，或无词级数据时按行时长线性估算）。
+  /// 当前行逐字填充动画：填充开关开启、播放中且当前行可估算进度（词级
+  /// 数据，或无词级数据时按行时长线性估算）；滚动与居中（多行窗口）形态
+  /// 均支持填充。
   Animation<double>? _fillAnimationFor(
     MusicLyricLine line,
     PortalLyricVisualSettings settings,
     Duration? lineDuration,
   ) {
-    if (!widget.scrollMode ||
-        !settings.wordFillEnabled ||
+    if (!settings.wordFillEnabled ||
         !widget.player.state.playing ||
         (line.words.isEmpty && lineDuration == null)) {
       return null;
@@ -672,13 +646,16 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
   /// 按播放位置重锚逐字填充：优先按词级时间轴推进（已完成词时长 / 总词
   /// 时长），无词级数据时按行时长线性估算，保证行级歌词同样有填充反馈。
   void _syncFill(Duration position) {
+    if (widget.lyrics.isEmpty) {
+      // 位置流在无歌词（未加载曲目 / 纯音乐）时同样到达，此时无填充对象。
+      return;
+    }
     final activeIndex = _activeIndex.clamp(0, widget.lyrics.length - 1);
     final line = widget.lyrics.isEmpty ? null : widget.lyrics[activeIndex];
     final settings = widget.lyricSettings ?? PortalLyricVisualSettings.defaults;
     final lineDuration =
         widget.lyrics.isEmpty ? null : _lineDurationFor(activeIndex);
     final fillable =
-        widget.scrollMode &&
         settings.wordFillEnabled &&
         widget.player.state.playing &&
         line != null &&

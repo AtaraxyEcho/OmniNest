@@ -97,6 +97,10 @@ class _MusicImmersivePlayerStageState
             size,
             topPadding: topPadding,
             headerHeight: headerBlockHeight,
+            deckEnabled: visual.deckEnabled,
+            // 居中布局同样在歌词窗口上方预留元信息带（三布局统一的头部）。
+            lyricHeaderHeight:
+                visual.lyrics.enabled ? kMusicLyricMetaRowHeight * scale : 0,
           );
           final headerTop =
               isCenter ? centerFrame.headerTop : sideFrame.headerTop;
@@ -120,7 +124,30 @@ class _MusicImmersivePlayerStageState
               isCenter
                   ? centerFrame.lyricRect
                   : sideFrame.lyricViewport(layout);
-          final lyricSpec = resolveMusicLyricSpec(layout, scale);
+          final lyricSpec = resolveMusicLyricSpec(
+            layout,
+            scale,
+            activeFontScale: visual.lyrics.activeFontScale,
+            inactiveFontScale: visual.lyrics.inactiveFontScale,
+          );
+          // 歌词列头部带矩形：三个布局统一（居右为样例原生，居左与居中
+          // 为补齐的同一控件样式）。
+          final lyricHeaderRect =
+              isCenter
+                  ? Rect.fromLTWH(
+                    lyricRect.left,
+                    lyricRect.top - kMusicLyricMetaRowHeight * scale,
+                    lyricRect.width,
+                    kMusicLyricMetaRowHeight * scale,
+                  )
+                  : lyricSection!.top >= 0
+                  ? Rect.fromLTWH(
+                    lyricSection.left,
+                    lyricSection.top,
+                    lyricSection.width,
+                    kMusicLyricMetaRowHeight * scale,
+                  )
+                  : null;
           // 播放胶囊：样例 `max-w-5xl`（右侧布局 `max-w-6xl`）居中，
           final controlsHeight = kMusicFooterHeight * scale;
           final controlsBottom =
@@ -259,16 +286,33 @@ class _MusicImmersivePlayerStageState
                   left: deckRect.left,
                   width: deckRect.width,
                   top: deckRect.bottom + musicDeckSpecGap(layout) * scale,
-                  child: _DigitalDeckSpecCapsule(track: track, scale: scale),
+                  child: Builder(
+                    builder: (context) {
+                      final servedQuality = state?.playbackPlan?.quality;
+                      return _DigitalDeckSpecCapsule(
+                        track: track,
+                        scale: scale,
+                        servedQualityLabel:
+                            servedQuality == null ||
+                                    servedQuality.trim().isEmpty
+                                ? null
+                                : musicQualityLabel(
+                                  AppLocalizations.of(context),
+                                  servedQuality,
+                                ),
+                      );
+                    },
+                  ),
                 ),
-              // 居右布局歌词列顶部元信息行（样例 `Synchronized Master Lyrics`
-              // + 格式徽标 + 歌词偏移微调）：左侧布局的样例没有这一行。
-              if (layout == PortalMusicLayout.right && visual.lyrics.enabled)
+              // 歌词列顶部元信息行：三个布局统一渲染（居右为样例原生，
+              // 居左/居中补齐同一控件），含同步歌词标签、格式徽标与 ±0.2s
+              // 偏移微调；左侧布局的样例原本没有，但统一后交互一致。
+              if (visual.lyrics.enabled && lyricHeaderRect != null)
                 Positioned(
-                  left: lyricSection!.left,
-                  width: lyricSection.width,
-                  top: lyricSection.top,
-                  height: kMusicLyricMetaRowHeight * scale,
+                  left: lyricHeaderRect.left,
+                  width: lyricHeaderRect.width,
+                  top: lyricHeaderRect.top,
+                  height: lyricHeaderRect.height,
                   child: _DigitalLyricColumnHeader(
                     track: track,
                     scale: scale,

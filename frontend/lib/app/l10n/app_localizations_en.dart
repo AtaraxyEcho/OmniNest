@@ -2395,9 +2395,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get musicVisualizerLyricOffset => 'Lyric delay';
-
-  @override
   String get musicVisualizerLyricTranslation => 'Show translation';
 
   @override
@@ -2408,6 +2405,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicVisualizerLyricFocusBand => 'Focus band';
+
+  @override
+  String get musicVisualizerActiveBackground => 'Active line backdrop';
+
+  @override
+  String get musicVisualizerActiveFontScale => 'Active lyric size';
+
+  @override
+  String get musicVisualizerInactiveFontScale => 'Inactive lyric size';
 
   @override
   String get musicLyricBackToCurrent => 'Back to current';
@@ -8735,6 +8741,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicShuffle => 'Shuffle';
+
+  @override
+  String get musicPlayModeSequential => 'Sequential playback';
 
   @override
   String get musicRepeatOff => 'Sequential';

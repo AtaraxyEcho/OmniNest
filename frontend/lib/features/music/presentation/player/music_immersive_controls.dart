@@ -241,7 +241,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
     );
   }
 
-  /// 中段第一行：随机 / 后退 10 秒 / 上一首 / 播放 / 下一首 / 前进 10 秒 / 循环
+  /// 中段第一行：播放模式 / 后退 10 秒 / 上一首 / 播放 / 下一首 / 前进 10 秒
   /// （样例居中与居右布局的传输行序，`gap-5`）。
   Widget _buildTransportRow(
     WidgetRef ref,
@@ -250,6 +250,23 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
     required MusicRepeatMode repeatMode,
     required bool compact,
   }) {
+    // 播放模式三档互斥（顺序 / 随机 / 循环），单按钮轮换：
+    // 随机与循环不再可能同时生效。
+    final playModeIcon =
+        shuffleEnabled
+            ? Icons.shuffle_on_rounded
+            : repeatMode == MusicRepeatMode.off
+            ? Icons.repeat_rounded
+            : Icons.repeat_on_rounded;
+    final playModeActive = shuffleEnabled || repeatMode != MusicRepeatMode.off;
+    final playModeTooltip =
+        shuffleEnabled
+            ? l10n.musicShuffle
+            : repeatMode == MusicRepeatMode.all
+            ? l10n.musicRepeatAll
+            : repeatMode == MusicRepeatMode.one
+            ? l10n.musicRepeatOne
+            : l10n.musicPlayModeSequential;
     return SizedBox(
       // 中段两行总高 62（40 + 6 + 16）恰好等于胶囊内高，避免列溢出。
       height: transportRowHeight * scale,
@@ -259,17 +276,15 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
           if (!compact)
             _DockIconButton(
               scale: scale,
-              tooltip: l10n.musicShuffle,
-              icon:
-                  shuffleEnabled
-                      ? Icons.shuffle_on_rounded
-                      : Icons.shuffle_rounded,
+              tooltip: playModeTooltip,
+              icon: playModeIcon,
               iconSize: 16,
+              active: playModeActive,
               onTap:
                   () =>
                       ref
                           .read(musicCenterControllerProvider.notifier)
-                          .toggleShuffle(),
+                          .cyclePlayMode(),
             ),
           if (!compact) ...[
             SizedBox(width: transportGap * scale),
@@ -327,29 +342,6 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
               onTap: () => _seekDockBy(player, 10),
             ),
           ],
-          if (!compact) SizedBox(width: transportGap * scale),
-          if (!compact)
-            _DockIconButton(
-              scale: scale,
-              tooltip:
-                  repeatMode == MusicRepeatMode.one
-                      ? l10n.musicRepeatOne
-                      : repeatMode == MusicRepeatMode.all
-                      ? l10n.musicRepeatAll
-                      : l10n.musicRepeatOff,
-              icon:
-                  repeatMode == MusicRepeatMode.one
-                      ? Icons.repeat_one_on_rounded
-                      : repeatMode == MusicRepeatMode.all
-                      ? Icons.repeat_on_rounded
-                      : Icons.repeat_rounded,
-              iconSize: 16,
-              onTap:
-                  () =>
-                      ref
-                          .read(musicCenterControllerProvider.notifier)
-                          .toggleRepeatMode(),
-            ),
         ],
       ),
     );
@@ -433,14 +425,16 @@ void _toggleFavorite(WidgetRef ref, MusicTrack track) {
   }());
 }
 
-/// 样例样式的图标按钮：`text-on-surface-variant hover:text-primary p-1`。
-class _DockIconButton extends StatelessWidget {
+/// Dock 图标按钮：`text-on-surface-variant hover:text-primary p-1`，
+/// 悬停提亮、按下缩放反馈；模式开启态（如随机/循环）用满亮白常亮显示。
+class _DockIconButton extends StatefulWidget {
   const _DockIconButton({
     required this.scale,
     required this.tooltip,
     required this.icon,
     required this.iconSize,
     required this.onTap,
+    this.active = false,
   });
 
   final double scale;
@@ -449,19 +443,51 @@ class _DockIconButton extends StatelessWidget {
   final double iconSize;
   final VoidCallback onTap;
 
+  /// 模式开启态：图标满亮白；关闭态半透明白、悬停提亮。
+  final bool active;
+
+  @override
+  State<_DockIconButton> createState() => _DockIconButtonState();
+}
+
+class _DockIconButtonState extends State<_DockIconButton> {
+  bool _pressed = false;
+
   @override
   Widget build(BuildContext context) {
+    final idleColor = kMusicLyricTranslationColor.withValues(alpha: 0.9);
     return Tooltip(
-      message: tooltip,
+      message: widget.tooltip,
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
-        onTap: onTap,
-        child: Padding(
-          padding: EdgeInsets.all(4 * scale),
-          child: Icon(
-            icon,
-            color: kMusicLyricTranslationColor,
-            size: iconSize * scale,
+        onTap: widget.onTap,
+        onHighlightChanged:
+            (highlighted) =>
+                highlighted != _pressed
+                    ? setState(() => _pressed = highlighted)
+                    : null,
+        splashColor: Colors.white.withValues(alpha: 0.08),
+        highlightColor: Colors.white.withValues(alpha: 0.06),
+        child: AnimatedScale(
+          // 按下缩放反馈：与样例播放键的 active:scale-95 观感一致。
+          scale: _pressed ? 0.88 : 1,
+          duration: MusicImmersiveMotion.duration(
+            context,
+            const Duration(milliseconds: 120),
+          ),
+          curve: Curves.easeOutCubic,
+          child: Padding(
+            padding: EdgeInsets.all(4 * widget.scale),
+            child: Icon(
+              widget.icon,
+              color:
+                  widget.active
+                      ? Colors.white
+                      : _pressed
+                      ? Colors.white
+                      : idleColor,
+              size: widget.iconSize * widget.scale,
+            ),
           ),
         ),
       ),
