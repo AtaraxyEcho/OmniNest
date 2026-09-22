@@ -26,8 +26,8 @@ class BackdropRuntimeConfigServiceTest {
 
     @Test
     void returnsPlanDefaultsWhenCatalogEmpty() {
-        assertThat(configService.maxImageBytes()).isEqualTo(20 * 1024 * 1024);
-        assertThat(configService.maxVideoBytes()).isEqualTo(64 * 1024 * 1024);
+        assertThat(configService.maxImageBytes()).isEqualTo(20L * 1024 * 1024);
+        assertThat(configService.maxVideoBytes()).isEqualTo(448L * 1024 * 1024);
         assertThat(configService.maxAssetsPerUser()).isEqualTo(30);
         assertThat(configService.uploadRatePerHour()).isEqualTo(20);
     }
@@ -44,14 +44,22 @@ class BackdropRuntimeConfigServiceTest {
     }
 
     @Test
-    void clampsAssetBytesToMultipartBoundary() {
+    void readsAssetBytesWithoutHardcodedCeiling() {
         when(configValueProvider.findByKey(BackdropRuntimeConfigService.MAX_VIDEO_BYTES))
-                .thenReturn(Optional.of("536870912"));
+                .thenReturn(Optional.of("469762048"));
         when(configValueProvider.findByKey(BackdropRuntimeConfigService.MAX_IMAGE_BYTES))
                 .thenReturn(Optional.of("1024"));
 
-        assertThat(configService.maxVideoBytes()).isEqualTo(128 * 1024 * 1024);
-        assertThat(configService.maxImageBytes()).isEqualTo(1024 * 1024);
+        assertThat(configService.maxVideoBytes()).isEqualTo(448L * 1024 * 1024);
+        assertThat(configService.maxImageBytes()).isEqualTo(1024);
+    }
+
+    @Test
+    void readsVideoLimitAboveIntRangeWithoutFallingBack() {
+        when(configValueProvider.findByKey(BackdropRuntimeConfigService.MAX_VIDEO_BYTES))
+                .thenReturn(Optional.of("2147483648"));
+
+        assertThat(configService.maxVideoBytes()).isEqualTo(2_147_483_648L);
     }
 
     @Test
@@ -70,6 +78,6 @@ class BackdropRuntimeConfigServiceTest {
         when(configValueProvider.findByKey(BackdropRuntimeConfigService.MAX_VIDEO_BYTES))
                 .thenReturn(Optional.of("not-a-number"));
 
-        assertThat(configService.maxVideoBytes()).isEqualTo(64 * 1024 * 1024);
+        assertThat(configService.maxVideoBytes()).isEqualTo(448L * 1024 * 1024);
     }
 }

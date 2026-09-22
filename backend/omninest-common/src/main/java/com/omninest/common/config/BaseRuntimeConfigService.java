@@ -85,6 +85,20 @@ public abstract class BaseRuntimeConfigService {
     }
 
     /**
+     * 读取长整数类型配置。字节大小等可超过 int 范围的配置必须用它，
+     * 否则 {@code Integer.parseInt} 失败会被静默回落到默认值。
+     *
+     * @param key 配置键
+     * @param defaultValue 默认值
+     * @return 配置值，解析失败时返回默认值
+     */
+    public long longConfig(String key, long defaultValue) {
+        return cachedConfigValue(key)
+                .map(value -> parseLong(value, defaultValue))
+                .orElse(defaultValue);
+    }
+
+    /**
      * 解析布尔配置值。
      *
      * @param value 待解析的配置值
@@ -118,6 +132,24 @@ public abstract class BaseRuntimeConfigService {
         }
         try {
             return Integer.parseInt(value.trim());
+        } catch (NumberFormatException exception) {
+            return defaultValue;
+        }
+    }
+
+    /**
+     * 解析长整数配置值。
+     *
+     * @param value 待解析的配置值
+     * @param defaultValue 默认值
+     * @return 解析后的配置值
+     */
+    protected long parseLong(String value, long defaultValue) {
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            return Long.parseLong(value.trim());
         } catch (NumberFormatException exception) {
             return defaultValue;
         }

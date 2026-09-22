@@ -6,6 +6,7 @@ import com.omninest.common.security.SafeUrlValidator;
 import com.omninest.common.storage.ObjectStorageBuckets;
 import com.omninest.common.storage.ObjectStorageClient;
 import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.modules.file.config.FileTransferLimitsProperties;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.FilePurgeState;
@@ -52,7 +53,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class DerivedAssetStorageService {
     private static final Duration DOWNLOAD_TIMEOUT = Duration.ofSeconds(30);
     private static final int MAX_REDIRECTS = 5;
-    private static final long MAX_DERIVED_ASSET_BYTES = 128L * 1024 * 1024;
+    /** 远程抓取和流式复制派生字节的字节上限；本地落库上限由部署配置决定。 */
+    private static final long MAX_FETCHED_DERIVED_ASSET_BYTES = 128L * 1024 * 1024;
     /** 转码产物、批量打包等完整内容产物的兜底上限，仅用于拦截异常产物写满磁盘。 */
     private static final long MAX_MEDIA_DERIVED_ASSET_BYTES = 64L * 1024 * 1024 * 1024;
     /**
@@ -75,6 +77,7 @@ public class DerivedAssetStorageService {
     private final FileNodeRepository fileNodeRepository;
     private final SafeUrlValidator safeUrlValidator;
     private final TransactionTemplate transactionTemplate;
+    private final FileTransferLimitsProperties transferLimits;
 
     /** 在独立新事务中执行存储动作；并发流水线写入同一对象键时重试一次。 */
     private UUID storeInNewTransactionWithRetry(StoreAction action) {
@@ -319,7 +322,7 @@ public class DerivedAssetStorageService {
             Files.createDirectories(PROCESSING_ROOT);
             tempFile = Files.createTempFile(PROCESSING_ROOT, "reader-cover-", ".img");
             try (OutputStream out = Files.newOutputStream(tempFile)) {
-                copyBounded(data, out, MAX_DERIVED_ASSET_BYTES);
+                copyBounded(data, out, MAX_FETCHED_DERIVED_ASSET_BYTES);
             }
             Path stagedFile = tempFile;
             return storeInNewTransactionWithRetry(() -> {
@@ -440,7 +443,7 @@ public class DerivedAssetStorageService {
         long sizeBytes = Files.size(normalizedSource);
         long maxBytes = assetType != null && LARGE_ASSET_TYPES.contains(assetType)
                 ? MAX_MEDIA_DERIVED_ASSET_BYTES
-                : MAX_DERIVED_ASSET_BYTES;
+                : transferLimits.getMaxDerivedAssetBytes();
         if (sizeBytes <= 0 || sizeBytes > maxBytes) {
             throw new BusinessException(ErrorCode.FILE_UPLOAD_FAILED, "派生资源大小超出限制");
         }
@@ -588,14 +591,14 @@ public class DerivedAssetStorageService {
     private DownloadedAsset persistResponse(HttpResponse<InputStream> response) throws IOException {
         Files.createDirectories(PROCESSING_ROOT);
         long contentLength = response.headers().firstValueAsLong("Content-Length").orElse(-1L);
-        if (contentLength > MAX_DERIVED_ASSET_BYTES) {
+        if (contentLength > MAX_FETCHED_DERIVED_ASSET_BYTES) {
             throw new IOException("派生资源响应大小超出限制");
         }
         Path tempFile = Files.createTempFile(PROCESSING_ROOT, "remote-", ".asset");
         try {
             try (InputStream body = response.body()) {
                 try (OutputStream output = Files.newOutputStream(tempFile)) {
-                    copyBounded(body, output, MAX_DERIVED_ASSET_BYTES);
+                    copyBounded(body, output, MAX_FETCHED_DERIVED_ASSET_BYTES);
                 }
             }
             String mimeType = response.headers().firstValue("Content-Type")

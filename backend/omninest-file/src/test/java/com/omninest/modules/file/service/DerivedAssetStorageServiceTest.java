@@ -11,6 +11,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.modules.file.config.FileTransferLimitsProperties;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.security.SafeUrlValidator;
@@ -78,7 +79,8 @@ class DerivedAssetStorageServiceTest {
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                new FileTransferLimitsProperties()
         );
         LegacyObjectReference reference = new LegacyObjectReference(
                 "derived-assets",
@@ -114,7 +116,8 @@ class DerivedAssetStorageServiceTest {
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                new FileTransferLimitsProperties()
         );
 
         boolean deleted = service.deleteOwned(OWNER_ID, FILE_NODE_ID);
@@ -142,7 +145,8 @@ class DerivedAssetStorageServiceTest {
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                new FileTransferLimitsProperties()
         );
 
         int deletedCount = service.deleteOwnedBatch(
@@ -177,7 +181,8 @@ class DerivedAssetStorageServiceTest {
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                new FileTransferLimitsProperties()
         );
 
         assertThatThrownBy(() -> service.deleteOwned(OWNER_ID, FILE_NODE_ID))
@@ -211,7 +216,8 @@ class DerivedAssetStorageServiceTest {
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                new FileTransferLimitsProperties()
         );
 
         boolean available = service.isAvailable(
@@ -247,7 +253,8 @@ class DerivedAssetStorageServiceTest {
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                new FileTransferLimitsProperties()
         );
 
         UUID fileNodeId = service.store(
@@ -297,7 +304,8 @@ class DerivedAssetStorageServiceTest {
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                new FileTransferLimitsProperties()
         );
         String logicalName = FILE_NODE_ID + "_h265.mp4";
 
@@ -360,7 +368,8 @@ class DerivedAssetStorageServiceTest {
                     fileObjectRepository,
                     fileNodeRepository,
                     safeUrlValidator,
-                    transactionTemplate
+                    transactionTemplate,
+                    new FileTransferLimitsProperties()
             );
 
             UUID fileNodeId = service.storeRemote(new DerivedAssetRequest(
@@ -400,13 +409,16 @@ class DerivedAssetStorageServiceTest {
         try (RandomAccessFile file = new RandomAccessFile(bigFile.toFile(), "rw")) {
             file.setLength(129L * 1024 * 1024);
         }
+        FileTransferLimitsProperties limits = new FileTransferLimitsProperties();
+        limits.setMaxDerivedAssetBytes(128L * 1024 * 1024);
         DerivedAssetStorageService service = new DerivedAssetStorageService(
                 objectStorageBuckets(),
                 objectStorageClient,
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                limits
         );
         allowStoreTransaction();
 
@@ -480,7 +492,8 @@ class DerivedAssetStorageServiceTest {
                 fileObjectRepository,
                 fileNodeRepository,
                 safeUrlValidator,
-                transactionTemplate
+                transactionTemplate,
+                new FileTransferLimitsProperties()
         );
 
         UUID fileNodeId = service.store(

@@ -25,7 +25,10 @@ class ConfigDefinitionCatalogTest {
         assertThat(ConfigDefinitionCatalog.find("backdrop.max-image-bytes"))
                 .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("20971520"));
         assertThat(ConfigDefinitionCatalog.find("backdrop.max-video-bytes"))
-                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("67108864"));
+                .hasValueSatisfying(definition -> {
+                    assertThat(definition.defaultValue()).isEqualTo("469762048");
+                    assertThat(definition.maxValue()).isEqualByComparingTo("503316480");
+                });
         assertThat(ConfigDefinitionCatalog.find("backdrop.max-assets-per-user"))
                 .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("30"));
         assertThat(ConfigDefinitionCatalog.find("backdrop.upload.rate-per-hour"))

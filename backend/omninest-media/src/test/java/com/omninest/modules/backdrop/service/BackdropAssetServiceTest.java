@@ -85,8 +85,8 @@ class BackdropAssetServiceTest {
 
         when(runtimeConfigService.uploadRatePerHour()).thenReturn(20);
         when(runtimeConfigService.maxAssetsPerUser()).thenReturn(30);
-        when(runtimeConfigService.maxImageBytes()).thenReturn(20 * 1024 * 1024);
-        when(runtimeConfigService.maxVideoBytes()).thenReturn(64 * 1024 * 1024);
+        when(runtimeConfigService.maxImageBytes()).thenReturn(20L * 1024 * 1024);
+        when(runtimeConfigService.maxVideoBytes()).thenReturn(64L * 1024 * 1024);
         when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
         when(backdropAssetRepository.save(any())).thenAnswer(invocation -> {
             storedAsset.set(invocation.getArgument(0));
@@ -257,7 +257,7 @@ class BackdropAssetServiceTest {
         bigVideo[5] = 't';
         bigVideo[6] = 'y';
         bigVideo[7] = 'p';
-        when(runtimeConfigService.maxVideoBytes()).thenReturn(1024 * 1024);
+        when(runtimeConfigService.maxVideoBytes()).thenReturn(1024L * 1024);
 
         assertThatThrownBy(() -> service.uploadAsset(OWNER_ID,
                         new MockMultipartFile("file", "clip.mp4", "video/mp4", bigVideo)))

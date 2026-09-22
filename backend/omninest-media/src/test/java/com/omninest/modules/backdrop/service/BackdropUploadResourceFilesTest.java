@@ -109,8 +109,8 @@ class BackdropUploadResourceFilesTest {
 
         when(runtimeConfigService.uploadRatePerHour()).thenReturn(20);
         when(runtimeConfigService.maxAssetsPerUser()).thenReturn(30);
-        when(runtimeConfigService.maxImageBytes()).thenReturn(20 * 1024 * 1024);
-        when(runtimeConfigService.maxVideoBytes()).thenReturn(64 * 1024 * 1024);
+        when(runtimeConfigService.maxImageBytes()).thenReturn(20L * 1024 * 1024);
+        when(runtimeConfigService.maxVideoBytes()).thenReturn(64L * 1024 * 1024);
         when(rateLimitService.tryAcquire(anyString(), anyInt(), any(Duration.class))).thenReturn(true);
         when(ingressStagingService.stage(any(), anyString(), any(UUID.class), anyString(), anyString(),
                 any(Path.class))).thenReturn(UUID.randomUUID());
@@ -296,7 +296,7 @@ class BackdropUploadResourceFilesTest {
     @Test
     @DisplayName("视频超过运行时大小限额被拒绝(8004)")
     void videoOverLimitRejected() throws Exception {
-        when(runtimeConfigService.maxVideoBytes()).thenReturn(1024 * 1024);
+        when(runtimeConfigService.maxVideoBytes()).thenReturn(1024L * 1024);
 
         assertThatThrownBy(() -> service.uploadAsset(OWNER_ID, real("horizon-sky.mp4")))
                 .isInstanceOfSatisfying(BusinessException.class, exception ->

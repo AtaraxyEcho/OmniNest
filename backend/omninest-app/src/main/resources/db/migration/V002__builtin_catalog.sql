@@ -82,7 +82,7 @@ INSERT INTO omni.config_entries (
     ('photo.ai.url', 'http://localhost:8090', 'STRING', 'photo', 'HOT', '图像分析服务地址', false),
     ('photo.ai.timeout', '30', 'NUMBER', 'photo', 'HOT', '图像分析请求超时（秒）', false),
     ('backdrop.max-image-bytes', '20971520', 'NUMBER', 'backdrop', 'HOT', '背景图片单文件大小上限（字节）', false),
-    ('backdrop.max-video-bytes', '67108864', 'NUMBER', 'backdrop', 'HOT', '背景视频单文件大小上限（字节）', false),
+    ('backdrop.max-video-bytes', '469762048', 'NUMBER', 'backdrop', 'HOT', '背景视频单文件大小上限（字节）', false),
     ('backdrop.max-assets-per-user', '30', 'NUMBER', 'backdrop', 'HOT', '每用户背景素材数量上限', false),
     ('backdrop.upload.rate-per-hour', '20', 'NUMBER', 'backdrop', 'HOT', '每用户每小时上传次数上限', false),
     ('weather.qweather.project', '', 'STRING', 'weather', 'HOT', '和风天气项目 ID', false),

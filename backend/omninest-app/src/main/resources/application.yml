@@ -103,6 +103,7 @@ photo:
 file:
   transfer-limits:
     max-files-per-task: 10000
+    max-derived-asset-bytes: 536870912
 
 reader:
   archive-limits:
