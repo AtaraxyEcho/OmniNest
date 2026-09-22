@@ -90,6 +90,19 @@ output `flutter_assets/NOTICES`. Main direct dependencies (`frontend/pubspec.yam
 
 ---
 
+## Deployment services (deploy/)
+
+Optional containers built by the deployment stack that the music module talks to:
+
+| Component | Version | License | Upstream | Note |
+|---|---|---|---|---|
+| NeteaseCloudMusicApi | `4.32.0` (pinned in `deploy/netease-api/Dockerfile`) | MIT | https://github.com/Binaryify/NeteaseCloudMusicApi | Community NetEase Cloud Music API container (`netease-api`), the unofficial API the platform integration proxies through; optional and disabled unless deployed |
+
+> This component is an independent community project and is **not** part of OmniNest; OmniNest is not
+> affiliated with NetEase Cloud Music or the component's authors. It is deployed only if you enable it.
+
+---
+
 ## Fonts and media assets
 
 | Asset | License | Note |
