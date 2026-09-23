@@ -43,6 +43,7 @@ import com.omninest.modules.music.service.MusicAdminService;
 import com.omninest.modules.music.service.MusicCoverService;
 import com.omninest.modules.music.service.MusicLibraryService;
 import com.omninest.modules.music.service.MusicPlatformAccountService;
+import com.omninest.modules.music.service.MusicOnlineDispatcher;
 import com.omninest.modules.music.service.MusicPlatformService;
 import com.omninest.modules.music.service.MusicPlaybackService;
 import com.omninest.modules.music.service.MusicPlaybackQueueService;
@@ -59,6 +60,7 @@ import jakarta.validation.constraints.Size;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -91,6 +93,7 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class MusicController {
     private final CurrentUserContext currentUserContext;
+    private final MusicOnlineDispatcher onlineDispatcher;
     private final MusicLibraryService musicLibraryService;
     private final MusicPlaylistService playlistService;
     private final MusicAdminService musicAdminService;
@@ -492,31 +495,31 @@ public class MusicController {
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/online/search")
-    ApiResponse<List<OnlineTrackDto>> onlineSearch(
+    CompletableFuture<ApiResponse<List<OnlineTrackDto>>> onlineSearch(
             @RequestParam @Size(max = 200) String q,
             @RequestParam(defaultValue = "20") @Min(1) @Max(50) int limit,
             @RequestParam(required = false) @Size(max = 32) String platform
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        List<OnlineTrackDto> results;
         if (platform != null && !platform.isBlank()) {
-            results = musicPlatformService.search(ownerUserId, q, limit, platform);
-        } else {
-            results = musicPlatformService.search(ownerUserId, q, limit);
+            return onlineDispatcher.online(
+                    () -> musicPlatformService.search(ownerUserId, q, limit, platform));
         }
-        return ApiResponse.success(results);
+        return onlineDispatcher.online(
+                () -> musicPlatformService.search(ownerUserId, q, limit));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/online/playback-plan")
-    ApiResponse<MusicPlaybackPlanDto> onlinePlaybackPlan(
+    CompletableFuture<ApiResponse<MusicPlaybackPlanDto>> onlinePlaybackPlan(
             @RequestParam @Size(max = 32) String platform,
             @RequestParam @Size(max = 255) String songId,
             @RequestParam(required = false) @Size(max = 255) String mediaMid,
             @RequestParam(defaultValue = "high") @Size(max = 32) String quality
     ) {
-        return ApiResponse.success(playbackService.onlinePlaybackPlan(
-                currentUserContext.requireCurrentUserId(),
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return onlineDispatcher.online(() -> playbackService.onlinePlaybackPlan(
+                ownerUserId,
                 platform,
                 songId,
                 mediaMid,
@@ -567,58 +570,78 @@ public class MusicController {
     @Operation(summary = "获取外部平台每日推荐歌曲")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/platforms/{platform}/recommendations/daily-tracks")
-    ApiResponse<DailyRecommendedTracksDto> dailyRecommendedTracks(
+    CompletableFuture<ApiResponse<DailyRecommendedTracksDto>> dailyRecommendedTracks(
             @PathVariable @Size(max = 32) String platform
     ) {
-        return ApiResponse.success(musicPlatformService.dailyRecommendedTracks(
-                currentUserContext.requireCurrentUserId(),
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return onlineDispatcher.online(() -> musicPlatformService.dailyRecommendedTracks(
+                ownerUserId,
                 platform
         ));
     }
 
+    @Operation(summary = "分页获取外部平台歌单")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/platforms/{platform}/playlists")
-    ApiResponse<List<OnlinePlaylistDto>> platformPlaylists(
-            @PathVariable @Size(max = 32) String platform
+    CompletableFuture<ApiResponse<PageResponse<OnlinePlaylistDto>>> platformPlaylists(
+            @PathVariable @Size(max = 32) String platform,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "100") @Min(1) @Max(200) int size
     ) {
-        return ApiResponse.success(musicPlatformService.playlists(
-                currentUserContext.requireCurrentUserId(),
-                platform
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return onlineDispatcher.online(() -> musicPlatformService.playlists(
+                ownerUserId,
+                platform,
+                page,
+                size
         ));
     }
 
+    @Operation(summary = "分页获取外部平台歌单曲目")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/platforms/{platform}/playlists/{playlistId}/tracks")
-    ApiResponse<List<OnlineTrackDto>> platformPlaylistTracks(
+    CompletableFuture<ApiResponse<PageResponse<OnlineTrackDto>>> platformPlaylistTracks(
             @PathVariable @Size(max = 32) String platform,
-            @PathVariable @Size(max = 255) String playlistId
+            @PathVariable @Size(max = 255) String playlistId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "1000") @Min(1) @Max(1000) int size
     ) {
-        return ApiResponse.success(musicPlatformService.playlistTracks(
-                currentUserContext.requireCurrentUserId(),
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return onlineDispatcher.online(() -> musicPlatformService.playlistTracks(
+                ownerUserId,
                 platform,
-                playlistId
+                playlistId,
+                page,
+                size
         ));
     }
 
+    @Operation(summary = "分页获取外部平台喜欢歌曲")
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/platforms/{platform}/liked-tracks")
-    ApiResponse<List<OnlineTrackDto>> platformLikedTracks(
-            @PathVariable @Size(max = 32) String platform
+    CompletableFuture<ApiResponse<PageResponse<OnlineTrackDto>>> platformLikedTracks(
+            @PathVariable @Size(max = 32) String platform,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "1000") @Min(1) @Max(1000) int size
     ) {
-        return ApiResponse.success(musicPlatformService.likedTracks(
-                currentUserContext.requireCurrentUserId(),
-                platform
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return onlineDispatcher.online(() -> musicPlatformService.likedTracks(
+                ownerUserId,
+                platform,
+                page,
+                size
         ));
     }
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/platforms/{platform}/tracks/{songId}/lyrics")
-    ApiResponse<LyricsResult> platformTrackLyrics(
+    CompletableFuture<ApiResponse<LyricsResult>> platformTrackLyrics(
             @PathVariable @Size(max = 32) String platform,
             @PathVariable @Size(max = 255) String songId
     ) {
-        return ApiResponse.success(musicPlatformService.getLyrics(
-                currentUserContext.requireCurrentUserId(),
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return onlineDispatcher.online(() -> musicPlatformService.getLyrics(
+                ownerUserId,
                 platform,
                 songId
         ));
@@ -651,9 +674,12 @@ public class MusicController {
 
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/music/platform/{platform}/info")
-    ApiResponse<PlatformUserInfo> platformInfo(@PathVariable String platform) {
-        return ApiResponse.success(musicPlatformAccountService.getUserInfo(
-                currentUserContext.requireCurrentUserId(),
+    CompletableFuture<ApiResponse<PlatformUserInfo>> platformInfo(
+            @PathVariable String platform
+    ) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return onlineDispatcher.online(() -> musicPlatformAccountService.getUserInfo(
+                ownerUserId,
                 platform
         ));
     }

@@ -457,7 +457,7 @@ List<OnlineTrack> _knownOnlineTracks(
     ...(platform.likedTracksByPlatform[source.apiValue] ??
         const <OnlineTrack>[]),
     for (final entry in platform.playlistTracks.entries)
-      if (entry.key.startsWith('${source.apiValue}:')) ...entry.value,
+      if (entry.key.startsWith('${source.apiValue}:')) ...entry.value.items,
   ];
   final knownIds = <String>{};
   return tracks

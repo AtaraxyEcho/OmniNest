@@ -11,13 +11,19 @@ final musicPlatformLibraryProvider = AsyncNotifierProvider<
   MusicPlatformLibraryState
 >(MusicPlatformLibraryController.new);
 
+/// 平台未提供缩放地址时才回退原图，封面网格因此不必下载全尺寸图片。
+String _coverUrl({required String coverUrl, required String thumbUrl}) {
+  final thumb = thumbUrl.trim();
+  return thumb.isNotEmpty ? thumb : coverUrl.trim();
+}
+
 /// 外部音乐平台账号曲库状态。
 class MusicPlatformLibraryState {
   const MusicPlatformLibraryState({
     this.statuses = const <MusicPlatformStatus>[],
     this.playlistsByPlatform = const <String, List<OnlinePlaylist>>{},
     this.likedTracksByPlatform = const <String, List<OnlineTrack>>{},
-    this.playlistTracks = const <String, List<OnlineTrack>>{},
+    this.playlistTracks = const <String, MusicPagedResult<OnlineTrack>>{},
     this.loadingPlaylistKeys = const <String>{},
     this.failures = const <String, String>{},
   });
@@ -25,7 +31,9 @@ class MusicPlatformLibraryState {
   final List<MusicPlatformStatus> statuses;
   final Map<String, List<OnlinePlaylist>> playlistsByPlatform;
   final Map<String, List<OnlineTrack>> likedTracksByPlatform;
-  final Map<String, List<OnlineTrack>> playlistTracks;
+
+  /// 已加载的平台歌单曲目分页：预热只落首页，打开歌单时补齐整页。
+  final Map<String, MusicPagedResult<OnlineTrack>> playlistTracks;
   final Set<String> loadingPlaylistKeys;
   final Map<String, String> failures;
 
@@ -45,22 +53,24 @@ class MusicPlatformLibraryState {
 
   /// 返回歌单展示封面，已加载曲目时优先使用第一首歌曲封面。
   String coverUrlForPlaylist(OnlinePlaylist playlist) {
-    final tracks =
-        playlistTracks['${playlist.platform}:${playlist.playlistId}'];
-    if (tracks != null && tracks.isNotEmpty) {
-      final firstTrackCover = tracks.first.coverUrl.trim();
+    final page = playlistTracks['${playlist.platform}:${playlist.playlistId}'];
+    if (page != null && page.items.isNotEmpty) {
+      final firstTrackCover = _coverUrl(
+        coverUrl: page.items.first.coverUrl,
+        thumbUrl: page.items.first.thumbUrl,
+      );
       if (firstTrackCover.isNotEmpty) {
         return firstTrackCover;
       }
     }
-    return playlist.coverUrl.trim();
+    return _coverUrl(coverUrl: playlist.coverUrl, thumbUrl: playlist.thumbUrl);
   }
 
   MusicPlatformLibraryState copyWith({
     List<MusicPlatformStatus>? statuses,
     Map<String, List<OnlinePlaylist>>? playlistsByPlatform,
     Map<String, List<OnlineTrack>>? likedTracksByPlatform,
-    Map<String, List<OnlineTrack>>? playlistTracks,
+    Map<String, MusicPagedResult<OnlineTrack>>? playlistTracks,
     Set<String>? loadingPlaylistKeys,
     Map<String, String>? failures,
   }) {
@@ -92,6 +102,12 @@ class MusicPlatformLibraryController
   /// 预热覆盖的歌单数量上限：超出的部分走按需加载路径。
   static const int _playlistPreloadLimit = 8;
 
+  /// 预热每个歌单只取封面与预览够用的条数：整表下发会在设备侧解析数百 KB JSON。
+  static const int _playlistPreloadTrackPageSize = 50;
+
+  /// 打开歌单时一次取满后端上限，保持详情与播放队列的既有语义。
+  static const int _playlistTrackPageSize = 1000;
+
   int _preloadGeneration = 0;
 
   @override
@@ -121,6 +137,8 @@ class MusicPlatformLibraryController
   }
 
   /// 按需加载一个在线歌单的曲目。
+  ///
+  /// 预热只落首页，因此命中预热分页时仍要按整页补齐，避免详情与播放队列被首页截断。
   Future<List<OnlineTrack>> loadPlaylistTracks(OnlinePlaylist playlist) async {
     if (!ref.mounted) {
       return const <OnlineTrack>[];
@@ -131,8 +149,8 @@ class MusicPlatformLibraryController
     }
     final key = _playlistKey(playlist.platform, playlist.playlistId);
     final cached = current.playlistTracks[key];
-    if (cached != null) {
-      return cached;
+    if (cached != null && !cached.hasMore) {
+      return cached.items;
     }
     state = AsyncData(
       current.copyWith(
@@ -140,24 +158,28 @@ class MusicPlatformLibraryController
       ),
     );
     try {
-      final tracks = await ref
+      final page = await ref
           .read(musicApiProvider)
-          .platformPlaylistTracks(playlist.platform, playlist.playlistId);
+          .platformPlaylistTracks(
+            playlist.platform,
+            playlist.playlistId,
+            size: _playlistTrackPageSize,
+          );
       if (!ref.mounted) {
         return const <OnlineTrack>[];
       }
       final latest = state.asData?.value ?? current;
       state = AsyncData(
         latest.copyWith(
-          playlistTracks: <String, List<OnlineTrack>>{
+          playlistTracks: <String, MusicPagedResult<OnlineTrack>>{
             ...latest.playlistTracks,
-            key: List<OnlineTrack>.unmodifiable(tracks),
+            key: page,
           },
           loadingPlaylistKeys: <String>{...latest.loadingPlaylistKeys}
             ..remove(key),
         ),
       );
-      return tracks;
+      return page.items;
     } on Object catch (error) {
       if (!ref.mounted) {
         return const <OnlineTrack>[];
@@ -203,10 +225,9 @@ class MusicPlatformLibraryController
         if (status.capabilities.playlists) {
           futures.add(() async {
             try {
+              final page = await api.platformPlaylists(status.platform);
               playlistsByPlatform[status
-                  .platform] = List<OnlinePlaylist>.unmodifiable(
-                await api.platformPlaylists(status.platform),
-              );
+                  .platform] = List<OnlinePlaylist>.unmodifiable(page.items);
             } on Object catch (error) {
               failures['${status.platform}:playlists'] =
                   describeUserFacingError(error).message;
@@ -216,10 +237,9 @@ class MusicPlatformLibraryController
         if (status.capabilities.likedTracks) {
           futures.add(() async {
             try {
+              final page = await api.platformLikedTracks(status.platform);
               likedTracksByPlatform[status
-                  .platform] = List<OnlineTrack>.unmodifiable(
-                await api.platformLikedTracks(status.platform),
-              );
+                  .platform] = List<OnlineTrack>.unmodifiable(page.items);
             } on Object catch (error) {
               failures['${status.platform}:liked'] =
                   describeUserFacingError(error).message;
@@ -229,6 +249,7 @@ class MusicPlatformLibraryController
         await Future.wait(futures);
       }),
     );
+    final previous = state.asData?.value;
     final nextState = MusicPlatformLibraryState(
       statuses: List<MusicPlatformStatus>.unmodifiable(statuses),
       playlistsByPlatform: Map<String, List<OnlinePlaylist>>.unmodifiable(
@@ -236,6 +257,11 @@ class MusicPlatformLibraryController
       ),
       likedTracksByPlatform: Map<String, List<OnlineTrack>>.unmodifiable(
         likedTracksByPlatform,
+      ),
+      // 刷新保留上一轮已加载的歌单曲目：丢掉它们会让封面回退一帧，并让预热
+      // 把全部歌单重新回源一遍第三方接口。
+      playlistTracks: Map<String, MusicPagedResult<OnlineTrack>>.unmodifiable(
+        <String, MusicPagedResult<OnlineTrack>>{...?previous?.playlistTracks},
       ),
       failures: Map<String, String>.unmodifiable(failures),
     );
@@ -293,7 +319,7 @@ class MusicPlatformLibraryController
       ),
     );
     var nextIndex = 0;
-    final tracksByKey = <String, List<OnlineTrack>>{};
+    final tracksByKey = <String, MusicPagedResult<OnlineTrack>>{};
     final failures = <String, String>{};
     final queue = keyed.entries.toList(growable: false);
     Future<void> worker() async {
@@ -302,13 +328,14 @@ class MusicPlatformLibraryController
           nextIndex < queue.length) {
         final entry = queue[nextIndex++];
         try {
-          final tracks = await ref
+          final page = await ref
               .read(musicApiProvider)
               .platformPlaylistTracks(
                 entry.value.platform,
                 entry.value.playlistId,
+                size: _playlistPreloadTrackPageSize,
               );
-          tracksByKey[entry.key] = List<OnlineTrack>.unmodifiable(tracks);
+          tracksByKey[entry.key] = page;
         } on Object catch (error) {
           failures[entry.key] = describeUserFacingError(error).message;
         }
@@ -328,7 +355,7 @@ class MusicPlatformLibraryController
     }
     state = AsyncData(
       latest.copyWith(
-        playlistTracks: <String, List<OnlineTrack>>{
+        playlistTracks: <String, MusicPagedResult<OnlineTrack>>{
           ...latest.playlistTracks,
           ...tracksByKey,
         },

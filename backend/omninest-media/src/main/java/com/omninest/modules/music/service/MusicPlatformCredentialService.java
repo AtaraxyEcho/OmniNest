@@ -86,6 +86,7 @@ public class MusicPlatformCredentialService {
                 account.lastVerifiedAt()
         );
         cache(cacheKey(ownerUserId, platform), credential);
+        evictLibrary(ownerUserId, platform);
     }
 
     /**
@@ -97,6 +98,23 @@ public class MusicPlatformCredentialService {
     public void clear(UUID ownerUserId, MusicPlatform platform) {
         integrationAccountService.delete(ownerUserId, INTEGRATION_TYPE, platform.apiValue());
         invalidate(cacheKey(ownerUserId, platform), ownerUserId, platform);
+        evictLibrary(ownerUserId, platform);
+    }
+
+    /**
+     * 凭据换绑或解绑后清理该用户在当前平台的只读回源缓存：歌单、歌单曲目、喜欢列表和
+     * 当日推荐都按用户归属，不清会让新账号在 TTL 内看到上一账号的内容。
+     */
+    private void evictLibrary(UUID ownerUserId, MusicPlatform platform) {
+        try {
+            MusicPlatformLibraryCache.evict(readThroughCache, ownerUserId, platform);
+        } catch (RuntimeException exception) {
+            log.warn(
+                    "清理音乐平台账号内容缓存失败: userId={}, platform={}",
+                    ownerUserId,
+                    platform.apiValue()
+            );
+        }
     }
 
     private void cache(String cacheKey, MusicPlatformCredential credential) {

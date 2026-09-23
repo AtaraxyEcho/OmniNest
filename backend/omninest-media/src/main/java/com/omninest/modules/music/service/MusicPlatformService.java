@@ -1,11 +1,14 @@
 package com.omninest.modules.music.service;
 
+import com.omninest.common.api.PageResponse;
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.music.dto.OnlineMusicDtos.DailyRecommendedTracksDto;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlinePlaylistDto;
+import com.omninest.modules.music.dto.OnlineMusicDtos.OnlinePlaylistList;
 import com.omninest.modules.music.dto.OnlineMusicDtos.OnlineTrackDto;
+import com.omninest.modules.music.dto.OnlineMusicDtos.OnlineTrackList;
 import com.omninest.modules.music.dto.OnlineMusicDtos.PlaybackUrlResult;
 import com.omninest.modules.music.service.platform.MusicPlatform;
 import com.omninest.modules.music.service.platform.MusicPlatformProvider;
@@ -17,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,8 +34,17 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class MusicPlatformService {
-    private static final String DAILY_RECOMMENDATION_CACHE_PREFIX =
-            "omninest:music:recommendation:daily:";
+
+    /**
+     * 账号内容缓存有效期：这些列表只读自第三方平台，短 TTL 换取进入音乐页时的
+     * 免回源；平台侧的新增改动按 TTL 自然收敛。
+     */
+    private static final Duration ACCOUNT_LIST_CACHE_TTL = Duration.ofMinutes(10);
+
+    /**
+     * 单个歌单曲目基本不变，用更长有效期覆盖整次日首页浏览。
+     */
+    private static final Duration PLAYLIST_TRACKS_CACHE_TTL = Duration.ofMinutes(30);
 
     private final List<MusicPlatformProvider> providers;
     private final MusicRuntimeConfigService configService;
@@ -137,53 +150,86 @@ public class MusicPlatformService {
     }
 
     /**
-     * 获取当前用户的指定平台歌单。
+     * 分页获取当前用户的指定平台歌单。
      *
      * @param ownerUserId 当前用户 ID
      * @param platformValue 平台 API 标识
-     * @return 平台歌单
+     * @param page 页码，从 0 开始
+     * @param size 每页数量
+     * @return 平台歌单分页，总数为该账号全部歌单
      */
-    public List<OnlinePlaylistDto> playlists(UUID ownerUserId, String platformValue) {
+    public PageResponse<OnlinePlaylistDto> playlists(
+            UUID ownerUserId,
+            String platformValue,
+            int page,
+            int size
+    ) {
         MusicPlatformProvider provider = requireConnectedProvider(ownerUserId, platformValue);
         if (!provider.capabilities().playlists()) {
-            return List.of();
+            return PageResponse.of(List.of(), page, size, 0);
         }
-        return provider.playlists(ownerUserId);
+        String cacheKey = MusicPlatformLibraryCache.playlists(ownerUserId, provider.platform());
+        OnlinePlaylistList cached = readThroughCache.getOrLoad(
+                cacheKey,
+                ACCOUNT_LIST_CACHE_TTL,
+                () -> new OnlinePlaylistList(provider.playlists(ownerUserId)),
+                OnlinePlaylistList.class
+        );
+        return slice(cached == null ? List.of() : cached.items(), page, size);
     }
 
     /**
-     * 获取指定平台歌单的曲目。
+     * 分页获取指定平台歌单的曲目。
      *
      * @param ownerUserId 当前用户 ID
      * @param platformValue 平台 API 标识
      * @param playlistId 平台歌单 ID
-     * @return 在线曲目
+     * @param page 页码，从 0 开始
+     * @param size 每页数量
+     * @return 在线曲目分页，总数为该歌单全部曲目
      */
-    public List<OnlineTrackDto> playlistTracks(
+    public PageResponse<OnlineTrackDto> playlistTracks(
             UUID ownerUserId,
             String platformValue,
-            String playlistId
+            String playlistId,
+            int page,
+            int size
     ) {
         MusicPlatformProvider provider = requireConnectedProvider(ownerUserId, platformValue);
         if (!provider.capabilities().playlists()) {
-            return List.of();
+            return PageResponse.of(List.of(), page, size, 0);
         }
-        return provider.playlistTracks(ownerUserId, playlistId);
+        String cacheKey = MusicPlatformLibraryCache.playlistTracks(
+                ownerUserId,
+                provider.platform(),
+                playlistId
+        );
+        return slice(cachedTracks(cacheKey, PLAYLIST_TRACKS_CACHE_TTL,
+                () -> provider.playlistTracks(ownerUserId, playlistId)), page, size);
     }
 
     /**
-     * 获取当前用户在指定平台喜欢的曲目。
+     * 分页获取当前用户在指定平台喜欢的曲目。
      *
      * @param ownerUserId 当前用户 ID
      * @param platformValue 平台 API 标识
-     * @return 喜欢曲目
+     * @param page 页码，从 0 开始
+     * @param size 每页数量
+     * @return 喜欢曲目分页，总数为该账号全部喜欢曲目
      */
-    public List<OnlineTrackDto> likedTracks(UUID ownerUserId, String platformValue) {
+    public PageResponse<OnlineTrackDto> likedTracks(
+            UUID ownerUserId,
+            String platformValue,
+            int page,
+            int size
+    ) {
         MusicPlatformProvider provider = requireConnectedProvider(ownerUserId, platformValue);
         if (!provider.capabilities().likedTracks()) {
-            return List.of();
+            return PageResponse.of(List.of(), page, size, 0);
         }
-        return provider.likedTracks(ownerUserId);
+        String cacheKey = MusicPlatformLibraryCache.likedTracks(ownerUserId, provider.platform());
+        return slice(cachedTracks(cacheKey, ACCOUNT_LIST_CACHE_TTL,
+                () -> provider.likedTracks(ownerUserId)), page, size);
     }
 
     /**
@@ -306,6 +352,36 @@ public class MusicPlatformService {
         return deduplicated;
     }
 
+    /**
+     * 按页切分已缓存的全量列表。第三方账号列表整表缓存，分页只缩小下发给设备的载荷，
+     * 不改变第三方回源次数。
+     */
+    private <T> PageResponse<T> slice(List<T> items, int page, int size) {
+        int total = items.size();
+        long from = Math.min((long) Math.max(page, 0) * size, total);
+        long to = Math.min(from + size, total);
+        return PageResponse.of(
+                List.copyOf(items.subList((int) from, (int) to)),
+                page,
+                size,
+                total
+        );
+    }
+
+    private List<OnlineTrackDto> cachedTracks(
+            String cacheKey,
+            Duration ttl,
+            Supplier<List<OnlineTrackDto>> loader
+    ) {
+        OnlineTrackList cached = readThroughCache.getOrLoad(
+                cacheKey,
+                ttl,
+                () -> new OnlineTrackList(loader.get()),
+                OnlineTrackList.class
+        );
+        return cached == null ? List.of() : cached.items();
+    }
+
     private DailyRecommendedTracksDto loadDailyRecommendation(
             MusicPlatformProvider provider,
             UUID ownerUserId,
@@ -327,11 +403,7 @@ public class MusicPlatformService {
             MusicPlatform platform,
             LocalDate recommendationDate
     ) {
-        return DAILY_RECOMMENDATION_CACHE_PREFIX
-                + ownerUserId
-                + ":"
-                + platform.apiValue()
-                + ":"
+        return MusicPlatformLibraryCache.dailyRecommendations(ownerUserId, platform)
                 + recommendationDate;
     }
 

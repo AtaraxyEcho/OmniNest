@@ -8,6 +8,9 @@ class MusicDeckDesktopLayout {
   static const double sideCardWidth = 264;
   static const double cardGap = 20;
 
+  /// 播放岛在超宽屏上的收束上限；常态下岛与中内容列同宽，不再按比例收缩。
+  static const double islandMaxWidth = 1480;
+
   const MusicDeckDesktopLayout({
     required this.viewportWidth,
     required this.compactNavigation,
@@ -38,7 +41,7 @@ class MusicDeckDesktopLayout {
       horizontalPadding: horizontalPadding,
       navigationWidth: compactNavigation ? 76 : sideCardWidth,
       widePanelWidth: showWidePanel ? sideCardWidth : 0,
-      playerMaxWidth: (viewportWidth * 0.52).clamp(920.0, 1480.0),
+      playerMaxWidth: islandMaxWidth,
       // 搜索框与其他模块顶栏搜索对齐:上限取统一搜索框令牌宽,不再随视口放大。
       searchMaxWidth: (availableWidth * 0.14).clamp(
         AppControlTokens.searchFieldWidth * 0.8,

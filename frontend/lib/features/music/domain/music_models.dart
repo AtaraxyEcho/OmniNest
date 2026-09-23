@@ -941,6 +941,7 @@ class OnlineTrack {
     required this.artistName,
     this.albumTitle = '',
     this.coverUrl = '',
+    this.thumbUrl = '',
     this.durationSeconds,
     this.quality,
 
@@ -953,6 +954,9 @@ class OnlineTrack {
   final String artistName;
   final String albumTitle;
   final String coverUrl;
+
+  /// 图片来源平台提供的缩略位地址，缺失时展示层回退 `coverUrl`。
+  final String thumbUrl;
   final int? durationSeconds;
   final String? quality;
 
@@ -977,6 +981,7 @@ class OnlineTrack {
       artistName: json['artistName']?.toString() ?? '',
       albumTitle: json['albumTitle']?.toString() ?? '',
       coverUrl: json['coverUrl']?.toString() ?? '',
+      thumbUrl: json['thumbUrl']?.toString() ?? '',
       durationSeconds: _nullableInt(json['durationSeconds']),
       quality: json['quality']?.toString(),
 
@@ -1022,6 +1027,7 @@ class OnlinePlaylist {
     required this.name,
     this.description = '',
     this.coverUrl = '',
+    this.thumbUrl = '',
     this.trackCount,
     this.ownerName = '',
     this.subscribed = false,
@@ -1033,6 +1039,9 @@ class OnlinePlaylist {
   final String name;
   final String description;
   final String coverUrl;
+
+  /// 图片来源平台提供的缩略位地址，缺失时展示层回退 `coverUrl`。
+  final String thumbUrl;
   final int? trackCount;
   final String ownerName;
   final bool subscribed;
@@ -1044,6 +1053,7 @@ class OnlinePlaylist {
     name: json['name']?.toString() ?? '',
     description: json['description']?.toString() ?? '',
     coverUrl: json['coverUrl']?.toString() ?? '',
+    thumbUrl: json['thumbUrl']?.toString() ?? '',
     trackCount: _nullableInt(json['trackCount']),
     ownerName: json['ownerName']?.toString() ?? '',
     subscribed: _asBool(json['subscribed']),

@@ -44,9 +44,14 @@ class MusicDeckShell extends ConsumerStatefulWidget {
 }
 
 class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
-  /// 桌面三卡（导航/内容/正在播放）的统一底距：与底部悬浮迷你播放器
-  /// 顶边对齐（高度取自 MusicDeckMiniPlayer.barHeight，单一事实来源）。
-  static const double _playerOverlayInset = MusicDeckMiniPlayer.barHeight;
+  /// 播放岛玻璃与中内容列之间的呼吸间隙，避免两块玻璃的 1px 描边相贴。
+  static const double _islandGap = 12;
+
+  /// 中内容列与搜索浮层的底距：控制岛高度加呼吸间隙
+  /// （高度取自 MusicDeckMiniPlayer.barHeight，单一事实来源）。
+  /// 左右两张侧卡不使用该底距，与播放岛共用窗口底部的同一条基线。
+  static const double _playerOverlayInset =
+      MusicDeckMiniPlayer.barHeight + _islandGap;
 
   final TextEditingController _searchController = TextEditingController();
   final FocusNode _searchFocusNode = FocusNode(debugLabel: 'Music Deck 搜索');
@@ -172,18 +177,14 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 Expanded(
                   child: Row(
                     children: [
-                      Padding(
-                        padding: const EdgeInsets.only(
-                          bottom: _playerOverlayInset,
-                        ),
-                        child: MusicDeckNavigation(
-                          selected: _section,
-                          compact: layout.compactNavigation,
-                          canManage: canManage,
-                          connectedPlatformCount: platform.length,
-                          onSelected: _selectSection,
-                          onManageAccounts: _openAccounts,
-                        ),
+                      // 侧卡与播放岛同底线：不设底距，卡片下探到窗口底部基线。
+                      MusicDeckNavigation(
+                        selected: _section,
+                        compact: layout.compactNavigation,
+                        canManage: canManage,
+                        connectedPlatformCount: platform.length,
+                        onSelected: _selectSection,
+                        onManageAccounts: _openAccounts,
                       ),
                       const SizedBox(width: MusicDeckDesktopLayout.cardGap),
                       Expanded(
@@ -208,12 +209,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                         const SizedBox(width: MusicDeckDesktopLayout.cardGap),
                         SizedBox(
                           width: layout.widePanelWidth,
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                              bottom: _playerOverlayInset,
-                            ),
-                            child: _WideNowPanel(platform: platform),
-                          ),
+                          child: _WideNowPanel(platform: platform),
                         ),
                       ],
                     ],
@@ -242,9 +238,11 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 ),
               ),
             ),
+            // 播放岛取中内容列的整条水平带：与两张侧卡各留 cardGap，
+            // 底边与侧卡落在同一条基线上；仅在超宽屏按上限收束居中。
             Positioned(
-              left: layout.navigationWidth + 34,
-              right: layout.trailingPanelSpace + 20,
+              left: layout.navigationWidth + MusicDeckDesktopLayout.cardGap,
+              right: layout.trailingPanelSpace,
               bottom: 0,
               child: Center(
                 child: ConstrainedBox(

@@ -258,7 +258,10 @@ void main() {
     // 左右侧卡统一宽度与间距，不再随视口放大。
     expect(ultraWide.widePanelWidth, MusicDeckDesktopLayout.sideCardWidth);
     expect(ultraWide.navigationWidth, MusicDeckDesktopLayout.sideCardWidth);
-    expect(ultraWide.playerMaxWidth, 1480);
+    // 岛与中内容列同宽，只保留上限：不再按比例收缩，也没有 920 下限，
+    // 否则侧卡下探到底线后两侧留白会露出岛没占满带宽。
+    expect(standard.playerMaxWidth, MusicDeckDesktopLayout.islandMaxWidth);
+    expect(ultraWide.playerMaxWidth, MusicDeckDesktopLayout.islandMaxWidth);
     // 搜索框上限与其他模块顶栏搜索令牌一致,不再随视口放宽。
     expect(ultraWide.searchMaxWidth, AppControlTokens.searchFieldWidth);
   });

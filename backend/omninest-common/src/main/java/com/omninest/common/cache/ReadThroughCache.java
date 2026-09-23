@@ -29,4 +29,11 @@ public interface ReadThroughCache {
      * @return 缓存值或加载结果
      */
     <T> T getOrLoad(String key, Duration ttl, Supplier<T> loader, Class<T> type);
+
+    /**
+     * 按键模式批量失效缓存，用于清理同一归属下的一组动态键。
+     *
+     * @param pattern Redis 键匹配模式，调用方需保证前缀已按业务和归属命名
+     */
+    void evictPattern(String pattern);
 }

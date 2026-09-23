@@ -61,6 +61,19 @@ class NeteaseMusicProxyTest {
         assertThat(playlist.trackCount()).isEqualTo(42);
         assertThat(playlist.subscribed()).isTrue();
         assertThat(playlist.ownerName()).isEqualTo("Music User");
+        assertThat(playlist.thumbUrl()).isEqualTo("https://example.com/cover.jpg?paramSize=300x300");
+    }
+
+    @Test
+    void thumbnailUrlOnlyRewritesPlainImageAddresses() {
+        assertThat(NeteaseMusicProxy.thumbnailUrl("https://p3.music.126.net/a.jpg"))
+                .isEqualTo("https://p3.music.126.net/a.jpg?paramSize=300x300");
+        assertThat(NeteaseMusicProxy.thumbnailUrl("https://p3.music.126.net/a.jpg?id=7"))
+                .isEqualTo("https://p3.music.126.net/a.jpg?id=7&paramSize=300x300");
+        assertThat(NeteaseMusicProxy.thumbnailUrl("https://p3.music.126.net/a.jpg?paramSize=200x200"))
+                .isEqualTo("https://p3.music.126.net/a.jpg?paramSize=200x200");
+        assertThat(NeteaseMusicProxy.thumbnailUrl("")).isEmpty();
+        assertThat(NeteaseMusicProxy.thumbnailUrl(null)).isNull();
     }
 
     @Test
@@ -81,6 +94,8 @@ class NeteaseMusicProxyTest {
         assertThat(tracks.getFirst().songId()).isEqualTo("1001");
         assertThat(tracks.getFirst().artistName()).isEqualTo("Omni Band");
         assertThat(tracks.getFirst().durationSeconds()).isEqualTo(245);
+        assertThat(tracks.getFirst().coverUrl()).isEqualTo("https://example.com/a.jpg");
+        assertThat(tracks.getFirst().thumbUrl()).isEqualTo("https://example.com/a.jpg?paramSize=300x300");
     }
 
     @Test

@@ -239,15 +239,20 @@ void main() {
       body: {
         'code': 200,
         'message': 'success',
-        'data': [
-          {
-            'platform': 'netease',
-            'playlistId': 'playlist-1',
-            'name': 'Daily Mix',
-            'trackCount': 12,
-            'subscribed': true,
-          },
-        ],
+        'data': {
+          'items': [
+            {
+              'platform': 'netease',
+              'playlistId': 'playlist-1',
+              'name': 'Daily Mix',
+              'trackCount': 12,
+              'subscribed': true,
+            },
+          ],
+          'page': 0,
+          'size': 100,
+          'totalElements': 12,
+        },
       },
     );
     final playlistApi = MusicApi(_apiClient(playlistAdapter));
@@ -256,20 +261,28 @@ void main() {
 
     expect(playlistAdapter.lastMethod, 'GET');
     expect(playlistAdapter.lastPath, '/music/platforms/netease/playlists');
-    expect(playlists.single.name, 'Daily Mix');
+    expect(playlistAdapter.lastQueryParameters, {'page': 0, 'size': 100});
+    expect(playlists.items.single.name, 'Daily Mix');
+    // 总数来自后端分页信封，预热首页因此仍知道自己被截断。
+    expect(playlists.totalElements, 12);
 
     final trackAdapter = _CapturingHttpClientAdapter(
       body: {
         'code': 200,
         'message': 'success',
-        'data': [
-          {
-            'platform': 'netease',
-            'songId': 'song-1',
-            'title': 'Night Drive',
-            'artistName': 'Omni Band',
-          },
-        ],
+        'data': {
+          'items': [
+            {
+              'platform': 'netease',
+              'songId': 'song-1',
+              'title': 'Night Drive',
+              'artistName': 'Omni Band',
+            },
+          ],
+          'page': 0,
+          'size': 50,
+          'totalElements': 800,
+        },
       },
     );
     final trackApi = MusicApi(_apiClient(trackAdapter));
@@ -277,6 +290,7 @@ void main() {
     final tracks = await trackApi.platformPlaylistTracks(
       'netease',
       'playlist-1',
+      size: 50,
     );
 
     expect(trackAdapter.lastMethod, 'GET');
@@ -284,7 +298,9 @@ void main() {
       trackAdapter.lastPath,
       '/music/platforms/netease/playlists/playlist-1/tracks',
     );
-    expect(tracks.single.songId, 'song-1');
+    expect(trackAdapter.lastQueryParameters, {'page': 0, 'size': 50});
+    expect(tracks.items.single.songId, 'song-1');
+    expect(tracks.hasMore, isTrue);
   });
 
   test('liked tracks endpoint is scoped to the selected platform', () async {
@@ -292,7 +308,12 @@ void main() {
       body: {
         'code': 200,
         'message': 'success',
-        'data': <Map<String, dynamic>>[],
+        'data': {
+          'items': <Map<String, dynamic>>[],
+          'page': 0,
+          'size': 1000,
+          'totalElements': 0,
+        },
       },
     );
     final api = MusicApi(_apiClient(adapter));
@@ -301,6 +322,7 @@ void main() {
 
     expect(adapter.lastMethod, 'GET');
     expect(adapter.lastPath, '/music/platforms/netease/liked-tracks');
+    expect(adapter.lastQueryParameters, {'page': 0, 'size': 1000});
   });
 
   test(

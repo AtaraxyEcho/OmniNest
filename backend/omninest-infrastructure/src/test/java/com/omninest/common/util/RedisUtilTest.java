@@ -2,15 +2,28 @@ package com.omninest.common.util;
 
 import org.mockito.ArgumentMatchers;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.enums.ErrorCode;
+import com.omninest.common.error.BusinessException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -98,5 +111,157 @@ class RedisUtilTest {
         assertThat(scriptCaptor.getValue().getScriptAsString())
                 .contains("redis.call('get', KEYS[1])")
                 .contains("redis.call('del', KEYS[1])");
+    }
+
+    @Test
+    void getOrLoadReturnsCachedValueWithoutCallingLoader() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("cache:music:playlists")).thenReturn("{\"name\":\"cached\"}");
+        AtomicInteger loaderCalls = new AtomicInteger();
+
+        CachePayload payload = redisUtil.getOrLoad(
+                "cache:music:playlists",
+                Duration.ofMinutes(5),
+                () -> {
+                    loaderCalls.incrementAndGet();
+                    return new CachePayload("loaded");
+                },
+                CachePayload.class
+        );
+
+        assertThat(payload.name()).isEqualTo("cached");
+        assertThat(loaderCalls).hasValue(0);
+    }
+
+    @Test
+    void concurrentMissesShareOneLoadAndWriteCacheOnce() throws Exception {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("cache:music:playlists")).thenReturn(null);
+        AtomicInteger loaderCalls = new AtomicInteger();
+        CountDownLatch loaderEntered = new CountDownLatch(1);
+        CountDownLatch releaseLoader = new CountDownLatch(1);
+        Callable<CachePayload> call = () -> redisUtil.getOrLoad(
+                "cache:music:playlists",
+                Duration.ofMinutes(5),
+                () -> {
+                    loaderCalls.incrementAndGet();
+                    loaderEntered.countDown();
+                    awaitUninterruptibly(releaseLoader);
+                    return new CachePayload("loaded");
+                },
+                CachePayload.class
+        );
+        ExecutorService executor = Executors.newFixedThreadPool(4);
+        try {
+            List<Future<CachePayload>> futures = new ArrayList<>();
+            for (int index = 0; index < 4; index++) {
+                futures.add(executor.submit(call));
+            }
+
+            assertThat(loaderEntered.await(5, TimeUnit.SECONDS)).isTrue();
+            // 留出等待者进入等待的时间：单飞生效时它们不会各自回源。
+            Thread.sleep(150);
+            releaseLoader.countDown();
+
+            List<String> names = new ArrayList<>();
+            for (Future<CachePayload> future : futures) {
+                names.add(future.get(5, TimeUnit.SECONDS).name());
+            }
+            assertThat(names).containsExactly("loaded", "loaded", "loaded", "loaded");
+            assertThat(loaderCalls).hasValue(1);
+            verify(valueOperations, times(1))
+                    .set(eq("cache:music:playlists"), ArgumentMatchers.anyString(), eq(Duration.ofMinutes(5)));
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void concurrentWaitersReceiveTheOriginalLoadFailure() throws Exception {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("cache:music:playlists")).thenReturn(null);
+        BusinessException failure = new BusinessException(ErrorCode.DEPENDENCY_UNAVAILABLE, "平台接口不可用");
+        AtomicInteger loaderCalls = new AtomicInteger();
+        CountDownLatch loaderEntered = new CountDownLatch(1);
+        CountDownLatch releaseLoader = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        Callable<String> call = () -> {
+            try {
+                redisUtil.getOrLoad(
+                        "cache:music:playlists",
+                        Duration.ofMinutes(5),
+                        () -> {
+                            loaderCalls.incrementAndGet();
+                            loaderEntered.countDown();
+                            awaitUninterruptibly(releaseLoader);
+                            throw failure;
+                        },
+                        CachePayload.class
+                );
+                return "no-error";
+            } catch (BusinessException exception) {
+                return exception.getMessage();
+            }
+        };
+        try {
+            Future<String> leader = executor.submit(call);
+            Future<String> waiter = executor.submit(call);
+
+            assertThat(loaderEntered.await(5, TimeUnit.SECONDS)).isTrue();
+            Thread.sleep(150);
+            releaseLoader.countDown();
+
+            assertThat(leader.get(5, TimeUnit.SECONDS)).isEqualTo("平台接口不可用");
+            assertThat(waiter.get(5, TimeUnit.SECONDS)).isEqualTo("平台接口不可用");
+            // 失败结果不落缓存，下一次调用重新回源。
+            verify(valueOperations, never()).set(
+                    eq("cache:music:playlists"),
+                    ArgumentMatchers.anyString(),
+                    ArgumentMatchers.any(Duration.class)
+            );
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void failedLoadReleasesSingleFlightForNextAttempt() {
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("cache:music:playlists")).thenReturn(null);
+        AtomicInteger loaderCalls = new AtomicInteger();
+
+        assertThatThrownBy(() -> redisUtil.getOrLoad(
+                "cache:music:playlists",
+                Duration.ofMinutes(5),
+                () -> {
+                    loaderCalls.incrementAndGet();
+                    throw new IllegalStateException("数据源不可用");
+                },
+                CachePayload.class
+        )).isInstanceOf(IllegalStateException.class).hasMessage("数据源不可用");
+
+        CachePayload payload = redisUtil.getOrLoad(
+                "cache:music:playlists",
+                Duration.ofMinutes(5),
+                () -> {
+                    loaderCalls.incrementAndGet();
+                    return new CachePayload("loaded");
+                },
+                CachePayload.class
+        );
+
+        assertThat(payload.name()).isEqualTo("loaded");
+        assertThat(loaderCalls).hasValue(2);
+    }
+
+    private static void awaitUninterruptibly(CountDownLatch latch) {
+        try {
+            latch.await(5, TimeUnit.SECONDS);
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private record CachePayload(String name) {
     }
 }

@@ -46,7 +46,8 @@ class MusicDeckMiniPlayer extends ConsumerStatefulWidget {
   });
 
   /// 悬浮态整条控制岛的高度（外边距 7 + 内容行 66 + 外边距 7）。
-  /// 甲板布局用它作为三张玻璃卡的统一底距，使卡片底边与控制岛顶边对齐。
+  /// 甲板布局以它算出中内容列与播放岛之间的底距；左右两张侧卡不吃该底距，
+  /// 与播放岛共用窗口底部的同一条基线。
   static const double barHeight = 80;
 
   final bool compact;
@@ -109,6 +110,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
     final session = ref.watch(musicPlaybackSessionProvider);
     final music = ref.watch(musicCenterControllerProvider).asData?.value;
     final item = music?.currentItem;
+    final playMode = music?.playMode ?? MusicPlayMode.sequential;
     final track = _resolveDisplayTrack(music);
     final playing =
         session.player.state.playing &&
@@ -189,6 +191,19 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
               ),
             ),
             const SizedBox(width: 16),
+            // 播放模式与沉浸页 Dock 共用同一控件、同一轮换命令：
+            // 顺序播放 / 随机播放 / 单曲循环三态互斥，只换图标与着色。
+            MusicPlayModeButton(
+              playMode: playMode,
+              iconSize: 20,
+              idleColor: _palette(context).text,
+              activeColor: _palette(context).accent,
+              onTap:
+                  () =>
+                      ref
+                          .read(musicCenterControllerProvider.notifier)
+                          .cyclePlayMode(),
+            ),
             IconButton(
               tooltip: AppLocalizations.of(context).musicDeckPrevious,
               onPressed:

@@ -81,6 +81,7 @@ class MusicPlatformCredentialServiceTest {
                 Mockito.any(),
                 Mockito.eq(MusicPlatformCredential.class)
         );
+        assertLibraryEvictions(readThroughCache);
     }
 
     @Test
@@ -127,13 +128,30 @@ class MusicPlatformCredentialServiceTest {
         Mockito.verify(readThroughCache).invalidate(
                 "omninest:integration:music:" + OWNER_ID + ":netease:account"
         );
+        assertLibraryEvictions(readThroughCache);
+    }
+
+    /**
+     * 凭据换绑与解绑都要清掉该用户该平台的只读回源缓存，否则新账号会沿用上一账号内容。
+     */
+    private void assertLibraryEvictions(ReadThroughCache readThroughCache) {
+        Mockito.verify(readThroughCache).evictPattern("omninest:music:playlists:" + OWNER_ID + ":netease");
+        Mockito.verify(readThroughCache)
+                .evictPattern("omninest:music:playlist-tracks:" + OWNER_ID + ":netease:*");
+        Mockito.verify(readThroughCache).evictPattern("omninest:music:liked-tracks:" + OWNER_ID + ":netease");
+        Mockito.verify(readThroughCache)
+                .evictPattern("omninest:music:recommendation:daily:" + OWNER_ID + ":netease:*");
     }
 
     private ReadThroughCache passthroughCache() {
         return Mockito.mock(ReadThroughCache.class, invocation -> {
-            if ("getOrLoad".equals(invocation.getMethod().getName())) {
+            String method = invocation.getMethod().getName();
+            if ("getOrLoad".equals(method)) {
                 Supplier<?> loader = invocation.getArgument(2);
                 return loader.get();
+            }
+            if ("evictPattern".equals(method)) {
+                return null;
             }
             return false;
         });

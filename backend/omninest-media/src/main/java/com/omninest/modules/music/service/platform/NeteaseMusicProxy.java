@@ -46,6 +46,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
 
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(10);
     private static final int MAX_ACCOUNT_TRACKS = 1_000;
+    private static final String PARAM_SIZE_KEY = "paramSize";
+    private static final String THUMBNAIL_SIZE = "300x300";
     private static final int SONG_DETAIL_CHUNK_SIZE = 500;
     private static final String USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             + "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
@@ -666,7 +668,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 coverUrl,
                 durationSeconds,
                 null,
-                extra
+                extra,
+                thumbnailUrl(coverUrl)
         );
     }
 
@@ -758,6 +761,23 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
         cookies.put(name, name + "=" + value);
     }
 
+    /**
+     * 网易云图片 CDN 通过 paramSize 提供缩放位图，列表缩略位因此不必下载原图。
+     *
+     * @param coverUrl 原始封面地址
+     * @return 缩略图地址；地址为空或已带尺寸参数时原样返回
+     */
+    static String thumbnailUrl(String coverUrl) {
+        if (coverUrl == null || coverUrl.isBlank() || coverUrl.contains(PARAM_SIZE_KEY)) {
+            return coverUrl;
+        }
+        return coverUrl
+                + (coverUrl.contains("?") ? "&" : "?")
+                + PARAM_SIZE_KEY
+                + "="
+                + THUMBNAIL_SIZE;
+    }
+
     OnlinePlaylistDto parsePlaylist(JSONObject playlist) {
         if (playlist == null) {
             return null;
@@ -781,7 +801,8 @@ public class NeteaseMusicProxy implements MusicPlatformProvider {
                 playlist.getInteger("trackCount"),
                 creator == null ? null : creator.getString("nickname"),
                 playlist.getBooleanValue("subscribed"),
-                extra
+                extra,
+                thumbnailUrl(playlist.getString("coverImgUrl"))
         );
     }
 

@@ -533,7 +533,9 @@ public class MusicLibraryService {
                 history.getCoverUrl(),
                 history.getDurationSeconds(),
                 null,
-                extra
+                // 缩略图尺寸规则属于图片来源平台，播放历史只保留原始封面地址。
+                extra,
+                null
         );
     }
 

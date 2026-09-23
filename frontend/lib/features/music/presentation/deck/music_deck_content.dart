@@ -699,7 +699,9 @@ class _CollectionDetail extends ConsumerWidget {
         playlist.ownerName,
         platform.coverUrlForPlaylist(playlist),
         MusicPlatform.fromApiValue(playlist.platform),
-        (platform.playlistTracks['${playlist.platform}:${playlist.playlistId}'] ??
+        (platform
+                    .playlistTracks['${playlist.platform}:${playlist.playlistId}']
+                    ?.items ??
                 const <OnlineTrack>[])
             .map(MusicPlayableItem.online)
             .toList(growable: false),
@@ -1295,8 +1297,16 @@ class _GenresContent extends ConsumerStatefulWidget {
 
 class _GenresContentState extends ConsumerState<_GenresContent> {
   String? _selectedGenre;
+  List<MusicTrack>? _groupedTracks;
+  Map<String, List<MusicTrack>>? _groupedByGenre;
 
+  /// 按曲目列表身份缓存分组：中心状态每次发布都是新实例，但 `tracks` 列表
+  /// 通常原样传递，列表未变时不再整表重分组。
   Map<String, List<MusicTrack>> _groupByGenre(List<MusicTrack> tracks) {
+    final cached = _groupedByGenre;
+    if (cached != null && identical(_groupedTracks, tracks)) {
+      return cached;
+    }
     final result = <String, List<MusicTrack>>{};
     for (final track in tracks) {
       final genre = track.genre?.trim();
@@ -1305,6 +1315,8 @@ class _GenresContentState extends ConsumerState<_GenresContent> {
       }
       result.putIfAbsent(genre, () => []).add(track);
     }
+    _groupedTracks = tracks;
+    _groupedByGenre = result;
     return result;
   }
 

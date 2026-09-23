@@ -49,23 +49,27 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
 
-      await tester.pumpWidget(
-        _testApp(
-          scale: scale,
-          child: const SizedBox(
-            width: 640,
-            child: MusicDeckMiniPlayer(
-              compact: false,
-              embedded: true,
-              managePlaybackSession: false,
-              onOpenQueue: _noop,
+      // 624 是甲板最窄桌面档（视口 760）下播放岛的实际带宽：
+      // 720 内容宽 - 导航 76 - cardGap 20。补入播放模式按钮后必须仍不溢出。
+      for (final width in <double>[624, 640]) {
+        await tester.pumpWidget(
+          _testApp(
+            scale: scale,
+            child: SizedBox(
+              width: width,
+              child: const MusicDeckMiniPlayer(
+                compact: false,
+                embedded: true,
+                managePlaybackSession: false,
+                onOpenQueue: _noop,
+              ),
             ),
           ),
-        ),
-      );
-      await tester.pump();
+        );
+        await tester.pump();
 
-      expect(tester.takeException(), isNull);
+        expect(tester.takeException(), isNull, reason: '岛宽 $width');
+      }
     });
   }
 }

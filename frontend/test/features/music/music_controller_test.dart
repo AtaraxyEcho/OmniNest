@@ -22,7 +22,19 @@ import 'package:omninest/features/music/presentation/deck/music_deck_search.dart
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
 part 'music_controller_platform_test_part.dart';
+part 'music_controller_first_frame_test_part.dart';
 part 'music_controller_queue_test_part.dart';
+
+MusicPagedResult<T> _paged<T>(List<T> items, int page, int size) {
+  final from = (page * size).clamp(0, items.length);
+  final to = (from + size).clamp(0, items.length);
+  return MusicPagedResult<T>(
+    items: List<T>.unmodifiable(items.sublist(from, to)),
+    page: page,
+    size: size,
+    totalElements: items.length,
+  );
+}
 
 void main() {
   test('play track loads playback plan and marks music playing', () async {
@@ -683,6 +695,8 @@ void main() {
   });
 
   registerMusicPlatformTests();
+  registerMusicFirstFrameTieringTests();
+  registerMusicPlaylistPreloadTests();
 }
 
 class _EmptyMusicPlatformLibraryController
@@ -792,12 +806,51 @@ class _FakeMusicApi implements MusicApi {
   final Map<String, Completer<List<OnlineTrack>>> pendingSearches =
       <String, Completer<List<OnlineTrack>>>{};
 
+  /// 次级切片（仪表盘点、专辑与歌手全量列表、平台账号资料）的返回值与挂起信号：
+  /// 用于断言首帧只等必需请求、次级切片在其后补齐，以及旧回填不得覆盖新刷新。
+  List<MusicAlbum> libraryAlbums = const <MusicAlbum>[];
+  List<MusicArtist> libraryArtists = const <MusicArtist>[];
+  MusicDashboard dashboardValue = MusicDashboard.empty();
+  PlatformUserInfo? platformInfoValue;
+  Object? dashboardError;
+  Object? playlistsError;
+  final secondaryRequests = <String>[];
+  Completer<void>? secondaryGate;
+
+  /// 置 false 后次级请求立即回包：用于让挂起的那一轮与随后新一轮刷新分出先后。
+  bool gateSecondary = true;
+
+  /// 在线歌单曲目预热的返回值与挂起信号：按 key 定制曲目数与响应顺序。
+  List<OnlinePlaylist> neteasePlaylists = const <OnlinePlaylist>[
+    OnlinePlaylist(
+      platform: 'netease',
+      playlistId: 'netease-list-1',
+      name: 'Netease Collection',
+    ),
+  ];
+  Completer<void>? playlistTracksGate;
+
+  /// 歌单曲目条数与每次请求的页大小，用于断言预热与按需加载的载荷差别。
+  int playlistTrackCount = 1;
+  final Map<String, int> platformPlaylistTrackSizes = <String, int>{};
+
   _FakeMusicApi() {
     libraryTracks.addAll([track, secondTrack]);
   }
 
   @override
-  Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
+  Future<MusicDashboard> dashboard() async {
+    secondaryRequests.add('dashboard');
+    final error = dashboardError;
+    final value = dashboardValue;
+    if (gateSecondary) {
+      await secondaryGate?.future;
+    }
+    if (error != null) {
+      throw error;
+    }
+    return value;
+  }
 
   final tracksPageRequests = <int>[];
   final tracksPageErrors = <int, Object>{};
@@ -837,78 +890,113 @@ class _FakeMusicApi implements MusicApi {
     int page = 0,
     int size = 100,
     String sort = 'updatedAt,desc',
-  }) async => const MusicPagedResult<MusicAlbum>(
-    items: <MusicAlbum>[],
-    page: 0,
-    size: 0,
-    totalElements: 0,
-  );
+  }) async {
+    secondaryRequests.add('albums');
+    // 按调用时刻取快照：挂起期间改动数据时，回包仍反映发起时的状态。
+    final items = List<MusicAlbum>.from(libraryAlbums);
+    if (gateSecondary) {
+      await secondaryGate?.future;
+    }
+    return MusicPagedResult<MusicAlbum>(
+      items: items,
+      page: page,
+      size: size,
+      totalElements: items.length,
+    );
+  }
 
   @override
   Future<MusicPagedResult<MusicArtist>> artists({
     int page = 0,
     int size = 100,
     String sort = 'name,asc',
-  }) async => const MusicPagedResult<MusicArtist>(
-    items: <MusicArtist>[],
-    page: 0,
-    size: 0,
-    totalElements: 0,
-  );
+  }) async {
+    secondaryRequests.add('artists');
+    final items = List<MusicArtist>.from(libraryArtists);
+    if (gateSecondary) {
+      await secondaryGate?.future;
+    }
+    return MusicPagedResult<MusicArtist>(
+      items: items,
+      page: page,
+      size: size,
+      totalElements: items.length,
+    );
+  }
 
   @override
-  Future<List<MusicPlaylist>> playlists() async => [playlist];
+  Future<List<MusicPlaylist>> playlists() async {
+    final error = playlistsError;
+    if (error != null) {
+      throw error;
+    }
+    return [playlist];
+  }
 
   @override
   Future<List<MusicPlatformStatus>> musicPlatforms() async => platformStatuses;
 
   @override
-  Future<List<OnlinePlaylist>> platformPlaylists(String platform) async {
+  Future<MusicPagedResult<OnlinePlaylist>> platformPlaylists(
+    String platform, {
+    int page = 0,
+    int size = 100,
+  }) async {
     if (failingPlaylistPlatforms.contains(platform)) {
       throw StateError('$platform playlist failure');
     }
     if (platform == 'netease') {
-      return const <OnlinePlaylist>[
-        OnlinePlaylist(
-          platform: 'netease',
-          playlistId: 'netease-list-1',
-          name: 'Netease Collection',
-        ),
-      ];
+      return _paged(neteasePlaylists, page, size);
     }
-    return const <OnlinePlaylist>[];
+    return _paged(const <OnlinePlaylist>[], page, size);
   }
 
   @override
-  Future<List<OnlineTrack>> platformPlaylistTracks(
+  Future<MusicPagedResult<OnlineTrack>> platformPlaylistTracks(
     String platform,
-    String playlistId,
-  ) async {
+    String playlistId, {
+    int page = 0,
+    int size = 200,
+  }) async {
     platformPlaylistTrackRequests.add('$platform:$playlistId');
-    return <OnlineTrack>[
-      OnlineTrack(
+    platformPlaylistTrackSizes['$platform:$playlistId'] = size;
+    await playlistTracksGate?.future;
+    return _paged(_playlistTracks(platform), page, size);
+  }
+
+  List<OnlineTrack> _playlistTracks(String platform) {
+    return List<OnlineTrack>.generate(playlistTrackCount, (index) {
+      return OnlineTrack(
         platform: platform,
-        songId: 'playlist-song-1',
+        songId: 'playlist-song-${index + 1}',
         title: 'Playlist Song',
         artistName: 'Playlist Artist',
-        coverUrl: 'https://example.com/$platform-cover.jpg',
-      ),
-    ];
+        coverUrl: index == 0 ? 'https://example.com/$platform-cover.jpg' : '',
+      );
+    });
   }
 
   @override
-  Future<List<OnlineTrack>> platformLikedTracks(String platform) async {
+  Future<MusicPagedResult<OnlineTrack>> platformLikedTracks(
+    String platform, {
+    int page = 0,
+    int size = 1000,
+  }) async {
     if (platform == 'netease') {
-      return const <OnlineTrack>[
-        OnlineTrack(
-          platform: 'netease',
-          songId: 'liked-1',
-          title: 'Liked Song',
-          artistName: 'Cloud Artist',
-        ),
-      ];
+      return _paged(
+        const <OnlineTrack>[
+          OnlineTrack(
+            platform: 'netease',
+            songId: 'liked-1',
+            title: 'Liked Song',
+            artistName: 'Cloud Artist',
+          ),
+        ],
+        page,
+        size,
+      );
     }
-    return const <OnlineTrack>[];
+    return _paged(const <OnlineTrack>[], page, size);
   }
 
   @override
@@ -1299,7 +1387,14 @@ class _FakeMusicApi implements MusicApi {
   Future<void> platformLogout(String platform) async {}
 
   @override
-  Future<PlatformUserInfo?> platformInfo(String platform) async => null;
+  Future<PlatformUserInfo?> platformInfo(String platform) async {
+    secondaryRequests.add('platformInfo');
+    final value = platformInfoValue;
+    if (gateSecondary) {
+      await secondaryGate?.future;
+    }
+    return value;
+  }
 
   @override
   Future<MusicLyricsResult?> searchLyrics(String trackId) async =>

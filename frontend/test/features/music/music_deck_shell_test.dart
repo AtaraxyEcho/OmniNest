@@ -11,9 +11,15 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
+import 'package:omninest/features/music/data/music_api.dart';
+import 'package:omninest/features/music/data/music_playback_queue_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
+import 'package:omninest/features/music/domain/music_playable_item.dart';
+import 'package:omninest/features/music/presentation/deck/music_deck_layout.dart';
+import 'package:omninest/features/music/presentation/deck/music_deck_mini_player.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_shell.dart';
+import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 
 void main() {
   testWidgets('移动端查看全部页面提供返回首页控件', (tester) async {
@@ -180,6 +186,89 @@ void main() {
     expect(leftSize!.height, rightSize!.height, reason: '左右两张玻璃卡高度必须一致');
     expect(leftSize.width, rightSize.width, reason: '左右两张玻璃卡宽度必须一致');
   });
+
+  testWidgets('桌面侧卡与播放岛共用底线，播放岛提供播放模式入口', (tester) async {
+    tester.view.physicalSize = const Size(1900, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    // 走真实中心控制器：播放模式命令是控制器上的扩展方法，替身无法拦截，
+    // 只有端到端读状态才能证明控制岛接到了同一条轮换命令。
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(_IslandPlayModeStubApi()),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        musicPlaybackQueueStoreProvider.overrideWithValue(
+          _MemoryMusicPlaybackQueueStore(),
+        ),
+        musicPlatformLibraryProvider.overrideWith(
+          _FakeMusicPlatformLibraryController.new,
+        ),
+        musicPlaybackSessionProvider.overrideWith(
+          _StubPlaybackSessionController.new,
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: OmniNestTheme.from(AppThemePalette.dark),
+          home: const MusicDeckShell(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    Rect glassRect(Finder anchor) => tester.getRect(
+      find.ancestor(of: anchor, matching: find.byType(MusicDeckGlass)).first,
+    );
+
+    final island = tester.getRect(find.byType(MusicDeckMiniPlayer));
+    final leftCard = glassRect(find.text('首页'));
+    final rightCard = glassRect(find.text('正在播放'));
+
+    // 三块表面落在同一条基线上：侧卡不再被抬高整个岛高。
+    expect(island.bottom, moreOrLessEquals(leftCard.bottom, epsilon: 0.5));
+    expect(island.bottom, moreOrLessEquals(rightCard.bottom, epsilon: 0.5));
+    // 播放岛取中内容列的整条带宽，与两侧卡各留一个 cardGap。
+    const gap = MusicDeckDesktopLayout.cardGap;
+    expect(island.left, moreOrLessEquals(leftCard.right + gap, epsilon: 0.5));
+    expect(
+      rightCard.left,
+      moreOrLessEquals(island.right + gap, epsilon: 0.5),
+      reason: '岛宽不再按比例收缩，超宽屏只按上限收束',
+    );
+    expect(island.height, MusicDeckMiniPlayer.barHeight);
+
+    // 播放模式入口与沉浸页 Dock 同源：三态各一图标，点击走轮换命令。
+    expect(
+      container.read(musicCenterControllerProvider).value!.playMode,
+      MusicPlayMode.repeatOne,
+    );
+    expect(find.byType(MusicPlayModeButton), findsOneWidget);
+    expect(find.byIcon(Icons.repeat_one_rounded), findsOneWidget);
+
+    await tester.tap(find.byType(MusicPlayModeButton));
+    await tester.pump();
+    expect(
+      container.read(musicCenterControllerProvider).value!.playMode,
+      MusicPlayMode.sequential,
+      reason: '单曲循环档点击后轮换回顺序播放',
+    );
+    // 图标切换走 160ms 淡入淡出，推进到时序结束后再断言两档图标。
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.byIcon(Icons.repeat_one_rounded), findsNothing);
+    expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
+    // 播放队列持久化带 160ms 防抖定时器，推进时钟让它自然落地。
+    await tester.pump(const Duration(seconds: 1));
+  });
 }
 
 class _FakeMusicCenterController extends MusicCenterController {
@@ -189,6 +278,78 @@ class _FakeMusicCenterController extends MusicCenterController {
 
   @override
   Future<MusicCenterState> build() async => initialState;
+}
+
+class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
+  @override
+  Future<MusicPlaybackQueueSnapshot?> load(String ownerId) async => null;
+
+  @override
+  Future<void> save(
+    String ownerId,
+    MusicPlaybackQueueSnapshot snapshot,
+  ) async {}
+}
+
+/// 只提供控制岛用例走到的链路，恢复的播放模式固定为单曲循环。
+class _IslandPlayModeStubApi implements MusicApi {
+  MusicPagedResult<T> _emptyPage<T>() =>
+      MusicPagedResult<T>(items: <T>[], page: 0, size: 30);
+
+  @override
+  Future<MusicDashboard> dashboard() async =>
+      MusicDashboard.fromJson(const <String, dynamic>{});
+
+  @override
+  Future<MusicPagedResult<MusicTrack>> tracks({
+    int page = 0,
+    int size = 100,
+    String sort = 'title,asc',
+  }) async => _emptyPage<MusicTrack>();
+
+  @override
+  Future<MusicPagedResult<MusicAlbum>> albums({
+    int page = 0,
+    int size = 100,
+    String sort = 'updatedAt,desc',
+  }) async => _emptyPage<MusicAlbum>();
+
+  @override
+  Future<MusicPagedResult<MusicArtist>> artists({
+    int page = 0,
+    int size = 100,
+    String sort = 'name,asc',
+  }) async => _emptyPage<MusicArtist>();
+
+  @override
+  Future<List<MusicPlaylist>> playlists() async => const <MusicPlaylist>[];
+
+  @override
+  Future<List<MusicRecentEntry>> recentItems() async =>
+      const <MusicRecentEntry>[];
+
+  @override
+  Future<MusicTrack?> lastPlayed() async => null;
+
+  @override
+  Future<MusicPlaybackQueueSnapshot> playbackQueue() async =>
+      MusicPlaybackQueueSnapshot.fromJson(<String, dynamic>{
+        'items': <Map<String, dynamic>>[],
+        'currentIndex': -1,
+        'shuffleEnabled': false,
+        'repeatMode': 'one',
+      });
+
+  @override
+  Future<MusicPlaybackQueueSnapshot> savePlaybackQueue(
+    MusicPlaybackQueueSnapshot snapshot,
+  ) async => snapshot;
+
+  @override
+  Future<PlatformUserInfo?> platformInfo(String platform) async => null;
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
 class _FakeMusicPlatformLibraryController

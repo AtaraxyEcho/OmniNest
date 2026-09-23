@@ -502,30 +502,43 @@ class MusicApi {
   }
 
   /// 获取在线平台歌单
-  Future<List<OnlinePlaylist>> platformPlaylists(String platform) async {
+  Future<MusicPagedResult<OnlinePlaylist>> platformPlaylists(
+    String platform, {
+    int page = 0,
+    int size = 100,
+  }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/platforms/$platform/playlists',
+      queryParameters: <String, dynamic>{'page': page, 'size': size},
     );
-    return _parseList(response.data, OnlinePlaylist.fromJson, '平台歌单列表格式不正确');
+    return _parsePage(response.data, OnlinePlaylist.fromJson, '平台歌单列表格式不正确');
   }
 
   /// 获取在线平台歌单曲目
-  Future<List<OnlineTrack>> platformPlaylistTracks(
+  Future<MusicPagedResult<OnlineTrack>> platformPlaylistTracks(
     String platform,
-    String playlistId,
-  ) async {
+    String playlistId, {
+    int page = 0,
+    int size = 200,
+  }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/platforms/$platform/playlists/$playlistId/tracks',
+      queryParameters: <String, dynamic>{'page': page, 'size': size},
     );
-    return _parseList(response.data, OnlineTrack.fromJson, '平台歌单曲目格式不正确');
+    return _parsePage(response.data, OnlineTrack.fromJson, '平台歌单曲目格式不正确');
   }
 
   /// 获取在线平台喜欢歌曲
-  Future<List<OnlineTrack>> platformLikedTracks(String platform) async {
+  Future<MusicPagedResult<OnlineTrack>> platformLikedTracks(
+    String platform, {
+    int page = 0,
+    int size = 1000,
+  }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/platforms/$platform/liked-tracks',
+      queryParameters: <String, dynamic>{'page': page, 'size': size},
     );
-    return _parseList(response.data, OnlineTrack.fromJson, '平台喜欢歌曲格式不正确');
+    return _parsePage(response.data, OnlineTrack.fromJson, '平台喜欢歌曲格式不正确');
   }
 
   /// 获取外部平台每日推荐歌曲。

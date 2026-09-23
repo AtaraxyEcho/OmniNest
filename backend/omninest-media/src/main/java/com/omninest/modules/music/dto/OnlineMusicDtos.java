@@ -32,7 +32,8 @@ public final class OnlineMusicDtos {
             String coverUrl,
             Integer durationSeconds,
             String quality,
-            Map<String, Object> extra
+            Map<String, Object> extra,
+            String thumbUrl
     ) {
     }
 
@@ -78,7 +79,8 @@ public final class OnlineMusicDtos {
             Integer trackCount,
             String ownerName,
             boolean subscribed,
-            Map<String, Object> extra
+            Map<String, Object> extra,
+            String thumbUrl
     ) {
     }
 
@@ -99,6 +101,34 @@ public final class OnlineMusicDtos {
          */
         public DailyRecommendedTracksDto {
             tracks = tracks == null ? List.of() : List.copyOf(tracks);
+        }
+    }
+
+    /**
+     * 在线平台歌单列表载荷，用于短期缓存第三方回源结果。
+     *
+     * @param items 歌单列表
+     */
+    public record OnlinePlaylistList(List<OnlinePlaylistDto> items) {
+        /**
+         * 规范化歌单列表。
+         */
+        public OnlinePlaylistList {
+            items = items == null ? List.of() : List.copyOf(items);
+        }
+    }
+
+    /**
+     * 在线平台曲目列表载荷，用于短期缓存第三方回源结果。
+     *
+     * @param items 曲目列表
+     */
+    public record OnlineTrackList(List<OnlineTrackDto> items) {
+        /**
+         * 规范化曲目列表。
+         */
+        public OnlineTrackList {
+            items = items == null ? List.of() : List.copyOf(items);
         }
     }
 
