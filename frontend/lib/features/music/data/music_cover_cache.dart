@@ -1,15 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
-/// 音乐封面稳定 API 路径前缀（后端 GET /api/v1/music/covers/{fileId}）。
-const String _coverApiPathPrefix = '/api/v1/music/covers/';
-
-/// 判断地址是否为本地音乐封面的稳定鉴权 API 路径。
-///
-/// 后端 DTO 返回相对路径；网易云等外部 CDN 封面为绝对地址，
-/// 天然不匹配本前缀，Authorization 头不会外发给第三方域名。
-bool isMusicCoverApiPath(String url) => url.startsWith(_coverApiPathPrefix);
-
 /// 音乐封面专域缓存管理器。
 ///
 /// 独立于 DefaultCacheManager 默认库（200 对象）：本地曲库、专辑、

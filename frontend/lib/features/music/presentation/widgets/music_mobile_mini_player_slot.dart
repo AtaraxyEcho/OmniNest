@@ -184,7 +184,7 @@ class _MusicMobileMiniPlayerSlotState
                                         borderRadius: BorderRadius.circular(6),
                                         child: MusicDeckArtwork(
                                           title: track.title,
-                                          imageUrl: track.coverUrl,
+                                          imageUrl: track.listCoverUrl,
                                           borderRadius: 6,
                                         ),
                                       ),

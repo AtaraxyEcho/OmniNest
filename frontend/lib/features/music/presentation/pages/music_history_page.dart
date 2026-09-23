@@ -261,7 +261,10 @@ class _HistoryRow extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
       leading: SizedBox.square(
         dimension: 44,
-        child: MusicDeckArtwork(title: entry.title, imageUrl: entry.coverUrl),
+        child: MusicDeckArtwork(
+          title: entry.title,
+          imageUrl: entry.listCoverUrl,
+        ),
       ),
       title: Text(
         entry.title,

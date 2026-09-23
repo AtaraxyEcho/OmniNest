@@ -1,6 +1,7 @@
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/music/data/music_cover_cache.dart';
+import 'package:omninest/features/music/domain/music_cover_paths.dart';
 
 /// 封面取图的应用层出口。
 ///

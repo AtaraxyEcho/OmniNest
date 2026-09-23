@@ -82,8 +82,9 @@ void main() {
       favorite: false,
       coverUrl: '/api/v1/music/covers/file-1',
     );
-    // 本地曲库没有缩放端点，回退稳定鉴权路径。
-    expect(local.listCoverUrl, '/api/v1/music/covers/file-1');
+    // 本地封面按稳定鉴权路径派生缩略图，原图路径保持不变。
+    expect(local.listCoverUrl, '/api/v1/music/covers/file-1/thumbnail');
+    expect(local.coverUrl, '/api/v1/music/covers/file-1');
   });
 
   test('未知在线平台不会降级为本地来源', () {

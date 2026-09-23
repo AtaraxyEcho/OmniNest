@@ -40,6 +40,7 @@ public class MusicCoverService {
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
     private final FileMetadataQueryService fileMetadataQueryService;
+    private final MusicCoverThumbnailService coverThumbnailService;
 
     /**
      * 已完成权限校验的封面流式读取描述。
@@ -77,6 +78,39 @@ public class MusicCoverService {
             contentType = "image/jpeg";
         }
         return new CoverStreamDescriptor(ownerUserId, fileId, contentType, node.sizeBytes());
+    }
+
+    /**
+     * 缩略图流式读取结果。
+     *
+     * @param descriptor 实际写出的内容描述
+     * @param derived 内容是否为派生缩略图；回退原图时为 false
+     */
+    public record ThumbnailStream(CoverStreamDescriptor descriptor, boolean derived) {
+    }
+
+    /**
+     * 校验封面缩略图可被当前用户读取并返回流式描述。
+     *
+     * <p>缩略图缺失时按需派生；原图不受理、派生并发达到上限或生成失败时回退原图描述，
+     * 因此该入口始终能渲染出图像，只是尺寸可能未缩小。调用方须按 {@code derived}
+     * 区分缓存策略，避免回退的原图把稳定缩略图路径长期占住。</p>
+     *
+     * @param ownerUserId 所属用户标识
+     * @param fileId 封面原图文件标识
+     * @return 缩略图或回退原图的流式读取结果
+     */
+    public ThumbnailStream prepareThumbnailStream(UUID ownerUserId, UUID fileId) {
+        CoverStreamDescriptor source = prepareCoverStream(ownerUserId, fileId);
+        UUID thumbnailFileId = coverThumbnailService.ensureThumbnail(
+                ownerUserId,
+                fileId,
+                source.sizeBytes()
+        ).orElse(null);
+        if (thumbnailFileId == null || thumbnailFileId.equals(fileId)) {
+            return new ThumbnailStream(source, false);
+        }
+        return new ThumbnailStream(prepareCoverStream(ownerUserId, thumbnailFileId), true);
     }
 
     /**

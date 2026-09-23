@@ -346,7 +346,7 @@ List<MusicDeckCoverItem> _albumCoverItems(
           id: album.id,
           title: album.title,
           subtitle: album.artistName,
-          imageUrl: album.coverUrl,
+          imageUrl: album.listCoverUrl,
           onTap: () => onOpenCollection(AlbumMusicDeckCollection(album)),
         ),
       ),
@@ -404,7 +404,7 @@ List<MusicDeckCoverItem> _artistCoverItems(
           id: artist.id,
           title: artist.name,
           subtitle: l10n.musicDeckTrackCount(artist.trackCount),
-          imageUrl: artist.avatarUrl,
+          imageUrl: artist.listCoverUrl,
           icon: Icons.person_rounded,
           onTap: () => onOpenCollection(ArtistMusicDeckCollection(artist)),
         ),
@@ -640,7 +640,7 @@ List<MusicDeckCoverItem> _playlistCoverItems(
           id: playlist.id,
           title: playlist.name,
           subtitle: l10n.musicDeckTrackCount(playlist.trackCount),
-          imageUrl: playlist.coverUrl,
+          imageUrl: playlist.listCoverUrl,
           actions:
               playlist.playlistType == 'CUSTOM' &&
                       onEdit != null &&

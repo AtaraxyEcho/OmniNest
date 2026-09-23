@@ -266,7 +266,7 @@ MusicPortalTrack? _projectTrack(MusicTrack? track) {
     title: track.title,
     artistName: track.artistName,
     albumTitle: track.albumTitle,
-    coverUrl: track.coverUrl,
+    coverUrl: track.listCoverUrl,
     lyrics: List<MusicPortalLyricLine>.unmodifiable(
       track.lyricLines.map(
         (line) => MusicPortalLyricLine(
@@ -286,6 +286,6 @@ MusicPortalAlbum? _projectAlbum(MusicAlbum? album) {
   return MusicPortalAlbum(
     title: album.title,
     artistName: album.artistName,
-    coverUrl: album.coverUrl,
+    coverUrl: album.listCoverUrl,
   );
 }

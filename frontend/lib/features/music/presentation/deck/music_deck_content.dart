@@ -264,7 +264,7 @@ class _DailyRecommendationSection extends ConsumerWidget {
                 subtitle: l10n.musicDailyRecommendationTrackCount(
                   value.tracks.length,
                 ),
-                imageUrl: value.coverUrl,
+                imageUrl: value.listCoverUrl,
                 platform: MusicPlatform.netease,
                 overlayPlatformBadge: true,
                 icon: Icons.today_rounded,
@@ -687,7 +687,7 @@ class _CollectionDetail extends ConsumerWidget {
         playlist.name,
         playlist.description ??
             AppLocalizations.of(context).musicDeckLocalPlaylist,
-        playlist.coverUrl,
+        playlist.listCoverUrl,
         MusicPlatform.local,
         center.selectedPlaylist?.id == playlist.id
             ? center.selectedPlaylistTracks
@@ -716,7 +716,7 @@ class _CollectionDetail extends ConsumerWidget {
         AppLocalizations.of(
           context,
         ).musicDailyRecommendationTrackCount(recommendation.tracks.length),
-        recommendation.coverUrl,
+        recommendation.listCoverUrl,
         MusicPlatform.fromApiValue(recommendation.platform),
         recommendation.tracks
             .map(MusicPlayableItem.online)
@@ -726,7 +726,7 @@ class _CollectionDetail extends ConsumerWidget {
       AlbumMusicDeckCollection(:final album) => (
         album.title,
         album.artistName,
-        album.coverUrl,
+        album.listCoverUrl,
         MusicPlatform.local,
         center.selectedAlbum?.id == album.id
             ? center.selectedAlbumTracks
@@ -738,7 +738,7 @@ class _CollectionDetail extends ConsumerWidget {
       ArtistMusicDeckCollection(:final artist) => (
         artist.name,
         AppLocalizations.of(context).musicDeckTrackCount(artist.trackCount),
-        artist.avatarUrl,
+        artist.listCoverUrl,
         MusicPlatform.local,
         center.selectedArtist?.id == artist.id
             ? center.selectedArtistTracks

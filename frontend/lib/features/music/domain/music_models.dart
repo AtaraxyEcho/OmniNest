@@ -1,3 +1,5 @@
+import 'package:omninest/features/music/domain/music_cover_paths.dart';
+
 part 'music_models_lyric_parser.dart';
 
 class MusicTrack {
@@ -66,15 +68,18 @@ class MusicTrack {
   final String? genre;
   final String? coverUrl;
 
-  /// 图片来源平台提供的缩略位地址；本地曲库没有缩放端点，保持为空。
+  /// 图片来源平台提供的缩略位地址；本地曲库走派生缩略图端点，见 [listCoverUrl]。
   final String? coverThumbUrl;
   final bool favorite;
   final DateTime? updatedAt;
 
-  /// 列表与封面格子用的展示地址：优先平台缩放图，缺省回退原图。
+  /// 列表与封面格子用的展示地址：优先平台缩放图，其次本地派生缩略图，缺省回退原图。
   String? get listCoverUrl {
     final thumb = coverThumbUrl?.trim() ?? '';
-    return thumb.isEmpty ? coverUrl : thumb;
+    if (thumb.isNotEmpty) {
+      return thumb;
+    }
+    return musicCoverThumbnailPath(coverUrl);
   }
 
   String get durationText {
@@ -309,6 +314,9 @@ class MusicAlbum {
   final int? totalDuration;
   final int trackCount;
   final DateTime? updatedAt;
+
+  /// 专辑格子用的展示地址：本地封面走派生缩略图，外部地址原样返回。
+  String? get listCoverUrl => musicCoverThumbnailPath(coverUrl);
 }
 
 class MusicArtist {
@@ -338,6 +346,9 @@ class MusicArtist {
   final int trackCount;
   final int albumCount;
   final DateTime? updatedAt;
+
+  /// 艺人格子用的展示地址：本地头像走派生缩略图，外部地址原样返回。
+  String? get listCoverUrl => musicCoverThumbnailPath(avatarUrl);
 }
 
 class MusicPlaylist {
@@ -373,6 +384,9 @@ class MusicPlaylist {
   final String? coverUrl;
   final int trackCount;
   final DateTime? updatedAt;
+
+  /// 歌单格子用的展示地址：本地封面走派生缩略图，外部地址原样返回。
+  String? get listCoverUrl => musicCoverThumbnailPath(coverUrl);
 
   MusicPlaylist copyWith({int? trackCount}) {
     return MusicPlaylist(
@@ -797,6 +811,11 @@ class DailyRecommendedTracks {
       .map((track) => track.coverUrl.trim())
       .firstWhere((url) => url.isNotEmpty, orElse: () => '');
 
+  /// 格子用的展示地址：取首曲目的缩放封面，缺省回退原图。
+  String get listCoverUrl => tracks
+      .map((track) => track.listCoverUrl.trim())
+      .firstWhere((url) => url.isNotEmpty, orElse: () => '');
+
   factory DailyRecommendedTracks.fromJson(Map<String, dynamic> json) {
     return DailyRecommendedTracks(
       platform: json['platform']?.toString() ?? '',
@@ -902,6 +921,9 @@ class MusicPlayHistoryEntry {
   final String artistName;
   final String? albumTitle;
   final String? coverUrl;
+
+  /// 历史列表行用的展示地址：本地封面走派生缩略图，外部地址原样返回。
+  String? get listCoverUrl => musicCoverThumbnailPath(coverUrl);
   final int? durationSeconds;
   final String? platform;
   final DateTime playedAt;

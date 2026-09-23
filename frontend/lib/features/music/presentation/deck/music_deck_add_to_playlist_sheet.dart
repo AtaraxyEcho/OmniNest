@@ -84,7 +84,7 @@ class MusicDeckAddToPlaylistSheet extends ConsumerWidget {
                         dimension: 40,
                         child: MusicDeckArtwork(
                           title: playlist.name,
-                          imageUrl: playlist.coverUrl,
+                          imageUrl: playlist.listCoverUrl,
                           borderRadius: 5,
                         ),
                       ),

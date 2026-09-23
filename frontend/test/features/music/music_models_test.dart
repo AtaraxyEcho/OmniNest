@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/features/music/domain/music_cover_paths.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 
 void main() {
@@ -323,5 +324,91 @@ void main() {
       const Duration(milliseconds: 800),
     );
     expect(line.estimatedVocalSpan(Duration.zero), Duration.zero);
+  });
+
+  test('列表展示地址优先平台缩放图，其次本地派生缩略图', () {
+    const localCover =
+        '/api/v1/music/covers/7f000000-0000-0000-0000-000000000001';
+    const local = MusicTrack(
+      id: 'track-1',
+      fileNodeId: 'file-1',
+      title: 'Local',
+      artistName: 'Artist',
+      albumTitle: 'Album',
+      format: 'flac',
+      favorite: false,
+      coverUrl: localCover,
+    );
+    expect(local.listCoverUrl, '$localCover/thumbnail');
+    // 沉浸层等大尺寸surface仍取原图，派生缩略图不得替换它。
+    expect(local.coverUrl, localCover);
+    expect(local.coverThumbUrl, isNull);
+
+    const platform = MusicTrack(
+      id: 'track-2',
+      fileNodeId: 'file-2',
+      title: 'Online',
+      artistName: 'Artist',
+      albumTitle: 'Album',
+      format: 'mp3',
+      favorite: false,
+      coverUrl: 'https://example.com/cover.jpg',
+      coverThumbUrl: 'https://example.com/cover.jpg?paramSize=300x300',
+    );
+    expect(platform.listCoverUrl, platform.coverThumbUrl);
+
+    const withoutCover = MusicTrack(
+      id: 'track-3',
+      fileNodeId: 'file-3',
+      title: 'Bare',
+      artistName: 'Artist',
+      albumTitle: 'Album',
+      format: 'mp3',
+      favorite: false,
+    );
+    expect(withoutCover.listCoverUrl, isNull);
+
+    final collectionCovers = [
+      MusicAlbum(
+        id: 'album-1',
+        title: 'A',
+        artistName: 'B',
+        trackCount: 1,
+        coverUrl: localCover,
+      ).listCoverUrl,
+      MusicPlaylist(
+        id: 'playlist-1',
+        name: 'P',
+        playlistType: 'CUSTOM',
+        trackCount: 1,
+        coverUrl: localCover,
+      ).listCoverUrl,
+      MusicArtist(
+        id: 'artist-1',
+        name: 'A',
+        trackCount: 1,
+        albumCount: 1,
+        avatarUrl: localCover,
+      ).listCoverUrl,
+      MusicPlayHistoryEntry(
+        playableKey: 'local:1',
+        title: 'T',
+        artistName: 'A',
+        coverUrl: localCover,
+        playedAt: DateTime.utc(2026),
+      ).listCoverUrl,
+    ];
+    for (final url in collectionCovers) {
+      expect(url, '$localCover/thumbnail');
+    }
+  });
+
+  test('外部地址与空值不会被拼上缩略图后缀', () {
+    expect(
+      musicCoverThumbnailPath('https://example.com/cover.jpg'),
+      'https://example.com/cover.jpg',
+    );
+    expect(musicCoverThumbnailPath(''), '');
+    expect(musicCoverThumbnailPath(null), isNull);
   });
 }

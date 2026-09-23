@@ -92,6 +92,12 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 @Slf4j
 public class MusicController {
+    /** 稳定封面路径可被客户端私有缓存无限期复用。 */
+    private static final String IMMUTABLE_CACHE_CONTROL = "private, max-age=2592000, immutable";
+
+    /** 缩略图回退原图时只做短期缓存，稍后重试即可拿到真正的派生图。 */
+    private static final String THUMBNAIL_FALLBACK_CACHE_CONTROL = "private, max-age=60";
+
     private final CurrentUserContext currentUserContext;
     private final MusicOnlineDispatcher onlineDispatcher;
     private final MusicLibraryService musicLibraryService;
@@ -424,8 +430,36 @@ public class MusicController {
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(descriptor.contentType()))
                 .contentLength(descriptor.sizeBytes())
-                .header(HttpHeaders.CACHE_CONTROL, "private, max-age=2592000, immutable")
+                .header(HttpHeaders.CACHE_CONTROL, IMMUTABLE_CACHE_CONTROL)
                 .body(body);
+    }
+
+    /**
+     * 流式下载音乐封面缩略图：首次访问时按需派生 300px 版本，之后按稳定路径长期缓存。
+     *
+     * <p>派生要解码原图，因此整段准备放在音乐线程池执行，请求线程只承担鉴权与参数解析。
+     * 路径同样永久稳定：缩略图按封面文件标识定位，封面重传会生成新的文件标识。</p>
+     */
+    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @Operation(summary = "下载音乐封面缩略图", description = "按需派生并流式返回 300px 封面，原图不受理时回退原图")
+    @GetMapping("/api/v1/music/covers/{fileId}/thumbnail")
+    CompletableFuture<ResponseEntity<StreamingResponseBody>> downloadMusicCoverThumbnail(@PathVariable UUID fileId) {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return onlineDispatcher.supply(() -> {
+            MusicCoverService.ThumbnailStream thumbnail = musicCoverService.prepareThumbnailStream(
+                    ownerUserId,
+                    fileId
+            );
+            MusicCoverService.CoverStreamDescriptor descriptor = thumbnail.descriptor();
+            StreamingResponseBody body = outputStream -> musicCoverService.streamCover(descriptor, outputStream);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.parseMediaType(descriptor.contentType()))
+                    .contentLength(descriptor.sizeBytes())
+                    .header(HttpHeaders.CACHE_CONTROL, thumbnail.derived()
+                            ? IMMUTABLE_CACHE_CONTROL
+                            : THUMBNAIL_FALLBACK_CACHE_CONTROL)
+                    .body(body);
+        });
     }
 
     @PostMapping("/api/v1/admin/music/scan")

@@ -176,7 +176,7 @@ class _ArtistAlbumsShelfState extends ConsumerState<_ArtistAlbumsShelf> {
           id: album.id,
           title: album.title,
           subtitle: l10n.musicDeckTrackCount(album.trackCount),
-          imageUrl: album.coverUrl,
+          imageUrl: album.listCoverUrl,
           icon: Icons.album_rounded,
           onTap:
               () => ref

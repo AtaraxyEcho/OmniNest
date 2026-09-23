@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/music/data/music_cover_cache.dart';
+import 'package:omninest/features/music/domain/music_cover_paths.dart';
 
 void main() {
   group('isMusicCoverApiPath', () {
@@ -11,6 +12,15 @@ void main() {
       expect(
         isMusicCoverApiPath(
           '/api/v1/music/covers/6f1d2c3a-1234-4abc-9def-000000000001',
+        ),
+        isTrue,
+      );
+      // 缩略图是同一资源下的子路径，必须共用封面专域缓存。
+      expect(
+        isMusicCoverApiPath(
+          musicCoverThumbnailPath(
+            '/api/v1/music/covers/6f1d2c3a-1234-4abc-9def-000000000001',
+          )!,
         ),
         isTrue,
       );
