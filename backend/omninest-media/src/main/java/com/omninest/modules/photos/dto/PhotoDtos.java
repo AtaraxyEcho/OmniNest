@@ -417,28 +417,6 @@ public final class PhotoDtos {
             long totalItems
     ) {}
 
-    // ─── 备份状态 DTO ───
-
-    public record PhotoBackupStatusDto(
-            String deviceId,
-            Instant lastBackupAt,
-            int lastPhotoCount
-    ) {}
-
-    public record BackupStatusRequest(
-            @NotBlank
-            @Size(max = 200) String deviceId
-    ) {}
-
-    public record BackupReportRequest(
-            String deviceId,
-            int photoCount
-    ) {}
-
-    public record CheckDuplicateRequest(
-            List<String> contentHashes
-    ) {}
-
     public record PhotoRelationEdgeDto(
             String sourceType,
             String sourceKey,

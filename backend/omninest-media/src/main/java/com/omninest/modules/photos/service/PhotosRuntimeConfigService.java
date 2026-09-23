@@ -19,7 +19,6 @@ public class PhotosRuntimeConfigService extends BaseRuntimeConfigService {
     public static final String PHOTO_AI_ENABLED = "photo.ai.enabled";
     public static final String PHOTO_AI_ENDPOINT = "photo.ai.url";
     public static final String PHOTO_AI_TIMEOUT = "photo.ai.timeout";
-    public static final String PHOTO_BACKUP_ENABLED = "photo.backup";
     public static final String PHOTO_GEO_RATE = "photo.geo.rate";
     public static final String PHOTO_GEO_OFFLINE = "photo.geo.offline";
     public static final String PHOTO_GEO_NOMINATIM = "photo.geo.nominatim";
@@ -74,14 +73,6 @@ public class PhotosRuntimeConfigService extends BaseRuntimeConfigService {
                 3,
                 120
         );
-    }
-
-    /** @return 是否启用照片备份 */
-    public boolean isBackupEnabled() {
-        return cachedConfigValue(PHOTO_BACKUP_ENABLED)
-                .or(() -> cachedConfigValue("photo.backup.enabled"))
-                .map(value -> parseBoolean(value, true))
-                .orElse(true);
     }
 
     /** @return Nominatim 每秒请求上限 */

@@ -225,8 +225,6 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
         'photo.ai.endpoint': l10n.adminConfigPhotoAiEndpoint,
         'photo.ai.timeout': l10n.adminConfigPhotoAiTimeout,
         'photo.ai.timeout-seconds': l10n.adminConfigPhotoAiTimeout,
-        'photo.backup': l10n.adminConfigPhotoBackup,
-        'photo.backup.enabled': l10n.adminConfigPhotoBackup,
         'photo.geo.rate': l10n.adminConfigPhotoGeoRate,
         'photo.geo.rate-limit-per-second': l10n.adminConfigPhotoGeoRate,
         'storage.quota.default': l10n.adminConfigDefaultQuota,
@@ -283,7 +281,6 @@ String _configTitle(AppLocalizations l10n, AdminConfigEntry entry) {
   }
   return switch (entry.displayCode) {
     'config.media.autoImport' => l10n.adminConfigMediaAutoImport,
-    'config.photo.backup' => l10n.adminConfigPhotoBackup,
     'config.logRetention.enabled' => l10n.adminConfigLogRetentionEnabled,
     'config.logRetention.retentionDays' => l10n.adminConfigLogRetentionDays,
     'config.logRetention.scanPaths' => l10n.adminConfigLogRetentionPaths,
@@ -442,7 +439,6 @@ String _configDescription(AppLocalizations l10n, AdminConfigEntry entry) {
   }
   return switch (entry.displayCode) {
     'config.media.autoImport' => l10n.adminConfigMediaAutoImportDescription,
-    'config.photo.backup' => l10n.adminConfigPhotoBackupDescription,
     'config.storage.defaultQuota' => l10n.adminConfigDefaultQuotaDescription,
     'config.storage.warningPercent' => l10n.adminConfigQuotaWarningDescription,
     'config.storage.sharedSpace' => l10n.adminConfigSharedSpaceDescription,

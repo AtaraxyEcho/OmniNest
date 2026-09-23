@@ -215,39 +215,7 @@
   "profileSectionAppearance": "外观与语言",
   "profileSectionNotifications": "通知",
   "profileSectionSecurity": "安全与设备",
-  "profileSectionBackup": "备份",
   "profileSectionAbout": "关于",
-  "photoBackupBackgroundTitle": "自动备份本机相册",
-  "photoBackupBackgroundSubtitle": "开启后将本机相册的全部照片自动上传到你的 OmniNest 服务器（仅 Android）",
-  "photoBackupConfirmTitle": "开启自动备份？",
-  "photoBackupConfirmBody": "将按所选范围自动上传照片到你的 OmniNest 服务器（仅 Android）。",
-  "photoBackupConfirmBodyScoped": "仅上传下方勾选相册中的照片到你的 OmniNest 服务器（仅 Android）。",
-  "photoBackupBackgroundSubtitleScoped": "开启后将自动上传所选范围的照片到你的 OmniNest 服务器（仅 Android）",
-  "photoBackupAllowMobileData": "无 Wi-Fi 时也使用移动数据备份",
-  "photoBackupAllowMobileDataHint": "勾选后在移动网络下也会消耗流量上传",
-  "photoBackupScopeSelectedCount": "已选 {count} 个相册",
-  "@photoBackupScopeSelectedCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "photoBackupScopeOptionAll": "全部相册",
-  "photoBackupScopeOptionSelected": "自选相册",
-  "photoBackupConfirmEnable": "开启",
-  "photoBackupAlbumPickerTitle": "选择要备份的相册",
-  "photoBackupAlbumPickerEmpty": "未获取到相册，请检查相册访问权限",
-  "photoBackupNeedSelectAlbum": "请至少选择一个相册",
-  "photoBackupScopeSummaryAll": "当前范围：全部相册",
-  "photoBackupScopeSummarySelected": "当前范围：已选 {count} 个相册",
-  "@photoBackupScopeSummarySelected": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "profileManageBackdrop": "管理背景",
   "profileUsername": "用户名",
   "profileEmail": "邮箱",
@@ -1394,7 +1362,6 @@
   "adminConfigClearCredentialConfirm": "清除后相关集成功能将无法使用，确定继续吗？",
   "adminConfigCredentialClearedReason": "管理员清除集成凭据",
   "adminConfigMediaAutoImport": "自动导入已发现的媒体",
-  "adminConfigPhotoBackup": "照片自动备份",
   "adminConfigDefaultQuota": "新用户默认配额",
   "adminConfigQuotaWarning": "配额预警阈值",
   "adminConfigSharedSpace": "共享空间",
@@ -1492,7 +1459,6 @@
   "adminConfigAppVersionDownloadUrl": "安装包下载地址",
   "adminConfigAppVersionDownloadUrlDescription": "客户端安装包下载页面的链接。",
   "adminConfigMediaAutoImportDescription": "启用后可按媒体模块规则自动接收已发现的影片。",
-  "adminConfigPhotoBackupDescription": "控制新照片是否进入自动备份流程。",
   "adminConfigDefaultQuotaDescription": "创建新用户时采用的默认存储容量，单位为 GB。",
   "adminConfigQuotaWarningDescription": "达到该使用比例时向用户显示容量预警。",
   "adminConfigSharedSpaceDescription": "控制所有用户是否可以使用共享空间。",
@@ -3616,10 +3582,6 @@
   "taskNotifyTitleFailed": "任务失败",
   "profileTaskSystemNotifications": "系统通知",
   "profileTaskSystemNotificationsHint": "任务完成或失败时发送系统通知",
-  "batteryOptimizationTitle": "允许后台运行",
-  "batteryOptimizationHint": "将本应用加入电池优化白名单，避免后台备份被系统拦截",
-  "batteryOptimizationGranted": "已允许后台运行",
-  "batteryOptimizationAllow": "去允许",
   "settingsCheckUpdate": "检查更新",
   "settingsCheckUpdateFailed": "检查更新失败：{error}",
   "settingsAlreadyLatest": "已是最新版本",
@@ -3752,30 +3714,6 @@
   "musicCandidateFetchFailed": "候选获取失败",
   "musicNoCandidates": "没有找到候选",
   "musicNoCandidatesHint": "可以先完善本地标题、歌手或专辑，再重新尝试。",
-  "backupSkipNonWifi": "非 WiFi 网络，跳过备份",
-  "backupSkipNoPermission": "未获得相册访问权限",
-  "backupSkipNoAlbums": "无相册",
-  "backupSkipNoPhotos": "无照片",
-  "backupNotificationChannel": "照片备份",
-  "backupNotificationChannelDesc": "照片自动备份进度",
-  "backupNotificationTitle": "照片备份中",
-  "backupNotificationProgress": "已处理 {current}/{total}，已上传 {uploaded} 张",
-  "@backupNotificationProgress": {
-    "placeholders": {
-      "current": {},
-      "total": {},
-      "uploaded": {}
-    }
-  },
-  "backupNotificationComplete": "照片备份完成",
-  "backupNotificationSummary": "上传 {uploaded} 张，跳过 {skipped} 张，失败 {failed} 张",
-  "@backupNotificationSummary": {
-    "placeholders": {
-      "uploaded": {},
-      "skipped": {},
-      "failed": {}
-    }
-  },
   "photoRegenerateThumbnails": "重建缩略图",
   "photoRegenerateQueued": "缩略图重建任务已创建，可在任务中心查看进度",
   "photosActionFailed": "操作失败，请稍后重试",

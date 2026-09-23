@@ -786,19 +786,6 @@ public interface PhotoItemRepository extends JpaRepository<PhotoItem, UUID> {
             @Param("ownerUserId") UUID ownerUserId,
             @Param("limit") int limit);
 
-    /**
-     * 查询用户照片中 providerMetadata.contentHash 匹配指定哈希值的照片，
-     * 返回已存在的 contentHash 列表。
-     */
-    @Query(value = "SELECT DISTINCT (p.provider_metadata->>'contentHash')::text FROM omni.photo_items p "
-            + "WHERE p.owner_user_id = :ownerUserId "
-            + "AND p.provider_metadata->>'contentHash' IS NOT NULL "
-            + "AND (p.provider_metadata->>'contentHash')::text IN (:hashes)",
-            nativeQuery = true)
-    List<String> findExistingContentHashes(
-            @Param("ownerUserId") UUID ownerUserId,
-            @Param("hashes") List<String> hashes);
-
     // ─── 回收站 ───
 
     /**

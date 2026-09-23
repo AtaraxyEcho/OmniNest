@@ -13,9 +13,6 @@ import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
-import 'package:omninest/features/photos/application/photo_backup_preferences.dart';
-import 'package:omninest/features/photos/presentation/widgets/battery_optimization_card.dart';
-import 'package:omninest/features/photos/presentation/widgets/photo_backup_enable_flow.dart';
 import 'package:omninest/features/profile/presentation/widgets/change_password_dialog.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_server_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
@@ -185,68 +182,6 @@ class ProfileMobileContent extends ConsumerWidget {
               ],
             ),
           ],
-          const SizedBox(height: MobileLayoutTokens.sectionGap),
-          MobileSettingsGroup(
-            title: l10n.profileSectionBackup,
-            children: [
-              Consumer(
-                builder: (context, tileRef, _) {
-                  final settings =
-                      tileRef
-                          .watch(photoBackupPreferencesControllerProvider)
-                          .asData
-                          ?.value;
-                  final isAllScope =
-                      settings == null ||
-                      settings.scope == PhotoBackupScope.all;
-                  // 副标题受 tile maxLines 截断，范围改走 trailing 短标签。
-                  final subtitleText =
-                      isAllScope
-                          ? l10n.photoBackupBackgroundSubtitle
-                          : l10n.photoBackupBackgroundSubtitleScoped;
-                  final scopeChip =
-                      isAllScope
-                          ? l10n.photoBackupScopeOptionAll
-                          : l10n.photoBackupScopeSelectedCount(
-                            settings.selectedAlbumIds.length,
-                          );
-                  return MobileSettingsTile(
-                    icon: Icons.cloud_sync_outlined,
-                    title: l10n.photoBackupBackgroundTitle,
-                    subtitle: subtitleText,
-                    trailing: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          scopeChip,
-                          style: TextStyle(
-                            color: context.mobileColors.textSecondary,
-                            fontSize: AppTypography.labelSmall,
-                          ),
-                        ),
-                        Switch(
-                          value: settings?.enabled ?? false,
-                          onChanged:
-                              isAndroidPlatform
-                                  ? (value) => showPhotoBackupEnableFlow(
-                                    context,
-                                    tileRef,
-                                    enable: value,
-                                  )
-                                  : null,
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 12),
-                child: BatteryOptimizationCard(),
-              ),
-            ],
-          ),
           // Admin 仅桌面端开放；移动端个人中心不提供管理台入口。
           const SizedBox(height: MobileLayoutTokens.sectionGap),
           MobileSettingsGroup(

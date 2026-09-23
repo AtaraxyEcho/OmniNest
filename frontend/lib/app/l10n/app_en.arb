@@ -215,39 +215,7 @@
   "profileSectionAppearance": "Appearance & language",
   "profileSectionNotifications": "Notifications",
   "profileSectionSecurity": "Security & devices",
-  "profileSectionBackup": "Backup",
   "profileSectionAbout": "About",
-  "photoBackupBackgroundTitle": "Auto-upload device photos",
-  "photoBackupBackgroundSubtitle": "Automatically uploads all photos in your device gallery to your OmniNest server (Android only)",
-  "photoBackupConfirmTitle": "Enable auto backup?",
-  "photoBackupConfirmBody": "Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only).",
-  "photoBackupConfirmBodyScoped": "Only photos in the albums checked below will be uploaded to your OmniNest server (Android only).",
-  "photoBackupBackgroundSubtitleScoped": "Automatically uploads photos in the selected scope to your OmniNest server (Android only)",
-  "photoBackupAllowMobileData": "Also back up over mobile data when no Wi-Fi",
-  "photoBackupAllowMobileDataHint": "Unchecking means Wi-Fi only",
-  "photoBackupScopeSelectedCount": "{count} albums selected",
-  "@photoBackupScopeSelectedCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
-  "photoBackupScopeOptionAll": "All albums",
-  "photoBackupScopeOptionSelected": "Selected albums",
-  "photoBackupConfirmEnable": "Enable",
-  "photoBackupAlbumPickerTitle": "Choose albums to back up",
-  "photoBackupAlbumPickerEmpty": "No albums found. Check photo access permission.",
-  "photoBackupNeedSelectAlbum": "Select at least one album",
-  "photoBackupScopeSummaryAll": "Scope: all albums",
-  "photoBackupScopeSummarySelected": "Scope: {count} albums selected",
-  "@photoBackupScopeSummarySelected": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
   "profileManageBackdrop": "Manage background",
   "profileUsername": "Username",
   "profileEmail": "Email",
@@ -1520,7 +1488,6 @@
   "adminConfigClearCredentialConfirm": "The related integration will stop working after this credential is cleared. Continue?",
   "adminConfigCredentialClearedReason": "Integration credential cleared by administrator",
   "adminConfigMediaAutoImport": "Automatically import discovered media",
-  "adminConfigPhotoBackup": "Automatic photo backup",
   "adminConfigDefaultQuota": "Default quota for new users",
   "adminConfigQuotaWarning": "Quota warning threshold",
   "adminConfigSharedSpace": "Shared space",
@@ -1618,7 +1585,6 @@
   "adminConfigAppVersionDownloadUrl": "Installer download URL",
   "adminConfigAppVersionDownloadUrlDescription": "Link to the client installer download page.",
   "adminConfigMediaAutoImportDescription": "Allows discovered titles to enter the media import flow according to Media rules.",
-  "adminConfigPhotoBackupDescription": "Controls whether new photos enter the automatic backup flow.",
   "adminConfigDefaultQuotaDescription": "Storage assigned to newly created users, in GB.",
   "adminConfigQuotaWarningDescription": "Shows a capacity warning when usage reaches this percentage.",
   "adminConfigSharedSpaceDescription": "Controls whether users can access the shared space.",
@@ -3742,10 +3708,6 @@
   "taskNotifyTitleFailed": "Task Failed",
   "profileTaskSystemNotifications": "System Notifications",
   "profileTaskSystemNotificationsHint": "Send a system notification when tasks complete or fail",
-  "batteryOptimizationTitle": "Allow background running",
-  "batteryOptimizationHint": "Exclude the app from battery optimization so background backups are not blocked",
-  "batteryOptimizationGranted": "Background running allowed",
-  "batteryOptimizationAllow": "Allow",
   "settingsCheckUpdate": "Check for Updates",
   "settingsCheckUpdateFailed": "Check for updates failed: {error}",
   "settingsAlreadyLatest": "You are on the latest version",
@@ -3878,30 +3840,6 @@
   "musicCandidateFetchFailed": "Failed to fetch candidates",
   "musicNoCandidates": "No candidates found",
   "musicNoCandidatesHint": "Try improving the local title, artist or album, then retry.",
-  "backupSkipNonWifi": "Not on WiFi, skipping backup",
-  "backupSkipNoPermission": "Photo library access not granted",
-  "backupSkipNoAlbums": "No albums",
-  "backupSkipNoPhotos": "No photos",
-  "backupNotificationChannel": "Photo Backup",
-  "backupNotificationChannelDesc": "Photo auto-backup progress",
-  "backupNotificationTitle": "Photo Backup In Progress",
-  "backupNotificationProgress": "Processed {current}/{total}, {uploaded} uploaded",
-  "@backupNotificationProgress": {
-    "placeholders": {
-      "current": {},
-      "total": {},
-      "uploaded": {}
-    }
-  },
-  "backupNotificationComplete": "Photo Backup Complete",
-  "backupNotificationSummary": "{uploaded} uploaded, {skipped} skipped, {failed} failed",
-  "@backupNotificationSummary": {
-    "placeholders": {
-      "uploaded": {},
-      "skipped": {},
-      "failed": {}
-    }
-  },
   "photoRegenerateThumbnails": "Regenerate Thumbnails",
   "photoRegenerateQueued": "Thumbnail rebuild queued. Track progress in the task center.",
   "photosActionFailed": "Action failed. Try again later.",

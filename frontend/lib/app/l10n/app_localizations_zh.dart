@@ -551,69 +551,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileSectionSecurity => '安全与设备';
 
   @override
-  String get profileSectionBackup => '备份';
-
-  @override
   String get profileSectionAbout => '关于';
-
-  @override
-  String get photoBackupBackgroundTitle => '自动备份本机相册';
-
-  @override
-  String get photoBackupBackgroundSubtitle =>
-      '开启后将本机相册的全部照片自动上传到你的 OmniNest 服务器（仅 Android）';
-
-  @override
-  String get photoBackupConfirmTitle => '开启自动备份？';
-
-  @override
-  String get photoBackupConfirmBody =>
-      '将按所选范围自动上传照片到你的 OmniNest 服务器（仅 Android）。';
-
-  @override
-  String get photoBackupConfirmBodyScoped =>
-      '仅上传下方勾选相册中的照片到你的 OmniNest 服务器（仅 Android）。';
-
-  @override
-  String get photoBackupBackgroundSubtitleScoped =>
-      '开启后将自动上传所选范围的照片到你的 OmniNest 服务器（仅 Android）';
-
-  @override
-  String get photoBackupAllowMobileData => '无 Wi-Fi 时也使用移动数据备份';
-
-  @override
-  String get photoBackupAllowMobileDataHint => '勾选后在移动网络下也会消耗流量上传';
-
-  @override
-  String photoBackupScopeSelectedCount(int count) {
-    return '已选 $count 个相册';
-  }
-
-  @override
-  String get photoBackupScopeOptionAll => '全部相册';
-
-  @override
-  String get photoBackupScopeOptionSelected => '自选相册';
-
-  @override
-  String get photoBackupConfirmEnable => '开启';
-
-  @override
-  String get photoBackupAlbumPickerTitle => '选择要备份的相册';
-
-  @override
-  String get photoBackupAlbumPickerEmpty => '未获取到相册，请检查相册访问权限';
-
-  @override
-  String get photoBackupNeedSelectAlbum => '请至少选择一个相册';
-
-  @override
-  String get photoBackupScopeSummaryAll => '当前范围：全部相册';
-
-  @override
-  String photoBackupScopeSummarySelected(int count) {
-    return '当前范围：已选 $count 个相册';
-  }
 
   @override
   String get profileManageBackdrop => '管理背景';
@@ -3430,9 +3368,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminConfigMediaAutoImport => '自动导入已发现的媒体';
 
   @override
-  String get adminConfigPhotoBackup => '照片自动备份';
-
-  @override
   String get adminConfigDefaultQuota => '新用户默认配额';
 
   @override
@@ -3735,9 +3670,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminConfigMediaAutoImportDescription => '启用后可按媒体模块规则自动接收已发现的影片。';
-
-  @override
-  String get adminConfigPhotoBackupDescription => '控制新照片是否进入自动备份流程。';
 
   @override
   String get adminConfigDefaultQuotaDescription => '创建新用户时采用的默认存储容量，单位为 GB。';
@@ -8260,18 +8192,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profileTaskSystemNotificationsHint => '任务完成或失败时发送系统通知';
 
   @override
-  String get batteryOptimizationTitle => '允许后台运行';
-
-  @override
-  String get batteryOptimizationHint => '将本应用加入电池优化白名单，避免后台备份被系统拦截';
-
-  @override
-  String get batteryOptimizationGranted => '已允许后台运行';
-
-  @override
-  String get batteryOptimizationAllow => '去允许';
-
-  @override
   String get settingsCheckUpdate => '检查更新';
 
   @override
@@ -8627,48 +8547,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicNoCandidatesHint => '可以先完善本地标题、歌手或专辑，再重新尝试。';
-
-  @override
-  String get backupSkipNonWifi => '非 WiFi 网络，跳过备份';
-
-  @override
-  String get backupSkipNoPermission => '未获得相册访问权限';
-
-  @override
-  String get backupSkipNoAlbums => '无相册';
-
-  @override
-  String get backupSkipNoPhotos => '无照片';
-
-  @override
-  String get backupNotificationChannel => '照片备份';
-
-  @override
-  String get backupNotificationChannelDesc => '照片自动备份进度';
-
-  @override
-  String get backupNotificationTitle => '照片备份中';
-
-  @override
-  String backupNotificationProgress(
-    Object current,
-    Object total,
-    Object uploaded,
-  ) {
-    return '已处理 $current/$total，已上传 $uploaded 张';
-  }
-
-  @override
-  String get backupNotificationComplete => '照片备份完成';
-
-  @override
-  String backupNotificationSummary(
-    Object uploaded,
-    Object skipped,
-    Object failed,
-  ) {
-    return '上传 $uploaded 张，跳过 $skipped 张，失败 $failed 张';
-  }
 
   @override
   String get photoRegenerateThumbnails => '重建缩略图';

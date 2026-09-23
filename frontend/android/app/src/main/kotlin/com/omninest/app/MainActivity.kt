@@ -1,12 +1,8 @@
 package com.omninest.app
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import android.app.PictureInPictureParams
 import android.content.res.Configuration
 import android.os.Build
-import android.os.PowerManager
 import android.util.Rational
 import android.view.KeyEvent
 import com.ryanheise.audioservice.AudioServiceActivity
@@ -40,26 +36,6 @@ class MainActivity : AudioServiceActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             "omninest/pip"
         )
-        MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            "omninest/battery"
-        ).setMethodCallHandler { call, result ->
-            when (call.method) {
-                "isIgnoringBatteryOptimizations" -> {
-                    val powerManager = getSystemService(Context.POWER_SERVICE) as? PowerManager
-                    result.success(powerManager?.isIgnoringBatteryOptimizations(packageName) == true)
-                }
-                "requestIgnoreBatteryOptimizations" -> {
-                    val intent = Intent(
-                        android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
-                        Uri.parse("package:$packageName")
-                    )
-                    startActivity(intent)
-                    result.success(true)
-                }
-                else -> result.notImplemented()
-            }
-        }
         // 阅读器音量键翻页：开启后拦截音量键并转发方向，关闭后恢复系统音量。
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,

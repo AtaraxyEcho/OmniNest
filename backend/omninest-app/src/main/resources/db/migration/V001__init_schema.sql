@@ -1810,17 +1810,6 @@ CREATE TABLE "omni"."photo_albums" (
 )
 ;
 
-CREATE TABLE "omni"."photo_backup_status" (
-  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
-  "owner_user_id" uuid NOT NULL,
-  "device_id" varchar(200) NOT NULL,
-  "last_backup_at" timestamptz(6),
-  "last_photo_count" int4 NOT NULL DEFAULT 0,
-  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "updated_at" timestamptz(6) NOT NULL DEFAULT now()
-)
-;
-
 CREATE TABLE "omni"."photo_batch_tasks" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "owner_user_id" uuid NOT NULL,
@@ -3344,16 +3333,6 @@ ALTER TABLE "omni"."photo_albums" ADD CONSTRAINT "photo_albums_photo_count_check
 
 ALTER TABLE "omni"."photo_albums" ADD CONSTRAINT "photo_albums_pkey" PRIMARY KEY ("id");
 
-CREATE INDEX "idx_photo_backup_status_owner" ON "omni"."photo_backup_status" USING btree (
-  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST
-);
-CREATE UNIQUE INDEX "idx_photo_backup_status_owner_device" ON "omni"."photo_backup_status" USING btree (
-  "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
-  "device_id" "pg_catalog"."text_ops" ASC NULLS LAST
-);
-
-ALTER TABLE "omni"."photo_backup_status" ADD CONSTRAINT "photo_backup_status_pkey" PRIMARY KEY ("id");
-
 CREATE INDEX "idx_photo_batch_tasks_owner" ON "omni"."photo_batch_tasks" USING btree (
   "owner_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,
   "created_at" "pg_catalog"."timestamptz_ops" DESC NULLS FIRST
@@ -3924,15 +3903,6 @@ COMMENT ON COLUMN "omni"."photo_albums"."photo_count" IS '相册当前照片数�
 COMMENT ON COLUMN "omni"."photo_albums"."created_at" IS '创建时间';
 COMMENT ON COLUMN "omni"."photo_albums"."updated_at" IS '更新时间';
 COMMENT ON COLUMN "omni"."photo_albums"."version" IS '乐观锁版本号';
-
-COMMENT ON TABLE "omni"."photo_backup_status" IS '照片设备备份状态表，记录设备最近一次备份水位';
-COMMENT ON COLUMN "omni"."photo_backup_status"."id" IS '设备备份状态唯一标识，主键';
-COMMENT ON COLUMN "omni"."photo_backup_status"."owner_user_id" IS '所属用户ID，关联auth_users';
-COMMENT ON COLUMN "omni"."photo_backup_status"."device_id" IS '来源设备稳定标识';
-COMMENT ON COLUMN "omni"."photo_backup_status"."last_backup_at" IS '最近一次备份完成时间';
-COMMENT ON COLUMN "omni"."photo_backup_status"."last_photo_count" IS '最近一次备份后的照片数量';
-COMMENT ON COLUMN "omni"."photo_backup_status"."created_at" IS '创建时间';
-COMMENT ON COLUMN "omni"."photo_backup_status"."updated_at" IS '更新时间';
 
 COMMENT ON TABLE "omni"."photo_batch_tasks" IS '照片批量处理任务表，记录批量操作进度与结果';
 COMMENT ON COLUMN "omni"."photo_batch_tasks"."id" IS '照片批量任务唯一标识，主键';

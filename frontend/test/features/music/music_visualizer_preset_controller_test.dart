@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,6 +14,19 @@ import 'package:omninest/core/preferences/user_preferences_api.dart';
 import 'package:omninest/features/music/application/music_visualizer_preset_controller.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// 与 Notifier 私有一致的冷启动首帧缓存键；测试按同一键预置与校验。
+const _localCacheKey = 'music_player_visual_v1_cache';
+
+Map<String, dynamic> _visualJson({required bool playerEnabled}) {
+  return PortalMusicVisualizerPreferences(
+    visual: PortalMusicVisualizerSettings.defaults.copyWith(
+      player: PortalGlassPlayerSettings.defaults.copyWith(
+        enabled: playerEnabled,
+      ),
+    ),
+  ).toJson();
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +50,7 @@ void main() {
     final container = ProviderContainer.test(
       overrides: [
         userPreferencesApiProvider.overrideWithValue(api),
-        authSessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
+        authSessionProvider.overrideWith(_SessionNotifier.new),
       ],
     );
     addTearDown(container.dispose);
@@ -73,7 +87,7 @@ void main() {
     final container = ProviderContainer.test(
       overrides: [
         userPreferencesApiProvider.overrideWithValue(api),
-        authSessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
+        authSessionProvider.overrideWith(_SessionNotifier.new),
       ],
     );
     addTearDown(container.dispose);
@@ -108,7 +122,7 @@ void main() {
     final container = ProviderContainer.test(
       overrides: [
         userPreferencesApiProvider.overrideWithValue(api),
-        authSessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
+        authSessionProvider.overrideWith(_SessionNotifier.new),
       ],
     );
     addTearDown(container.dispose);
@@ -125,12 +139,143 @@ void main() {
     expect(restored.visual.player.enabled, isTrue);
   });
 
+  test('冷启动命中首帧缓存时先出用户档位，远端同版本不再重发', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      _localCacheKey: jsonEncode(<String, Object?>{
+        'userId': 'user-1',
+        'version': 3,
+        'preferences': _visualJson(playerEnabled: false),
+      }),
+    });
+    final api =
+        _FakeUserPreferencesApi()
+          ..values[musicVisualizerPreferenceScope] = _visualJson(
+            playerEnabled: false,
+          )
+          ..versions[musicVisualizerPreferenceScope] = 3
+          ..loadGate = Completer<void>();
+    final container = ProviderContainer.test(
+      overrides: [
+        userPreferencesApiProvider.overrideWithValue(api),
+        authSessionProvider.overrideWith(_SessionNotifier.new),
+      ],
+    );
+    addTearDown(container.dispose);
+    final published = <bool>[];
+    final subscription = container.listen(musicVisualizerPreferencesProvider, (
+      previous,
+      next,
+    ) {
+      final value = next.asData?.value;
+      if (value != null) {
+        published.add(value.visual.player.enabled);
+      }
+    });
+    addTearDown(subscription.close);
+
+    await pumpEventQueue();
+    // 远端仍挂起时首帧已是用户档位，而不是等待回包后再从默认布局重排。
+    expect(published, <bool>[false]);
+
+    api.loadGate!.complete();
+    await container.read(musicVisualizerPreferencesProvider.future);
+    await pumpEventQueue();
+    // 远端版本与缓存一致：复用已发布实例，不产生第二次等价重排。
+    expect(published, <bool>[false]);
+  });
+
+  test('远端确认后回写首帧缓存供下次冷启动使用', () async {
+    final api =
+        _FakeUserPreferencesApi()
+          ..values[musicVisualizerPreferenceScope] = _visualJson(
+            playerEnabled: false,
+          )
+          ..versions[musicVisualizerPreferenceScope] = 4;
+    final container = ProviderContainer.test(
+      overrides: [
+        userPreferencesApiProvider.overrideWithValue(api),
+        authSessionProvider.overrideWith(_SessionNotifier.new),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(musicVisualizerPreferencesProvider.future);
+
+    final store = await SharedPreferences.getInstance();
+    final raw = store.getString(_localCacheKey);
+    expect(raw, isNotNull);
+    final decoded = jsonDecode(raw!) as Map<String, dynamic>;
+    expect(decoded['userId'], 'user-1');
+    expect(decoded['version'], 4);
+    expect(
+      PortalMusicVisualizerPreferences.fromJson(
+        Map<String, dynamic>.from(decoded['preferences'] as Map),
+      ).visual.player.enabled,
+      isFalse,
+    );
+  });
+
+  test('首帧缓存属于其他账号时作废，改用当前账号的远端档位', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      _localCacheKey: jsonEncode(<String, Object?>{
+        'userId': 'user-1',
+        'version': 3,
+        'preferences': _visualJson(playerEnabled: false),
+      }),
+    });
+    // 版本号与上一账号完全相同：不作废缓存就会被版本短路留成串档结果。
+    final api =
+        _FakeUserPreferencesApi()
+          ..values[musicVisualizerPreferenceScope] = _visualJson(
+            playerEnabled: true,
+          )
+          ..versions[musicVisualizerPreferenceScope] = 3;
+    final container = ProviderContainer.test(
+      overrides: [
+        userPreferencesApiProvider.overrideWithValue(api),
+        authSessionProvider.overrideWith(() => _SessionNotifier('user-2')),
+      ],
+    );
+    addTearDown(container.dispose);
+    final published = <bool>[];
+    final subscription = container.listen(musicVisualizerPreferencesProvider, (
+      previous,
+      next,
+    ) {
+      final value = next.asData?.value;
+      if (value != null) {
+        published.add(value.visual.player.enabled);
+      }
+    });
+    addTearDown(subscription.close);
+
+    await container.read(musicVisualizerPreferencesProvider.future);
+    await pumpEventQueue();
+
+    // 上一账号的缓存先出图，当前账号的远端档位随后接管；同版本号不得短路掉这一步。
+    expect(published, <bool>[false, true]);
+    expect(
+      container
+          .read(musicVisualizerPreferencesProvider)
+          .value!
+          .visual
+          .player
+          .enabled,
+      isTrue,
+    );
+
+    final store = await SharedPreferences.getInstance();
+    final decoded =
+        jsonDecode(store.getString(_localCacheKey)!) as Map<String, dynamic>;
+    expect(decoded['userId'], 'user-2');
+  });
+
   test('保存视觉设置同步到本地和远端', () async {
     final api = _FakeUserPreferencesApi();
     final container = ProviderContainer.test(
       overrides: [
         userPreferencesApiProvider.overrideWithValue(api),
-        authSessionProvider.overrideWith(_AuthenticatedSessionNotifier.new),
+        authSessionProvider.overrideWith(_SessionNotifier.new),
       ],
     );
     addTearDown(container.dispose);
@@ -287,11 +432,15 @@ void main() {
   });
 }
 
-class _AuthenticatedSessionNotifier extends AuthSessionNotifier {
+class _SessionNotifier extends AuthSessionNotifier {
+  _SessionNotifier([this.userId = 'user-1']);
+
+  final String userId;
+
   @override
   Future<AuthSessionState> build() async {
     return AuthSessionState(
-      user: UserProfile(id: 'user-1', username: 'tester', role: 'MEMBER'),
+      user: UserProfile(id: userId, username: 'tester', role: 'MEMBER'),
     );
   }
 }
@@ -315,8 +464,12 @@ class _FakeUserPreferencesApi extends UserPreferencesApi {
   final List<String> deletedScopes = <String>[];
   bool failNextDelete = false;
 
+  /// 非空时远端读取挂起到该信号完成，用于断言首帧早于回包。
+  Completer<void>? loadGate;
+
   @override
   Future<PreferenceSnapshot> getSnapshot(String scope) async {
+    await loadGate?.future;
     return PreferenceSnapshot(
       scope: scope,
       preferences: values[scope] ?? const <String, dynamic>{},

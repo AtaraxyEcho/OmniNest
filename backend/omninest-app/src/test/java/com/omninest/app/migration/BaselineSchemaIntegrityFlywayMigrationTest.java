@@ -161,12 +161,12 @@ class BaselineSchemaIntegrityFlywayMigrationTest {
     }
 
     @Test
-    void baselineExcludesRemovedRemoteBackupTable() throws SQLException {
+    void baselineExcludesRemovedLegacyTables() throws SQLException {
         Assertions.assertThat(countObjects("""
                 SELECT count(*)
                 FROM information_schema.tables
                 WHERE table_schema = 'omni'
-                  AND table_name = 'backup_jobs'
+                  AND table_name IN ('backup_jobs', 'photo_backup_status')
                 """)).isZero();
     }
 

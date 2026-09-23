@@ -377,22 +377,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.7.1"
-  device_info_plus:
-    dependency: "direct main"
-    description:
-      name: device_info_plus
-      sha256: "98f28b42168cc509abc92f88518882fd58061ea372d7999aecc424345c7bff6a"
-      url: "https://pub.dev"
-    source: hosted
-    version: "11.5.0"
-  device_info_plus_platform_interface:
-    dependency: transitive
-    description:
-      name: device_info_plus_platform_interface
-      sha256: e1ea89119e34903dca74b883d0dd78eb762814f97fb6c76f35e9ff74d261a18f
-      url: "https://pub.dev"
-    source: hosted
-    version: "7.0.3"
   dio:
     dependency: "direct main"
     description:
@@ -1332,14 +1316,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "7.0.2"
-  photo_manager:
-    dependency: "direct main"
-    description:
-      name: photo_manager
-      sha256: fb3bc8ea653370f88742b3baa304700107c83d12748aa58b2b9f2ed3ef15e6c2
-      url: "https://pub.dev"
-    source: hosted
-    version: "3.9.0"
   platform:
     dependency: transitive
     description:
@@ -2017,14 +1993,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "5.15.0"
-  win32_registry:
-    dependency: transitive
-    description:
-      name: win32_registry
-      sha256: "6f1b564492d0147b330dd794fee8f512cec4977957f310f9951b5f9d83618dae"
-      url: "https://pub.dev"
-    source: hosted
-    version: "2.1.0"
   window_manager:
     dependency: "direct main"
     description:
@@ -2033,14 +2001,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.4.3"
-  workmanager:
-    dependency: "direct main"
-    description:
-      name: workmanager
-      sha256: f3c3ce6d79cce53eee4a29dd2e8328c25db5ba5d9062fcc5e8f3c71e0af9b7e4
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.6.0"
   xdg_directories:
     dependency: transitive
     description:

@@ -10,7 +10,6 @@ import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/services/app_image_cache_policy.dart';
 import 'package:omninest/core/window/window_geometry_service.dart';
-import 'package:omninest/features/photos/application/photo_backup_preferences.dart';
 import 'package:omninest/platform/desktop/desktop_shell_bootstrap.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -76,8 +75,6 @@ Future<AppBootstrapData> _loadBootstrapData() async {
 
   try {
     final preferences = await SharedPreferences.getInstance();
-    // Android 照片后台备份：按用户偏好恢复 WorkManager 周期任务（Web 为空实现）。
-    unawaited(restorePhotoBackupSchedulingFromPreferences());
     return AppBootstrapData(
       themeModeName:
           preferences.getString(appearanceDeviceModeKey) ??

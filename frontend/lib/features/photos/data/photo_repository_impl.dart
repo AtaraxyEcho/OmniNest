@@ -303,16 +303,4 @@ class PhotoRepositoryImpl implements PhotoRepository {
 
   @override
   Future<String> reanalyzeLibrary() => _api.reanalyzeLibrary();
-
-  @override
-  Future<Map<String, dynamic>> getBackupStatus(String deviceId) =>
-      _api.getBackupStatus(deviceId);
-
-  @override
-  Future<void> reportBackup(String deviceId, int photoCount) =>
-      _api.reportBackup(deviceId, photoCount);
-
-  @override
-  Future<List<String>> checkDuplicate(List<String> contentHashes) =>
-      _api.checkDuplicate(contentHashes);
 }

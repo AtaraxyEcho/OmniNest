@@ -13,9 +13,6 @@ import com.omninest.modules.photos.dto.GroupBy;
 import com.omninest.modules.photos.dto.PhotoDtos.AddPhotosToAlbumRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoRelationsDto;
 import com.omninest.modules.photos.dto.PhotoDtos.AddTagRequest;
-import com.omninest.modules.photos.dto.PhotoDtos.BackupReportRequest;
-import com.omninest.modules.photos.dto.PhotoDtos.BackupStatusRequest;
-import com.omninest.modules.photos.dto.PhotoDtos.CheckDuplicateRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.CreateAlbumRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.CreateAlbumShareRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.CreateBatchTaskRequest;
@@ -25,7 +22,6 @@ import com.omninest.modules.photos.dto.PhotoDtos.NameClusterRequest;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDetailDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAlbumDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoAiTaskDto;
-import com.omninest.modules.photos.dto.PhotoDtos.PhotoBackupStatusDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoBatchDownloadTicketDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoBatchTaskDto;
 import com.omninest.modules.photos.dto.PhotoDtos.PhotoDashboardDto;
@@ -44,7 +40,6 @@ import com.omninest.modules.photos.service.PhotoAdminService;
 import com.omninest.modules.photos.service.PhotoAiService;
 import com.omninest.modules.photos.service.PhotoAiTaskService;
 import com.omninest.modules.photos.service.PhotoAlbumService;
-import com.omninest.modules.photos.service.PhotoBackupService;
 import com.omninest.modules.photos.service.PhotoBatchService;
 import com.omninest.modules.photos.service.PhotoEditService;
 import com.omninest.modules.photos.service.PhotoMotionRescanService;
@@ -89,7 +84,6 @@ public class PhotoLibraryController {
     private final PhotoBatchService batchService;
     private final PhotoEditService editService;
     private final GeoDatasetService geoDatasetService;
-    private final PhotoBackupService backupService;
     private final PhotoAiService photoAiService;
     private final PhotoAiTaskService photoAiTaskService;
     private final PhotosRuntimeConfigService photosRuntimeConfigService;
@@ -847,48 +841,6 @@ public class PhotoLibraryController {
         requireAiEnabled();
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(photoAiTaskService.queueLibraryReanalysis(userId));
-    }
-
-    // ─── 备份状态 ───
-
-    @Operation(summary = "查询备份状态", description = "查询指定设备的照片备份状态")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
-    @PostMapping("/api/v1/photos/backup/status")
-    ApiResponse<PhotoBackupStatusDto> backupStatus(@Valid @RequestBody BackupStatusRequest body) {
-        if (!photosRuntimeConfigService.isBackupEnabled()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "照片备份功能未启用");
-        }
-        UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(backupService.getBackupStatus(userId, body.deviceId()));
-    }
-
-    @Operation(summary = "上报备份进度", description = "客户端上报照片备份进度信息")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
-    @PostMapping("/api/v1/photos/backup/report")
-    ApiResponse<Void> reportBackup(@Valid @RequestBody BackupReportRequest body) {
-        if (!photosRuntimeConfigService.isBackupEnabled()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "照片备份功能未启用");
-        }
-        UUID userId = currentUserContext.requireCurrentUserId();
-        backupService.reportBackup(userId, body.deviceId(), body.photoCount());
-        return ApiResponse.success();
-    }
-
-    @Operation(summary = "检查重复照片", description = "通过内容哈希检查照片是否已备份")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
-    @PostMapping("/api/v1/photos/backup/check-duplicate")
-    ApiResponse<List<String>> checkDuplicate(@Valid @RequestBody CheckDuplicateRequest body) {
-        if (!photosRuntimeConfigService.isBackupEnabled()) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "照片备份功能未启用");
-        }
-        if (body.contentHashes() == null || body.contentHashes().isEmpty()) {
-            return ApiResponse.success(List.of());
-        }
-        if (body.contentHashes().size() > 1000) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "单次查询不能超过 1000 个哈希值");
-        }
-        UUID userId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(backupService.checkDuplicate(userId, body.contentHashes()));
     }
 
     /**

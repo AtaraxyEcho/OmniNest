@@ -29,7 +29,6 @@ INSERT INTO omni.config_entries (
     ('app.version.download-url', '', 'STRING', 'general', 'HOT', '安装包下载页地址', false),
     ('media.import.enabled', 'true', 'BOOLEAN', 'media', 'HOT', '是否启用媒体自动导入', false),
     ('reader.import.enabled', 'true', 'BOOLEAN', 'reader', 'HOT', '是否启用阅读内容自动导入', false),
-    ('photo.backup', 'true', 'BOOLEAN', 'photo', 'HOT', '是否启用照片自动备份', false),
     ('photo.geo.rate', '1', 'NUMBER', 'photo', 'HOT', '地理编码每秒请求上限', false),
     ('photo.geo.offline', 'true', 'BOOLEAN', 'photo', 'HOT', '是否启用 GeoNames 离线逆地理编码', false),
     ('photo.geo.nominatim', 'false', 'BOOLEAN', 'photo', 'HOT', '离线未命中时是否回退 Nominatim 在线服务', false),

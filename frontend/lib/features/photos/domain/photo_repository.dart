@@ -243,15 +243,4 @@ abstract interface class PhotoRepository {
 
   /// 提交照片库存量 AI 重分析任务
   Future<String> reanalyzeLibrary();
-
-  // -- 备份状态 --
-
-  /// 获取备份状态
-  Future<Map<String, dynamic>> getBackupStatus(String deviceId);
-
-  /// 上报备份进度
-  Future<void> reportBackup(String deviceId, int photoCount);
-
-  /// 检查重复文件
-  Future<List<String>> checkDuplicate(List<String> contentHashes);
 }

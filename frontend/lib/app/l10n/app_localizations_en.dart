@@ -572,71 +572,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profileSectionSecurity => 'Security & devices';
 
   @override
-  String get profileSectionBackup => 'Backup';
-
-  @override
   String get profileSectionAbout => 'About';
-
-  @override
-  String get photoBackupBackgroundTitle => 'Auto-upload device photos';
-
-  @override
-  String get photoBackupBackgroundSubtitle =>
-      'Automatically uploads all photos in your device gallery to your OmniNest server (Android only)';
-
-  @override
-  String get photoBackupConfirmTitle => 'Enable auto backup?';
-
-  @override
-  String get photoBackupConfirmBody =>
-      'Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only).';
-
-  @override
-  String get photoBackupConfirmBodyScoped =>
-      'Only photos in the albums checked below will be uploaded to your OmniNest server (Android only).';
-
-  @override
-  String get photoBackupBackgroundSubtitleScoped =>
-      'Automatically uploads photos in the selected scope to your OmniNest server (Android only)';
-
-  @override
-  String get photoBackupAllowMobileData =>
-      'Also back up over mobile data when no Wi-Fi';
-
-  @override
-  String get photoBackupAllowMobileDataHint => 'Unchecking means Wi-Fi only';
-
-  @override
-  String photoBackupScopeSelectedCount(int count) {
-    return '$count albums selected';
-  }
-
-  @override
-  String get photoBackupScopeOptionAll => 'All albums';
-
-  @override
-  String get photoBackupScopeOptionSelected => 'Selected albums';
-
-  @override
-  String get photoBackupConfirmEnable => 'Enable';
-
-  @override
-  String get photoBackupAlbumPickerTitle => 'Choose albums to back up';
-
-  @override
-  String get photoBackupAlbumPickerEmpty =>
-      'No albums found. Check photo access permission.';
-
-  @override
-  String get photoBackupNeedSelectAlbum => 'Select at least one album';
-
-  @override
-  String get photoBackupScopeSummaryAll => 'Scope: all albums';
-
-  @override
-  String photoBackupScopeSummarySelected(int count) {
-    return 'Scope: $count albums selected';
-  }
 
   @override
   String get profileManageBackdrop => 'Manage background';
@@ -3536,9 +3472,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Automatically import discovered media';
 
   @override
-  String get adminConfigPhotoBackup => 'Automatic photo backup';
-
-  @override
   String get adminConfigDefaultQuota => 'Default quota for new users';
 
   @override
@@ -3854,10 +3787,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get adminConfigMediaAutoImportDescription =>
       'Allows discovered titles to enter the media import flow according to Media rules.';
-
-  @override
-  String get adminConfigPhotoBackupDescription =>
-      'Controls whether new photos enter the automatic backup flow.';
 
   @override
   String get adminConfigDefaultQuotaDescription =>
@@ -8521,19 +8450,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Send a system notification when tasks complete or fail';
 
   @override
-  String get batteryOptimizationTitle => 'Allow background running';
-
-  @override
-  String get batteryOptimizationHint =>
-      'Exclude the app from battery optimization so background backups are not blocked';
-
-  @override
-  String get batteryOptimizationGranted => 'Background running allowed';
-
-  @override
-  String get batteryOptimizationAllow => 'Allow';
-
-  @override
   String get settingsCheckUpdate => 'Check for Updates';
 
   @override
@@ -8895,48 +8811,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get musicNoCandidatesHint =>
       'Try improving the local title, artist or album, then retry.';
-
-  @override
-  String get backupSkipNonWifi => 'Not on WiFi, skipping backup';
-
-  @override
-  String get backupSkipNoPermission => 'Photo library access not granted';
-
-  @override
-  String get backupSkipNoAlbums => 'No albums';
-
-  @override
-  String get backupSkipNoPhotos => 'No photos';
-
-  @override
-  String get backupNotificationChannel => 'Photo Backup';
-
-  @override
-  String get backupNotificationChannelDesc => 'Photo auto-backup progress';
-
-  @override
-  String get backupNotificationTitle => 'Photo Backup In Progress';
-
-  @override
-  String backupNotificationProgress(
-    Object current,
-    Object total,
-    Object uploaded,
-  ) {
-    return 'Processed $current/$total, $uploaded uploaded';
-  }
-
-  @override
-  String get backupNotificationComplete => 'Photo Backup Complete';
-
-  @override
-  String backupNotificationSummary(
-    Object uploaded,
-    Object skipped,
-    Object failed,
-  ) {
-    return '$uploaded uploaded, $skipped skipped, $failed failed';
-  }
 
   @override
   String get photoRegenerateThumbnails => 'Regenerate Thumbnails';

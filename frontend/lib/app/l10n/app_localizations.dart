@@ -1142,119 +1142,11 @@ abstract class AppLocalizations {
   /// **'Security & devices'**
   String get profileSectionSecurity;
 
-  /// No description provided for @profileSectionBackup.
-  ///
-  /// In en, this message translates to:
-  /// **'Backup'**
-  String get profileSectionBackup;
-
   /// No description provided for @profileSectionAbout.
   ///
   /// In en, this message translates to:
   /// **'About'**
   String get profileSectionAbout;
-
-  /// No description provided for @photoBackupBackgroundTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Auto-upload device photos'**
-  String get photoBackupBackgroundTitle;
-
-  /// No description provided for @photoBackupBackgroundSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Automatically uploads all photos in your device gallery to your OmniNest server (Android only)'**
-  String get photoBackupBackgroundSubtitle;
-
-  /// No description provided for @photoBackupConfirmTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Enable auto backup?'**
-  String get photoBackupConfirmTitle;
-
-  /// No description provided for @photoBackupConfirmBody.
-  ///
-  /// In en, this message translates to:
-  /// **'Photos in the selected scope will be uploaded automatically to your OmniNest server (Android only).'**
-  String get photoBackupConfirmBody;
-
-  /// No description provided for @photoBackupConfirmBodyScoped.
-  ///
-  /// In en, this message translates to:
-  /// **'Only photos in the albums checked below will be uploaded to your OmniNest server (Android only).'**
-  String get photoBackupConfirmBodyScoped;
-
-  /// No description provided for @photoBackupBackgroundSubtitleScoped.
-  ///
-  /// In en, this message translates to:
-  /// **'Automatically uploads photos in the selected scope to your OmniNest server (Android only)'**
-  String get photoBackupBackgroundSubtitleScoped;
-
-  /// No description provided for @photoBackupAllowMobileData.
-  ///
-  /// In en, this message translates to:
-  /// **'Also back up over mobile data when no Wi-Fi'**
-  String get photoBackupAllowMobileData;
-
-  /// No description provided for @photoBackupAllowMobileDataHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Unchecking means Wi-Fi only'**
-  String get photoBackupAllowMobileDataHint;
-
-  /// No description provided for @photoBackupScopeSelectedCount.
-  ///
-  /// In en, this message translates to:
-  /// **'{count} albums selected'**
-  String photoBackupScopeSelectedCount(int count);
-
-  /// No description provided for @photoBackupScopeOptionAll.
-  ///
-  /// In en, this message translates to:
-  /// **'All albums'**
-  String get photoBackupScopeOptionAll;
-
-  /// No description provided for @photoBackupScopeOptionSelected.
-  ///
-  /// In en, this message translates to:
-  /// **'Selected albums'**
-  String get photoBackupScopeOptionSelected;
-
-  /// No description provided for @photoBackupConfirmEnable.
-  ///
-  /// In en, this message translates to:
-  /// **'Enable'**
-  String get photoBackupConfirmEnable;
-
-  /// No description provided for @photoBackupAlbumPickerTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Choose albums to back up'**
-  String get photoBackupAlbumPickerTitle;
-
-  /// No description provided for @photoBackupAlbumPickerEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No albums found. Check photo access permission.'**
-  String get photoBackupAlbumPickerEmpty;
-
-  /// No description provided for @photoBackupNeedSelectAlbum.
-  ///
-  /// In en, this message translates to:
-  /// **'Select at least one album'**
-  String get photoBackupNeedSelectAlbum;
-
-  /// No description provided for @photoBackupScopeSummaryAll.
-  ///
-  /// In en, this message translates to:
-  /// **'Scope: all albums'**
-  String get photoBackupScopeSummaryAll;
-
-  /// No description provided for @photoBackupScopeSummarySelected.
-  ///
-  /// In en, this message translates to:
-  /// **'Scope: {count} albums selected'**
-  String photoBackupScopeSummarySelected(int count);
 
   /// No description provided for @profileManageBackdrop.
   ///
@@ -6523,12 +6415,6 @@ abstract class AppLocalizations {
   /// **'Automatically import discovered media'**
   String get adminConfigMediaAutoImport;
 
-  /// No description provided for @adminConfigPhotoBackup.
-  ///
-  /// In en, this message translates to:
-  /// **'Automatic photo backup'**
-  String get adminConfigPhotoBackup;
-
   /// No description provided for @adminConfigDefaultQuota.
   ///
   /// In en, this message translates to:
@@ -7110,12 +6996,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Allows discovered titles to enter the media import flow according to Media rules.'**
   String get adminConfigMediaAutoImportDescription;
-
-  /// No description provided for @adminConfigPhotoBackupDescription.
-  ///
-  /// In en, this message translates to:
-  /// **'Controls whether new photos enter the automatic backup flow.'**
-  String get adminConfigPhotoBackupDescription;
 
   /// No description provided for @adminConfigDefaultQuotaDescription.
   ///
@@ -15575,30 +15455,6 @@ abstract class AppLocalizations {
   /// **'Send a system notification when tasks complete or fail'**
   String get profileTaskSystemNotificationsHint;
 
-  /// No description provided for @batteryOptimizationTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow background running'**
-  String get batteryOptimizationTitle;
-
-  /// No description provided for @batteryOptimizationHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Exclude the app from battery optimization so background backups are not blocked'**
-  String get batteryOptimizationHint;
-
-  /// No description provided for @batteryOptimizationGranted.
-  ///
-  /// In en, this message translates to:
-  /// **'Background running allowed'**
-  String get batteryOptimizationGranted;
-
-  /// No description provided for @batteryOptimizationAllow.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow'**
-  String get batteryOptimizationAllow;
-
   /// No description provided for @settingsCheckUpdate.
   ///
   /// In en, this message translates to:
@@ -16287,74 +16143,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Try improving the local title, artist or album, then retry.'**
   String get musicNoCandidatesHint;
-
-  /// No description provided for @backupSkipNonWifi.
-  ///
-  /// In en, this message translates to:
-  /// **'Not on WiFi, skipping backup'**
-  String get backupSkipNonWifi;
-
-  /// No description provided for @backupSkipNoPermission.
-  ///
-  /// In en, this message translates to:
-  /// **'Photo library access not granted'**
-  String get backupSkipNoPermission;
-
-  /// No description provided for @backupSkipNoAlbums.
-  ///
-  /// In en, this message translates to:
-  /// **'No albums'**
-  String get backupSkipNoAlbums;
-
-  /// No description provided for @backupSkipNoPhotos.
-  ///
-  /// In en, this message translates to:
-  /// **'No photos'**
-  String get backupSkipNoPhotos;
-
-  /// No description provided for @backupNotificationChannel.
-  ///
-  /// In en, this message translates to:
-  /// **'Photo Backup'**
-  String get backupNotificationChannel;
-
-  /// No description provided for @backupNotificationChannelDesc.
-  ///
-  /// In en, this message translates to:
-  /// **'Photo auto-backup progress'**
-  String get backupNotificationChannelDesc;
-
-  /// No description provided for @backupNotificationTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Photo Backup In Progress'**
-  String get backupNotificationTitle;
-
-  /// No description provided for @backupNotificationProgress.
-  ///
-  /// In en, this message translates to:
-  /// **'Processed {current}/{total}, {uploaded} uploaded'**
-  String backupNotificationProgress(
-    Object current,
-    Object total,
-    Object uploaded,
-  );
-
-  /// No description provided for @backupNotificationComplete.
-  ///
-  /// In en, this message translates to:
-  /// **'Photo Backup Complete'**
-  String get backupNotificationComplete;
-
-  /// No description provided for @backupNotificationSummary.
-  ///
-  /// In en, this message translates to:
-  /// **'{uploaded} uploaded, {skipped} skipped, {failed} failed'**
-  String backupNotificationSummary(
-    Object uploaded,
-    Object skipped,
-    Object failed,
-  );
 
   /// No description provided for @photoRegenerateThumbnails.
   ///

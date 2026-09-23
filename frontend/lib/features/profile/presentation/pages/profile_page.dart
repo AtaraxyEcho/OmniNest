@@ -25,7 +25,6 @@ import 'package:omninest/features/profile/presentation/widgets/change_password_d
 import 'package:omninest/features/profile/presentation/widgets/profile_account_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_appearance_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_server_panel.dart';
-import 'package:omninest/features/profile/presentation/widgets/profile_backup_panel.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_desktop_preferences.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_desktop_shell.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_mobile_content.dart';
@@ -348,7 +347,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         ],
       ),
       ProfileSection.server => const ProfileServerPanel(),
-      ProfileSection.backup => const ProfileBackupPanel(),
       ProfileSection.about => const ProfileAboutPanel(),
     };
   }

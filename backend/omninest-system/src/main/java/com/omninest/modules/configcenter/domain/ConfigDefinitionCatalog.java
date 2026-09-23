@@ -65,7 +65,6 @@ public final class ConfigDefinitionCatalog {
             "music.qq.hosts",
             "photo.ai.endpoint",
             "photo.ai.timeout-seconds",
-            "photo.backup.enabled",
             "photo.geo.rate-limit-per-second",
             "photo.geo.cache-enabled",
             "storage.quota.warning.percent",
@@ -114,8 +113,6 @@ public final class ConfigDefinitionCatalog {
                 "config.media.autoImport", "是否启用媒体自动导入"));
         add(values, bool("reader.import.enabled", true, "reader", ConfigSurface.GENERAL,
                 "config.reader.import", "是否启用阅读内容自动导入"));
-        add(values, bool("photo.backup", true, "photo", ConfigSurface.GENERAL,
-                "config.photo.backup", "是否启用照片自动备份"));
         add(values, number("photo.geo.rate", "1", "photo", ConfigSurface.GENERAL,
                 "config.photo.geo.rate", "地理编码每秒请求上限", 1, 10));
         add(values, bool("photo.geo.offline", true, "photo", ConfigSurface.GENERAL,

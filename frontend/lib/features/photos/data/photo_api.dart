@@ -609,39 +609,6 @@ class PhotoApi {
     return parseData(response.data)['taskId']?.toString() ?? '';
   }
 
-  // -- 备份状态 --
-
-  /// 获取备份状态
-  Future<Map<String, dynamic>> getBackupStatus(String deviceId) async {
-    final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/backup/status',
-      data: {'deviceId': deviceId},
-    );
-    return parseData(response.data);
-  }
-
-  /// 上报备份进度
-  Future<void> reportBackup(String deviceId, int photoCount) async {
-    await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/backup/report',
-      data: {'deviceId': deviceId, 'photoCount': photoCount},
-    );
-  }
-
-  /// 检查重复文件（返回已存在的哈希列表）
-  Future<List<String>> checkDuplicate(List<String> contentHashes) async {
-    final response = await apiClient.dio.post<Map<String, dynamic>>(
-      '/photos/backup/check-duplicate',
-      data: contentHashes,
-    );
-    final envelope = parseEnvelope(response.data);
-    final data = envelope['data'];
-    if (data is List) {
-      return data.map((e) => e.toString()).toList();
-    }
-    return [];
-  }
-
   // -- 解析辅助函数 --
 
   Map<String, dynamic> parseData(Map<String, dynamic>? body) {
