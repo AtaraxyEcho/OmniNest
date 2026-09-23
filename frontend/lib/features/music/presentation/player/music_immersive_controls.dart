@@ -172,7 +172,6 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
         // 半透明填充叠 backdrop 模糊：胶囊透出壁纸，不再是接近不透明的暗块。
         color: chrome.fill,
         borderRadius: pill,
-        border: Border.all(color: chrome.border, width: 1 * scale),
         boxShadow: <BoxShadow>[
           // 样例 `.specular-border` 的投影：`0 20px 50px -10px`，按主题取强度。
           BoxShadow(
@@ -193,6 +192,22 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
           child: Stack(
             fit: StackFit.expand,
             children: [
+              // 样例 `.specular-border` 的均匀 1px 描边必须画在模糊之后：
+              // 挂在 BackdropFilter 之下时描边会被一起采进模糊背景，1px 白线
+              // 被 sigma 30 抹平，暗背景下只剩顶部内高光可见。
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: pill,
+                      border: Border.all(
+                        color: chrome.border,
+                        width: 1 * scale,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
               // 样例 `.specular-border` 的顶部 1px 内高光。
               Positioned(
                 top: 0,

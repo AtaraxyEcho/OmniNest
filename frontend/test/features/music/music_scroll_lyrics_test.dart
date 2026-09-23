@@ -1247,11 +1247,15 @@ void main() {
     final spec = resolveMusicLyricSpec(PortalMusicLayout.left, 1);
 
     // 样例的左侧竖向强调条已整体移除：短歌词下它只是一根与内容无关的白线。
-    // 断言只认「带左边框的装饰盒」，避免把底衬色带误判。
+    // 断言只认「带左边框的装饰盒」，避免把底衬色带误判；时间参考胶囊
+    // （样例 lyric-meta）本身带描边，按键排除。
     int leftBarCount() {
       return tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).where((
         box,
       ) {
+        if (box.key == const ValueKey('music-lyric-aux-pill')) {
+          return false;
+        }
         final decoration = box.decoration;
         if (decoration is! BoxDecoration) {
           return false;
@@ -1279,6 +1283,54 @@ void main() {
       MusicLyricLine(position: Duration(seconds: 30), text: '第二行'),
     ]);
     expect(leftBarCount(), 0);
+  });
+
+  testWidgets('在读行底部渲染样例时间参考行，非在读行与居中窗口不渲染', (tester) async {
+    const lyrics = <MusicLyricLine>[
+      MusicLyricLine(position: Duration(seconds: 12), text: '第一句'),
+      MusicLyricLine(position: Duration(seconds: 40), text: '第二句'),
+    ];
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 13),
+    );
+    addTearDown(player.dispose);
+
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        spec: resolveMusicLyricSpec(PortalMusicLayout.left, 1),
+        lyrics: lyrics,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    // 样例 `lyric-meta`：波形图标 + `mm:ss.d` 行时间戳 + 「重复本句」，
+    // 只在在读行出现。
+    expect(find.byIcon(Icons.graphic_eq), findsOneWidget);
+    expect(find.text('00:12.0'), findsOneWidget);
+    expect(find.text('重复本句'), findsOneWidget);
+    expect(find.text('00:40.0'), findsNothing);
+
+    // 居中布局是样例的固定四行窗口，没有这一行。
+    final centerPlayer = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 13),
+    );
+    addTearDown(centerPlayer.dispose);
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: centerPlayer,
+        spec: resolveMusicLyricSpec(PortalMusicLayout.center, 1),
+        scrollMode: false,
+        textAlign: TextAlign.center,
+        blockAnchor: Alignment.center,
+        lyrics: lyrics,
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.byIcon(Icons.graphic_eq), findsNothing);
+    expect(find.text('重复本句'), findsNothing);
   });
 }
 

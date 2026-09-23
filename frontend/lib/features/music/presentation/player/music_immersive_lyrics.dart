@@ -32,6 +32,15 @@ const String _lineMenuCopy = 'copy';
 const String _lineMenuDelayLater = 'delayLater';
 const String _lineMenuAdvanceEarlier = 'advanceEarlier';
 
+/// 在读行时间参考的显示格式：样例 `formatTimeDec` 的 `mm:ss.d`（十分之一秒）。
+/// 分钟数不取模，与样例一致（超过 60 分钟仍读作 60+）。
+String _formatLyricStamp(Duration position) {
+  final minutes = position.inMinutes.toString().padLeft(2, '0');
+  final seconds = position.inSeconds.remainder(60).toString().padLeft(2, '0');
+  final deciseconds = (position.inMilliseconds % 1000) ~/ 100;
+  return '$minutes:$seconds.$deciseconds';
+}
+
 /// 显示当前歌词及相邻歌词，并以固定周期驱动当前行呼吸效果。
 class MusicImmersiveLyrics extends StatefulWidget {
   const MusicImmersiveLyrics({
@@ -337,15 +346,23 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
                     leadPadding: listPadding,
                     anchor: anchor,
                   ),
-              child: ListView.builder(
-                controller: _scrollController,
-                physics: const ClampingScrollPhysics(),
-                padding: EdgeInsets.symmetric(vertical: listPadding),
-                itemCount: widget.lyrics.length,
-                // 行槽等高：给出固定 extent 让列表跳过逐项布局测量。
-                itemExtent: slotHeight,
-                itemBuilder:
-                    (context, index) => _buildSlot(index, slotHeight, settings),
+              child: ScrollConfiguration(
+                // 样例歌词滚动区是 `.no-scrollbar`：滚动条会压在最左/最右行的
+                // 文字上，三端统一隐藏，滚动仍可用（滚轮、拖拽、键盘）。
+                behavior: ScrollConfiguration.of(
+                  context,
+                ).copyWith(scrollbars: false),
+                child: ListView.builder(
+                  controller: _scrollController,
+                  physics: const ClampingScrollPhysics(),
+                  padding: EdgeInsets.symmetric(vertical: listPadding),
+                  itemCount: widget.lyrics.length,
+                  // 行槽等高：给出固定 extent 让列表跳过逐项布局测量。
+                  itemExtent: slotHeight,
+                  itemBuilder:
+                      (context, index) =>
+                          _buildSlot(index, slotHeight, settings),
+                ),
               ),
             ),
           ),
@@ -538,6 +555,8 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
       hovered: index == _hoveredIndex,
       scale: widget.scale,
       spec: spec,
+      // 在读行时间参考行的强调色（样例 text-primary）。
+      accentColor: widget.palette.accent,
       // 与在读行的行号差：复刻形态据此取样例的不透明度档位。
       relativeIndex: index - _activeIndex,
       fontSize: _layout.lineFontSize(
@@ -648,23 +667,22 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
     return duration > Duration.zero ? duration : null;
   }
 
-  /// 按播放位置重锚逐字填充：优先按词级时间轴推进（已完成词时长 / 总词
-  /// 时长），无词级数据时按行时长线性估算，保证行级歌词同样有填充反馈。
+  /// 按播放位置重锚逐字填充：优先按词级时间轴推进（已完成词时长 / 总演唱
+  /// 时长），无词级数据时按字符数估算的演唱时长推进；两种路径都只将补间
+  /// 推进到下一个变化点，唱完后停在满格，不把间奏算进填充。
   void _syncFill(Duration position) {
     if (widget.lyrics.isEmpty) {
       // 位置流在无歌词（未加载曲目 / 纯音乐）时同样到达，此时无填充对象。
       return;
     }
     final activeIndex = _activeIndex.clamp(0, widget.lyrics.length - 1);
-    final line = widget.lyrics.isEmpty ? null : widget.lyrics[activeIndex];
+    final line = widget.lyrics[activeIndex];
     final settings = widget.lyricSettings ?? PortalLyricVisualSettings.defaults;
-    final lineDuration =
-        widget.lyrics.isEmpty ? null : _lineDurationFor(activeIndex);
+    final lineSpan = _lineDurationFor(activeIndex);
     final fillable =
         settings.wordFillEnabled &&
         widget.player.state.playing &&
-        line != null &&
-        (line.words.isNotEmpty || lineDuration != null);
+        (line.words.isNotEmpty || lineSpan != null);
     if (!fillable) {
       if (_fillController.isAnimating) {
         _fillController.stop();
@@ -683,35 +701,32 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
           ),
         );
     final withinLine = effective - line.position;
-    var fraction = line.fillProgressAt(withinLine);
-    var remainingMs =
-        fraction == null
-            ? null
-            : () {
-              final totalWordMs = line.words.fold<int>(
-                0,
-                (sum, word) => sum + word.duration.inMilliseconds,
-              );
-              return ((1 - fraction!) * totalWordMs).round();
-            }();
-    // 无词级数据（或词级不可用）时按行时长线性估算。
-    if (fraction == null && lineDuration != null) {
-      if (withinLine < Duration.zero) {
-        fraction = 0.0;
-        remainingMs = lineDuration.inMilliseconds;
-      } else if (withinLine >= lineDuration) {
-        fraction = 1.0;
-        remainingMs = 0;
-      } else {
-        fraction = withinLine.inMilliseconds / lineDuration.inMilliseconds;
-        remainingMs = lineDuration.inMilliseconds - withinLine.inMilliseconds;
+    final state = line.fillStateAt(withinLine);
+    double fraction;
+    double target;
+    Duration remaining;
+    if (state != null) {
+      fraction = state.fraction;
+      target = state.nextFraction;
+      remaining = state.toNextFraction;
+    } else {
+      // 无词级数据（或整行只有空白词元）：按估算演唱时长推进。
+      final vocal = line.estimatedVocalSpan(lineSpan ?? Duration.zero);
+      final elapsedMs = withinLine.inMilliseconds;
+      final vocalMs = vocal.inMilliseconds;
+      fraction =
+          elapsedMs <= 0
+              ? 0.0
+              : vocalMs <= 0
+              ? 1.0
+              : (elapsedMs / vocalMs).clamp(0.0, 1.0).toDouble();
+      target = 1.0;
+      // 行首之前不预推进度：补间时长夹到演唱窗口，避免整行提前起算。
+      remaining =
+          withinLine <= Duration.zero ? Duration.zero : vocal - withinLine;
+      if (remaining < Duration.zero) {
+        remaining = Duration.zero;
       }
-    }
-    if (fraction == null) {
-      if (_fillActive) {
-        setState(() => _fillActive = false);
-      }
-      return;
     }
     if (!_fillActive) {
       setState(() => _fillActive = true);
@@ -720,10 +735,10 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
       _fillController.stop();
     }
     _fillController.value = fraction;
-    if (remainingMs != null && remainingMs > 0) {
+    if (remaining > Duration.zero && target > fraction) {
       _fillController.animateTo(
-        1.0,
-        duration: Duration(milliseconds: remainingMs),
+        target,
+        duration: remaining,
         curve: Curves.linear,
       );
     }

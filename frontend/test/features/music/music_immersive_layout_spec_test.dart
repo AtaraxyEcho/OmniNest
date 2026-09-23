@@ -415,6 +415,27 @@ void main() {
       expect(right.mask, (0.15, 0.82));
     });
 
+    test('在读行时间参考行只在两侧布局预留，居中固定窗口为 0', () {
+      final left = resolveMusicLyricSpec(PortalMusicLayout.left, 1);
+      // 样例 `lyric-meta`：`mt-3` 间隙 + `py-1` 胶囊 + `text-[11px]` 文字。
+      expect(left.activeAuxGap, 12);
+      expect(left.activeAuxReserve, 24);
+      expect(left.activeAuxFontSize, 11);
+      expect(left.activeAuxIconSize, 14);
+      expect(
+        resolveMusicLyricSpec(PortalMusicLayout.right, 1).activeAuxReserve,
+        24,
+      );
+      final center = resolveMusicLyricSpec(PortalMusicLayout.center, 1);
+      expect(center.activeAuxGap, 0);
+      expect(center.activeAuxReserve, 0);
+      expect(center.activeAuxFontSize, 0);
+      expect(center.activeAuxIconSize, 0);
+      // 占位随缩放同比放大，行槽等高因此每行都计入。
+      final scaled = resolveMusicLyricSpec(PortalMusicLayout.left, 2);
+      expect(scaled.activeAuxReserve, 48);
+    });
+
     test('行距倍率只缩放块间隙，不缩在读行的底衬内边距', () {
       final tightened = resolveMusicLyricSpec(
         PortalMusicLayout.left,

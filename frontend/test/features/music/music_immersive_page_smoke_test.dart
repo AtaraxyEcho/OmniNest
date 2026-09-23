@@ -211,9 +211,8 @@ void main() {
   });
 
   testWidgets('底部 Dock 为半透明玻璃并按深浅色主题取色', (tester) async {
-    Future<({Color fill, Color progress, Color title})> dockChromeOf(
-      Brightness brightness,
-    ) async {
+    Future<({BoxBorder? border, Color fill, Color progress, Color title})>
+    dockChromeOf(Brightness brightness) async {
       tester.view.physicalSize = const Size(1280, 1024);
       tester.view.devicePixelRatio = 1.0;
       await tester.pumpWidget(
@@ -263,7 +262,8 @@ void main() {
               widget is DecoratedBox &&
               widget.decoration is BoxDecoration &&
               (widget.decoration as BoxDecoration).borderRadius ==
-                  BorderRadius.circular(999),
+                  BorderRadius.circular(999) &&
+              (widget.decoration as BoxDecoration).color != null,
         ),
       );
       final capsule = tester.widgetList<DecoratedBox>(capsuleFinder).first;
@@ -279,6 +279,7 @@ void main() {
               .first;
       return (
         fill: (capsule.decoration as BoxDecoration).color!,
+        border: (capsule.decoration as BoxDecoration).border,
         progress: progress.activeColor,
         title: title.style!.color!,
       );
@@ -301,6 +302,27 @@ void main() {
     );
     expect(dark.progress, Colors.white);
     expect(light.progress, isNot(Colors.white));
+    // 镜面描边（样例 `.specular-border` 的均匀 1px 环）必须画在 BackdropFilter
+    // 之后：挂在模糊之下时描边会被一起采进模糊背景，1px 白线被 sigma 30 抹平，
+    // 暗背景下只剩顶部内高光一条线。
+    expect(dark.border, isNull, reason: '填充盒不得承载描边');
+    expect(light.border, isNull, reason: '填充盒不得承载描边');
+    expect(
+      find.descendant(
+        of: find.byType(BackdropFilter),
+        matching: find.byWidgetPredicate(
+          (widget) =>
+              widget is DecoratedBox &&
+              widget.decoration is BoxDecoration &&
+              (widget.decoration as BoxDecoration).borderRadius ==
+                  BorderRadius.circular(999) &&
+              (widget.decoration as BoxDecoration).border != null &&
+              (widget.decoration as BoxDecoration).color == null,
+        ),
+      ),
+      findsOneWidget,
+      reason: 'Dock 描边应作为模糊之后的独立图层',
+    );
     expect(tester.takeException(), isNull);
   });
 

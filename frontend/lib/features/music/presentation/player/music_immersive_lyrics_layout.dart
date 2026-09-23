@@ -152,14 +152,19 @@ class _MusicLyricsLayout {
       }
       widest = math.max(widest, math.max(mainWidth, translationWidth));
     }
+    // +1 为舍入保护：文字宽度与容器宽度相等时，浮点误差会让最后一字折行。
+    // 在读行的时间参考行比短句宽，块宽按下限抬升，否则 meta 行溢出行块。
+    final auxMinBlockWidth = spec?.activeAuxMinBlockWidth ?? 0;
     _metricsKey = key;
     _maxTextLines = maxLines;
     _maxTranslationLines = maxTranslationLineCount;
-    // +1 为舍入保护：文字宽度与容器宽度相等时，浮点误差会让最后一字折行。
     _blockWidthValue =
         !scrollMode || widest <= 0
             ? null
-            : math.min(widest + 1, availableWidth);
+            : math.min(
+              math.max(widest + 1, auxMinBlockWidth),
+              math.max(availableWidth, auxMinBlockWidth),
+            );
   }
 
   /// 行高 = 内容高度（在读行与翻译行中较高者）+ 行距空隙，并做上下限保护。
@@ -192,7 +197,12 @@ class _MusicLyricsLayout {
               : 0.0;
       // 逐字填充遮罩的墨迹边距由行内容向外溢出（歌词行 Stack 不裁剪），
       // 不占用行槽高度，避免行距被撑大。
-      return (mainBox + translationBox + spec.lineGap)
+      // 在读行的时间参考行只有读行才有，但行槽等高，必须整列预留。
+      return (mainBox +
+              translationBox +
+              spec.activeAuxGap +
+              spec.activeAuxReserve +
+              spec.lineGap)
           .clamp(24.0, 480.0)
           .toDouble();
     }

@@ -213,4 +213,99 @@ void main() {
       );
     },
   );
+
+  test('句末静默的空白词元不计入演唱时长，唱完即停在满格', () {
+    const line = MusicLyricLine(
+      position: Duration(seconds: 10),
+      text: '唱完就停',
+      words: <MusicLyricWord>[
+        MusicLyricWord(
+          offset: Duration.zero,
+          duration: Duration(milliseconds: 500),
+          text: '唱完就停',
+        ),
+        // 网易云 yrc 用一个长空白词元承载句后静默/间奏。
+        MusicLyricWord(
+          offset: Duration(milliseconds: 500),
+          duration: Duration(seconds: 8),
+          text: ' ',
+        ),
+      ],
+    );
+    expect(line.vocalEnd, const Duration(milliseconds: 500));
+    // 唱完的瞬间即满格；其后整段间奏都保持满格，不再推进填充。
+    expect(line.fillProgressAt(const Duration(milliseconds: 500)), 1.0);
+    expect(line.fillProgressAt(const Duration(seconds: 8)), 1.0);
+
+    // 整行只有空白词元：无演唱内容，vocalEnd 为 null 并回退估算时长。
+    const silent = MusicLyricLine(
+      position: Duration.zero,
+      text: '（间奏）',
+      words: <MusicLyricWord>[
+        MusicLyricWord(
+          offset: Duration.zero,
+          duration: Duration(seconds: 8),
+          text: ' ',
+        ),
+      ],
+    );
+    expect(silent.vocalEnd, isNull);
+    expect(silent.fillProgressAt(const Duration(seconds: 2)), isNull);
+  });
+
+  test('补间只推进到下一个变化点，空隙内保持', () {
+    const line = MusicLyricLine(
+      position: Duration.zero,
+      text: 'AB',
+      words: <MusicLyricWord>[
+        MusicLyricWord(
+          offset: Duration.zero,
+          duration: Duration(milliseconds: 100),
+          text: 'A',
+        ),
+        MusicLyricWord(
+          offset: Duration(seconds: 5),
+          duration: Duration(milliseconds: 100),
+          text: 'B',
+        ),
+      ],
+    );
+    // 1s 处落在空隙：进度停在 50%，补间目标不变，只推进到下一个词元起点。
+    final gap = line.fillStateAt(const Duration(seconds: 1))!;
+    expect(gap.fraction, 0.5);
+    expect(gap.nextFraction, 0.5);
+    expect(gap.toNextFraction, const Duration(seconds: 4));
+    // 正在唱第二个词：推进到它结束处即满格。
+    final singing = line.fillStateAt(const Duration(milliseconds: 5050))!;
+    expect(singing.fraction, closeTo(0.75, 0.001));
+    expect(singing.nextFraction, 1.0);
+    expect(singing.toNextFraction, const Duration(milliseconds: 50));
+    // 唱完之后不再有待推进目标。
+    final done = line.fillStateAt(const Duration(seconds: 9))!;
+    expect(done.fraction, 1.0);
+    expect(done.nextFraction, 1.0);
+    expect(done.toNextFraction, Duration.zero);
+  });
+
+  test('无词级数据时按字符数估算演唱时长，并以行间隙封顶', () {
+    const line = MusicLyricLine(position: Duration.zero, text: '四个字呀');
+    // 4 字 × 300ms = 1.2s，正好落在下限。
+    expect(
+      line.estimatedVocalSpan(const Duration(seconds: 30)),
+      const Duration(milliseconds: 1200),
+    );
+    // 短句不低于 1.2s，长句按字数线性放大，而不是摊满整段间隙。
+    expect(
+      const MusicLyricLine(
+        position: Duration.zero,
+        text: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ).estimatedVocalSpan(const Duration(seconds: 30)),
+      const Duration(seconds: 9),
+    );
+    expect(
+      line.estimatedVocalSpan(const Duration(milliseconds: 800)),
+      const Duration(milliseconds: 800),
+    );
+    expect(line.estimatedVocalSpan(Duration.zero), Duration.zero);
+  });
 }

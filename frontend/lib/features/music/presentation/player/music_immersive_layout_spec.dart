@@ -912,6 +912,11 @@ const Color kMusicLyricTranslationColor = Color(0xFFC4C7CA);
 const Color kMusicLyricActiveTextColor = Color(0xFFFFFFFF);
 const Color kMusicLyricSideActiveTranslationColor = Color(0xFFBDC7D4);
 
+/// 在读行时间参考胶囊的底色与描边：样例 `bg-surface-container-lowest/90`
+/// 与 `border-white/25`。
+const Color kMusicLyricAuxPillFill = Color(0xE60C0E11);
+const double kMusicLyricAuxPillBorderAlpha = 0.25;
+
 /// 最远端译文的不透明度（样例两侧 `text-on-surface-variant/70`）。
 const double kMusicLyricFarTranslationAlpha = 0.7;
 
@@ -974,6 +979,11 @@ class MusicLyricSpec {
     required this.mask,
     required this.textAlign,
     required this.blockAnchor,
+    required this.activeAuxGap,
+    required this.activeAuxReserve,
+    required this.activeAuxFontSize,
+    required this.activeAuxIconSize,
+    required this.activeAuxMinBlockWidth,
     this.activeLineBackgroundColor,
     this.inactiveOpacityScale = 1,
   });
@@ -1032,6 +1042,20 @@ class MusicLyricSpec {
   final (double, double) mask;
   final TextAlign textAlign;
   final Alignment blockAnchor;
+
+  /// 在读行底部时间参考行（样例 `lyric-meta`：波形图标 + 行时间戳 + 重复本句）
+  /// 与正文的间隙，以及该行自身占位高度。居中布局的固定四行窗口不放这一行，
+  /// 两者均为 0。行槽等高，因此这两项会计入每一行的高度。
+  final double activeAuxGap;
+  final double activeAuxReserve;
+
+  /// 时间参考行的文字与波形图标字号（样例 `text-[11px]` 与 `text-body-sm`）。
+  final double activeAuxFontSize;
+  final double activeAuxIconSize;
+
+  /// 时间参考行不折行所需的最小文字块宽度：短句的实测块宽会窄于这一行，
+  /// 不抬升块宽会让 meta 行溢出。居中布局为 0。
+  final double activeAuxMinBlockWidth;
 
   /// 单行内容高度（原文 + 译文），行槽高度在其之上再加 [lineGap]。
   double contentHeight() {
@@ -1171,6 +1195,15 @@ MusicLyricSpec resolveMusicLyricSpec(
             : kMusicLeftLyricMask,
     textAlign: isCenter ? TextAlign.center : TextAlign.left,
     blockAnchor: isCenter ? Alignment.center : Alignment.centerLeft,
+    // 在读行底部时间参考行：样例 `lyric-meta` 的 `mt-3` + `py-1` 胶囊。
+    // 居中布局是固定四行窗口，样例里没有这一行，占位归零。
+    activeAuxGap: isCenter ? 0 : px(12),
+    activeAuxReserve: isCenter ? 0 : px(24),
+    activeAuxFontSize: isCenter ? 0 : px(11),
+    activeAuxIconSize: isCenter ? 0 : px(14),
+    // 胶囊（内边距 + 图标 + 时间戳）加间隙与间隔点的固定宽度：
+    // 统一块宽必须不低于它，否则短句的时间参考行会溢出行块。
+    activeAuxMinBlockWidth: isCenter ? 0 : px(180),
     inactiveOpacityScale: opacityScale,
   );
 }

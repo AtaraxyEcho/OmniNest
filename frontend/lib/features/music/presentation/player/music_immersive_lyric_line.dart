@@ -13,6 +13,7 @@ class _MusicLyricLine extends StatefulWidget {
     required this.textAlign,
     required this.scrollMode,
     this.spec,
+    this.accentColor,
     this.relativeIndex = 0,
     this.blockWidth,
     this.blockAnchor = Alignment.center,
@@ -42,6 +43,10 @@ class _MusicLyricLine extends StatefulWidget {
 
   /// 复刻参数（桌面沉浸舞台传入）：为 null 时沿用用户设置的通用排版。
   final MusicLyricSpec? spec;
+
+  /// 时间参考行的强调色（样例 `text-primary`）：只在在读行的 `lyric-meta`
+  /// 行使用，非复刻形态不渲染该行。
+  final Color? accentColor;
 
   /// 该行与在读行的行号差（负值在前、正值在后）。
   final int relativeIndex;
@@ -331,10 +336,25 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
             )
             : paint(text, style: textStyle);
 
+    final auxRow = _buildAuxRow();
+    // 原文与译文共用同一侧基线：左对齐按起始边，居中按中心，右对齐按末端。
+    final crossAxisAlignment =
+        widget.textAlign == TextAlign.center
+            ? CrossAxisAlignment.center
+            : widget.textAlign == TextAlign.right
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start;
     final translation =
         widget.settings.translationEnabled ? _translationText : null;
     if (translation == null) {
-      return mainChild;
+      if (auxRow == null) {
+        return mainChild;
+      }
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: crossAxisAlignment,
+        children: [mainChild, auxRow],
+      );
     }
     final extraStyle = textStyle.copyWith(
       // 译文单独取色：样例原文与译文是两级色。
@@ -377,13 +397,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       colors: resolved.translation,
       style: extraStyle,
     );
-    // 原文与译文共用同一侧基线：左对齐按起始边，居中按中心，右对齐按末端。
-    final crossAxisAlignment =
-        widget.textAlign == TextAlign.center
-            ? CrossAxisAlignment.center
-            : widget.textAlign == TextAlign.right
-            ? CrossAxisAlignment.end
-            : CrossAxisAlignment.start;
+    // 原文与译文共用同一侧基线：交叉轴对齐方式与上面一致。
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: crossAxisAlignment,
@@ -397,7 +411,92 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
                   : (active ? spec.activeTranslationGap : spec.translationGap),
         ),
         translationChild,
+        if (auxRow != null) auxRow,
       ],
+    );
+  }
+
+  /// 在读行底部的时间参考行（样例 `lyric-meta`）：波形图标 + 行时间戳胶囊、
+  /// 间隔点与「重复本句」。整行已挂跳转手势，这一行不再挂二次手势，点击由
+  /// 整行的 `onTap`（跳回本句起点）承接。
+  Widget? _buildAuxRow() {
+    final spec = widget.spec;
+    if (spec == null || !widget.active || spec.activeAuxReserve <= 0) {
+      return null;
+    }
+    final scale = widget.scale;
+    final accent = widget.accentColor ?? spec.activeTextColor;
+    final stampStyle = TextStyle(
+      color: accent,
+      fontSize: spec.activeAuxFontSize,
+      height: 1.2,
+      fontWeight: FontWeight.w600,
+    );
+    final labelStyle = TextStyle(
+      color: spec.textColor,
+      fontSize: spec.activeAuxFontSize,
+      height: 1.2,
+      fontWeight: FontWeight.w500,
+    );
+    return Padding(
+      padding: EdgeInsets.only(top: spec.activeAuxGap),
+      child: SizedBox(
+        height: spec.activeAuxReserve,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DecoratedBox(
+              key: const ValueKey('music-lyric-aux-pill'),
+              decoration: BoxDecoration(
+                color: kMusicLyricAuxPillFill,
+                borderRadius: BorderRadius.circular(spec.activeAuxReserve / 2),
+                border: Border.all(
+                  color: Colors.white.withValues(
+                    alpha: kMusicLyricAuxPillBorderAlpha,
+                  ),
+                ),
+              ),
+              child: Padding(
+                padding: EdgeInsets.symmetric(
+                  horizontal: 12 * scale,
+                  vertical: 4 * scale,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.graphic_eq,
+                      size: spec.activeAuxIconSize,
+                      color: accent,
+                    ),
+                    SizedBox(width: 6 * scale),
+                    Text(
+                      _formatLyricStamp(widget.line.position),
+                      style: stampStyle,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(width: 12 * scale),
+            Text(
+              '•',
+              style: labelStyle.copyWith(
+                color: spec.textColor.withValues(alpha: 0.4),
+              ),
+            ),
+            SizedBox(width: 12 * scale),
+            Flexible(
+              child: Text(
+                AppLocalizations.of(context).musicLyricRepeatVerse,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: labelStyle,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -591,7 +690,9 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       var matchedAll = true;
       var cursor = 0;
       for (final word in words) {
-        if (word.text.isEmpty) {
+        // 空白词元只承载句末静默与词间空隙（`yrc` 用它表达间奏），不计入
+        // 演唱时长：否则该行填充会拖着间奏慢慢爬，唱完了还没填满。
+        if (word.isBlank) {
           continue;
         }
         final index = text.indexOf(word.text, cursor);
