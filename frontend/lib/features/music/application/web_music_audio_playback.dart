@@ -12,7 +12,8 @@ import 'package:web/web.dart' as web;
 ///
 /// SoLoud 为 FFI 原生库，在 Web 无实现（实例化即 `_isInited` TypeError），
 /// 故 Web 端走浏览器音频元素。已知行为差异：
-/// - 进度粒度随 timeupdate（约 250ms），比原生 16ms ticker 粗；
+/// - 进度粒度：播放期间按 16ms 定时器读取 `currentTime`，与原生 ticker 同频；
+///   `timeupdate`（浏览器约 250ms 节流）作为定时器被后台限流时的兜底；
 /// - 频谱无来源，回退静默帧；
 /// - 受浏览器自动播放策略约束：首次起播需处于用户手势上下文，
 ///   后续自动切歌依赖文档 sticky activation。
@@ -22,6 +23,9 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
   }
 
   static const Duration _openTimeout = Duration(seconds: 12);
+
+  /// 与原生 `MusicAudioPlayer._tickInterval` 同频。
+  static const Duration _positionTickInterval = Duration(milliseconds: 16);
 
   final web.HTMLAudioElement _audio = web.HTMLAudioElement();
 
@@ -38,6 +42,7 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
 
   Completer<void>? _openCompleter;
   Timer? _openTimeoutTimer;
+  Timer? _positionTicker;
   MusicAudioPlayerState _state = const MusicAudioPlayerState();
   String? _url;
   bool _disposed = false;
@@ -89,7 +94,8 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
     _audio.load();
     try {
       await _openCompleter!.future;
-      _state = _state.copyWith(
+      // 走 `_updateState` 而不是直接改 `_state`：起播/暂停收敛点在那里。
+      _updateState(
         playing: play,
         position: Duration.zero,
         duration: _elementDuration,
@@ -196,6 +202,43 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
     return Duration(milliseconds: (raw * 1000).round());
   }
 
+  /// 高频位置采样：`timeupdate` 被浏览器节流到约 250ms，而逐字填充的补间只
+  /// 推进到下一个变化点，粗事件会让填充停在词边界等下一次回调。播放期间按原生
+  /// 同频的 16ms 定时器读 `currentTime`；`timeupdate` 保留，覆盖定时器被
+  /// 后台限流的场景。
+  ///
+  /// 不用 requestAnimationFrame：这里只是重锚补间的事件源，画面推进由
+  /// AnimationController 自身的 vsync 驱动，采样无需与帧对齐。
+  void _startPositionTicker() {
+    if (_disposed || _positionTicker != null) {
+      return;
+    }
+    _positionTicker = Timer.periodic(
+      _positionTickInterval,
+      (_) => _emitPosition(),
+    );
+  }
+
+  void _stopPositionTicker() {
+    _positionTicker?.cancel();
+    _positionTicker = null;
+  }
+
+  void _emitPosition() {
+    if (_disposed) {
+      return;
+    }
+    final position = Duration(
+      milliseconds: (_audio.currentTime * 1000).round(),
+    );
+    if (position == _state.position) {
+      // 缓冲停顿等情况下 currentTime 不变，无需按帧重复广播同一位置。
+      return;
+    }
+    _updateState(position: position);
+    _positionController.add(position);
+  }
+
   void _bindEvents() {
     _audio.oncanplay =
         ((web.Event _) {
@@ -209,14 +252,7 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
             _durationController.add(duration);
           }
         }).toJS;
-    _audio.ontimeupdate =
-        ((web.Event _) {
-          final position = Duration(
-            milliseconds: (_audio.currentTime * 1000).round(),
-          );
-          _updateState(position: position);
-          _positionController.add(position);
-        }).toJS;
+    _audio.ontimeupdate = ((web.Event _) => _emitPosition()).toJS;
     _audio.onplay =
         ((web.Event _) {
           _updateState(playing: true);
@@ -240,6 +276,7 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
   }
 
   void _unbindEvents() {
+    _stopPositionTicker();
     _audio.oncanplay = null;
     _audio.onloadedmetadata = null;
     _audio.ontimeupdate = null;
@@ -294,6 +331,13 @@ class WebMusicAudioPlayback implements MusicAudioPlayback {
       volume: volume,
       speed: speed,
     );
+    // 起停按当前状态收敛而不是比较前后差异：`openUrl` 直接改写 `_state`，
+    // 按差异判断会漏掉这一次起播。
+    if (_state.playing) {
+      _startPositionTicker();
+    } else {
+      _stopPositionTicker();
+    }
   }
 
   void _log(String text, {bool playbackFailure = false}) {

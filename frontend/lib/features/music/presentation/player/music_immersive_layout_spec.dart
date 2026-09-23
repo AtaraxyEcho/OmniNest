@@ -87,6 +87,11 @@ const double kMusicFooterBottomMargin = 8;
 /// 底部播放胶囊的高度：样例 `py-3` 与中段两行（传输 40 + 间距 6 + 进度 16）。
 const double kMusicFooterHeight = 86;
 
+/// 居中构图必须从内容区扣掉的底部高度带：播放胶囊本体加其下边距。
+/// 居中框原先只减页边距，固定小窗口侥幸不撞，改成滚动视口后必须显式让位。
+const double kMusicCenterFooterReservedHeight =
+    kMusicFooterHeight + kMusicFooterBottomMargin;
+
 double musicFooterMaxWidth(PortalMusicLayout layout) =>
     layout == PortalMusicLayout.right
         ? kMusicFooterMaxWidthRight
@@ -169,6 +174,20 @@ const List<double> kMusicCenterRotations = <double>[
   12 * math.pi / 180,
 ];
 const List<double> kMusicCenterScales = <double>[0.82, 0.90, 1.0, 0.90, 0.82];
+
+/// 居中卡组悬停抽出位移：横向补该档与相邻内侧档间距的一半（外侧档间距
+/// 105、内侧 125），符号即扇形外向；在读档不位移。
+const List<double> kMusicCenterHoverPullOutX = <double>[
+  -52.5,
+  -62.5,
+  0,
+  62.5,
+  52.5,
+];
+
+/// 悬停时的纵向抬升与轻微放大：居中卡组常态无景深，靠尺度变化给出抽出感。
+const double kMusicCenterHoverLiftY = 12;
+const double kMusicCenterHoverScale = 1.03;
 const List<double> kMusicCenterOpacities = <double>[0.75, 0.85, 1, 0.85, 0.75];
 const List<double> kMusicCenterBorderAlphas = <double>[
   0.2,
@@ -786,6 +805,17 @@ MusicDeckCardSpec _radialDeckCard(int slot) {
     overlayTopAlpha: kMusicCenterOverlayTopAlphas[index],
     overlayBlack: true,
     sheenAlpha: slot == 0 ? 0.5 : 0,
+    // 悬停抽出：外侧与内侧后排档沿扇形外向推半个档间距并抬升，读起来才有
+    // "把卡片抽出来"的动作；只改封面缩放不足以被察觉（两侧布局同理由）。
+    hoverOffset:
+        slot == 0
+            ? null
+            : Offset(
+              kMusicCenterOffsetsX[index] + kMusicCenterHoverPullOutX[index],
+              kMusicCenterOffsetsY[index] - kMusicCenterHoverLiftY,
+            ),
+    hoverScale:
+        slot == 0 ? null : kMusicCenterScales[index] * kMusicCenterHoverScale,
     hoverBorderAlpha: kMusicCenterHoverBorderAlphas[index],
     hoverCoverScale: kMusicDeckCardHoverCoverScale,
     hoverCoverBrightness: kMusicCenterHoverCoverBrightness[index],
@@ -1111,8 +1141,12 @@ MusicLyricSpec resolveMusicLyricSpec(
   double? inactiveOpacity,
   double lineSpacing = 1,
   bool timeTagEnabled = false,
+  bool deckEnabled = true,
 }) {
   final isCenter = layout == PortalMusicLayout.center;
+  // 居中构图只有在堆叠卡片可见时使用固定三行窗口；关闭卡组后歌词改为滚动列，
+  // 与两侧布局同一形态（居左、同一渐隐要带），由 fixedWindowLines == 0 表达。
+  final centerFixedWindow = isCenter && deckEnabled;
   // 时间标签是用户开关项（默认关闭），关闭后连同其预留高度一并归零，
   // 行槽与渲染共用同一判据。
   final showTimeTag = timeTagEnabled && !isCenter;
@@ -1150,8 +1184,9 @@ MusicLyricSpec resolveMusicLyricSpec(
             : kMusicLyricSideActiveTranslationColor,
     // 样例把两侧布局的行间隙写死为 space-y-8/9（32/36px）；在读行还另有上下
     // 内边距，叠加后视觉上明显偏松，因此基准收到 18/20，并交给行距倍率调节。
+    // 关卡组后的居中滚动列与两侧同形态，因此用两侧的行距与在读行样式。
     lineGap: px(
-      (isCenter
+      (centerFixedWindow
               ? 12
               : layout == PortalMusicLayout.right
               ? 20
@@ -1160,7 +1195,7 @@ MusicLyricSpec resolveMusicLyricSpec(
     ),
     activeLinePaddingX: px(16),
     activeLinePaddingY:
-        isCenter
+        centerFixedWindow
             ? 0
             : px(
               layout == PortalMusicLayout.right
@@ -1168,11 +1203,13 @@ MusicLyricSpec resolveMusicLyricSpec(
                   : kMusicLeftLyricActivePaddingY,
             ),
     activeLineRadius: px(12),
-    activeLineScale: isCenter ? 1.04 : 1,
+    activeLineScale: centerFixedWindow ? 1.04 : 1,
     activeLineGlowAlpha:
-        isCenter ? kMusicCenterLyricGlowAlpha : kMusicSideLyricGlowAlpha,
+        centerFixedWindow
+            ? kMusicCenterLyricGlowAlpha
+            : kMusicSideLyricGlowAlpha,
     activeLineGlowBlur:
-        isCenter ? kMusicCenterLyricGlowBlur : kMusicSideLyricGlowBlur,
+        centerFixedWindow ? kMusicCenterLyricGlowBlur : kMusicSideLyricGlowBlur,
     beforeOpacities:
         isCenter
             ? kMusicCenterLyricBeforeOpacities
@@ -1189,18 +1226,23 @@ MusicLyricSpec resolveMusicLyricSpec(
         isCenter
             ? kMusicCenterLyricTranslationAlpha
             : kMusicLyricFarTranslationAlpha,
-    activeLineBackgroundColor: isCenter ? null : const Color(0x660C0E11),
-    fixedWindowLines: isCenter ? 4 : 0,
+    activeLineBackgroundColor:
+        centerFixedWindow ? null : const Color(0x660C0E11),
+    fixedWindowLines: centerFixedWindow ? 3 : 0,
+    // 关闭卡组的居中构图是通高滚动视口，沿用两侧已调校过的渐隐要带；
+    // 小窗的 0.22/0.78 放进通高视口会把上半段整片压暗。
     mask:
         isCenter
-            ? kMusicCenterLyricMask
+            ? centerFixedWindow
+                ? kMusicCenterLyricMask
+                : kMusicLeftLyricMask
             : layout == PortalMusicLayout.right
             ? kMusicRightLyricMask
             : kMusicLeftLyricMask,
-    textAlign: isCenter ? TextAlign.center : TextAlign.left,
-    blockAnchor: isCenter ? Alignment.center : Alignment.centerLeft,
+    textAlign: centerFixedWindow ? TextAlign.center : TextAlign.left,
+    blockAnchor: centerFixedWindow ? Alignment.center : Alignment.centerLeft,
     // 在读行底部时间标签：样例 `lyric-meta` 的 `mt-3` + `py-1` 胶囊。
-    // 居中固定四行窗口没有这一行（样例如此），用户开关关闭时同样归零。
+    // 居中构图没有这一行（样例如此），用户开关关闭时同样归零。
     activeAuxGap: showTimeTag ? px(12) : 0,
     activeAuxReserve: showTimeTag ? px(22) : 0,
     activeAuxFontSize: showTimeTag ? px(11) : 0,
@@ -1431,14 +1473,18 @@ class MusicCenterLayoutFrame {
   /// 按基准尺寸推导居中布局。
   ///
   /// [deckEnabled] 为 false 时（用户关闭堆叠卡片）跳过卡组与曲目信息带，
-  /// 歌词窗口（连同其头部带）在内容区内水平与垂直双居中。
+  /// 歌词改为通高滚动视口：元信息带贴内容区顶部，视口吃满剩余高度，
+  /// 当前句位置由用户的焦点锚点决定，不再靠固定窗口高度居中。
   /// [lyricHeaderHeight] 为歌词窗口上方元信息带预留高度（居右布局样例）。
+  /// [lyricSlotHeight] 与 [lyricWindowLines] 用于按实际行槽推导固定窗口高度。
   factory MusicCenterLayoutFrame.resolve(
     Size size, {
     double? topPadding,
     double? headerHeight,
     bool deckEnabled = true,
     double lyricHeaderHeight = 0,
+    required double lyricSlotHeight,
+    required int lyricWindowLines,
   }) {
     final scale = musicLayoutScale(size);
     final pagePadding = kMusicLayoutPagePadding * scale;
@@ -1455,6 +1501,8 @@ class MusicCenterLayoutFrame {
               kMusicLayoutHeaderBlockMinHeight,
             )
             .toDouble();
+    // 底部播放条不是页面边距：留白只按页边距扣会把手势区压到播放条上。
+    final footerReserved = kMusicCenterFooterReservedHeight * scale;
     final contentRect = Rect.fromLTWH(
       pagePadding,
       headerTop + resolvedHeaderHeight,
@@ -1462,7 +1510,11 @@ class MusicCenterLayoutFrame {
       math
           .max(
             0.0,
-            size.height - headerTop - resolvedHeaderHeight - pagePadding,
+            size.height -
+                headerTop -
+                resolvedHeaderHeight -
+                pagePadding -
+                footerReserved,
           )
           .toDouble(),
     );
@@ -1479,25 +1531,22 @@ class MusicCenterLayoutFrame {
     final lyricLeft =
         centeredContent.left + (centeredContent.width - lyricWidth) / 2;
     if (!deckEnabled) {
-      // 无卡组：歌词头部带 + 歌词窗口在内容区内双居中。
-      final stackHeight = lyricHeaderHeight + 120 * scale;
-      final top =
-          centeredContent.top +
-          math.max(0.0, (centeredContent.height - stackHeight) / 2).toDouble();
+      // 无卡组：元信息带贴内容区顶部，歌词滚动视口吃满其余高度。
+      final viewportTop = centeredContent.top + lyricHeaderHeight;
       return MusicCenterLayoutFrame(
         scale: scale,
         deck: MusicDeckStageGeometry.resolveCenter(
           contentRect: centeredContent,
-          top: top,
+          top: viewportTop,
           height: 0,
           scale: scale,
         ),
         metaRect: Rect.zero,
         lyricRect: Rect.fromLTWH(
           lyricLeft,
-          top + lyricHeaderHeight,
+          viewportTop,
           lyricWidth,
-          120 * scale,
+          math.max(0.0, centeredContent.height - lyricHeaderHeight).toDouble(),
         ),
         headerTop: headerTop,
         headerHeight: resolvedHeaderHeight,
@@ -1510,7 +1559,10 @@ class MusicCenterLayoutFrame {
             .toDouble();
     final deckGap = kMusicCenterDeckGap * scale;
     final metaHeight = 52 * scale;
-    final lyricHeight = 120 * scale;
+    // 固定窗口按实际行槽推导：行槽取整留了 2px 余量（见
+    // _MusicLyricsLayout.contentSlotHeight），窗口短于 lines * 行槽就会被
+    // floor 掉一行，偶数行会让当前句偏离正中。
+    final lyricHeight = math.max(1, lyricWindowLines) * (lyricSlotHeight + 2);
     final stackHeight = deckHeight + deckGap + metaHeight + lyricHeight;
     final top =
         centeredContent.top +

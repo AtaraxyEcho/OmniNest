@@ -103,6 +103,58 @@ void main() {
     expect((topGap - bottomGap).abs(), lessThan(4));
   });
 
+  testWidgets('Hero 封面卡保持可点击（曾经静默无回调）', (tester) async {
+    tester.view.physicalSize = const Size(1936, 1080);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await pumpPortal(tester);
+
+    final cover = find.byKey(const ValueKey('omninest.portal.hero-cover'));
+    expect(cover, findsOneWidget);
+    // 封面卡一旦失去点击回调就退化成纯展示件，且编译期不报错；
+    // 这里钉住入口圆钮存在且命中区只在角落（整张封面可点会误触）。
+    // key 挂在外层 SizedBox 上，手势层是它的子节点。
+    final entry = find.byKey(const ValueKey('omninest.portal.cover-entry'));
+    expect(entry, findsOneWidget);
+    final gesture = tester.widget<GestureDetector>(entry);
+    expect(gesture.onTap, isNotNull);
+    final entrySize = tester.getSize(entry);
+    final coverSize = tester.getSize(cover);
+    expect(entrySize.width, lessThanOrEqualTo(40));
+    expect(entrySize.height, lessThanOrEqualTo(40));
+    expect(
+      entrySize.width * entrySize.height,
+      lessThan(coverSize.width * coverSize.height * 0.05),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('沉浸播放层常驻过渡容器，未进入时也有淡出落点', (tester) async {
+    tester.view.physicalSize = const Size(1936, 1080);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await pumpPortal(tester);
+
+    // 沉浸层若是条件插入，退出时会被立刻移除，动画无处可跑；
+    // 因此未进入时也必须挂着占位分支，且两者同处一个 AnimatedSwitcher。
+    expect(
+      find.byKey(const ValueKey('portal-immersive-hidden')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('portal-immersive-playback')),
+      findsNothing,
+    );
+    expect(
+      find.ancestor(
+        of: find.byKey(const ValueKey('portal-immersive-hidden')),
+        matching: find.byType(AnimatedSwitcher),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('桌面最小宽度 1024 进入两栏中间档且无溢出', (tester) async {
     // 逻辑宽 1024：内容区 960，落在 900-1279 两栏档。
     tester.view.physicalSize = const Size(2048, 1600);

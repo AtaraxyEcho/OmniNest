@@ -132,6 +132,15 @@ class _BackdropLibraryPortalState
                                         child: _PortalHeroCoverDisplay(
                                           palette: widget.palette,
                                           item: active,
+                                          // 音乐封面直进沉浸播放详情，其余模块
+                                          // 回到自己的分区路由。
+                                          onTap:
+                                              active.module ==
+                                                      PortalFocusModule.music
+                                                  ? widget
+                                                      .onOpenImmersivePlayback
+                                                  : () =>
+                                                      context.go(active.route),
                                         ),
                                       ),
                                     ],
@@ -154,6 +163,8 @@ class _BackdropLibraryPortalState
                                         palette: widget.palette,
                                         data: data,
                                         activeModule: active.module,
+                                        onOpenImmersivePlayback:
+                                            widget.onOpenImmersivePlayback,
                                         lightweight: widget.localBackdropActive,
                                       ),
                                     ),
@@ -239,6 +250,15 @@ class _BackdropLibraryPortalState
                                         child: _PortalHeroCoverDisplay(
                                           palette: widget.palette,
                                           item: active,
+                                          // 音乐封面直进沉浸播放详情，其余模块
+                                          // 回到自己的分区路由。
+                                          onTap:
+                                              active.module ==
+                                                      PortalFocusModule.music
+                                                  ? widget
+                                                      .onOpenImmersivePlayback
+                                                  : () =>
+                                                      context.go(active.route),
                                         ),
                                       ),
                                     ],
@@ -252,6 +272,8 @@ class _BackdropLibraryPortalState
                                   palette: widget.palette,
                                   data: data,
                                   activeModule: active.module,
+                                  onOpenImmersivePlayback:
+                                      widget.onOpenImmersivePlayback,
                                   lightweight: widget.localBackdropActive,
                                 ),
                               ),
@@ -500,11 +522,71 @@ class _HeroCopy extends StatelessWidget {
   }
 }
 
+/// 封面入口圆钮：把「进入播放详情/分区」的命中区收成一枚角落按钮。
+/// 整张封面可点在瀑布流密度下会误触（滑动、悬停取封面都会落在卡上）。
+class _PortalCoverEntryButton extends StatelessWidget {
+  const _PortalCoverEntryButton({
+    required this.onTap,
+    required this.module,
+    required this.tooltip,
+  });
+
+  final VoidCallback onTap;
+  final PortalFocusModule module;
+  final String tooltip;
+
+  @override
+  Widget build(BuildContext context) {
+    final music = module == PortalFocusModule.music;
+    return Tooltip(
+      message: tooltip,
+      child: Semantics(
+        button: true,
+        label: tooltip,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: GestureDetector(
+            key: const ValueKey('omninest.portal.cover-entry'),
+            onTap: onTap,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.14),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
+              ),
+              child: SizedBox(
+                width: 40,
+                height: 40,
+                child: Center(
+                  child: Icon(
+                    music
+                        ? Icons.graphic_eq_rounded
+                        : Icons.open_in_new_rounded,
+                    size: 18,
+                    color: const Color(0xEBFFFFFF),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _PortalHeroCoverDisplay extends ConsumerStatefulWidget {
-  const _PortalHeroCoverDisplay({required this.palette, required this.item});
+  /// `onTap` 必填：此前封面卡没有任何点击回调，音乐模块的卡片点了没反应，
+  /// 且缺参数时编译期不会提示，属于静默失效。
+  const _PortalHeroCoverDisplay({
+    required this.palette,
+    required this.item,
+    required this.onTap,
+  });
 
   final PortalVisualPalette palette;
   final PortalFocusItem item;
+  final VoidCallback onTap;
 
   @override
   ConsumerState<_PortalHeroCoverDisplay> createState() =>
@@ -555,22 +637,36 @@ class _PortalHeroCoverDisplayState
             key: const ValueKey('omninest.portal.hero-cover'),
             width: coverWidth,
             height: coverHeight,
-            child: PortalGradientCover(
-              palette: widget.palette,
-              title: item.title,
-              subtitle: item.subtitle,
-              variant: item.variant,
-              height: coverHeight,
-              imageUrl: item.imageUrl,
-              readerItemId: item.readerItemId,
-              coverCacheKey: item.coverCacheKey,
-              onCoverError: _handleCoverError,
-              fallbackIcon: item.icon.iconData,
-              maxCoverWidth: coverWidth,
-              maxCoverHeight: coverHeight,
-              foregroundFit: BoxFit.contain,
-              foregroundPadding: const EdgeInsets.fromLTRB(16, 16, 16, 74),
-              borderWidth: 1.2,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                PortalGradientCover(
+                  palette: widget.palette,
+                  title: item.title,
+                  subtitle: item.subtitle,
+                  variant: item.variant,
+                  height: coverHeight,
+                  imageUrl: item.imageUrl,
+                  readerItemId: item.readerItemId,
+                  coverCacheKey: item.coverCacheKey,
+                  onCoverError: _handleCoverError,
+                  fallbackIcon: item.icon.iconData,
+                  maxCoverWidth: coverWidth,
+                  maxCoverHeight: coverHeight,
+                  foregroundFit: BoxFit.contain,
+                  foregroundPadding: const EdgeInsets.fromLTRB(16, 16, 16, 74),
+                  borderWidth: 1.2,
+                ),
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: _PortalCoverEntryButton(
+                    onTap: widget.onTap,
+                    module: item.module,
+                    tooltip: item.actionLabel,
+                  ),
+                ),
+              ],
             ),
           ),
         );

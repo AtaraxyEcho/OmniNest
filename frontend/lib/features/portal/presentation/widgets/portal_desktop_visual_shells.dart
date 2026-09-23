@@ -273,11 +273,11 @@ class _PortalDesktopVisualHostState
                           const Duration(milliseconds: 240),
                         ),
                         curve: Curves.easeOutCubic,
-                        child: AnimatedSlide(
-                          offset:
-                              immersivePlaybackVisible
-                                  ? const Offset(0, 0.035)
-                                  : Offset.zero,
+                        child: AnimatedScale(
+                          // 背景"收远"而不是下移：与前景的推近形成对向运动，
+                          // 位移读起来像页面被挤走。不叠压暗遮罩，壁纸可见度
+                          // 本身就是沉浸页要展示的内容。
+                          scale: immersivePlaybackVisible ? 0.985 : 1,
                           duration: PortalMotion.duration(
                             context,
                             const Duration(milliseconds: 240),
@@ -297,22 +297,83 @@ class _PortalDesktopVisualHostState
               ),
             ),
           ),
-          if (immersivePlaybackVisible)
-            Positioned.fill(
-              top:
-                  hosted
-                      ? 0
-                      : immersiveActive
-                      ? 0
-                      : MediaQuery.paddingOf(context).top + 58,
-              child: MusicImmersivePlayer(
-                palette: _musicImmersivePalette(palette),
-                reservedTopInset:
-                    !hosted && immersiveActive
-                        ? MediaQuery.paddingOf(context).top + 58
-                        : 0,
+          // 沉浸播放层自带进出场过渡：此前它被直接插入/移除，背景已经淡出而
+          // 前景「啪」地出现（退出同理），观感上就是缺少过渡。让位规则仍由
+          // Positioned.fill 的 top 决定，动画只负责淡入与轻微收放。
+          Positioned.fill(
+            top:
+                hosted
+                    ? 0
+                    : immersiveActive
+                    ? 0
+                    : MediaQuery.paddingOf(context).top + 58,
+            child: IgnorePointer(
+              ignoring: !immersivePlaybackVisible,
+              child: AnimatedSwitcher(
+                duration: PortalMotion.duration(
+                  context,
+                  const Duration(milliseconds: 240),
+                ),
+                reverseDuration: PortalMotion.duration(
+                  context,
+                  const Duration(milliseconds: 200),
+                ),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                // 默认 layoutBuilder 以非定位子节点排版，会让沉浸层丢掉
+                // Positioned.fill 的铺满约束（塌陷且过渡看不出来）。这里显式
+                // 让每一帧都撑满父级。
+                layoutBuilder:
+                    (current, previousChildren) => Stack(
+                      fit: StackFit.expand,
+                      children: <Widget>[
+                        ...previousChildren,
+                        if (current != null) current,
+                      ],
+                    ),
+                transitionBuilder: (child, animation) {
+                  final curved = CurvedAnimation(
+                    parent: animation,
+                    curve: Curves.easeOutCubic,
+                  );
+                  // 减少动效偏好下只保留淡入，几何量塌成常量。
+                  final settled = MediaQuery.disableAnimationsOf(context);
+                  return FadeTransition(
+                    opacity: curved,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: settled ? Offset.zero : const Offset(0, 0.02),
+                        end: Offset.zero,
+                      ).animate(curved),
+                      child: ScaleTransition(
+                        // 0.985 → 1 的推近：幅度再大就会在视口边缘露出背景。
+                        scale: Tween<double>(
+                          begin: settled ? 1 : 0.985,
+                          end: 1,
+                        ).animate(curved),
+                        child: child,
+                      ),
+                    ),
+                  );
+                },
+                child:
+                    immersivePlaybackVisible
+                        ? KeyedSubtree(
+                          key: const ValueKey('portal-immersive-playback'),
+                          child: MusicImmersivePlayer(
+                            palette: _musicImmersivePalette(palette),
+                            reservedTopInset:
+                                !hosted && immersiveActive
+                                    ? MediaQuery.paddingOf(context).top + 58
+                                    : 0,
+                          ),
+                        )
+                        : const SizedBox.shrink(
+                          key: ValueKey('portal-immersive-hidden'),
+                        ),
               ),
             ),
+          ),
           if (!hosted && immersiveActive)
             Positioned(
               left: 32,

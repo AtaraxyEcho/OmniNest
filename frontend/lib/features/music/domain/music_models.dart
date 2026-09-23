@@ -131,7 +131,7 @@ class MusicLyricWord {
     required this.text,
   });
 
-  /// 相对所在行起始位置的偏移。
+  /// 相对所在行起始位置的偏移；行首早于锚点时可为负值（见 `_nearestWords`）。
   final Duration offset;
   final Duration duration;
   final String text;
@@ -402,6 +402,10 @@ void _addWord(
 /// 词偏移是相对 yrc 行首的（见 `_addWord`），而消费方按 LRC 行首计算行内进度。
 /// 按容差命中相邻行时必须把两份行首的时间差补回偏移，否则整块词级时间相对
 /// 人声恒定提前或滞后（逐字填充跟不上唱词）。精确匹配无位移，仍复用原列表实例。
+///
+/// 位移后的偏移允许为负：yrc 行首早于 LRC 行首时，前导词元在 LRC 锚点时刻已经
+/// 唱了一部分，[MusicLyricLine.fillStateAt] 按负偏移计入这段已唱时长。把负值夹到
+/// 0 会让行首若干词元同时起唱，表现为填充领先人声后再错位。
 List<MusicLyricWord> _nearestWords(
   Map<Duration, List<MusicLyricWord>> table,
   Duration position,
@@ -436,16 +440,11 @@ List<MusicLyricWord> _nearestWords(
   return List<MusicLyricWord>.unmodifiable([
     for (final word in best)
       MusicLyricWord(
-        offset: _wordOffsetOrZero(word.offset + shift),
+        offset: word.offset + shift,
         duration: word.duration,
         text: word.text,
       ),
   ]);
-}
-
-/// 词偏移下限：负值（异常数据）按 0 处理，与 `_addWord` 的口径一致。
-Duration _wordOffsetOrZero(Duration offset) {
-  return offset < Duration.zero ? Duration.zero : offset;
 }
 
 /// 解析译文时间轴；纯文本译文返回空表（逐行文本交给行级回退处理）。

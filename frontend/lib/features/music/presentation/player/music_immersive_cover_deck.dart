@@ -201,29 +201,24 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
     }
 
     final strips = <Widget>[];
-    // 左右两侧各自从最外档向内推进，命中条之间互不重叠。
+    // 每侧都从在读卡外缘向外推进。内侧档卡面更大、其外缘反而更靠内，若按
+    // 由外向内推进，内侧档会算出负宽度并被整条丢弃——表现为紧贴在读卡的两档
+    // 既点不动也不响应悬停。卡面尺寸要乘档位缩放，否则条带比真实像素宽。
     for (final side in <int>[-1, 1]) {
-      var innerEdge = side < 0 ? heroLeft : heroRight;
-      for (final slot in <int>[side * 2, side]) {
+      var edge = side < 0 ? heroLeft : heroRight;
+      for (final slot in <int>[side, side * 2]) {
         final index = _resolveSlotIndex(slot);
         if (index == null) {
           continue;
         }
         final spec = resolveMusicDeckCard(widget.layout, slot);
+        final cardSize = spec.size * scale * spec.scale;
         final cardCenterX = centerX + spec.offset.dx * scale;
-        final cardSize = spec.size * scale;
-        final cardLeft = cardCenterX - cardSize / 2;
-        final cardRight = cardCenterX + cardSize / 2;
-        final double bandLeft;
-        final double bandRight;
-        if (side < 0) {
-          bandLeft = cardLeft;
-          bandRight = innerEdge;
-        } else {
-          bandLeft = innerEdge;
-          bandRight = cardRight;
-        }
-        innerEdge = side < 0 ? cardLeft : cardRight;
+        final outerEdge =
+            side < 0 ? cardCenterX - cardSize / 2 : cardCenterX + cardSize / 2;
+        final bandLeft = side < 0 ? outerEdge : edge;
+        final bandRight = side < 0 ? edge : outerEdge;
+        edge = outerEdge;
         final bandWidth = bandRight - bandLeft;
         if (bandWidth <= 0) {
           continue;
@@ -250,28 +245,36 @@ class _DigitalImmersiveCoverDeckState extends State<MusicImmersiveCoverDeck> {
     return strips;
   }
 
-  /// 两侧布局（居左/居右）的命中条。
+  /// 两侧布局的命中条顺序：由内向外，与绘制顺序相反。
+  /// 按绘制顺序生成时内侧宽条最后入栈，会把外侧各档全部盖住。
+  static const _sideHitSlotOrder = <int>[1, 2, 3, 4];
+
+  /// 两侧布局（居左/居右）的命中条：每档只占上一档右缘到本档右缘的露出带。
   List<Widget> _buildSideLayoutHitStrips(Size stageSize) {
     final scale = widget.scale;
     final inset = musicDeckStageInset(widget.layout) * scale;
     final activeSize = resolveMusicDeckCard(widget.layout, 0).size * scale;
-    final left = inset + activeSize;
     final top = (stageSize.height - activeSize) / 2;
     final strips = <Widget>[];
-    for (final slot in _paintOrder) {
+    var innerEdge = inset + activeSize;
+    for (final slot in _sideHitSlotOrder) {
       final index = _resolveSlotIndex(slot);
       if (index == null) {
         continue;
       }
       final spec = resolveMusicDeckCard(widget.layout, slot);
-      final width = inset + spec.offset.dx * scale + spec.size * scale - left;
+      final outerEdge = inset + spec.offset.dx * scale + spec.size * scale;
+      final width = outerEdge - innerEdge;
       if (width <= 0) {
+        // 该档被内侧卡完全遮住，没有独立露出带；推进边界保持不变。
         continue;
       }
+      final bandLeft = innerEdge;
+      innerEdge = outerEdge;
       strips.add(
         Positioned(
           key: ValueKey('deck-hit-strip-$slot'),
-          left: left,
+          left: bandLeft,
           width: width,
           top: top,
           height: activeSize,

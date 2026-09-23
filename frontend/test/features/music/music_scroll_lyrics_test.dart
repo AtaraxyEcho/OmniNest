@@ -1346,6 +1346,265 @@ void main() {
     await tester.pump();
     expect(find.byIcon(Icons.graphic_eq), findsNothing);
   });
+
+  testWidgets('在读行底衬按行内容取高，不随行槽漂移', (tester) async {
+    // 纯音乐这类单行短歌词：底衬必须包住文字本身（上下各扩 paddingY），
+    // 而不是按整行槽钉边距——行槽里含行距、译文预留与时间标签位。
+    Future<({MusicLyricSpec spec, Rect band, Rect text})> pumpAndMeasure({
+      required bool timeTag,
+    }) async {
+      final player = _FakeMusicAudioPlayback(initialPosition: Duration.zero);
+      addTearDown(player.dispose);
+      final spec = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        1,
+        timeTagEnabled: timeTag,
+      );
+      await tester.pumpWidget(
+        _lyricsApp(
+          player: player,
+          spec: spec,
+          lyrics: const <MusicLyricLine>[
+            MusicLyricLine(position: Duration.zero, text: '纯音乐，请欣赏'),
+            MusicLyricLine(position: Duration(seconds: 30), text: '第二句'),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      final band = tester
+          .widgetList<DecoratedBox>(find.byType(DecoratedBox))
+          .firstWhere(
+            (box) =>
+                box.decoration is BoxDecoration &&
+                (box.decoration as BoxDecoration).color ==
+                    const Color(0x660C0E11),
+          );
+      return (
+        band: tester.getRect(find.byWidget(band)),
+        text: tester.getRect(find.text('纯音乐，请欣赏')),
+        spec: spec,
+      );
+    }
+
+    final off = await pumpAndMeasure(timeTag: false);
+    // 底衬包住文字行盒并四向至少扩出 padding，且与文字同一水平轴心：
+    // 行槽里的行距、译文预留与时间标签位都不应参与色块取高。
+    expect(
+      off.band.top,
+      lessThanOrEqualTo(off.text.top - off.spec.activeLinePaddingY + 1),
+    );
+    expect(
+      off.band.bottom,
+      greaterThanOrEqualTo(off.text.bottom + off.spec.activeLinePaddingY - 1),
+    );
+    expect((off.band.center.dy - off.text.center.dy).abs(), lessThan(1.5));
+    expect(off.band.left, lessThan(off.text.left));
+
+    // 开启时间标签后底衬把标签一起包住：只按内容增长，
+    // 不再被行槽的其余预留撑高。
+    final on = await pumpAndMeasure(timeTag: true);
+    expect(on.band.height, greaterThan(off.band.height));
+    expect(
+      on.band.height - off.band.height,
+      closeTo(on.spec.activeAuxGap + on.spec.activeAuxReserve, 2),
+    );
+  });
+
+  testWidgets('跨可视行的词元时长按字符占比拆分，次行不再锁在未唱', (tester) async {
+    // 折行为 14 + 4 字符：第二个词元 "A AAAA" 从第 13 个字符起，跨过换行点。
+    // 整段时长记给首行会让次行权重为 0，被唱时仍停在非当前句色（"填不满"），
+    // 等下一个变化点再整块跳变。按字符占比拆分后次行应在演唱到达时就开始点亮。
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 1),
+    );
+    addTearDown(player.dispose);
+    const probeKey = ValueKey('music-lyric-pixel-probe');
+    final lyrics = <MusicLyricLine>[
+      const MusicLyricLine(position: Duration.zero, text: 'X'),
+      const MusicLyricLine(
+        position: Duration(seconds: 1),
+        text: 'AAAA AAAA AAAA AAAA',
+        words: <MusicLyricWord>[
+          MusicLyricWord(
+            offset: Duration.zero,
+            duration: Duration(milliseconds: 100),
+            text: 'AAAA AAAA AAA',
+          ),
+          MusicLyricWord(
+            offset: Duration(milliseconds: 100),
+            duration: Duration(milliseconds: 700),
+            text: 'A AAAA',
+          ),
+        ],
+      ),
+      const MusicLyricLine(position: Duration(seconds: 2), text: 'X'),
+    ];
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        lyrics: lyrics,
+        fontFamily: 'Ahem',
+        repaintBoundaryKey: probeKey,
+        settings: PortalLyricVisualSettings.defaults.copyWith(
+          fontSizePx: 48,
+          currentFontSizePx: 48,
+          currentPaint: const LyricPaint.vertical(0xFFB7FFE7, 0xFF7098A0),
+        ),
+      ),
+    );
+    await _advance(tester);
+    // 结构前置断言：确认确实折成 14 + 4 两行，词元才可能跨行。
+    // 每行有 ambient + active 两份同文副本，按 .first 取其一。
+    expect(find.text('AAAA AAAA AAAA'), findsAtLeastNWidgets(1));
+    expect(find.text('AAAA'), findsAtLeastNWidgets(1));
+
+    // 演唱到行内 500ms：整行进度 500/800。
+    player.emit(const Duration(milliseconds: 1500));
+    await tester.pump();
+
+    final (image, delta) = await _pixelProbe(tester, probeKey);
+    addTearDown(image.dispose);
+    final secondLine = tester.getRect(find.text('AAAA').first);
+    final firstLine = tester.getRect(find.text('AAAA AAAA AAAA').first);
+
+    // 次行左端已点亮、右端仍未唱；首行整行唱完。
+    expect(
+      delta(Offset(secondLine.left + 8, secondLine.center.dy)),
+      greaterThan(20),
+    );
+    expect(
+      delta(
+        Offset(secondLine.left + secondLine.width * 0.9, secondLine.center.dy),
+      ).abs(),
+      lessThan(12),
+    );
+    expect(
+      delta(
+        Offset(firstLine.left + firstLine.width * 0.95, firstLine.center.dy),
+      ),
+      greaterThan(20),
+    );
+  });
+
+  testWidgets('个别词元与行文本失配时其余行仍按时间加权', (tester) async {
+    // 词级时长刻意与行宽失衡：首行 14 字符只唱 100/550，次行 4 字符唱 400/550。
+    // 失配词 "ZZZZ" 的 50ms 仍留在总时长里（与 fillStateAt 口径一致），按比例
+    // 摊回两行。整行退回行宽加权时次行要等到进度 672/864=77.8% 才亮；按时间加权
+    // 时它在 110/550=20% 就开始点亮。
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 1),
+    );
+    addTearDown(player.dispose);
+    const probeKey = ValueKey('music-lyric-pixel-probe');
+    final lyrics = <MusicLyricLine>[
+      const MusicLyricLine(position: Duration.zero, text: 'X'),
+      const MusicLyricLine(
+        position: Duration(seconds: 1),
+        text: 'ABCD EFGH IJKL MNOP',
+        words: <MusicLyricWord>[
+          MusicLyricWord(
+            offset: Duration.zero,
+            duration: Duration(milliseconds: 100),
+            text: 'ABCD EFGH IJKL',
+          ),
+          // 行文本中不存在：只丢该词自身的归属，不再作废整行时间加权。
+          MusicLyricWord(
+            offset: Duration(milliseconds: 100),
+            duration: Duration(milliseconds: 50),
+            text: 'ZZZZ',
+          ),
+          MusicLyricWord(
+            offset: Duration(milliseconds: 150),
+            duration: Duration(milliseconds: 400),
+            text: 'MNOP',
+          ),
+        ],
+      ),
+      const MusicLyricLine(position: Duration(seconds: 2), text: 'X'),
+    ];
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        lyrics: lyrics,
+        fontFamily: 'Ahem',
+        repaintBoundaryKey: probeKey,
+        settings: PortalLyricVisualSettings.defaults.copyWith(
+          fontSizePx: 48,
+          currentFontSizePx: 48,
+          currentPaint: const LyricPaint.vertical(0xFFB7FFE7, 0xFF7098A0),
+        ),
+      ),
+    );
+    await _advance(tester);
+    expect(find.text('ABCD EFGH IJKL'), findsAtLeastNWidgets(1));
+
+    // 行内 200ms：整行进度 200/550 = 36.4%。
+    player.emit(const Duration(milliseconds: 1200));
+    await tester.pump();
+
+    final (image, delta) = await _pixelProbe(tester, probeKey);
+    addTearDown(image.dispose);
+    final firstLine = tester.getRect(find.text('ABCD EFGH IJKL').first);
+    final secondLine = tester.getRect(find.text('MNOP').first);
+    // 首行已唱完（右端读色），次行左端已开始点亮。
+    expect(
+      delta(
+        Offset(firstLine.left + firstLine.width * 0.95, firstLine.center.dy),
+      ),
+      greaterThan(20),
+    );
+    expect(
+      delta(Offset(secondLine.left + 8, secondLine.center.dy)),
+      greaterThan(20),
+    );
+  });
+
+  testWidgets('点击歌词行跳转加回生效的歌词延迟', (tester) async {
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 10),
+    );
+    addTearDown(player.dispose);
+    await tester.pumpWidget(_lyricsApp(player: player, trackOffsetMs: 500));
+    await _advance(tester);
+
+    await tester.tap(find.text('Lyric 12'));
+    await tester.pump();
+
+    // 行选中按 position - 500ms 判定，跳到第 12 句必须落在 12.5s，
+    // 否则播放后立刻又被算回上一句。
+    expect(player.state.position, const Duration(milliseconds: 12500));
+  });
+}
+
+/// 采样 [boundaryKey] 重绘边界的渲染像素，返回 (图像, G-R 取值函数)。
+///
+/// 渐变读色的 G 分量明显高于 R，非当前句色 G≈R，据此判断某点是否已被填充。
+Future<(ui.Image, int Function(Offset))> _pixelProbe(
+  WidgetTester tester,
+  Key boundaryKey,
+) async {
+  final renderObject = tester.renderObject<RenderRepaintBoundary>(
+    find.byKey(boundaryKey),
+  );
+  late final ui.Image image;
+  await tester.binding.runAsync(() async {
+    image = await renderObject.toImage(pixelRatio: 1);
+  });
+  late final ByteData bytes;
+  await tester.binding.runAsync(() async {
+    final data = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    expect(data, isNotNull);
+    bytes = data!;
+  });
+  int delta(Offset point) {
+    final x = point.dx.round().clamp(0, image.width - 1);
+    final y = point.dy.round().clamp(0, image.height - 1);
+    final offset = (y * image.width + x) * 4;
+    return bytes.getUint8(offset + 1) - bytes.getUint8(offset);
+  }
+
+  return (image, delta);
 }
 
 Widget _lyricsApp({

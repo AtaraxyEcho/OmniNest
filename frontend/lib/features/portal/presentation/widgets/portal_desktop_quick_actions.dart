@@ -30,6 +30,9 @@ class _PortalFocusQuickActions extends ConsumerWidget {
         child: _PortalMusicFocusPreview(
           palette: palette,
           onOpenQueue: () => showMusicDeckQueue(context),
+          // 封面即播放详情页入口：`MusicDeckMiniPlayer.onOpenPlayer` 可空，
+          // 漏传时封面点击会静默失效。
+          onOpenPlayer: onOpenImmersivePlayback,
         ),
       ),
       PortalFocusModule.video => _PortalModulePagedPreview<
@@ -171,10 +174,14 @@ class _PortalMusicFocusPreview extends ConsumerWidget {
   const _PortalMusicFocusPreview({
     required this.palette,
     required this.onOpenQueue,
+    required this.onOpenPlayer,
   });
 
   final PortalVisualPalette palette;
   final VoidCallback onOpenQueue;
+
+  /// 打开播放详情页（沉浸层）：由 Portal 的沉浸会话入口提供。
+  final VoidCallback onOpenPlayer;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -189,6 +196,7 @@ class _PortalMusicFocusPreview extends ConsumerWidget {
       managePlaybackSession: true,
       embedded: true,
       onOpenQueue: onOpenQueue,
+      onOpenPlayer: onOpenPlayer,
     );
     // 队列卡数据就绪且有内容时展示虚拟化队列网格；加载中或队列为空
     // 时仅保留迷你播放器。

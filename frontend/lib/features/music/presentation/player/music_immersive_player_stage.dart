@@ -1,5 +1,74 @@
 part of 'music_immersive_player.dart';
 
+/// 舞台分区的错峰进场揭示：整层的淡入+推近由宿主（Portal overlay 或甲板
+/// 覆盖层）负责，这里只让封面与歌词依次落位，形成层次而不是整体闪一下。
+///
+/// 不透明度起点故意不为 0：`RenderOpacity` 在 alpha == 0 时不参与命中测试，
+/// 揭示期间会让悬停与点击同时落空；同理不做位移，避免扰动以几何为准的断言。
+class _StageReveal extends StatefulWidget {
+  const _StageReveal({required this.delay, required this.child});
+
+  final Duration delay;
+  final Widget child;
+
+  @override
+  State<_StageReveal> createState() => _StageRevealState();
+}
+
+class _StageRevealState extends State<_StageReveal>
+    with SingleTickerProviderStateMixin {
+  static const double _startOpacity = 0.35;
+
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 220),
+    value: 1,
+  );
+  Timer? _startTimer;
+  bool _started = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_started) {
+      return;
+    }
+    // 减少动效偏好只能在依赖就绪后读取：initState 里取 MediaQuery 会抛
+    // dependOnInheritedWidgetOfExactType 断言。
+    _started = true;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      return;
+    }
+    _controller.value = _startOpacity;
+    // 计时器必须可取消：否则用例结束时仍挂着 pending timer，flutter_test 报错。
+    _startTimer = Timer(widget.delay, () {
+      if (mounted) {
+        _controller.forward();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _startTimer?.cancel();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_controller.value >= 1) {
+      return widget.child;
+    }
+    return FadeTransition(
+      opacity: Tween<double>(begin: _startOpacity, end: 1).animate(
+        CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+      ),
+      child: widget.child,
+    );
+  }
+}
+
 class _MusicImmersivePlayerStage extends ConsumerStatefulWidget {
   const _MusicImmersivePlayerStage({
     required this.palette,
@@ -17,6 +86,10 @@ class _MusicImmersivePlayerStage extends ConsumerStatefulWidget {
 class _MusicImmersivePlayerStageState
     extends ConsumerState<_MusicImmersivePlayerStage> {
   int _deckIndex = 0;
+
+  /// `_deckIndex` 属于哪首曲目：换曲时在 build 期直接重算，避免先画
+  /// 第 0 张卡再 post-frame 纠正造成的跳卡。
+  String? _deckIndexTrackId;
   bool _syncScheduled = false;
   bool _deckExpanded = false;
   bool _visualEditorOpen = false;
@@ -57,7 +130,12 @@ class _MusicImmersivePlayerStageState
     final lyrics = track?.lyricLines ?? const <MusicLyricLine>[];
     final isPlaying = state?.isPlaying == true && track != null;
     final deckTracks = _resolveDeckTracks(state, track);
-    _syncDeckIndex(track, deckTracks);
+    // 换曲时在同一帧内把卡组对齐到当前曲：留到 post-frame 会让首帧画成
+    // 队列首张卡，随即触发整组重排与位移动画。
+    if (_deckIndexTrackId != track?.id) {
+      _deckIndexTrackId = track?.id;
+      _deckIndex = _resolveDeckIndex(track, deckTracks) ?? _deckIndex;
+    }
     final requestedLayout = visual.lyrics.layout;
 
     return GestureDetector(
@@ -93,6 +171,16 @@ class _MusicImmersivePlayerStageState
             topPadding: topPadding,
             headerHeight: headerBlockHeight,
           );
+          final lyricSpec = resolveMusicLyricSpec(
+            layout,
+            scale,
+            activeFontSizePx: visual.lyrics.activeFontSizePx,
+            inactiveFontSizePx: visual.lyrics.inactiveFontSizePx,
+            inactiveOpacity: visual.lyrics.inactiveOpacity,
+            lineSpacing: visual.lyrics.lineSpacing,
+            timeTagEnabled: visual.lyrics.timeTagEnabled,
+            deckEnabled: visual.deckEnabled,
+          );
           final centerFrame = MusicCenterLayoutFrame.resolve(
             size,
             topPadding: topPadding,
@@ -101,6 +189,8 @@ class _MusicImmersivePlayerStageState
             // 居中布局同样在歌词窗口上方预留元信息带（三布局统一的头部）。
             lyricHeaderHeight:
                 visual.lyrics.enabled ? kMusicLyricMetaRowHeight * scale : 0,
+            lyricSlotHeight: lyricSpec.slotHeight(),
+            lyricWindowLines: lyricSpec.fixedWindowLines,
           );
           final headerTop =
               isCenter ? centerFrame.headerTop : sideFrame.headerTop;
@@ -124,15 +214,6 @@ class _MusicImmersivePlayerStageState
               isCenter
                   ? centerFrame.lyricRect
                   : sideFrame.lyricViewport(layout);
-          final lyricSpec = resolveMusicLyricSpec(
-            layout,
-            scale,
-            activeFontSizePx: visual.lyrics.activeFontSizePx,
-            inactiveFontSizePx: visual.lyrics.inactiveFontSizePx,
-            inactiveOpacity: visual.lyrics.inactiveOpacity,
-            lineSpacing: visual.lyrics.lineSpacing,
-            timeTagEnabled: visual.lyrics.timeTagEnabled,
-          );
           // 歌词列头部带矩形：三个布局统一（居右为样例原生，居左与居中
           // 为补齐的同一控件样式）。
           final lyricHeaderRect =
@@ -169,34 +250,40 @@ class _MusicImmersivePlayerStageState
               if (visual.lyrics.enabled)
                 Positioned.fromRect(
                   rect: lyricRect,
-                  child: _ImmersiveLyrics(
-                    palette: widget.palette,
-                    player: session.player,
-                    track: track,
-                    lyrics: lyrics,
-                    scale: scale,
-                    lyricSettings: visual.lyrics,
-                    lyricSpec: lyricSpec,
-                    trackOffsetMs: trackOffsetMs,
-                    onAdjustLyricOffset: _adjustTrackLyricOffset,
-                    blockAnchor: lyricSpec.blockAnchor,
-                    textAlign: lyricSpec.textAlign,
-                    // 居中布局的歌词窗口按样例固定为四行固定窗口，其余布局
-                    // 恒为滚动歌词（形态由布局决定，桌面不再切换）。
-                    lyricScrollMode: lyricSpec.fixedWindowLines == 0,
-                    onPrevious: () {},
-                    onTogglePlayback:
-                        () => _runPlaybackCommand(
-                          () =>
-                              ref
-                                  .read(musicCenterControllerProvider.notifier)
-                                  .togglePlayback(),
-                        ),
-                    onNext: () {},
-                    onSeek:
-                        (position) => ref
-                            .read(musicPlaybackSessionProvider.notifier)
-                            .seekTo(position),
+                  child: _StageReveal(
+                    delay: const Duration(milliseconds: 110),
+                    child: _ImmersiveLyrics(
+                      palette: widget.palette,
+                      player: session.player,
+                      track: track,
+                      lyrics: lyrics,
+                      scale: scale,
+                      lyricSettings: visual.lyrics,
+                      lyricSpec: lyricSpec,
+                      trackOffsetMs: trackOffsetMs,
+                      onAdjustLyricOffset: _adjustTrackLyricOffset,
+                      blockAnchor: lyricSpec.blockAnchor,
+                      textAlign: lyricSpec.textAlign,
+                      // 居中布局仅在堆叠卡片可见时用固定三行窗口，其余形态
+                      // （两侧布局、居中关卡组）恒为滚动歌词；形态由 lyric
+                      // 规格的 fixedWindowLines 决定，桌面不再手动切换。
+                      lyricScrollMode: lyricSpec.fixedWindowLines == 0,
+                      onPrevious: () {},
+                      onTogglePlayback:
+                          () => _runPlaybackCommand(
+                            () =>
+                                ref
+                                    .read(
+                                      musicCenterControllerProvider.notifier,
+                                    )
+                                    .togglePlayback(),
+                          ),
+                      onNext: () {},
+                      onSeek:
+                          (position) => ref
+                              .read(musicPlaybackSessionProvider.notifier)
+                              .seekTo(position),
+                    ),
                   ),
                 ),
               if (visual.player.enabled)
@@ -272,20 +359,24 @@ class _MusicImmersivePlayerStageState
               if (visual.deckEnabled)
                 Positioned.fromRect(
                   rect: deckRect,
-                  child: MusicImmersiveCoverDeck(
-                    palette: widget.palette,
-                    tracks: deckTracks,
-                    selectedIndex: _deckIndex,
-                    currentTrack: track,
-                    expanded: _deckExpanded,
-                    scale: scale,
-                    layout: layout,
-                    isPlaying: isPlaying,
-                    stageSize: deckRect.size,
-                    nowPlayingLabel:
-                        AppLocalizations.of(context).musicDeckNowPlaying,
-                    onSelected: (index) => _selectDeckTrack(deckTracks, index),
-                    onStep: (delta) => _stepDeck(deckTracks, delta),
+                  child: _StageReveal(
+                    delay: Duration.zero,
+                    child: MusicImmersiveCoverDeck(
+                      palette: widget.palette,
+                      tracks: deckTracks,
+                      selectedIndex: _deckIndex,
+                      currentTrack: track,
+                      expanded: _deckExpanded,
+                      scale: scale,
+                      layout: layout,
+                      isPlaying: isPlaying,
+                      stageSize: deckRect.size,
+                      nowPlayingLabel:
+                          AppLocalizations.of(context).musicDeckNowPlaying,
+                      onSelected:
+                          (index) => _selectDeckTrack(deckTracks, index),
+                      onStep: (delta) => _stepDeck(deckTracks, delta),
+                    ),
                   ),
                 ),
               // 两侧布局卡组列底部的音频参数胶囊（样例 `Spec Data & DAC Output Indicator`）。
@@ -487,20 +578,14 @@ class _MusicImmersivePlayerStageState
     return List<MusicTrack>.unmodifiable(tracks);
   }
 
-  void _syncDeckIndex(MusicTrack? track, List<MusicTrack> tracks) {
+  /// 当前曲在卡组里的档位；不在卡组时返回 null（保持调用方现值）。
+  int? _resolveDeckIndex(MusicTrack? track, List<MusicTrack> tracks) {
     final trackId = track?.id;
     if (trackId == null) {
-      return;
+      return null;
     }
     final index = tracks.indexWhere((item) => item.id == trackId);
-    if (index < 0 || _deckIndex == index) {
-      return;
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && _deckIndex != index) {
-        setState(() => _deckIndex = index);
-      }
-    });
+    return index < 0 ? null : index;
   }
 
   /// 卡组滚轮步进：语义是「下一首/上一首」，必须经播放模式解析目标，

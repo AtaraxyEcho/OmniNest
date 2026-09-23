@@ -67,7 +67,16 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
 
   @override
   Widget build(BuildContext context) {
-    final platform = ref.watch(musicPlatformLibraryProvider).asData?.value;
+    // 甲板树只用到「已启用且已连接」的平台状态：按 `statuses` 切片订阅，
+    // 账号未变时歌单/曲目发布不再重建整棵树。派生放在 build 内做，因为
+    // `select` 以 `==` 比较，每次派生的新列表都会被判为变化。
+    final platformStatuses = ref.watch(
+      musicPlatformLibraryProvider.select(
+        (async) =>
+            async.asData?.value.statuses ?? const <MusicPlatformStatus>[],
+      ),
+    );
+    final platform = musicConnectedPlatformStatuses(platformStatuses);
     final sources = ref.watch(musicDeckSourceSelectionProvider);
     final width = MediaQuery.sizeOf(context).width;
     final compact = MobileShellScope.isHosted(context) || width < 760;
@@ -133,7 +142,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
 
   Widget _buildDesktop(
     BuildContext context,
-    MusicPlatformLibraryState? platform,
+    List<MusicPlatformStatus> platform,
     Set<MusicPlatform> sources,
   ) {
     final width = MediaQuery.sizeOf(context).width;
@@ -171,8 +180,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                           selected: _section,
                           compact: layout.compactNavigation,
                           canManage: canManage,
-                          connectedPlatformCount:
-                              platform?.connectedStatuses.length ?? 0,
+                          connectedPlatformCount: platform.length,
                           onSelected: _selectSection,
                           onManageAccounts: _openAccounts,
                         ),
@@ -324,7 +332,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
 
   Widget _buildMobile(
     BuildContext context,
-    MusicPlatformLibraryState? platform,
+    List<MusicPlatformStatus> platform,
     Set<MusicPlatform> sources,
   ) {
     final l10n = AppLocalizations.of(context);
@@ -367,8 +375,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                     tooltip: l10n.musicDeckManageAccounts,
                     onPressed: _openAccounts,
                     icon: Badge(
-                      isLabelVisible:
-                          (platform?.connectedStatuses.length ?? 0) > 0,
+                      isLabelVisible: platform.isNotEmpty,
                       child: const Icon(Icons.manage_accounts_rounded),
                     ),
                   ),
@@ -663,15 +670,14 @@ class _TopAction extends StatelessWidget {
 class _WideNowPanel extends ConsumerWidget {
   const _WideNowPanel({required this.platform});
 
-  final MusicPlatformLibraryState? platform;
+  final List<MusicPlatformStatus> platform;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.musicColors;
     final center = ref.watch(musicCenterControllerProvider).asData?.value;
     final track = center?.activeTrack;
-    final statuses =
-        platform?.connectedStatuses ?? const <MusicPlatformStatus>[];
+    final statuses = platform;
     return MusicDeckGlass(
       opacity: 0.16,
       blur: 10,

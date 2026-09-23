@@ -8,6 +8,26 @@ import 'package:omninest/features/music/presentation/player/music_immersive_layo
 /// 样例基准画布：三份设计稿均按 1280×1024 构图。
 const Size _reference = Size(1280, 1024);
 
+/// 与舞台同序推导居中框：歌词规格给出行槽与固定窗口行数。
+MusicCenterLayoutFrame _resolveCenterFrame(
+  Size size, {
+  bool deckEnabled = true,
+  double lyricHeaderHeight = 0,
+}) {
+  final spec = resolveMusicLyricSpec(
+    PortalMusicLayout.center,
+    musicLayoutScale(size),
+    deckEnabled: deckEnabled,
+  );
+  return MusicCenterLayoutFrame.resolve(
+    size,
+    deckEnabled: deckEnabled,
+    lyricHeaderHeight: lyricHeaderHeight,
+    lyricSlotHeight: spec.slotHeight(),
+    lyricWindowLines: spec.fixedWindowLines,
+  );
+}
+
 void main() {
   group('复刻基准', () {
     test('基准尺寸下缩放系数为 1', () {
@@ -322,15 +342,73 @@ void main() {
       expect(right.perspective, 0);
     });
 
-    test('居中布局卡组、曲目信息与歌词窗口纵向串联', () {
-      final frame = MusicCenterLayoutFrame.resolve(_reference);
+    test('居中布局卡组、曲目信息与三行歌词窗口纵向串联', () {
+      final frame = _resolveCenterFrame(_reference);
       expect(frame.deck.rect.width, closeTo(1024, 1e-9));
       expect(frame.deck.rect.height, closeTo(380, 1e-9));
       expect(frame.lyricRect.width, closeTo(576, 1e-9));
-      expect(frame.lyricRect.height, closeTo(120, 1e-9));
+      // 行槽 60 + 2 取整余量 × 3 行；写死 120 会被 floor 成 2 行。
+      expect(frame.lyricRect.height, closeTo(186, 1e-9));
       expect(frame.lyricRect.center.dx, closeTo(640, 1e-9));
       expect(frame.metaRect.top, closeTo(frame.deck.rect.bottom + 20, 1e-9));
       expect(frame.lyricRect.top, closeTo(frame.metaRect.bottom, 1e-9));
+      // 底部播放条（86 + 8）已从内容区扣除，歌词不得压上去。
+      expect(
+        frame.lyricRect.bottom,
+        lessThanOrEqualTo(
+          _reference.height -
+              (kMusicLayoutPagePadding + kMusicCenterFooterReservedHeight),
+        ),
+      );
+    });
+
+    test('关闭卡组后歌词变为通高滚动视口并让出播放条', () {
+      const headerHeight = kMusicLyricMetaRowHeight;
+      final frame = _resolveCenterFrame(
+        _reference,
+        deckEnabled: false,
+        lyricHeaderHeight: headerHeight,
+      );
+      // 视口顶部贴在元信息带之下，底部到播放条上沿为止。
+      expect(frame.lyricRect.top, greaterThanOrEqualTo(headerHeight));
+      expect(
+        frame.lyricRect.bottom,
+        closeTo(
+          _reference.height -
+              (kMusicLayoutPagePadding + kMusicCenterFooterReservedHeight),
+          1e-9,
+        ),
+      );
+      // 通高视口远大于三行窗口，形态改为滚动。
+      expect(frame.lyricRect.height, greaterThan(600));
+      expect(frame.deck.rect.height, 0);
+      expect(frame.metaRect, Rect.zero);
+    });
+
+    test('关闭卡组时歌词形态与两侧滚动布局同一口径', () {
+      final scrolled = resolveMusicLyricSpec(
+        PortalMusicLayout.center,
+        1,
+        deckEnabled: false,
+      );
+      final fixed = resolveMusicLyricSpec(PortalMusicLayout.center, 1);
+      expect(scrolled.fixedWindowLines, 0);
+      expect(scrolled.textAlign, TextAlign.left);
+      expect(scrolled.blockAnchor, Alignment.centerLeft);
+      expect(scrolled.mask, kMusicLeftLyricMask);
+      // 滚动形态的行距与在读行样式跟两侧同一口径，否则在小窗度量下会挤成一块。
+      expect(scrolled.lineGap, 18);
+      expect(scrolled.activeLineBackgroundColor, isNotNull);
+      expect(scrolled.activeLinePaddingY, greaterThan(0));
+      expect(scrolled.activeLineScale, 1);
+      // 卡组可见时仍是固定三行居中窗口。
+      expect(fixed.fixedWindowLines, 3);
+      expect(fixed.textAlign, TextAlign.center);
+      expect(fixed.mask, kMusicCenterLyricMask);
+      expect(fixed.lineGap, 12);
+      expect(fixed.activeLineBackgroundColor, isNull);
+      expect(fixed.activeLinePaddingY, 0);
+      expect(fixed.activeLineScale, closeTo(1.04, 1e-9));
     });
 
     test('两种构图在各窗口尺寸下都不越出窗口', () {
@@ -344,7 +422,7 @@ void main() {
         Size(420, 320),
       ];
       for (final window in windows) {
-        final center = MusicCenterLayoutFrame.resolve(window);
+        final center = _resolveCenterFrame(window);
         expect(
           center.lyricRect.bottom,
           lessThanOrEqualTo(window.height + 1e-6),
@@ -356,6 +434,33 @@ void main() {
           reason: '居中构图宽度越界：$window',
         );
         expect(center.deck.rect.top, greaterThanOrEqualTo(0));
+        // 关闭卡组的滚动视口同样不得压到播放条上。
+        final scrolled = _resolveCenterFrame(
+          window,
+          deckEnabled: false,
+          lyricHeaderHeight:
+              kMusicLyricMetaRowHeight * musicLayoutScale(window),
+        );
+        expect(
+          scrolled.lyricRect.bottom,
+          lessThanOrEqualTo(window.height + 1e-6),
+          reason: '关卡组滚动视口越界：$window',
+        );
+        expect(
+          scrolled.lyricRect.right,
+          lessThanOrEqualTo(window.width + 1e-6),
+          reason: '关卡组滚动视口宽度越界：$window',
+        );
+        expect(
+          scrolled.lyricRect.bottom,
+          lessThanOrEqualTo(
+            window.height -
+                (kMusicLayoutPagePadding + kMusicCenterFooterReservedHeight) *
+                    musicLayoutScale(window) +
+                1e-6,
+          ),
+          reason: '关卡组滚动视口压到播放条：$window',
+        );
 
         if (resolveMusicComposition(window, PortalMusicLayout.left) !=
             PortalMusicLayout.left) {
@@ -443,7 +548,7 @@ void main() {
         ).activeAuxReserve,
         22,
       );
-      // 居中布局是样例的固定四行窗口，开了也不放这一行。
+      // 居中构图（固定三行窗口与关卡组滚动列）都不放这一行。
       final center = resolveMusicLyricSpec(
         PortalMusicLayout.center,
         1,
@@ -480,7 +585,7 @@ void main() {
       );
     });
 
-    test('居中布局为固定四行窗口', () {
+    test('居中布局卡组可见时为固定三行窗口', () {
       final center = resolveMusicLyricSpec(PortalMusicLayout.center, 1);
       expect(center.fontSize, 14);
       expect(center.activeFontSize, 18);
@@ -488,7 +593,7 @@ void main() {
       expect(center.activeTranslationFontSize, 12);
       expect(center.lineGap, 12);
       expect(center.mask, (0.22, 0.78));
-      expect(center.fixedWindowLines, 4);
+      expect(center.fixedWindowLines, 3);
       expect(center.textAlign, TextAlign.center);
       expect(center.blockAnchor, Alignment.center);
       expect(center.activeLineScale, closeTo(1.04, 1e-9));
@@ -649,6 +754,25 @@ void main() {
       // 在读卡样例没有 hover:border 类，回落到常态值。
       final hero = resolveMusicDeckCard(PortalMusicLayout.center, 0);
       expect(hero.resolvedHoverBorderAlpha, hero.borderAlpha);
+      // 在读卡不抽出：与两侧布局同一约定。
+      expect(hero.resolvedHoverOffset, hero.offset);
+      expect(hero.resolvedHoverScale, hero.scale);
+      // 后排卡必须沿扇形外向抽出：只改描边与封面缩放不足以被察觉。
+      final inner = resolveMusicDeckCard(PortalMusicLayout.center, 1);
+      final outer = resolveMusicDeckCard(PortalMusicLayout.center, -2);
+      expect(
+        inner.resolvedHoverOffset.dx,
+        closeTo(inner.offset.dx + 62.5, 1e-9),
+      );
+      expect(
+        inner.resolvedHoverOffset.dy,
+        closeTo(inner.offset.dy - kMusicCenterHoverLiftY, 1e-9),
+      );
+      expect(
+        outer.resolvedHoverOffset.dx,
+        closeTo(outer.offset.dx - 52.5, 1e-9),
+      );
+      expect(inner.resolvedHoverScale, greaterThan(inner.scale));
     });
 
     test('展开态放大后各档样式比例不变', () {

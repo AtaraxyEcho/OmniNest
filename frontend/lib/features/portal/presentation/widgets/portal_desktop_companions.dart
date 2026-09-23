@@ -221,6 +221,7 @@ class _AttentionPanel extends ConsumerWidget {
     required this.palette,
     required this.data,
     required this.activeModule,
+    required this.onOpenImmersivePlayback,
     this.lightweight = false,
   });
 
@@ -228,6 +229,9 @@ class _AttentionPanel extends ConsumerWidget {
   final _PortalDesktopData data;
   final PortalFocusModule activeModule;
   final bool lightweight;
+
+  /// 内嵌迷你播放器封面的跳转目标：进入沉浸播放详情页。
+  final VoidCallback onOpenImmersivePlayback;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -266,6 +270,7 @@ class _AttentionPanel extends ConsumerWidget {
                       ),
                       managePlaybackSession: true,
                       embedded: true,
+                      onOpenPlayer: onOpenImmersivePlayback,
                       onOpenQueue: () => showMusicDeckQueue(context),
                     ),
                     const SizedBox(height: 14),
@@ -556,14 +561,36 @@ class _SingleColumnVisual extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 18),
-                PortalGradientCover(
-                  palette: palette,
-                  title: item.title,
-                  subtitle: item.subtitle,
+                // 与桌面 hero 封面同一规则：入口收在角落圆钮上，整张封面不再
+                // 可点，避免误触；音乐直进沉浸播放详情，其余模块回各自分区路由。
+                SizedBox(
                   height: 320,
-                  imageUrl: item.imageUrl,
-                  readerItemId: item.readerItemId,
-                  fallbackIcon: item.icon.iconData,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      PortalGradientCover(
+                        palette: palette,
+                        title: item.title,
+                        subtitle: item.subtitle,
+                        height: 320,
+                        imageUrl: item.imageUrl,
+                        readerItemId: item.readerItemId,
+                        fallbackIcon: item.icon.iconData,
+                      ),
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: _PortalCoverEntryButton(
+                          onTap:
+                              item.module == PortalFocusModule.music
+                                  ? onOpenImmersivePlayback
+                                  : () => context.go(item.route),
+                          module: item.module,
+                          tooltip: item.actionLabel,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),

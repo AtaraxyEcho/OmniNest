@@ -30,9 +30,8 @@ class MusicPlatformLibraryState {
   final Map<String, String> failures;
 
   /// 返回已连接且可用的平台状态。
-  List<MusicPlatformStatus> get connectedStatuses => statuses
-      .where((status) => status.enabled && status.connected)
-      .toList(growable: false);
+  List<MusicPlatformStatus> get connectedStatuses =>
+      musicConnectedPlatformStatuses(statuses);
 
   /// 返回所有已加载的账号歌单。
   List<OnlinePlaylist> get playlists => playlistsByPlatform.values
@@ -76,6 +75,14 @@ class MusicPlatformLibraryState {
     );
   }
 }
+
+/// 「已启用且已连接」的平台状态：甲板与现在面板只需要这一片，单独暴露
+/// 是为了让消费方按切片订阅，而不是订阅整个状态对象。
+List<MusicPlatformStatus> musicConnectedPlatformStatuses(
+  List<MusicPlatformStatus> statuses,
+) => statuses
+    .where((status) => status.enabled && status.connected)
+    .toList(growable: false);
 
 /// 加载平台状态、账号歌单和喜欢歌曲，并隔离单来源失败。
 class MusicPlatformLibraryController

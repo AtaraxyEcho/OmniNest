@@ -106,11 +106,27 @@ void main() {
 
     expect(lines, hasLength(1));
     expect(lines[0].words, hasLength(2));
-    // 16210 - 16500 为负，沿用「异常数据按 0」的既有口径。
-    expect(lines[0].words[0].offset, Duration.zero);
+    // 16210 - 16500 = -290ms：负偏移保留，词元在锚点前已开唱。
+    expect(lines[0].words[0].offset, const Duration(milliseconds: -290));
     // 16880 - 16500 = 380ms（未重定基时会算成 670ms）。
     expect(lines[0].words[1].offset, const Duration(milliseconds: 380));
     expect(lines[0].wordsEnd, const Duration(milliseconds: 790));
+  });
+
+  test('锚点前已在演唱的词元按已唱时长计入填充', () {
+    // 负偏移若被夹到 0，行首两个词会同时起唱：锚点时刻进度算成 0，
+    // 表现为填充领先人声后再错位。这里 290ms 已唱必须立刻反映在进度上。
+    const yrc = '[16210,3460](16210,670,0)还(16880,410,0)没';
+    final line = parseMusicLyrics('[00:16.500]还没', wordLyrics: yrc).single;
+
+    // 总演唱时长 1080ms，锚点时刻已唱 290ms。
+    expect(line.fillProgressAt(Duration.zero), closeTo(290 / 1080, 1e-9));
+    // 锚点 + 380ms 时第一个词已唱完（670ms），第二个词刚起唱。
+    expect(
+      line.fillProgressAt(const Duration(milliseconds: 380)),
+      closeTo(670 / 1080, 1e-9),
+    );
+    expect(line.fillProgressAt(const Duration(milliseconds: 790)), 1.0);
   });
 
   test(

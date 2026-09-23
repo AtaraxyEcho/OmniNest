@@ -804,11 +804,25 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
     if (index < 0 || index >= widget.lyrics.length) {
       return;
     }
-    final position = widget.lyrics[index].position;
+    final settings = widget.lyricSettings ?? PortalLyricVisualSettings.defaults;
+    // 行选中与逐字填充都按 `position - offset` 判定，跳转必须加回同一个延迟，
+    // 否则校准过延迟后点任意一行都会落到与在读行相差 offset 的时刻：播放后
+    // 立刻跳到上一行或下一行，用户读作"延迟没生效"。
+    var target =
+        widget.lyrics[index].position +
+        Duration(
+          milliseconds: _effectiveOffsetMs(
+            settings,
+            trackOffsetMs: widget.trackOffsetMs,
+          ),
+        );
+    if (target < Duration.zero) {
+      target = Duration.zero;
+    }
     if (_activeIndex != index) {
       setState(() => _activeIndex = index);
     }
-    unawaited(widget.onSeek(position));
+    unawaited(widget.onSeek(target));
   }
 
   KeyEventResult _handleKeyEvent(KeyEvent event) {

@@ -169,17 +169,6 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
             child: Stack(
               clipBehavior: Clip.none,
               children: [
-                // 在读行底衬：向外扩张而文字与其他行同基线。
-                if (widget.active && _activeLineDecoration != null)
-                  Positioned(
-                    top: widget.spec!.activeLinePaddingY,
-                    bottom: widget.spec!.activeLinePaddingY,
-                    left: -widget.spec!.activeLinePaddingX,
-                    right: -widget.spec!.activeLinePaddingX,
-                    child: IgnorePointer(
-                      child: DecoratedBox(decoration: _activeLineDecoration!),
-                    ),
-                  ),
                 // 焦点带：在焦点行后叠一层低强度横向提亮（可开关）。
                 if (widget.focusBand)
                   const Positioned.fill(child: _LyricFocusBand()),
@@ -188,7 +177,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
                   alignment: widget.blockAnchor,
                   child: SizedBox(
                     width: widget.blockWidth,
-                    child: _buildBody(content, breathing),
+                    child: _buildBandedBody(content, breathing),
                   ),
                 ),
               ],
@@ -196,6 +185,35 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
           ),
         ),
       ),
+    );
+  }
+
+  /// 在读行底衬：以本行内容为基准向外扩张（负 inset 且舞台不裁剪），
+  /// 文字仍与其他行同基线。
+  ///
+  /// 此前底衬按整行槽上下钉 `activeLinePaddingY`：行槽里含行距、译文预留与
+  /// 时间标签位，纯音乐这类单行短歌词会画出比文字高出一大截、并随时间标签
+  /// 开关漂移的色块（观感上「不是矩形」）。样例的 `active-lyric-box` 是包住
+  /// 本行内容（原文 + 译文 + lyric-meta）的盒子，因此按内容取高。
+  Widget _buildBandedBody(Widget content, double breathing) {
+    final body = _buildBody(content, breathing);
+    final spec = widget.spec;
+    final decoration = widget.active ? _activeLineDecoration : null;
+    if (spec == null || decoration == null) {
+      return body;
+    }
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned(
+          top: -spec.activeLinePaddingY,
+          bottom: -spec.activeLinePaddingY,
+          left: -spec.activeLinePaddingX,
+          right: -spec.activeLinePaddingX,
+          child: IgnorePointer(child: DecoratedBox(decoration: decoration)),
+        ),
+        body,
+      ],
     );
   }
 
@@ -577,8 +595,8 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
   ///
   /// 度量样式必须与环境 DefaultTextStyle 合并（字体族等继承属性影响折行），
   /// 行宽按裁剪后的子串实测（行尾空白不参与）。有词级数据时把每个词的
-  /// 时长按字符区间归集到所在可视行，行间衔接按词级时长加权；词缺失或
-  /// 匹配失败时回退按行宽加权。
+  /// 时长按字符重叠比例拆分到所在可视行，行间衔接按词级时长加权；词级数据
+  /// 覆盖不足或完全缺失时回退按行宽加权。
   _FillLineLayout _resolveFillLines(
     BuildContext context,
     String text,
@@ -658,13 +676,15 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       consumed.add(sum);
       sum += width;
     }
-    // 词级时长权重：每个词按其字符起点归入所在可视行。任一词匹配失败
-    // 即整体放弃时间加权，回退行宽加权，避免部分行权重缺失造成跳变。
+    // 词级时长权重：词元按其字符区间与可视行区间的重叠占比拆分时长。整段记给
+    // 起始可视行会让跨行的次行在被唱时锁在 0%，等权重轮到它时整块跳变。
+    // 个别词与行文本对不上（标点、空白差异）只丢该词自身的归属，其余行仍按时间
+    // 加权；只有匹配到的时长不足总演唱时长一半时才整体回退行宽加权。
     List<double>? timeWeights;
     var totalTime = 0.0;
     if (words.isNotEmpty) {
       final weights = List<double>.filled(lines.length, 0.0);
-      var matchedAll = true;
+      var matchedTime = 0.0;
       var cursor = 0;
       for (final word in words) {
         // 空白词元只承载句末静默与词间空隙（`yrc` 用它表达间奏），不计入
@@ -672,22 +692,34 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
         if (word.isBlank) {
           continue;
         }
+        final durationMs = word.duration.inMilliseconds.toDouble();
+        totalTime += durationMs;
         final index = text.indexOf(word.text, cursor);
         if (index < 0) {
-          matchedAll = false;
-          break;
+          continue;
         }
-        cursor = index + word.text.length;
-        totalTime += word.duration.inMilliseconds;
+        final wordLength = math.max(word.text.length, 1);
+        cursor = index + wordLength;
+        matchedTime += durationMs;
         for (var k = 0; k < rawRanges.length; k++) {
           final (rangeStart, rangeEnd) = rawRanges[k];
-          if (index >= rangeStart && index < rangeEnd) {
-            weights[k] += word.duration.inMilliseconds;
-            break;
+          final overlap =
+              math.min(index + wordLength, rangeEnd) -
+              math.max(index, rangeStart);
+          if (overlap > 0) {
+            weights[k] += durationMs * overlap / wordLength;
           }
         }
       }
-      if (matchedAll && totalTime > 0) {
+      if (matchedTime > 0 && matchedTime * 2 >= totalTime) {
+        // 失配词的时长仍留在 totalTime 里（与 fillStateAt 的口径一致），按比例
+        // 摊回各可视行，否则权重之和小于总时长，行尾永远填不满。
+        if (matchedTime < totalTime) {
+          final scale = totalTime / matchedTime;
+          for (var k = 0; k < weights.length; k++) {
+            weights[k] *= scale;
+          }
+        }
         timeWeights = weights;
       } else {
         totalTime = 0;
@@ -783,12 +815,14 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
           // 局部进度，保证次行在演唱到达时立刻开始点亮；无词级数据时
           // 回退按行宽加权。边界换算到行盒坐标。
           final double progress;
-          if (timeWeight != null) {
+          if (timeWeight != null && timeWeight > 0) {
             final consumedTime = (fraction * totalTimeWeight -
                     timeConsumedBefore!)
                 .clamp(0.0, timeWeight);
-            progress = timeWeight <= 0 ? 0.0 : consumedTime / timeWeight;
+            progress = consumedTime / timeWeight;
           } else {
+            // 无时长（整行无词级数据，或本可视行的词元全部失配）时按行宽兜底，
+            // 锁在 0% 会让这一行唱完了仍停在非当前句色。
             final consumed = (fraction * totalGlyphWidth - consumedBefore)
                 .clamp(0.0, glyphWidth);
             progress = glyphWidth <= 0 ? 0.0 : consumed / glyphWidth;

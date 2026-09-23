@@ -111,7 +111,15 @@ void main() {
     expect(stageSource, _flatContains('state?.playbackQueue'));
     expect(stageSource, _flatLacks('.take(12)'));
     expect(stageSource, _flatLacks('_syncedTrackId'));
-    expect(stageSource, _flatContains('index < 0 || _deckIndex == index'));
+    // 卡组索引在 build 期随曲目派生；留到 post-frame 纠正会让首帧画成队列
+    // 首张卡，再整组重排（冷启动可见的跳卡）。
+    expect(
+      stageSource,
+      _flatContains(
+        '_deckIndex = _resolveDeckIndex(track, deckTracks) ?? _deckIndex',
+      ),
+    );
+    expect(stageSource, _flatLacks('_syncDeckIndex'));
     // 卡片点击仍是显式跳播（playQueueIndex），步进才走播放模式。
     expect(stageSource, _flatContains('_selectDeckTrack(deckTracks, index)'));
     expect(stageSource, _flatContains('controller.playQueueIndex(queueIndex)'));
