@@ -82,6 +82,9 @@ class MusicPlatformLibraryController
     extends AsyncNotifier<MusicPlatformLibraryState> {
   static const int _playlistPreloadConcurrency = 3;
 
+  /// 预热覆盖的歌单数量上限：超出的部分走按需加载路径。
+  static const int _playlistPreloadLimit = 8;
+
   int _preloadGeneration = 0;
 
   @override
@@ -248,19 +251,87 @@ class MusicPlatformLibraryController
     if (playlists.isEmpty) {
       return;
     }
+    // 预热只覆盖前若干歌单：其余按 `loadPlaylistTracks` 的按需路径加载。
+    // 每个响应都要在 UI isolate 里反序列化，无上限预热会在平台数据到达后
+    // 连续抢占主线程。
+    final targets = playlists
+        .take(_playlistPreloadLimit)
+        .toList(growable: false);
+    if (targets.isEmpty || !ref.mounted || generation != _preloadGeneration) {
+      return;
+    }
+    // 先把全部键标记为加载中（一次发布），使预热期间的按需调用复用同一状态，
+    // 再合并结果一次性发布：逐个发布会让首页按歌单数量连续整页重建。
+    final before = state.asData?.value;
+    if (before == null) {
+      return;
+    }
+    final keyed = <String, OnlinePlaylist>{
+      for (final playlist in targets)
+        // 已缓存的歌单不再回源：刷新时只补新的或缺失的。
+        if (!before.playlistTracks.containsKey(
+          _playlistKey(playlist.platform, playlist.playlistId),
+        ))
+          _playlistKey(playlist.platform, playlist.playlistId): playlist,
+    };
+    if (keyed.isEmpty) {
+      return;
+    }
+    state = AsyncData(
+      before.copyWith(
+        loadingPlaylistKeys: <String>{
+          ...before.loadingPlaylistKeys,
+          ...keyed.keys,
+        },
+      ),
+    );
     var nextIndex = 0;
+    final tracksByKey = <String, List<OnlineTrack>>{};
+    final failures = <String, String>{};
+    final queue = keyed.entries.toList(growable: false);
     Future<void> worker() async {
       while (ref.mounted &&
           generation == _preloadGeneration &&
-          nextIndex < playlists.length) {
-        final playlist = playlists[nextIndex++];
-        await loadPlaylistTracks(playlist);
+          nextIndex < queue.length) {
+        final entry = queue[nextIndex++];
+        try {
+          final tracks = await ref
+              .read(musicApiProvider)
+              .platformPlaylistTracks(
+                entry.value.platform,
+                entry.value.playlistId,
+              );
+          tracksByKey[entry.key] = List<OnlineTrack>.unmodifiable(tracks);
+        } on Object catch (error) {
+          failures[entry.key] = describeUserFacingError(error).message;
+        }
       }
     }
 
-    final workerCount = playlists.length.clamp(1, _playlistPreloadConcurrency);
+    final workerCount = queue.length.clamp(1, _playlistPreloadConcurrency);
     await Future.wait(
       List<Future<void>>.generate(workerCount, (_) => worker()),
+    );
+    if (!ref.mounted || generation != _preloadGeneration) {
+      return;
+    }
+    final latest = state.asData?.value;
+    if (latest == null) {
+      return;
+    }
+    state = AsyncData(
+      latest.copyWith(
+        playlistTracks: <String, List<OnlineTrack>>{
+          ...latest.playlistTracks,
+          ...tracksByKey,
+        },
+        loadingPlaylistKeys: <String>{...latest.loadingPlaylistKeys}
+          ..removeAll(keyed.keys),
+        failures:
+            failures.isEmpty
+                ? latest.failures
+                : <String, String>{...latest.failures, ...failures},
+      ),
     );
   }
 

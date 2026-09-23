@@ -23,6 +23,7 @@ part 'music_center_mapping.dart';
 part 'music_library_content_commands.dart';
 part 'music_library_maintenance_commands.dart';
 part 'music_playback_queue_commands.dart';
+part 'music_center_queue_restore.dart';
 part 'music_queue_persistence.dart';
 part 'music_platform_account_commands.dart';
 part 'music_providers.dart';
@@ -50,9 +51,6 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   /// 已播历史上限。
   static const int _playHistoryLimit = 200;
 
-  /// library 来源队列重建与续页的单次取页上限。
-  static const int _libraryPageLimit = 20;
-
   /// library 纯本地来源队列的续页游标（下一页页码，null=未初始化）。
   int? _libraryNextPage;
   int _libraryFetchGeneration = 0;
@@ -71,6 +69,11 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   }
 
   MusicApi get _api => ref.read(musicApiProvider);
+
+  /// 平台账号曲库的当前快照：队列重建按值取用，不订阅平台状态变化。
+  MusicPlatformLibraryState get _platformLibrarySnapshot =>
+      ref.read(musicPlatformLibraryProvider).asData?.value ??
+      const MusicPlatformLibraryState();
 
   MusicCenterState? get _currentState => state.asData?.value;
 
@@ -130,7 +133,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       _controllerDisposed = true;
       _queuePersistence.dispose();
     });
-    final loaded = await _loadState();
+    final loaded = await _loadState(includeSecondary: false);
     if (loaded.playMode == MusicPlayMode.shuffle) {
       _startShuffleRound(loaded.playbackItems, loaded.currentItem?.playableKey);
     }
@@ -145,7 +148,50 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         restoredItem.track.lyricsRaw?.isNotEmpty != true) {
       unawaited(_loadOnlineLyrics(restoredItem, _playRequestGeneration));
     }
+    unawaited(_backfillSecondary());
     return loaded;
+  }
+
+  /// 首帧之后补齐次级数据：仪表盘点、专辑与歌手全量列表、各平台账号资料。
+  ///
+  /// 这些切片都不参与 Music 首页首帧，此前却与必需请求排在同一栅栏里，最慢的
+  /// 第三方账号资料回源会把整页压在加载态——表现就是登录平台后与首次进入时的
+  /// 明显卡顿。补齐结果只在没有新的刷新启动时发布，且必须等 `build()` 的返回值
+  /// 落地后再写状态，否则会用尚无数据的快照覆盖首帧。
+  Future<void> _backfillSecondary() async {
+    final generation = _refreshGeneration;
+    final results = await Future.wait(<Future<Object?>>[
+      _safe(_api.dashboard, MusicDashboard.empty()),
+      _safe(() async => (await _api.albums(size: 200)).items, <MusicAlbum>[]),
+      _safe(() async => (await _api.artists(size: 200)).items, <MusicArtist>[]),
+      _safePlatformInfo(),
+    ]);
+    for (var attempt = 0; attempt < 3; attempt++) {
+      if (_controllerDisposed || !ref.mounted) {
+        return;
+      }
+      if (state.asData?.value != null) {
+        break;
+      }
+      await Future<void>.delayed(Duration.zero);
+    }
+    final current = state.asData?.value;
+    if (current == null ||
+        _controllerDisposed ||
+        !ref.mounted ||
+        generation != _refreshGeneration) {
+      return;
+    }
+    final platformInfo = results[3] as Map<String, PlatformUserInfo?>;
+    state = AsyncData(
+      current.copyWith(
+        dashboard: results[0] as MusicDashboard,
+        albums: results[1] as List<MusicAlbum>,
+        artists: results[2] as List<MusicArtist>,
+        neteaseUserInfo: platformInfo['netease'],
+        errorMessage: _partialErrors.isEmpty ? null : _partialErrors.join('；'),
+      ),
+    );
   }
 
   Future<void> refresh() async {
@@ -251,6 +297,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     MusicArtist? selectedArtist,
     List<MusicTrack>? selectedArtistTracks,
     int tracksPageSize = musicLibraryPageSize,
+    bool includeSecondary = true,
   }) async {
     final currentItem = playback?.currentItem;
     final playbackPlan = playback?.playbackPlan;
@@ -260,8 +307,27 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     final playbackIndex = playback?.playbackIndex ?? -1;
     final playMode = playback?.playMode ?? MusicPlayMode.sequential;
     _partialErrors.clear();
-    final results = await Future.wait([
-      _safe(_api.dashboard, MusicDashboard.empty()),
+    // 首帧只等本分区必需的请求：曲库首页、歌单、最近播放与恢复队列快照。
+    // 仪表盘点、专辑/歌手全量列表与平台账号资料不参与首页渲染，
+    // 交给 `_backfillSecondary` 在首帧之后补齐（`includeSecondary` 为 true 时
+    // 仍按一次栅栏取齐，供手动刷新与实时事件刷新使用）。
+    Future<Object?> deferred(Object? value) => Future<Object?>.value(value);
+    final results = await Future.wait(<Future<Object?>>[
+      includeSecondary
+          ? _safe(_api.dashboard, MusicDashboard.empty())
+          : deferred(MusicDashboard.empty()),
+      includeSecondary
+          ? _safe(
+            () async => (await _api.albums(size: 200)).items,
+            <MusicAlbum>[],
+          )
+          : deferred(const <MusicAlbum>[]),
+      includeSecondary
+          ? _safe(
+            () async => (await _api.artists(size: 200)).items,
+            <MusicArtist>[],
+          )
+          : deferred(const <MusicArtist>[]),
       _safe(() async {
         final page = await _api.tracks(size: tracksPageSize);
         return _LibraryTracksPage(
@@ -271,20 +337,20 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
           size: page.size,
         );
       }, _LibraryTracksPage.empty()),
-      _safe(() async => (await _api.albums(size: 200)).items, <MusicAlbum>[]),
-      _safe(() async => (await _api.artists(size: 200)).items, <MusicArtist>[]),
       _safe(_api.playlists, <MusicPlaylist>[]),
       _safe(_api.recentItems, <MusicRecentEntry>[]),
       _safe(_api.lastPlayed, null),
       _queuePersistence.load(),
-      _safePlatformInfo(),
+      includeSecondary
+          ? _safePlatformInfo()
+          : deferred(const <String, PlatformUserInfo?>{}),
     ]);
     final dashboard = results[0] as MusicDashboard;
-    final tracksPage = results[1] as _LibraryTracksPage;
+    final albums = results[1] as List<MusicAlbum>;
+    final artists = results[2] as List<MusicArtist>;
+    final tracksPage = results[3] as _LibraryTracksPage;
     var tracks = tracksPage.items;
     var hasMoreTracks = tracksPage.hasMore;
-    final albums = results[2] as List<MusicAlbum>;
-    final artists = results[3] as List<MusicArtist>;
     final playlists = results[4] as List<MusicPlaylist>;
     final recentEntries = results[5] as List<MusicRecentEntry>;
     final lastPlayed = results[6] as MusicTrack?;
@@ -896,135 +962,6 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     return (<MusicPlayableItem>[item], MusicQueueSource.transient);
   }
 
-  /// 按快照来源重建全量队列；来源不可重建或未命中当前曲时返回 null（降级窗口快照）。
-  Future<_QueueSourceRebuild?> _rebuildQueueFromSource(
-    MusicQueueSource source,
-    String currentKey,
-    List<MusicTrack> loadedTracks,
-  ) async {
-    try {
-      switch (source.kind) {
-        case MusicQueueSourceKind.playlist:
-        case MusicQueueSourceKind.album:
-        case MusicQueueSourceKind.artist:
-          final tracks = await _fetchSourceTracks(source);
-          if (tracks == null) {
-            return null;
-          }
-          return _rebuildFromTrackList(tracks, source, currentKey);
-        case MusicQueueSourceKind.library:
-          if (source.isPureLocalLibrary) {
-            return await _rebuildLibraryQueue(currentKey);
-          }
-          final likedItems = <MusicPlayableItem>[
-            for (final platform in (source.platforms ?? const <String>[]).where(
-              (item) => item != 'local',
-            ))
-              ...(((ref.read(musicPlatformLibraryProvider).asData?.value ??
-                              const MusicPlatformLibraryState())
-                          .likedTracksByPlatform[platform] ??
-                      const <OnlineTrack>[])
-                  .map(MusicPlayableItem.online)),
-          ];
-          if (likedItems.isEmpty) {
-            return null;
-          }
-          final mergedItems = <MusicPlayableItem>[
-            ...loadedTracks.map(MusicPlayableItem.local),
-            ...likedItems,
-          ];
-          final index = mergedItems.indexWhere(
-            (item) => item.playableKey == currentKey,
-          );
-          if (index < 0) {
-            return null;
-          }
-          return _QueueSourceRebuild(
-            items: mergedItems,
-            index: index,
-            source: source,
-            tracks: loadedTracks,
-            hasMore: false,
-          );
-        case MusicQueueSourceKind.transient:
-          return null;
-      }
-    } on Exception {
-      return null;
-    }
-  }
-
-  Future<List<MusicTrack>?> _fetchSourceTracks(MusicQueueSource source) async {
-    final id = source.id;
-    if (id == null) {
-      return null;
-    }
-    return switch (source.kind) {
-      MusicQueueSourceKind.playlist => _api.playlistTracks(id),
-      MusicQueueSourceKind.album => _api.albumTracks(id),
-      MusicQueueSourceKind.artist => _api.artistTracks(id),
-      _ => null,
-    };
-  }
-
-  _QueueSourceRebuild? _rebuildFromTrackList(
-    List<MusicTrack> tracks,
-    MusicQueueSource source,
-    String currentKey,
-  ) {
-    if (tracks.isEmpty) {
-      return null;
-    }
-    final items = tracks.map(MusicPlayableItem.local).toList();
-    final index = items.indexWhere((item) => item.playableKey == currentKey);
-    if (index < 0) {
-      return null;
-    }
-    return _QueueSourceRebuild(
-      items: items,
-      index: index,
-      source: source,
-      tracks: tracks,
-      hasMore: false,
-    );
-  }
-
-  /// 顺序取页重建纯本地曲库队列，直到命中当前曲或曲库取尽。
-  Future<_QueueSourceRebuild?> _rebuildLibraryQueue(String currentKey) async {
-    final items = <MusicPlayableItem>[];
-    final tracks = <MusicTrack>[];
-    final seenKeys = <String>{};
-    var hasMore = false;
-    int? hitIndex;
-    for (var page = 0; page < _libraryPageLimit; page++) {
-      final result = await _api.tracks(page: page, size: musicLibraryPageSize);
-      hasMore = result.hasMore;
-      for (final track in result.items) {
-        if (seenKeys.add('local:${track.id}')) {
-          tracks.add(track);
-          items.add(MusicPlayableItem.local(track));
-          if (hitIndex == null && 'local:${track.id}' == currentKey) {
-            hitIndex = items.length - 1;
-          }
-        }
-      }
-      if (hitIndex != null || !hasMore) {
-        break;
-      }
-    }
-    if (hitIndex == null) {
-      return null;
-    }
-    return _QueueSourceRebuild(
-      items: items,
-      index: hitIndex,
-      source: MusicQueueSource.localLibrary(),
-      tracks: tracks,
-      hasMore: hasMore,
-      nextPage: hasMore ? (tracks.length / musicLibraryPageSize).ceil() : null,
-    );
-  }
-
   /// library 纯本地来源在队列末端尝试续页；成功追加后返回 true。
   Future<bool> _extendLibraryQueueIfPossible(MusicCenterState current) async {
     if (!current.queueSource.isPureLocalLibrary ||
@@ -1150,27 +1087,6 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
 }
 
 /// 曲库加载内部使用的曲目分页载体，用于区分加载失败与空结果。
-/// 按来源重建队列的结果载体。
-class _QueueSourceRebuild {
-  const _QueueSourceRebuild({
-    required this.items,
-    required this.index,
-    required this.source,
-    required this.tracks,
-    required this.hasMore,
-    this.nextPage,
-  });
-
-  final List<MusicPlayableItem> items;
-  final int index;
-  final MusicQueueSource source;
-  final List<MusicTrack> tracks;
-  final bool hasMore;
-
-  /// library 重建后的续页游标（仍有更多页时非空）。
-  final int? nextPage;
-}
-
 class _LibraryTracksPage {
   const _LibraryTracksPage({
     required this.items,

@@ -61,6 +61,11 @@ class MusicDeckGlass extends StatelessWidget {
   }
 }
 
+/// 内联 `data:image/` 封面解码结果缓存：按 URI 复用 provider，数量按插入序
+/// 淘汰，避免大列表滚动时反复同步 base64 解码。
+final Map<String, MemoryImage> _dataImageProviders = <String, MemoryImage>{};
+const int _dataImageProviderLimit = 64;
+
 /// 统一处理本地和在线音乐封面。
 class MusicDeckArtwork extends StatelessWidget {
   const MusicDeckArtwork({
@@ -98,27 +103,40 @@ class MusicDeckArtwork extends StatelessWidget {
     if (source == null || source.isEmpty) {
       return null;
     }
-    if (source.startsWith('data:image/')) {
-      final comma = source.indexOf(',');
-      if (comma < 0) {
-        return null;
-      }
-      try {
-        return Image.memory(
-          base64Decode(source.substring(comma + 1)),
-          fit: BoxFit.cover,
-          gaplessPlayback: true,
-          filterQuality: FilterQuality.medium,
-        );
-      } on FormatException {
-        return null;
-      }
-    }
     final logicalWidth =
         constraints.maxWidth.isFinite ? constraints.maxWidth : 240.0;
     final cacheWidth = (logicalWidth * MediaQuery.devicePixelRatioOf(context))
         .round()
         .clamp(120, 1200);
+    if (source.startsWith('data:image/')) {
+      final comma = source.indexOf(',');
+      if (comma < 0) {
+        return null;
+      }
+      // 内联封面此前每次 build 都重新 base64Decode 整段字符串：列表滚动会
+      // 把同步解码反复压在 UI isolate 上。按 URI 复用解码后的 provider，
+      // 缩放仍交给 Image 的 cacheWidth（不同尺寸各自解码一次）。
+      var provider = _dataImageProviders[source];
+      if (provider == null) {
+        try {
+          provider = MemoryImage(base64Decode(source.substring(comma + 1)));
+        } on FormatException {
+          return null;
+        }
+        if (_dataImageProviders.length >= _dataImageProviderLimit) {
+          _dataImageProviders.remove(_dataImageProviders.keys.first);
+        }
+        _dataImageProviders[source] = provider;
+      }
+      return Image(
+        // 缩放按尺寸包一层 ResizeImage：它的相等性按值比较，同一尺寸的
+        // provider 仍然稳定，不会因此重新解码。
+        image: ResizeImage(provider, width: cacheWidth),
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.medium,
+      );
+    }
     // 本地封面走稳定鉴权 API 路径时使用专域缓存管理器（dio 拼 baseUrl
     // 并附带鉴权头）；CDN 地址与缓存未注入时保持默认路径。Web 端默认
     // HtmlImage 渲染会绕过 cacheManager 并把相对 URL 按页面 origin 解析，
