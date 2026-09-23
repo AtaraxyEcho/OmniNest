@@ -263,7 +263,14 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                                       (_duration.inMilliseconds * value)
                                           .round(),
                                 );
-                                session.player.seek(target);
+                                // 经播放会话跳转：直接 seek 会被切歌加载完成时的归零覆盖。
+                                unawaited(
+                                  ref
+                                      .read(
+                                        musicPlaybackSessionProvider.notifier,
+                                      )
+                                      .seekTo(target),
+                                );
                                 setState(() => _position = target);
                               },
                     ),

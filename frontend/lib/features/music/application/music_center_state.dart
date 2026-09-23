@@ -10,7 +10,10 @@ enum MusicSection {
   artistDetail,
 }
 
-enum MusicRepeatMode { off, all, one }
+/// 播放模式：三态互斥，播放详情页与移动端播放页共用单按钮轮换。
+///
+/// [sequential] 是默认档，按队列顺序播放且首尾循环；[repeatOne] 只重复当前曲目。
+enum MusicPlayMode { sequential, shuffle, repeatOne }
 
 /// 播放域视图：刷新链路整体携带播放状态，避免逐字段穿参遗漏导致队列被静默重置。
 class MusicPlaybackView {
@@ -20,8 +23,7 @@ class MusicPlaybackView {
     this.isPlaying = false,
     this.playbackItems = const [],
     this.playbackIndex = -1,
-    this.repeatMode = MusicRepeatMode.off,
-    this.shuffleEnabled = false,
+    this.playMode = MusicPlayMode.sequential,
     this.queueSource = MusicQueueSource.transient,
   });
 
@@ -30,8 +32,7 @@ class MusicPlaybackView {
   final bool isPlaying;
   final List<MusicPlayableItem> playbackItems;
   final int playbackIndex;
-  final MusicRepeatMode repeatMode;
-  final bool shuffleEnabled;
+  final MusicPlayMode playMode;
   final MusicQueueSource queueSource;
 }
 
@@ -50,8 +51,7 @@ class MusicCenterState {
     this.isPlaying = false,
     this.playbackItems = const [],
     this.playbackIndex = -1,
-    this.repeatMode = MusicRepeatMode.off,
-    this.shuffleEnabled = false,
+    this.playMode = MusicPlayMode.sequential,
     this.queueSource = MusicQueueSource.transient,
     this.selectedPlaylist,
     this.selectedPlaylistTracks = const [],
@@ -78,8 +78,7 @@ class MusicCenterState {
   final bool isPlaying;
   final List<MusicPlayableItem> playbackItems;
   final int playbackIndex;
-  final MusicRepeatMode repeatMode;
-  final bool shuffleEnabled;
+  final MusicPlayMode playMode;
   final MusicQueueSource queueSource;
   final MusicPlaylist? selectedPlaylist;
   final List<MusicTrack> selectedPlaylistTracks;
@@ -102,8 +101,7 @@ class MusicCenterState {
     isPlaying: isPlaying,
     playbackItems: playbackItems,
     playbackIndex: playbackIndex,
-    repeatMode: repeatMode,
-    shuffleEnabled: shuffleEnabled,
+    playMode: playMode,
     queueSource: queueSource,
   );
 
@@ -129,8 +127,7 @@ class MusicCenterState {
     bool? isPlaying,
     List<MusicPlayableItem>? playbackItems,
     int? playbackIndex,
-    MusicRepeatMode? repeatMode,
-    bool? shuffleEnabled,
+    MusicPlayMode? playMode,
     MusicQueueSource? queueSource,
     MusicPlaylist? selectedPlaylist,
     List<MusicTrack>? selectedPlaylistTracks,
@@ -167,8 +164,7 @@ class MusicCenterState {
       isPlaying: isPlaying ?? this.isPlaying,
       playbackItems: playbackItems ?? this.playbackItems,
       playbackIndex: playbackIndex ?? this.playbackIndex,
-      repeatMode: repeatMode ?? this.repeatMode,
-      shuffleEnabled: shuffleEnabled ?? this.shuffleEnabled,
+      playMode: playMode ?? this.playMode,
       queueSource: queueSource ?? this.queueSource,
       selectedPlaylist:
           clearSelectedPlaylist

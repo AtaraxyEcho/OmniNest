@@ -48,6 +48,7 @@ void main() {
                   glow: Colors.white,
                 ),
                 player: player,
+                onSeek: (position) => player.seek(position),
                 track: _track,
                 lyrics: _lyrics,
                 scale: 1,

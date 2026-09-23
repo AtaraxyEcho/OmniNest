@@ -1,4 +1,4 @@
-﻿import 'dart:convert';
+import 'dart:convert';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -178,7 +178,7 @@ void main() {
       preferences.toJson(),
     );
 
-    expect(restored.schemaVersion, 15);
+    expect(restored.schemaVersion, 16);
     expect(restored.visual.lyrics.visibleLines, 7);
     expect(restored.visual.lyrics.lineSpacing, 1.4);
     expect(
@@ -210,7 +210,7 @@ void main() {
       },
     );
 
-    expect(restored.schemaVersion, 15);
+    expect(restored.schemaVersion, 16);
     expect(restored.visual.lyrics.currentPaint.primary, 0xFFAABBCC);
     expect(
       restored.visual.lyrics.inactivePaint.primary,
@@ -219,6 +219,37 @@ void main() {
     // 音频条已整体移除：旧字段被静默忽略，播放器退回默认设置。
     expect(restored.visual.player.volumeEnabled, isTrue);
     expect(restored.visual.player.progressEnabled, isTrue);
+  });
+
+  test('桌面歌词字号以 px 保存，旧倍率按当时布局基准换算', () {
+    final legacy = PortalLyricVisualSettings.fromJson(const <String, dynamic>{
+      'layout': 'left',
+      'activeFontScale': 1.5,
+      'inactiveFontScale': 0.75,
+    });
+    // 两侧布局基准 44/18：1.5 倍越界夹到上限 64，0.75 倍取整为 14。
+    expect(legacy.activeFontSizePx, 64);
+    expect(legacy.inactiveFontSizePx, 14);
+    // 倍率字段退出契约：只回写 px。
+    expect(legacy.toJson().containsKey('activeFontScale'), isFalse);
+    expect(legacy.toJson()['activeFontSizePx'], 64);
+
+    // 居中布局基准不同，同一倍率换算出另一组 px。
+    expect(
+      PortalLyricVisualSettings.fromJson(const <String, dynamic>{
+        'layout': 'center',
+        'activeFontScale': 1.5,
+      }).activeFontSizePx,
+      27,
+    );
+
+    // 未调过字号时不写 px，由布局样例基准兜底。
+    expect(PortalLyricVisualSettings.defaults.activeFontSizePx, isNull);
+    expect(PortalLyricVisualSettings.fromJson(null).inactiveFontSizePx, isNull);
+    expect(
+      PortalLyricVisualSettings.defaults.toJson().containsKey('fontSizePx'),
+      isTrue,
+    );
   });
 
   test('v11 旧设置中的频响与封面元素字段被静默丢弃', () {
@@ -234,7 +265,7 @@ void main() {
       },
     );
 
-    expect(restored.schemaVersion, 15);
+    expect(restored.schemaVersion, 16);
     // 频响与封面元素（含原始封面）已整体移除：字段不再存在，载入不报错；
     // deckEnabled 为 v13 新增的堆叠卡片开关。
     expect(restored.visual.lyrics.translationEnabled, isFalse);

@@ -63,8 +63,12 @@ const double kMusicSideCompositionMinWidth = 960;
 const double kMusicSideCompositionMinHeight = 560;
 const double kMusicSideCompositionMinAspect = 0.9;
 
-/// 12 列主网格：`grid-cols-12 gap-8`。
-const double kMusicLayoutGridGap = 32;
+/// 12 列主网格：样例 `main` 为 `gap-10 lg:gap-16`，取 `gap-16`。
+const double kMusicLayoutGridGap = 64;
+
+/// 主舞台水平上限：两侧布局与居中布局的样例 `main` 均为 `max-w-6xl`（1152）。
+/// 窗口比基准更宽时两栏不再摊满整窗，而是整体居中，两侧让给背景动态壁纸。
+const double kMusicStageMaxWidth = 1152;
 
 /// 两侧布局主区高度：`h-[calc(100vh-13.5rem)]` 对应的预留量。
 const double kMusicLayoutMainChrome = 216;
@@ -958,7 +962,6 @@ class MusicLyricSpec {
     required this.lineGap,
     required this.activeLinePaddingX,
     required this.activeLinePaddingY,
-    required this.activeLineAccentWidth,
     required this.activeLineRadius,
     required this.activeLineScale,
     required this.activeLineGlowAlpha,
@@ -972,7 +975,7 @@ class MusicLyricSpec {
     required this.textAlign,
     required this.blockAnchor,
     this.activeLineBackgroundColor,
-    this.activeLineAccentColor,
+    this.inactiveOpacityScale = 1,
   });
 
   final double fontSize;
@@ -1001,7 +1004,6 @@ class MusicLyricSpec {
   final double lineGap;
   final double activeLinePaddingX;
   final double activeLinePaddingY;
-  final double activeLineAccentWidth;
   final double activeLineRadius;
   final double activeLineScale;
 
@@ -1013,13 +1015,17 @@ class MusicLyricSpec {
   final List<double> beforeOpacities;
   final List<double> afterOpacities;
 
+  /// 用户「非当前句透明度」对样例阶梯的整体倍率：1 为样例观感，
+  /// 由 [resolveMusicLyricSpec] 按设置值与默认值的比值算出。
+  final double inactiveOpacityScale;
+
   /// 非在读译文的额外压暗系数（近端/远端），见 [translationAlpha]。
   final double translationBaseAlpha;
   final double translationFarAlpha;
 
-  /// 在读行底衬与左侧强调条；居中布局两者都不做，故为 null。
+  /// 在读行底衬；居中布局不做底衬，故为 null。样例的左侧竖向强调条已整体
+  /// 移除（纯音乐等短歌词下只剩一根与内容无关的白线）。
   final Color? activeLineBackgroundColor;
-  final Color? activeLineAccentColor;
 
   /// 固定窗口形态的可见行数；两侧布局为 0（沿用设备级滚动偏好）。
   final int fixedWindowLines;
@@ -1050,6 +1056,9 @@ class MusicLyricSpec {
 }
 
 /// 非在读行按与在读行的距离取的不透明度；在读行为满亮。
+///
+/// 样例档位再乘用户的「非当前句透明度」倍率，并留 0.05 下限，避免把整块
+/// 歌词压到不可读。
 double musicLyricLineOpacity(MusicLyricSpec spec, int relative) {
   if (relative == 0) {
     return 1;
@@ -1059,23 +1068,36 @@ double musicLyricLineOpacity(MusicLyricSpec spec, int relative) {
     return 1;
   }
   final index = (relative.abs() - 1).clamp(0, steps.length - 1);
-  return steps[index];
+  return (steps[index] * spec.inactiveOpacityScale).clamp(0.05, 1.0).toDouble();
 }
 
 /// 解析某布局的歌词区复刻参数（按 [scale] 等比换算）。
 ///
-/// [activeFontScale] / [inactiveFontScale] 为用户在视觉编辑中调整的字号
-/// 缩放（1.0 = 样例原值），分别作用于在读与未读的全部文字尺寸。
+/// [activeFontSizePx] / [inactiveFontSizePx] 为用户在视觉编辑中设定的字号
+/// （px）；留空时跟随该布局的样例基准。译文等派生尺寸按「设定值 / 基准值」
+/// 的同一比值缩放，保证只改字号不破样例排版比例。
+/// [inactiveOpacity] 为用户的「非当前句透明度」，换算成样例透明度阶梯的倍率，
+/// 未设置时与样例观感一致。[lineSpacing] 为行距倍率，作用于相邻歌词块的间隙
+/// （在读行的底衬内边距不随之缩放，否则高亮带会随行距变形）。
 MusicLyricSpec resolveMusicLyricSpec(
   PortalMusicLayout layout,
   double scale, {
-  double activeFontScale = 1,
-  double inactiveFontScale = 1,
+  int? activeFontSizePx,
+  int? inactiveFontSizePx,
+  double? inactiveOpacity,
+  double lineSpacing = 1,
 }) {
   final isCenter = layout == PortalMusicLayout.center;
+  final (baseActive, baseInactive) = musicLyricBaseFontSizes(layout);
+  final activeRatio = (activeFontSizePx ?? baseActive) / baseActive;
+  final inactiveRatio = (inactiveFontSizePx ?? baseInactive) / baseInactive;
+  // 锚点而非默认值：默认值调整不应改变既有用户已保存设置对应的观感。
+  final opacityScale =
+      (inactiveOpacity ?? kMusicLyricLadderOpacityAnchor) /
+      kMusicLyricLadderOpacityAnchor;
   double px(double value) => value * scale;
-  double pxInactive(double value) => value * scale * inactiveFontScale;
-  double pxActive(double value) => value * scale * activeFontScale;
+  double pxInactive(double value) => value * scale * inactiveRatio;
+  double pxActive(double value) => value * scale * activeRatio;
   return MusicLyricSpec(
     fontSize: pxInactive(isCenter ? 14 : 18),
     activeFontSize: pxActive(isCenter ? 18 : 44),
@@ -1098,7 +1120,16 @@ MusicLyricSpec resolveMusicLyricSpec(
         isCenter
             ? kMusicLyricTranslationColor
             : kMusicLyricSideActiveTranslationColor,
-    lineGap: px(isCenter ? 12 : (layout == PortalMusicLayout.right ? 36 : 32)),
+    // 样例把两侧布局的行间隙写死为 space-y-8/9（32/36px）；在读行还另有上下
+    // 内边距，叠加后视觉上明显偏松，因此基准收到 18/20，并交给行距倍率调节。
+    lineGap: px(
+      (isCenter
+              ? 12
+              : layout == PortalMusicLayout.right
+              ? 20
+              : 18) *
+          lineSpacing,
+    ),
     activeLinePaddingX: px(16),
     activeLinePaddingY:
         isCenter
@@ -1108,7 +1139,6 @@ MusicLyricSpec resolveMusicLyricSpec(
                   ? kMusicRightLyricActivePaddingY
                   : kMusicLeftLyricActivePaddingY,
             ),
-    activeLineAccentWidth: px(2),
     activeLineRadius: px(12),
     activeLineScale: isCenter ? 1.04 : 1,
     activeLineGlowAlpha:
@@ -1132,7 +1162,6 @@ MusicLyricSpec resolveMusicLyricSpec(
             ? kMusicCenterLyricTranslationAlpha
             : kMusicLyricFarTranslationAlpha,
     activeLineBackgroundColor: isCenter ? null : const Color(0x660C0E11),
-    activeLineAccentColor: isCenter ? null : const Color(0xFFFFFFFF),
     fixedWindowLines: isCenter ? 4 : 0,
     mask:
         isCenter
@@ -1142,6 +1171,7 @@ MusicLyricSpec resolveMusicLyricSpec(
             : kMusicLeftLyricMask,
     textAlign: isCenter ? TextAlign.center : TextAlign.left,
     blockAnchor: isCenter ? Alignment.center : Alignment.centerLeft,
+    inactiveOpacityScale: opacityScale,
   );
 }
 
@@ -1182,7 +1212,13 @@ class MusicSideLayoutFrame {
             .toDouble();
     final gridGap = kMusicLayoutGridGap * scale;
     final mainTop = headerTop + resolvedHeaderHeight;
-    final contentWidth = math.max(0.0, size.width - pagePadding * 2).toDouble();
+    final availableWidth =
+        math.max(0.0, size.width - pagePadding * 2).toDouble();
+    // 主舞台按样例 `main` 的 `max-w-6xl mx-auto` 限宽并水平居中：窗口比基准宽时
+    // 两栏不摊满整窗，歌词向中部靠拢、卡组从窗口边缘回弹。
+    final contentWidth =
+        math.min(availableWidth, kMusicStageMaxWidth * scale).toDouble();
+    final contentLeft = pagePadding + (availableWidth - contentWidth) / 2;
     // 主区底边固定在 `height - 13.5rem`，顶部安全区只把上沿下压。
     final desiredHeight =
         size.height -
@@ -1198,7 +1234,7 @@ class MusicSideLayoutFrame {
       pagePadding: pagePadding,
       headerTop: headerTop,
       headerHeight: resolvedHeaderHeight,
-      mainRect: Rect.fromLTWH(pagePadding, mainTop, contentWidth, mainHeight),
+      mainRect: Rect.fromLTWH(contentLeft, mainTop, contentWidth, mainHeight),
       gridGap: gridGap,
       deckColumnWidth: musicLayoutColumns(
         contentWidth,
@@ -1395,7 +1431,7 @@ class MusicCenterLayoutFrame {
     );
     // 内容区按样例限制在 max-w-6xl 内水平居中。
     final contentMaxWidth =
-        math.min(1152 * scale, contentRect.width).toDouble();
+        math.min(kMusicStageMaxWidth * scale, contentRect.width).toDouble();
     final centeredContent = Rect.fromLTWH(
       contentRect.left + (contentRect.width - contentMaxWidth) / 2,
       contentRect.top,

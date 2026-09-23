@@ -98,6 +98,21 @@ void main() {
     expect(lines[1].words.single.text, '好');
   });
 
+  test('yrc 行首与 LRC 行首不一致时词偏移按绝对时间重定基', () {
+    // LRC 行首 16500ms、yrc 行首 16210ms：容差命中后必须把 -290ms 补回偏移，
+    // 否则整块词级时间相对人声恒定滞后（逐字填充跟不上唱词）。
+    const yrc = '[16210,3460](16210,670,0)还(16880,410,0)没';
+    final lines = parseMusicLyrics('[00:16.500]还没', wordLyrics: yrc);
+
+    expect(lines, hasLength(1));
+    expect(lines[0].words, hasLength(2));
+    // 16210 - 16500 为负，沿用「异常数据按 0」的既有口径。
+    expect(lines[0].words[0].offset, Duration.zero);
+    // 16880 - 16500 = 380ms（未重定基时会算成 670ms）。
+    expect(lines[0].words[1].offset, const Duration(milliseconds: 380));
+    expect(lines[0].wordsEnd, const Duration(milliseconds: 790));
+  });
+
   test(
     'yrc metadata line is skipped and unknown lines fall back to empty words',
     () {

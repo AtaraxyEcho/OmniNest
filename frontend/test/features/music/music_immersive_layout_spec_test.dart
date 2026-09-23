@@ -228,49 +228,72 @@ void main() {
       expect(musicDeckPerspective(PortalMusicLayout.center), 1000);
     });
 
-    test('两侧布局框架与样例 12 列网格一致', () {
+    test('两侧布局框架与样例主舞台限宽一致', () {
       final frame = MusicSideLayoutFrame.resolve(_reference);
       expect(frame.pagePadding, 40);
       expect(frame.headerTop, 40);
       // 顶栏块 = 样例顶栏 48 + `my-2` 8，主区上沿因此落在样例的 96。
       expect(frame.headerHeight, 56);
-      expect(frame.gridGap, 32);
-      expect(frame.mainRect.left, 40);
+      // 样例 `main` 为 `max-w-6xl mx-auto` + `gap-10 lg:gap-16`：
+      // 1280 基准下主舞台收成 1152 并左右各留 64。
+      expect(frame.gridGap, 64);
+      expect(frame.mainRect.left, 64);
       expect(frame.mainRect.top, closeTo(96, 1e-9));
-      expect(frame.mainRect.width, closeTo(1200, 1e-9));
+      expect(frame.mainRect.width, closeTo(1152, 1e-9));
       expect(frame.mainRect.height, closeTo(808, 1e-9));
-      expect(frame.deckColumnWidth, closeTo(481.33, 0.01));
-      expect(frame.lyricColumnWidth, closeTo(686.67, 0.01));
+      expect(frame.mainRect.right, closeTo(1216, 1e-9));
+      expect(frame.deckColumnWidth, closeTo(442.67, 0.01));
+      expect(frame.lyricColumnWidth, closeTo(645.33, 0.01));
 
       // 居左布局：卡组在左、歌词在右；居右布局对调。
-      expect(frame.deckSection(PortalMusicLayout.left).left, closeTo(40, 1e-9));
+      expect(frame.deckSection(PortalMusicLayout.left).left, closeTo(64, 1e-9));
       expect(
         frame.lyricSection(PortalMusicLayout.left).left,
-        closeTo(553.33, 0.01),
+        closeTo(570.67, 0.01),
       );
       expect(
         frame.deckSection(PortalMusicLayout.right).left,
-        closeTo(758.67, 0.01),
+        closeTo(773.33, 0.01),
       );
       expect(
         frame.lyricSection(PortalMusicLayout.right).left,
-        closeTo(40, 1e-9),
+        closeTo(64, 1e-9),
       );
+    });
+
+    test('宽窗口下主舞台限宽居中，两栏不摊满整窗', () {
+      // 2560×1440：缩放由高度决定（1.40625），主舞台取样例上限后居中。
+      const window = Size(2560, 1440);
+      final frame = MusicSideLayoutFrame.resolve(window);
+      final stageMax = kMusicStageMaxWidth * frame.scale;
+      final sideMargin = (window.width - stageMax) / 2 - frame.pagePadding;
+      expect(frame.mainRect.width, closeTo(stageMax, 1e-6));
+      // 两侧留出等宽的背景带，视线聚到中部。
+      expect(
+        frame.mainRect.left - frame.pagePadding,
+        closeTo(sideMargin, 1e-6),
+      );
+      expect(
+        window.width - frame.pagePadding - frame.mainRect.right,
+        closeTo(sideMargin, 1e-6),
+      );
+      // 留出量必须显著大于零，否则限宽没有生效。
+      expect(sideMargin, greaterThan(300));
     });
 
     test('歌词视口扣掉列内边距与元信息/锚点行', () {
       final frame = MusicSideLayoutFrame.resolve(_reference);
       final left = frame.lyricViewport(PortalMusicLayout.left);
-      expect(left.left, closeTo(593.33, 0.01));
-      expect(left.right, closeTo(1216, 1e-9));
+      expect(left.left, closeTo(610.67, 0.01));
+      expect(left.right, closeTo(1192, 1e-9));
       expect(left.top, closeTo(134, 1e-9));
       expect(left.bottom, closeTo(862, 1e-9));
 
       final right = frame.lyricViewport(PortalMusicLayout.right);
       // 居右布局的左内边距按用户要求提到 40（样例 `lg:pl-6` 是 24，但居右时
       // 歌词列贴着窗口左缘，24 的观感是「完全贴在左侧」）。
-      expect(right.left, closeTo(80, 1e-9));
-      expect(right.right, closeTo(710.67, 0.01));
+      expect(right.left, closeTo(104, 1e-9));
+      expect(right.right, closeTo(693.33, 0.01));
       expect(right.bottom, closeTo(858, 1e-9));
     });
 
@@ -281,8 +304,9 @@ void main() {
         sectionRect: frame.deckSection(PortalMusicLayout.left),
         scale: frame.scale,
       );
-      expect(left.rect.left, closeTo(64, 1e-9));
-      expect(left.rect.width, closeTo(440, 1e-9));
+      expect(left.rect.left, closeTo(88, 1e-9));
+      // 限宽后卡组列按样例的 `max-w-[420px]` 收紧，舞台宽度落在列内上限。
+      expect(left.rect.width, closeTo(418.67, 0.01));
       expect(left.rect.height, closeTo(385, 1e-9));
       expect(left.rect.top, closeTo(307.5, 1e-9));
       expect(left.perspective, 1400);
@@ -292,8 +316,8 @@ void main() {
         sectionRect: frame.deckSection(PortalMusicLayout.right),
         scale: frame.scale,
       );
-      expect(right.rect.right, closeTo(1216, 1e-9));
-      expect(right.rect.width, closeTo(420, 1e-9));
+      expect(right.rect.right, closeTo(1192, 1e-9));
+      expect(right.rect.width, closeTo(418.67, 0.01));
       expect(right.rect.top, closeTo(305, 1e-9));
       expect(right.perspective, 0);
     });
@@ -377,7 +401,7 @@ void main() {
       expect(left.activeFontSize, 44);
       expect(left.translationFontSize, 12);
       expect(left.activeTranslationFontSize, 16);
-      expect(left.lineGap, 32);
+      expect(left.lineGap, 18);
       expect(left.mask, (0.14, 0.84));
       expect(left.textAlign, TextAlign.left);
       expect(left.blockAnchor, Alignment.centerLeft);
@@ -387,8 +411,27 @@ void main() {
       final right = resolveMusicLyricSpec(PortalMusicLayout.right, 1);
       expect(right.fontSize, 18);
       expect(right.activeFontSize, 44);
-      expect(right.lineGap, 36);
+      expect(right.lineGap, 20);
       expect(right.mask, (0.15, 0.82));
+    });
+
+    test('行距倍率只缩放块间隙，不缩在读行的底衬内边距', () {
+      final tightened = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        1,
+        lineSpacing: 0.5,
+      );
+      expect(tightened.lineGap, 9);
+      expect(tightened.activeLinePaddingY, isNot(0));
+      // 设备缩放与行距倍率相乘。
+      expect(
+        resolveMusicLyricSpec(
+          PortalMusicLayout.left,
+          0.5,
+          lineSpacing: 2,
+        ).lineGap,
+        18,
+      );
     });
 
     test('居中布局为固定四行窗口', () {
@@ -407,9 +450,9 @@ void main() {
 
     test('行槽高度按内容与行距推导', () {
       final left = resolveMusicLyricSpec(PortalMusicLayout.left, 1);
-      // 在读行：44px 原文 + 16px 译文 + 6px 间距 = 82，加 32px 行距。
+      // 在读行：44px 原文 + 16px 译文 + 6px 间距 = 82，加 18px 行距。
       expect(left.contentHeight(), closeTo(82, 1e-9));
-      expect(left.slotHeight(), closeTo(114, 1e-9));
+      expect(left.slotHeight(), closeTo(100, 1e-9));
 
       final center = resolveMusicLyricSpec(PortalMusicLayout.center, 1);
       // 在读行：18px 原文 + 12px 译文 + 4px 间距 = 48，加 12px 行距。
@@ -694,20 +737,17 @@ void main() {
       expect(center.activeTranslationColor, kMusicLyricTranslationColor);
     });
 
-    test('在读行底衬与强调条只有两侧布局有', () {
+    test('在读行底衬只有两侧布局有，左侧强调条已整体移除', () {
       for (final layout in <PortalMusicLayout>[
         PortalMusicLayout.left,
         PortalMusicLayout.right,
       ]) {
         final spec = resolveMusicLyricSpec(layout, 1);
         expect(spec.activeLineBackgroundColor, const Color(0x660C0E11));
-        expect(spec.activeLineAccentColor, const Color(0xFFFFFFFF));
-        expect(spec.activeLineAccentWidth, 2);
         expect(spec.activeLineRadius, 12);
       }
       final center = resolveMusicLyricSpec(PortalMusicLayout.center, 1);
       expect(center.activeLineBackgroundColor, isNull);
-      expect(center.activeLineAccentColor, isNull);
     });
 
     test('在读行纵向内边距与样例 py-3.5 / py-3 / 无 一致', () {
@@ -746,6 +786,81 @@ void main() {
       expect(musicLyricLineOpacity(center, -1), 0.25);
       expect(musicLyricLineOpacity(center, 1), 0.30);
       expect(musicLyricLineOpacity(center, 2), 0.15);
+    });
+
+    test('字号按 px 设定，译文等派生尺寸同比缩放', () {
+      // 未显式设定时等于该布局的样例基准字号（两侧 44/18，居中 18/14）。
+      expect(
+        resolveMusicLyricSpec(PortalMusicLayout.left, 1).activeFontSize,
+        44,
+      );
+      expect(resolveMusicLyricSpec(PortalMusicLayout.left, 1).fontSize, 18);
+      expect(
+        resolveMusicLyricSpec(PortalMusicLayout.center, 1).activeFontSize,
+        18,
+      );
+
+      final resized = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        1,
+        activeFontSizePx: 22,
+        inactiveFontSizePx: 9,
+      );
+      expect(resized.activeFontSize, 22);
+      expect(resized.fontSize, 9);
+      // 比值 22/44 = 0.5 与 9/18 = 0.5：译文按同比值缩放。
+      expect(resized.activeTranslationFontSize, 8);
+      expect(resized.translationFontSize, 6);
+      // 设备缩放系数仍然生效。
+      expect(
+        resolveMusicLyricSpec(
+          PortalMusicLayout.left,
+          0.5,
+          activeFontSizePx: 22,
+        ).activeFontSize,
+        11,
+      );
+    });
+
+    test('非当前句透明度缩放样例阶梯且不影响到读行', () {
+      // 设置值等于默认值时倍率为 1，阶梯与样例一致。
+      final sample = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        1,
+        inactiveOpacity: kMusicLyricLadderOpacityAnchor,
+      );
+      expect(musicLyricLineOpacity(sample, 1), 0.50);
+      expect(musicLyricLineOpacity(sample, 3), 0.15);
+
+      // 默认值 0.8 → 倍率 1.6：未读行整体提亮，超过满亮的档位被夹到 1。
+      final fresh = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        1,
+        inactiveOpacity: PortalLyricVisualSettings.defaults.inactiveOpacity,
+      );
+      expect(musicLyricLineOpacity(fresh, 1), 0.80);
+      expect(musicLyricLineOpacity(fresh, 2), 0.48);
+      expect(musicLyricLineOpacity(fresh, 3), 0.24);
+
+      // 倍率 1.0 / 0.5 = 2：整体提亮，最远档 0.15 → 0.30，最近档封顶满亮。
+      final bright = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        1,
+        inactiveOpacity: 1,
+      );
+      expect(musicLyricLineOpacity(bright, 0), 1);
+      expect(musicLyricLineOpacity(bright, 1), 1);
+      expect(musicLyricLineOpacity(bright, 3), 0.30);
+
+      // 倍率 0.25 / 0.5 = 0.5：整体压暗，在读行始终满亮。
+      final dim = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        1,
+        inactiveOpacity: 0.25,
+      );
+      expect(musicLyricLineOpacity(dim, 0), 1);
+      expect(musicLyricLineOpacity(dim, 1), 0.25);
+      expect(musicLyricLineOpacity(dim, 2), 0.15);
     });
 
     test('译文的额外压暗只在样例标注的地方生效', () {

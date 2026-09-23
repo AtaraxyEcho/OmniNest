@@ -28,14 +28,18 @@ void main() {
     expect(portalSource, _flatLacks('_PortalImmersiveButton'));
   });
 
-  test('沉浸封面卡片滑动循环导航不截断', () {
+  test('沉浸封面卡片步进经播放模式解析目标，不按展示索引加减', () {
     final source = _readFlat(
       'lib/features/music/presentation/player/music_immersive_player_stage.dart',
     );
 
-    // 末端/队首回绕用取模实现，禁止 clamp 截断。
+    // 卡组滚轮/方向步进语义是「下一首/上一首」：必须由 controller 按播放模式
+    // 解析目标（随机档跳出顺序、单曲循环档原地重播），末端回绕同样由播放模式
+    // 负责；按展示索引加减会让随机与单曲循环在该入口静默失效。
     expect(source, _flatLacks('clamp(0, tracks.length - 1)'));
-    expect(source, _flatContains('(_deckIndex + delta) % tracks.length'));
+    expect(source, _flatLacks('(_deckIndex + delta) % tracks.length'));
+    expect(source, _flatContains('controller.nextTrack()'));
+    expect(source, _flatContains('controller.previousTrack()'));
   });
 
   test('沉浸顶部只显示放大的歌曲信息与收藏按钮', () {
@@ -108,7 +112,9 @@ void main() {
     expect(stageSource, _flatLacks('.take(12)'));
     expect(stageSource, _flatLacks('_syncedTrackId'));
     expect(stageSource, _flatContains('index < 0 || _deckIndex == index'));
-    expect(stageSource, _flatContains('_selectDeckTrack(tracks, nextIndex)'));
+    // 卡片点击仍是显式跳播（playQueueIndex），步进才走播放模式。
+    expect(stageSource, _flatContains('_selectDeckTrack(deckTracks, index)'));
+    expect(stageSource, _flatContains('controller.playQueueIndex(queueIndex)'));
     expect(deckSource, _flatContains('_deckPaintOrder = <int>[4, 3, 2, 1]'));
   });
 

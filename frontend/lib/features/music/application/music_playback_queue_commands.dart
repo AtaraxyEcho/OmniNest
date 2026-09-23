@@ -70,7 +70,7 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       (candidate) => candidate.playableKey == startKey,
     );
     final resolvedTarget = targetIndex < 0 ? 0 : targetIndex;
-    if (current.shuffleEnabled &&
+    if (current.playMode == MusicPlayMode.shuffle &&
         (!_samePlayableKeySet(current.playbackItems, uniqueItems) ||
             current.queueSource.identityKey != source.identityKey)) {
       // 整队替换且 key 集合或来源变化：按新队列重开一轮洗牌序。
@@ -96,7 +96,7 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     final items = [...current.playbackItems];
     final insertAt = (current.playbackIndex + 1).clamp(0, items.length);
     items.insert(insertAt, item);
-    if (current.shuffleEnabled) {
+    if (current.playMode == MusicPlayMode.shuffle) {
       // 下一首播放语义：洗牌序队头同步插入。
       _shuffleUpcoming.insert(0, item.playableKey);
     }
@@ -121,7 +121,7 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     if (index < 0 || index == current.playbackIndex) {
       return;
     }
-    if (current.shuffleEnabled) {
+    if (current.playMode == MusicPlayMode.shuffle) {
       // 洗牌模式下实际播放序由洗牌序决定：把该曲目同步到未播序队头即可，
       // 线性队列保持原位（展示顺序与播放索引都不变，无需重排与持久化）。
       _shuffleUpcoming
@@ -293,30 +293,27 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     await setPlaying(!current.isPlaying);
   }
 
-  /// 按循环和随机模式播放下一项；清空后的队列不会复活。
+  /// 按播放模式播放下一项；清空后的队列不会复活。
   ///
-  /// [autoAdvance] 表示曲目自然播完的自动推进：队尾遵循 repeat 语义（off 停播）。
-  /// 手动下一首（按钮/媒体键）总是回绕队首。
+  /// [autoAdvance] 表示曲目自然播完的自动推进：单曲循环档原地重播当前曲目，
+  /// 顺序与随机档都是列表首尾循环。手动下一首（按钮/媒体键）总是前进一格。
   Future<void> nextTrack({bool autoAdvance = false}) async {
     final current = _currentState;
     if (current == null || current.playbackItems.isEmpty) {
       return;
     }
     final queue = current.playbackItems;
-    if (current.repeatMode == MusicRepeatMode.one &&
+    if (autoAdvance &&
+        current.playMode == MusicPlayMode.repeatOne &&
         current.playbackIndex >= 0) {
       await _playItemInQueue(current, queue, current.playbackIndex);
       return;
     }
-    if (current.shuffleEnabled && queue.length > 1) {
-      if (await _nextShuffledTrack(
-        current,
-        queue,
-        manualAdvance: !autoAdvance,
-      )) {
+    if (current.playMode == MusicPlayMode.shuffle && queue.length > 1) {
+      if (await _nextShuffledTrack(current, queue)) {
         return;
       }
-      // 洗牌序耗尽且无法重生成（自动推进且 repeat=off）：按停播收尾。
+      // 洗牌序无法重生成（队列已空）：按停播收尾。
       _replaceState(current.copyWith(isPlaying: false));
       return;
     }
@@ -343,19 +340,16 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
       }
       // 空页（hasMore 陈旧）：落入回绕判定。
     }
-    if (!autoAdvance || current.repeatMode == MusicRepeatMode.all) {
-      await _playItemInQueue(current, queue, 0);
-      return;
-    }
-    _replaceState(current.copyWith(isPlaying: false));
+    // 列表末端：顺序档恒为列表首尾循环，自动推进与手动下一首都回绕队首。
+    await _playItemInQueue(current, queue, 0);
   }
 
-  /// 洗牌推进：消费未播洗牌序；repeat=all 或手动推进时先尝试续页再重生成一轮。
+  /// 洗牌推进：消费未播洗牌序；未播序耗尽时先尝试续页，再重开一轮
+  /// （随机档与顺序档一样是列表首尾循环语义，不会在队尾停播）。
   Future<bool> _nextShuffledTrack(
     MusicCenterState current,
-    List<MusicPlayableItem> queue, {
-    bool manualAdvance = false,
-  }) async {
+    List<MusicPlayableItem> queue,
+  ) async {
     if (_shuffleUpcoming.isEmpty && !_shuffleRoundConsumed) {
       // 尚未开轮（如恢复场景）：按需生成。
       _startShuffleRound(queue, current.currentItem?.playableKey);
@@ -363,21 +357,18 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     if (await _consumeShuffleUpcoming(current, queue)) {
       return true;
     }
-    if (current.repeatMode == MusicRepeatMode.all || manualAdvance) {
-      if (await _extendLibraryQueueIfPossible(current)) {
-        final latest = _currentState;
-        if (latest != null) {
-          _startShuffleRound(
-            latest.playbackItems,
-            latest.currentItem?.playableKey,
-          );
-          return _consumeShuffleUpcoming(latest, latest.playbackItems);
-        }
+    if (await _extendLibraryQueueIfPossible(current)) {
+      final latest = _currentState;
+      if (latest != null) {
+        _startShuffleRound(
+          latest.playbackItems,
+          latest.currentItem?.playableKey,
+        );
+        return _consumeShuffleUpcoming(latest, latest.playbackItems);
       }
-      _startShuffleRound(queue, current.currentItem?.playableKey);
-      return _consumeShuffleUpcoming(current, queue);
     }
-    return false;
+    _startShuffleRound(queue, current.currentItem?.playableKey);
+    return _consumeShuffleUpcoming(current, queue);
   }
 
   /// 依次消费洗牌序，跳过已不在队列中的 key；耗尽即标记本轮结束。
@@ -493,44 +484,16 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     );
   }
 
-  /// 轮换播放循环模式。
-  void toggleRepeatMode() {
+  /// 应用播放模式：三态互斥，进入随机档时按当前队列开一轮洗牌序，
+  /// 离开随机档时丢弃未播序并回到线性队列顺序。
+  void setPlayMode(MusicPlayMode playMode) {
     final current = _currentState;
-    if (current == null) {
+    if (current == null || current.playMode == playMode) {
       return;
     }
-    final next = switch (current.repeatMode) {
-      MusicRepeatMode.off => MusicRepeatMode.all,
-      MusicRepeatMode.all => MusicRepeatMode.one,
-      MusicRepeatMode.one => MusicRepeatMode.off,
-    };
-    // 循环类模式与随机播放互斥：进入循环档时关闭随机，避免双模式叠加。
-    final nextState = current.copyWith(
-      repeatMode: next,
-      shuffleEnabled:
-          next == MusicRepeatMode.off ? current.shuffleEnabled : false,
-    );
+    final nextState = current.copyWith(playMode: playMode);
     _replaceState(nextState);
-    if (!nextState.shuffleEnabled) {
-      _shuffleUpcoming.clear();
-    }
-    _queuePersistence.schedule(nextState);
-  }
-
-  /// 切换随机播放状态；开启时按当前队列生成洗牌序，关闭时仅清空未播序。
-  /// 开启随机会退出循环类模式，保证播放模式互斥。
-  void toggleShuffle() {
-    final current = _currentState;
-    if (current == null) {
-      return;
-    }
-    final enabled = !current.shuffleEnabled;
-    final nextState = current.copyWith(
-      shuffleEnabled: enabled,
-      repeatMode: enabled ? MusicRepeatMode.off : current.repeatMode,
-    );
-    _replaceState(nextState);
-    if (enabled) {
+    if (playMode == MusicPlayMode.shuffle) {
       _startShuffleRound(
         nextState.playbackItems,
         nextState.currentItem?.playableKey,
@@ -541,39 +504,13 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     _queuePersistence.schedule(nextState);
   }
 
-  /// 单按钮轮换播放模式：顺序 → 随机 → 循环 → 顺序。
-  ///
-  /// 三种模式互斥（随机与循环不再同时生效）；旧的单曲循环状态在轮换时
-  /// 归一到顺序档。
+  /// 单按钮轮换播放模式：顺序播放 → 随机播放 → 单曲循环 → 顺序播放。
   void cyclePlayMode() {
     final current = _currentState;
     if (current == null) {
       return;
     }
-    final MusicCenterState nextState;
-    if (current.shuffleEnabled) {
-      // 随机 → 循环（列表循环）。
-      nextState = current.copyWith(
-        shuffleEnabled: false,
-        repeatMode: MusicRepeatMode.all,
-      );
-    } else {
-      nextState = switch (current.repeatMode) {
-        // 顺序 → 随机。
-        MusicRepeatMode.off || MusicRepeatMode.one => current.copyWith(
-          shuffleEnabled: true,
-          repeatMode: MusicRepeatMode.off,
-        ),
-        // 循环 → 顺序。
-        MusicRepeatMode.all => current.copyWith(
-          repeatMode: MusicRepeatMode.off,
-        ),
-      };
-    }
-    _replaceState(nextState);
-    if (!nextState.shuffleEnabled) {
-      _shuffleUpcoming.clear();
-    }
-    _queuePersistence.schedule(nextState);
+    final modes = MusicPlayMode.values;
+    setPlayMode(modes[(current.playMode.index + 1) % modes.length]);
   }
 }

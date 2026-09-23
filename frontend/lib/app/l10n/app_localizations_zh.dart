@@ -2397,13 +2397,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicVisualizerLayout => '桌面布局';
 
   @override
-  String get musicVisualizerLayoutLeft => '居左';
+  String get musicVisualizerLayoutLyricsLeft => '歌词居左';
 
   @override
-  String get musicVisualizerLayoutCenter => '居中';
+  String get musicVisualizerLayoutLyricsCenter => '歌词居中';
 
   @override
-  String get musicVisualizerLayoutRight => '居右';
+  String get musicVisualizerLayoutLyricsRight => '歌词居右';
 
   @override
   String get musicVisualizerColorHue => '色相';
@@ -2799,6 +2799,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalLocalBackdropUploading => '正在上传…';
 
   @override
+  String get portalLocalBackdropDropHint => '松开即可上传背景素材';
+
+  @override
   String portalLocalBackdropUploadFailedNames(Object titles) {
     return '上传失败：$titles';
   }
@@ -2811,7 +2814,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get portalLocalBackdropUnsupportedFormat =>
-      '仅支持 JPG、PNG、WebP、GIF 图片或 MP4、WebM、MOV 视频';
+      '仅支持 JPG、PNG、WebP、GIF 图片或 MP4、WebM、MOV、M4V 视频';
 
   @override
   String get portalLocalBackdropFileTooLarge => '背景素材文件过大';
@@ -8480,12 +8483,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicPlayModeSequential => '顺序播放';
-
-  @override
-  String get musicRepeatOff => '顺序播放';
-
-  @override
-  String get musicRepeatAll => '列表循环';
 
   @override
   String get musicRepeatOne => '单曲循环';

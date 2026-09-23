@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:drift/native.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -621,6 +625,152 @@ void main() {
       expect(
         state.backdrops.where((backdrop) => backdrop.id == 'server-up'),
         isNotEmpty,
+      );
+      expect(uploadCalls, 1);
+    });
+
+    test('拖放入口按扩展名分流,不支持的条目记为格式错误且不上传', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final api = _MockBackdropApi();
+      final uploaded = BackdropServerAsset(
+        id: 'server-drop',
+        title: 'clip',
+        mediaType: 'video',
+        status: 'READY',
+        fileSize: 8,
+        updatedAt: DateTime(2026),
+      );
+      final uploadedFiles = <BackdropPickedFile>[];
+      when(() => api.list()).thenAnswer((_) async => const []);
+      when(() => api.upload(any())).thenAnswer((invocation) async {
+        uploadedFiles.add(
+          invocation.positionalArguments.single as BackdropPickedFile,
+        );
+        return uploaded;
+      });
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      await notifier.addDroppedBackdropFiles([
+        XFile.fromData(
+          Uint8List.fromList(List<int>.filled(8, 0)),
+          path: 'D:/drops/clip.mp4',
+        ),
+        XFile.fromData(Uint8List.fromList([0]), path: 'D:/drops/notes.txt'),
+      ]);
+
+      final state = container.read(appBackdropControllerProvider).requireValue;
+      expect(uploadedFiles, hasLength(1));
+      expect(uploadedFiles.single.name, endsWith('clip.mp4'));
+      expect(uploadedFiles.single.size, 8);
+      expect(uploadedFiles.single.isStreamBased, isFalse);
+      expect(state.uploading, isFalse);
+      expect(state.failedUploads, hasLength(1));
+      expect(state.failedUploads.single.title, endsWith('.txt'));
+      expect(state.failedUploads.single.code, '8002');
+    });
+
+    test('上传进行中重复拖放不再发起请求', () async {
+      final database = LocalDatabase(NativeDatabase.memory());
+      final repository = AppBackdropRepository(database);
+      final api = _MockBackdropApi();
+      final gate = Completer<BackdropServerAsset>();
+      var uploadCalls = 0;
+      when(() => api.list()).thenAnswer((_) async => const []);
+      when(() => api.upload(any())).thenAnswer((_) {
+        uploadCalls++;
+        return gate.future;
+      });
+      final container = ProviderContainer.test(
+        overrides: [
+          appBackdropRepositoryProvider.overrideWithValue(repository),
+          appBackdropBundledAssetInstallerProvider.overrideWithValue(
+            _NoopBundledAssetInstaller(),
+          ),
+          authSessionProvider.overrideWith(
+            () => _MutableSessionNotifier(
+              AuthSessionState(
+                user: UserProfile(
+                  id: _testOwnerId,
+                  username: 'owner',
+                  role: 'MEMBER',
+                ),
+              ),
+            ),
+          ),
+          appBackdropApiProvider.overrideWithValue(api),
+          backdropPreferencesProvider.overrideWith(
+            () => _NoopBackdropPreferencesController(repository),
+          ),
+        ],
+      );
+      addTearDown(() async {
+        container.dispose();
+        await database.close();
+      });
+
+      await container.read(appBackdropControllerProvider.future);
+      final notifier = container.read(appBackdropControllerProvider.notifier);
+      final dropped = [
+        XFile.fromData(
+          Uint8List.fromList(List<int>.filled(4, 0)),
+          path: 'D:/drops/clip.mp4',
+        ),
+      ];
+      final firstBatch = notifier.addDroppedBackdropFiles(dropped);
+      for (var round = 0; round < 5; round++) {
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(
+        container.read(appBackdropControllerProvider).requireValue.uploading,
+        isTrue,
+      );
+
+      await notifier.addDroppedBackdropFiles(dropped);
+      expect(uploadCalls, 1);
+
+      gate.complete(
+        BackdropServerAsset(
+          id: 'server-drop',
+          title: 'clip',
+          mediaType: 'video',
+          status: 'READY',
+          fileSize: 4,
+          updatedAt: DateTime(2026),
+        ),
+      );
+      await firstBatch;
+      expect(
+        container.read(appBackdropControllerProvider).requireValue.uploading,
+        isFalse,
       );
       expect(uploadCalls, 1);
     });

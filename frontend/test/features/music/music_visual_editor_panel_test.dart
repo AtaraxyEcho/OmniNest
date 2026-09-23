@@ -58,15 +58,19 @@ void main() {
     // 两色与共用外观参数在两种形态下都可用。
     expect(find.text('在读歌词颜色'), findsOneWidget);
     expect(find.text('非当前句歌词颜色'), findsOneWidget);
-    expect(find.text('歌词行距'), findsOneWidget);
-    // 滑杆必须带具体数值与单位（默认值：字号 18px、行距 1.00×、透明度 50%）。
-    expect(find.text('18 px'), findsOneWidget);
-    // 行距与在读/未读字号缩放默认均为 1.00×，共三个滑杆。
-    expect(find.text('1.00×'), findsNWidgets(3));
-    expect(find.text('50%'), findsOneWidget);
+    // 行距为两端共用设置，桌面组与移动端组各出一个滑杆。
+    expect(find.text('歌词行距'), findsNWidgets(2));
+    // 滑杆必须带具体数值与单位：桌面在读/未读字号按 px 呈现（居左布局的
+    // 样例基准 44/18），移动端整段字号默认 18 px，故 18 px 出现两次。
+    expect(find.text('44 px'), findsOneWidget);
+    expect(find.text('18 px'), findsNWidgets(2));
+    // 行距滑杆在桌面组与移动端组各一个，均为 1.00×。
+    expect(find.text('1.00×'), findsNWidgets(2));
+    // 非当前句透明度在桌面组与移动端组共用同一设置值，默认 80%。
+    expect(find.text('80%'), findsNWidgets(2));
     // 堆叠卡片开关在桌面组可见（默认开启）。
     expect(find.text('显示堆叠卡片'), findsOneWidget);
-    // 在读/未读字号缩放滑杆（桌面组专属）。
+    // 在读/未读字号滑杆（桌面组专属）。
     expect(find.text('在读歌词字号'), findsOneWidget);
     expect(find.text('未读歌词字号'), findsOneWidget);
   });

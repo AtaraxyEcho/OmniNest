@@ -225,6 +225,11 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
                 child: AnimatedOpacity(
                   opacity: _searchFocused ? 1 : 0,
                   duration: const Duration(milliseconds: 150),
+                  // 透明度归零会整棵摘掉搜索结果的语义子树，重新聚焦时再整棵
+                  // 加回：Windows 辅助功能桥会在仍持有旧节点 id 时更新失败
+                  // （"will not be in the tree and is not the new root"）。
+                  // 交互本身由外层 IgnorePointer 屏蔽，读屏可以继续停留在树上。
+                  alwaysIncludeSemantics: true,
                   child: MusicDeckSearchOverlay(onDismiss: _closeSearch),
                 ),
               ),

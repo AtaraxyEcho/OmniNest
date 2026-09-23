@@ -33,8 +33,7 @@ void registerMusicQueueTests() {
     ]);
     expect(state.playbackIndex, 1);
     expect(state.currentItem?.playableKey, 'online:netease:188888');
-    expect(state.repeatMode, MusicRepeatMode.all);
-    expect(state.shuffleEnabled, isTrue);
+    expect(state.playMode, MusicPlayMode.shuffle);
     expect(api.onlinePlaybackRequests, ['netease:188888']);
   });
 
@@ -413,7 +412,7 @@ void registerMusicQueueTests() {
 
     controller.random = Random(7);
     await controller.playItems(items, startIndex: 0);
-    controller.toggleShuffle();
+    controller.setPlayMode(MusicPlayMode.shuffle);
 
     // 控制器对"队列 key − 当前曲"做洗牌，模拟须同构。
     final expected = _shuffledKeys(const [
@@ -428,7 +427,7 @@ void registerMusicQueueTests() {
     }
   });
 
-  test('repeat all starts a fresh seeded round after exhaustion', () async {
+  test('shuffle starts a fresh seeded round after exhaustion', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
       overrides: [musicApiProvider.overrideWithValue(api)],
@@ -439,8 +438,7 @@ void registerMusicQueueTests() {
 
     controller.random = Random(7);
     await controller.playItems(_fourTrackItems(api), startIndex: 0);
-    controller.toggleRepeatMode();
-    controller.toggleShuffle();
+    controller.setPlayMode(MusicPlayMode.shuffle);
 
     final rng = Random(7);
     const allKeys = [
@@ -473,7 +471,7 @@ void registerMusicQueueTests() {
 
     controller.random = Random(7);
     await controller.playItems(_fourTrackItems(api), startIndex: 0);
-    controller.toggleShuffle();
+    controller.setPlayMode(MusicPlayMode.shuffle);
     final expected = _shuffledKeys(const [
       'local:track-2',
       'local:track-3',
@@ -559,30 +557,27 @@ void registerMusicQueueTests() {
     );
   });
 
-  test(
-    'manual next wraps at the queue end regardless of repeat mode',
-    () async {
-      final api = _FakeMusicApi();
-      final container = ProviderContainer.test(
-        overrides: [musicApiProvider.overrideWithValue(api)],
-      );
-      addTearDown(container.dispose);
-      await container.read(musicCenterControllerProvider.future);
-      final controller = container.read(musicCenterControllerProvider.notifier);
-      final items = _fourTrackItems(api);
+  test('manual next wraps at the queue end', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+    final items = _fourTrackItems(api);
 
-      await controller.playItems(items, startIndex: 3);
-      await controller.nextTrack();
+    await controller.playItems(items, startIndex: 3);
+    await controller.nextTrack();
 
-      final state = container.read(musicCenterControllerProvider).value!;
-      expect(state.repeatMode, MusicRepeatMode.off);
-      expect(state.currentItem?.playableKey, 'local:track-1');
-      expect(state.playbackIndex, 0);
-      expect(state.isPlaying, isTrue);
-    },
-  );
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.playMode, MusicPlayMode.sequential);
+    expect(state.currentItem?.playableKey, 'local:track-1');
+    expect(state.playbackIndex, 0);
+    expect(state.isPlaying, isTrue);
+  });
 
-  test('auto advance at the queue end stops with repeat off', () async {
+  test('auto advance at the queue end wraps to the queue start', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
       overrides: [musicApiProvider.overrideWithValue(api)],
@@ -596,11 +591,31 @@ void registerMusicQueueTests() {
     await controller.nextTrack(autoAdvance: true);
 
     final state = container.read(musicCenterControllerProvider).value!;
-    expect(state.currentItem?.playableKey, 'local:track-4');
-    expect(state.isPlaying, isFalse);
+    expect(state.currentItem?.playableKey, 'local:track-1');
+    expect(state.isPlaying, isTrue);
   });
 
-  test('manual shuffle next regenerates the round with repeat off', () async {
+  test('auto advance replays the current track under repeat one', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+    final items = _fourTrackItems(api);
+
+    await controller.playItems(items, startIndex: 3);
+    controller.setPlayMode(MusicPlayMode.repeatOne);
+    await controller.nextTrack(autoAdvance: true);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.playableKey, 'local:track-4');
+    expect(state.playbackIndex, 3);
+    expect(state.isPlaying, isTrue);
+  });
+
+  test('manual shuffle next regenerates the round when exhausted', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
       overrides: [musicApiProvider.overrideWithValue(api)],
@@ -611,7 +626,7 @@ void registerMusicQueueTests() {
 
     controller.random = Random(7);
     await controller.playItems(_fourTrackItems(api), startIndex: 0);
-    controller.toggleShuffle();
+    controller.setPlayMode(MusicPlayMode.shuffle);
     final rng = Random(7);
     final firstRound = _shuffledKeys(const [
       'local:track-2',
@@ -650,7 +665,7 @@ void registerMusicQueueTests() {
 
     controller.random = Random(7);
     await controller.playItems(_fourTrackItems(api), startIndex: 0);
-    controller.toggleShuffle();
+    controller.setPlayMode(MusicPlayMode.shuffle);
     controller.enqueue(
       MusicPlayableItem.local(
         const MusicTrack(
@@ -687,7 +702,7 @@ void registerMusicQueueTests() {
 
     controller.random = Random(7);
     await controller.playItems(_fourTrackItems(api), startIndex: 0);
-    controller.toggleShuffle();
+    controller.setPlayMode(MusicPlayMode.shuffle);
     final expected = _shuffledKeys(const [
       'local:track-2',
       'local:track-3',
@@ -720,7 +735,7 @@ void registerMusicQueueTests() {
 
       controller.random = Random(7);
       await controller.playItems(items, startIndex: 0);
-      controller.toggleShuffle();
+      controller.setPlayMode(MusicPlayMode.shuffle);
       final round = _shuffledKeys(const [
         'local:track-2',
         'local:track-3',
@@ -808,7 +823,7 @@ void registerMusicQueueTests() {
 
       await controller.nextTrack();
       final state = container.read(musicCenterControllerProvider).asData!.value;
-      expect(state.shuffleEnabled, isTrue);
+      expect(state.playMode, MusicPlayMode.shuffle);
       expect(state.currentItem?.playableKey, isNot('local:track-1'));
       expect(
         state.playbackItems.map((item) => item.playableKey),

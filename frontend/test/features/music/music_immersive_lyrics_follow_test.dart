@@ -222,6 +222,7 @@ Widget _lyricsApp({
         child: MusicImmersiveLyrics(
           palette: MusicImmersivePalette.digital,
           player: player,
+          onSeek: (position) => player.seek(position),
           track: _track,
           lyrics: lyrics,
           scale: 1,

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
@@ -224,24 +225,63 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
   /// 唤起文件选择并逐个上传。
   /// 网络类失败自动重试一次;全部结束后刷新列表并记录失败条目。
   Future<void> addBackdropFiles() async {
-    final session = await ref.read(authSessionProvider.future);
-    if (!session.isAuthenticated) {
-      return;
-    }
-    final current = state.asData?.value;
-    if (current?.uploading == true) {
+    if (!await _canStartUpload()) {
       return;
     }
     final picked = await ref.read(appBackdropFilePickerProvider).pick();
-    if (picked.isEmpty) {
+    await _uploadBatch(picked, const []);
+  }
+
+  /// 上传系统拖放进来的文件。
+  /// 扩展名不受支持的条目直接记为不支持格式,不发起上传请求。
+  Future<void> addDroppedBackdropFiles(List<XFile> dropped) async {
+    if (dropped.isEmpty) {
+      return;
+    }
+    if (!await _canStartUpload()) {
+      return;
+    }
+    final accepted = <BackdropPickedFile>[];
+    final rejected = <BackdropUploadFailure>[];
+    for (final file in dropped) {
+      if (!isBackdropAllowedFileName(file.name)) {
+        rejected.add(BackdropUploadFailure(title: file.name, code: '8002'));
+        continue;
+      }
+      try {
+        accepted.add(await BackdropPickedFile.fromDroppedFile(file));
+      } on Exception catch (error) {
+        if (kDebugMode) {
+          devLog('背景素材拖放读取失败: ${file.name} $error');
+        }
+        rejected.add(BackdropUploadFailure(title: file.name, code: 'UNKNOWN'));
+      }
+    }
+    await _uploadBatch(accepted, rejected);
+  }
+
+  Future<bool> _canStartUpload() async {
+    final session = await ref.read(authSessionProvider.future);
+    if (!session.isAuthenticated) {
+      return false;
+    }
+    final current = state.asData?.value;
+    return current?.uploading != true;
+  }
+
+  Future<void> _uploadBatch(
+    List<BackdropPickedFile> picked,
+    List<BackdropUploadFailure> knownFailures,
+  ) async {
+    if (picked.isEmpty && knownFailures.isEmpty) {
       return;
     }
     state = AsyncData(
-      (current ??
+      (state.asData?.value ??
               await _loadCurrentState(ref.read(appBackdropRepositoryProvider)))
           .copyWith(uploading: true, clearUploadFailures: true),
     );
-    final failures = <BackdropUploadFailure>[];
+    final failures = <BackdropUploadFailure>[...knownFailures];
     for (final file in picked) {
       try {
         final asset = await _uploadWithRetry(file);

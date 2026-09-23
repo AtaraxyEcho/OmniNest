@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 
 /// Music 播放按钮的视觉层级。
@@ -219,6 +221,106 @@ class MusicPlaybackProgressBar extends StatelessWidget {
           showValueIndicator: ShowValueIndicator.never,
         ),
         child: AppSlider(value: value.clamp(0.0, 1.0), onChanged: onChanged),
+      ),
+    );
+  }
+}
+
+/// 播放模式轮换按钮：顺序播放 / 随机播放 / 单曲循环三态只更换图标与着色，
+/// 点击后不保留选中底色（与主流播放器一致）。
+class MusicPlayModeButton extends StatefulWidget {
+  const MusicPlayModeButton({
+    required this.playMode,
+    required this.onTap,
+    required this.idleColor,
+    required this.activeColor,
+    this.iconSize = 20,
+    this.padding = 4,
+    super.key,
+  });
+
+  final MusicPlayMode playMode;
+  final VoidCallback? onTap;
+
+  /// 顺序档（默认）的图标色；随机与单曲循环档用 [activeColor] 强调。
+  final Color idleColor;
+  final Color activeColor;
+  final double iconSize;
+  final double padding;
+
+  /// 模式图标：三态互斥，每档一个图标。
+  static IconData iconFor(MusicPlayMode playMode) {
+    return switch (playMode) {
+      MusicPlayMode.sequential => Icons.repeat_rounded,
+      MusicPlayMode.shuffle => Icons.shuffle_rounded,
+      MusicPlayMode.repeatOne => Icons.repeat_one_rounded,
+    };
+  }
+
+  /// 模式文案：Tooltip 与读屏标签共用同一来源，避免两处措辞分叉。
+  static String labelFor(AppLocalizations l10n, MusicPlayMode playMode) {
+    return switch (playMode) {
+      MusicPlayMode.sequential => l10n.musicPlayModeSequential,
+      MusicPlayMode.shuffle => l10n.musicShuffle,
+      MusicPlayMode.repeatOne => l10n.musicRepeatOne,
+    };
+  }
+
+  @override
+  State<MusicPlayModeButton> createState() => _MusicPlayModeButtonState();
+}
+
+class _MusicPlayModeButtonState extends State<MusicPlayModeButton> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = MusicPlayModeButton.labelFor(
+      AppLocalizations.of(context),
+      widget.playMode,
+    );
+    final reduceMotion =
+        MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    final duration =
+        reduceMotion ? Duration.zero : const Duration(milliseconds: 160);
+    final isActive = widget.playMode != MusicPlayMode.sequential;
+    return Semantics(
+      button: true,
+      enabled: widget.onTap != null,
+      label: label,
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(999),
+          onTap: widget.onTap,
+          onHighlightChanged: (highlighted) {
+            if (highlighted != _pressed) {
+              setState(() => _pressed = highlighted);
+            }
+          },
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          hoverColor: Colors.transparent,
+          focusColor: Colors.transparent,
+          child: AnimatedScale(
+            scale: _pressed ? 0.88 : 1,
+            duration: duration,
+            curve: Curves.easeOutCubic,
+            child: Padding(
+              padding: EdgeInsets.all(widget.padding),
+              child: AnimatedSwitcher(
+                duration: duration,
+                switchInCurve: Curves.easeOutCubic,
+                child: Icon(
+                  MusicPlayModeButton.iconFor(widget.playMode),
+                  key: ValueKey<MusicPlayMode>(widget.playMode),
+                  size: widget.iconSize,
+                  color: isActive ? widget.activeColor : widget.idleColor,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

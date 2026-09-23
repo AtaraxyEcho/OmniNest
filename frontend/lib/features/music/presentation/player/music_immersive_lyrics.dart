@@ -45,6 +45,7 @@ class MusicImmersiveLyrics extends StatefulWidget {
     required this.onTogglePlayback,
     required this.onPrevious,
     required this.onNext,
+    required this.onSeek,
     this.lyricSettings,
     this.lyricSpec,
     this.scrollMode = true,
@@ -55,6 +56,10 @@ class MusicImmersiveLyrics extends StatefulWidget {
 
   final MusicImmersivePalette palette;
   final MusicAudioPlayback player;
+
+  /// 进度跳转必须经播放会话（`MusicPlaybackSessionController.seekTo`）：
+  /// 直接对播放器 seek 会被切歌加载完成时的归零覆盖。
+  final Future<void> Function(Duration position) onSeek;
   final MusicTrack? track;
   final List<MusicLyricLine> lyrics;
   final double scale;
@@ -788,7 +793,7 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
     if (_activeIndex != index) {
       setState(() => _activeIndex = index);
     }
-    unawaited(widget.player.seek(position));
+    unawaited(widget.onSeek(position));
   }
 
   KeyEventResult _handleKeyEvent(KeyEvent event) {

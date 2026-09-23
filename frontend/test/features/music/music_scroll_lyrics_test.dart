@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui show Image, ImageByteFormat;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
@@ -423,9 +424,12 @@ void main() {
     );
     expect(
       tester.widget<Text>(find.text('Lyric 9')).style!.color,
-      const Color(0xFFFFFFFF).withValues(alpha: 0.5),
+      const Color(
+        0xFFFFFFFF,
+      ).withValues(alpha: PortalLyricVisualSettings.defaults.inactiveOpacity),
     );
-    expect(PortalLyricVisualSettings.defaults.inactiveOpacity, 0.5);
+    // 默认 80%：非当前句仍可辨认，改默认值时上面的断言随之跟随。
+    expect(PortalLyricVisualSettings.defaults.inactiveOpacity, 0.8);
   });
 
   testWidgets('原文与译文各自独立使用上下渐变', (tester) async {
@@ -969,6 +973,104 @@ void main() {
     );
   });
 
+  testWidgets('折行逐字填充按词级时长衔接行间进度（次行不被宽度比例拖延）', (tester) async {
+    // 词级时长刻意与行宽失衡：首行三组词只唱 0.3s（宽占 78%），次行一组词
+    // 唱 0.7s（宽占 22%）。位置进行到 0.4s（总进度 40%）时次行按时间应已
+    // 点亮约 14%；若错误地按行宽加权，次行会完全未唱（回归即"明显延迟"）。
+    // 断言直接采样渲染像素：已唱区域为渐变读色（G 分量高于 R），未唱区域
+    // 为非当前句色（G≈R）。
+    final player = _FakeMusicAudioPlayback(
+      initialPosition: const Duration(seconds: 1),
+    );
+    addTearDown(player.dispose);
+    const probeKey = ValueKey('music-lyric-pixel-probe');
+    final lyrics = <MusicLyricLine>[
+      const MusicLyricLine(position: Duration.zero, text: 'X'),
+      const MusicLyricLine(
+        position: Duration(seconds: 1),
+        text: 'AAAA AAAA AAAA AAAA',
+        words: <MusicLyricWord>[
+          MusicLyricWord(
+            offset: Duration.zero,
+            duration: Duration(milliseconds: 100),
+            text: 'AAAA ',
+          ),
+          MusicLyricWord(
+            offset: Duration(milliseconds: 100),
+            duration: Duration(milliseconds: 100),
+            text: 'AAAA ',
+          ),
+          MusicLyricWord(
+            offset: Duration(milliseconds: 200),
+            duration: Duration(milliseconds: 100),
+            text: 'AAAA ',
+          ),
+          MusicLyricWord(
+            offset: Duration(milliseconds: 300),
+            duration: Duration(milliseconds: 700),
+            text: 'AAAA',
+          ),
+        ],
+      ),
+      const MusicLyricLine(position: Duration(seconds: 2), text: 'X'),
+    ];
+    await tester.pumpWidget(
+      _lyricsApp(
+        player: player,
+        lyrics: lyrics,
+        fontFamily: 'Ahem',
+        repaintBoundaryKey: probeKey,
+        settings: PortalLyricVisualSettings.defaults.copyWith(
+          fontSizePx: 48,
+          currentFontSizePx: 48,
+          currentPaint: const LyricPaint.vertical(0xFFB7FFE7, 0xFF7098A0),
+        ),
+      ),
+    );
+    await _advance(tester);
+    player.emit(const Duration(milliseconds: 1400));
+    await tester.pump();
+
+    final renderBoundary = tester.renderObject<RenderRepaintBoundary>(
+      find.byKey(probeKey),
+    );
+    late final ui.Image image;
+    await tester.binding.runAsync(() async {
+      image = await renderBoundary.toImage(pixelRatio: 1);
+    });
+    final bytes = await tester.binding.runAsync(
+      () => image.toByteData(format: ui.ImageByteFormat.rawRgba),
+    );
+    expect(bytes, isNotNull);
+
+    int greenMinusRed(Offset point) {
+      final x = point.dx.round().clamp(0, image.width - 1);
+      final y = point.dy.round().clamp(0, image.height - 1);
+      final offset = (y * image.width + x) * 4;
+      return bytes!.getUint8(offset + 1) - bytes.getUint8(offset);
+    }
+
+    // 次行 "AAAA"：字形只占行盒左侧 192px，左端约 14% 已唱（渐变读色，
+    // G 分量高于 R），中段未唱（非当前句色，G≈R）。
+    final secondLine = tester.getRect(find.text('AAAA').first);
+    final firstLine = tester.getRect(find.text('AAAA AAAA AAAA').first);
+    final filledDelta = greenMinusRed(
+      Offset(secondLine.left + 8, secondLine.center.dy),
+    );
+    final unsungDelta = greenMinusRed(
+      Offset(secondLine.left + 100, secondLine.center.dy),
+    );
+    expect(filledDelta, greaterThan(20));
+    expect(unsungDelta.abs(), lessThan(12));
+
+    // 首行在 0.3s 唱完，0.4s 时应整行点亮（右端也是读色）。
+    final firstTailDelta = greenMinusRed(
+      Offset(firstLine.left + firstLine.width * 0.9, firstLine.center.dy),
+    );
+    expect(firstTailDelta, greaterThan(20));
+    image.dispose();
+  });
+
   testWidgets('居左/居中/居右锚点下填充遮罩都按当前行挂载', (tester) async {
     final player = _FakeMusicAudioPlayback(
       initialPosition: const Duration(seconds: 3),
@@ -1139,6 +1241,45 @@ void main() {
       findsOneWidget,
     );
   });
+  testWidgets('在读行不绘制左侧强调条（单行与多行一致）', (tester) async {
+    final player = _FakeMusicAudioPlayback(initialPosition: Duration.zero);
+    addTearDown(player.dispose);
+    final spec = resolveMusicLyricSpec(PortalMusicLayout.left, 1);
+
+    // 样例的左侧竖向强调条已整体移除：短歌词下它只是一根与内容无关的白线。
+    // 断言只认「带左边框的装饰盒」，避免把底衬色带误判。
+    int leftBarCount() {
+      return tester.widgetList<DecoratedBox>(find.byType(DecoratedBox)).where((
+        box,
+      ) {
+        final decoration = box.decoration;
+        if (decoration is! BoxDecoration) {
+          return false;
+        }
+        final border = decoration.border;
+        return border is Border && border.left.width > 0;
+      }).length;
+    }
+
+    Future<void> pumpLyrics(List<MusicLyricLine> lyrics) async {
+      await tester.pumpWidget(
+        _lyricsApp(player: player, spec: spec, lyrics: lyrics),
+      );
+      await tester.pump();
+      await tester.pump();
+    }
+
+    await pumpLyrics(const <MusicLyricLine>[
+      MusicLyricLine(position: Duration.zero, text: '纯音乐，请欣赏'),
+    ]);
+    expect(leftBarCount(), 0);
+
+    await pumpLyrics(const <MusicLyricLine>[
+      MusicLyricLine(position: Duration.zero, text: '第一行'),
+      MusicLyricLine(position: Duration(seconds: 30), text: '第二行'),
+    ]);
+    expect(leftBarCount(), 0);
+  });
 }
 
 Widget _lyricsApp({
@@ -1154,6 +1295,7 @@ Widget _lyricsApp({
   void Function(int deltaMs)? onAdjustLyricOffset,
   MusicLyricSpec? spec,
   String? fontFamily,
+  Key? repaintBoundaryKey,
 }) {
   final lines =
       lyrics ??
@@ -1185,25 +1327,29 @@ Widget _lyricsApp({
           : lines;
   // 测试字体度量决定折行位置：传入 fontFamily 时用固定度量的 Ahem
   // 字体（每字形宽 = 字号），让折行断言可以精确预判。
-  final body = SizedBox(
-    height: height,
-    child: MusicImmersiveLyrics(
-      palette: MusicImmersivePalette.digital,
-      player: player,
-      track: _track,
-      lyrics: resolvedLines,
-      scale: 1,
-      lyricSettings: settings,
-      lyricSpec: spec,
-      trackOffsetMs: trackOffsetMs,
-      onAdjustLyricOffset: onAdjustLyricOffset,
-      // 滚动歌词形态、文本排列与块锚点由宿主传入（设备级偏好 + 端形态 + 歌词位置）。
-      scrollMode: scrollMode,
-      textAlign: textAlign,
-      blockAnchor: blockAnchor,
-      onTogglePlayback: () {},
-      onPrevious: () {},
-      onNext: () {},
+  final body = RepaintBoundary(
+    key: repaintBoundaryKey,
+    child: SizedBox(
+      height: height,
+      child: MusicImmersiveLyrics(
+        palette: MusicImmersivePalette.digital,
+        player: player,
+        onSeek: (position) => player.seek(position),
+        track: _track,
+        lyrics: resolvedLines,
+        scale: 1,
+        lyricSettings: settings,
+        lyricSpec: spec,
+        trackOffsetMs: trackOffsetMs,
+        onAdjustLyricOffset: onAdjustLyricOffset,
+        // 滚动歌词形态、文本排列与块锚点由宿主传入（设备级偏好 + 端形态 + 歌词位置）。
+        scrollMode: scrollMode,
+        textAlign: textAlign,
+        blockAnchor: blockAnchor,
+        onTogglePlayback: () {},
+        onPrevious: () {},
+        onNext: () {},
+      ),
     ),
   );
   return MaterialApp(

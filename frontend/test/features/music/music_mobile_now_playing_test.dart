@@ -47,8 +47,10 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pump(const Duration(milliseconds: 400));
 
-    expect(find.byIcon(Icons.shuffle_rounded), findsOneWidget);
+    // 播放模式为单按钮：默认顺序档只显示列表循环图标，不再并列随机入口。
     expect(find.byIcon(Icons.repeat_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.shuffle_rounded), findsNothing);
+    expect(find.byIcon(Icons.repeat_one_rounded), findsNothing);
     expect(find.byType(MusicDeckArtwork), findsAtLeastNWidgets(1));
     // 背景改为动态壁纸透出：不再有专辑图模糊底图与重遮罩色层。
     expect(find.byType(ImageFiltered), findsNothing);

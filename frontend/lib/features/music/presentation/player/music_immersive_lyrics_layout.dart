@@ -190,10 +190,9 @@ class _MusicLyricsLayout {
                     transLines,
               )
               : 0.0;
-      // 逐字填充遮罩内含墨迹边距（覆盖 y/g 等下伸字形），行槽相应增加。
-      final fillPad =
-          settings.wordFillEnabled ? 2 * spec.activeFontSize * 0.14 : 0.0;
-      return (mainBox + translationBox + fillPad + spec.lineGap)
+      // 逐字填充遮罩的墨迹边距由行内容向外溢出（歌词行 Stack 不裁剪），
+      // 不占用行槽高度，避免行距被撑大。
+      return (mainBox + translationBox + spec.lineGap)
           .clamp(24.0, 480.0)
           .toDouble();
     }
@@ -220,12 +219,11 @@ class _MusicLyricsLayout {
       activeFont * _lyricLineHeight * mainLines + extraReserve(activeFont),
       baseFont * _lyricLineHeight * mainLines + extraReserve(baseFont),
     );
-    // 逐字填充遮罩内含墨迹边距（覆盖 y/g 等下伸字形），行槽相应增加；
-    // 另加 2px 余量吸收 strut 与字体真实行高的亚像素差。
-    final fillPad = settings.wordFillEnabled ? 2 * activeFont * 0.14 : 0.0;
+    // 逐字填充遮罩的墨迹边距由行内容向外溢出（歌词行 Stack 不裁剪），
+    // 不占用行槽高度；另加 2px 余量吸收 strut 与字体真实行高的亚像素差。
     // 行距 1.0 = 行间保留一个字高的空隙；只作用于空隙，不放大整行高度。
     final gap = baseFont * settings.lineSpacing;
-    return (content + fillPad + gap + 2).clamp(24.0, 320.0).toDouble();
+    return (content + gap + 2).clamp(24.0, 320.0).toDouble();
   }
 
   /// 单行字号：px 即最终字号；多行形态的在读行用独立 px。
@@ -289,9 +287,15 @@ class _MusicLyricsLayout {
       textDirection: textDirection,
       textScaler: textScaler,
     )..layout(maxWidth: maxWidth);
-    final width = painter.width;
-    final lines = painter.computeLineMetrics().length;
+    // 折行时 TextPainter.width 是被钳制到 maxWidth 的排版宽度，不是真实
+    // 最宽行；块宽必须取实际行度量，否则块被撑到可用宽度、填充边界映射
+    // 与行盒不一致。
+    final metrics = painter.computeLineMetrics();
+    var width = 0.0;
+    for (final metric in metrics) {
+      width = math.max(width, metric.width);
+    }
     painter.dispose();
-    return (width, math.max(1, lines));
+    return (width, math.max(1, metrics.length));
   }
 }

@@ -47,6 +47,9 @@ final musicAudioPlaybackProvider = Provider.autoDispose<MusicAudioPlayback>((
   return player;
 });
 
+/// 切歌加载中记下的一次跳转目标。
+typedef _PendingSeek = ({String playableKey, Duration position});
+
 final musicPlaybackSessionProvider =
     NotifierProvider<MusicPlaybackSessionController, MusicPlaybackSession>(
       MusicPlaybackSessionController.new,
@@ -66,6 +69,8 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   bool _syncRequested = false;
   bool _persistRequested = false;
   bool _pendingCompleted = false;
+  bool _completedForLoadedItem = false;
+  _PendingSeek? _pendingSeek;
   Future<void>? _persistFuture;
   AppLifecycleListener? _lifecycleListener;
   int _lastSavedSecond = -1;
@@ -162,7 +167,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
           ),
       onSeek:
           (position) => _runMediaCommand(() async {
-            await _player.seek(position);
+            await seekTo(position);
           }),
     );
     if (kIsWeb) {
@@ -184,6 +189,11 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     }
     unawaited(
       ensureMusicMediaSession(commands).then((handler) {
+        // 会话可能在等待平台通道期间被销毁（登出/换号 invalidate）：此时
+        // 继续用 ref 读中心状态会命中 Riverpod 的失效 Ref 断言。
+        if (!ref.mounted) {
+          return;
+        }
         _mediaHandler = handler;
         _syncSystemMediaState();
       }),
@@ -268,6 +278,36 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     state = state.copyWith(lastError: null);
   }
 
+  /// 受控跳转：所有用户发起的进度跳转都走这里，而不是直接操作播放器。
+  ///
+  /// 切歌时 `_openItem` 会把新音源定位到 0；若此刻用户点了歌词行或拖了进度条，
+  /// 直接 `player.seek()` 会被那次归零覆盖（表现为跳转后仍从头播放）。因此目标
+  /// 位置先记下来，加载完成后对同一曲目生效；曲目已加载时立即跳转。
+  Future<void> seekTo(Duration position) async {
+    final item =
+        ref.read(musicCenterControllerProvider).asData?.value.currentItem;
+    if (item == null) {
+      return;
+    }
+    _pendingSeek = (playableKey: item.playableKey, position: position);
+    if (_loadedItem?.playableKey == item.playableKey) {
+      _pendingSeek = null;
+      await _player.seek(position);
+      return;
+    }
+    await syncFromCenterState();
+  }
+
+  /// 取出并清除指定曲目的待生效跳转。
+  Duration? _takePendingSeek(String playableKey) {
+    final pending = _pendingSeek;
+    if (pending == null) {
+      return null;
+    }
+    _pendingSeek = null;
+    return pending.playableKey == playableKey ? pending.position : null;
+  }
+
   Future<void> _syncOnce() async {
     final current = ref.read(musicCenterControllerProvider).asData?.value;
     if (current == null) {
@@ -314,7 +354,14 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       return;
     }
     if (current.isPlaying && !_player.state.playing) {
-      await _player.play();
+      if (_completedForLoadedItem) {
+        // 单曲循环原地重播：地址与曲目都没变，只调 play() 无法从头起播
+        // （原生适配器在播完时已丢弃句柄），改走同一地址的 openUrl 重放分支。
+        await openMusicAudio(_player, plan.url, play: true);
+        _completedForLoadedItem = false;
+      } else {
+        await _player.play();
+      }
     } else if (!current.isPlaying && _player.state.playing) {
       await _player.pause();
       await _persistCurrent();
@@ -332,9 +379,10 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       }
       await _persistCurrent();
       await openMusicAudio(_player, url, play: false);
-      await _player.seek(Duration.zero);
+      await _player.seek(_takePendingSeek(item.playableKey) ?? Duration.zero);
       _loadedUrl = url;
       _loadedItem = item;
+      _completedForLoadedItem = false;
       _lastSavedSecond = 0;
       final latestItem =
           ref.read(musicCenterControllerProvider).asData?.value.currentItem;
@@ -368,8 +416,10 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   }
 
   Future<void> _handleCompleted() async {
+    // 单曲循环会重播同一地址：先记录播完事实，同步链路据此走重放而不是空 play()。
+    _completedForLoadedItem = true;
     await _persistCurrent(completed: true);
-    // 自动推进：队尾遵循 repeat 语义；手动下一首才总是回绕。
+    // 自动推进：顺序与随机档首尾循环，手动下一首才总是前进一格。
     await ref
         .read(musicCenterControllerProvider.notifier)
         .nextTrack(autoAdvance: true);

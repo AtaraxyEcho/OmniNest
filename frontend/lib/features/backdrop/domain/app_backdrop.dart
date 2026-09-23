@@ -17,6 +17,30 @@ enum AppBackdropMediaType {
   }
 }
 
+/// 背景库接受的素材扩展名(小写),文件选择与系统拖放入口共用。
+const List<String> backdropAllowedExtensions = [
+  'jpg',
+  'jpeg',
+  'png',
+  'webp',
+  'gif',
+  'mp4',
+  'webm',
+  'mov',
+  'm4v',
+];
+
+/// 文件名是否带有背景库支持的扩展名。
+bool isBackdropAllowedFileName(String fileName) {
+  final dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex < 0 || dotIndex == fileName.length - 1) {
+    return false;
+  }
+  return backdropAllowedExtensions.contains(
+    fileName.substring(dotIndex + 1).toLowerCase(),
+  );
+}
+
 /// 内置默认壁纸的稳定素材 ID,三端一致且不受服务端素材库影响。
 const String bundledDefaultWallpaperId = 'bundled-default-wallpaper-v2';
 

@@ -2474,13 +2474,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicVisualizerLayout => 'Desktop layout';
 
   @override
-  String get musicVisualizerLayoutLeft => 'Left';
+  String get musicVisualizerLayoutLyricsLeft => 'Lyrics left';
 
   @override
-  String get musicVisualizerLayoutCenter => 'Center';
+  String get musicVisualizerLayoutLyricsCenter => 'Lyrics centered';
 
   @override
-  String get musicVisualizerLayoutRight => 'Right';
+  String get musicVisualizerLayoutLyricsRight => 'Lyrics right';
 
   @override
   String get musicVisualizerColorHue => 'Hue';
@@ -2877,6 +2877,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalLocalBackdropUploading => 'Uploading…';
 
   @override
+  String get portalLocalBackdropDropHint => 'Drop files to upload backdrops';
+
+  @override
   String portalLocalBackdropUploadFailedNames(Object titles) {
     return 'Failed to upload: $titles';
   }
@@ -2891,7 +2894,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get portalLocalBackdropUnsupportedFormat =>
-      'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV videos are supported';
+      'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV, M4V videos are supported';
 
   @override
   String get portalLocalBackdropFileTooLarge => 'Backdrop file is too large';
@@ -8744,12 +8747,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicPlayModeSequential => 'Sequential playback';
-
-  @override
-  String get musicRepeatOff => 'Sequential';
-
-  @override
-  String get musicRepeatAll => 'Loop All';
 
   @override
   String get musicRepeatOne => 'Loop Single';

@@ -131,7 +131,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       _queuePersistence.dispose();
     });
     final loaded = await _loadState();
-    if (loaded.shuffleEnabled) {
+    if (loaded.playMode == MusicPlayMode.shuffle) {
       _startShuffleRound(loaded.playbackItems, loaded.currentItem?.playableKey);
     }
     if (_queuePersistence.restoreRequiresRemoteSync) {
@@ -258,8 +258,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     final playbackItems =
         playback?.playbackItems ?? const <MusicPlayableItem>[];
     final playbackIndex = playback?.playbackIndex ?? -1;
-    final repeatMode = playback?.repeatMode ?? MusicRepeatMode.off;
-    final shuffleEnabled = playback?.shuffleEnabled ?? false;
+    final playMode = playback?.playMode ?? MusicPlayMode.sequential;
     _partialErrors.clear();
     final results = await Future.wait([
       _safe(_api.dashboard, MusicDashboard.empty()),
@@ -294,8 +293,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     final recentItems = _toRecentItems(recentEntries);
     var resolvedQueue = List<MusicPlayableItem>.of(playbackItems);
     var resolvedQueueIndex = playbackIndex;
-    var resolvedRepeatMode = repeatMode;
-    var resolvedShuffleEnabled = shuffleEnabled;
+    var resolvedPlayMode = playMode;
     var resolvedQueueSource =
         playback?.queueSource ?? MusicQueueSource.transient;
     if (restorePlaybackQueue && resolvedQueue.isEmpty) {
@@ -307,8 +305,10 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       if (resolvedQueueIndex < 0 && resolvedQueue.isNotEmpty) {
         resolvedQueueIndex = 0;
       }
-      resolvedRepeatMode = _repeatModeFromValue(queueSnapshot.repeatMode);
-      resolvedShuffleEnabled = queueSnapshot.shuffleEnabled;
+      resolvedPlayMode = _playModeFromSnapshotFields(
+        repeatMode: queueSnapshot.repeatMode,
+        shuffleEnabled: queueSnapshot.shuffleEnabled,
+      );
       // 来源不可重建时降级为窗口快照（transient）。
       resolvedQueueSource = MusicQueueSource.transient;
       if (queueSnapshot.source.rebuildable && restoredKey != null) {
@@ -445,8 +445,7 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       isPlaying: isPlaying && resolvedPlan != null,
       playbackItems: List<MusicPlayableItem>.unmodifiable(resolvedQueue),
       playbackIndex: resolvedQueueIndex,
-      repeatMode: resolvedRepeatMode,
-      shuffleEnabled: resolvedShuffleEnabled,
+      playMode: resolvedPlayMode,
       queueSource: resolvedQueueSource,
       selectedPlaylist: resolvedPlaylist,
       selectedPlaylistTracks: resolvedPlaylistTracks,

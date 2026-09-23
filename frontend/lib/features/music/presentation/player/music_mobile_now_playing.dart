@@ -187,6 +187,10 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                                               .notifier,
                                         )
                                         .nextTrack(),
+                            onSeek:
+                                (position) => ref
+                                    .read(musicPlaybackSessionProvider.notifier)
+                                    .seekTo(position),
                           ),
                         ),
                       ],
@@ -212,13 +216,16 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                     player: session.player,
                     enabled: track != null,
                     isPlaying: center?.isPlaying == true,
-                    shuffleEnabled: center?.shuffleEnabled == true,
-                    repeatMode: center?.repeatMode ?? MusicRepeatMode.off,
-                    onToggleShuffle:
+                    playMode: center?.playMode ?? MusicPlayMode.sequential,
+                    onCyclePlayMode:
                         () =>
                             ref
                                 .read(musicCenterControllerProvider.notifier)
-                                .toggleShuffle(),
+                                .cyclePlayMode(),
+                    onSeek:
+                        (position) => ref
+                            .read(musicPlaybackSessionProvider.notifier)
+                            .seekTo(position),
                     onPrevious:
                         () =>
                             ref
@@ -234,11 +241,6 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                             ref
                                 .read(musicCenterControllerProvider.notifier)
                                 .nextTrack(),
-                    onToggleRepeat:
-                        () =>
-                            ref
-                                .read(musicCenterControllerProvider.notifier)
-                                .toggleRepeatMode(),
                   ),
                 ],
               ),
@@ -617,25 +619,25 @@ class _MobilePlaybackControls extends StatelessWidget {
     required this.player,
     required this.enabled,
     required this.isPlaying,
-    required this.shuffleEnabled,
-    required this.repeatMode,
-    required this.onToggleShuffle,
+    required this.playMode,
+    required this.onCyclePlayMode,
+    required this.onSeek,
     required this.onPrevious,
     required this.onTogglePlayback,
     required this.onNext,
-    required this.onToggleRepeat,
   });
 
   final MusicAudioPlayback player;
   final bool enabled;
   final bool isPlaying;
-  final bool shuffleEnabled;
-  final MusicRepeatMode repeatMode;
-  final VoidCallback onToggleShuffle;
+  final MusicPlayMode playMode;
+  final VoidCallback onCyclePlayMode;
+
+  /// 进度跳转经播放会话，避免与切歌加载竞争。
+  final Future<void> Function(Duration position) onSeek;
   final VoidCallback onPrevious;
   final VoidCallback onTogglePlayback;
   final VoidCallback onNext;
-  final VoidCallback onToggleRepeat;
 
   @override
   Widget build(BuildContext context) {
@@ -667,8 +669,10 @@ class _MobilePlaybackControls extends StatelessWidget {
                   thumbColor: Colors.white,
                   onChanged:
                       enabled && totalMs > 0
-                          ? (value) => player.seek(
-                            Duration(milliseconds: (totalMs * value).round()),
+                          ? (value) => unawaited(
+                            onSeek(
+                              Duration(milliseconds: (totalMs * value).round()),
+                            ),
                           )
                           : null,
                 ),
@@ -684,16 +688,20 @@ class _MobilePlaybackControls extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    IconButton(
-                      tooltip: l10n.musicShuffle,
-                      onPressed: enabled ? onToggleShuffle : null,
-                      icon: Icon(Icons.shuffle_rounded, size: 20),
-                      color:
-                          shuffleEnabled
-                              ? const Color(0xFF72D6C9)
-                              : Colors.white.withValues(alpha: 0.62),
+                    // 播放模式单按钮轮换：与桌面 Dock 同一交互（只换图标，不留底色）。
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: MusicPlayModeButton(
+                          playMode: playMode,
+                          onTap: enabled ? onCyclePlayMode : null,
+                          iconSize: 20,
+                          padding: 10,
+                          idleColor: Colors.white.withValues(alpha: 0.62),
+                          activeColor: const Color(0xFF72D6C9),
+                        ),
+                      ),
                     ),
                     IconButton(
                       tooltip: l10n.musicDeckPrevious,
@@ -701,6 +709,7 @@ class _MobilePlaybackControls extends StatelessWidget {
                       icon: Icon(Icons.skip_previous_rounded, size: 30),
                       color: Colors.white,
                     ),
+                    const SizedBox(width: 10),
                     MusicPlaybackButton(
                       isPlaying: isPlaying,
                       tooltip: isPlaying ? l10n.musicPause : l10n.musicPlay,
@@ -710,26 +719,14 @@ class _MobilePlaybackControls extends StatelessWidget {
                       accentColor: const Color(0xFF72D6C9),
                       foregroundColor: Colors.white,
                     ),
+                    const SizedBox(width: 10),
                     IconButton(
                       tooltip: l10n.musicDeckNext,
                       onPressed: enabled ? onNext : null,
                       icon: Icon(Icons.skip_next_rounded, size: 30),
                       color: Colors.white,
                     ),
-                    IconButton(
-                      tooltip: _repeatTooltip(l10n),
-                      onPressed: enabled ? onToggleRepeat : null,
-                      icon: Icon(
-                        repeatMode == MusicRepeatMode.one
-                            ? Icons.repeat_one_rounded
-                            : Icons.repeat_rounded,
-                        size: 20,
-                      ),
-                      color:
-                          repeatMode == MusicRepeatMode.off
-                              ? Colors.white.withValues(alpha: 0.62)
-                              : const Color(0xFF72D6C9),
-                    ),
+                    const Expanded(child: SizedBox.shrink()),
                   ],
                 ),
               ],
@@ -750,13 +747,5 @@ class _MobilePlaybackControls extends StatelessWidget {
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
-  }
-
-  String _repeatTooltip(AppLocalizations l10n) {
-    return switch (repeatMode) {
-      MusicRepeatMode.off => l10n.musicRepeatOff,
-      MusicRepeatMode.all => l10n.musicRepeatAll,
-      MusicRepeatMode.one => l10n.musicRepeatOne,
-    };
   }
 }

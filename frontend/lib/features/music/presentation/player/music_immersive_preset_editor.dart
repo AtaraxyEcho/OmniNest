@@ -173,26 +173,19 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                                   ),
                             ),
                             if (_draft.lyrics.enabled) ...[
-                              // 桌面布局三预设（居左/居中/居右）：默认居左。
-                              // 布局决定主视觉卡组与歌词列的构图，两端共享。
+                              // 桌面布局三预设：面向用户的方向以**歌词区域**描述
+                              // （枚举 `left`/`right` 指卡组侧，两者互为镜像），
+                              // 选项顺序也按歌词所在侧排列。
                               _VisualControlGap(
                                 scopeLabel: l10n.musicVisualizerScopeDesktop,
                                 child: AppDropdown<PortalMusicLayout>(
                                   label: l10n.musicVisualizerLayout,
                                   value: _draft.lyrics.layout,
                                   items: [
-                                    for (final entry
-                                        in PortalMusicLayout.values)
+                                    for (final entry in _lyricLayoutOrder)
                                       AppDropdownItem(
                                         value: entry,
-                                        label: switch (entry) {
-                                          PortalMusicLayout.left =>
-                                            l10n.musicVisualizerLayoutLeft,
-                                          PortalMusicLayout.center =>
-                                            l10n.musicVisualizerLayoutCenter,
-                                          PortalMusicLayout.right =>
-                                            l10n.musicVisualizerLayoutRight,
-                                        },
+                                        label: _lyricLayoutLabel(l10n, entry),
                                       ),
                                   ],
                                   onChanged:
@@ -258,22 +251,25 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                                       ),
                                     ),
                               ),
-                              // 在读/未读字号缩放：乘在样例字号上，行槽
-                              // 高度按折行与缩放自适应。
+                              // 在读/未读字号（px）：未显式设定前取该布局的
+                              // 样例基准；译文等派生尺寸按同比缩放。
                               _VisualSlider(
                                 palette: _editorPalette(context),
                                 label: l10n.musicVisualizerActiveFontScale,
-                                value: _draft.lyrics.activeFontScale,
-                                min: 0.6,
-                                max: 1.6,
-                                divisions: 10,
-                                valueSuffix: '×',
+                                value: _desktopActiveFontPx(),
+                                min: kMusicDesktopActiveFontMinPx.toDouble(),
+                                max: kMusicDesktopActiveFontMaxPx.toDouble(),
+                                divisions:
+                                    kMusicDesktopActiveFontMaxPx -
+                                    kMusicDesktopActiveFontMinPx,
+                                displayAsInteger: true,
+                                valueSuffix: ' px',
                                 scopeLabel: l10n.musicVisualizerScopeDesktop,
                                 onChanged:
                                     (value) => _update(
                                       _draft.copyWith(
                                         lyrics: _draft.lyrics.copyWith(
-                                          activeFontScale: value,
+                                          activeFontSizePx: value.round(),
                                         ),
                                       ),
                                     ),
@@ -281,17 +277,49 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                               _VisualSlider(
                                 palette: _editorPalette(context),
                                 label: l10n.musicVisualizerInactiveFontScale,
-                                value: _draft.lyrics.inactiveFontScale,
-                                min: 0.6,
-                                max: 1.6,
-                                divisions: 10,
-                                valueSuffix: '×',
+                                value: _desktopInactiveFontPx(),
+                                min: kMusicDesktopInactiveFontMinPx.toDouble(),
+                                max: kMusicDesktopInactiveFontMaxPx.toDouble(),
+                                divisions:
+                                    kMusicDesktopInactiveFontMaxPx -
+                                    kMusicDesktopInactiveFontMinPx,
+                                displayAsInteger: true,
+                                valueSuffix: ' px',
                                 scopeLabel: l10n.musicVisualizerScopeDesktop,
                                 onChanged:
                                     (value) => _update(
                                       _draft.copyWith(
                                         lyrics: _draft.lyrics.copyWith(
-                                          inactiveFontScale: value,
+                                          inactiveFontSizePx: value.round(),
+                                        ),
+                                      ),
+                                    ),
+                              ),
+                              // 桌面行距：同一设置值也作用于移动端滚动歌词，
+                              // 故徽标为通用而非桌面专属。
+                              _buildLineSpacingSlider(
+                                context,
+                                l10n,
+                                scopeLabel: l10n.musicVisualizerScopeAll,
+                              ),
+                              // 非当前句强度：桌面按它缩放样例透明度阶梯，
+                              // 与移动端共用同一设置值。
+                              _VisualSlider(
+                                palette: _editorPalette(context),
+                                label:
+                                    l10n.portalMusicVisualizerInactiveOpacity,
+                                value: _draft.lyrics.inactiveOpacity,
+                                min: 0.25,
+                                max: 1,
+                                divisions: 15,
+                                valuePercent: true,
+                                displayAsInteger: true,
+                                scopeLabel: l10n.musicVisualizerScopeAll,
+                                onChanged:
+                                    (value) => _update(
+                                      _draft.copyWith(
+                                        lyrics: _draft.lyrics.copyWith(
+                                          inactiveOpacity: value,
                                         ),
                                       ),
                                     ),
@@ -523,7 +551,7 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                                 _buildLineSpacingSlider(
                                   context,
                                   l10n,
-                                  scopeLabel: l10n.musicVisualizerScopeMobile,
+                                  scopeLabel: l10n.musicVisualizerScopeAll,
                                 ),
                               ],
                               // 多行歌词专属：可见行数 → 行距 → 在读行放大 →
@@ -551,7 +579,7 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                                 _buildLineSpacingSlider(
                                   context,
                                   l10n,
-                                  scopeLabel: l10n.musicVisualizerScopeMobile,
+                                  scopeLabel: l10n.musicVisualizerScopeAll,
                                 ),
                                 // 在读行字号（px）：多行形态可大于整段字号。
                                 _VisualSlider(
@@ -596,11 +624,11 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                                     l10n.portalMusicVisualizerInactiveOpacity,
                                 value: _draft.lyrics.inactiveOpacity,
                                 min: 0.25,
-                                max: 0.75,
-                                divisions: 10,
+                                max: 1,
+                                divisions: 15,
                                 valuePercent: true,
                                 displayAsInteger: true,
-                                scopeLabel: l10n.musicVisualizerScopeMobile,
+                                scopeLabel: l10n.musicVisualizerScopeAll,
                                 onChanged:
                                     (value) => _update(
                                       _draft.copyWith(
@@ -669,6 +697,37 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
   void _update(PortalMusicVisualizerSettings next) {
     setState(() => _draft = next);
     widget.onChanged(next);
+  }
+
+  /// 布局下拉的展示顺序：按歌词所在侧（左→中→右）排列。
+  static const List<PortalMusicLayout> _lyricLayoutOrder = <PortalMusicLayout>[
+    PortalMusicLayout.right,
+    PortalMusicLayout.center,
+    PortalMusicLayout.left,
+  ];
+
+  /// 布局文案以歌词所在侧命名，枚举值以卡组侧命名，因此两侧布局互为镜像。
+  static String _lyricLayoutLabel(
+    AppLocalizations l10n,
+    PortalMusicLayout layout,
+  ) {
+    return switch (layout) {
+      PortalMusicLayout.left => l10n.musicVisualizerLayoutLyricsRight,
+      PortalMusicLayout.center => l10n.musicVisualizerLayoutLyricsCenter,
+      PortalMusicLayout.right => l10n.musicVisualizerLayoutLyricsLeft,
+    };
+  }
+
+  /// 桌面字号滑块的当前值：用户未显式设定前，显示当前布局的样例基准字号，
+  /// 避免滑块从 1.0 之类的倍率起步、与渲染观感对不上。
+  double _desktopActiveFontPx() {
+    final base = musicLyricBaseFontSizes(_draft.lyrics.layout).$1;
+    return (_draft.lyrics.activeFontSizePx ?? base).toDouble();
+  }
+
+  double _desktopInactiveFontPx() {
+    final base = musicLyricBaseFontSizes(_draft.lyrics.layout).$2;
+    return (_draft.lyrics.inactiveFontSizePx ?? base).toDouble();
   }
 
   void _resetToDefault() {

@@ -404,8 +404,9 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
   /// 逐字填充的单行渲染：已唱部分用读色、未唱部分用非当前句色。
   ///
   /// 渐变与填充都以"可视行"为单位：原文折行后按排版度量切分为逐行渲染，
-  /// 每个可视行各自套完整的上下渐变，填充按行宽加权顺序推进（第一行
-  /// 填满后第二行才开始），不再整块文本共用一道渐变与一道填充边界。
+  /// 每个可视行各自套完整的上下渐变，填充按词级时长在各可视行间衔接
+  /// （第一行唱完第二行立刻开始，无词级数据回退按行宽加权），不再整块
+  /// 文本共用一道渐变与一道填充边界。
   /// 遮罩内为文字加上下墨迹边距，使遮罩矩形覆盖 y / g 等下伸字形；
   /// 在读/非当前句两层使用同一墨迹边距与样式，且每层只包一次边距，
   /// 字形完全对齐。行状态切换为原地更新（无 AnimatedSwitcher 交叉
@@ -439,7 +440,14 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
           text.textAlign ?? TextAlign.start,
           text.maxLines ?? 1,
           constraints.maxWidth,
+          widget.line.words,
         );
+        // 行盒实际宽度：上游紧约束（块宽/槽宽）会覆盖 SizedBox 的收缩宽度，
+        // 填充边界必须按真实渲染盒宽换算，否则非整块宽的行会被等比压缩。
+        final boxWidth =
+            constraints.hasTightWidth
+                ? constraints.maxWidth
+                : math.max(layout.widest, 0.0);
         return SizedBox(
           width: layout.widest,
           height: 2 * inkPad + layout.tops.last + layout.heights.last,
@@ -448,7 +456,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
             children: [
               for (var index = 0; index < layout.lines.length; index++)
                 Positioned(
-                  top: inkPad + layout.tops[index],
+                  top: layout.tops[index],
                   left: 0,
                   right: 0,
                   height: layout.heights[index] + 2 * inkPad,
@@ -460,11 +468,13 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
                     textAlign: text.textAlign ?? TextAlign.start,
                     inkPad: inkPad,
                     lineHeight: layout.heights[index],
-                    boxWidth: layout.widest,
-                    glyphLeft: layout.lefts[index],
+                    boxWidth: boxWidth,
                     glyphWidth: layout.widths[index],
                     consumedBefore: layout.consumed[index],
                     totalGlyphWidth: layout.totalWidth,
+                    timeWeight: layout.timeWeights?[index],
+                    timeConsumedBefore: layout.consumedTime?[index],
+                    totalTimeWeight: layout.totalTime,
                     fillKey:
                         index == 0
                             ? fillKey
@@ -490,7 +500,9 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
   /// 用与真实排版相同的输入度量原文折行：可视行子串、行盒位置与行宽。
   ///
   /// 度量样式必须与环境 DefaultTextStyle 合并（字体族等继承属性影响折行），
-  /// 行宽按裁剪后的子串实测（行尾空白不参与），填充边界按行宽加权推进。
+  /// 行宽按裁剪后的子串实测（行尾空白不参与）。有词级数据时把每个词的
+  /// 时长按字符区间归集到所在可视行，行间衔接按词级时长加权；词缺失或
+  /// 匹配失败时回退按行宽加权。
   _FillLineLayout _resolveFillLines(
     BuildContext context,
     String text,
@@ -500,6 +512,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     TextAlign textAlign,
     int maxLines,
     double maxWidth,
+    List<MusicLyricWord> words,
   ) {
     final scaler = MediaQuery.textScalerOf(context);
     final effectiveStyle = ambientStyle.merge(style);
@@ -512,6 +525,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       effectiveStyle.fontFamily,
       scaler.toString(),
       maxLines,
+      identityHashCode(words),
     );
     final cached = _fillLineLayoutCache;
     if (cached != null && cached.cacheKey == cacheKey) {
@@ -531,6 +545,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     final tops = <double>[];
     final heights = <double>[];
     final widths = <double>[];
+    final rawRanges = <(int, int)>[];
     var start = 0;
     var top = 0.0;
     for (final metric in metrics) {
@@ -540,6 +555,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       final range = painter.getLineBoundary(TextPosition(offset: start));
       final end = range.end.clamp(start + 1, text.length);
       final piece = text.substring(start, end).trim();
+      final rangeStart = start;
       start = end;
       if (piece.isEmpty) {
         continue;
@@ -554,46 +570,79 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       tops.add(top);
       heights.add(metric.height);
       widths.add(piecePainter.width);
+      rawRanges.add((rangeStart, end));
       top += metric.height;
       piecePainter.dispose();
     }
     painter.dispose();
     final widest = widths.fold(0.0, math.max);
-    final lefts = <double>[];
-    for (final width in widths) {
-      double left;
-      if (textAlign == TextAlign.center) {
-        left = (widest - width) / 2;
-      } else if (textAlign == TextAlign.right || textAlign == TextAlign.end) {
-        left = widest - width;
-      } else {
-        left = 0;
-      }
-      lefts.add(math.max(0.0, left));
-    }
     final consumed = <double>[];
     var sum = 0.0;
     for (final width in widths) {
       consumed.add(sum);
       sum += width;
     }
+    // 词级时长权重：每个词按其字符起点归入所在可视行。任一词匹配失败
+    // 即整体放弃时间加权，回退行宽加权，避免部分行权重缺失造成跳变。
+    List<double>? timeWeights;
+    var totalTime = 0.0;
+    if (words.isNotEmpty) {
+      final weights = List<double>.filled(lines.length, 0.0);
+      var matchedAll = true;
+      var cursor = 0;
+      for (final word in words) {
+        if (word.text.isEmpty) {
+          continue;
+        }
+        final index = text.indexOf(word.text, cursor);
+        if (index < 0) {
+          matchedAll = false;
+          break;
+        }
+        cursor = index + word.text.length;
+        totalTime += word.duration.inMilliseconds;
+        for (var k = 0; k < rawRanges.length; k++) {
+          final (rangeStart, rangeEnd) = rawRanges[k];
+          if (index >= rangeStart && index < rangeEnd) {
+            weights[k] += word.duration.inMilliseconds;
+            break;
+          }
+        }
+      }
+      if (matchedAll && totalTime > 0) {
+        timeWeights = weights;
+      } else {
+        totalTime = 0;
+      }
+    }
+    final consumedTime = <double>[];
+    if (timeWeights != null) {
+      var timeSum = 0.0;
+      for (final weight in timeWeights) {
+        consumedTime.add(timeSum);
+        timeSum += weight;
+      }
+    }
     final layout = _FillLineLayout(
       cacheKey: cacheKey,
       lines: lines,
       tops: tops,
       heights: heights,
-      lefts: lefts,
       widths: widths,
       consumed: consumed,
       totalWidth: sum,
       widest: widest,
+      timeWeights: timeWeights,
+      totalTime: totalTime,
+      consumedTime: timeWeights == null ? null : consumedTime,
     );
     _fillLineLayoutCache = layout;
     return layout;
   }
 
   /// 单个可视行的填充渲染：底层整行非当前句色、顶层在读色按该行边界
-  /// 裁切；上下渐变在该行行盒内完整走一遍。
+  /// 裁切；上下渐变在该行行盒内完整走一遍。字形起点按实际渲染盒宽与
+  /// 文本排列推导。
   Widget _buildFilledLineSlice({
     required int index,
     required String lineText,
@@ -603,10 +652,12 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     required double inkPad,
     required double lineHeight,
     required double boxWidth,
-    required double glyphLeft,
     required double glyphWidth,
     required double consumedBefore,
     required double totalGlyphWidth,
+    required double? timeWeight,
+    required double? timeConsumedBefore,
+    required double totalTimeWeight,
     required Key fillKey,
     required Key layeredKey,
     required ({bool gradient, List<Color> colors}) activePaint,
@@ -614,6 +665,15 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
   }) {
     final solidPair = !activePaint.gradient && !inactivePaint.gradient;
     final inkPadding = EdgeInsets.symmetric(vertical: inkPad);
+    double glyphLeft;
+    if (textAlign == TextAlign.center) {
+      glyphLeft = (boxWidth - glyphWidth) / 2;
+    } else if (textAlign == TextAlign.right || textAlign == TextAlign.end) {
+      glyphLeft = boxWidth - glyphWidth;
+    } else {
+      glyphLeft = 0;
+    }
+    glyphLeft = math.max(0.0, glyphLeft);
     final activeLineText = Text(
       lineText,
       key: index == 0 ? const ValueKey('music-lyric-active') : null,
@@ -641,13 +701,20 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
         animation: widget.fillAnimation!,
         builder: (context, child) {
           final fraction = widget.fillAnimation!.value.clamp(0.0, 1.0);
-          // 填充按行宽加权顺序推进：整段已唱宽度扣减前面各行后得到本行
-          // 局部进度，边界换算到行盒坐标。
-          final consumed = (fraction * totalGlyphWidth - consumedBefore).clamp(
-            0.0,
-            glyphWidth,
-          );
-          final progress = glyphWidth <= 0 ? 0.0 : consumed / glyphWidth;
+          // 行间衔接按词级时长加权：整段已唱时长扣减前面各行后得到本行
+          // 局部进度，保证次行在演唱到达时立刻开始点亮；无词级数据时
+          // 回退按行宽加权。边界换算到行盒坐标。
+          final double progress;
+          if (timeWeight != null) {
+            final consumedTime = (fraction * totalTimeWeight -
+                    timeConsumedBefore!)
+                .clamp(0.0, timeWeight);
+            progress = timeWeight <= 0 ? 0.0 : consumedTime / timeWeight;
+          } else {
+            final consumed = (fraction * totalGlyphWidth - consumedBefore)
+                .clamp(0.0, glyphWidth);
+            progress = glyphWidth <= 0 ? 0.0 : consumed / glyphWidth;
+          }
           final boundary =
               (glyphLeft + progress * glyphWidth) / math.max(boxWidth, 1);
           // 纯色组合：单层 srcIn 遮罩直接替换颜色——左在读色、右非当前句色
@@ -697,8 +764,10 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
       );
     }
     // 双层叠加：底层整行非当前句色，顶层在读色按边界裁切；两层使用同一
-    // 墨迹边距，保证字形完全对齐。
+    // 墨迹边距，保证字形完全对齐。expand 使两层铺满行盒：填充边界按行盒
+    // 宽度换算，若让文字收缩排布，非最宽行的遮罩箱体变窄会压缩边界位置。
     return Stack(
+      fit: StackFit.expand,
       children: [
         _paintLineVertical(
           Padding(padding: inkPadding, child: inactiveLineText),
@@ -768,8 +837,9 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     return translation == null || translation.isEmpty ? null : translation;
   }
 
-  /// 在读行的底衬与左侧强调条；居中布局两者都不做时返回 null。
-  /// 底衬背景可经视觉设置开关关闭（只保留左侧强调条）。
+  /// 在读行的底衬色带；居中布局不做底衬时返回 null。
+  /// 样例的左侧竖向强调条已整体移除：在纯音乐等短歌词下它读起来只是一根
+  /// 与内容无关的白线，而在多行下它与底衬色带表达同一件事实（当前行）。
   BoxDecoration? get _activeLineDecoration {
     final spec = widget.spec;
     if (spec == null) {
@@ -779,22 +849,12 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
         widget.settings.activeLineBackgroundEnabled
             ? spec.activeLineBackgroundColor
             : null;
-    final accent = spec.activeLineAccentColor;
-    if (background == null && accent == null) {
+    if (background == null) {
       return null;
     }
     return BoxDecoration(
       color: background,
       borderRadius: BorderRadius.circular(spec.activeLineRadius),
-      border:
-          accent == null
-              ? null
-              : Border(
-                left: BorderSide(
-                  color: accent,
-                  width: spec.activeLineAccentWidth,
-                ),
-              ),
     );
   }
 
@@ -921,11 +981,13 @@ class _FillLineLayout {
     required this.lines,
     required this.tops,
     required this.heights,
-    required this.lefts,
     required this.widths,
     required this.consumed,
     required this.totalWidth,
     required this.widest,
+    required this.timeWeights,
+    required this.totalTime,
+    required this.consumedTime,
   });
 
   final Object cacheKey;
@@ -939,9 +1001,6 @@ class _FillLineLayout {
   /// 每行行盒高度（strut 强制一致）。
   final List<double> heights;
 
-  /// 每行字形起点在行盒内的横向偏移（随文本排列对齐）。
-  final List<double> lefts;
-
   /// 每行实测字形宽度。
   final List<double> widths;
 
@@ -953,6 +1012,16 @@ class _FillLineLayout {
 
   /// 最宽可视行的宽度（行盒宽度）。
   final double widest;
+
+  /// 每个可视行的词级时长权重（毫秒）；无词级数据或匹配失败时为 null，
+  /// 行间衔接回退按行宽加权。
+  final List<double>? timeWeights;
+
+  /// 词级时长权重合计（毫秒）；[timeWeights] 为 null 时为 0。
+  final double totalTime;
+
+  /// 每行之前所有行的词级时长累计（毫秒）；[timeWeights] 为 null 时为 null。
+  final List<double>? consumedTime;
 }
 
 /// 焦点带：在读行背后的一层低强度横向提亮，向两端淡出。

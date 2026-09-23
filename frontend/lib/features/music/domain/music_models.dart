@@ -321,6 +321,10 @@ void _addWord(
 }
 
 /// 就近挂载词级数据：行起始时间精确匹配优先，其次 500ms 容差内取最近一行。
+///
+/// 词偏移是相对 yrc 行首的（见 `_addWord`），而消费方按 LRC 行首计算行内进度。
+/// 按容差命中相邻行时必须把两份行首的时间差补回偏移，否则整块词级时间相对
+/// 人声恒定提前或滞后（逐字填充跟不上唱词）。精确匹配无位移，仍复用原列表实例。
 List<MusicLyricWord> _nearestWords(
   Map<Duration, List<MusicLyricWord>> table,
   Duration position,
@@ -334,16 +338,37 @@ List<MusicLyricWord> _nearestWords(
   }
   const tolerance = Duration(milliseconds: 500);
   List<MusicLyricWord>? best;
+  Duration? bestStart;
   Duration? bestDistance;
   for (final entry in table.entries) {
     final distance = (entry.key - position).abs();
     if (distance <= tolerance &&
         (bestDistance == null || distance < bestDistance)) {
       bestDistance = distance;
+      bestStart = entry.key;
       best = entry.value;
     }
   }
-  return best ?? const <MusicLyricWord>[];
+  if (best == null || bestStart == null) {
+    return const <MusicLyricWord>[];
+  }
+  final shift = bestStart - position;
+  if (shift == Duration.zero) {
+    return best;
+  }
+  return List<MusicLyricWord>.unmodifiable([
+    for (final word in best)
+      MusicLyricWord(
+        offset: _wordOffsetOrZero(word.offset + shift),
+        duration: word.duration,
+        text: word.text,
+      ),
+  ]);
+}
+
+/// 词偏移下限：负值（异常数据）按 0 处理，与 `_addWord` 的口径一致。
+Duration _wordOffsetOrZero(Duration offset) {
+  return offset < Duration.zero ? Duration.zero : offset;
 }
 
 /// 解析译文时间轴；纯文本译文返回空表（逐行文本交给行级回退处理）。

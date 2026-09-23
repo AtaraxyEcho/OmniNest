@@ -4585,23 +4585,23 @@ abstract class AppLocalizations {
   /// **'Desktop layout'**
   String get musicVisualizerLayout;
 
-  /// No description provided for @musicVisualizerLayoutLeft.
+  /// No description provided for @musicVisualizerLayoutLyricsLeft.
   ///
   /// In en, this message translates to:
-  /// **'Left'**
-  String get musicVisualizerLayoutLeft;
+  /// **'Lyrics left'**
+  String get musicVisualizerLayoutLyricsLeft;
 
-  /// No description provided for @musicVisualizerLayoutCenter.
+  /// No description provided for @musicVisualizerLayoutLyricsCenter.
   ///
   /// In en, this message translates to:
-  /// **'Center'**
-  String get musicVisualizerLayoutCenter;
+  /// **'Lyrics centered'**
+  String get musicVisualizerLayoutLyricsCenter;
 
-  /// No description provided for @musicVisualizerLayoutRight.
+  /// No description provided for @musicVisualizerLayoutLyricsRight.
   ///
   /// In en, this message translates to:
-  /// **'Right'**
-  String get musicVisualizerLayoutRight;
+  /// **'Lyrics right'**
+  String get musicVisualizerLayoutLyricsRight;
 
   /// No description provided for @musicVisualizerColorHue.
   ///
@@ -5359,6 +5359,12 @@ abstract class AppLocalizations {
   /// **'Uploading…'**
   String get portalLocalBackdropUploading;
 
+  /// No description provided for @portalLocalBackdropDropHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop files to upload backdrops'**
+  String get portalLocalBackdropDropHint;
+
   /// No description provided for @portalLocalBackdropUploadFailedNames.
   ///
   /// In en, this message translates to:
@@ -5380,7 +5386,7 @@ abstract class AppLocalizations {
   /// No description provided for @portalLocalBackdropUnsupportedFormat.
   ///
   /// In en, this message translates to:
-  /// **'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV videos are supported'**
+  /// **'Only JPG, PNG, WebP, GIF images or MP4, WebM, MOV, M4V videos are supported'**
   String get portalLocalBackdropUnsupportedFormat;
 
   /// No description provided for @portalLocalBackdropFileTooLarge.
@@ -16018,18 +16024,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Sequential playback'**
   String get musicPlayModeSequential;
-
-  /// No description provided for @musicRepeatOff.
-  ///
-  /// In en, this message translates to:
-  /// **'Sequential'**
-  String get musicRepeatOff;
-
-  /// No description provided for @musicRepeatAll.
-  ///
-  /// In en, this message translates to:
-  /// **'Loop All'**
-  String get musicRepeatAll;
 
   /// No description provided for @musicRepeatOne.
   ///

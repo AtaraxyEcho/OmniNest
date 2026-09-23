@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -74,6 +75,7 @@ class _ImmersiveLyrics extends StatelessWidget {
     required this.onTogglePlayback,
     required this.onPrevious,
     required this.onNext,
+    required this.onSeek,
     this.lyricSettings,
     this.lyricSpec,
     this.lyricScrollMode = true,
@@ -100,6 +102,9 @@ class _ImmersiveLyrics extends StatelessWidget {
   final VoidCallback onPrevious;
   final VoidCallback onNext;
 
+  /// 进度跳转：由舞台转发到播放会话的受控 seek。
+  final Future<void> Function(Duration position) onSeek;
+
   /// 桌面端歌词形态由布局唯一决定：两侧滚动、居中固定窗口。
   final bool lyricScrollMode;
 
@@ -125,6 +130,7 @@ class _ImmersiveLyrics extends StatelessWidget {
       onTogglePlayback: onTogglePlayback,
       onPrevious: onPrevious,
       onNext: onNext,
+      onSeek: onSeek,
     );
   }
 }

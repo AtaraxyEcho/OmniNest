@@ -116,11 +116,14 @@ class _MusicQueuePersistenceCoordinator {
             : (current.playbackIndex - start)
                 .clamp(0, items.length - 1)
                 .toInt();
+    final (repeatMode, shuffleEnabled) = _playModeToSnapshotFields(
+      current.playMode,
+    );
     final snapshot = MusicPlaybackQueueSnapshot(
       items: List<MusicPlayableItem>.unmodifiable(items),
       currentIndex: currentIndex,
-      repeatMode: current.repeatMode.name,
-      shuffleEnabled: current.shuffleEnabled,
+      repeatMode: repeatMode,
+      shuffleEnabled: shuffleEnabled,
       source: current.queueSource,
       truncated: queue.length > _cacheLimit,
       // 未同步脏标志：updatedAt 留空，仅在远端保存成功回显后写入服务端时间戳。

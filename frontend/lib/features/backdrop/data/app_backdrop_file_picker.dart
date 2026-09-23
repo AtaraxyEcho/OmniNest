@@ -1,5 +1,7 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 
 /// 选中的待上传背景文件,平台差异(Web 流式 / 桌面移动路径)收敛在此。
 class BackdropPickedFile {
@@ -24,6 +26,15 @@ class BackdropPickedFile {
 
   /// 是否基于流上传(Web)。
   bool get isStreamBased => path == null || path!.isEmpty;
+
+  /// 由系统拖放条目构造待上传文件。拖放入口仅在非 Web 平台启用,路径为真实文件路径。
+  static Future<BackdropPickedFile> fromDroppedFile(XFile file) async {
+    return BackdropPickedFile(
+      name: file.name,
+      size: await file.length(),
+      path: file.path,
+    );
+  }
 }
 
 /// 背景素材文件选择器端口。
@@ -36,17 +47,7 @@ abstract class BackdropFilePicker {
 class DefaultBackdropFilePicker implements BackdropFilePicker {
   const DefaultBackdropFilePicker();
 
-  static const List<String> allowedExtensions = [
-    'jpg',
-    'jpeg',
-    'png',
-    'webp',
-    'gif',
-    'mp4',
-    'webm',
-    'mov',
-    'm4v',
-  ];
+  static const List<String> allowedExtensions = backdropAllowedExtensions;
 
   @override
   Future<List<BackdropPickedFile>> pick() async {

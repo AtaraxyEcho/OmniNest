@@ -127,8 +127,10 @@ class _MusicImmersivePlayerStageState
           final lyricSpec = resolveMusicLyricSpec(
             layout,
             scale,
-            activeFontScale: visual.lyrics.activeFontScale,
-            inactiveFontScale: visual.lyrics.inactiveFontScale,
+            activeFontSizePx: visual.lyrics.activeFontSizePx,
+            inactiveFontSizePx: visual.lyrics.inactiveFontSizePx,
+            inactiveOpacity: visual.lyrics.inactiveOpacity,
+            lineSpacing: visual.lyrics.lineSpacing,
           );
           // 歌词列头部带矩形：三个布局统一（居右为样例原生，居左与居中
           // 为补齐的同一控件样式）。
@@ -190,6 +192,10 @@ class _MusicImmersivePlayerStageState
                                   .togglePlayback(),
                         ),
                     onNext: () {},
+                    onSeek:
+                        (position) => ref
+                            .read(musicPlaybackSessionProvider.notifier)
+                            .seekTo(position),
                   ),
                 ),
               if (visual.player.enabled)
@@ -199,7 +205,6 @@ class _MusicImmersivePlayerStageState
                   bottom: controlsBottom,
                   height: controlsHeight,
                   child: _DigitalImmersiveGlassPlayerControls(
-                    palette: widget.palette,
                     player: session.player,
                     track: track,
                     isPlaying: isPlaying,
@@ -227,6 +232,10 @@ class _MusicImmersivePlayerStageState
                                   .read(musicCenterControllerProvider.notifier)
                                   .nextTrack(),
                         ),
+                    onSeek:
+                        (position) => ref
+                            .read(musicPlaybackSessionProvider.notifier)
+                            .seekTo(position),
                   ),
                 ),
               Positioned(
@@ -493,17 +502,20 @@ class _MusicImmersivePlayerStageState
     });
   }
 
+  /// 卡组滚轮步进：语义是「下一首/上一首」，必须经播放模式解析目标，
+  /// 不能按展示顺序加减索引（随机档会退回顺序，单曲循环档会原地不动）。
   void _stepDeck(List<MusicTrack> tracks, int delta) {
     if (tracks.isEmpty || tracks.length == 1) {
       return;
     }
-    // 手动滑动循环导航：末端回绕队首，队首回绕队尾。
-    final nextIndex =
-        ((_deckIndex + delta) % tracks.length + tracks.length) % tracks.length;
-    if (nextIndex == _deckIndex) {
-      return;
-    }
-    _selectDeckTrack(tracks, nextIndex);
+    _runPlaybackCommand(() async {
+      final controller = ref.read(musicCenterControllerProvider.notifier);
+      if (delta > 0) {
+        await controller.nextTrack();
+      } else {
+        await controller.previousTrack();
+      }
+    });
   }
 
   void _selectDeckTrack(List<MusicTrack> tracks, int index) {

@@ -1,9 +1,114 @@
 part of 'music_immersive_player.dart';
 
-/// 底部浮动的播放条：完全按样例的「玻璃胶囊 Dock」复刻。
+/// 底部 Dock 玻璃配色：按宿主深浅色主题解析，使半透明磨砂胶囊在两种主题下
+/// 都能读出曲目文字与图标状态，不再固定使用近不透明暗底。
+@immutable
+class _DockGlassChrome {
+  const _DockGlassChrome({
+    required this.fill,
+    required this.border,
+    required this.topHighlight,
+    required this.shadow,
+    required this.blurSigma,
+    required this.title,
+    required this.subtitle,
+    required this.iconIdle,
+    required this.iconStrong,
+    required this.artworkFill,
+    required this.playBackground,
+    required this.playAccent,
+    required this.playForeground,
+    required this.progressActive,
+    required this.progressInactive,
+    required this.progressThumb,
+    required this.volumePanelBackground,
+    required this.volumePanelText,
+  });
+
+  factory _DockGlassChrome.resolve(BuildContext context) {
+    final colors = context.musicColors;
+    final scheme = Theme.of(context).colorScheme;
+    final blur = switch (Theme.of(context).brightness) {
+      Brightness.light => 26.0,
+      Brightness.dark => 30.0,
+    };
+    if (Theme.of(context).brightness == Brightness.light) {
+      return _DockGlassChrome(
+        fill: Color.lerp(
+          colors.surfaceContainerHigh,
+          Colors.white,
+          0.45,
+        )!.withValues(alpha: 0.60),
+        border: Colors.white.withValues(alpha: 0.62),
+        topHighlight: Colors.white.withValues(alpha: 0.85),
+        shadow: Colors.black.withValues(alpha: 0.18),
+        blurSigma: blur,
+        title: colors.onSurface,
+        subtitle: colors.onSurfaceVariant,
+        iconIdle: colors.onSurfaceVariant,
+        iconStrong: colors.primary,
+        artworkFill: colors.surfaceContainerHigh,
+        playBackground: scheme.onSurface,
+        playAccent: colors.primary,
+        playForeground: colors.surface,
+        progressActive: colors.primary,
+        progressInactive: colors.onSurface.withValues(alpha: 0.12),
+        progressThumb: colors.primary,
+        volumePanelBackground: Color.lerp(
+          colors.surfaceContainerHigh,
+          Colors.white,
+          0.60,
+        )!.withValues(alpha: 0.96),
+        volumePanelText: colors.onSurface,
+      );
+    }
+    return _DockGlassChrome(
+      fill: kMusicDeckCardSurfaceColor.withValues(alpha: 0.48),
+      border: Colors.white.withValues(alpha: 0.16),
+      topHighlight: Colors.white.withValues(alpha: 0.20),
+      shadow: Colors.black.withValues(alpha: 0.45),
+      blurSigma: blur,
+      title: Colors.white,
+      subtitle: kMusicLyricTranslationColor,
+      iconIdle: kMusicLyricTranslationColor.withValues(alpha: 0.9),
+      iconStrong: Colors.white,
+      artworkFill: kMusicSampleSurfaceContainerHighest.withValues(alpha: 0.8),
+      playBackground: Colors.white,
+      playAccent: Colors.white,
+      playForeground: kMusicDeckCardOverlayColor,
+      progressActive: Colors.white,
+      progressInactive: Colors.white.withValues(alpha: 0.16),
+      progressThumb: Colors.white,
+      volumePanelBackground: const Color(0xF00E151B),
+      volumePanelText: Colors.white,
+    );
+  }
+
+  final Color fill;
+  final Color border;
+  final Color topHighlight;
+  final Color shadow;
+  final double blurSigma;
+  final Color title;
+  final Color subtitle;
+
+  /// 常态图标色与悬停/激活图标色：模式状态只由着色与图标表达，不铺底色。
+  final Color iconIdle;
+  final Color iconStrong;
+  final Color artworkFill;
+  final Color playBackground;
+  final Color playAccent;
+  final Color playForeground;
+  final Color progressActive;
+  final Color progressInactive;
+  final Color progressThumb;
+  final Color volumePanelBackground;
+  final Color volumePanelText;
+}
+
+/// 底部浮动的播放条：透明玻璃胶囊 Dock，配色随宿主深浅色主题解析。
 class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
   const _DigitalImmersiveGlassPlayerControls({
-    required this.palette,
     required this.player,
     required this.track,
     required this.isPlaying,
@@ -13,6 +118,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
     required this.onPrevious,
     required this.onTogglePlayback,
     required this.onNext,
+    required this.onSeek,
   });
 
   /// 胶囊纵向内边距 `py-3`，与中段两行（传输 40 + 间距 6 + 进度 16）合成的总高
@@ -27,13 +133,12 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
   static const double progressRowHeight = 16;
   static const double thumbSize = 44;
 
-  /// 低于该宽度时收起随机/循环与左段曲目信息。
+  /// 低于该宽度时收起播放模式与左段曲目信息。
   static const double compactBreakpoint = 660;
 
   /// 胶囊可用宽度，由舞台按 `max-w-5xl / max-w-6xl` 计算后传入。
   final double width;
 
-  final MusicImmersivePalette palette;
   final MusicAudioPlayback player;
   final MusicTrack? track;
   final bool isPlaying;
@@ -43,12 +148,16 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
   final VoidCallback onTogglePlayback;
   final VoidCallback onNext;
 
+  /// 受控跳转（进度条与 ±10 秒）：必须经播放会话，直接 seek 会被切歌加载
+  /// 完成时的归零覆盖。
+  final Future<void> Function(Duration position) onSeek;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     final center = ref.watch(musicCenterControllerProvider).asData?.value;
-    final shuffleEnabled = center?.shuffleEnabled ?? false;
-    final repeatMode = center?.repeatMode ?? MusicRepeatMode.off;
+    final playMode = center?.playMode ?? MusicPlayMode.sequential;
+    final chrome = _DockGlassChrome.resolve(context);
     // 收藏入口只在当前播放项为本地曲目时出现：收藏命令仅覆盖本地曲库，
     // 与曲库列表和移动端播放页的门控一致。
     final currentItem = center?.currentItem;
@@ -60,16 +169,14 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
     final pill = BorderRadius.circular(999);
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: kMusicDeckCardSurfaceColor.withValues(alpha: 0.90),
+        // 半透明填充叠 backdrop 模糊：胶囊透出壁纸，不再是接近不透明的暗块。
+        color: chrome.fill,
         borderRadius: pill,
-        border: Border.all(
-          color: Colors.white.withValues(alpha: 0.16),
-          width: 1 * scale,
-        ),
+        border: Border.all(color: chrome.border, width: 1 * scale),
         boxShadow: <BoxShadow>[
-          // 样例 `.specular-border` 的投影：`0 20px 50px -10px rgba(0,0,0,0.75)`。
+          // 样例 `.specular-border` 的投影：`0 20px 50px -10px`，按主题取强度。
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.75),
+            color: chrome.shadow,
             blurRadius: 50 * scale,
             spreadRadius: -10 * scale,
             offset: Offset(0, 20 * scale),
@@ -79,7 +186,10 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
       child: ClipRRect(
         borderRadius: pill,
         child: BackdropFilter(
-          filter: ui.ImageFilter.blur(sigmaX: 28, sigmaY: 28),
+          filter: ui.ImageFilter.blur(
+            sigmaX: chrome.blurSigma,
+            sigmaY: chrome.blurSigma,
+          ),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -90,9 +200,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                 right: 0,
                 height: 1 * scale,
                 child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                  ),
+                  decoration: BoxDecoration(color: chrome.topHighlight),
                 ),
               ),
               Padding(
@@ -111,6 +219,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                           _buildTrackSection(
                             l10n,
                             ref,
+                            chrome,
                             canFavorite: canFavorite,
                           ),
                         SizedBox(width: sectionGap * scale),
@@ -125,15 +234,16 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                                 _buildTransportRow(
                                   ref,
                                   l10n,
-                                  shuffleEnabled: shuffleEnabled,
-                                  repeatMode: repeatMode,
+                                  chrome,
+                                  playMode: playMode,
                                   compact: compact,
                                 ),
                                 SizedBox(height: rowGap * scale),
                                 if (settings.progressEnabled)
                                   _GlassMusicProgress(
-                                    palette: palette,
+                                    chrome: chrome,
                                     player: player,
+                                    onSeek: onSeek,
                                     scale: scale,
                                     enabled: track != null,
                                   ),
@@ -142,7 +252,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                           ),
                         ),
                         SizedBox(width: sectionGap * scale),
-                        _buildActionSection(context, ref, l10n),
+                        _buildActionSection(context, ref, l10n, chrome),
                       ],
                     );
                   },
@@ -161,7 +271,8 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
   /// 内部再放 Expanded 就会报「非零 flex 但宽度无界」。
   Widget _buildTrackSection(
     AppLocalizations l10n,
-    WidgetRef ref, {
+    WidgetRef ref,
+    _DockGlassChrome chrome, {
     required bool canFavorite,
   }) {
     final size = thumbSize * scale;
@@ -183,13 +294,11 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                 width: size,
                 height: size,
                 alignment: Alignment.center,
-                color: kMusicSampleSurfaceContainerHighest.withValues(
-                  alpha: 0.8,
-                ),
+                color: chrome.artworkFill,
                 child: Icon(
                   Icons.music_note_rounded,
                   size: size * 0.42,
-                  color: Colors.white.withValues(alpha: 0.78),
+                  color: chrome.iconIdle,
                 ),
               ),
             ),
@@ -205,7 +314,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: Colors.white,
+                    color: chrome.title,
                     fontSize: kMusicFooterTitleFontSize * scale,
                     height: 20 / 14,
                     fontWeight: FontWeight.w500,
@@ -216,7 +325,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
-                    color: kMusicLyricTranslationColor,
+                    color: chrome.subtitle,
                     fontSize: kMusicFooterArtistFontSize * scale,
                     height: 18 / 12,
                     fontWeight: FontWeight.w400,
@@ -231,6 +340,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
             _DockFavoriteButton(
               scale: scale,
               favorited: track.favorite,
+              chrome: chrome,
               tooltip:
                   track.favorite ? l10n.musicUnfavorite : l10n.musicFavorite,
               onTap: () => _toggleFavorite(ref, track),
@@ -245,28 +355,11 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
   /// （样例居中与居右布局的传输行序，`gap-5`）。
   Widget _buildTransportRow(
     WidgetRef ref,
-    AppLocalizations l10n, {
-    required bool shuffleEnabled,
-    required MusicRepeatMode repeatMode,
+    AppLocalizations l10n,
+    _DockGlassChrome chrome, {
+    required MusicPlayMode playMode,
     required bool compact,
   }) {
-    // 播放模式三档互斥（顺序 / 随机 / 循环），单按钮轮换：
-    // 随机与循环不再可能同时生效。
-    final playModeIcon =
-        shuffleEnabled
-            ? Icons.shuffle_on_rounded
-            : repeatMode == MusicRepeatMode.off
-            ? Icons.repeat_rounded
-            : Icons.repeat_on_rounded;
-    final playModeActive = shuffleEnabled || repeatMode != MusicRepeatMode.off;
-    final playModeTooltip =
-        shuffleEnabled
-            ? l10n.musicShuffle
-            : repeatMode == MusicRepeatMode.all
-            ? l10n.musicRepeatAll
-            : repeatMode == MusicRepeatMode.one
-            ? l10n.musicRepeatOne
-            : l10n.musicPlayModeSequential;
     return SizedBox(
       // 中段两行总高 62（40 + 6 + 16）恰好等于胶囊内高，避免列溢出。
       height: transportRowHeight * scale,
@@ -274,12 +367,12 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           if (!compact)
-            _DockIconButton(
-              scale: scale,
-              tooltip: playModeTooltip,
-              icon: playModeIcon,
-              iconSize: 16,
-              active: playModeActive,
+            MusicPlayModeButton(
+              playMode: playMode,
+              iconSize: 16 * scale,
+              padding: 4 * scale,
+              idleColor: chrome.iconIdle,
+              activeColor: chrome.iconStrong,
               onTap:
                   () =>
                       ref
@@ -291,16 +384,18 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
             // 后退/前进 10 秒：样例居中与居右布局的 `replay_10 / forward_10`。
             _DockIconButton(
               scale: scale,
+              chrome: chrome,
               tooltip: l10n.musicSeekBack10,
               icon: Icons.replay_10_rounded,
               iconSize: 19,
-              onTap: () => _seekDockBy(player, -10),
+              onTap: () => _seekDockBy(player, onSeek, -10),
             ),
           ],
           SizedBox(width: transportGap * scale),
           _DockIconButton(
             scale: scale,
-            tooltip: l10n.videoPreviousEpisode,
+            chrome: chrome,
+            tooltip: l10n.musicDeckPrevious,
             icon: Icons.skip_previous_rounded,
             iconSize: 18,
             onTap: onPrevious,
@@ -318,16 +413,17 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
                 isPlaying: isPlaying,
                 onPressed: onTogglePlayback,
                 buttonSize: MusicPlaybackButtonSize.regular,
-                backgroundColor: Colors.white,
-                accentColor: Colors.white,
-                foregroundColor: kMusicDeckCardOverlayColor,
+                backgroundColor: chrome.playBackground,
+                accentColor: chrome.playAccent,
+                foregroundColor: chrome.playForeground,
               ),
             ),
           ),
           SizedBox(width: transportGap * scale),
           _DockIconButton(
             scale: scale,
-            tooltip: l10n.videoNextEpisode,
+            chrome: chrome,
+            tooltip: l10n.musicDeckNext,
             icon: Icons.skip_next_rounded,
             iconSize: 18,
             onTap: onNext,
@@ -336,10 +432,11 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
             SizedBox(width: transportGap * scale),
             _DockIconButton(
               scale: scale,
+              chrome: chrome,
               tooltip: l10n.musicSeekForward10,
               icon: Icons.forward_10_rounded,
               iconSize: 19,
-              onTap: () => _seekDockBy(player, 10),
+              onTap: () => _seekDockBy(player, onSeek, 10),
             ),
           ],
         ],
@@ -354,6 +451,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     AppLocalizations l10n,
+    _DockGlassChrome chrome,
   ) {
     return SizedBox(
       width: sideSectionMinWidth * scale,
@@ -365,19 +463,18 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
               player: player,
               tooltip: l10n.portalMusicVisualizerVolume,
               style: MusicVolumeButtonStyle.glass,
-              iconColor: kMusicLyricTranslationColor,
-              mutedIconColor: kMusicLyricTranslationColor.withValues(
-                alpha: 0.48,
-              ),
-              activeColor: Colors.white,
-              panelTextColor: Colors.white,
-              panelBackground: const Color(0xF00E151B),
+              iconColor: chrome.subtitle,
+              mutedIconColor: chrome.iconIdle.withValues(alpha: 0.48),
+              activeColor: chrome.iconStrong,
+              panelTextColor: chrome.volumePanelText,
+              panelBackground: chrome.volumePanelBackground,
               iconSize: 16 * scale,
             ),
           SizedBox(width: 16 * scale),
           // 播放设置：图标改为齿轮，避免与样例用于「氛围设置」的 tune 语义混淆。
           _DockIconButton(
             scale: scale,
+            chrome: chrome,
             tooltip: l10n.musicPlaybackSettings,
             icon: Icons.settings_rounded,
             iconSize: 16,
@@ -386,6 +483,7 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
           SizedBox(width: 16 * scale),
           _DockIconButton(
             scale: scale,
+            chrome: chrome,
             tooltip: l10n.musicQueueTitle,
             icon: Icons.queue_music_rounded,
             iconSize: 16,
@@ -398,7 +496,11 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
 }
 
 /// Dock 快进/快退：按当前进度相对跳转并夹在时长范围内。
-void _seekDockBy(MusicAudioPlayback player, int seconds) {
+void _seekDockBy(
+  MusicAudioPlayback player,
+  Future<void> Function(Duration position) seek,
+  int seconds,
+) {
   final totalMs = player.state.duration.inMilliseconds;
   if (totalMs <= 0) {
     return;
@@ -407,7 +509,7 @@ void _seekDockBy(MusicAudioPlayback player, int seconds) {
       (player.state.position.inMilliseconds + seconds * 1000)
           .clamp(0, totalMs)
           .toInt();
-  unawaited(player.seek(Duration(milliseconds: targetMs)));
+  unawaited(seek(Duration(milliseconds: targetMs)));
 }
 
 /// Dock 收藏切换：命令内部已容错，这里只兜住异常避免未处理异步错误。
@@ -425,26 +527,23 @@ void _toggleFavorite(WidgetRef ref, MusicTrack track) {
   }());
 }
 
-/// Dock 图标按钮：`text-on-surface-variant hover:text-primary p-1`，
-/// 悬停提亮、按下缩放反馈；模式开启态（如随机/循环）用满亮白常亮显示。
+/// Dock 图标按钮：悬停与按下只改图标着色和缩放，不留水波、高亮与焦点底色。
 class _DockIconButton extends StatefulWidget {
   const _DockIconButton({
     required this.scale,
+    required this.chrome,
     required this.tooltip,
     required this.icon,
     required this.iconSize,
     required this.onTap,
-    this.active = false,
   });
 
   final double scale;
+  final _DockGlassChrome chrome;
   final String tooltip;
   final IconData icon;
   final double iconSize;
   final VoidCallback onTap;
-
-  /// 模式开启态：图标满亮白；关闭态半透明白、悬停提亮。
-  final bool active;
 
   @override
   State<_DockIconButton> createState() => _DockIconButtonState();
@@ -452,22 +551,30 @@ class _DockIconButton extends StatefulWidget {
 
 class _DockIconButtonState extends State<_DockIconButton> {
   bool _pressed = false;
+  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    final idleColor = kMusicLyricTranslationColor.withValues(alpha: 0.9);
+    final chrome = widget.chrome;
     return Tooltip(
       message: widget.tooltip,
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: widget.onTap,
-        onHighlightChanged:
-            (highlighted) =>
-                highlighted != _pressed
-                    ? setState(() => _pressed = highlighted)
-                    : null,
-        splashColor: Colors.white.withValues(alpha: 0.08),
-        highlightColor: Colors.white.withValues(alpha: 0.06),
+        onHighlightChanged: (highlighted) {
+          if (highlighted != _pressed) {
+            setState(() => _pressed = highlighted);
+          }
+        },
+        onHover: (hovered) {
+          if (hovered != _hovered) {
+            setState(() => _hovered = hovered);
+          }
+        },
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
         child: AnimatedScale(
           // 按下缩放反馈：与样例播放键的 active:scale-95 观感一致。
           scale: _pressed ? 0.88 : 1,
@@ -480,12 +587,7 @@ class _DockIconButtonState extends State<_DockIconButton> {
             padding: EdgeInsets.all(4 * widget.scale),
             child: Icon(
               widget.icon,
-              color:
-                  widget.active
-                      ? Colors.white
-                      : _pressed
-                      ? Colors.white
-                      : idleColor,
+              color: _hovered || _pressed ? chrome.iconStrong : chrome.iconIdle,
               size: widget.iconSize * widget.scale,
             ),
           ),
@@ -495,16 +597,18 @@ class _DockIconButtonState extends State<_DockIconButton> {
   }
 }
 
-/// Dock 收藏按钮：未收藏为描边灰心，收藏后为实心白（样例 `FILL 1 + text-primary`）。
+/// Dock 收藏按钮：未收藏为描边灰心，收藏后为实心强调色。
 class _DockFavoriteButton extends StatelessWidget {
   const _DockFavoriteButton({
     required this.scale,
+    required this.chrome,
     required this.favorited,
     required this.tooltip,
     required this.onTap,
   });
 
   final double scale;
+  final _DockGlassChrome chrome;
   final bool favorited;
   final String tooltip;
   final VoidCallback onTap;
@@ -516,6 +620,10 @@ class _DockFavoriteButton extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(999),
         onTap: onTap,
+        splashColor: Colors.transparent,
+        highlightColor: Colors.transparent,
+        hoverColor: Colors.transparent,
+        focusColor: Colors.transparent,
         child: Padding(
           padding: EdgeInsets.all(5 * scale),
           child: AnimatedSwitcher(
@@ -528,10 +636,7 @@ class _DockFavoriteButton extends StatelessWidget {
                   ? Icons.favorite_rounded
                   : Icons.favorite_border_rounded,
               key: ValueKey<bool>(favorited),
-              color:
-                  favorited
-                      ? Colors.white
-                      : kMusicLyricTranslationColor.withValues(alpha: 0.9),
+              color: favorited ? chrome.iconStrong : chrome.iconIdle,
               size: 15 * scale,
             ),
           ),
@@ -580,14 +685,16 @@ class _GlassIconButton extends StatelessWidget {
 /// 进度行：`w-9` 等宽时间 + `h-1.5` 轨 + 总时长（样例 `gap-3`）。
 class _GlassMusicProgress extends StatelessWidget {
   const _GlassMusicProgress({
-    required this.palette,
+    required this.chrome,
     required this.player,
+    required this.onSeek,
     required this.scale,
     required this.enabled,
   });
 
-  final MusicImmersivePalette palette;
+  final _DockGlassChrome chrome;
   final MusicAudioPlayback player;
+  final Future<void> Function(Duration position) onSeek;
   final double scale;
   final bool enabled;
 
@@ -630,13 +737,16 @@ class _GlassMusicProgress extends StatelessWidget {
                     child: MusicPlaybackProgressBar(
                       value: value,
                       semanticLabel: l10n.portalMusicVisualizerSeek,
-                      activeColor: Colors.white,
-                      thumbColor: Colors.white,
+                      activeColor: chrome.progressActive,
+                      inactiveColor: chrome.progressInactive,
+                      thumbColor: chrome.progressThumb,
                       onChanged:
                           enabled && totalMs > 0
-                              ? (next) => player.seek(
-                                Duration(
-                                  milliseconds: (totalMs * next).round(),
+                              ? (next) => unawaited(
+                                onSeek(
+                                  Duration(
+                                    milliseconds: (totalMs * next).round(),
+                                  ),
                                 ),
                               )
                               : null,
@@ -661,7 +771,7 @@ class _GlassMusicProgress extends StatelessWidget {
 
   TextStyle _timeStyle(double alpha) {
     return TextStyle(
-      color: kMusicLyricTranslationColor.withValues(alpha: alpha),
+      color: chrome.subtitle.withValues(alpha: alpha),
       fontSize: kMusicFooterTimeFontSize * scale,
       height: 1.0,
       fontWeight: FontWeight.w400,

@@ -23,6 +23,41 @@ const int _maxLyricFontSizePx = 32;
 const int _minCurrentFontSizePx = 16;
 const int _maxCurrentFontSizePx = 48;
 
+/// 桌面歌词字号的可设范围（px）：与样例基准同单位，编辑面板按字号调节。
+const int kMusicDesktopActiveFontMinPx = 16;
+const int kMusicDesktopActiveFontMaxPx = 64;
+const int kMusicDesktopInactiveFontMinPx = 12;
+const int kMusicDesktopInactiveFontMaxPx = 40;
+
+/// 桌面歌词透明度阶梯的锚点值：`inactiveOpacity` 等于该值时，未读行透明度
+/// 与样例逐像素一致。锚点独立于默认值，避免调整默认值改变老用户的观感。
+const double kMusicLyricLadderOpacityAnchor = 0.5;
+
+/// 某布局的歌词基准字号（在读、未读，单位 px，按 1280×1024 参考构图）：
+/// 规格解析与编辑面板初值共用同一来源，避免面板与渲染基准分叉。
+(int active, int inactive) musicLyricBaseFontSizes(PortalMusicLayout layout) {
+  return layout == PortalMusicLayout.center ? (18, 14) : (44, 18);
+}
+
+/// 读取桌面歌词字号（px）：显式值优先；旧倍率按该布局基准换算；两者都没有
+/// 时返回 null，表示跟随该布局的样例基准字号。
+int? _readDesktopFontSizePx(
+  Object? value, {
+  required Object? legacyScale,
+  required int base,
+  required int min,
+  required int max,
+}) {
+  final raw = (value as num?)?.toInt();
+  if (raw != null) {
+    return raw.clamp(min, max);
+  }
+  if (legacyScale == null) {
+    return null;
+  }
+  return (base * _readDouble(legacyScale, 1)).round().clamp(min, max).toInt();
+}
+
 /// 单个歌词颜色的取值：画法 + 两端颜色。
 ///
 /// 领域层不依赖 Flutter，颜色以 ARGB 整数保存；纯色时 [secondary] 等于
@@ -132,14 +167,19 @@ class PortalLyricVisualSettings {
     required this.focusBandEnabled,
     required this.layout,
     this.activeLineBackgroundEnabled = true,
-    this.activeFontScale = 1,
-    this.inactiveFontScale = 1,
+    this.activeFontSizePx,
+    this.inactiveFontSizePx,
   });
 
   factory PortalLyricVisualSettings.fromJson(Map<String, dynamic>? json) {
     if (json == null) {
       return defaults;
     }
+    final layout = _parseLayout(
+      json['layout'],
+      legacyPosition: json['position'],
+    );
+    final (baseActive, baseInactive) = musicLyricBaseFontSizes(layout);
     return PortalLyricVisualSettings(
       enabled: json['enabled'] as bool? ?? true,
       translationEnabled:
@@ -183,20 +223,25 @@ class PortalLyricVisualSettings {
           ).clamp(0.35, 0.65).toDouble(),
       focusBandEnabled:
           json['focusBandEnabled'] as bool? ?? defaults.focusBandEnabled,
-      layout: _parseLayout(json['layout'], legacyPosition: json['position']),
+      layout: layout,
       // 在读行底衬背景（样例的黑色高亮带）开关，默认开启。
       activeLineBackgroundEnabled:
           json['activeLineBackgroundEnabled'] as bool? ?? true,
-      activeFontScale:
-          _readDouble(
-            json['activeFontScale'],
-            defaults.activeFontScale,
-          ).clamp(0.6, 1.6).toDouble(),
-      inactiveFontScale:
-          _readDouble(
-            json['inactiveFontScale'],
-            defaults.inactiveFontScale,
-          ).clamp(0.6, 1.6).toDouble(),
+      // 桌面在读/未读字号：v16 起以 px 保存，旧的倍率字段按当时布局基准换算。
+      activeFontSizePx: _readDesktopFontSizePx(
+        json['activeFontSizePx'],
+        legacyScale: json['activeFontScale'],
+        base: baseActive,
+        min: kMusicDesktopActiveFontMinPx,
+        max: kMusicDesktopActiveFontMaxPx,
+      ),
+      inactiveFontSizePx: _readDesktopFontSizePx(
+        json['inactiveFontSizePx'],
+        legacyScale: json['inactiveFontScale'],
+        base: baseInactive,
+        min: kMusicDesktopInactiveFontMinPx,
+        max: kMusicDesktopInactiveFontMaxPx,
+      ),
     );
   }
 
@@ -242,8 +287,10 @@ class PortalLyricVisualSettings {
     // 字号以 px 表达（主流方案）：整段歌词 18px，多行形态在读行 30px。
     fontSizePx: 18,
     currentFontSizePx: 30,
-    // 非当前句（已唱行与未唱行）统一按透明度压暗，主流默认半透明白。
-    inactiveOpacity: 0.5,
+    // 非当前句（已唱行与未唱行）统一按透明度压暗：默认 80%，主流播放器
+    // 的未读行仍可辨认。桌面把它当作样例透明度阶梯的倍率锚点
+    // （[kMusicLyricLadderOpacityAnchor]）来缩放。
+    inactiveOpacity: 0.8,
     visibleLines: 3,
     lineSpacing: 1,
     // 两色模型（主流）：当前行满亮白色，其余行半透明白。
@@ -304,11 +351,12 @@ class PortalLyricVisualSettings {
   /// 在读行底衬背景（样例的黑色高亮带）开关：关闭后只保留左侧强调条。
   final bool activeLineBackgroundEnabled;
 
-  /// 在读行文字缩放（乘在样例字号上）：1.0 为样例原值。
-  final double activeFontScale;
+  /// 桌面在读行字号（px）：null 表示跟随该布局的样例基准字号。译文等派生
+  /// 尺寸按「设置值 / 基准值」同步缩放，保持样例排版比例。
+  final int? activeFontSizePx;
 
-  /// 未读行文字缩放（乘在样例字号上）：1.0 为样例原值。
-  final double inactiveFontScale;
+  /// 桌面未读行字号（px）：null 表示跟随该布局的样例基准字号。
+  final int? inactiveFontSizePx;
 
   PortalLyricVisualSettings copyWith({
     bool? enabled,
@@ -327,8 +375,8 @@ class PortalLyricVisualSettings {
     bool? focusBandEnabled,
     PortalMusicLayout? layout,
     bool? activeLineBackgroundEnabled,
-    double? activeFontScale,
-    double? inactiveFontScale,
+    int? activeFontSizePx,
+    int? inactiveFontSizePx,
   }) {
     return PortalLyricVisualSettings(
       enabled: enabled ?? this.enabled,
@@ -348,8 +396,8 @@ class PortalLyricVisualSettings {
       layout: layout ?? this.layout,
       activeLineBackgroundEnabled:
           activeLineBackgroundEnabled ?? this.activeLineBackgroundEnabled,
-      activeFontScale: activeFontScale ?? this.activeFontScale,
-      inactiveFontScale: inactiveFontScale ?? this.inactiveFontScale,
+      activeFontSizePx: activeFontSizePx ?? this.activeFontSizePx,
+      inactiveFontSizePx: inactiveFontSizePx ?? this.inactiveFontSizePx,
     );
   }
 
@@ -371,8 +419,8 @@ class PortalLyricVisualSettings {
       'focusBandEnabled': focusBandEnabled,
       'layout': layout.name,
       'activeLineBackgroundEnabled': activeLineBackgroundEnabled,
-      'activeFontScale': activeFontScale,
-      'inactiveFontScale': inactiveFontScale,
+      if (activeFontSizePx != null) 'activeFontSizePx': activeFontSizePx,
+      if (inactiveFontSizePx != null) 'inactiveFontSizePx': inactiveFontSizePx,
     };
   }
 }
@@ -483,7 +531,7 @@ class PortalMusicVisualizerPreferences {
     this.visual = PortalMusicVisualizerSettings.defaults,
   });
 
-  static const int currentSchemaVersion = 15;
+  static const int currentSchemaVersion = 16;
 
   factory PortalMusicVisualizerPreferences.fromJson(Map<String, dynamic> json) {
     final visual = _readMap(json['visual']) ?? _readLegacyVisual(json);

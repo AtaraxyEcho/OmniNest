@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:typed_data';
 
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:drift/native.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,11 +16,18 @@ import 'package:omninest/features/backdrop/application/app_backdrop_controller.d
 import 'package:omninest/features/backdrop/application/app_backdrop_preferences.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_api.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_bundled_asset.dart';
+import 'package:omninest/features/backdrop/data/app_backdrop_file_picker.dart';
 import 'package:omninest/features/backdrop/data/app_backdrop_repository.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_settings_panel.dart';
 
 void main() {
+  setUpAll(() {
+    registerFallbackValue(
+      const BackdropPickedFile(name: 'fallback.png', size: 1, path: 'D:/a.png'),
+    );
+  });
+
   testWidgets('移动端背景设置可以启用设备隔离并显示当前配置目标', (tester) async {
     tester.view.physicalSize = const Size(1000, 800);
     tester.view.devicePixelRatio = 1;
@@ -96,6 +106,106 @@ void main() {
     final state = container.read(appBackdropControllerProvider).requireValue;
     expect(state.settings.separateDeviceBackdrops, isTrue);
     expect(state.selectionTarget, AppBackdropSelectionTarget.mobile);
+  });
+
+  testWidgets('背景设置面板接收系统拖放并在上传期间禁用接收', (tester) async {
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1;
+    final database = LocalDatabase(NativeDatabase.memory());
+    final repository = AppBackdropRepository(database);
+    final api = _MockBackdropApi();
+    final uploadGate = Completer<BackdropServerAsset>();
+    when(() => api.list()).thenAnswer((_) async => []);
+    when(() => api.upload(any())).thenAnswer((_) => uploadGate.future);
+    final container = ProviderContainer.test(
+      overrides: [
+        appBackdropRepositoryProvider.overrideWithValue(repository),
+        appBackdropBundledAssetInstallerProvider.overrideWithValue(
+          _NoopBundledAssetInstaller(),
+        ),
+        authSessionProvider.overrideWith(
+          () => _MutableSessionNotifier(
+            AuthSessionState(
+              user: UserProfile(
+                id: 'owner-user',
+                username: 'owner',
+                role: 'MEMBER',
+              ),
+            ),
+          ),
+        ),
+        appBackdropApiProvider.overrideWithValue(api),
+        backdropPreferencesProvider.overrideWith(
+          () => _NoopBackdropPreferencesController(repository),
+        ),
+      ],
+    );
+    addTearDown(() async {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+      container.dispose();
+      await database.close();
+    });
+    await container.read(appBackdropControllerProvider.future);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder:
+                (context) => Scaffold(
+                  body: Center(
+                    child: TextButton(
+                      onPressed: () {
+                        unawaited(showAppBackdropSettings(context));
+                      },
+                      child: const Text('打开背景设置'),
+                    ),
+                  ),
+                ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('打开背景设置'));
+    await tester.pumpAndSettle();
+
+    DropTarget dropTarget() =>
+        tester.widget<DropTarget>(find.byType(DropTarget));
+    expect(dropTarget().enable, isTrue);
+
+    unawaited(
+      container
+          .read(appBackdropControllerProvider.notifier)
+          .addDroppedBackdropFiles([
+            XFile.fromData(
+              Uint8List.fromList(List<int>.filled(4, 0)),
+              path: 'D:/drops/clip.mp4',
+            ),
+          ]),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(dropTarget().enable, isFalse);
+    expect(find.text('正在上传…'), findsOneWidget);
+
+    uploadGate.complete(
+      BackdropServerAsset(
+        id: 'server-drop',
+        title: 'clip',
+        mediaType: 'video',
+        status: 'READY',
+        fileSize: 4,
+        updatedAt: DateTime(2026),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(dropTarget().enable, isTrue);
   });
 
   testWidgets('浅色主题下瓦片标题压遮罩恒为白色', (tester) async {

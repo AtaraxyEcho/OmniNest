@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_controls.dart';
+import 'package:omninest/features/backdrop/presentation/app_backdrop_drop_surface.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
 
@@ -181,155 +182,162 @@ class _AppBackdropSettingsContentState
     final filteredBackdrops = _applyFilter(widget.state.backdrops);
     return Padding(
       padding: EdgeInsets.all(compact ? 16 : 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                Icons.photo_library_rounded,
-                color: widget.palette.accent,
-                size: 22,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l10n.portalLocalBackdropTitle,
-                      style: TextStyle(
-                        color: widget.palette.text,
-                        fontSize: AppTypography.titleLarge,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      l10n.portalLocalBackdropSubtitle,
-                      style: TextStyle(
-                        color: widget.palette.muted,
-                        fontSize: AppTypography.bodySmall,
-                      ),
-                    ),
-                  ],
+      child: AppBackdropDropSurface(
+        palette: widget.palette,
+        busy: widget.state.uploading,
+        onFilesDropped: widget.notifier.addDroppedBackdropFiles,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.photo_library_rounded,
+                  color: widget.palette.accent,
+                  size: 22,
                 ),
-              ),
-              IconButton(
-                tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                onPressed: () => Navigator.of(context).pop(),
-                icon: Icon(Icons.close_rounded, color: widget.palette.text),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: [
-                    AppBackdropActionButton(
-                      palette: widget.palette,
-                      icon: Icons.add_photo_alternate_rounded,
-                      label: l10n.portalLocalBackdropAddFiles,
-                      onTap:
-                          widget.state.uploading
-                              ? null
-                              : () => widget.notifier.addBackdropFiles(),
-                    ),
-                    if (widget.state.backdrops.any(
-                      (backdrop) => !backdrop.isBundled,
-                    ))
-                      AppBackdropActionButton(
-                        palette: widget.palette,
-                        icon: Icons.delete_sweep_rounded,
-                        label: l10n.portalLocalBackdropClearAll,
-                        onTap: () => _confirmClearAll(context, l10n),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        l10n.portalLocalBackdropTitle,
+                        style: TextStyle(
+                          color: widget.palette.text,
+                          fontSize: AppTypography.titleLarge,
+                          fontWeight: FontWeight.w800,
+                        ),
                       ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 12),
-              Padding(
-                padding: const EdgeInsets.only(top: 9),
-                child: Text(
-                  l10n.portalLocalBackdropCount(widget.state.backdrops.length),
-                  style: TextStyle(
-                    color: widget.palette.muted,
-                    fontSize: AppTypography.bodySmall,
+                      const SizedBox(height: 3),
+                      Text(
+                        l10n.portalLocalBackdropSubtitle,
+                        style: TextStyle(
+                          color: widget.palette.muted,
+                          fontSize: AppTypography.bodySmall,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
+                IconButton(
+                  tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: Icon(Icons.close_rounded, color: widget.palette.text),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [
+                      AppBackdropActionButton(
+                        palette: widget.palette,
+                        icon: Icons.add_photo_alternate_rounded,
+                        label: l10n.portalLocalBackdropAddFiles,
+                        onTap:
+                            widget.state.uploading
+                                ? null
+                                : () => widget.notifier.addBackdropFiles(),
+                      ),
+                      if (widget.state.backdrops.any(
+                        (backdrop) => !backdrop.isBundled,
+                      ))
+                        AppBackdropActionButton(
+                          palette: widget.palette,
+                          icon: Icons.delete_sweep_rounded,
+                          label: l10n.portalLocalBackdropClearAll,
+                          onTap: () => _confirmClearAll(context, l10n),
+                        ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Padding(
+                  padding: const EdgeInsets.only(top: 9),
+                  child: Text(
+                    l10n.portalLocalBackdropCount(
+                      widget.state.backdrops.length,
+                    ),
+                    style: TextStyle(
+                      color: widget.palette.muted,
+                      fontSize: AppTypography.bodySmall,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _BackdropFilterBar(
+              palette: widget.palette,
+              value: _filter,
+              options: filterOptions,
+              onChanged: (value) => setState(() => _filter = value),
+            ),
+            if (_uploadFeedback(l10n) != null) ...[
+              const SizedBox(height: 10),
+              Text(
+                _uploadFeedback(l10n)!,
+                style: TextStyle(
+                  color: widget.palette.accentAlt,
+                  fontSize: AppTypography.bodySmall,
+                ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          _BackdropFilterBar(
-            palette: widget.palette,
-            value: _filter,
-            options: filterOptions,
-            onChanged: (value) => setState(() => _filter = value),
-          ),
-          if (_uploadFeedback(l10n) != null) ...[
-            const SizedBox(height: 10),
-            Text(
-              _uploadFeedback(l10n)!,
-              style: TextStyle(
-                color: widget.palette.accentAlt,
-                fontSize: AppTypography.bodySmall,
-              ),
+            const SizedBox(height: 18),
+            Expanded(
+              child:
+                  compact
+                      ? ListView(
+                        children: [
+                          SizedBox(
+                            height: 280,
+                            child: _BackdropGrid(
+                              palette: widget.palette,
+                              state: widget.state,
+                              backdrops: filteredBackdrops,
+                              notifier: widget.notifier,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          AppBackdropControls(
+                            palette: widget.palette,
+                            state: widget.state,
+                            notifier: widget.notifier,
+                          ),
+                        ],
+                      )
+                      : Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            flex: 5,
+                            child: _BackdropGrid(
+                              palette: widget.palette,
+                              state: widget.state,
+                              backdrops: filteredBackdrops,
+                              notifier: widget.notifier,
+                            ),
+                          ),
+                          const SizedBox(width: 18),
+                          SizedBox(
+                            width: 300,
+                            child: AppBackdropControls(
+                              palette: widget.palette,
+                              state: widget.state,
+                              notifier: widget.notifier,
+                            ),
+                          ),
+                        ],
+                      ),
             ),
           ],
-          const SizedBox(height: 18),
-          Expanded(
-            child:
-                compact
-                    ? ListView(
-                      children: [
-                        SizedBox(
-                          height: 280,
-                          child: _BackdropGrid(
-                            palette: widget.palette,
-                            state: widget.state,
-                            backdrops: filteredBackdrops,
-                            notifier: widget.notifier,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        AppBackdropControls(
-                          palette: widget.palette,
-                          state: widget.state,
-                          notifier: widget.notifier,
-                        ),
-                      ],
-                    )
-                    : Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(
-                          flex: 5,
-                          child: _BackdropGrid(
-                            palette: widget.palette,
-                            state: widget.state,
-                            backdrops: filteredBackdrops,
-                            notifier: widget.notifier,
-                          ),
-                        ),
-                        const SizedBox(width: 18),
-                        SizedBox(
-                          width: 300,
-                          child: AppBackdropControls(
-                            palette: widget.palette,
-                            state: widget.state,
-                            notifier: widget.notifier,
-                          ),
-                        ),
-                      ],
-                    ),
-          ),
-        ],
+        ),
       ),
     );
   }

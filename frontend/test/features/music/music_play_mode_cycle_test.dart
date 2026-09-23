@@ -6,14 +6,12 @@ import 'package:omninest/features/music/data/music_playback_queue_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 
-/// 播放模式单按钮轮换：顺序 → 随机 → 循环 → 顺序，三种模式互斥。
+/// 播放模式三态互斥：顺序播放（首尾循环）→ 随机播放 → 单曲循环 → 顺序播放，
+/// 以及与后端快照 off/all/one + shuffleEnabled 字段的互逆映射。
 
 void main() {
-  /// 播放队列快照桩：恢复链路据此还原随机/循环状态。
-  _StubMusicApi stubWith({
-    required bool shuffle,
-    required String repeatMode,
-  }) {
+  /// 恢复链路据播放队列快照还原播放模式。
+  _StubMusicApi stubWith({required bool shuffle, required String repeatMode}) {
     final api = _StubMusicApi();
     api.queueSnapshot = MusicPlaybackQueueSnapshot.fromJson(<String, dynamic>{
       'items': <Map<String, dynamic>>[
@@ -51,59 +49,84 @@ void main() {
     return container;
   }
 
-  test('顺序 → 随机：开启洗牌并保持循环关闭', () async {
+  Future<MusicCenterState> startWith(_StubMusicApi api) async {
+    final container = containerWith(api);
+    return container.read(musicCenterControllerProvider.future);
+  }
+
+  MusicCenterState stateOf(ProviderContainer container) =>
+      container.read(musicCenterControllerProvider).value!;
+
+  test('无快照状态时默认顺序播放', () async {
+    final container = containerWith(
+      stubWith(shuffle: false, repeatMode: 'off'),
+    );
+    final state = await container.read(musicCenterControllerProvider.future);
+    expect(state.playMode, MusicPlayMode.sequential);
+  });
+
+  test('单按钮轮换走完三态后回到顺序播放', () async {
     final container = containerWith(
       stubWith(shuffle: false, repeatMode: 'off'),
     );
     await container.read(musicCenterControllerProvider.future);
-    container.read(musicCenterControllerProvider.notifier).cyclePlayMode();
-    final state = container.read(musicCenterControllerProvider).value!;
-    expect(state.shuffleEnabled, isTrue);
-    expect(state.repeatMode, MusicRepeatMode.off);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    controller.cyclePlayMode();
+    expect(stateOf(container).playMode, MusicPlayMode.shuffle);
+
+    controller.cyclePlayMode();
+    expect(stateOf(container).playMode, MusicPlayMode.repeatOne);
+
+    controller.cyclePlayMode();
+    expect(stateOf(container).playMode, MusicPlayMode.sequential);
   });
 
-  test('随机 → 循环：关闭洗牌并进入列表循环', () async {
-    final container = containerWith(
-      stubWith(shuffle: true, repeatMode: 'off'),
+  test('旧的 off 与 all 快照都归入顺序播放档', () async {
+    expect(
+      (await startWith(stubWith(shuffle: false, repeatMode: 'off'))).playMode,
+      MusicPlayMode.sequential,
     );
-    await container.read(musicCenterControllerProvider.future);
-    container.read(musicCenterControllerProvider.notifier).cyclePlayMode();
-    final state = container.read(musicCenterControllerProvider).value!;
-    expect(state.shuffleEnabled, isFalse);
-    expect(state.repeatMode, MusicRepeatMode.all);
+    expect(
+      (await startWith(stubWith(shuffle: false, repeatMode: 'all'))).playMode,
+      MusicPlayMode.sequential,
+    );
   });
 
-  test('循环 → 顺序：关闭循环且不启用随机', () async {
-    final container = containerWith(
-      stubWith(shuffle: false, repeatMode: 'all'),
+  test('随机位优先于循环位，one 归入单曲循环', () async {
+    expect(
+      (await startWith(stubWith(shuffle: true, repeatMode: 'all'))).playMode,
+      MusicPlayMode.shuffle,
     );
-    await container.read(musicCenterControllerProvider.future);
-    container.read(musicCenterControllerProvider.notifier).cyclePlayMode();
-    final state = container.read(musicCenterControllerProvider).value!;
-    expect(state.shuffleEnabled, isFalse);
-    expect(state.repeatMode, MusicRepeatMode.off);
+    expect(
+      (await startWith(stubWith(shuffle: false, repeatMode: 'one'))).playMode,
+      MusicPlayMode.repeatOne,
+    );
   });
 
-  test('从随机与循环叠加的组合态轮换：归一到循环档且互斥', () async {
-    final container = containerWith(
-      stubWith(shuffle: true, repeatMode: 'all'),
-    );
+  test('播放模式按后端契约编码回快照', () async {
+    final api = stubWith(shuffle: false, repeatMode: 'off');
+    final container = containerWith(api);
     await container.read(musicCenterControllerProvider.future);
-    container.read(musicCenterControllerProvider.notifier).cyclePlayMode();
-    final state = container.read(musicCenterControllerProvider).value!;
-    expect(state.shuffleEnabled, isFalse);
-    expect(state.repeatMode, MusicRepeatMode.all);
-  });
+    final controller = container.read(musicCenterControllerProvider.notifier);
 
-  test('旧的单曲循环状态轮换后归一到随机', () async {
-    final container = containerWith(
-      stubWith(shuffle: false, repeatMode: 'one'),
+    controller.setPlayMode(MusicPlayMode.repeatOne);
+    await controller.flushPlaybackQueue();
+    expect(api.remoteSaves.last.repeatMode, 'one', reason: '单曲循环沿用后端 one 位');
+    expect(api.remoteSaves.last.shuffleEnabled, isFalse);
+
+    controller.setPlayMode(MusicPlayMode.shuffle);
+    await controller.flushPlaybackQueue();
+    expect(api.remoteSaves.last.shuffleEnabled, isTrue);
+
+    controller.setPlayMode(MusicPlayMode.sequential);
+    await controller.flushPlaybackQueue();
+    expect(
+      api.remoteSaves.last.repeatMode,
+      'all',
+      reason: '顺序播放即列表首尾循环，沿用后端 all 位',
     );
-    await container.read(musicCenterControllerProvider.future);
-    container.read(musicCenterControllerProvider.notifier).cyclePlayMode();
-    final state = container.read(musicCenterControllerProvider).value!;
-    expect(state.shuffleEnabled, isTrue);
-    expect(state.repeatMode, MusicRepeatMode.off);
+    expect(api.remoteSaves.last.shuffleEnabled, isFalse);
   });
 }
 
@@ -112,12 +135,19 @@ class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
   Future<MusicPlaybackQueueSnapshot?> load(String ownerId) async => null;
 
   @override
-  Future<void> save(String ownerId, MusicPlaybackQueueSnapshot snapshot) async {}
+  Future<void> save(
+    String ownerId,
+    MusicPlaybackQueueSnapshot snapshot,
+  ) async {}
 }
 
 /// 仅实现构建链路与播放模式轮换用到的接口方法；未实现的方法按契约抛错。
 class _StubMusicApi implements MusicApi {
   MusicPlaybackQueueSnapshot? queueSnapshot;
+
+  /// 远端回写的播放队列快照：用于断言播放模式的编码。
+  final List<MusicPlaybackQueueSnapshot> remoteSaves =
+      <MusicPlaybackQueueSnapshot>[];
 
   MusicPagedResult<T> _emptyPage<T>() =>
       MusicPagedResult<T>(items: <T>[], page: 0, size: 30);
@@ -165,7 +195,10 @@ class _StubMusicApi implements MusicApi {
   @override
   Future<MusicPlaybackQueueSnapshot> savePlaybackQueue(
     MusicPlaybackQueueSnapshot snapshot,
-  ) async => snapshot;
+  ) async {
+    remoteSaves.add(snapshot);
+    return snapshot;
+  }
 
   @override
   Future<PlatformUserInfo?> platformInfo(String platform) async => null;
