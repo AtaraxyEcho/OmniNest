@@ -105,7 +105,10 @@ extension MusicCenterQueueRestore on MusicCenterController {
     var hasMore = false;
     int? hitIndex;
     for (var page = 0; page < _libraryPageLimit; page++) {
-      final result = await _api.tracks(page: page, size: MusicCenterController.musicLibraryPageSize);
+      final result = await _api.tracks(
+        page: page,
+        size: MusicCenterController.musicLibraryPageSize,
+      );
       hasMore = result.hasMore;
       for (final track in result.items) {
         if (seenKeys.add('local:${track.id}')) {
@@ -129,7 +132,11 @@ extension MusicCenterQueueRestore on MusicCenterController {
       source: MusicQueueSource.localLibrary(),
       tracks: tracks,
       hasMore: hasMore,
-      nextPage: hasMore ? (tracks.length / MusicCenterController.musicLibraryPageSize).ceil() : null,
+      nextPage:
+          hasMore
+              ? (tracks.length / MusicCenterController.musicLibraryPageSize)
+                  .ceil()
+              : null,
     );
   }
 }

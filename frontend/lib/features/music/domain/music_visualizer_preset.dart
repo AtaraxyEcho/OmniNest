@@ -167,6 +167,7 @@ class PortalLyricVisualSettings {
     required this.focusBandEnabled,
     required this.layout,
     this.activeLineBackgroundEnabled = true,
+    this.timeTagEnabled = false,
     this.activeFontSizePx,
     this.inactiveFontSizePx,
   });
@@ -227,6 +228,8 @@ class PortalLyricVisualSettings {
       // 在读行底衬背景（样例的黑色高亮带）开关，默认开启。
       activeLineBackgroundEnabled:
           json['activeLineBackgroundEnabled'] as bool? ?? true,
+      // 在读行下方的时间标签（样例 lyric-meta）：默认关闭。
+      timeTagEnabled: json['timeTagEnabled'] as bool? ?? false,
       // 桌面在读/未读字号：v16 起以 px 保存，旧的倍率字段按当时布局基准换算。
       activeFontSizePx: _readDesktopFontSizePx(
         json['activeFontSizePx'],
@@ -351,6 +354,10 @@ class PortalLyricVisualSettings {
   /// 在读行底衬背景（样例的黑色高亮带）开关：关闭后只保留左侧强调条。
   final bool activeLineBackgroundEnabled;
 
+  /// 在读行下方的时间标签开关：显示当前行起始时间（样例 `lyric-meta`）。
+  /// 默认关闭：开启后行槽整列变高，观感由用户自行取舍。
+  final bool timeTagEnabled;
+
   /// 桌面在读行字号（px）：null 表示跟随该布局的样例基准字号。译文等派生
   /// 尺寸按「设置值 / 基准值」同步缩放，保持样例排版比例。
   final int? activeFontSizePx;
@@ -375,6 +382,7 @@ class PortalLyricVisualSettings {
     bool? focusBandEnabled,
     PortalMusicLayout? layout,
     bool? activeLineBackgroundEnabled,
+    bool? timeTagEnabled,
     int? activeFontSizePx,
     int? inactiveFontSizePx,
   }) {
@@ -396,6 +404,7 @@ class PortalLyricVisualSettings {
       layout: layout ?? this.layout,
       activeLineBackgroundEnabled:
           activeLineBackgroundEnabled ?? this.activeLineBackgroundEnabled,
+      timeTagEnabled: timeTagEnabled ?? this.timeTagEnabled,
       activeFontSizePx: activeFontSizePx ?? this.activeFontSizePx,
       inactiveFontSizePx: inactiveFontSizePx ?? this.inactiveFontSizePx,
     );
@@ -419,6 +428,7 @@ class PortalLyricVisualSettings {
       'focusBandEnabled': focusBandEnabled,
       'layout': layout.name,
       'activeLineBackgroundEnabled': activeLineBackgroundEnabled,
+      'timeTagEnabled': timeTagEnabled,
       if (activeFontSizePx != null) 'activeFontSizePx': activeFontSizePx,
       if (inactiveFontSizePx != null) 'inactiveFontSizePx': inactiveFontSizePx,
     };
@@ -531,7 +541,7 @@ class PortalMusicVisualizerPreferences {
     this.visual = PortalMusicVisualizerSettings.defaults,
   });
 
-  static const int currentSchemaVersion = 16;
+  static const int currentSchemaVersion = 17;
 
   factory PortalMusicVisualizerPreferences.fromJson(Map<String, dynamic> json) {
     final visual = _readMap(json['visual']) ?? _readLegacyVisual(json);

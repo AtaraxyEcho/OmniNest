@@ -40,7 +40,7 @@ void main() {
     expect(modelSource, isNot(contains('PortalSpectrumVisualSettings')));
     expect(modelSource, isNot(contains('PortalCoverElementSettings')));
     expect(modelSource, isNot(contains("json?['coverElements']")));
-    expect(modelSource, contains('static const int currentSchemaVersion = 16'));
+    expect(modelSource, contains('static const int currentSchemaVersion = 17'));
     // 编辑面板不再有封面与频响分区。
     expect(editorSource, isNot(contains('MusicVisualEditorSection.cover')));
     expect(editorSource, isNot(contains('MusicVisualEditorSection.spectrum')));

@@ -160,6 +160,9 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   /// 落地后再写状态，否则会用尚无数据的快照覆盖首帧。
   Future<void> _backfillSecondary() async {
     final generation = _refreshGeneration;
+    // `_partialErrors` 里是首帧已经发布过的错误，可能被用户关掉过；
+    // 直接重新拼接会把旧错误再弹一次，因此只登记本轮新增的部分。
+    final knownErrorCount = _partialErrors.length;
     final results = await Future.wait(<Future<Object?>>[
       _safe(_api.dashboard, MusicDashboard.empty()),
       _safe(() async => (await _api.albums(size: 200)).items, <MusicAlbum>[]),
@@ -182,6 +185,10 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         generation != _refreshGeneration) {
       return;
     }
+    final freshErrors =
+        knownErrorCount < _partialErrors.length
+            ? _partialErrors.sublist(knownErrorCount)
+            : const <String>[];
     final platformInfo = results[3] as Map<String, PlatformUserInfo?>;
     state = AsyncData(
       current.copyWith(
@@ -189,7 +196,15 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         albums: results[1] as List<MusicAlbum>,
         artists: results[2] as List<MusicArtist>,
         neteaseUserInfo: platformInfo['netease'],
-        errorMessage: _partialErrors.isEmpty ? null : _partialErrors.join('；'),
+        // 无新错误时不传 errorMessage（copyWith 传 null 即保持原值）；
+        // 有新错误时追加到尚未关闭的旧错误之后。
+        errorMessage:
+            freshErrors.isEmpty
+                ? null
+                : <String>[
+                  if (current.errorMessage != null) current.errorMessage!,
+                  ...freshErrors,
+                ].join('；'),
       ),
     );
   }

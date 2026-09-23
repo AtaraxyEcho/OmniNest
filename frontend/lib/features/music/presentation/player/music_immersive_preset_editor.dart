@@ -251,6 +251,24 @@ class _MusicVisualEditorPanelState extends State<MusicVisualEditorPanel> {
                                       ),
                                     ),
                               ),
+                              // 在读行下方时间标签（样例 lyric-meta 胶囊）：
+                              // 居中固定窗口不放这一行，开关随组合隐藏。
+                              if (_draft.lyrics.layout !=
+                                  PortalMusicLayout.center)
+                                _VisualSwitch(
+                                  palette: _editorPalette(context),
+                                  label: l10n.musicVisualizerLyricTimeTag,
+                                  value: _draft.lyrics.timeTagEnabled,
+                                  scopeLabel: l10n.musicVisualizerScopeDesktop,
+                                  onChanged:
+                                      (value) => _update(
+                                        _draft.copyWith(
+                                          lyrics: _draft.lyrics.copyWith(
+                                            timeTagEnabled: value,
+                                          ),
+                                        ),
+                                      ),
+                                ),
                               // 在读/未读字号（px）：未显式设定前取该布局的
                               // 样例基准；译文等派生尺寸按同比缩放。
                               _VisualSlider(

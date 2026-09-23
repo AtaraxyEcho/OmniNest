@@ -415,25 +415,50 @@ void main() {
       expect(right.mask, (0.15, 0.82));
     });
 
-    test('在读行时间参考行只在两侧布局预留，居中固定窗口为 0', () {
-      final left = resolveMusicLyricSpec(PortalMusicLayout.left, 1);
+    test('在读行时间标签默认关闭，开启后只在两侧布局预留', () {
+      // 默认（未开启）：三项占位全部为 0，行槽与不渲染时一致。
+      final off = resolveMusicLyricSpec(PortalMusicLayout.left, 1);
+      expect(off.activeAuxGap, 0);
+      expect(off.activeAuxReserve, 0);
+      expect(off.activeAuxFontSize, 0);
+      expect(off.activeAuxIconSize, 0);
+      expect(off.activeAuxMinBlockWidth, 0);
+
+      final left = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        1,
+        timeTagEnabled: true,
+      );
       // 样例 `lyric-meta`：`mt-3` 间隙 + `py-1` 胶囊 + `text-[11px]` 文字。
       expect(left.activeAuxGap, 12);
-      expect(left.activeAuxReserve, 24);
+      expect(left.activeAuxReserve, 22);
       expect(left.activeAuxFontSize, 11);
-      expect(left.activeAuxIconSize, 14);
+      expect(left.activeAuxIconSize, 12);
+      expect(left.activeAuxMinBlockWidth, 124);
       expect(
-        resolveMusicLyricSpec(PortalMusicLayout.right, 1).activeAuxReserve,
-        24,
+        resolveMusicLyricSpec(
+          PortalMusicLayout.right,
+          1,
+          timeTagEnabled: true,
+        ).activeAuxReserve,
+        22,
       );
-      final center = resolveMusicLyricSpec(PortalMusicLayout.center, 1);
+      // 居中布局是样例的固定四行窗口，开了也不放这一行。
+      final center = resolveMusicLyricSpec(
+        PortalMusicLayout.center,
+        1,
+        timeTagEnabled: true,
+      );
       expect(center.activeAuxGap, 0);
       expect(center.activeAuxReserve, 0);
-      expect(center.activeAuxFontSize, 0);
-      expect(center.activeAuxIconSize, 0);
+      expect(center.activeAuxMinBlockWidth, 0);
       // 占位随缩放同比放大，行槽等高因此每行都计入。
-      final scaled = resolveMusicLyricSpec(PortalMusicLayout.left, 2);
-      expect(scaled.activeAuxReserve, 48);
+      final scaled = resolveMusicLyricSpec(
+        PortalMusicLayout.left,
+        2,
+        timeTagEnabled: true,
+      );
+      expect(scaled.activeAuxReserve, 44);
     });
 
     test('行距倍率只缩放块间隙，不缩在读行的底衬内边距', () {

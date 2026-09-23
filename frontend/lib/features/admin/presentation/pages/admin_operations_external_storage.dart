@@ -460,11 +460,21 @@ const _gbValueConfigs = {'storage.quota.default', 'storage.quota.default.gb'};
 
 const _byteToGbDisplayConfigs = {'share.max-bytes', 'shared_space.max_bytes'};
 
+/// 需要以 MB 为单位展示的字节类配置键；存储值仍是字节。
+const _byteToMbDisplayConfigs = {
+  'backdrop.max-image-bytes',
+  'backdrop.max-video-bytes',
+};
+
 /// 将配置值格式化。
 String _formatConfigValue(String key, String value) {
   if (_gbValueConfigs.contains(key)) {
     final gb = double.tryParse(value);
     return gb == null ? value : '${gb.toStringAsFixed(1)} GB';
+  }
+  if (_byteToMbDisplayConfigs.contains(key)) {
+    final bytes = int.tryParse(value) ?? 0;
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
   }
   if (!_byteToGbDisplayConfigs.contains(key)) return value;
   final bytes = int.tryParse(value) ?? 0;

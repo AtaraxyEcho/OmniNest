@@ -305,9 +305,16 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
 
   /// 需要以 GB 为单位展示/编辑的字节类配置键。
   static const _gbConfigs = {'share.max-bytes', 'shared_space.max_bytes'};
+
+  /// 需要以 MB 为单位展示/编辑的字节类配置键；存储与后端契约仍是字节。
+  static const _mbConfigs = {
+    'backdrop.max-image-bytes',
+    'backdrop.max-video-bytes',
+  };
   static const _quotaSliderMaxGb = 1024.0;
 
   bool get _isGbConfig => _gbConfigs.contains(widget.entry.key);
+  bool get _isMbConfig => _mbConfigs.contains(widget.entry.key);
   bool get _isQuotaConfig => _isQuotaConfigEntry(widget.entry);
   bool get _isBoolConfig => widget.entry.valueType == 'BOOLEAN';
   bool get _isSensitiveConfig => _isSensitiveConfigEntry(widget.entry);
@@ -323,6 +330,10 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       final bytes = int.tryParse(widget.entry.value) ?? 0;
       return (bytes / (1024 * 1024 * 1024)).toStringAsFixed(1);
     }
+    if (_isMbConfig) {
+      final bytes = int.tryParse(widget.entry.value) ?? 0;
+      return (bytes / (1024 * 1024)).toStringAsFixed(1);
+    }
     return widget.entry.value;
   }
 
@@ -331,6 +342,13 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
     final gb = double.tryParse(gbValue);
     if (gb == null || gb < 0) return '0';
     return (gb * 1024 * 1024 * 1024).round().toString();
+  }
+
+  /// 将 MB 输入值转换为字节字符串。
+  String _mbToBytes(String mbValue) {
+    final mb = double.tryParse(mbValue);
+    if (mb == null || mb < 0) return '0';
+    return (mb * 1024 * 1024).round().toString();
   }
 
   /// 最终提交的值。
@@ -344,6 +362,7 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       if (_isGbConfig) return _gbToBytes(raw);
       return gb.round().toString();
     }
+    if (_isMbConfig) return _mbToBytes(raw);
     return _isGbConfig ? _gbToBytes(raw) : raw;
   }
 
@@ -444,10 +463,10 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
                       _isSensitiveConfig
                           ? l10n.adminSensitiveValuePlaceholder
                           : null,
-                  suffixText: _isGbConfig ? 'GB' : null,
+                  suffixText: _isGbConfig ? 'GB' : (_isMbConfig ? 'MB' : null),
                 ),
                 keyboardType:
-                    _isGbConfig
+                    _isGbConfig || _isMbConfig
                         ? const TextInputType.numberWithOptions(decimal: true)
                         : TextInputType.text,
                 minLines: 1,
@@ -500,6 +519,11 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
       setState(() => _error = quotaError);
       return;
     }
+    final mbError = _validateMegabytes(l10n);
+    if (mbError != null) {
+      setState(() => _error = mbError);
+      return;
+    }
     if (_isSensitiveConfig && _submitValue.isEmpty) {
       setState(() => _error = l10n.adminSensitiveValuePlaceholder);
       return;
@@ -541,6 +565,18 @@ class _ConfigEditDialogState extends ConsumerState<_ConfigEditDialog> {
     }
     if (!_isGbConfig && value != value.roundToDouble()) {
       return l10n.adminConfigQuotaWholeGb;
+    }
+    return null;
+  }
+
+  /// MB 单位配置的入参校验；上限由配置中心目录按字节判定，前端不重复维护。
+  String? _validateMegabytes(AppLocalizations l10n) {
+    if (!_isMbConfig) {
+      return null;
+    }
+    final value = double.tryParse(_valueController.text.trim());
+    if (value == null || !value.isFinite || value < 1) {
+      return l10n.adminConfigMbInvalid;
     }
     return null;
   }

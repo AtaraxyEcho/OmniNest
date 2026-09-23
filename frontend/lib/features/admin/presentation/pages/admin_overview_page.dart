@@ -291,72 +291,95 @@ class _TrendAndHealth extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1080;
-        final trend = AdminInfoPanel(
-          title: l10n.adminActivityChart,
-          subtitle: l10n.adminActivityChartSubtitle,
-          trailing: AdminStatusPill(
-            label: l10n.adminOverviewTasksTotal(summary.tasks.total),
-          ),
-          children: [
-            SizedBox(
-              height: 240,
-              child:
-                  (analytics == null || analytics!.userGrowth.isEmpty)
-                      ? Center(
-                        child: Text(
-                          l10n.adminNoTrendData,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: adminColors.onSurfaceVariant),
-                        ),
-                      )
-                      : CurveChart(
-                        data: analytics!.userGrowth,
-                        color: adminColors.primary,
+        // 服务瓦片固定 72 高，两列只有在 flex 4 侧实际容得下 420 内容宽时才启用，
+        // 与 1080 档的 1 列布局保持同一阈值口径。
+        final healthColumns = isWide && constraints.maxWidth >= 1320 ? 2 : 1;
+        final healthRows = (summary.health.length / healthColumns).ceil();
+        final healthBodyHeight =
+            healthRows * 72 + (healthRows > 1 ? (healthRows - 1) * 12 : 0);
+        Widget trendPanel({required bool expandBody}) {
+          final chart =
+              (analytics == null || analytics!.userGrowth.isEmpty)
+                  ? Center(
+                    child: Text(
+                      l10n.adminNoTrendData,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: adminColors.onSurfaceVariant,
                       ),
+                    ),
+                  )
+                  : CurveChart(
+                    data: analytics!.userGrowth,
+                    color: adminColors.primary,
+                  );
+          return AdminInfoPanel(
+            title: l10n.adminActivityChart,
+            subtitle: l10n.adminActivityChartSubtitle,
+            expandBody: expandBody,
+            trailing: AdminStatusPill(
+              label: l10n.adminOverviewTasksTotal(summary.tasks.total),
             ),
-          ],
-        );
+            children: [
+              if (expandBody)
+                Expanded(child: chart)
+              else
+                SizedBox(height: 240, child: chart),
+            ],
+          );
+        }
+
         final health = AdminInfoPanel(
           title: l10n.adminHealthStatus,
           subtitle: l10n.adminHealthStatusSubtitle,
+          expandBody: isWide,
           children: [
-            LayoutBuilder(
-              builder: (context, hc) {
-                final columns = hc.maxWidth >= 420 ? 2 : 1;
-                return GridView.count(
-                  crossAxisCount: columns,
-                  crossAxisSpacing: 12,
-                  mainAxisSpacing: 12,
-                  // 固定 tile 高度，避免 detail 文案长短导致瓦片高度不齐。
-                  mainAxisExtent: 72,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: [
-                    for (final item in summary.health)
-                      AdminServiceTile(
-                        name: item.name,
-                        status: item.status,
-                        detail: item.detail,
-                      ),
-                  ],
-                );
-              },
+            GridView.count(
+              crossAxisCount: healthColumns,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              // 固定 tile 高度，避免 detail 文案长短导致瓦片高度不齐。
+              mainAxisExtent: 72,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                for (final item in summary.health)
+                  AdminServiceTile(
+                    name: item.name,
+                    status: item.status,
+                    detail: item.detail,
+                  ),
+              ],
             ),
           ],
         );
 
         if (!isWide) {
-          return Column(children: [trend, const SizedBox(height: 16), health]);
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              trendPanel(expandBody: false),
+              const SizedBox(height: 16),
+              health,
+            ],
+          );
         }
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(flex: 7, child: trend),
-            const SizedBox(width: 16),
-            Expanded(flex: 4, child: health),
-          ],
+        // 等高中栏：左系统活动 / 右服务状态，底边对齐；面板内剩余空间由
+        // expandBody 的 Expanded 吸收，两侧因此始终同高且不溢出。
+        return SizedBox(
+          height: healthBodyHeight + _overviewMidRowChromeHeight,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(flex: 7, child: trendPanel(expandBody: true)),
+              const SizedBox(width: 16),
+              Expanded(flex: 4, child: health),
+            ],
+          ),
         );
       },
     );
   }
 }
+
+/// 概览中栏面板除图表外的固定高度：标题+副标题、22 的标题间距与面板内边距。
+const double _overviewMidRowChromeHeight = 232;

@@ -131,6 +131,7 @@ class _MusicImmersivePlayerStageState
             inactiveFontSizePx: visual.lyrics.inactiveFontSizePx,
             inactiveOpacity: visual.lyrics.inactiveOpacity,
             lineSpacing: visual.lyrics.lineSpacing,
+            timeTagEnabled: visual.lyrics.timeTagEnabled,
           );
           // 歌词列头部带矩形：三个布局统一（居右为样例原生，居左与居中
           // 为补齐的同一控件样式）。

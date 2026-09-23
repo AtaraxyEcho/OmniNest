@@ -197,12 +197,15 @@ class _MusicLyricsLayout {
               : 0.0;
       // 逐字填充遮罩的墨迹边距由行内容向外溢出（歌词行 Stack 不裁剪），
       // 不占用行槽高度，避免行距被撑大。
-      // 在读行的时间参考行只有读行才有，但行槽等高，必须整列预留。
+      // 在读行的时间标签只有读行才有，但行槽等高，必须整列预留。
+      // 末尾 2px 余量吸收小数缩放下文字行盒取整与 strut 推导高度的差，
+      // 否则会在读行底部溢出亚像素（RenderFlex overflowed by 0.48px）。
       return (mainBox +
               translationBox +
               spec.activeAuxGap +
               spec.activeAuxReserve +
-              spec.lineGap)
+              spec.lineGap +
+              2)
           .clamp(24.0, 480.0)
           .toDouble();
     }

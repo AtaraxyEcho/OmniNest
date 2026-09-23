@@ -4465,6 +4465,12 @@ abstract class AppLocalizations {
   /// **'Active line backdrop'**
   String get musicVisualizerActiveBackground;
 
+  /// No description provided for @musicVisualizerLyricTimeTag.
+  ///
+  /// In en, this message translates to:
+  /// **'Active line time tag'**
+  String get musicVisualizerLyricTimeTag;
+
   /// No description provided for @musicVisualizerActiveFontScale.
   ///
   /// In en, this message translates to:
@@ -4482,12 +4488,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Back to current'**
   String get musicLyricBackToCurrent;
-
-  /// No description provided for @musicLyricRepeatVerse.
-  ///
-  /// In en, this message translates to:
-  /// **'Repeat this verse'**
-  String get musicLyricRepeatVerse;
 
   /// No description provided for @musicLyricCopied.
   ///
@@ -7024,7 +7024,7 @@ abstract class AppLocalizations {
   /// No description provided for @adminConfigBackdropMaxImageBytesDescription.
   ///
   /// In en, this message translates to:
-  /// **'Maximum size in bytes of a single backdrop image.'**
+  /// **'Maximum size of a single backdrop image, entered in MB and stored as bytes.'**
   String get adminConfigBackdropMaxImageBytesDescription;
 
   /// No description provided for @adminConfigBackdropMaxVideoBytes.
@@ -7036,8 +7036,14 @@ abstract class AppLocalizations {
   /// No description provided for @adminConfigBackdropMaxVideoBytesDescription.
   ///
   /// In en, this message translates to:
-  /// **'Maximum size in bytes of a single backdrop video.'**
+  /// **'Maximum size of a single backdrop video, entered in MB and stored as bytes.'**
   String get adminConfigBackdropMaxVideoBytesDescription;
+
+  /// No description provided for @adminConfigMbInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a size limit of at least 1 MB.'**
+  String get adminConfigMbInvalid;
 
   /// No description provided for @adminConfigBackdropMaxAssets.
   ///

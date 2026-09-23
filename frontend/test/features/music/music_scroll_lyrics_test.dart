@@ -1285,52 +1285,66 @@ void main() {
     expect(leftBarCount(), 0);
   });
 
-  testWidgets('在读行底部渲染样例时间参考行，非在读行与居中窗口不渲染', (tester) async {
+  testWidgets('在读行时间标签默认关闭，开启后只在两侧布局的读行出现', (tester) async {
     const lyrics = <MusicLyricLine>[
       MusicLyricLine(position: Duration(seconds: 12), text: '第一句'),
       MusicLyricLine(position: Duration(seconds: 40), text: '第二句'),
     ];
+
+    Future<void> pumpWith(MusicLyricSpec spec) async {
+      final player = _FakeMusicAudioPlayback(
+        initialPosition: const Duration(seconds: 13),
+      );
+      addTearDown(player.dispose);
+      await tester.pumpWidget(
+        _lyricsApp(player: player, spec: spec, lyrics: lyrics),
+      );
+      await tester.pump();
+      await tester.pump();
+    }
+
+    // 默认关闭：不渲染时间胶囊，也不预留其高度。
+    await pumpWith(resolveMusicLyricSpec(PortalMusicLayout.left, 1));
+    expect(find.byIcon(Icons.graphic_eq), findsNothing);
+    expect(find.text('00:12.0'), findsNothing);
+
+    // 开启后：在读行显示 `mm:ss.d` 时间胶囊；样例里的「重复本句」入口已删除，
+    // 跳回本句仍由整行的 onTap 承接。
+    await pumpWith(
+      resolveMusicLyricSpec(PortalMusicLayout.left, 1, timeTagEnabled: true),
+    );
+    expect(find.byIcon(Icons.graphic_eq), findsOneWidget);
+    expect(find.text('00:12.0'), findsOneWidget);
+    expect(find.text('00:40.0'), findsNothing);
+    expect(find.text('重复本句'), findsNothing);
+  });
+
+  testWidgets('居中固定窗口不放时间标签', (tester) async {
     final player = _FakeMusicAudioPlayback(
       initialPosition: const Duration(seconds: 13),
     );
     addTearDown(player.dispose);
-
     await tester.pumpWidget(
       _lyricsApp(
         player: player,
-        spec: resolveMusicLyricSpec(PortalMusicLayout.left, 1),
-        lyrics: lyrics,
-      ),
-    );
-    await tester.pump();
-    await tester.pump();
-
-    // 样例 `lyric-meta`：波形图标 + `mm:ss.d` 行时间戳 + 「重复本句」，
-    // 只在在读行出现。
-    expect(find.byIcon(Icons.graphic_eq), findsOneWidget);
-    expect(find.text('00:12.0'), findsOneWidget);
-    expect(find.text('重复本句'), findsOneWidget);
-    expect(find.text('00:40.0'), findsNothing);
-
-    // 居中布局是样例的固定四行窗口，没有这一行。
-    final centerPlayer = _FakeMusicAudioPlayback(
-      initialPosition: const Duration(seconds: 13),
-    );
-    addTearDown(centerPlayer.dispose);
-    await tester.pumpWidget(
-      _lyricsApp(
-        player: centerPlayer,
-        spec: resolveMusicLyricSpec(PortalMusicLayout.center, 1),
+        // 居中布局即使开关开着也不预留时间标签位（样例为固定四行窗口）。
+        spec: resolveMusicLyricSpec(
+          PortalMusicLayout.center,
+          1,
+          timeTagEnabled: true,
+        ),
         scrollMode: false,
         textAlign: TextAlign.center,
         blockAnchor: Alignment.center,
-        lyrics: lyrics,
+        lyrics: const <MusicLyricLine>[
+          MusicLyricLine(position: Duration(seconds: 12), text: '第一句'),
+          MusicLyricLine(position: Duration(seconds: 40), text: '第二句'),
+        ],
       ),
     );
     await tester.pump();
     await tester.pump();
     expect(find.byIcon(Icons.graphic_eq), findsNothing);
-    expect(find.text('重复本句'), findsNothing);
   });
 }
 

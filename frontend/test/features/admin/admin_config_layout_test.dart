@@ -125,6 +125,59 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('背景库大小配置按 MB 展示而非原始字节', (tester) async {
+    tester.view.physicalSize = const Size(1440, 1000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const view = AdminConfigManagementView(
+      items: [
+        AdminConfigEntry(
+          key: 'backdrop.max-image-bytes',
+          value: '20971520',
+          valueType: 'NUMBER',
+          category: 'backdrop',
+          refreshScope: 'HOT',
+          updatedAt: '2026-09-22T08:00:00Z',
+          surface: 'GENERAL',
+          displayCode: 'config.backdrop.maxImageBytes',
+        ),
+        AdminConfigEntry(
+          key: 'backdrop.max-video-bytes',
+          value: '469762048',
+          valueType: 'NUMBER',
+          category: 'backdrop',
+          refreshScope: 'HOT',
+          updatedAt: '2026-09-22T08:00:00Z',
+          surface: 'GENERAL',
+          displayCode: 'config.backdrop.maxVideoBytes',
+        ),
+      ],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(
+          theme: OmniNestTheme.light(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const Scaffold(
+            body: SingleChildScrollView(child: AdminConfigPage(view: view)),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('20.0 MB'), findsOneWidget);
+    expect(find.textContaining('448.0 MB'), findsOneWidget);
+    // 原始字节不得再出现在列表里。
+    expect(find.textContaining('20971520'), findsNothing);
+    expect(find.textContaining('469762048'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('分组筛选下拉过滤配置列表', (tester) async {
     tester.view.physicalSize = const Size(1440, 1000);
     tester.view.devicePixelRatio = 1;

@@ -2333,6 +2333,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicVisualizerActiveBackground => '在读行背景';
 
   @override
+  String get musicVisualizerLyricTimeTag => '在读行时间标签';
+
+  @override
   String get musicVisualizerActiveFontScale => '在读歌词字号';
 
   @override
@@ -2340,9 +2343,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicLyricBackToCurrent => '回到当前播放';
-
-  @override
-  String get musicLyricRepeatVerse => '重复本句';
 
   @override
   String get musicLyricCopied => '已复制该行歌词';
@@ -3689,13 +3689,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get adminConfigBackdropMaxImageBytes => '背景图片大小上限';
 
   @override
-  String get adminConfigBackdropMaxImageBytesDescription => '背景图片单文件大小上限（字节）。';
+  String get adminConfigBackdropMaxImageBytesDescription =>
+      '背景图片单文件大小上限，按 MB 填写，保存为字节。';
 
   @override
   String get adminConfigBackdropMaxVideoBytes => '背景视频大小上限';
 
   @override
-  String get adminConfigBackdropMaxVideoBytesDescription => '背景视频单文件大小上限（字节）。';
+  String get adminConfigBackdropMaxVideoBytesDescription =>
+      '背景视频单文件大小上限，按 MB 填写，保存为字节。';
+
+  @override
+  String get adminConfigMbInvalid => '请输入不小于 1 MB 的大小上限。';
 
   @override
   String get adminConfigBackdropMaxAssets => '背景素材数量上限';

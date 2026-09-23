@@ -2410,6 +2410,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicVisualizerActiveBackground => 'Active line backdrop';
 
   @override
+  String get musicVisualizerLyricTimeTag => 'Active line time tag';
+
+  @override
   String get musicVisualizerActiveFontScale => 'Active lyric size';
 
   @override
@@ -2417,9 +2420,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicLyricBackToCurrent => 'Back to current';
-
-  @override
-  String get musicLyricRepeatVerse => 'Repeat this verse';
 
   @override
   String get musicLyricCopied => 'Lyric line copied';
@@ -3804,14 +3804,17 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminConfigBackdropMaxImageBytesDescription =>
-      'Maximum size in bytes of a single backdrop image.';
+      'Maximum size of a single backdrop image, entered in MB and stored as bytes.';
 
   @override
   String get adminConfigBackdropMaxVideoBytes => 'Backdrop video size limit';
 
   @override
   String get adminConfigBackdropMaxVideoBytesDescription =>
-      'Maximum size in bytes of a single backdrop video.';
+      'Maximum size of a single backdrop video, entered in MB and stored as bytes.';
+
+  @override
+  String get adminConfigMbInvalid => 'Enter a size limit of at least 1 MB.';
 
   @override
   String get adminConfigBackdropMaxAssets => 'Backdrop asset count limit';

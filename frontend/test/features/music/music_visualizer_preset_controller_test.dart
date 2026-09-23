@@ -178,7 +178,7 @@ void main() {
       preferences.toJson(),
     );
 
-    expect(restored.schemaVersion, 16);
+    expect(restored.schemaVersion, 17);
     expect(restored.visual.lyrics.visibleLines, 7);
     expect(restored.visual.lyrics.lineSpacing, 1.4);
     expect(
@@ -210,7 +210,7 @@ void main() {
       },
     );
 
-    expect(restored.schemaVersion, 16);
+    expect(restored.schemaVersion, 17);
     expect(restored.visual.lyrics.currentPaint.primary, 0xFFAABBCC);
     expect(
       restored.visual.lyrics.inactivePaint.primary,
@@ -265,7 +265,7 @@ void main() {
       },
     );
 
-    expect(restored.schemaVersion, 16);
+    expect(restored.schemaVersion, 17);
     // 频响与封面元素（含原始封面）已整体移除：字段不再存在，载入不报错；
     // deckEnabled 为 v13 新增的堆叠卡片开关。
     expect(restored.visual.lyrics.translationEnabled, isFalse);

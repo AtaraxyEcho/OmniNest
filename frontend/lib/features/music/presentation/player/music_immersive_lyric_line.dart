@@ -416,9 +416,9 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     );
   }
 
-  /// 在读行底部的时间参考行（样例 `lyric-meta`）：波形图标 + 行时间戳胶囊、
-  /// 间隔点与「重复本句」。整行已挂跳转手势，这一行不再挂二次手势，点击由
-  /// 整行的 `onTap`（跳回本句起点）承接。
+  /// 在读行下方的时间标签（样例 `lyric-meta` 的胶囊部分）：波形图标 + 本行
+  /// 起始时间。整行已挂跳转手势，标签不再挂二次手势，点击由整行的 `onTap`
+  /// （跳回本句起点）承接。
   Widget? _buildAuxRow() {
     final spec = widget.spec;
     if (spec == null || !widget.active || spec.activeAuxReserve <= 0) {
@@ -426,22 +426,18 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
     }
     final scale = widget.scale;
     final accent = widget.accentColor ?? spec.activeTextColor;
+    final height = spec.activeAuxReserve;
     final stampStyle = TextStyle(
       color: accent,
       fontSize: spec.activeAuxFontSize,
-      height: 1.2,
+      height: 1.1,
       fontWeight: FontWeight.w600,
-    );
-    final labelStyle = TextStyle(
-      color: spec.textColor,
-      fontSize: spec.activeAuxFontSize,
-      height: 1.2,
-      fontWeight: FontWeight.w500,
+      letterSpacing: 0.6 * scale,
     );
     return Padding(
       padding: EdgeInsets.only(top: spec.activeAuxGap),
       child: SizedBox(
-        height: spec.activeAuxReserve,
+        height: height,
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -449,7 +445,7 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
               key: const ValueKey('music-lyric-aux-pill'),
               decoration: BoxDecoration(
                 color: kMusicLyricAuxPillFill,
-                borderRadius: BorderRadius.circular(spec.activeAuxReserve / 2),
+                borderRadius: BorderRadius.circular(height / 2),
                 border: Border.all(
                   color: Colors.white.withValues(
                     alpha: kMusicLyricAuxPillBorderAlpha,
@@ -457,41 +453,22 @@ class _MusicLyricLineState extends State<_MusicLyricLine>
                 ),
               ),
               child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: 12 * scale,
-                  vertical: 4 * scale,
-                ),
+                padding: EdgeInsets.symmetric(horizontal: 9 * scale),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       Icons.graphic_eq,
                       size: spec.activeAuxIconSize,
-                      color: accent,
+                      color: accent.withValues(alpha: 0.85),
                     ),
-                    SizedBox(width: 6 * scale),
+                    SizedBox(width: 5 * scale),
                     Text(
                       _formatLyricStamp(widget.line.position),
                       style: stampStyle,
                     ),
                   ],
                 ),
-              ),
-            ),
-            SizedBox(width: 12 * scale),
-            Text(
-              '•',
-              style: labelStyle.copyWith(
-                color: spec.textColor.withValues(alpha: 0.4),
-              ),
-            ),
-            SizedBox(width: 12 * scale),
-            Flexible(
-              child: Text(
-                AppLocalizations.of(context).musicLyricRepeatVerse,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: labelStyle,
               ),
             ),
           ],

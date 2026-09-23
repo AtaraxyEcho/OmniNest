@@ -40,7 +40,7 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
     _section = AdminSection.fromPathSegment(widget.initialSectionSegment);
     // 进入即查由页面挂载统一承担：失效目标分区常驻缓存；未创建的
     // provider 失效为空操作，挂载后仅取数一次。
-    ref.read(adminSectionRefreshProvider).invalidate(_section);
+    _invalidateSectionAfterFrame(_section);
   }
 
   @override
@@ -50,9 +50,21 @@ class _AdminDashboardPageState extends ConsumerState<AdminDashboardPage> {
       final next = AdminSection.fromPathSegment(widget.initialSectionSegment);
       if (next != _section) {
         setState(() => _section = next);
-        ref.read(adminSectionRefreshProvider).invalidate(next);
+        _invalidateSectionAfterFrame(next);
       }
     }
+  }
+
+  /// 失效必须推迟到本帧之后：initState/didUpdateWidget 都处于构建期，
+  /// 此时弄脏侧栏也在监听的常驻 provider，兄弟节点稍后 watch 该 provider
+  /// 会同步刷新并回灌侧栏，触发 setState() during build。
+  void _invalidateSectionAfterFrame(AdminSection section) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ref.read(adminSectionRefreshProvider).invalidate(section);
+    });
   }
 
   void _onSectionChanged(AdminSection section) {
