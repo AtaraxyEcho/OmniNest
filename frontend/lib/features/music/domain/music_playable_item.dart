@@ -75,6 +75,8 @@ class MusicPlayableItem {
         favorite: false,
         durationSeconds: onlineTrack.durationSeconds,
         coverUrl: onlineTrack.coverUrl,
+        coverThumbUrl:
+            onlineTrack.thumbUrl.isEmpty ? null : onlineTrack.thumbUrl,
       ),
     );
   }

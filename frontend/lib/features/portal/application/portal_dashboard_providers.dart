@@ -7,9 +7,8 @@ import 'package:omninest/features/admin/admin_dashboard.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
-import 'package:omninest/features/portal/application/portal_paged_cards.dart';
+import 'package:omninest/features/portal/portal_dashboard.dart';
 import 'package:omninest/features/portal/portal_weather.dart';
-import 'package:omninest/features/portal/domain/portal_focus_models.dart';
 import 'package:omninest/features/reader/reader_dashboard.dart';
 import 'package:omninest/features/video/video_dashboard.dart';
 

@@ -128,14 +128,14 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
           ),
           child: AppBackdropHost(child: child ?? const SizedBox.shrink()),
         );
-        // 应用字体档位根部生效。MediaQuery 包装必须结构恒定：跟随系统时
-        // 写入原始系统 TextScaler（数据等价），避免档位翻转时整棵路由子树
-        // 因 widget 类型变化而重挂（丢失滚动状态并打断背景视频会话）。
-        final appScale = fontScalePreset.scale;
-        final effectiveScaler =
-            appScale == null
-                ? systemScaler
-                : ComposedScaler(systemScaler, appScale);
+        // 应用字体档位根部生效。缩放一律经 ComposedScaler：跟随系统档位时
+        // （preset.scale == null）也要吃到 ComposedScaler.maxScale 封顶，
+        // 且 scaler 类型不随档位翻转变化，整棵路由子树不会因此重挂
+        // （丢失滚动状态并打断背景视频会话）。
+        final effectiveScaler = ComposedScaler(
+          systemScaler,
+          fontScalePreset.scale ?? 1,
+        );
         content = MediaQuery(
           data: mediaQuery.copyWith(textScaler: effectiveScaler),
           child: content,
@@ -147,7 +147,9 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
           width: mediaQuery.size.width,
         );
         return FontScaleScope(
-          systemScaler: systemScaler,
+          // 供自绘排版取用的「仅系统缩放」口径同样封顶，否则阅读页测量
+          // 会与实际渲染字号在超大无障碍档位下分叉。
+          systemScaler: ComposedScaler(systemScaler, 1),
           child: NotificationForegroundToast(
             child: DesktopFormMinWidth(mobileForm: mobileForm, child: content),
           ),

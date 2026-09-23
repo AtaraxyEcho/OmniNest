@@ -14,6 +14,14 @@ const _preloadTestArtist = MusicArtist(
   albumCount: 1,
 );
 
+const _neteaseLibraryStatus = MusicPlatformStatus(
+  platform: 'netease',
+  displayName: 'NetEase Cloud Music',
+  enabled: true,
+  connected: true,
+  capabilities: MusicPlatformCapabilities(playlists: true, likedTracks: true),
+);
+
 const _connectedNeteaseStatus = MusicPlatformStatus(
   platform: 'netease',
   displayName: 'NetEase Cloud Music',
@@ -273,6 +281,41 @@ void registerMusicPlaylistPreloadTests() {
     expect(opened, hasLength(800));
     final loaded = container.read(musicPlatformLibraryProvider).value!;
     expect(loaded.playlistTracks['netease:list-0']!.hasMore, isFalse);
+  });
+
+  test('显式刷新只回源列表，打开歌单才单独取新页', () async {
+    final api =
+        _FakeMusicApi()
+          ..platformStatuses = const <MusicPlatformStatus>[
+            _neteaseLibraryStatus,
+          ]
+          ..neteasePlaylists = _onlinePlaylists(1);
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicPlatformLibraryProvider.future);
+    await pumpEventQueue();
+    expect(api.platformListRefreshFlags['playlists'], isNot(true));
+    final preloadRequests = api.platformPlaylistTrackRequests.length;
+
+    await container.read(musicPlatformLibraryProvider.notifier).refresh();
+    await pumpEventQueue();
+
+    // 用户刷新让歌单与喜欢列表回源，但已缓存的曲目页不重复下载。
+    expect(api.platformListRefreshFlags['playlists'], isTrue);
+    expect(api.platformListRefreshFlags['likedTracks'], isTrue);
+    expect(api.platformPlaylistTrackRequests, hasLength(preloadRequests));
+
+    final playlist =
+        container.read(musicPlatformLibraryProvider).value!.playlists.first;
+    await container
+        .read(musicPlatformLibraryProvider.notifier)
+        .loadPlaylistTracks(playlist, forceRefresh: true);
+
+    expect(api.platformPlaylistTrackSizes['netease:list-0'], 1000);
+    expect(api.platformListRefreshFlags['playlistTracks'], isTrue);
+    expect(api.platformPlaylistTrackRequests, hasLength(preloadRequests + 1));
   });
 
   test('预热只覆盖前 8 个歌单，其余走按需加载', () async {

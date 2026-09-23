@@ -17,7 +17,7 @@ import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_visualizer_preset_controller.dart';
-import 'package:omninest/features/music/data/music_cover_cache.dart';
+import 'package:omninest/features/music/application/music_cover_artwork.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
@@ -32,6 +32,7 @@ import 'package:omninest/features/music/presentation/widgets/music_volume_button
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 
 part 'music_immersive_cover_deck.dart';
+part 'music_immersive_cover_deck_widgets.dart';
 part 'music_immersive_controls.dart';
 part 'music_immersive_deck_spec.dart';
 part 'music_immersive_player_stage.dart';
@@ -135,7 +136,7 @@ class _ImmersiveLyrics extends StatelessWidget {
   }
 }
 
-class _MusicImmersiveArtwork extends StatelessWidget {
+class _MusicImmersiveArtwork extends ConsumerWidget {
   const _MusicImmersiveArtwork({
     required this.imageUrl,
     required this.fallback,
@@ -155,15 +156,13 @@ class _MusicImmersiveArtwork extends StatelessWidget {
   final int? cacheHeight;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final url = imageUrl?.trim();
     // 本地封面稳定 API 路径走专域缓存管理器；CDN 地址保持默认路径。
     // Web 端默认 HtmlImage 渲染绕过 cacheManager 且按页面 origin 解析
     // 相对 URL，跨源部署必须切 HttpGet 走管理器下载。
     final manager =
-        url == null || !isMusicCoverApiPath(url)
-            ? null
-            : MusicCoverCache.maybeInstance;
+        url == null ? null : ref.watch(musicCoverCacheManagerProvider(url));
     final child =
         url == null || url.isEmpty
             ? fallback

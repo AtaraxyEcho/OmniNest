@@ -413,7 +413,10 @@ class _SearchTrackRow extends StatelessWidget {
         onTap: onTap,
         leading: SizedBox.square(
           dimension: 40,
-          child: MusicDeckArtwork(title: track.title, imageUrl: track.coverUrl),
+          child: MusicDeckArtwork(
+            title: track.title,
+            imageUrl: track.listCoverUrl,
+          ),
         ),
         title: Text(
           track.title,

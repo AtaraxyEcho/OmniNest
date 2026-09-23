@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 
 /// 桌面形态的最小内容宽度护栏。
 ///
@@ -17,8 +18,9 @@ class DesktopFormMinWidth extends StatelessWidget {
 
   final Widget child;
 
-  /// 桌面双栏布局的最低内容宽度，与桌面端最小窗口尺寸一致。
-  static const double minWidth = 1024;
+  /// 桌面双栏布局的最低内容宽度，与 [ResponsiveBreakpoints.workbenchRail]
+  /// 同源，也是桌面端最小窗口尺寸。
+  static const double minWidth = ResponsiveBreakpoints.workbenchRail;
 
   @override
   Widget build(BuildContext context) {

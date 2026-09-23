@@ -24,6 +24,7 @@ import 'package:omninest/features/tasks/domain/task_record.dart';
 part 'music_controller_platform_test_part.dart';
 part 'music_controller_first_frame_test_part.dart';
 part 'music_controller_queue_test_part.dart';
+part 'music_controller_queue_source_test_part.dart';
 
 MusicPagedResult<T> _paged<T>(List<T> items, int page, int size) {
   final from = (page * size).clamp(0, items.length);
@@ -834,6 +835,9 @@ class _FakeMusicApi implements MusicApi {
   int playlistTrackCount = 1;
   final Map<String, int> platformPlaylistTrackSizes = <String, int>{};
 
+  /// 最近一次平台列表请求是否要求跳过短期缓存。
+  final Map<String, bool> platformListRefreshFlags = <String, bool>{};
+
   _FakeMusicApi() {
     libraryTracks.addAll([track, secondTrack]);
   }
@@ -941,7 +945,9 @@ class _FakeMusicApi implements MusicApi {
     String platform, {
     int page = 0,
     int size = 100,
+    bool refresh = false,
   }) async {
+    platformListRefreshFlags['playlists'] = refresh;
     if (failingPlaylistPlatforms.contains(platform)) {
       throw StateError('$platform playlist failure');
     }
@@ -957,8 +963,10 @@ class _FakeMusicApi implements MusicApi {
     String playlistId, {
     int page = 0,
     int size = 200,
+    bool refresh = false,
   }) async {
     platformPlaylistTrackRequests.add('$platform:$playlistId');
+    platformListRefreshFlags['playlistTracks'] = refresh;
     platformPlaylistTrackSizes['$platform:$playlistId'] = size;
     await playlistTracksGate?.future;
     return _paged(_playlistTracks(platform), page, size);
@@ -981,7 +989,9 @@ class _FakeMusicApi implements MusicApi {
     String platform, {
     int page = 0,
     int size = 1000,
+    bool refresh = false,
   }) async {
+    platformListRefreshFlags['likedTracks'] = refresh;
     if (platform == 'netease') {
       return _paged(
         const <OnlineTrack>[

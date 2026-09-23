@@ -25,6 +25,28 @@ void main() {
       expect(scaler.scale(16), systemScaler.scale(16));
     });
 
+    group('maxScale 封顶', () {
+      test('系统无障碍与字体档位叠加不超过上限', () {
+        const scaler = ComposedScaler(TextScaler.linear(2.0), 1.3);
+        expect(scaler.scale(16), closeTo(16 * ComposedScaler.maxScale, 0.0001));
+        // ignore: deprecated_member_use
+        expect(scaler.textScaleFactor, ComposedScaler.maxScale);
+      });
+
+      test('未超上限时保持组合结果', () {
+        const scaler = ComposedScaler(TextScaler.linear(1.4), 1.0);
+        expect(scaler.scale(16), closeTo(16 * 1.4, 0.0001));
+      });
+
+      test('仅系统缩放口径同样封顶，自绘排版与渲染不会分叉', () {
+        const systemOnly = ComposedScaler(TextScaler.linear(2.0), 1.0);
+        expect(
+          systemOnly.scale(20),
+          closeTo(20 * ComposedScaler.maxScale, 0.0001),
+        );
+      });
+    });
+
     test('相等性按 systemScaler 与 appScale 判定', () {
       const scaler = ComposedScaler(systemScaler, 1.15);
       expect(scaler, const ComposedScaler(systemScaler, 1.15));

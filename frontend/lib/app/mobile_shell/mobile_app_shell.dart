@@ -399,30 +399,36 @@ class _TopBarSearchField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final muted = foreground.withValues(alpha: 0.62);
-    return Material(
-      key: const ValueKey('omninest.mobile.top-bar-search'),
-      color: foreground.withValues(alpha: 0.08),
-      borderRadius: BorderRadius.circular(19),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(19),
-        onTap: onTap,
+    // 顶栏行高 56，把命中盒抬到 48 不改变可见胶囊的 38 高度与位置。
+    return SizedBox(
+      height: MobileLayoutTokens.minimumTarget,
+      child: Center(
         child: SizedBox(
           height: 38,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
-            child: Row(
-              children: [
-                Icon(Icons.search_rounded, size: 19, color: muted),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    hint,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: muted, fontSize: 15),
-                  ),
+          child: Material(
+            key: const ValueKey('omninest.mobile.top-bar-search'),
+            color: foreground.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(19),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(19),
+              onTap: onTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    Icon(Icons.search_rounded, size: 19, color: muted),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        hint,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: muted, fontSize: 15),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),

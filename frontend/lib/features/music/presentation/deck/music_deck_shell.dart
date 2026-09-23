@@ -477,7 +477,7 @@ class _MusicDeckShellState extends ConsumerState<MusicDeckShell> {
       case OnlineMusicDeckCollection(:final playlist):
         await ref
             .read(musicPlatformLibraryProvider.notifier)
-            .loadPlaylistTracks(playlist);
+            .loadPlaylistTracks(playlist, forceRefresh: true);
       case DailyRecommendationMusicDeckCollection():
         break;
       case AlbumMusicDeckCollection(:final album):

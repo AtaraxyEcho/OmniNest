@@ -37,6 +37,8 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
     final l10n = AppLocalizations.of(context);
     final colors = context.globalColors;
     return AlertDialog(
+      // 横屏手机与最大字号档位下表单高度会超出对话框默认高度。
+      scrollable: true,
       backgroundColor: colors.surfaceContainerHigh,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       title: Row(

@@ -125,13 +125,12 @@ class ChapterPanelState extends State<ChapterPanel>
                     ),
                   ),
                   const Spacer(),
-                  GestureDetector(
-                    onTap: widget.onDismiss,
-                    child: Icon(
-                      Icons.close_rounded,
-                      size: 20,
-                      color: widget.settings.onSurfaceVariantColor,
-                    ),
+                  IconButton(
+                    onPressed: widget.onDismiss,
+                    tooltip: AppLocalizations.of(context).readerClose,
+                    iconSize: 20,
+                    color: widget.settings.onSurfaceVariantColor,
+                    icon: const Icon(Icons.close_rounded),
                   ),
                 ],
               ),

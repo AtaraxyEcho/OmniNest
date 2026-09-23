@@ -330,7 +330,7 @@ class _MusicQueueRow extends StatelessWidget {
           dimension: 42,
           child: MusicDeckArtwork(
             title: item.track.title,
-            imageUrl: item.track.coverUrl,
+            imageUrl: item.track.listCoverUrl,
             borderRadius: 6,
           ),
         ),

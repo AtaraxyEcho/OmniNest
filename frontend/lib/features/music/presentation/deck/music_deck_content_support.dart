@@ -371,7 +371,7 @@ List<MusicDeckCoverItem> _albumCoverItems(
         platform: source,
         title: first.albumTitle,
         artistName: first.artistName,
-        coverUrl: first.coverUrl,
+        coverUrl: first.listCoverUrl,
         tracks: List<OnlineTrack>.unmodifiable(tracks),
       );
       items.add(
@@ -379,7 +379,7 @@ List<MusicDeckCoverItem> _albumCoverItems(
           id: '${source.apiValue}:album:${first.albumTitle}:${first.artistName}',
           title: first.albumTitle,
           subtitle: first.artistName,
-          imageUrl: first.coverUrl,
+          imageUrl: first.listCoverUrl,
           platform: source,
           onTap: () => onOpenCollection(selection),
         ),
@@ -425,7 +425,7 @@ List<MusicDeckCoverItem> _artistCoverItems(
     for (final entry in groups.entries) {
       final tracks = entry.value;
       final coverUrl = tracks
-          .map((track) => track.coverUrl)
+          .map((track) => track.listCoverUrl)
           .firstWhere((url) => url.isNotEmpty, orElse: () => '');
       final selection = OnlineArtistMusicDeckCollection(
         platform: source,

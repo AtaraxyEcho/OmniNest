@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_theme.dart';
+import 'package:omninest/app/theme/app_typography.dart';
 
 /// Music 沉浸播放器使用的视觉配色。
 class MusicImmersivePalette {
@@ -93,7 +94,11 @@ class MusicVisualScopeBadge extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: TextStyle(color: palette.muted, fontSize: 10, height: 1.4),
+        style: TextStyle(
+          color: palette.muted,
+          fontSize: AppTypography.labelMicro,
+          height: 1.4,
+        ),
       ),
     );
   }

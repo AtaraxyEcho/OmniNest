@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_control_layout.dart';
@@ -111,40 +113,48 @@ class ReaderAdaptivePanelOverlay extends StatelessWidget {
             ? Duration.zero
             : const Duration(milliseconds: 210);
 
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: onClose,
-            child: ColoredBox(color: Colors.black.withValues(alpha: 0.34)),
-          ),
-        ),
-        if (layout.usesSidePanel)
-          Positioned(
-            top: 72,
-            right: 24,
-            bottom: 24,
-            width: layout.panelWidth,
-            child: _ReaderPanelEntrance(
-              horizontal: true,
-              duration: duration,
-              child: panel,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 键盘弹出后 Scaffold body 变矮；面板高度按实际可用高收敛，并保留
+        // 一条遮罩带供点外关闭，否则标题与关闭钮会被 Stack 裁到可视区外。
+        final availableHeight = math.max(0.0, constraints.maxHeight - 24);
+        final panelHeight = math.min(layout.panelMaxHeight, availableHeight);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onClose,
+                child: ColoredBox(color: Colors.black.withValues(alpha: 0.34)),
+              ),
             ),
-          )
-        else
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: layout.panelMaxHeight,
-            child: _ReaderPanelEntrance(
-              horizontal: false,
-              duration: duration,
-              child: panel,
-            ),
-          ),
-      ],
+            if (layout.usesSidePanel)
+              Positioned(
+                top: 72,
+                right: 24,
+                bottom: 24,
+                width: layout.panelWidth,
+                child: _ReaderPanelEntrance(
+                  horizontal: true,
+                  duration: duration,
+                  child: panel,
+                ),
+              )
+            else
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height: panelHeight,
+                child: _ReaderPanelEntrance(
+                  horizontal: false,
+                  duration: duration,
+                  child: panel,
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

@@ -97,7 +97,7 @@ class MusicPlatformServiceTest {
         when(neteaseProvider.isLoggedIn(OWNER_ID)).thenReturn(true);
         when(neteaseProvider.playlists(OWNER_ID)).thenReturn(List.of(playlist));
 
-        PageResponse<OnlinePlaylistDto> page = service.playlists(OWNER_ID, "netease", 0, 100);
+        PageResponse<OnlinePlaylistDto> page = service.playlists(OWNER_ID, "netease", 0, 100, false);
 
         assertThat(page.items()).containsExactly(playlist);
         assertThat(page.totalElements()).isEqualTo(1);
@@ -125,12 +125,33 @@ class MusicPlatformServiceTest {
                 "netease",
                 "playlist-1",
                 0,
-                1000
+                1000,
+                false
         );
 
         assertThat(page.items()).extracting(OnlineTrackDto::songId)
                 .containsExactly("first", "second");
         assertThat(page.totalElements()).isEqualTo(2);
+    }
+
+    @Test
+    void forcedRefreshReFetchesTheAccountList() {
+        InMemoryLibraryCache cache = new InMemoryLibraryCache();
+        MusicPlatformService cachedService = new MusicPlatformService(
+                List.of(neteaseProvider),
+                configService,
+                cache
+        );
+        when(neteaseProvider.isLoggedIn(OWNER_ID)).thenReturn(true);
+        when(neteaseProvider.playlists(OWNER_ID)).thenReturn(List.of());
+
+        cachedService.playlists(OWNER_ID, "netease", 0, 100, false);
+        cachedService.playlists(OWNER_ID, "netease", 0, 100, false);
+        verify(neteaseProvider).playlists(OWNER_ID);
+
+        // 用户显式刷新必须真的回源，否则短 TTL 会让刷新按钮看起来没反应。
+        cachedService.playlists(OWNER_ID, "netease", 0, 100, true);
+        verify(neteaseProvider, Mockito.times(2)).playlists(OWNER_ID);
     }
 
     @Test
@@ -148,9 +169,9 @@ class MusicPlatformServiceTest {
                 onlineTrack("liked-3")
         ));
 
-        PageResponse<OnlineTrackDto> first = cachedService.likedTracks(OWNER_ID, "netease", 0, 2);
-        PageResponse<OnlineTrackDto> second = cachedService.likedTracks(OWNER_ID, "netease", 1, 2);
-        PageResponse<OnlineTrackDto> beyond = cachedService.likedTracks(OWNER_ID, "netease", 2, 2);
+        PageResponse<OnlineTrackDto> first = cachedService.likedTracks(OWNER_ID, "netease", 0, 2, false);
+        PageResponse<OnlineTrackDto> second = cachedService.likedTracks(OWNER_ID, "netease", 1, 2, false);
+        PageResponse<OnlineTrackDto> beyond = cachedService.likedTracks(OWNER_ID, "netease", 2, 2, false);
 
         assertThat(first.items()).extracting(OnlineTrackDto::songId).containsExactly("liked-1", "liked-2");
         assertThat(first.totalElements()).isEqualTo(3);
@@ -200,9 +221,9 @@ class MusicPlatformServiceTest {
         when(neteaseProvider.isLoggedIn(OWNER_ID)).thenReturn(true);
         when(neteaseProvider.playlists(OWNER_ID)).thenReturn(List.of(playlist));
 
-        assertThat(cachedService.playlists(OWNER_ID, "netease", 0, 100).items())
+        assertThat(cachedService.playlists(OWNER_ID, "netease", 0, 100, false).items())
                 .containsExactly(playlist);
-        assertThat(cachedService.playlists(OWNER_ID, "netease", 0, 100).items())
+        assertThat(cachedService.playlists(OWNER_ID, "netease", 0, 100, false).items())
                 .containsExactly(playlist);
 
         // 命中缓存不再打第三方接口，键按用户与平台归属。
@@ -213,7 +234,7 @@ class MusicPlatformServiceTest {
 
         MusicPlatformLibraryCache.evict(cache, OWNER_ID, MusicPlatform.NETEASE);
 
-        assertThat(cachedService.playlists(OWNER_ID, "netease", 0, 100).items())
+        assertThat(cachedService.playlists(OWNER_ID, "netease", 0, 100, false).items())
                 .containsExactly(playlist);
         verify(neteaseProvider, Mockito.times(2)).playlists(OWNER_ID);
         assertThat(cache.loadedKeys()).hasSize(2);
@@ -231,9 +252,9 @@ class MusicPlatformServiceTest {
         when(neteaseProvider.playlistTracks(ArgumentMatchers.eq(OWNER_ID), ArgumentMatchers.anyString()))
                 .thenReturn(List.of());
 
-        cachedService.playlistTracks(OWNER_ID, "netease", "playlist-1", 0, 50);
-        cachedService.playlistTracks(OWNER_ID, "netease", "playlist-1", 0, 50);
-        cachedService.playlistTracks(OWNER_ID, "netease", "playlist-2", 0, 50);
+        cachedService.playlistTracks(OWNER_ID, "netease", "playlist-1", 0, 50, false);
+        cachedService.playlistTracks(OWNER_ID, "netease", "playlist-1", 0, 50, false);
+        cachedService.playlistTracks(OWNER_ID, "netease", "playlist-2", 0, 50, false);
 
         assertThat(cache.loadedKeys()).containsExactly(
                 "omninest:music:playlist-tracks:" + OWNER_ID + ":netease:playlist-1",

@@ -5,13 +5,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:omninest/features/music/application/music_immersive_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_fullscreen_control.dart';
+import 'package:omninest/features/tasks/task_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
@@ -22,7 +22,6 @@ import 'package:omninest/features/admin/application/admin_console_access_provide
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/music/music_portal.dart';
-import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/music_shell_ui.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/portal/application/portal_dashboard_providers.dart';
@@ -439,6 +438,7 @@ class _PortalDesktopVisualHostState
           ),
           const SizedBox(width: 10),
           FontScaleControl(size: 20, color: palette.text),
+          TaskActivityButton(size: 20, color: palette.text),
           NotificationIcon(size: 20, color: palette.text),
           const SizedBox(width: 8),
           const UserAvatarMenu(),

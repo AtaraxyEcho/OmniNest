@@ -65,6 +65,9 @@ abstract final class AppTypography {
   /// 副标题 / 描述。
   static const double bodySmall = 12;
 
+  /// 沉浸舞台徽标等最小档辅助文字。
+  static const double labelMicro = 10;
+
   /// eyebrow / 时间戳等辅助文字。
   static const double labelSmall = 11;
 

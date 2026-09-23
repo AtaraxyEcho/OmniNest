@@ -18,7 +18,9 @@ import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
+import 'package:omninest/core/widgets/app_form_factor.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/widgets/hosted_touch_canvas.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/workbench_navigation_bar.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
@@ -353,11 +355,11 @@ class _FileManagerShell extends ConsumerWidget {
     final hosted = MobileShellScope.isHosted(context);
     return LayoutBuilder(
       builder: (context, constraints) {
-        // 宽屏门限与桌面最小窗口(1024)对齐：避免 1024-1099 落入
-        // 非托管窄窗路径（与移动壳层并行的第二套实现）。
-        // 托管态（手机/平板）与 Photos/Music/Reader 同规则一律走触屏
-        // 布局，桌面侧栏路径仅非托管窗口使用。
-        final isWide = !hosted && constraints.maxWidth >= 1024;
+        // 桌面侧栏路径仅非托管窗口使用；托管态（手机/平板）一律走触屏布局。
+        // 阈值与 DesktopFormMinWidth 同源于 ResponsiveBreakpoints.workbenchRail。
+        final isWide =
+            omniCanvasFormOf(context, constraints) ==
+            OmniCanvasForm.desktopRail;
         final currentDest = _destinationForSection(state.section);
         final selectedIndex =
             currentDest != null
@@ -382,8 +384,9 @@ class _FileManagerShell extends ConsumerWidget {
                   ),
                   // 托管态触屏内容按壳层 chrome 同宽封顶居中：平板宽度下
                   // 卡片行/列表行不被整屏拉伸，与底栏 tab 组同语言。
-                  child: _HostedTouchCanvas(
+                  child: HostedTouchCanvas(
                     hosted: hosted,
+                    maxContentWidth: MobileLayoutTokens.chromeMaxWidth,
                     child: Column(
                       children: [
                         if (hosted && !isWide && !mobileHomeOpen) ...[
@@ -744,31 +747,6 @@ class _FileHostedSearchBarState extends ConsumerState<_FileHostedSearchBar> {
             icon: const Icon(Icons.close_rounded),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// 托管态触屏内容画布：平板宽度下按壳层 chrome 同宽（720）封顶居中，
-/// 手机宽度无感直通；非托管窗口保持原有铺满行为。
-class _HostedTouchCanvas extends StatelessWidget {
-  const _HostedTouchCanvas({required this.hosted, required this.child});
-
-  final bool hosted;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    if (!hosted) {
-      return child;
-    }
-    return Align(
-      alignment: Alignment.topCenter,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(
-          maxWidth: MobileLayoutTokens.chromeMaxWidth,
-        ),
-        child: child,
       ),
     );
   }

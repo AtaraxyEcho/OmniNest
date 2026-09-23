@@ -61,6 +61,25 @@ void main() {
     );
   });
 
+  testWidgets('弹层内循环按钮的命中区不低于 48', (tester) async {
+    await tester.pumpWidget(host());
+    await tester.pump();
+
+    await tester.tap(find.byType(UserAvatarMenu));
+    await tester.pumpAndSettle();
+
+    final chipInkWell = find.ancestor(
+      of: find.byIcon(Icons.dark_mode_outlined),
+      matching: find.byType(InkWell),
+    );
+    expect(chipInkWell, findsOneWidget);
+    expect(
+      tester.getRect(chipInkWell).height,
+      greaterThanOrEqualTo(48),
+      reason: '可见描边保持 24，命中区按壳层标准抬到 48',
+    );
+  });
+
   testWidgets('头像菜单语言行内按钮切换全局语言且不关闭面板', (tester) async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       localeDeviceLanguageKey: 'zh',

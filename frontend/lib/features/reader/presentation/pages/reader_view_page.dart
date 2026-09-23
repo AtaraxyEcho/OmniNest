@@ -1066,6 +1066,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     final chromeLayout = ReaderChromeLayout.resolve(
       immersiveMode: _settings.immersiveMode,
       isPageMode: _isPageMode,
+      // 本页 body 未套 SafeArea（全屏排版），正文自行兜底刘海与手势条。
+      safePadding: MediaQuery.viewPaddingOf(context),
     );
 
     return Stack(

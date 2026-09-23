@@ -2,6 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/music/data/music_local_preference_store.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 
+/// 歌词形态偏好未就绪或读取失败时的设备级默认值。
+const bool kMusicLyricScrollModeDefault =
+    MusicLocalPreferenceStore.defaultLyricScrollMode;
+
 final musicLocalPreferenceStoreProvider = Provider<MusicLocalPreferenceStore>(
   (ref) => const MusicLocalPreferenceStore(),
 );

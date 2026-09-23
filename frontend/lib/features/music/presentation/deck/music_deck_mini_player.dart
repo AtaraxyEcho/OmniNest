@@ -149,7 +149,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                 dimension: 52,
                 child: MusicDeckArtwork(
                   title: track?.title ?? '',
-                  imageUrl: track?.coverUrl,
+                  imageUrl: track?.listCoverUrl,
                   borderRadius: 5,
                 ),
               ),
@@ -392,7 +392,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                       dimension: 46,
                       child: MusicDeckArtwork(
                         title: track?.title ?? '',
-                        imageUrl: track?.coverUrl,
+                        imageUrl: track?.listCoverUrl,
                         borderRadius: 5,
                       ),
                     ),

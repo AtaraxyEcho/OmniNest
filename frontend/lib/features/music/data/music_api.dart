@@ -506,10 +506,11 @@ class MusicApi {
     String platform, {
     int page = 0,
     int size = 100,
+    bool refresh = false,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/platforms/$platform/playlists',
-      queryParameters: <String, dynamic>{'page': page, 'size': size},
+      queryParameters: _listQuery(page, size, refresh),
     );
     return _parsePage(response.data, OnlinePlaylist.fromJson, '平台歌单列表格式不正确');
   }
@@ -520,10 +521,11 @@ class MusicApi {
     String playlistId, {
     int page = 0,
     int size = 200,
+    bool refresh = false,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/platforms/$platform/playlists/$playlistId/tracks',
-      queryParameters: <String, dynamic>{'page': page, 'size': size},
+      queryParameters: _listQuery(page, size, refresh),
     );
     return _parsePage(response.data, OnlineTrack.fromJson, '平台歌单曲目格式不正确');
   }
@@ -533,12 +535,22 @@ class MusicApi {
     String platform, {
     int page = 0,
     int size = 1000,
+    bool refresh = false,
   }) async {
     final response = await apiClient.dio.get<Map<String, dynamic>>(
       '/music/platforms/$platform/liked-tracks',
-      queryParameters: <String, dynamic>{'page': page, 'size': size},
+      queryParameters: _listQuery(page, size, refresh),
     );
     return _parsePage(response.data, OnlineTrack.fromJson, '平台喜欢歌曲格式不正确');
+  }
+
+  /// 平台列表查询参数；refresh 只在用户显式刷新时下发，让后端跳过短期缓存回源。
+  Map<String, dynamic> _listQuery(int page, int size, bool refresh) {
+    return <String, dynamic>{
+      'page': page,
+      'size': size,
+      if (refresh) 'refresh': true,
+    };
   }
 
   /// 获取外部平台每日推荐歌曲。

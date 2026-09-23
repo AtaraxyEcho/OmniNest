@@ -14,7 +14,6 @@ const _allowedViolations = <String>{
   'CROSS_FEATURE_INTERNAL lib/features/portal/presentation/widgets/portal_mobile_shell.dart -> package:omninest/features/reader/presentation/widgets/reader_cover_image.dart',
   // Portal 阅读进度卡与 hosted 内容复用阅读模块认证封面组件。
   'CROSS_FEATURE_INTERNAL lib/features/portal/presentation/widgets/reading_progress_widget.dart -> package:omninest/features/reader/presentation/widgets/reader_cover_image.dart',
-  'OVERSIZED_SOURCE lib/features/music/presentation/deck/music_deck_content.dart lines=1337',
   'OVERSIZED_SOURCE lib/features/reader/presentation/pages/reader_item_detail_page.dart lines=1216',
   'OVERSIZED_SOURCE lib/features/reader/presentation/pages/reader_view_page.dart lines=1286',
   'OVERSIZED_SOURCE lib/features/video/application/movie_controller.dart lines=1274',

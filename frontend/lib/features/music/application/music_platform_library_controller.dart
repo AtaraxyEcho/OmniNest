@@ -122,7 +122,7 @@ class MusicPlatformLibraryController
   /// 刷新期间保留上一次成功数据，避免 UI 回落空状态闪烁。
   Future<void> refresh() async {
     final previous = state.asData?.value;
-    final next = await AsyncValue.guard(_load);
+    final next = await AsyncValue.guard(() => _load(forceRefresh: true));
     if (next.hasError && previous != null) {
       state = AsyncData(previous);
       return;
@@ -132,14 +132,18 @@ class MusicPlatformLibraryController
 
   /// 严格刷新实时事件涉及的平台账号曲库。
   Future<void> refreshForRealtime() async {
-    final refreshed = await _load();
+    final refreshed = await _load(forceRefresh: true);
     state = AsyncData(refreshed);
   }
 
   /// 按需加载一个在线歌单的曲目。
   ///
   /// 预热只落首页，因此命中预热分页时仍要按整页补齐，避免详情与播放队列被首页截断。
-  Future<List<OnlineTrack>> loadPlaylistTracks(OnlinePlaylist playlist) async {
+  /// [forceRefresh] 用于用户点开歌单：跳过该歌单的后端短期缓存，拿到改动后的曲目。
+  Future<List<OnlineTrack>> loadPlaylistTracks(
+    OnlinePlaylist playlist, {
+    bool forceRefresh = false,
+  }) async {
     if (!ref.mounted) {
       return const <OnlineTrack>[];
     }
@@ -149,7 +153,7 @@ class MusicPlatformLibraryController
     }
     final key = _playlistKey(playlist.platform, playlist.playlistId);
     final cached = current.playlistTracks[key];
-    if (cached != null && !cached.hasMore) {
+    if (cached != null && !cached.hasMore && !forceRefresh) {
       return cached.items;
     }
     state = AsyncData(
@@ -164,6 +168,7 @@ class MusicPlatformLibraryController
             playlist.platform,
             playlist.playlistId,
             size: _playlistTrackPageSize,
+            refresh: forceRefresh,
           );
       if (!ref.mounted) {
         return const <OnlineTrack>[];
@@ -199,7 +204,11 @@ class MusicPlatformLibraryController
     }
   }
 
-  Future<MusicPlatformLibraryState> _load() async {
+  /// 加载平台账号内容。
+  ///
+  /// [forceRefresh] 用于用户显式刷新与平台变更事件：只让歌单与喜欢列表跳过后端短期缓存
+  /// 回源；歌单曲目页保持复用，需要新页由打开该歌单时单独强制回源。
+  Future<MusicPlatformLibraryState> _load({bool forceRefresh = false}) async {
     final preloadGeneration = ++_preloadGeneration;
     final api = ref.read(musicApiProvider);
     final failures = <String, String>{};
@@ -225,7 +234,10 @@ class MusicPlatformLibraryController
         if (status.capabilities.playlists) {
           futures.add(() async {
             try {
-              final page = await api.platformPlaylists(status.platform);
+              final page = await api.platformPlaylists(
+                status.platform,
+                refresh: forceRefresh,
+              );
               playlistsByPlatform[status
                   .platform] = List<OnlinePlaylist>.unmodifiable(page.items);
             } on Object catch (error) {
@@ -237,7 +249,10 @@ class MusicPlatformLibraryController
         if (status.capabilities.likedTracks) {
           futures.add(() async {
             try {
-              final page = await api.platformLikedTracks(status.platform);
+              final page = await api.platformLikedTracks(
+                status.platform,
+                refresh: forceRefresh,
+              );
               likedTracksByPlatform[status
                   .platform] = List<OnlineTrack>.unmodifiable(page.items);
             } on Object catch (error) {
@@ -259,7 +274,7 @@ class MusicPlatformLibraryController
         likedTracksByPlatform,
       ),
       // 刷新保留上一轮已加载的歌单曲目：丢掉它们会让封面回退一帧，并让预热
-      // 把全部歌单重新回源一遍第三方接口。
+      // 把全部歌单重新回源一遍第三方接口。需要新页由打开歌单时显式强制回源。
       playlistTracks: Map<String, MusicPagedResult<OnlineTrack>>.unmodifiable(
         <String, MusicPagedResult<OnlineTrack>>{...?previous?.playlistTracks},
       ),

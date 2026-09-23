@@ -156,19 +156,22 @@ public class MusicPlatformService {
      * @param platformValue 平台 API 标识
      * @param page 页码，从 0 开始
      * @param size 每页数量
+     * @param forceRefresh 是否跳过缓存强制回源
      * @return 平台歌单分页，总数为该账号全部歌单
      */
     public PageResponse<OnlinePlaylistDto> playlists(
             UUID ownerUserId,
             String platformValue,
             int page,
-            int size
+            int size,
+            boolean forceRefresh
     ) {
         MusicPlatformProvider provider = requireConnectedProvider(ownerUserId, platformValue);
         if (!provider.capabilities().playlists()) {
             return PageResponse.of(List.of(), page, size, 0);
         }
         String cacheKey = MusicPlatformLibraryCache.playlists(ownerUserId, provider.platform());
+        invalidateIfForced(forceRefresh, cacheKey);
         OnlinePlaylistList cached = readThroughCache.getOrLoad(
                 cacheKey,
                 ACCOUNT_LIST_CACHE_TTL,
@@ -186,6 +189,7 @@ public class MusicPlatformService {
      * @param playlistId 平台歌单 ID
      * @param page 页码，从 0 开始
      * @param size 每页数量
+     * @param forceRefresh 是否跳过缓存强制回源
      * @return 在线曲目分页，总数为该歌单全部曲目
      */
     public PageResponse<OnlineTrackDto> playlistTracks(
@@ -193,7 +197,8 @@ public class MusicPlatformService {
             String platformValue,
             String playlistId,
             int page,
-            int size
+            int size,
+            boolean forceRefresh
     ) {
         MusicPlatformProvider provider = requireConnectedProvider(ownerUserId, platformValue);
         if (!provider.capabilities().playlists()) {
@@ -204,6 +209,7 @@ public class MusicPlatformService {
                 provider.platform(),
                 playlistId
         );
+        invalidateIfForced(forceRefresh, cacheKey);
         return slice(cachedTracks(cacheKey, PLAYLIST_TRACKS_CACHE_TTL,
                 () -> provider.playlistTracks(ownerUserId, playlistId)), page, size);
     }
@@ -215,19 +221,22 @@ public class MusicPlatformService {
      * @param platformValue 平台 API 标识
      * @param page 页码，从 0 开始
      * @param size 每页数量
+     * @param forceRefresh 是否跳过缓存强制回源
      * @return 喜欢曲目分页，总数为该账号全部喜欢曲目
      */
     public PageResponse<OnlineTrackDto> likedTracks(
             UUID ownerUserId,
             String platformValue,
             int page,
-            int size
+            int size,
+            boolean forceRefresh
     ) {
         MusicPlatformProvider provider = requireConnectedProvider(ownerUserId, platformValue);
         if (!provider.capabilities().likedTracks()) {
             return PageResponse.of(List.of(), page, size, 0);
         }
         String cacheKey = MusicPlatformLibraryCache.likedTracks(ownerUserId, provider.platform());
+        invalidateIfForced(forceRefresh, cacheKey);
         return slice(cachedTracks(cacheKey, ACCOUNT_LIST_CACHE_TTL,
                 () -> provider.likedTracks(ownerUserId)), page, size);
     }
@@ -366,6 +375,23 @@ public class MusicPlatformService {
                 size,
                 total
         );
+    }
+
+    /**
+     * 用户显式刷新或收到平台变更事件时先失效缓存键，让本次请求真正回源。
+     *
+     * @param forceRefresh 是否强制回源
+     * @param cacheKey 待失效的缓存键
+     */
+    private void invalidateIfForced(boolean forceRefresh, String cacheKey) {
+        if (!forceRefresh) {
+            return;
+        }
+        try {
+            readThroughCache.invalidate(cacheKey);
+        } catch (RuntimeException exception) {
+            log.warn("清理音乐平台账号内容缓存失败: key={}", exception.getMessage());
+        }
     }
 
     private List<OnlineTrackDto> cachedTracks(

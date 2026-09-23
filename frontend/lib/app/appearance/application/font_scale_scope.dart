@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-/// 向子树暴露进入根部覆盖前的原始系统 TextScaler。
+/// 向子树暴露剔除应用字体档位后的系统 TextScaler（已按
+/// ComposedScaler.maxScale 封顶）。
 ///
-/// 根部注入 ComposedScaler 后环境缩放为"系统 × 应用档位"，Reader 正文等
-/// 自绘排版区域需要剔除应用档位、仅保留系统无障碍缩放，由此取值。
+/// 根部注入组合缩放后环境值为"系统 × 应用档位"，Reader 正文等自绘排版
+/// 区域需要剔除应用档位、仅保留系统无障碍缩放，由此取值。
 class FontScaleScope extends InheritedWidget {
   const FontScaleScope({
     required this.systemScaler,

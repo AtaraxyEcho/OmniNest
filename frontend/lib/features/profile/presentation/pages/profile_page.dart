@@ -11,6 +11,7 @@ import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/core/window/desktop_close_action.dart';
 import 'package:omninest/core/window/desktop_close_behavior_controller.dart';
@@ -189,7 +190,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ? ref.watch(desktopCloseBehaviorProvider).asData?.value
             : null;
 
-    if (MediaQuery.sizeOf(context).width < 860) {
+    // 个人中心为根 Navigator 承载的顶层路由，屏幕宽即可用画布宽。
+    if (MediaQuery.sizeOf(context).width <
+        ResponsiveBreakpoints.workbenchRail) {
       return Scaffold(
         backgroundColor: context.mobileColors.pageMask,
         appBar: AppBar(

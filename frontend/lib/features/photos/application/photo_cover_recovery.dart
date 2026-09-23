@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 
 /// 封面加载失败自愈控制器。
@@ -48,9 +48,7 @@ class PhotoCoverRecoveryController extends Notifier<int> {
           .refreshForRealtime();
     } on Exception catch (error) {
       // 恢复刷新失败不重试：到达次数上限前下一次失败上报会再触发。
-      if (kDebugMode) {
-        debugPrint('PhotoCoverRecovery: refresh failed: $error');
-      }
+      devLog('相册封面自愈刷新失败: $error');
     }
   }
 }

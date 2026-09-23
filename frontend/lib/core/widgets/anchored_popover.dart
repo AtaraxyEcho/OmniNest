@@ -56,7 +56,21 @@ class AnchoredPopover {
                   child: const SizedBox.expand(),
                 ),
               ),
-              Positioned(top: top, right: right, child: panelBuilder(context)),
+              Positioned(
+                top: top,
+                right: right,
+                // 锚点下方剩余高度不足（横屏小窗）时按剩余空间封顶并允许
+                // 滚动，否则固定高的面板会越出屏幕且无法触达底部项。
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: (overlayBox.size.height - top - 8).clamp(
+                      0.0,
+                      double.infinity,
+                    ),
+                  ),
+                  child: SingleChildScrollView(child: panelBuilder(context)),
+                ),
+              ),
             ],
           ),
     );

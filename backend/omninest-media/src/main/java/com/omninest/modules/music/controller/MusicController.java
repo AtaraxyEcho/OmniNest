@@ -586,14 +586,16 @@ public class MusicController {
     CompletableFuture<ApiResponse<PageResponse<OnlinePlaylistDto>>> platformPlaylists(
             @PathVariable @Size(max = 32) String platform,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "100") @Min(1) @Max(200) int size
+            @RequestParam(defaultValue = "100") @Min(1) @Max(200) int size,
+            @RequestParam(defaultValue = "false") boolean refresh
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return onlineDispatcher.online(() -> musicPlatformService.playlists(
                 ownerUserId,
                 platform,
                 page,
-                size
+                size,
+                refresh
         ));
     }
 
@@ -604,7 +606,8 @@ public class MusicController {
             @PathVariable @Size(max = 32) String platform,
             @PathVariable @Size(max = 255) String playlistId,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "1000") @Min(1) @Max(1000) int size
+            @RequestParam(defaultValue = "1000") @Min(1) @Max(1000) int size,
+            @RequestParam(defaultValue = "false") boolean refresh
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return onlineDispatcher.online(() -> musicPlatformService.playlistTracks(
@@ -612,7 +615,8 @@ public class MusicController {
                 platform,
                 playlistId,
                 page,
-                size
+                size,
+                refresh
         ));
     }
 
@@ -622,14 +626,16 @@ public class MusicController {
     CompletableFuture<ApiResponse<PageResponse<OnlineTrackDto>>> platformLikedTracks(
             @PathVariable @Size(max = 32) String platform,
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "1000") @Min(1) @Max(1000) int size
+            @RequestParam(defaultValue = "1000") @Min(1) @Max(1000) int size,
+            @RequestParam(defaultValue = "false") boolean refresh
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return onlineDispatcher.online(() -> musicPlatformService.likedTracks(
                 ownerUserId,
                 platform,
                 page,
-                size
+                size,
+                refresh
         ));
     }
 

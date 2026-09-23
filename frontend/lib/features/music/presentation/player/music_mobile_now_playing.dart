@@ -11,7 +11,6 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_visualizer_preset_controller.dart';
-import 'package:omninest/features/music/data/music_local_preference_store.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
@@ -66,7 +65,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
     // 歌词形态是设备级偏好：移动端同样可切换（两种形态都文本居中）。
     final lyricScrollMode =
         ref.watch(musicLyricScrollModeProvider).asData?.value ??
-        MusicLocalPreferenceStore.defaultLyricScrollMode;
+        kMusicLyricScrollModeDefault;
     final item = center?.currentItem;
     final track = item?.track ?? center?.activeTrack;
     // 曲目级歌词延迟覆盖（设备本地）：仅在解析完成后生效，未设置时退回全局校准。

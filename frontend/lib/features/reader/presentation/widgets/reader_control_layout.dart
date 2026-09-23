@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:omninest/app/appearance/application/composed_scaler.dart';
 
 /// 阅读器控制层的响应式密度。
 enum ReaderControlDensity { compact, medium, expanded }
@@ -88,7 +89,7 @@ class ReaderControlLayout {
       ReaderControlDensity.medium => 32.0,
       ReaderControlDensity.expanded => 44.0,
     };
-    final scaledFont = fontSize * textScale.clamp(1.0, 1.6);
+    final scaledFont = fontSize * textScale.clamp(1.0, ComposedScaler.maxScale);
     final preferredTextWidth = (scaledFont * 40).clamp(560.0, 820.0);
     final availableTextWidth = math.max(
       80.0,

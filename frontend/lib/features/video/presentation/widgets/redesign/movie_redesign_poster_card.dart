@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/appearance/application/composed_scaler.dart';
+import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_progress_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_status.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 海报卡片视图模型：统一电影条目与系列两类数据源。
 @immutable
@@ -149,6 +152,7 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
     final palette = context.movieRedesign;
     final text = context.movieRedesignText;
     final onPlay = data.onPlay;
+    final hoverCapable = PlatformCapabilities.current().supportsHoverPointer;
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hovered = true),
@@ -179,21 +183,35 @@ class _MovieRedesignPosterCardState extends State<MovieRedesignPosterCard> {
                       ),
                     ),
                     if (onPlay != null)
-                      AnimatedOpacity(
-                        duration: const Duration(milliseconds: 300),
-                        opacity: _hovered ? 1 : 0,
-                        child: Container(
-                          color: Colors.black.withValues(alpha: 0.55),
-                          child: Center(
-                            child: AnimatedScale(
-                              duration: const Duration(milliseconds: 200),
-                              curve: Curves.easeOut,
-                              scale: _hovered ? 1.0 : 0.75,
-                              child: _PlayButton(onPlay: onPlay),
+                      if (hoverCapable)
+                        AnimatedOpacity(
+                          duration: const Duration(milliseconds: 300),
+                          opacity: _hovered ? 1 : 0,
+                          child: Container(
+                            color: Colors.black.withValues(alpha: 0.55),
+                            child: Center(
+                              child: AnimatedScale(
+                                duration: const Duration(milliseconds: 200),
+                                curve: Curves.easeOut,
+                                scale: _hovered ? 1.0 : 0.75,
+                                child: _PlayButton(onPlay: onPlay),
+                              ),
+                            ),
+                          ),
+                        )
+                      // 触屏无 hover：整卡压暗会常驻，只常显右上角播放钮，
+                      // 避开底部进度条；命中区按壳层标准取 48。
+                      else
+                        Align(
+                          alignment: Alignment.topRight,
+                          child: Padding(
+                            padding: const EdgeInsets.all(8),
+                            child: _PlayButton(
+                              onPlay: onPlay,
+                              size: MobileLayoutTokens.minimumTarget,
                             ),
                           ),
                         ),
-                      ),
                     if (data.progressPercent != null)
                       Align(
                         alignment: Alignment.bottomCenter,
@@ -316,9 +334,12 @@ class _MetaDot extends StatelessWidget {
 }
 
 class _PlayButton extends StatelessWidget {
-  const _PlayButton({required this.onPlay});
+  const _PlayButton({required this.onPlay, this.size = 40});
 
   final VoidCallback onPlay;
+
+  /// 可见圆钮直径；触屏形态取壳层命中标准 48。
+  final double size;
 
   @override
   Widget build(BuildContext context) {
@@ -329,10 +350,14 @@ class _PlayButton extends StatelessWidget {
       child: InkWell(
         onTap: onPlay,
         customBorder: const CircleBorder(),
-        child: const SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(Icons.play_arrow_rounded, size: 22, color: Colors.white),
+        child: SizedBox(
+          width: size,
+          height: size,
+          child: const Icon(
+            Icons.play_arrow_rounded,
+            size: 22,
+            color: Colors.white,
+          ),
         ),
       ),
     );
@@ -379,7 +404,7 @@ class MovieRedesignPosterGrid extends StatelessWidget {
           textScale:
               MediaQuery.textScalerOf(
                 context,
-              ).scale(1).clamp(1.0, 1.5).toDouble(),
+              ).scale(1).clamp(1.0, ComposedScaler.maxScale).toDouble(),
         );
         return GridView.builder(
           shrinkWrap: true,
@@ -416,7 +441,7 @@ class MovieRedesignPosterSliverGrid extends StatelessWidget {
           textScale:
               MediaQuery.textScalerOf(
                 context,
-              ).scale(1).clamp(1.0, 1.5).toDouble(),
+              ).scale(1).clamp(1.0, ComposedScaler.maxScale).toDouble(),
         );
         return SliverGrid(
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(

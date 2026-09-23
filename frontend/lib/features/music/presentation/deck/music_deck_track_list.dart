@@ -225,7 +225,7 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                       dimension: 40,
                       child: MusicDeckArtwork(
                         title: track.title,
-                        imageUrl: track.coverUrl,
+                        imageUrl: track.listCoverUrl,
                         borderRadius: 5,
                       ),
                     ),

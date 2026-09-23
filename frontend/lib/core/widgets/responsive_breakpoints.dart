@@ -16,6 +16,10 @@ class ResponsiveBreakpoints {
   /// 宽屏下限：1200px 以上使用宽屏优化。
   static const double wide = 1200;
 
+  /// 桌面侧栏画布下限：与桌面端最小窗口宽度一致，非托管内容窄于该值时
+  /// 落触屏布局。与 [desktop]（是否切换移动壳层）是两个不同用途的阈值。
+  static const double workbenchRail = 1024;
+
   /// 判断是否为手机宽度。
   static bool isMobile(double width) => width < mobile;
 

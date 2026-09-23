@@ -4,10 +4,11 @@ import 'dart:ui';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
-import 'package:omninest/features/music/data/music_cover_cache.dart';
+import 'package:omninest/features/music/application/music_cover_artwork.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 
 /// Music Deck 局部玻璃表面。
@@ -67,7 +68,7 @@ final Map<String, MemoryImage> _dataImageProviders = <String, MemoryImage>{};
 const int _dataImageProviderLimit = 64;
 
 /// 统一处理本地和在线音乐封面。
-class MusicDeckArtwork extends StatelessWidget {
+class MusicDeckArtwork extends ConsumerWidget {
   const MusicDeckArtwork({
     required this.title,
     this.imageUrl,
@@ -82,11 +83,11 @@ class MusicDeckArtwork extends StatelessWidget {
   final double borderRadius;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final colors = context.musicColors;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final image = _buildImage(context, constraints);
+        final image = _buildImage(context, constraints, ref);
         return ClipRRect(
           borderRadius: BorderRadius.circular(borderRadius),
           child: ColoredBox(
@@ -98,7 +99,11 @@ class MusicDeckArtwork extends StatelessWidget {
     );
   }
 
-  Widget? _buildImage(BuildContext context, BoxConstraints constraints) {
+  Widget? _buildImage(
+    BuildContext context,
+    BoxConstraints constraints,
+    WidgetRef ref,
+  ) {
     final source = imageUrl?.trim();
     if (source == null || source.isEmpty) {
       return null;
@@ -141,8 +146,7 @@ class MusicDeckArtwork extends StatelessWidget {
     // 并附带鉴权头）；CDN 地址与缓存未注入时保持默认路径。Web 端默认
     // HtmlImage 渲染会绕过 cacheManager 并把相对 URL 按页面 origin 解析，
     // 必须切到 HttpGet 走管理器下载，否则跨源部署下封面全部 404。
-    final manager =
-        isMusicCoverApiPath(source) ? MusicCoverCache.maybeInstance : null;
+    final manager = ref.watch(musicCoverCacheManagerProvider(source));
     return CachedNetworkImage(
       imageUrl: source,
       fit: BoxFit.cover,

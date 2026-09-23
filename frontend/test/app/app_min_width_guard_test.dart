@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/app_min_width_guard.dart';
+import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 
 /// 桌面形态最小内容宽护栏测试：
 /// 桌面形态低于 1024 固定宽度横向滚动并改写 MediaQuery 宽度；
@@ -64,5 +65,13 @@ void main() {
 
     expect(find.byType(SingleChildScrollView), findsNothing);
     expect(find.text('1280', findRichText: false), findsOneWidget);
+  });
+
+  test('护栏宽度与桌面侧栏画布阈值同源', () {
+    expect(
+      DesktopFormMinWidth.minWidth,
+      ResponsiveBreakpoints.workbenchRail,
+      reason: '两处各写一份 1024 会随时间漂移成两种判定',
+    );
   });
 }

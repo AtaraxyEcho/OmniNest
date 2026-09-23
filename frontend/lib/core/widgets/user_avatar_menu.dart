@@ -7,6 +7,7 @@ import 'package:omninest/app/appearance/application/appearance_controller.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
@@ -331,28 +332,33 @@ class _SmallOutlineButton extends StatelessWidget {
       fontFamily: mono ? AppTypography.monoFamily : null,
       fontFamilyFallback: mono ? AppTypography.monoFamilyFallback : null,
     );
+    // 描边与文字保持 24 高的可见胶囊，命中区按壳层标准抬到 48：
+    // Flutter 命中区等于自身布局盒，因此把描边从 Material 移到内层盒。
     return Material(
       color: Colors.transparent,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.zero,
-        side: BorderSide(color: colors.outlineVariant),
-      ),
       child: InkWell(
-        borderRadius: BorderRadius.zero,
         onTap: onTap,
-        child: Container(
-          height: 24,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          alignment: Alignment.center,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) ...[
-                Icon(icon, size: 12, color: colors.onSurfaceVariant),
-                const SizedBox(width: 4),
-              ],
-              Text(label, style: textStyle),
-            ],
+        child: SizedBox(
+          height: MobileLayoutTokens.minimumTarget,
+          child: Center(
+            child: Container(
+              height: 24,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                border: Border.all(color: colors.outlineVariant),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (icon != null) ...[
+                    Icon(icon, size: 12, color: colors.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                  ],
+                  Text(label, style: textStyle),
+                ],
+              ),
+            ),
           ),
         ),
       ),

@@ -4,7 +4,10 @@ import 'package:flutter/foundation.dart';
 ///
 /// 仅保留有真实业务消费方的能力位；其余能力按平台分支在业务层判断。
 class PlatformCapabilities {
-  const PlatformCapabilities({required this.supportsSystemTray});
+  const PlatformCapabilities({
+    required this.supportsSystemTray,
+    required this.supportsHoverPointer,
+  });
 
   /// 根据当前运行平台返回对应的能力集。
   factory PlatformCapabilities.current() {
@@ -25,18 +28,40 @@ class PlatformCapabilities {
 
   final bool supportsSystemTray;
 
-  factory PlatformCapabilities.web() =>
-      const PlatformCapabilities(supportsSystemTray: false);
+  /// 是否存在可产生 hover 事件的指针设备。
+  ///
+  /// 触屏浏览器与触屏应用不会触发 `MouseRegion.onEnter`，因此仅靠 hover
+  /// 显现的操作入口在该类设备上不可达；Web 端按宿主 OS 判定。
+  final bool supportsHoverPointer;
 
-  factory PlatformCapabilities.android() =>
-      const PlatformCapabilities(supportsSystemTray: false);
+  /// Web 端按宿主 OS 判定：手机浏览器同样是触屏，不会触发 hover。
+  factory PlatformCapabilities.web() {
+    final hostIsTouch =
+        defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.iOS;
+    return PlatformCapabilities(
+      supportsSystemTray: false,
+      supportsHoverPointer: !hostIsTouch,
+    );
+  }
 
-  factory PlatformCapabilities.ios() =>
-      const PlatformCapabilities(supportsSystemTray: false);
+  factory PlatformCapabilities.android() => const PlatformCapabilities(
+    supportsSystemTray: false,
+    supportsHoverPointer: false,
+  );
 
-  factory PlatformCapabilities.desktop() =>
-      const PlatformCapabilities(supportsSystemTray: true);
+  factory PlatformCapabilities.ios() => const PlatformCapabilities(
+    supportsSystemTray: false,
+    supportsHoverPointer: false,
+  );
 
-  factory PlatformCapabilities.fallback() =>
-      const PlatformCapabilities(supportsSystemTray: false);
+  factory PlatformCapabilities.desktop() => const PlatformCapabilities(
+    supportsSystemTray: true,
+    supportsHoverPointer: true,
+  );
+
+  factory PlatformCapabilities.fallback() => const PlatformCapabilities(
+    supportsSystemTray: false,
+    supportsHoverPointer: false,
+  );
 }
