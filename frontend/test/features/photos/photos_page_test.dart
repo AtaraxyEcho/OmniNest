@@ -12,6 +12,8 @@ import 'package:omninest/core/auth/auth_session_store_base.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/pages/photos_page.dart';
+import 'package:omninest/features/tasks/application/task_controller.dart';
+import 'package:omninest/features/tasks/domain/task_record.dart';
 
 /// 伪造的照片中心控制器，返回空状态以避免网络请求
 class _FakePhotoCenterController extends PhotoCenterController {
@@ -66,6 +68,11 @@ void main() {
             // 覆盖照片控制器以避免网络请求
             photoCenterControllerProvider.overrideWith(
               () => _FakePhotoCenterController(),
+            ),
+            // 顶栏任务入口读取任务摘要，覆盖以避免网络请求与挂起 Timer。
+            activeTaskSummaryProvider.overrideWith(
+              (ref) async =>
+                  const ActiveTaskSummary(activeCount: 0, failedCount: 0),
             ),
           ],
           child: MaterialApp.router(

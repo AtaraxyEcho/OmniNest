@@ -12,6 +12,7 @@ import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/widgets/anchored_popover.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/core/widgets/hover_scale.dart';
+import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 
 /// 右上角头像下拉菜单组件。
 ///
@@ -182,7 +183,11 @@ class _UserAvatarMenuState extends ConsumerState<UserAvatarMenu> {
                   label: l10n.coreStorage,
                   onTap: () => _closeAndRun(() => _go('/files')),
                 ),
-                if (role == 'SUPER_ADMIN' || role == 'ADMIN')
+                // 管理后台以表格为主、无窄屏降级，手机形态不暴露入口；
+                // 平板与桌面仍可达（见 docs/2026-09-23/002 决策 D2）。
+                if ((role == 'SUPER_ADMIN' || role == 'ADMIN') &&
+                    MediaQuery.sizeOf(context).width >=
+                        ResponsiveBreakpoints.mobile)
                   _MenuActionRow(
                     icon: Icons.admin_panel_settings_outlined,
                     label: l10n.coreAdmin,

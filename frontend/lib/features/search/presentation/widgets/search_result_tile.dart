@@ -57,6 +57,8 @@ class SearchResultTile extends StatelessWidget {
         context.go('/reader/items/${result.id}');
       case 'video':
         context.go('/video/${result.id}');
+      case 'photo':
+        context.go('/photos/${result.id}');
       case 'music':
         context.go('/music');
       default:
@@ -69,6 +71,7 @@ class SearchResultTile extends StatelessWidget {
       'file' => Icons.insert_drive_file_outlined,
       'book' => Icons.menu_book_outlined,
       'video' => Icons.movie_outlined,
+      'photo' => Icons.photo_outlined,
       'music' => Icons.music_note_outlined,
       _ => Icons.search_rounded,
     };

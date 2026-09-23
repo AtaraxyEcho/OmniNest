@@ -183,7 +183,7 @@ class AdminListSort {
 }
 
 /// 筛选栏：关键词 + 组合筛选控件 + 可选的展开/收起。
-class AdminFilterBar extends StatelessWidget {
+class AdminFilterBar extends StatefulWidget {
   const AdminFilterBar({
     required this.keyword,
     required this.onKeywordChanged,
@@ -206,6 +206,44 @@ class AdminFilterBar extends StatelessWidget {
   final VoidCallback? onToggleExpanded;
 
   @override
+  State<AdminFilterBar> createState() => _AdminFilterBarState();
+}
+
+class _AdminFilterBarState extends State<AdminFilterBar> {
+  /// 关键词控制器由本状态持有：每次 build 都新建 TextEditingController 会在
+  /// 输入触发的重建中重置选区，中文输入法下光标跳回开头。
+  late final TextEditingController _keywordController = TextEditingController(
+    text: widget.keyword,
+  );
+
+  @override
+  void didUpdateWidget(covariant AdminFilterBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.keyword != widget.keyword &&
+        _keywordController.text != widget.keyword) {
+      _keywordController.value = TextEditingValue(
+        text: widget.keyword,
+        selection: TextSelection.collapsed(offset: widget.keyword.length),
+      );
+    }
+  }
+
+  @override
+  void dispose() {
+    _keywordController.dispose();
+    super.dispose();
+  }
+
+  // 转发宿主字段，避免改写既有 build 主体。
+  String get keyword => widget.keyword;
+  ValueChanged<String> get onKeywordChanged => widget.onKeywordChanged;
+  List<Widget> get filterChildren => widget.filterChildren;
+  List<Widget>? get trailing => widget.trailing;
+  bool get collapsible => widget.collapsible;
+  bool get expanded => widget.expanded;
+  VoidCallback? get onToggleExpanded => widget.onToggleExpanded;
+
+  @override
   Widget build(BuildContext context) {
     final visibleFilters =
         collapsible && !expanded
@@ -219,7 +257,7 @@ class AdminFilterBar extends StatelessWidget {
         SizedBox(
           width: AppControlTokens.searchFieldWidth,
           child: TextField(
-            controller: TextEditingController(text: keyword),
+            controller: _keywordController,
             decoration: InputDecoration(
               isDense: true,
               prefixIcon: const Icon(Icons.search_rounded, size: 18),

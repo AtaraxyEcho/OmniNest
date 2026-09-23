@@ -7,6 +7,7 @@ class PlatformCapabilities {
   const PlatformCapabilities({
     required this.supportsSystemTray,
     required this.supportsHoverPointer,
+    required this.supportsDragAndDropUpload,
   });
 
   /// 根据当前运行平台返回对应的能力集。
@@ -28,6 +29,9 @@ class PlatformCapabilities {
 
   final bool supportsSystemTray;
 
+  /// 是否支持把文件拖放进窗口（`desktop_drop` 仅覆盖桌面原生端）。
+  final bool supportsDragAndDropUpload;
+
   /// 是否存在可产生 hover 事件的指针设备。
   ///
   /// 触屏浏览器与触屏应用不会触发 `MouseRegion.onEnter`，因此仅靠 hover
@@ -42,26 +46,31 @@ class PlatformCapabilities {
     return PlatformCapabilities(
       supportsSystemTray: false,
       supportsHoverPointer: !hostIsTouch,
+      supportsDragAndDropUpload: false,
     );
   }
 
   factory PlatformCapabilities.android() => const PlatformCapabilities(
     supportsSystemTray: false,
     supportsHoverPointer: false,
+    supportsDragAndDropUpload: false,
   );
 
   factory PlatformCapabilities.ios() => const PlatformCapabilities(
     supportsSystemTray: false,
     supportsHoverPointer: false,
+    supportsDragAndDropUpload: false,
   );
 
   factory PlatformCapabilities.desktop() => const PlatformCapabilities(
     supportsSystemTray: true,
     supportsHoverPointer: true,
+    supportsDragAndDropUpload: true,
   );
 
   factory PlatformCapabilities.fallback() => const PlatformCapabilities(
     supportsSystemTray: false,
     supportsHoverPointer: false,
+    supportsDragAndDropUpload: false,
   );
 }

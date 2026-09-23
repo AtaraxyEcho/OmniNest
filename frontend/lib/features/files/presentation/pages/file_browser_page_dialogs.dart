@@ -200,6 +200,17 @@ Future<void> _downloadFile(
   try {
     final url = await controller.downloadUrl(file);
     if (!messenger.mounted) return;
+    // Web 直接开新标签下载；桌面与移动无浏览器上下文时退回复制链接。
+    if (openDownloadUrl(url)) {
+      if (!messenger.mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l10n.filesDownloadOpened),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
     final copied = await copyTextToClipboard(url);
     if (!messenger.mounted) return;
     messenger.showSnackBar(
@@ -357,16 +368,14 @@ Future<void> _showVersionsDialog({
             onPressed: () async {
               final messenger = ScaffoldMessenger.of(context);
               final navigator = Navigator.of(ctx);
-              final picked = await FilePicker.platform.pickFiles(
-                type: FileType.any,
-                allowMultiple: false,
-              );
-              final path = picked?.files.single.path;
-              if (path == null || path.isEmpty) {
+              // file_selector 的 XFile 在 Web 下没有 path 但可流式读取，与常规
+              // 上传走同一条链路；FilePicker 取 path 在 Web 会静默失败。
+              final picked = await openFile();
+              if (picked == null) {
                 return;
               }
               final ok = await _runFileActionWithMessenger(messenger, () async {
-                await controller.replaceFileWithNewVersion(file, XFile(path));
+                await controller.replaceFileWithNewVersion(file, picked);
               });
               if (!ok) {
                 return;

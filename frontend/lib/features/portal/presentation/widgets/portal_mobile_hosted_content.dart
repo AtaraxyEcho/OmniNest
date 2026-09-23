@@ -813,7 +813,7 @@ class _PortalSystemSummary extends StatelessWidget {
                 online
                     ? context.mobileColors.success
                     : context.mobileColors.warmAccent,
-            onTap: () => context.push('/activity'),
+            onTap: () => context.push('/notifications-tasks'),
           ),
           Divider(height: 1, color: context.mobileColors.outline),
           _PortalSystemRow(
@@ -827,7 +827,7 @@ class _PortalSystemSummary extends StatelessWidget {
                 (taskValue?.failedCount ?? 0) > 0
                     ? context.mobileColors.danger
                     : context.mobileColors.musicAccent,
-            onTap: () => context.push('/activity?tab=tasks'),
+            onTap: () => context.push('/notifications-tasks?tab=tasks'),
           ),
         ],
       ),

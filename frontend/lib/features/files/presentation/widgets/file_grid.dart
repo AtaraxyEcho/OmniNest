@@ -93,8 +93,12 @@ class FileGrid extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
+        // 多选态卡片行内要并排 Checkbox(48) + 缩略图 + 菜单钮(48)，两列时内容
+        // 宽度不足会溢出；手机宽度改单列，既不裁控件也不缩小命中区。
         final crossAxisCount =
-            width >= 1160
+            selectionActive && width < 640
+                ? 1
+                : width >= 1160
                 ? 5
                 : width >= 900
                 ? 4

@@ -134,11 +134,11 @@ abstract class AppLocalizations {
   /// **'Reading'**
   String get mobileNavReader;
 
-  /// No description provided for @mobileActivityCenter.
+  /// No description provided for @mobileNotificationTaskCenter.
   ///
   /// In en, this message translates to:
-  /// **'Activity'**
-  String get mobileActivityCenter;
+  /// **'Notifications & Tasks'**
+  String get mobileNotificationTaskCenter;
 
   /// No description provided for @mobileOfflineBanner.
   ///
@@ -2725,6 +2725,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Download link copied to clipboard'**
   String get filesDownloadLinkCopied;
+
+  /// No description provided for @filesDownloadOpened.
+  ///
+  /// In en, this message translates to:
+  /// **'Opened the download in a new tab'**
+  String get filesDownloadOpened;
 
   /// No description provided for @filesDownloadFailed.
   ///

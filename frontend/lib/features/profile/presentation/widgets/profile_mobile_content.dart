@@ -15,6 +15,7 @@ import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/profile/presentation/widgets/change_password_dialog.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_server_panel.dart';
+import 'package:omninest/features/profile/presentation/widgets/profile_two_factor_card.dart';
 import 'package:omninest/features/profile/presentation/widgets/profile_session_management_panel.dart';
 
 /// 个人中心在移动端使用的单列信息架构。
@@ -154,6 +155,12 @@ class ProfileMobileContent extends ConsumerWidget {
                 title: l10n.profileChangePassword,
                 subtitle: l10n.profileChangePasswordSubtitle,
                 onTap: () => _showChangePassword(context),
+              ),
+              MobileSettingsTile(
+                icon: Icons.verified_user_outlined,
+                title: l10n.profileTwoFactorTitle,
+                subtitle: l10n.profileTwoFactorSubtitle,
+                onTap: () => _showTwoFactor(context),
               ),
               MobileSettingsTile(
                 icon: Icons.devices_rounded,
@@ -369,6 +376,26 @@ class ProfileMobileContent extends ConsumerWidget {
               height: height,
               child: const SingleChildScrollView(
                 child: ProfileSessionManagementPanel(framed: false),
+              ),
+            ),
+          ),
+    );
+  }
+
+  /// 两步验证在桌面分区里可达；移动端按同一弹层方式承载，避免只有桌面能开。
+  Future<void> _showTwoFactor(BuildContext context) {
+    final height = math.min(MediaQuery.sizeOf(context).height * 0.78, 620.0);
+    return showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.mobileColors.surface,
+      showDragHandle: true,
+      builder:
+          (context) => SafeArea(
+            child: SizedBox(
+              height: height,
+              child: const SingleChildScrollView(
+                child: ProfileTwoFactorCard(framed: false),
               ),
             ),
           ),

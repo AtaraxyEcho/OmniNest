@@ -60,75 +60,84 @@ class _SearchPageState extends ConsumerState<SearchPage> {
           style: TextStyle(fontWeight: FontWeight.w700),
         ),
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: TextField(
-              controller: _controller,
-              autofocus: true,
-              onChanged:
-                  (q) => ref.read(searchQueryProvider.notifier).updateQuery(q),
-              onSubmitted: (_) => ref.invalidate(searchResultsProvider),
-              style: TextStyle(
-                color: colors.onSurface,
-                fontSize: AppTypography.titleMedium,
-              ),
-              decoration: InputDecoration(
-                hintText: l10n.searchHint,
-                hintStyle: TextStyle(
-                  color: colors.onSurfaceVariant.withValues(alpha: 0.6),
-                ),
-                prefixIcon: Icon(Icons.search_rounded),
-                suffixIcon:
-                    _controller.text.isNotEmpty
-                        ? IconButton(
-                          icon: Icon(Icons.clear_rounded),
-                          onPressed: () {
-                            _controller.clear();
-                            ref.read(searchQueryProvider.notifier).clear();
-                          },
-                        )
-                        : null,
-                filled: true,
-                fillColor: colors.surfaceContainerHighest.withValues(
-                  alpha: 0.4,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
-                ),
-              ),
-            ),
+      // 桌面与 Web 下限制内容列宽，避免搜索框与结果行被整屏拉伸。
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(
+            maxWidth: MobileLayoutTokens.chromeMaxWidth,
           ),
-          _SearchScopeBar(
-            selected: _scope,
-            onSelected: (scope) => setState(() => _scope = scope),
-          ),
-          Expanded(
-            child: results.when(
-              data: (items) {
-                final filtered = items
-                    .where((item) => _scope.matches(item.type))
-                    .toList(growable: false);
-                return filtered.isEmpty
-                    ? _EmptyState(
-                      hasQuery: ref.watch(searchQueryProvider).isNotEmpty,
-                    )
-                    : _SearchResultsList(items: filtered);
-              },
-              loading: () => const _SearchLoadingState(),
-              error:
-                  (_, _) => MobileInlineState(
-                    icon: Icons.cloud_off_outlined,
-                    message: l10n.searchFailed,
-                    actionLabel: l10n.filesRetry,
-                    onAction: () => ref.invalidate(searchResultsProvider),
-                    error: true,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                child: TextField(
+                  controller: _controller,
+                  autofocus: true,
+                  onChanged:
+                      (q) =>
+                          ref.read(searchQueryProvider.notifier).updateQuery(q),
+                  onSubmitted: (_) => ref.invalidate(searchResultsProvider),
+                  style: TextStyle(
+                    color: colors.onSurface,
+                    fontSize: AppTypography.titleMedium,
                   ),
-            ),
+                  decoration: InputDecoration(
+                    hintText: l10n.searchHint,
+                    hintStyle: TextStyle(
+                      color: colors.onSurfaceVariant.withValues(alpha: 0.6),
+                    ),
+                    prefixIcon: Icon(Icons.search_rounded),
+                    suffixIcon:
+                        _controller.text.isNotEmpty
+                            ? IconButton(
+                              icon: Icon(Icons.clear_rounded),
+                              onPressed: () {
+                                _controller.clear();
+                                ref.read(searchQueryProvider.notifier).clear();
+                              },
+                            )
+                            : null,
+                    filled: true,
+                    fillColor: colors.surfaceContainerHighest.withValues(
+                      alpha: 0.4,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide.none,
+                    ),
+                  ),
+                ),
+              ),
+              _SearchScopeBar(
+                selected: _scope,
+                onSelected: (scope) => setState(() => _scope = scope),
+              ),
+              Expanded(
+                child: results.when(
+                  data: (items) {
+                    final filtered = items
+                        .where((item) => _scope.matches(item.type))
+                        .toList(growable: false);
+                    return filtered.isEmpty
+                        ? _EmptyState(
+                          hasQuery: ref.watch(searchQueryProvider).isNotEmpty,
+                        )
+                        : _SearchResultsList(items: filtered);
+                  },
+                  loading: () => const _SearchLoadingState(),
+                  error:
+                      (_, _) => MobileInlineState(
+                        icon: Icons.cloud_off_outlined,
+                        message: l10n.searchFailed,
+                        actionLabel: l10n.filesRetry,
+                        onAction: () => ref.invalidate(searchResultsProvider),
+                        error: true,
+                      ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

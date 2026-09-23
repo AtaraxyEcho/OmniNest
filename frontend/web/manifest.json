@@ -3,10 +3,9 @@
     "short_name": "OmniNest",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#ffffff",
-    "theme_color": "#4F46E5",
+    "background_color": "#0b0f14",
+    "theme_color": "#0b6b61",
     "description": "OmniNest self-hosted personal digital life center.",
-    "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
         {

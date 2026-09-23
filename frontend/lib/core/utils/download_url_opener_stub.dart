@@ -1,2 +1,2 @@
-/// Web 端打开外部下载页的空实现（非 Web 平台）。
-void openDownloadUrl(String url) {}
+/// 非 Web 端实现：没有浏览器上下文可用，返回 false 由调用方降级。
+bool openDownloadUrl(String url) => false;

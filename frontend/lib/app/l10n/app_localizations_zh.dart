@@ -27,7 +27,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mobileNavReader => '阅读';
 
   @override
-  String get mobileActivityCenter => '活动中心';
+  String get mobileNotificationTaskCenter => '通知与任务';
 
   @override
   String get mobileOfflineBanner => '当前处于离线状态，部分操作暂不可用';
@@ -1381,6 +1381,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get filesDownloadLinkCopied => '下载链接已复制到剪贴板';
+
+  @override
+  String get filesDownloadOpened => '已在新标签页打开下载';
 
   @override
   String get filesDownloadFailed => '获取下载链接失败';

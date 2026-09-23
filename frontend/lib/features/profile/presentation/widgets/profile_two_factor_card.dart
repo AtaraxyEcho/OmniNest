@@ -16,7 +16,17 @@ final profileTwoFactorStatusProvider =
 
 /// 个人资料安全分区的两步验证管理卡：状态展示、自助开启向导、密码复核关闭。
 class ProfileTwoFactorCard extends ConsumerWidget {
-  const ProfileTwoFactorCard({super.key});
+  const ProfileTwoFactorCard({this.framed = true, super.key});
+
+  /// 桌面分区内自带头面板；移动端底部弹层由宿主提供表面，去掉重复描边。
+  final bool framed;
+
+  Widget _panel({required EdgeInsets padding, required Widget child}) {
+    if (!framed) {
+      return Padding(padding: padding, child: child);
+    }
+    return WorkbenchPanel(padding: padding, child: child);
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -24,12 +34,12 @@ class ProfileTwoFactorCard extends ConsumerWidget {
     final status = ref.watch(profileTwoFactorStatusProvider);
     return status.when(
       loading:
-          () => const WorkbenchPanel(
-            padding: EdgeInsets.all(12),
-            child: LinearProgressIndicator(minHeight: 2),
+          () => _panel(
+            padding: const EdgeInsets.all(12),
+            child: const LinearProgressIndicator(minHeight: 2),
           ),
       error:
-          (_, _) => WorkbenchPanel(
+          (_, _) => _panel(
             padding: const EdgeInsets.all(12),
             child: ListTile(
               leading: const Icon(Icons.error_outline_rounded),
@@ -43,7 +53,7 @@ class ProfileTwoFactorCard extends ConsumerWidget {
             ),
           ),
       data:
-          (value) => WorkbenchPanel(
+          (value) => _panel(
             padding: const EdgeInsets.all(12),
             child: ListTile(
               leading: Icon(
@@ -128,8 +138,9 @@ class _TwoFactorEnableDialogState
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(l10n.profileTwoFactorTitle),
-      content: SizedBox(
-        width: 380,
+      content: ConstrainedBox(
+        // 手机宽度下 AlertDialog 可用宽小于 380，固定宽会溢出。
+        constraints: const BoxConstraints(maxWidth: 380),
         child: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -359,8 +370,8 @@ class _TwoFactorDisableDialogState
     final l10n = AppLocalizations.of(context);
     return AlertDialog(
       title: Text(l10n.profileTwoFactorDisableAction),
-      content: SizedBox(
-        width: 340,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 340),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           mainAxisSize: MainAxisSize.min,

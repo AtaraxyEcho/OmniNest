@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/environment_providers.dart';
-import 'package:omninest/app/mobile_shell/mobile_activity_center_page.dart';
+import 'package:omninest/app/mobile_shell/notification_task_center_page.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
 import 'package:omninest/app/route/boot_page.dart';
@@ -51,7 +51,6 @@ import 'package:omninest/features/reader/presentation/pages/comic_import_confirm
 import 'package:omninest/features/search/presentation/pages/search_page.dart';
 import 'package:omninest/features/setup/application/initial_setup_controller.dart';
 import 'package:omninest/features/setup/presentation/pages/initial_setup_page.dart';
-import 'package:omninest/features/tasks/presentation/pages/tasks_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_center_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_detail_page.dart';
 import 'package:omninest/features/video/presentation/pages/movie_player_page.dart';
@@ -91,12 +90,21 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/profile/notifications',
         (state) => const NotificationSettingsPage(),
       ),
-      _animatedRoute('/tasks', (state) => const TasksPage()),
       _animatedRoute(
-        '/activity',
-        (state) => MobileActivityCenterPage(
+        '/notifications-tasks',
+        (state) => NotificationTaskCenterPage(
           initialIndex: state.uri.queryParameters['tab'] == 'tasks' ? 1 : 0,
         ),
+      ),
+      // /tasks 注册后长期无人链接，任务列表已并入通知与任务中心；两条旧路径
+      // 保留重定向（/activity 为改名前的入口）。
+      GoRoute(
+        path: '/tasks',
+        redirect: (context, state) => '/notifications-tasks?tab=tasks',
+      ),
+      GoRoute(
+        path: '/activity',
+        redirect: (context, state) => '/notifications-tasks',
       ),
       _animatedRoute(
         '/search',

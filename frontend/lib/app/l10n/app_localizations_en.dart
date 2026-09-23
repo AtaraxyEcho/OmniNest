@@ -27,7 +27,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mobileNavReader => 'Reading';
 
   @override
-  String get mobileActivityCenter => 'Activity';
+  String get mobileNotificationTaskCenter => 'Notifications & Tasks';
 
   @override
   String get mobileOfflineBanner =>
@@ -1435,6 +1435,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get filesDownloadLinkCopied => 'Download link copied to clipboard';
+
+  @override
+  String get filesDownloadOpened => 'Opened the download in a new tab';
 
   @override
   String get filesDownloadFailed => 'Failed to get download link';

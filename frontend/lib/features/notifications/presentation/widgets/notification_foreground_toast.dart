@@ -10,7 +10,7 @@ import 'package:omninest/features/notifications/application/notification_prefere
 import 'package:omninest/features/notifications/domain/notification_models.dart';
 
 /// 根部挂载的前台通知提示：实时通知到达时展示轻量 SnackBar，点击跳转
-/// 通知中心。通知页与活动中心打开期间抑制（同屏冗余）；提示展示期间
+/// 通知中心。通知页与通知与任务中心打开期间抑制（同屏冗余）；提示展示期间
 /// 新到达合并为最新一条（重置计时并更新内容）。开关为设备级本地偏好，
 /// 默认开启。
 class NotificationForegroundToast extends ConsumerWidget {
@@ -46,7 +46,7 @@ class NotificationForegroundToast extends ConsumerWidget {
     }
     final router = GoRouter.of(context);
     final path = router.routeInformationProvider.value.uri.path;
-    if (path == '/notifications' || path == '/activity') {
+    if (path == '/notifications' || path == '/notifications-tasks') {
       return;
     }
     final l10n = AppLocalizations.of(context);

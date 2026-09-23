@@ -159,11 +159,33 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
   }
 
   bool _handleGlobalKeyEvent(KeyEvent event) {
-    if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.f11) {
+    if (event is! KeyDownEvent) {
       return false;
     }
-    _toggleGlobalFullscreen();
-    return true;
+    if (event.logicalKey == LogicalKeyboardKey.f11) {
+      _toggleGlobalFullscreen();
+      return true;
+    }
+    if (event.logicalKey == LogicalKeyboardKey.keyK &&
+        (HardwareKeyboard.instance.isControlPressed ||
+            HardwareKeyboard.instance.isMetaPressed)) {
+      _openSearch();
+      return true;
+    }
+    return false;
+  }
+
+  /// Ctrl/Cmd+K 打开全局搜索；未认证或已在搜索页时不重复入栈。
+  void _openSearch() {
+    final session = ref.read(authSessionProvider).asData?.value;
+    if (session == null || !session.isAuthenticated) {
+      return;
+    }
+    final router = ref.read(appRouterProvider);
+    if (router.routeInformationProvider.value.uri.path == '/search') {
+      return;
+    }
+    router.push('/search');
   }
 
   void _toggleGlobalFullscreen() {

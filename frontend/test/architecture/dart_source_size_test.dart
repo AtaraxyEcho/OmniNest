@@ -8,9 +8,6 @@ const _maximumSourceLines = 1200;
 const _allowedOversizedSources = <String>{
   'lib/features/music/presentation/deck/music_deck_content.dart',
   'lib/features/reader/presentation/pages/reader_item_detail_page.dart',
-  'lib/features/reader/presentation/pages/reader_view_page.dart',
-  'lib/features/video/application/movie_controller.dart',
-  'lib/features/video/presentation/pages/movie_detail_page.dart',
   'test/features/music/music_controller_test.dart',
 };
 

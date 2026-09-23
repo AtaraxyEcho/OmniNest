@@ -54,7 +54,10 @@ void main() {
     final track = MusicPlayableItem.online(online).track;
 
     // 列表取缩放图，大图与沉浸卡组继续用原图。
-    expect(track.listCoverUrl, 'https://example.com/full.jpg?paramSize=300x300');
+    expect(
+      track.listCoverUrl,
+      'https://example.com/full.jpg?paramSize=300x300',
+    );
     expect(track.coverUrl, 'https://example.com/full.jpg');
 
     const withoutThumb = OnlineTrack(

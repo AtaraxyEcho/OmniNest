@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -350,18 +351,23 @@ class MinimalChapterTile extends StatelessWidget {
                 ),
               ),
               if (isParent)
-                GestureDetector(
-                  onTap: onToggleExpand,
-                  child: AnimatedRotation(
+                IconButton(
+                  onPressed: onToggleExpand,
+                  tooltip:
+                      isExpanded
+                          ? AppLocalizations.of(context).readerCollapse
+                          : AppLocalizations.of(context).readerExpand,
+                  iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(
+                    minWidth: MobileLayoutTokens.minimumTarget,
+                    minHeight: MobileLayoutTokens.minimumTarget,
+                  ),
+                  color: context.readerColors.onSurface.withValues(alpha: 0.5),
+                  icon: AnimatedRotation(
                     turns: isExpanded ? 0.25 : 0,
                     duration: const Duration(milliseconds: 200),
-                    child: Icon(
-                      Icons.chevron_right_rounded,
-                      color: context.readerColors.onSurface.withValues(
-                        alpha: 0.5,
-                      ),
-                      size: 20,
-                    ),
+                    child: const Icon(Icons.chevron_right_rounded),
                   ),
                 )
               else

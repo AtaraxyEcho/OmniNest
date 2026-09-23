@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/files_colors.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 接收桌面文件拖放并转交给现有上传队列。
 class FileDropUploadSurface extends StatefulWidget {
@@ -29,6 +30,11 @@ class _FileDropUploadSurfaceState extends State<FileDropUploadSurface> {
 
   @override
   Widget build(BuildContext context) {
+    // desktop_drop 只覆盖桌面原生端：Web 与触屏永远不会产生拖放事件，
+    // 与其挂一层无效的手势容器，不如按能力位直接透传子树。
+    if (!PlatformCapabilities.current().supportsDragAndDropUpload) {
+      return widget.child;
+    }
     return DropTarget(
       enable: widget.enabled,
       onDragEntered: (_) => _setDragging(true),

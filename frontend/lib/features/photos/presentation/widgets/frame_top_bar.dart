@@ -10,6 +10,7 @@ import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/files/application/media_import_service.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
+import 'package:omninest/features/tasks/task_ui.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
@@ -126,6 +127,7 @@ class FrameTopBar extends ConsumerWidget {
                   const SizedBox(width: 12),
                 ],
                 const FontScaleControl(size: 20),
+                const TaskActivityButton(size: 20),
                 const NotificationIcon(size: 20),
                 const SizedBox(width: 12),
                 const UserAvatarMenu(),

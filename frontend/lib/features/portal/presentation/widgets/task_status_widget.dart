@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/features/admin/application/admin_console_access_provider.dart';
 
 class TaskStatusWidget extends ConsumerWidget {
@@ -24,7 +25,13 @@ class TaskStatusWidget extends ConsumerWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: canAccessAdmin ? () => context.push('/admin') : null,
+        // 管理后台在手机形态不可用，入口与头像菜单保持同一判定。
+        onTap:
+            canAccessAdmin &&
+                    MediaQuery.sizeOf(context).width >=
+                        ResponsiveBreakpoints.mobile
+                ? () => context.push('/admin')
+                : null,
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(

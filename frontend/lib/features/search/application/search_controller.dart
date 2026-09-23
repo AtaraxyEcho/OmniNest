@@ -27,12 +27,30 @@ final searchResultsProvider = AsyncNotifierProvider.autoDispose<
 >(SearchResultsNotifier.new);
 
 class SearchResultsNotifier extends AsyncNotifier<List<SearchResult>> {
+  int _generation = 0;
+  List<SearchResult> _lastResults = const [];
+
   @override
   Future<List<SearchResult>> build() async {
-    final query = ref.watch(searchQueryProvider);
-    if (query.trim().isEmpty) return [];
+    final query = ref.watch(searchQueryProvider).trim();
+    final generation = ++_generation;
+    if (query.isEmpty) {
+      _lastResults = const [];
+      return _lastResults;
+    }
+    // 每个字符都打一次搜索接口会放大后端压力，并让旧响应有机会覆盖新结果；
+    // 去抖后仍以 generation 丢弃过期响应。
+    await Future<void>.delayed(const Duration(milliseconds: 300));
+    if (generation != _generation) {
+      return _lastResults;
+    }
     final api = ref.read(searchApiProvider);
-    return api.search(query.trim());
+    final results = await api.search(query);
+    if (generation != _generation) {
+      return _lastResults;
+    }
+    _lastResults = results;
+    return results;
   }
 
   Future<void> search(String query) async {

@@ -455,7 +455,11 @@ class ReaderViewSettingsPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
+        // 3 个字族项在手机面板宽度与大字号档位下会超出裸 Row 的可用宽，
+        // 改用 Wrap 让其换行；间距由 Wrap 统一承担。
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
           children: [
             _FontOption(
               label: l10n.readerFontSerif,
@@ -467,7 +471,6 @@ class ReaderViewSettingsPanel extends StatelessWidget {
                   () =>
                       onSettingsChanged(settings.copyWith(fontFamily: 'serif')),
             ),
-            const SizedBox(width: 10),
             _FontOption(
               label: l10n.readerFontSans,
               fontFamily: null,
@@ -478,7 +481,6 @@ class ReaderViewSettingsPanel extends StatelessWidget {
                   () =>
                       onSettingsChanged(settings.copyWith(fontFamily: 'sans')),
             ),
-            const SizedBox(width: 10),
             _FontOption(
               label: l10n.readerFontSystem,
               fontFamily: null,
@@ -510,7 +512,9 @@ class ReaderViewSettingsPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
+        // 4 个主题项在窄面板与字号上限档位下超出裸 Row 可用宽，允许换行。
+        Wrap(
+          runSpacing: 10,
           children: List.generate(ReaderReadingPalette.values.length, (i) {
             final theme = ReaderReadingPalette.values[i];
             final selected = settings.themeIndex == i;

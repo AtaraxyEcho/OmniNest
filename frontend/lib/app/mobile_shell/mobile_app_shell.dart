@@ -461,8 +461,8 @@ class _MobileActivityButton extends ConsumerWidget {
             : context.mobileColors.warmAccent;
     final visible = activity.isVisible;
     return IconButton(
-      tooltip: AppLocalizations.of(context).mobileActivityCenter,
-      onPressed: () => context.push('/activity'),
+      tooltip: AppLocalizations.of(context).mobileNotificationTaskCenter,
+      onPressed: () => context.push('/notifications-tasks'),
       icon: Stack(
         clipBehavior: Clip.none,
         children: [

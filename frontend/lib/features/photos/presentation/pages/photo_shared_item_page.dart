@@ -152,86 +152,89 @@ class _SharedItemPasswordPromptState extends State<_SharedItemPasswordPrompt> {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Container(
-        width: 360,
-        padding: EdgeInsets.all(32),
-        decoration: BoxDecoration(
-          color: context.photosColors.surfaceContainer,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.lock_outline_rounded,
-              color: context.photosColors.primaryContainer,
-              size: 48,
-            ),
-            SizedBox(height: 16),
-            Text(
-              AppLocalizations.of(context).photosSharedItemPasswordRequired,
-              style: TextStyle(
-                color: context.photosColors.onSurface,
-                fontSize: AppTypography.titleMedium,
-                fontWeight: FontWeight.w700,
+      child: ConstrainedBox(
+        // 手机宽度不足 360 时固定宽会横向溢出，改为上限。
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: Container(
+          padding: EdgeInsets.all(32),
+          decoration: BoxDecoration(
+            color: context.photosColors.surfaceContainer,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.lock_outline_rounded,
+                color: context.photosColors.primaryContainer,
+                size: 48,
               ),
-            ),
-            SizedBox(height: 8),
-            Text(
-              AppLocalizations.of(context).photosSharedAlbumPasswordHint,
-              style: TextStyle(
-                color: context.photosColors.onSurfaceVariant,
-                fontSize: AppTypography.bodyMedium,
+              SizedBox(height: 16),
+              Text(
+                AppLocalizations.of(context).photosSharedItemPasswordRequired,
+                style: TextStyle(
+                  color: context.photosColors.onSurface,
+                  fontSize: AppTypography.titleMedium,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
-            ),
-            if (widget.errorText != null) ...[
               SizedBox(height: 8),
               Text(
-                widget.errorText!,
+                AppLocalizations.of(context).photosSharedAlbumPasswordHint,
                 style: TextStyle(
-                  color: context.photosColors.danger,
+                  color: context.photosColors.onSurfaceVariant,
                   fontSize: AppTypography.bodyMedium,
                 ),
               ),
-            ],
-            SizedBox(height: 20),
-            TextField(
-              controller: _controller,
-              obscureText: true,
-              autofocus: true,
-              style: TextStyle(color: context.photosColors.onSurface),
-              decoration: InputDecoration(
-                hintText: AppLocalizations.of(context).photosEnterPassword,
-                hintStyle: TextStyle(
-                  color: context.photosColors.onSurfaceVariant.withValues(
-                    alpha: 0.6,
+              if (widget.errorText != null) ...[
+                SizedBox(height: 8),
+                Text(
+                  widget.errorText!,
+                  style: TextStyle(
+                    color: context.photosColors.danger,
+                    fontSize: AppTypography.bodyMedium,
                   ),
                 ),
-                prefixIcon: const Icon(Icons.key_rounded, size: 18),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
+              ],
+              SizedBox(height: 20),
+              TextField(
+                controller: _controller,
+                obscureText: true,
+                autofocus: true,
+                style: TextStyle(color: context.photosColors.onSurface),
+                decoration: InputDecoration(
+                  hintText: AppLocalizations.of(context).photosEnterPassword,
+                  hintStyle: TextStyle(
+                    color: context.photosColors.onSurfaceVariant.withValues(
+                      alpha: 0.6,
+                    ),
+                  ),
+                  prefixIcon: const Icon(Icons.key_rounded, size: 18),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-              ),
-              onSubmitted: (v) {
-                if (v.isNotEmpty) widget.onSubmit(v);
-              },
-            ),
-            SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: () {
-                  final text = _controller.text.trim();
-                  if (text.isNotEmpty) widget.onSubmit(text);
+                onSubmitted: (v) {
+                  if (v.isNotEmpty) widget.onSubmit(v);
                 },
-                style: FilledButton.styleFrom(
-                  backgroundColor: context.photosColors.primaryContainer,
-                  foregroundColor: context.photosColors.onPrimaryContainer,
-                ),
-                child: Text(AppLocalizations.of(context).photosAccess),
               ),
-            ),
-          ],
+              SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: () {
+                    final text = _controller.text.trim();
+                    if (text.isNotEmpty) widget.onSubmit(text);
+                  },
+                  style: FilledButton.styleFrom(
+                    backgroundColor: context.photosColors.primaryContainer,
+                    foregroundColor: context.photosColors.onPrimaryContainer,
+                  ),
+                  child: Text(AppLocalizations.of(context).photosAccess),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -249,10 +252,14 @@ class _SharedItemContent extends StatelessWidget {
     final imageUrl = photo.sourceUrl ?? photo.coverUrl;
     return Column(
       children: [
-        // 顶部栏
+        // 顶部栏：Scaffold body 不自动避让状态栏，分享页在手机上需自行加高。
         Container(
-          height: 64,
-          padding: EdgeInsets.symmetric(horizontal: 24),
+          height: 64 + MediaQuery.paddingOf(context).top,
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: MediaQuery.paddingOf(context).top,
+          ),
           decoration: BoxDecoration(
             color: context.photosColors.surfaceContainer.withValues(
               alpha: 0.70,
