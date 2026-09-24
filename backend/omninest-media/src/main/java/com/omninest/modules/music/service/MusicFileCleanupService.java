@@ -61,6 +61,7 @@ public class MusicFileCleanupService implements
     private final MusicPlaylistRepository playlistRepository;
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
+    private final MusicCoverRetentionService coverRetentionService;
 
     /**
      * 查询目标文件的本地音乐曲目引用。
@@ -214,6 +215,7 @@ public class MusicFileCleanupService implements
 
         Set<UUID> albumIds = new HashSet<>();
         Set<UUID> artistIds = new HashSet<>();
+        Set<UUID> coverFileIds = new LinkedHashSet<>();
         for (MusicTrack track : tracks) {
             if (track.getAlbumId() != null) {
                 albumIds.add(track.getAlbumId());
@@ -221,38 +223,49 @@ public class MusicFileCleanupService implements
             if (track.getArtistId() != null) {
                 artistIds.add(track.getArtistId());
             }
+            coverFileIds.add(track.getCoverFileId());
         }
 
         trackRepository.deleteAllInBatch(tracks);
+        coverRetentionService.releaseUnreferenced(ownerUserId, coverFileIds);
         cleanupOrphanedParents(ownerUserId, albumIds, artistIds);
         // 曲目删除改变音乐仪表盘统计与最近列表，需失效缓存。
         readThroughCache.invalidate("omninest:dashboard:music:" + ownerUserId);
     }
 
     private void cleanupOrphanedParents(UUID ownerUserId, Set<UUID> albumIds, Set<UUID> artistIds) {
+        Set<UUID> coverFileIds = new LinkedHashSet<>();
         if (!albumIds.isEmpty()) {
             Set<UUID> albumsWithTracks = new HashSet<>(
                     trackRepository.findAlbumIdsWithTracks(ownerUserId, albumIds));
-            List<UUID> albumsToDelete = albumIds.stream()
-                    .filter(id -> !albumsWithTracks.contains(id))
+            List<MusicAlbum> orphanAlbums = albumRepository.findAllByIdInAndOwnerUserId(albumIds, ownerUserId)
+                    .stream()
+                    .filter(album -> !albumsWithTracks.contains(album.getId()))
                     .toList();
-            if (!albumsToDelete.isEmpty()) {
-                albumRepository.deleteByOwnerUserIdAndIdIn(ownerUserId, albumsToDelete);
-                log.info("已清理孤立专辑: count={}", albumsToDelete.size());
+            if (!orphanAlbums.isEmpty()) {
+                orphanAlbums.forEach(album -> coverFileIds.add(album.getCoverFileId()));
+                albumRepository.deleteByOwnerUserIdAndIdIn(ownerUserId,
+                        orphanAlbums.stream().map(MusicAlbum::getId).toList());
+                log.info("已清理孤立专辑: count={}", orphanAlbums.size());
             }
         }
 
         if (!artistIds.isEmpty()) {
             Set<UUID> artistsWithTracks = new HashSet<>(
                     trackRepository.findArtistIdsWithTracks(ownerUserId, artistIds));
-            List<UUID> artistsToDelete = artistIds.stream()
-                    .filter(id -> !artistsWithTracks.contains(id))
+            List<MusicArtist> orphanArtists = artistRepository.findAllByIdInAndOwnerUserId(artistIds, ownerUserId)
+                    .stream()
+                    .filter(artist -> !artistsWithTracks.contains(artist.getId()))
                     .toList();
-            if (!artistsToDelete.isEmpty()) {
-                artistRepository.deleteByOwnerUserIdAndIdIn(ownerUserId, artistsToDelete);
-                log.info("已清理孤立艺术家: count={}", artistsToDelete.size());
+            if (!orphanArtists.isEmpty()) {
+                orphanArtists.forEach(artist -> coverFileIds.add(artist.getAvatarFileId()));
+                artistRepository.deleteByOwnerUserIdAndIdIn(ownerUserId,
+                        orphanArtists.stream().map(MusicArtist::getId).toList());
+                log.info("已清理孤立艺术家: count={}", orphanArtists.size());
             }
         }
+
+        coverRetentionService.releaseUnreferenced(ownerUserId, coverFileIds);
     }
 
     private void clearDanglingFileReferences(List<UUID> deletedFileIds) {

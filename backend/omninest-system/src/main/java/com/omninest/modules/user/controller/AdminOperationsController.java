@@ -95,7 +95,7 @@ public class AdminOperationsController {
 
     @Operation(summary = "重试失败任务")
     @PostMapping("/api/v1/admin/tasks/{taskId}/retry")
-    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<AdminOperationsDto.TaskRecordItem> retryTask(@PathVariable UUID taskId) {
         return ApiResponse.success(adminOperationsService.retryTask(currentUserContext.requireCurrentUserId(), taskId));
     }

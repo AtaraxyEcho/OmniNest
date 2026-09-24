@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/music/application/music_cover_artwork.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 
@@ -109,9 +110,15 @@ class MusicDeckArtwork extends ConsumerWidget {
     }
     final logicalWidth =
         constraints.maxWidth.isFinite ? constraints.maxWidth : 240.0;
-    final cacheWidth = (logicalWidth * MediaQuery.devicePixelRatioOf(context))
-        .round()
-        .clamp(120, 1200);
+    // 解码宽度按 64 向上量化：卡组宽度随窗口尺寸连续变化，逐像素跟随会为同一张
+    // 封面产生大量内存解码键与磁盘缩放条目，并反复触发重解码。
+    final cacheWidth = quantizedDecodeWidth(
+      logicalWidth: logicalWidth,
+      devicePixelRatio: MediaQuery.devicePixelRatioOf(context),
+      step: 64,
+      min: 128,
+      max: 1200,
+    );
     if (source.startsWith('data:image/')) {
       final comma = source.indexOf(',');
       if (comma < 0) {

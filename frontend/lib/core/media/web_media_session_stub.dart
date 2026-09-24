@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 /// 非 Web 平台的 Media Session 空实现。
 class WebMediaSessionBinderImpl {
   WebMediaSessionBinderImpl._({
@@ -31,6 +33,7 @@ class WebMediaSessionBinderImpl {
     required String artistName,
     required String albumTitle,
     String? coverUrl,
+    Future<Uint8List?> Function(String url)? coverLoader,
   }) {}
 
   void updatePlaybackState({

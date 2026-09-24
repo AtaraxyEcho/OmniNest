@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'web_media_session_stub.dart'
     if (dart.library.js_interop) 'web_media_session_web.dart'
     as impl;
@@ -37,17 +39,22 @@ class WebMediaSessionBinder {
   }
 
   /// 同步当前曲目元数据（标题/艺人/专辑/封面）。
+  ///
+  /// [coverLoader] 非空表示浏览器不能直连该封面地址（需鉴权的稳定 API 路径），
+  /// 由调用方提供取字节的方式，实现侧改投 object URL。
   void updateMetadata({
     required String title,
     required String artistName,
     required String albumTitle,
     String? coverUrl,
+    Future<Uint8List?> Function(String url)? coverLoader,
   }) {
     _impl.updateMetadata(
       title: title,
       artistName: artistName,
       albumTitle: albumTitle,
       coverUrl: coverUrl,
+      coverLoader: coverLoader,
     );
   }
 

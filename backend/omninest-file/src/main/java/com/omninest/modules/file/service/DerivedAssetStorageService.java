@@ -26,6 +26,7 @@ import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HexFormat;
 import java.util.List;
@@ -705,7 +706,7 @@ public class DerivedAssetStorageService {
                 .findByOwnerUserIdAndSourceTypeAndNormalizedPathStartingWithAndDeletedFalse(
                         ownerUserId, SOURCE_TYPE_DERIVED, prefix)
                 .stream()
-                .map(node -> new DerivedNodeRef(node.getId(), node.getNormalizedPath()))
+                .map(node -> new DerivedNodeRef(node.getId(), node.getNormalizedPath(), node.getCreatedAt()))
                 .toList();
     }
 
@@ -727,8 +728,9 @@ public class DerivedAssetStorageService {
      *
      * @param fileNodeId 文件节点 ID
      * @param normalizedPath 节点完整逻辑路径
+     * @param createdAt 节点创建时间，供调用方区分历史孤儿与正在写入的资产
      */
-    public record DerivedNodeRef(UUID fileNodeId, String normalizedPath) {
+    public record DerivedNodeRef(UUID fileNodeId, String normalizedPath, Instant createdAt) {
     }
 
     private record DownloadedAsset(Path path, String mimeType) {

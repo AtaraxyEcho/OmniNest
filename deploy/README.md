@@ -56,8 +56,29 @@ ClamAV 是可选服务，通过 `.env` 的 `COMPOSE_PROFILES=clamav` 控制：
 
 **子路径部署**：默认挂在站点根。若必须由反代挂在子路径（如 `https://nas.example.com/omninest/`），构建镜像前设
 `OMNINEST_WEB_BASE_HREF=/omninest/`（值必须以 `/` 开头并以 `/` 结尾，否则构建失败）。镜像会按该 base-href 构建
-Flutter Web，并把产物摆到 `html/<前缀>/` 下，因此代理需**原样保留前缀**转发给容器，不要 strip；Canvaskit 与
-SQLite WASM/Worker 都按页面基准解析，无需额外配置。前端使用 hash 路由，子路径下的深链不需要服务端 rewrite。
+Flutter Web，并把产物摆到 `html/<前缀>/` 下；Canvaskit 与 SQLite WASM/Worker 都按页面基准解析，前端使用 hash
+路由，子路径下的深链不需要服务端 rewrite。
+
+同一前缀会带进接口地址：Web 端从页面 `<base href>` 推导，API 变成 `https://nas.example.com/omninest/api/v1`、
+WS 变成 `https://nas.example.com/omninest/ws`；显式设置 `OMNINEST_API_BASE_URL`/`OMNINEST_WS_BASE_URL` 或管理端
+服务器配置时以配置为准，桌面端从 API 地址反推前缀，分享链接基址也按「前缀 + api/v1」剥离。因此代理需要
+**静态资源原样保留前缀、接口剥掉前缀**转发给后端（后端 `context-path` 保持 `/`，桌面与 Android 直连不受影响）：
+
+```nginx
+location /omninest/api/ { proxy_pass http://127.0.0.1:8080/api/; }   # 剥掉 /omninest
+location /omninest/ws {
+  proxy_pass http://127.0.0.1:8080/ws;
+  proxy_http_version 1.1;
+  proxy_set_header Upgrade $http_upgrade;
+  proxy_set_header Connection "upgrade";
+}
+location /omninest/ {
+  root /usr/share/nginx/html;
+  try_files $uri $uri/ /omninest/index.html;
+}
+```
+
+若反代本来就在站点根暴露 `/api/v1` 与 `/ws`，则把 API/WS 地址显式配成根路径即可，不必让接口跟前缀。
 
 ### 资源要求与安全扫描
 

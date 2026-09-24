@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:audio_session/audio_session.dart';
 import 'package:flutter/foundation.dart';
+import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/features/music/application/music_cover_artwork.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 
 /// 播放系统命令回调：由音乐播放会话层注入，转接 MusicCenter 命令。
@@ -31,10 +33,26 @@ class MusicMediaCommandCallbacks {
 ///
 /// playbackState/position 由 soloud 事件经播放会话层驱动；metadata 来自当前曲。
 class MusicMediaSessionHandler extends BaseAudioHandler with SeekHandler {
-  MusicMediaSessionHandler({required MusicMediaCommandCallbacks callbacks})
-    : _callbacks = callbacks;
+  MusicMediaSessionHandler({
+    required MusicMediaCommandCallbacks callbacks,
+    Future<Uri?> Function(String url)? artResolver,
+  }) : _callbacks = callbacks,
+       _artResolver = artResolver ?? resolveMusicCoverFileUri;
 
   final MusicMediaCommandCallbacks _callbacks;
+  final Future<Uri?> Function(String url) _artResolver;
+
+  /// 封面地址 → 已落盘的文件地址；解析完成前为 null，避免把系统取不到的地址下发。
+  final Map<String, Uri?> _artFileUris = <String, Uri?>{};
+
+  /// 正在解析的封面地址，防止进度流按秒重入时并发重复下载。
+  final Set<String> _artInFlight = <String>{};
+
+  MusicTrack? _lastTrack;
+  Duration _lastDuration = Duration.zero;
+
+  /// 封面解析结果按曲目累积，超出上限按插入序淘汰。
+  static const int _artUriLimit = 64;
 
   /// 系统媒体卡片元数据（标题/艺人/专辑/封面/时长）。
   Future<void> updateNowPlaying({
@@ -44,19 +62,7 @@ class MusicMediaSessionHandler extends BaseAudioHandler with SeekHandler {
     required Duration duration,
   }) async {
     if (track != null) {
-      mediaItem.add(
-        MediaItem(
-          id: 'local:${track.id}',
-          album: track.albumTitle,
-          title: track.title,
-          artist: track.artistName,
-          duration:
-              track.durationSeconds != null
-                  ? Duration(seconds: track.durationSeconds!)
-                  : (duration > Duration.zero ? duration : null),
-          artUri: _artUri(track.coverUrl),
-        ),
-      );
+      _emitMediaItem(track, duration);
     }
     playbackState.add(
       playbackState.value.copyWith(
@@ -73,12 +79,61 @@ class MusicMediaSessionHandler extends BaseAudioHandler with SeekHandler {
     );
   }
 
+  void _emitMediaItem(MusicTrack track, Duration fallbackDuration) {
+    _lastTrack = track;
+    _lastDuration = fallbackDuration;
+    mediaItem.add(
+      MediaItem(
+        id: 'local:${track.id}',
+        album: track.albumTitle,
+        title: track.title,
+        artist: track.artistName,
+        duration:
+            track.durationSeconds != null
+                ? Duration(seconds: track.durationSeconds!)
+                : (fallbackDuration > Duration.zero ? fallbackDuration : null),
+        artUri: _artUri(track.listCoverUrl),
+      ),
+    );
+  }
+
   Uri? _artUri(String? coverUrl) {
     final url = coverUrl?.trim();
     if (url == null || url.isEmpty) {
       return null;
     }
-    return Uri.tryParse(url);
+    final resolved = _artFileUris[url];
+    if (resolved != null) {
+      return resolved;
+    }
+    if (!_artInFlight.contains(url)) {
+      _artInFlight.add(url);
+      unawaited(_resolveArt(url));
+    }
+    return null;
+  }
+
+  Future<void> _resolveArt(String url) async {
+    try {
+      final uri = await _artResolver(url);
+      if (uri == null) {
+        return;
+      }
+      if (_artFileUris.length >= _artUriLimit) {
+        _artFileUris.remove(_artFileUris.keys.first);
+      }
+      _artFileUris[url] = uri;
+      final track = _lastTrack;
+      // 解析完成时可能已经切歌：只在仍是同一封面来源时补投，避免旧封面覆盖新曲目。
+      if (track != null && track.listCoverUrl?.trim() == url) {
+        _emitMediaItem(track, _lastDuration);
+      }
+    } on Object catch (error) {
+      // 封面取不到不得影响播放控制与元数据，也不得把异常抛回进度流。
+      devLog('音乐系统媒体封面解析失败: ${error.runtimeType}');
+    } finally {
+      _artInFlight.remove(url);
+    }
   }
 
   @override

@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Iterator;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -90,6 +91,26 @@ public class MusicCoverThumbnailService {
         static ThumbnailResult derived(UUID fileId) {
             return new ThumbnailResult(fileId, false);
         }
+    }
+
+    /**
+     * 查询封面已派生的缩略图文件节点。
+     *
+     * <p>派生键知识只留在本类：封面本体被回收时，调用方据此把缩略图与本体放进同一批
+     * 删除，避免中途失败留下无主的缩略图。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param coverFileId 封面原图文件节点 ID
+     * @return 缩略图文件节点 ID；尚未派生或对象缺失时为空
+     */
+    public Optional<UUID> findThumbnailFileId(UUID ownerUserId, UUID coverFileId) {
+        return derivedAssetStorageService.findStoredFileNodeId(
+                ownerUserId,
+                RESOURCE_TYPE,
+                coverFileId,
+                ASSET_TYPE,
+                FILE_NAME
+        );
     }
 
     /**

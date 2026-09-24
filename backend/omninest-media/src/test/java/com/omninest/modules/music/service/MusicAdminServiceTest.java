@@ -77,6 +77,8 @@ class MusicAdminServiceTest {
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final DerivedAssetStorageService derivedAssetStorageService =
             mock(DerivedAssetStorageService.class);
+    private final MusicCoverRetentionService coverRetentionService =
+            mock(MusicCoverRetentionService.class);
     private final MusicAdminService adminService = new MusicAdminService(
             scanJobRepository,
             trackRepository,
@@ -94,7 +96,8 @@ class MusicAdminServiceTest {
             syncEventService,
             readThroughCache,
             transactionManager,
-            derivedAssetStorageService
+            derivedAssetStorageService,
+            coverRetentionService
     );
 
     MusicAdminServiceTest() {

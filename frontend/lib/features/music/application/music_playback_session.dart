@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui' show AppExitResponse;
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,7 +12,9 @@ import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_media_session.dart';
+import 'package:omninest/features/music/data/music_cover_cache.dart';
 import 'package:omninest/features/music/data/music_progress_repository.dart';
+import 'package:omninest/features/music/domain/music_cover_paths.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
@@ -231,11 +234,17 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     );
     final binder = _webMediaBinder;
     if (binder != null && track != null) {
+      final coverUrl = track.listCoverUrl;
       binder.updateMetadata(
         title: track.title,
         artistName: track.artistName,
         albumTitle: track.albumTitle,
-        coverUrl: track.coverUrl,
+        coverUrl: coverUrl,
+        // 本地封面是需鉴权的稳定 API 路径：浏览器直连拿不到字节，改由共享 Dio 取。
+        coverLoader:
+            coverUrl != null && isMusicCoverApiPath(coverUrl)
+                ? _loadCoverBytes
+                : null,
       );
     }
     binder?.updatePlaybackState(
@@ -243,6 +252,22 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       position: position,
       duration: duration,
     );
+  }
+
+  Future<Uint8List?> _loadCoverBytes(String url) async {
+    final dio = ref.read(apiClientProvider).dio;
+    try {
+      final response = await dio.get<List<int>>(
+        resolveApiAbsoluteUrl(dio, url),
+        options: Options(responseType: ResponseType.bytes),
+      );
+      final bytes = response.data;
+      return bytes == null ? null : Uint8List.fromList(bytes);
+    } on Object catch (error) {
+      // 封面取不到只影响系统面板的图，不得冒泡进播放状态同步。
+      devLog('媒体会话封面字节加载失败: ${error.runtimeType}');
+      return null;
+    }
   }
 
   void _flushPlaybackQueue() {

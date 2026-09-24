@@ -21,3 +21,20 @@ ImageRenderMethodForWeb musicCoverRenderMethodForWeb(CacheManager? manager) =>
     manager == null
         ? ImageRenderMethodForWeb.HtmlImage
         : ImageRenderMethodForWeb.HttpGet;
+
+/// 把封面地址解析成系统可读的本地文件地址。
+///
+/// `audio_service` 的 Android 端用 `BitmapFactory.decodeFile(uri.path)` 取封面，
+/// 不会自行下载网络地址，也未鉴权的 API 路径本来也取不到；因此交给系统媒体会话的
+/// 封面必须先经缓存管理器落盘，再以 `file://` 形式下发。
+Future<Uri?> resolveMusicCoverFileUri(String url) async {
+  final manager =
+      isMusicCoverApiPath(url)
+          ? MusicCoverCache.maybeInstance
+          : DefaultCacheManager();
+  if (manager == null) {
+    return null;
+  }
+  final file = await manager.getSingleFile(url);
+  return Uri.file(file.path);
+}

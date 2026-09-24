@@ -457,8 +457,9 @@ class _FileRowState extends State<_FileRow> {
                   // 更多操作菜单
                   PopupMenuButton<_FileListAction>(
                     enabled: widget.enabled,
-                    // 主题下 IconButton 默认盒为 40（M3 视觉尺寸），
-                    // 与行内操作钮统一按 48 命中盒取齐。
+                    // IconButton 的外层命中盒已由 kMinInteractiveDimension 撑到
+                    // 48，但按钮自身盒只有 40；钉 minimumSize 让两颗按钮的可视
+                    // 尺寸与行内对齐一致。
                     style: ButtonStyle(
                       minimumSize: WidgetStatePropertyAll<Size>(
                         const Size(48, 48),
@@ -929,7 +930,7 @@ class _RowIconButtonState extends State<_RowIconButton> {
         child: GestureDetector(
           onTap: widget.enabled ? widget.onTap : null,
           // 命中盒按触屏标准取 48，悬停底色仍按 34 的视觉密度绘制；
-          // 行右侧的更多钮本就是 48 的 IconButton，行高不变。
+          // 行高不变靠的是行内纵向留白从 6 收到 2（见行容器注释）。
           behavior: HitTestBehavior.opaque,
           child: SizedBox.square(
             dimension: 48,

@@ -45,6 +45,7 @@ public class MusicPlaylistService {
     private final MusicTrackRepository trackRepository;
     private final MusicLibraryService musicLibraryService;
     private final MusicCoverService musicCoverService;
+    private final MusicCoverRetentionService coverRetentionService;
     private final MediaSyncEventService syncEventService;
 
     @Transactional(readOnly = true)
@@ -92,11 +93,13 @@ public class MusicPlaylistService {
         MusicPlaylist playlist = requireCustomPlaylist(ownerUserId, playlistId);
         playlist.setName(request.name().trim());
         playlist.setDescription(request.description());
+        UUID previousCoverFileId = playlist.getCoverFileId();
         if (request.coverFileId() != null) {
             musicCoverService.validateOwnedCover(ownerUserId, request.coverFileId());
             playlist.setCoverFileId(request.coverFileId());
         }
         MusicPlaylist saved = playlistRepository.save(playlist);
+        coverRetentionService.releaseUnreferenced(ownerUserId, previousCoverFileId);
         recordPlaylistEvent(ownerUserId, saved, SyncAction.UPDATED);
         return toDto(
                 saved,
@@ -109,8 +112,10 @@ public class MusicPlaylistService {
     public void delete(UUID ownerUserId, UUID playlistId) {
         log.info("删除播放列表: playlistId={}, userId={}", playlistId, ownerUserId);
         MusicPlaylist playlist = requireCustomPlaylist(ownerUserId, playlistId);
+        UUID coverFileId = playlist.getCoverFileId();
         playlistItemRepository.deleteByOwnerUserIdAndPlaylistId(ownerUserId, playlistId);
         playlistRepository.delete(playlist);
+        coverRetentionService.releaseUnreferenced(ownerUserId, coverFileId);
         recordPlaylistEvent(ownerUserId, playlist, SyncAction.DELETED);
     }
 

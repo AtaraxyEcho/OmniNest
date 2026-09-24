@@ -2,6 +2,7 @@ package com.omninest.modules.user.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
@@ -151,9 +152,11 @@ class AdminOperationsServiceTest {
     void operationsReturnTasksLogsStorageAndExternalStorageRows() {
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         UUID logId = UUID.fromString("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+        UUID ownerUserId = UUID.fromString("dddddddd-dddd-dddd-dddd-dddddddddddd");
         List<Object[]> taskRows = Collections.singletonList(
                 new Object[]{taskId, "FILE_INDEX", "FAILED", 30, "omninest.file.index", "索引失败", 2,
-                        Instant.parse("2026-05-20T10:00:00Z"), Instant.parse("2026-05-20T10:10:00Z")}
+                        Instant.parse("2026-05-20T10:00:00Z"), Instant.parse("2026-05-20T10:10:00Z"),
+                        ownerUserId, "member-it"}
         );
         doReturn(taskRows).when(taskRecordRepository).findRecent(100);
         var auditLog = new AuditLog();
@@ -174,7 +177,12 @@ class AdminOperationsServiceTest {
         );
         when(externalStorageAdministration.listAccounts()).thenReturn(List.of(externalAccount));
 
-        assertThat(service.tasks().items()).extracting("id").containsExactly(taskId);
+        var taskView = service.tasks();
+        assertThat(taskView.items()).extracting("id").containsExactly(taskId);
+        assertThat(taskView.items())
+                .extracting(AdminOperationsDto.TaskRecordItem::ownerUserId,
+                        AdminOperationsDto.TaskRecordItem::ownerLabel)
+                .containsExactly(tuple(ownerUserId, "member-it"));
         assertThat(service.logs().items()).extracting("id").containsExactly(logId);
         assertThat(service.storage().buckets())
                 .extracting(AdminOperationsDto.BucketItem::name)
@@ -220,7 +228,9 @@ class AdminOperationsServiceTest {
                         null,
                         1,
                         Instant.now(),
-                        Instant.now()
+                        Instant.now(),
+                        actorUserId,
+                        "admin-it"
                 )
         );
 
@@ -281,7 +291,9 @@ class AdminOperationsServiceTest {
                         null,
                         1,
                         Instant.now(),
-                        Instant.now()
+                        Instant.now(),
+                        actorUserId,
+                        "admin-it"
                 )
         );
 
@@ -330,7 +342,9 @@ class AdminOperationsServiceTest {
                         null,
                         1,
                         Instant.now(),
-                        Instant.now()
+                        Instant.now(),
+                        null,
+                        null
                 )
         );
 

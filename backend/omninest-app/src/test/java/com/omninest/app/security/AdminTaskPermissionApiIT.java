@@ -52,7 +52,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
  * 任务权限 API 隔离集成测试。
  *
  * <p>在真实 PostgreSQL + 完整 Spring Security 链路上验证：
- * MEMBER 不可读全站任务，ADMIN 可读但不可重试，个人任务接口仅本人可见。</p>
+ * MEMBER 不可读全站任务、不可重试，ADMIN 可读并可重试处置，个人任务接口仅本人可见。</p>
  *
  * @author OmniNest
  */
@@ -205,15 +205,33 @@ class AdminTaskPermissionApiIT {
     }
 
     @Test
-    @DisplayName("ADMIN 不可重试任务，SUPER_ADMIN 不因权限被拒绝")
-    void onlySuperAdminRetriesTasks() {
+    @DisplayName("ADMIN 可重试任务，MEMBER 不可")
+    void adminRetriesTasksAndMemberCannot() {
+        ResponseEntity<String> memberRetry = exchange(
+                "/api/v1/admin/tasks/" + MEMBER_TASK_ID + "/retry",
+                HttpMethod.POST,
+                memberToken(),
+                null,
+                String.class);
+        assertThat(memberRetry.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+        // 重试属任务处置，管理员应独立可用；下游 MQ 在测试内被禁用，
+        // 因此只断言授权层放行（非 403）。
         ResponseEntity<String> adminRetry = exchange(
                 "/api/v1/admin/tasks/" + MEMBER_TASK_ID + "/retry",
                 HttpMethod.POST,
                 adminToken(),
                 null,
                 String.class);
-        assertThat(adminRetry.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(adminRetry.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
+
+        ResponseEntity<String> dlqRetry = exchange(
+                "/api/v1/tasks/dlq/" + MEMBER_TASK_ID + "/retry",
+                HttpMethod.POST,
+                adminToken(),
+                null,
+                String.class);
+        assertThat(dlqRetry.getStatusCode()).isNotEqualTo(HttpStatus.FORBIDDEN);
 
         ResponseEntity<String> superRetry = exchange(
                 "/api/v1/admin/tasks/" + MEMBER_TASK_ID + "/retry",

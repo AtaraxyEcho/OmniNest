@@ -39,6 +39,7 @@ class MusicPlaylistServiceTest {
     private final MusicTrackRepository trackRepository = mock(MusicTrackRepository.class);
     private final MusicLibraryService musicLibraryService = mock(MusicLibraryService.class);
     private final MusicCoverService musicCoverService = mock(MusicCoverService.class);
+    private final MusicCoverRetentionService coverRetentionService = mock(MusicCoverRetentionService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final MusicPlaylistService playlistService =
             new MusicPlaylistService(
@@ -47,6 +48,7 @@ class MusicPlaylistServiceTest {
                     trackRepository,
                     musicLibraryService,
                     musicCoverService,
+                    coverRetentionService,
                     syncEventService
             );
 

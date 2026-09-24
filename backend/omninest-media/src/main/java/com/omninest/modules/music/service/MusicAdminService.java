@@ -90,6 +90,7 @@ public class MusicAdminService {
     private final ReadThroughCache readThroughCache;
     private final PlatformTransactionManager transactionManager;
     private final DerivedAssetStorageService derivedAssetStorageService;
+    private final MusicCoverRetentionService coverRetentionService;
     private TransactionTemplate transactionTemplate;
 
     /**
@@ -258,6 +259,7 @@ public class MusicAdminService {
         MusicTrack track = musicLibraryService.requireTrack(ownerUserId, trackId);
         UUID previousArtistId = track.getArtistId();
         UUID previousAlbumId = track.getAlbumId();
+        UUID previousCoverFileId = track.getCoverFileId();
 
         // 同步 music_artists / music_albums 实体，重关联 FK
         String artistName = request.artistName() != null ? request.artistName().trim() : track.getArtistName();
@@ -275,6 +277,7 @@ public class MusicAdminService {
         track.setAlbumId(album.getId());
         track.setMetadataStatus(MetadataStatus.MANUAL.getValue());
         trackRepository.save(track);
+        coverRetentionService.releaseUnreferenced(ownerUserId, previousCoverFileId);
         catalogService.refreshStatistics(ownerUserId, previousArtistId, previousAlbumId, track);
         recordTrackUpdated(ownerUserId, track);
         return musicLibraryService.toTrackDto(track, false);

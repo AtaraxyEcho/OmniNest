@@ -113,7 +113,7 @@ INSERT INTO omni.auth_permissions (id, code, name, module, description, enabled)
     ('a1b2c3d4-8888-8888-8888-888888888888', 'backdrop:read', '读取背景库', 'backdrop', '允许查看背景库素材。', true),
     ('a1b2c3d4-9999-9999-9999-999999999999', 'backdrop:write', '管理背景库', 'backdrop', '允许上传、修改和删除背景素材。', true),
     ('6d1b54bd-c1f3-403b-8428-082821e6de03', 'task:read', '读取任务', 'task', '允许查看当前用户拥有的任务。', true),
-    ('a1b2c3d4-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'task:admin', '任务管理', 'task', '允许查看全站任务与死信队列。', true),
+    ('a1b2c3d4-bbbb-bbbb-bbbb-bbbbbbbbbbbb', 'task:admin', '任务管理', 'task', '允许查看全站任务与死信队列，并重试失败、取消或死信任务。', true),
     ('4fc5ebd6-ae43-4125-9196-b3c2e15741f3', 'system:config:read', '读取系统配置', 'system', '允许读取系统配置。', true),
     ('80dd01d7-9e38-47ec-b644-fcf7d4bcd024', 'system:config:manage', '管理系统配置', 'system', '允许修改系统配置。', true),
     ('27d7dcd5-92a6-459c-9a7d-48c458dfc8c6', 'system:user:read', '读取用户', 'system', '允许查看系统用户。', true),

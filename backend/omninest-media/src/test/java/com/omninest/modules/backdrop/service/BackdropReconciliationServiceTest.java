@@ -170,6 +170,6 @@ class BackdropReconciliationServiceTest {
 
     private DerivedAssetStorageService.DerivedNodeRef nodeRef(UUID fileNodeId, UUID assetId) {
         return new DerivedAssetStorageService.DerivedNodeRef(
-                fileNodeId, "/.metadata/BACKDROP/" + assetId + "/ORIGINAL/original.png");
+                fileNodeId, "/.metadata/BACKDROP/" + assetId + "/ORIGINAL/original.png", Instant.now());
     }
 }

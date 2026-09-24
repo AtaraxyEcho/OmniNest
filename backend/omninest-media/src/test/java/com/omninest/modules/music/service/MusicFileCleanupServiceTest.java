@@ -18,6 +18,7 @@ import com.omninest.modules.music.repository.MusicTrackRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -30,6 +31,7 @@ import org.mockito.Mockito;
 class MusicFileCleanupServiceTest {
     private static final UUID OWNER_ID = UUID.fromString("10000000-0000-0000-0000-000000000001");
     private static final UUID FILE_NODE_ID = UUID.fromString("20000000-0000-0000-0000-000000000001");
+    private static final UUID COVER_FILE_ID = UUID.fromString("20000000-0000-0000-0000-000000000009");
     private static final UUID TRACK_ID = UUID.fromString("30000000-0000-0000-0000-000000000001");
 
     private final MusicTrackRepository trackRepository = Mockito.mock(MusicTrackRepository.class);
@@ -45,6 +47,8 @@ class MusicFileCleanupServiceTest {
     private final MusicPlaylistRepository playlistRepository = Mockito.mock(MusicPlaylistRepository.class);
     private final MediaSyncEventService syncEventService = Mockito.mock(MediaSyncEventService.class);
     private final ReadThroughCache readThroughCache = Mockito.mock(ReadThroughCache.class);
+    private final MusicCoverRetentionService coverRetentionService =
+            Mockito.mock(MusicCoverRetentionService.class);
     private final MusicFileCleanupService service = new MusicFileCleanupService(
             trackRepository,
             playbackCleanupService,
@@ -55,7 +59,8 @@ class MusicFileCleanupServiceTest {
             artistRepository,
             playlistRepository,
             syncEventService,
-            readThroughCache
+            readThroughCache,
+            coverRetentionService
     );
 
     @Test
@@ -76,6 +81,8 @@ class MusicFileCleanupServiceTest {
         Mockito.verify(playHistoryRepository).deleteByOwnerUserIdAndTrackIdIn(OWNER_ID, List.of(TRACK_ID));
         Mockito.verify(playlistItemRepository).deleteByOwnerUserIdAndTrackIdIn(OWNER_ID, List.of(TRACK_ID));
         Mockito.verify(trackRepository).deleteAllInBatch(List.of(track));
+        // 曲目行删掉后，它指向的封面与缩略图必须一起进入回收，否则成为无主派生资产。
+        Mockito.verify(coverRetentionService).releaseUnreferenced(OWNER_ID, Set.of(COVER_FILE_ID));
     }
 
     @Test
@@ -110,6 +117,7 @@ class MusicFileCleanupServiceTest {
         track.setId(TRACK_ID);
         track.setOwnerUserId(OWNER_ID);
         track.setFileNodeId(FILE_NODE_ID);
+        track.setCoverFileId(COVER_FILE_ID);
         return track;
     }
 

@@ -72,10 +72,13 @@ public class TaskController {
 
     /**
      * 重试死信队列中的任务
+     *
+     * <p>授权用 task:admin 而非系统配置管理：任务重试属任务处置，
+     * 管理员角色需要能独立完成，不必因此拿到全站配置写权限。</p>
      */
     @Operation(summary = "重试死信队列任务", description = "将死信队列中的指定任务重新投入正常队列进行重试")
     @PostMapping("/api/v1/tasks/dlq/{taskId}/retry")
-    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.TASK_ADMIN + "')")
     ApiResponse<Void> retryDlqEntry(@PathVariable UUID taskId) {
         taskQueryService.retryDlqEntry(taskId);
         return ApiResponse.success();
