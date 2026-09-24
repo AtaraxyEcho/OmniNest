@@ -383,7 +383,8 @@ class _FileRowState extends State<_FileRow> {
             onLongPress: longPress,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              // 行内操作钮命中盒 48，纵向留白相应收到 2，行高与抬上前一致（52）。
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
               decoration: BoxDecoration(
                 color:
                     widget.selected
@@ -456,6 +457,13 @@ class _FileRowState extends State<_FileRow> {
                   // 更多操作菜单
                   PopupMenuButton<_FileListAction>(
                     enabled: widget.enabled,
+                    // 主题下 IconButton 默认盒为 40（M3 视觉尺寸），
+                    // 与行内操作钮统一按 48 命中盒取齐。
+                    style: ButtonStyle(
+                      minimumSize: WidgetStatePropertyAll<Size>(
+                        const Size(48, 48),
+                      ),
+                    ),
                     icon: Icon(
                       Icons.more_vert_rounded,
                       size: 20,
@@ -860,7 +868,8 @@ class _SwipeAction extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 56,
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      // 与行内留白一致：行高由 48 命中盒决定，此处再留 5 会挤掉图标与文字的 2px。
+      padding: const EdgeInsets.symmetric(vertical: 2),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(8),
@@ -919,28 +928,36 @@ class _RowIconButtonState extends State<_RowIconButton> {
                 : SystemMouseCursors.basic,
         child: GestureDetector(
           onTap: widget.enabled ? widget.onTap : null,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color:
-                  _hovering && widget.enabled
-                      ? baseColor.withValues(alpha: 0.10)
-                      : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(
-              widget.icon,
-              size: 18,
-              color:
-                  widget.enabled
-                      ? (_hovering
-                          ? baseColor
-                          : context.filesColors.onSurfaceVariant)
-                      : Theme.of(
-                        context,
-                      ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+          // 命中盒按触屏标准取 48，悬停底色仍按 34 的视觉密度绘制；
+          // 行右侧的更多钮本就是 48 的 IconButton，行高不变。
+          behavior: HitTestBehavior.opaque,
+          child: SizedBox.square(
+            dimension: 48,
+            child: Center(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color:
+                      _hovering && widget.enabled
+                          ? baseColor.withValues(alpha: 0.10)
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  widget.icon,
+                  size: 18,
+                  color:
+                      widget.enabled
+                          ? (_hovering
+                              ? baseColor
+                              : context.filesColors.onSurfaceVariant)
+                          : Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant.withValues(alpha: 0.4),
+                ),
+              ),
             ),
           ),
         ),

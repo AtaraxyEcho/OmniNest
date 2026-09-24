@@ -190,6 +190,8 @@ class AdminTaskRecord {
     required this.retryCount,
     required this.createdAt,
     required this.updatedAt,
+    this.ownerUserId,
+    this.ownerLabel,
   });
 
   factory AdminTaskRecord.fromJson(Map<String, dynamic> json) {
@@ -204,6 +206,8 @@ class AdminTaskRecord {
       retryCount: _int(json['retryCount']),
       createdAt: json['createdAt']?.toString() ?? '',
       updatedAt: json['updatedAt']?.toString() ?? '',
+      ownerUserId: json['ownerUserId']?.toString(),
+      ownerLabel: json['ownerLabel']?.toString(),
     );
   }
 
@@ -217,6 +221,11 @@ class AdminTaskRecord {
   final int retryCount;
   final String createdAt;
   final String updatedAt;
+
+  /// 任务归属用户。普通用户不再查看任务队列，管理端要靠它把失败任务归到人。
+  /// 系统自身发起的任务没有归属，两项为空。
+  final String? ownerUserId;
+  final String? ownerLabel;
 
   bool get canRetry =>
       status == 'FAILED' || status == 'CANCELLED' || status == 'DLQ';

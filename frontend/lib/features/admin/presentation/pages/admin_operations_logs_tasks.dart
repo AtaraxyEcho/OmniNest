@@ -410,7 +410,7 @@ class _TaskListTab extends StatelessWidget {
                   selectedIndexes.length < selectableCount,
               showIndex: true,
               indexBase: page.page * pageSize,
-              minTableWidth: 1040,
+              minTableWidth: 1140,
               columns: [
                 AdminListColumn(
                   key: 'taskType',
@@ -418,6 +418,7 @@ class _TaskListTab extends StatelessWidget {
                   sortable: true,
                 ),
                 AdminListColumn(key: 'description', label: l10n.adminTaskName),
+                AdminListColumn(key: 'owner', label: l10n.adminTaskOwner),
                 AdminListColumn(
                   key: 'progress',
                   label: l10n.adminProgress,
@@ -450,6 +451,11 @@ class _TaskListTab extends StatelessWidget {
                   AdminCellText(item.taskType),
                   AdminCellText(
                     item.description.isEmpty ? item.id : item.description,
+                  ),
+                  AdminCellText(
+                    item.ownerLabel?.isNotEmpty == true
+                        ? item.ownerLabel!
+                        : '-',
                   ),
                   SizedBox(
                     width: 110,

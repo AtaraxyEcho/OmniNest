@@ -13,7 +13,6 @@ import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
-import 'package:omninest/features/tasks/task_ui.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
 
@@ -269,7 +268,6 @@ class _ReaderModuleTopBar extends ConsumerWidget {
             const SizedBox(width: 12),
             FontScaleControl(size: 20, color: rc.onSurfaceVariant),
             const SizedBox(width: 12),
-            TaskActivityButton(size: 20, color: rc.onSurfaceVariant),
             NotificationIcon(size: 20, color: rc.onSurfaceVariant),
             const SizedBox(width: 12),
             const UserAvatarMenu(),

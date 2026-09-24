@@ -6,6 +6,8 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
@@ -269,6 +271,87 @@ void main() {
     // 播放队列持久化带 160ms 防抖定时器，推进时钟让它自然落地。
     await tester.pump(const Duration(seconds: 1));
   });
+
+  testWidgets('本地资源列表提供删除入口并进入永久删除确认', (tester) async {
+    tester.view.physicalSize = const Size(1900, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final center = MusicCenterState(
+      dashboard: MusicDashboard.empty(),
+      tracks: const [_localManagementTrack],
+      albums: const [],
+      artists: const [],
+      playlists: const [],
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          musicCenterControllerProvider.overrideWith(
+            () => _FakeMusicCenterController(center),
+          ),
+          musicPlatformLibraryProvider.overrideWith(
+            _FakeMusicPlatformLibraryController.new,
+          ),
+          musicPlaybackSessionProvider.overrideWith(
+            _StubPlaybackSessionController.new,
+          ),
+          authSessionProvider.overrideWith(_ManageSessionNotifier.new),
+        ],
+        child: MaterialApp(
+          locale: const Locale('zh'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: OmniNestTheme.from(AppThemePalette.dark),
+          home: const MusicDeckShell(),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    await tester.tap(find.text('本地资源').first);
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.delete_outline_rounded), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.delete_outline_rounded));
+    await tester.pumpAndSettle();
+    expect(find.text('永久删除？'), findsOneWidget);
+    expect(
+      find.text('是否删除“Local Management Track”及其存储文件？此操作无法撤销。'),
+      findsOneWidget,
+    );
+
+    // 取消不得触发删除：确认框关闭后列表仍在原位。
+    await tester.tap(find.text('取消'));
+    await tester.pumpAndSettle();
+    expect(find.text('永久删除？'), findsNothing);
+    expect(find.text('Local Management Track'), findsOneWidget);
+  });
+}
+
+const MusicTrack _localManagementTrack = MusicTrack(
+  id: 'track-local-1',
+  fileNodeId: 'file-local-1',
+  title: 'Local Management Track',
+  artistName: 'Local Artist',
+  albumTitle: 'Local Album',
+  format: 'mp3',
+  favorite: false,
+);
+
+class _ManageSessionNotifier extends AuthSessionNotifier {
+  @override
+  Future<AuthSessionState> build() async => AuthSessionState(
+    user: UserProfile(
+      id: 'user-local',
+      username: 'local',
+      role: 'USER',
+      permissions: const <String>{'media:write'},
+    ),
+  );
 }
 
 class _FakeMusicCenterController extends MusicCenterController {

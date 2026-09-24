@@ -14,7 +14,6 @@ import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/files/media_import_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
-import 'package:omninest/features/tasks/task_ui.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
@@ -420,7 +419,6 @@ class MovieTopBar extends StatelessWidget {
           ),
           const SizedBox(width: 2),
           const FontScaleControl(size: 18),
-          const TaskActivityButton(size: 18),
           const NotificationIcon(size: 18),
           const SizedBox(width: 4),
           const UserAvatarMenu(),

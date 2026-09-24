@@ -27,9 +27,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get mobileNavReader => 'Reading';
 
   @override
-  String get mobileNotificationTaskCenter => 'Notifications & Tasks';
-
-  @override
   String get mobileOfflineBanner =>
       'You are offline. Some actions are unavailable.';
 
@@ -77,80 +74,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get searchGroupPhoto => 'Photos';
-
-  @override
-  String get tasksTitle => 'Tasks';
-
-  @override
-  String get tasksEmpty => 'No tasks';
-
-  @override
-  String get tasksEmptyHint => 'System tasks will appear here';
-
-  @override
-  String get tasksFilterAll => 'All';
-
-  @override
-  String get tasksFilterPending => 'Pending';
-
-  @override
-  String get tasksFilterRunning => 'Running';
-
-  @override
-  String get tasksFilterCompleted => 'Completed';
-
-  @override
-  String get tasksFilterFailed => 'Failed';
-
-  @override
-  String get tasksRetry => 'Retry';
-
-  @override
-  String get tasksStatusPending => 'Pending';
-
-  @override
-  String get tasksStatusRunning => 'Running';
-
-  @override
-  String get tasksStatusCompleted => 'Done';
-
-  @override
-  String get tasksStatusFailed => 'Failed';
-
-  @override
-  String get tasksRetryCount => 'Retry';
-
-  @override
-  String tasksRetryProgress(Object current, Object maximum) {
-    return 'Retries: $current/$maximum';
-  }
-
-  @override
-  String get tasksStatusRetryWait => 'Waiting to retry';
-
-  @override
-  String get tasksStatusNeedsAttention => 'Needs attention';
-
-  @override
-  String get tasksStatusCancelled => 'Cancelled';
-
-  @override
-  String get tasksPhasePlanning => 'Planning resource deletion';
-
-  @override
-  String get tasksPhaseDeletingObjects => 'Deleting object data';
-
-  @override
-  String get tasksPhaseVerifyingReferences => 'Checking resource references';
-
-  @override
-  String get tasksPhaseFinalizingDatabase => 'Cleaning up business data';
-
-  @override
-  String get tasksPhaseWaiting => 'Waiting for progress';
-
-  @override
-  String get tasksTimeJustNow => 'Just now';
 
   @override
   String tasksTimeMinutesAgo(Object count) {
@@ -2259,9 +2182,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get portalTaskTitle => 'Tasks';
-
-  @override
   String get portalTaskRunning => 'Running';
 
   @override
@@ -2549,11 +2469,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get portalMobileSyncOffline => 'Offline, waiting to sync';
-
-  @override
-  String portalMobileTaskSummary(Object active, Object failed) {
-    return '$active active, $failed failed';
-  }
 
   @override
   String portalMobileStorageUsed(Object used) {
@@ -3297,6 +3212,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get adminTaskName => 'Task name';
+
+  @override
+  String get adminTaskOwner => 'Owner';
 
   @override
   String get adminTaskExecutionStatus => 'Status';

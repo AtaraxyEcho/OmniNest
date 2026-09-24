@@ -1,3 +1,4 @@
+import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/features/music/data/music_cover_cache.dart';
@@ -10,3 +11,13 @@ import 'package:omninest/features/music/domain/music_cover_paths.dart';
 final musicCoverCacheManagerProvider = Provider.family<CacheManager?, String>(
   (ref, url) => isMusicCoverApiPath(url) ? MusicCoverCache.maybeInstance : null,
 );
+
+/// 与 [musicCoverCacheManagerProvider] 配对的 Web 渲染方式。
+///
+/// Web 端 `CachedNetworkImage` 默认 `HtmlImage`：浏览器按页面 origin 直接请求相对
+/// 路径且不携带 Bearer，鉴权封面必然 401。命中专域管理器时必须切 `HttpGet`，让字节
+/// 经由管理器下载。未命中（CDN 直链、非音乐地址）保持默认，行为与历史一致。
+ImageRenderMethodForWeb musicCoverRenderMethodForWeb(CacheManager? manager) =>
+    manager == null
+        ? ImageRenderMethodForWeb.HtmlImage
+        : ImageRenderMethodForWeb.HttpGet;

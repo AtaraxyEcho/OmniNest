@@ -18,7 +18,7 @@ enum OmniCanvasForm {
 /// 平板会被 `_HostedTouchCanvas` 一类限宽容器收窄画布，读 `MediaQuery` 的
 /// 屏幕宽会与该容器结论相反。
 ///
-/// `/notifications-tasks`、`/admin`、`/profile` 等顶层路由由根 Navigator 承载，不在
+/// `/notifications`、`/admin`、`/profile` 等顶层路由由根 Navigator 承载，不在
 /// 壳层子树内，此时 `hosted` 恒为 false，只能靠宽度落到触屏形态。
 ///
 /// 画布形态与「是否为手机」是两件事：入口可见性应按

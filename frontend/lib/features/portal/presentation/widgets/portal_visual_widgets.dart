@@ -652,14 +652,17 @@ class _AdaptiveCoverImage extends ConsumerWidget {
           fallback: fallback,
         );
       }
+      // 本地音乐封面走稳定鉴权 API 路径，需要音乐专域的 Dio 缓存管理器；
+      // 其他模块的签名直链与非音乐地址返回 null，行为不变。
+      final coverManager = ref.watch(
+        musicCoverCacheManagerProvider(networkCoverUrl!),
+      );
       return CachedNetworkImage(
-        imageUrl: networkCoverUrl!,
+        imageUrl: networkCoverUrl,
         cacheKey: coverCacheKey,
-        // 本地音乐封面走稳定鉴权 API 路径，需要音乐专域的 Dio 缓存管理器；
-        // 其他模块的签名直链与非音乐地址返回 null，行为不变。
-        cacheManager: ref.watch(
-          musicCoverCacheManagerProvider(networkCoverUrl),
-        ),
+        cacheManager: coverManager,
+        // Web 端默认 HtmlImage 会绕过管理器直连页面 origin 且不带 Bearer。
+        imageRenderMethodForWeb: musicCoverRenderMethodForWeb(coverManager),
         fit: BoxFit.cover,
         alignment: Alignment.center,
         filterQuality: FilterQuality.medium,
@@ -783,6 +786,8 @@ class _NetworkAdaptiveCoverImage extends ConsumerWidget {
             imageUrl: imageUrl,
             cacheKey: cacheKey,
             cacheManager: cacheManager,
+            // Web 端默认 HtmlImage 会绕过管理器直连页面 origin 且不带 Bearer。
+            imageRenderMethodForWeb: musicCoverRenderMethodForWeb(cacheManager),
             fit: BoxFit.cover,
             alignment: Alignment.center,
             filterQuality: FilterQuality.medium,
@@ -803,6 +808,8 @@ class _NetworkAdaptiveCoverImage extends ConsumerWidget {
             imageUrl: imageUrl,
             cacheKey: cacheKey,
             cacheManager: cacheManager,
+            // Web 端默认 HtmlImage 会绕过管理器直连页面 origin 且不带 Bearer。
+            imageRenderMethodForWeb: musicCoverRenderMethodForWeb(cacheManager),
             fit: foregroundFit,
             alignment: Alignment.center,
             filterQuality: FilterQuality.high,

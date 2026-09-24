@@ -11,7 +11,6 @@ import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_fullscreen_control.dart';
-import 'package:omninest/features/tasks/task_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
@@ -438,7 +437,6 @@ class _PortalDesktopVisualHostState
           ),
           const SizedBox(width: 10),
           FontScaleControl(size: 20, color: palette.text),
-          TaskActivityButton(size: 20, color: palette.text),
           NotificationIcon(size: 20, color: palette.text),
           const SizedBox(width: 8),
           const UserAvatarMenu(),

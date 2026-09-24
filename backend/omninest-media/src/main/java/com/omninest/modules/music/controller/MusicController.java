@@ -53,6 +53,7 @@ import com.omninest.modules.music.service.MusicStreamGatewayService;
 import com.omninest.modules.music.service.platform.MusicPlatformProvider.LyricsResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -100,6 +101,16 @@ public class MusicController {
 
     /** 缩略图回退且值得重试（派生繁忙或临时失败）：只缓存一分钟，下次进入即拿到缩略图。 */
     private static final String THUMBNAIL_RETRY_CACHE_CONTROL = "private, max-age=60";
+
+    /**
+     * 异步封面接口的占位响应头。
+     *
+     * <p>Spring Security 的默认写头在异步派发返回时执行，那时业务响应头尚未就绪，
+     * 它会补上 {@code no-cache, no-store, max-age=0}；之后再写 Cache-Control 只会追加，
+     * 客户端按第一个取值判断，稳定缩略图路径因此永远不新鲜。这里先占位抑制该写头，
+     * 派生完成后覆盖为真实新鲜度；失败路径保留本值，错误响应依旧不可缓存。</p>
+     */
+    private static final String UNCACHEABLE_CACHE_CONTROL = "no-store";
 
     private final CurrentUserContext currentUserContext;
     private final MusicOnlineDispatcher onlineDispatcher;
@@ -446,8 +457,12 @@ public class MusicController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @Operation(summary = "下载音乐封面缩略图", description = "按需派生并流式返回 300px 封面，原图不受理时回退原图")
     @GetMapping("/api/v1/music/covers/{fileId}/thumbnail")
-    CompletableFuture<ResponseEntity<StreamingResponseBody>> downloadMusicCoverThumbnail(@PathVariable UUID fileId) {
+    CompletableFuture<ResponseEntity<StreamingResponseBody>> downloadMusicCoverThumbnail(
+            @PathVariable UUID fileId,
+            HttpServletResponse response
+    ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        response.setHeader(HttpHeaders.CACHE_CONTROL, UNCACHEABLE_CACHE_CONTROL);
         return onlineDispatcher.supply(() -> {
             MusicCoverService.ThumbnailStream thumbnail = musicCoverService.prepareThumbnailStream(
                     ownerUserId,
@@ -455,10 +470,10 @@ public class MusicController {
             );
             MusicCoverService.CoverStreamDescriptor descriptor = thumbnail.descriptor();
             StreamingResponseBody body = outputStream -> musicCoverService.streamCover(descriptor, outputStream);
+            response.setHeader(HttpHeaders.CACHE_CONTROL, coverCacheControl(thumbnail.freshness()));
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(descriptor.contentType()))
                     .contentLength(descriptor.sizeBytes())
-                    .header(HttpHeaders.CACHE_CONTROL, coverCacheControl(thumbnail.freshness()))
                     .body(body);
         });
     }

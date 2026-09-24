@@ -6,7 +6,7 @@ import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/widgets/hover_scale.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 
-/// 显示通知入口和未读数量。
+/// 通知入口与未读数量。任务队列不在普通用户视野内，由管理端按归属人处理。
 class NotificationIcon extends ConsumerWidget {
   const NotificationIcon({super.key, this.size = 20, this.color});
 

@@ -291,12 +291,19 @@ class _TrendAndHealth extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final isWide = constraints.maxWidth >= 1080;
-        // 服务瓦片固定 72 高，两列只有在 flex 4 侧实际容得下 420 内容宽时才启用，
+        // 字号 1.6 档下两行文案会顶出 72 高，tile 与面板预留高度一并随字号放大。
+        final textScale =
+            MediaQuery.textScalerOf(
+              context,
+            ).scale(1).clamp(1.0, 1.6).toDouble();
+        final healthTileHeight = 72 * textScale;
+        // 两列只有在 flex 4 侧实际容得下 420 内容宽时才启用，
         // 与 1080 档的 1 列布局保持同一阈值口径。
         final healthColumns = isWide && constraints.maxWidth >= 1320 ? 2 : 1;
         final healthRows = (summary.health.length / healthColumns).ceil();
         final healthBodyHeight =
-            healthRows * 72 + (healthRows > 1 ? (healthRows - 1) * 12 : 0);
+            healthRows * healthTileHeight +
+            (healthRows > 1 ? (healthRows - 1) * 12 : 0);
         Widget trendPanel({required bool expandBody}) {
           final chart =
               (analytics == null || analytics!.userGrowth.isEmpty)
@@ -338,7 +345,7 @@ class _TrendAndHealth extends StatelessWidget {
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
               // 固定 tile 高度，避免 detail 文案长短导致瓦片高度不齐。
-              mainAxisExtent: 72,
+              mainAxisExtent: healthTileHeight,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [

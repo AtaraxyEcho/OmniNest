@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
@@ -174,10 +173,7 @@ class _MusicImmersiveArtwork extends ConsumerWidget {
               memCacheWidth: cacheWidth,
               memCacheHeight: cacheHeight,
               cacheManager: manager,
-              imageRenderMethodForWeb:
-                  manager == null
-                      ? ImageRenderMethodForWeb.HtmlImage
-                      : ImageRenderMethodForWeb.HttpGet,
+              imageRenderMethodForWeb: musicCoverRenderMethodForWeb(manager),
               filterQuality: FilterQuality.medium,
               placeholder: (context, url) => fallback,
               errorWidget: (context, url, error) => fallback,

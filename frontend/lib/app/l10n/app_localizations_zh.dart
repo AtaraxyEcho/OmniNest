@@ -27,9 +27,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get mobileNavReader => '阅读';
 
   @override
-  String get mobileNotificationTaskCenter => '通知与任务';
-
-  @override
   String get mobileOfflineBanner => '当前处于离线状态，部分操作暂不可用';
 
   @override
@@ -76,80 +73,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get searchGroupPhoto => '照片';
-
-  @override
-  String get tasksTitle => '任务';
-
-  @override
-  String get tasksEmpty => '暂无任务';
-
-  @override
-  String get tasksEmptyHint => '系统任务会显示在这里';
-
-  @override
-  String get tasksFilterAll => '全部';
-
-  @override
-  String get tasksFilterPending => '等待中';
-
-  @override
-  String get tasksFilterRunning => '执行中';
-
-  @override
-  String get tasksFilterCompleted => '已完成';
-
-  @override
-  String get tasksFilterFailed => '失败';
-
-  @override
-  String get tasksRetry => '重试';
-
-  @override
-  String get tasksStatusPending => '等待';
-
-  @override
-  String get tasksStatusRunning => '执行中';
-
-  @override
-  String get tasksStatusCompleted => '完成';
-
-  @override
-  String get tasksStatusFailed => '失败';
-
-  @override
-  String get tasksRetryCount => '重试';
-
-  @override
-  String tasksRetryProgress(Object current, Object maximum) {
-    return '重试 $current/$maximum';
-  }
-
-  @override
-  String get tasksStatusRetryWait => '等待重试';
-
-  @override
-  String get tasksStatusNeedsAttention => '需处理';
-
-  @override
-  String get tasksStatusCancelled => '已取消';
-
-  @override
-  String get tasksPhasePlanning => '规划删除资源';
-
-  @override
-  String get tasksPhaseDeletingObjects => '删除对象数据';
-
-  @override
-  String get tasksPhaseVerifyingReferences => '校验资源引用';
-
-  @override
-  String get tasksPhaseFinalizingDatabase => '清理业务数据';
-
-  @override
-  String get tasksPhaseWaiting => '等待任务进度';
-
-  @override
-  String get tasksTimeJustNow => '刚刚';
 
   @override
   String tasksTimeMinutesAgo(Object count) {
@@ -2184,9 +2107,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get portalTaskTitle => '任务';
-
-  @override
   String get portalTaskRunning => '运行中';
 
   @override
@@ -2474,11 +2394,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get portalMobileSyncOffline => '离线，等待恢复同步';
-
-  @override
-  String portalMobileTaskSummary(Object active, Object failed) {
-    return '$active 项运行中，$failed 项失败';
-  }
 
   @override
   String portalMobileStorageUsed(Object used) {
@@ -3201,6 +3116,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get adminTaskName => '任务名称';
+
+  @override
+  String get adminTaskOwner => '归属人';
 
   @override
   String get adminTaskExecutionStatus => '执行状态';

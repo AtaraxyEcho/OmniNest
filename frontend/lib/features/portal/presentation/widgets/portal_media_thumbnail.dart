@@ -41,13 +41,16 @@ class PortalMediaThumbnail extends ConsumerWidget {
     if (url == null || url.isEmpty) {
       child = fallback;
     } else {
+      // 本地音乐封面是稳定鉴权 API 路径：相对地址要经 baseUrl 拼接，
+      // 且必须带 Bearer；其他模块的签名直链与非音乐地址返回 null，
+      // 走默认缓存路径与历史行为一致。
+      final manager = ref.watch(musicCoverCacheManagerProvider(url));
       child = CachedNetworkImage(
         imageUrl: url,
         cacheKey: cacheKey,
-        // 本地音乐封面是稳定鉴权 API 路径：相对地址要经 baseUrl 拼接，
-        // 且必须带 Bearer；其他模块的签名直链与非音乐地址返回 null，
-        // 走默认缓存路径与历史行为一致。
-        cacheManager: ref.watch(musicCoverCacheManagerProvider(url)),
+        cacheManager: manager,
+        // Web 端默认 HtmlImage 会绕过管理器直连页面 origin 且不带 Bearer。
+        imageRenderMethodForWeb: musicCoverRenderMethodForWeb(manager),
         fit: fit,
         width: width,
         height: height,

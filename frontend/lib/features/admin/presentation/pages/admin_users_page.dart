@@ -52,11 +52,18 @@ class AdminUsersPage extends StatelessWidget {
         LayoutBuilder(
           builder: (context, constraints) {
             final columns = constraints.maxWidth >= 980 ? 4 : 2;
+            final tileWidth =
+                (constraints.maxWidth - (columns - 1) * 16) / columns;
+            // 与 AdminMetricGrid 同规则：定高随字号放大，否则两列窄卡必溢出。
+            final textScale =
+                MediaQuery.textScalerOf(
+                  context,
+                ).scale(1).clamp(1.0, 1.6).toDouble();
             return GridView.count(
               crossAxisCount: columns,
               crossAxisSpacing: 16,
               mainAxisSpacing: 16,
-              childAspectRatio: 1.9,
+              mainAxisExtent: tileWidth / 1.9 * textScale,
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [

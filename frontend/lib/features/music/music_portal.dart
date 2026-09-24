@@ -15,7 +15,7 @@ export 'package:omninest/features/music/application/music_portal_integration.dar
 export 'package:omninest/features/music/application/music_controller.dart'
     show MusicCenterState, musicCenterControllerProvider;
 export 'package:omninest/features/music/application/music_cover_artwork.dart'
-    show musicCoverCacheManagerProvider;
+    show musicCoverCacheManagerProvider, musicCoverRenderMethodForWeb;
 export 'package:omninest/features/music/application/music_immersive_controller.dart'
     show musicImmersiveControllerProvider;
 export 'package:omninest/features/music/domain/music_playable_item.dart'

@@ -1052,13 +1052,29 @@ class _LocalManagementContent extends ConsumerWidget {
                             color: context.musicColors.onSurfaceVariant,
                           ),
                         ),
-                        trailing: IconButton(
-                          tooltip: l10n.musicEditMetadata,
-                          onPressed:
-                              () => context.push(
-                                '/music/tracks/${track.id}/metadata',
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: l10n.musicEditMetadata,
+                              onPressed:
+                                  () => context.push(
+                                    '/music/tracks/${track.id}/metadata',
+                                  ),
+                              icon: const Icon(Icons.edit_outlined),
+                            ),
+                            IconButton(
+                              tooltip: l10n.musicDeleteLocalTrack,
+                              onPressed:
+                                  () => _deleteTrackHandler(context, ref)(
+                                    MusicPlayableItem.local(track),
+                                  ),
+                              icon: Icon(
+                                Icons.delete_outline_rounded,
+                                color: Theme.of(context).colorScheme.error,
                               ),
-                          icon: const Icon(Icons.edit_outlined),
+                            ),
+                          ],
                         ),
                       );
                     },

@@ -74,6 +74,13 @@ public final class AdminOperationsDto {
     ) {
     }
 
+    /**
+     * 任务记录项。
+     *
+     * <p>{@link #ownerUserId} 与 {@link #ownerLabel} 用于管理端把失败任务归到人：
+     * 任务不再是普通用户可见概念后，管理员是唯一能发现并重试失败的人。
+     * 无归属用户的系统任务两项为空。</p>
+     */
     @Schema(description = "任务记录项")
     public record TaskRecordItem(
             @Schema(description = "任务 ID") UUID id,
@@ -85,7 +92,9 @@ public final class AdminOperationsDto {
             @Schema(description = "错误摘要") String errorSummary,
             @Schema(description = "重试次数", example = "0") int retryCount,
             @Schema(description = "创建时间") Instant createdAt,
-            @Schema(description = "更新时间") Instant updatedAt
+            @Schema(description = "更新时间") Instant updatedAt,
+            @Schema(description = "归属用户 ID，系统任务为空") UUID ownerUserId,
+            @Schema(description = "归属用户显示名，优先昵称回退账号名", example = "ataraxy") String ownerLabel
     ) {
     }
 

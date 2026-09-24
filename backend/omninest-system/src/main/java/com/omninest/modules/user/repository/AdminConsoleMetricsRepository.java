@@ -24,18 +24,29 @@ public class AdminConsoleMetricsRepository {
 
     /**
      * 更新任务状态并返回完整记录（PostgreSQL RETURNING 子句）。
+     *
+     * <p>RETURNING 只给出被更新行本身，归属显示名需再联用户表，
+     * 因此写成 CTE 后在外层补齐 owner 两列。</p>
      */
     public AdminOperationsDto.TaskRecordItem updateTaskStatusReturning(UUID taskId, String status, int progress) {
         var query = entityManager.createNativeQuery("""
-                update omni.sys_tasks
-                set status = :status,
-                    progress = :progress,
-                    error_summary = null,
-                    retry_count = retry_count + 1,
-                    updated_at = now(),
-                    version = version + 1
-                where id = :taskId
-                returning id, task_type, status, progress, routing_key, error_summary, retry_count, created_at, updated_at
+                with updated as (
+                    update omni.sys_tasks
+                    set status = :status,
+                        progress = :progress,
+                        error_summary = null,
+                        retry_count = retry_count + 1,
+                        updated_at = now(),
+                        version = version + 1
+                    where id = :taskId
+                    returning *
+                )
+                select t.id, t.task_type, t.status, t.progress, t.routing_key,
+                       t.error_summary, t.retry_count, t.created_at, t.updated_at,
+                       t.owner_user_id,
+                       coalesce(nullif(a.display_name, ''), a.username) as owner_label
+                from updated t
+                left join omni.auth_users a on a.id = t.owner_user_id
                 """);
         query.setParameter("taskId", taskId);
         query.setParameter("status", status);
@@ -50,8 +61,16 @@ public class AdminConsoleMetricsRepository {
                 uuid(row[0]), text(row[1]), AdminOperationDescription.task(text(row[1]), text(row[4])),
                 text(row[2]), intValue(row[3]),
                 text(row[4]), text(row[5]), intValue(row[6]),
-                instant(row[7]), instant(row[8])
+                instant(row[7]), instant(row[8]),
+                uuidOrNull(row[9]), text(row[10])
         );
+    }
+
+    private UUID uuidOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return uuid(value);
     }
 
     private UUID uuid(Object value) {

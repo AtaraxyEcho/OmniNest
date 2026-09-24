@@ -10,6 +10,7 @@ import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_playback_session.dart';
 import 'package:omninest/features/music/application/music_spectrum_frame.dart';
@@ -72,13 +73,7 @@ void main() {
         mobileShellLocalBackdropActiveProvider.overrideWithValue(
           backdropActive,
         ),
-        mobileShellActivityProvider.overrideWithValue(
-          const MobileShellActivityState(
-            unreadCount: 0,
-            activeTaskCount: 0,
-            failedTaskCount: 0,
-          ),
-        ),
+        unreadCountProvider.overrideWith(_ZeroUnreadCount.new),
         mobileShellSelectionActiveProvider.overrideWith((ref, branch) => false),
         musicAudioPlaybackProvider.overrideWith(
           (ref) => const _SilentMusicAudioPlayback(),
@@ -489,4 +484,10 @@ class _SilentSpectrumListenable implements ValueListenable<MusicSpectrumFrame> {
 
   @override
   void removeListener(VoidCallback listener) {}
+}
+
+/// 壳层铃铛只需要未读计数；给零值避免真实请求。
+class _ZeroUnreadCount extends UnreadCountNotifier {
+  @override
+  int build() => 0;
 }

@@ -12,7 +12,6 @@ import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
-import 'package:omninest/features/tasks/task_ui.dart';
 import 'package:omninest/core/widgets/app_form_factor.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/admin/application/admin_console_controller.dart';
@@ -446,7 +445,6 @@ class _AdminTopBar extends ConsumerWidget {
               ),
               const SizedBox(width: 16),
               const FontScaleControl(size: 20),
-              const TaskActivityButton(size: 20),
               const NotificationIcon(size: 20),
               const SizedBox(width: 12),
               const UserAvatarMenu(),

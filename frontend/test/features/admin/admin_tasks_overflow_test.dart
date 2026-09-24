@@ -9,6 +9,8 @@ import 'package:omninest/features/admin/domain/admin_paging.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/application/admin_operations_controller.dart';
 import 'package:omninest/features/admin/presentation/pages/admin_dashboard_page.dart';
+import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/auth_models.dart';
 
 AdminPage<AdminTaskRecord> _fakePage(int count) {
   return AdminPage<AdminTaskRecord>(
@@ -24,6 +26,8 @@ AdminPage<AdminTaskRecord> _fakePage(int count) {
           retryCount: 0,
           createdAt: '2026-09-01T12:00:00Z',
           updatedAt: '2026-09-01T12:00:00Z',
+          ownerUserId: 'user-$i',
+          ownerLabel: 'member-$i',
         ),
     ],
     page: 0,
@@ -132,5 +136,54 @@ void main() {
       print('SIZE ${size.width}x${size.height} -> ${exception ?? 'OK'}');
       expect(exception, isNull);
     });
+  }
+
+  testWidgets('任务分区渲染归属人列', (tester) async {
+    tester.view.physicalSize = const Size(1440, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          consoleOverride,
+          authSessionProvider.overrideWith(_AdminSessionNotifier.new),
+          // 覆盖整个 family：分区内的查询记录由内部状态拼装，逐键覆盖易失配。
+          adminTaskPageProvider.overrideWith(
+            (ref, argument) async => _fakePage(3),
+          ),
+          adminDlqProvider.overrideWith((ref) async => const <AdminDlqTask>[]),
+        ],
+        child: MaterialApp(
+          theme: OmniNestTheme.dark(),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const AdminDashboardPage(initialSectionSegment: 'tasks'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // 普通用户不再查看任务队列，管理员要靠归属人把失败任务对到人。
+    expect(find.text('归属人'), findsOneWidget);
+    expect(find.text('member-0'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+}
+
+/// 管理端外壳按权限挑选分区，会话里必须带 task:admin 才会渲染任务分区。
+class _AdminSessionNotifier extends AuthSessionNotifier {
+  @override
+  Future<AuthSessionState> build() async {
+    return AuthSessionState(
+      user: UserProfile(
+        id: 'admin-1',
+        username: 'admin-it',
+        role: 'ADMIN',
+        permissions: const {'task:read', 'task:admin'},
+      ),
+    );
   }
 }

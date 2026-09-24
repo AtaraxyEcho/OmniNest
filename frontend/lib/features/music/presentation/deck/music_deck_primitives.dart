@@ -2,7 +2,6 @@ import 'dart:convert';
 import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -155,10 +154,7 @@ class MusicDeckArtwork extends ConsumerWidget {
       memCacheWidth: cacheWidth,
       maxWidthDiskCache: cacheWidth,
       cacheManager: manager,
-      imageRenderMethodForWeb:
-          manager == null
-              ? ImageRenderMethodForWeb.HtmlImage
-              : ImageRenderMethodForWeb.HttpGet,
+      imageRenderMethodForWeb: musicCoverRenderMethodForWeb(manager),
       useOldImageOnUrlChange: true,
       fadeInDuration: const Duration(milliseconds: 160),
       fadeOutDuration: const Duration(milliseconds: 80),

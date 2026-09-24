@@ -21,6 +21,7 @@ import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/backdrop/backdrop_ui.dart';
 import 'package:omninest/features/music/music_shell_ui.dart';
+import 'package:omninest/features/notifications/notification_ui.dart';
 
 /// 移动平台及紧凑视口使用的应用级导航壳层。
 class MobileAppShell extends ConsumerStatefulWidget {
@@ -354,10 +355,8 @@ class _MobileTopBar extends ConsumerWidget {
                           ),
                         ),
                       ),
-                    _MobileActivityButton(
-                      foregroundColor: foreground,
-                      borderColor: surface,
-                    ),
+                    // 与桌面/Web 同一铃铛组件：三端一致的未读徽标与跳转目标。
+                    NotificationIcon(size: 22, color: foreground),
                     const SizedBox(width: 4),
                     const UserAvatarMenu(size: 32, directToProfile: true),
                   ],
@@ -432,59 +431,6 @@ class _TopBarSearchField extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _MobileActivityButton extends ConsumerWidget {
-  const _MobileActivityButton({
-    required this.foregroundColor,
-    required this.borderColor,
-  });
-
-  final Color foregroundColor;
-
-  /// 活动点外圈描边色，取当前 chrome 表面避免浮点错位。
-  final Color borderColor;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final activity = ref.watch(mobileShellActivityProvider);
-    final failed = activity.failedTaskCount > 0;
-    final active = activity.activeTaskCount > 0;
-    final indicatorColor =
-        failed
-            ? context.mobileColors.danger
-            : active
-            ? context.mobileColors.musicAccent
-            : context.mobileColors.warmAccent;
-    final visible = activity.isVisible;
-    return IconButton(
-      tooltip: AppLocalizations.of(context).mobileNotificationTaskCenter,
-      onPressed: () => context.push('/notifications-tasks'),
-      icon: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Icon(
-            Icons.notifications_none_rounded,
-            size: 22,
-            color: foregroundColor,
-          ),
-          if (visible)
-            Positioned(
-              top: -2,
-              right: -3,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: indicatorColor,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: borderColor, width: 2),
-                ),
-                child: const SizedBox.square(dimension: 9),
-              ),
-            ),
-        ],
       ),
     );
   }

@@ -25,7 +25,6 @@ import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/workbench_navigation_bar.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/features/notifications/notification_ui.dart';
-import 'package:omninest/features/tasks/task_ui.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/confirm_action_dialog.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
@@ -656,7 +655,6 @@ class _FileTopBarState extends ConsumerState<_FileTopBar> {
             if (MediaQuery.of(context).size.width >= 600) ...[
               const SizedBox(width: 16),
               const FontScaleControl(size: 20),
-              const TaskActivityButton(size: 20),
               const NotificationIcon(size: 20),
               const SizedBox(width: 8),
             ],

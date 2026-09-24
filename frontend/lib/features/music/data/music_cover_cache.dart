@@ -26,7 +26,7 @@ abstract final class MusicCoverCache {
     }
     if (_instance == null || !identical(_instanceDio, dio)) {
       _instanceDio = dio;
-      _instance = CacheManager(
+      _instance = MusicCoverCacheManager(
         Config(
           'omninestMusicCovers',
           maxNrOfCacheObjects: 400,
@@ -42,6 +42,15 @@ abstract final class MusicCoverCache {
   static void configure(Dio dio) {
     _dio = dio;
   }
+}
+
+/// 封面专域缓存管理器。
+///
+/// 必须混入 [ImageCacheManager]：`cached_network_image` 只有在管理器实现了图片
+/// 缩放能力时才会带 `maxWidthDiskCache` 走注入的管理器，否则其内部断言在 debug
+/// 构建直接抛错，封面只能落到 errorWidget（release 下则静默忽略缩放）。
+class MusicCoverCacheManager extends CacheManager with ImageCacheManager {
+  MusicCoverCacheManager(super.config);
 }
 
 /// 经共享 Dio 拉取封面的 [FileService] 实现。

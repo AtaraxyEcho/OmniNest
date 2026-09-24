@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/environment_providers.dart';
-import 'package:omninest/app/mobile_shell/notification_task_center_page.dart';
 import 'package:omninest/app/mobile_shell/mobile_app_shell.dart';
 import 'package:omninest/app/route/app_route_surface.dart';
 import 'package:omninest/app/route/boot_page.dart';
@@ -90,21 +89,16 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         '/profile/notifications',
         (state) => const NotificationSettingsPage(),
       ),
-      _animatedRoute(
-        '/notifications-tasks',
-        (state) => NotificationTaskCenterPage(
-          initialIndex: state.uri.queryParameters['tab'] == 'tasks' ? 1 : 0,
-        ),
-      ),
-      // /tasks 注册后长期无人链接，任务列表已并入通知与任务中心；两条旧路径
-      // 保留重定向（/activity 为改名前的入口）。
+      // 任务队列不再是普通用户可见概念（由管理端按归属人查阅处理），
+      // 旧入口保留重定向：/notifications-tasks 是合并中心时期、/activity 是改名前。
       GoRoute(
-        path: '/tasks',
-        redirect: (context, state) => '/notifications-tasks?tab=tasks',
+        path: '/notifications-tasks',
+        redirect: (context, state) => '/notifications',
       ),
+      GoRoute(path: '/tasks', redirect: (context, state) => '/notifications'),
       GoRoute(
         path: '/activity',
-        redirect: (context, state) => '/notifications-tasks',
+        redirect: (context, state) => '/notifications',
       ),
       _animatedRoute(
         '/search',

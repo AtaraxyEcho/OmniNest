@@ -453,7 +453,7 @@ class _TaskCardState extends State<_TaskCard> {
                           runSpacing: 2,
                           children: [
                             for (final action in widget.actions)
-                              SizedBox.square(dimension: 34, child: action),
+                              SizedBox.square(dimension: 48, child: action),
                           ],
                         ),
                       ],
@@ -554,38 +554,48 @@ class _ActionIconButtonState extends State<_ActionIconButton> {
         onTapCancel:
             widget.enabled ? () => setState(() => _pressed = false) : null,
         onTap: widget.enabled ? widget.onTap : null,
-        child: AnimatedScale(
-          scale: _pressed ? 0.9 : 1.0,
-          duration: const Duration(milliseconds: 100),
-          curve: Curves.easeOutCubic,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color:
-                  _hovering && widget.enabled
-                      ? (widget.destructive
-                          ? context.filesColors.error.withValues(alpha: 0.12)
-                          : context.filesColors.onSurfaceVariant.withValues(
-                            alpha: 0.10,
-                          ))
-                      : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Tooltip(
-              message: widget.tooltip,
-              child: Icon(
-                widget.icon,
-                size: 18,
-                color:
-                    widget.enabled
-                        ? (_hovering
-                            ? baseColor
-                            : context.filesColors.onSurfaceVariant)
-                        : context.filesColors.onSurfaceVariant.withValues(
-                          alpha: 0.3,
-                        ),
+        // 命中盒按 48 取（触屏标准），按下缩放与悬停底色仍按 34 的视觉尺寸绘制；
+        // 透明区间也要能命中，故 opaque。
+        behavior: HitTestBehavior.opaque,
+        child: SizedBox.square(
+          dimension: 48,
+          child: Center(
+            child: AnimatedScale(
+              scale: _pressed ? 0.9 : 1.0,
+              duration: const Duration(milliseconds: 100),
+              curve: Curves.easeOutCubic,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 140),
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color:
+                      _hovering && widget.enabled
+                          ? (widget.destructive
+                              ? context.filesColors.error.withValues(
+                                alpha: 0.12,
+                              )
+                              : context.filesColors.onSurfaceVariant.withValues(
+                                alpha: 0.10,
+                              ))
+                          : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Tooltip(
+                  message: widget.tooltip,
+                  child: Icon(
+                    widget.icon,
+                    size: 18,
+                    color:
+                        widget.enabled
+                            ? (_hovering
+                                ? baseColor
+                                : context.filesColors.onSurfaceVariant)
+                            : context.filesColors.onSurfaceVariant.withValues(
+                              alpha: 0.3,
+                            ),
+                  ),
+                ),
               ),
             ),
           ),

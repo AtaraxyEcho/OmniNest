@@ -183,6 +183,28 @@ class AdminTaskPermissionApiIT {
     }
 
     @Test
+    @DisplayName("管理端任务分页返回归属人并可按归属人搜索")
+    void adminTaskPageExposesOwner() {
+        ResponseEntity<String> page = exchange(
+                "/api/v1/admin/tasks/page", HttpMethod.GET, adminToken(), null, String.class);
+        assertThat(page.getStatusCode()).isEqualTo(HttpStatus.OK);
+        // 任务不再是普通用户可见概念后，管理员只能靠归属人把失败任务对到人。
+        assertThat(page.getBody()).contains("\"ownerUserId\":\"" + MEMBER_ID);
+        assertThat(page.getBody()).contains("\"ownerLabel\":\"member-it\"");
+        assertThat(page.getBody()).contains("\"ownerLabel\":\"other-it\"");
+
+        ResponseEntity<String> filtered = exchange(
+                "/api/v1/admin/tasks/page?query=other-it",
+                HttpMethod.GET,
+                adminToken(),
+                null,
+                String.class);
+        assertThat(filtered.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(filtered.getBody()).contains(OTHER_TASK_ID.toString());
+        assertThat(filtered.getBody()).doesNotContain(MEMBER_TASK_ID.toString());
+    }
+
+    @Test
     @DisplayName("ADMIN 不可重试任务，SUPER_ADMIN 不因权限被拒绝")
     void onlySuperAdminRetriesTasks() {
         ResponseEntity<String> adminRetry = exchange(

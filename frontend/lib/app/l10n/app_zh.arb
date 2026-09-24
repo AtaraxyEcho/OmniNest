@@ -6,7 +6,6 @@
   "mobileNavMusic": "音乐",
   "mobileNavVisual": "影像",
   "mobileNavReader": "阅读",
-  "mobileNotificationTaskCenter": "通知与任务",
   "mobileOfflineBanner": "当前处于离线状态，部分操作暂不可用",
   "fullscreenEnterShortcut": "全屏（F11）",
   "fullscreenExitShortcut": "退出全屏（F11）",
@@ -23,36 +22,6 @@
   "searchGroupVideo": "视频",
   "searchGroupMusic": "音乐",
   "searchGroupPhoto": "照片",
-  "tasksTitle": "任务",
-  "tasksEmpty": "暂无任务",
-  "tasksEmptyHint": "系统任务会显示在这里",
-  "tasksFilterAll": "全部",
-  "tasksFilterPending": "等待中",
-  "tasksFilterRunning": "执行中",
-  "tasksFilterCompleted": "已完成",
-  "tasksFilterFailed": "失败",
-  "tasksRetry": "重试",
-  "tasksStatusPending": "等待",
-  "tasksStatusRunning": "执行中",
-  "tasksStatusCompleted": "完成",
-  "tasksStatusFailed": "失败",
-  "tasksRetryCount": "重试",
-  "tasksRetryProgress": "重试 {current}/{maximum}",
-  "@tasksRetryProgress": {
-    "placeholders": {
-      "current": {},
-      "maximum": {}
-    }
-  },
-  "tasksStatusRetryWait": "等待重试",
-  "tasksStatusNeedsAttention": "需处理",
-  "tasksStatusCancelled": "已取消",
-  "tasksPhasePlanning": "规划删除资源",
-  "tasksPhaseDeletingObjects": "删除对象数据",
-  "tasksPhaseVerifyingReferences": "校验资源引用",
-  "tasksPhaseFinalizingDatabase": "清理业务数据",
-  "tasksPhaseWaiting": "等待任务进度",
-  "tasksTimeJustNow": "刚刚",
   "tasksTimeMinutesAgo": "{count} 分钟前",
   "@tasksTimeMinutesAgo": {
     "placeholders": {
@@ -837,7 +806,6 @@
       "used": {}
     }
   },
-  "portalTaskTitle": "任务",
   "portalTaskRunning": "运行中",
   "portalTaskQueued": "队列中",
   "portalTaskFailed": "失败",
@@ -956,13 +924,6 @@
   "portalMobileSystemSummary": "系统摘要",
   "portalMobileSyncOnline": "同步服务在线",
   "portalMobileSyncOffline": "离线，等待恢复同步",
-  "portalMobileTaskSummary": "{active} 项运行中，{failed} 项失败",
-  "@portalMobileTaskSummary": {
-    "placeholders": {
-      "active": {},
-      "failed": {}
-    }
-  },
   "portalMobileStorageUsed": "已使用 {used}",
   "@portalMobileStorageUsed": {
     "placeholders": {
@@ -1289,6 +1250,8 @@
   "adminTaskErrorSummary": "错误摘要",
   "adminTaskUpdatedAt": "更新时间",
   "adminTaskName": "任务名称",
+  "adminTaskOwner": "归属人",
+  "adminTaskOwner": "归属人",
   "adminTaskExecutionStatus": "执行状态",
   "adminTaskListSubtitle": "失败、取消、死信状态支持重新入队。",
   "adminNoBackgroundTasks": "当前没有后台任务。",

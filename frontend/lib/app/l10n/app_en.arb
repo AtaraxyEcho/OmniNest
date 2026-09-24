@@ -6,7 +6,6 @@
   "mobileNavMusic": "Music",
   "mobileNavVisual": "Visual",
   "mobileNavReader": "Reading",
-  "mobileNotificationTaskCenter": "Notifications & Tasks",
   "mobileOfflineBanner": "You are offline. Some actions are unavailable.",
   "fullscreenEnterShortcut": "Full screen (F11)",
   "fullscreenExitShortcut": "Exit full screen (F11)",
@@ -23,36 +22,6 @@
   "searchGroupVideo": "Videos",
   "searchGroupMusic": "Music",
   "searchGroupPhoto": "Photos",
-  "tasksTitle": "Tasks",
-  "tasksEmpty": "No tasks",
-  "tasksEmptyHint": "System tasks will appear here",
-  "tasksFilterAll": "All",
-  "tasksFilterPending": "Pending",
-  "tasksFilterRunning": "Running",
-  "tasksFilterCompleted": "Completed",
-  "tasksFilterFailed": "Failed",
-  "tasksRetry": "Retry",
-  "tasksStatusPending": "Pending",
-  "tasksStatusRunning": "Running",
-  "tasksStatusCompleted": "Done",
-  "tasksStatusFailed": "Failed",
-  "tasksRetryCount": "Retry",
-  "tasksRetryProgress": "Retries: {current}/{maximum}",
-  "@tasksRetryProgress": {
-    "placeholders": {
-      "current": {},
-      "maximum": {}
-    }
-  },
-  "tasksStatusRetryWait": "Waiting to retry",
-  "tasksStatusNeedsAttention": "Needs attention",
-  "tasksStatusCancelled": "Cancelled",
-  "tasksPhasePlanning": "Planning resource deletion",
-  "tasksPhaseDeletingObjects": "Deleting object data",
-  "tasksPhaseVerifyingReferences": "Checking resource references",
-  "tasksPhaseFinalizingDatabase": "Cleaning up business data",
-  "tasksPhaseWaiting": "Waiting for progress",
-  "tasksTimeJustNow": "Just now",
   "tasksTimeMinutesAgo": "{count} min ago",
   "@tasksTimeMinutesAgo": {
     "placeholders": {
@@ -963,7 +932,6 @@
       "used": {}
     }
   },
-  "portalTaskTitle": "Tasks",
   "portalTaskRunning": "Running",
   "portalTaskQueued": "Queued",
   "portalTaskFailed": "Failed",
@@ -1082,13 +1050,6 @@
   "portalMobileSystemSummary": "System summary",
   "portalMobileSyncOnline": "Sync service online",
   "portalMobileSyncOffline": "Offline, waiting to sync",
-  "portalMobileTaskSummary": "{active} active, {failed} failed",
-  "@portalMobileTaskSummary": {
-    "placeholders": {
-      "active": {},
-      "failed": {}
-    }
-  },
   "portalMobileStorageUsed": "{used} used",
   "@portalMobileStorageUsed": {
     "placeholders": {
@@ -1415,6 +1376,7 @@
   "adminTaskErrorSummary": "Error summary",
   "adminTaskUpdatedAt": "Updated at",
   "adminTaskName": "Task name",
+  "adminTaskOwner": "Owner",
   "adminTaskExecutionStatus": "Status",
   "adminTaskListSubtitle": "Failed, cancelled and DLQ status support re-queue.",
   "adminNoBackgroundTasks": "No background tasks.",

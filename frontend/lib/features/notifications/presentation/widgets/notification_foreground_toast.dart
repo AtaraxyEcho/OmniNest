@@ -46,7 +46,7 @@ class NotificationForegroundToast extends ConsumerWidget {
     }
     final router = GoRouter.of(context);
     final path = router.routeInformationProvider.value.uri.path;
-    if (path == '/notifications' || path == '/notifications-tasks') {
+    if (path == '/notifications') {
       return;
     }
     final l10n = AppLocalizations.of(context);

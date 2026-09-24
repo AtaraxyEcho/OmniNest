@@ -19,12 +19,20 @@ PhotoItem _photo(String id) {
   );
 }
 
+Finder _tileTitles() {
+  return find.byWidgetPredicate(
+    (widget) => widget is Text && (widget.data ?? '').startsWith('Photo p'),
+  );
+}
+
 Future<void> _pumpTrashView(
   WidgetTester tester, {
   required ValueChanged<PhotoItem> onRestore,
   required ValueChanged<PhotoItem> onDeleteForever,
+  List<PhotoItem>? photos,
+  Size viewport = const Size(400, 900),
 }) async {
-  tester.view.physicalSize = const Size(400, 900);
+  tester.view.physicalSize = viewport;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.resetPhysicalSize);
   addTearDown(tester.view.resetDevicePixelRatio);
@@ -36,7 +44,7 @@ Future<void> _pumpTrashView(
       theme: OmniNestTheme.from(AppThemePalette.dark),
       home: Scaffold(
         body: FrameTrashView(
-          photos: [_photo('photo-1')],
+          photos: photos ?? [_photo('photo-1')],
           isLoading: false,
           onRestore: onRestore,
           onDeleteForever: onDeleteForever,
@@ -87,5 +95,57 @@ void main() {
 
     // 二次确认已上移到页面层 confirmAndRunFilePurge，视图内不再弹窗。
     expect(deleted, isTrue);
+  });
+
+  testWidgets('回收站大批量照片只建可见行', (tester) async {
+    final photos = [for (var i = 0; i < 200; i++) _photo('p$i')];
+    await _pumpTrashView(
+      tester,
+      onRestore: (_) {},
+      onDeleteForever: (_) {},
+      photos: photos,
+    );
+
+    final built = tester.widgetList(_tileTitles()).length;
+    expect(built, greaterThan(0));
+    expect(built, lessThan(200));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('滚动到末行后补建且不横向溢出', (tester) async {
+    final photos = [for (var i = 0; i < 200; i++) _photo('p$i')];
+    await _pumpTrashView(
+      tester,
+      onRestore: (_) {},
+      onDeleteForever: (_) {},
+      photos: photos,
+    );
+
+    await tester.dragUntilVisible(
+      find.text('Photo p199'),
+      find.byType(CustomScrollView),
+      const Offset(0, -1200),
+      maxIteration: 40,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Photo p199'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('宽视口列数增加后仍按行分块', (tester) async {
+    final photos = [for (var i = 0; i < 120; i++) _photo('p$i')];
+    await _pumpTrashView(
+      tester,
+      onRestore: (_) {},
+      onDeleteForever: (_) {},
+      photos: photos,
+      viewport: const Size(1440, 900),
+    );
+
+    final built = tester.widgetList(_tileTitles()).length;
+    expect(built, greaterThan(0));
+    expect(built, lessThan(120));
+    expect(tester.takeException(), isNull);
   });
 }

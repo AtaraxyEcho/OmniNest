@@ -226,7 +226,8 @@ public class AdminOperationsPagingService {
         return rows.stream().map(row -> new AdminOperationsDto.TaskRecordItem(
                 toUuid(row[0]), toText(row[1]), AdminOperationDescription.task(toText(row[1]), toText(row[4])),
                 toText(row[2]), toInt(row[3]), toText(row[4]), toText(row[5]), toInt(row[6]),
-                toInstant(row[7]), toInstant(row[8])
+                toInstant(row[7]), toInstant(row[8]),
+                toUuidOrNull(row[9]), toText(row[10])
         )).toList();
     }
 
@@ -328,6 +329,16 @@ public class AdminOperationsPagingService {
             return uuid;
         }
         return UUID.fromString(value.toString());
+    }
+
+    /**
+     * 系统任务的归属用户可以为空，单行缺失不得让整页转换失败。
+     */
+    private UUID toUuidOrNull(Object value) {
+        if (value == null) {
+            return null;
+        }
+        return toUuid(value);
     }
 
     private String toText(Object value) {

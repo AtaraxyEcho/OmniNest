@@ -12,8 +12,9 @@ void main() {
     required void Function(String columnKey, bool ascending) onSort,
     AdminListSort? sort,
     bool withActions = true,
+    Size surface = const Size(1280, 900),
   }) async {
-    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.physicalSize = surface;
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
@@ -64,6 +65,26 @@ void main() {
     expect(find.text('row-0'), findsOneWidget);
     expect(find.text('row-2'), findsOneWidget);
     expect(find.byIcon(Icons.more_vert_rounded), findsNWidgets(3));
+  });
+
+  testWidgets('竖屏平板宽度下固定操作列不引发布局异常', (tester) async {
+    await pumpTable(
+      tester,
+      rowCount: 5,
+      onSort: (columnKey, ascending) {},
+      surface: const Size(768, 900),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('托管画布宽度下固定操作列不引发布局异常', (tester) async {
+    await pumpTable(
+      tester,
+      rowCount: 5,
+      onSort: (columnKey, ascending) {},
+      surface: const Size(720, 900),
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('点击可排序列头回调列键与方向', (tester) async {

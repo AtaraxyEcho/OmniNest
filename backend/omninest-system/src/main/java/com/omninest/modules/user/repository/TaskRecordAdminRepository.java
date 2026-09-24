@@ -35,6 +35,19 @@ public class TaskRecordAdminRepository {
     }
 
     /**
+     * 任务投影列：前 9 列顺序被上层按下标消费，追加列只能加在末尾。
+     * 第 10、11 列为归属用户 ID 与显示名，供管理端把失败任务归到人。
+     */
+    private static final String TASK_PROJECTION = """
+            select t.id, t.task_type, t.status, t.progress, t.routing_key,
+                   t.error_summary, t.retry_count, t.created_at, t.updated_at,
+                   t.owner_user_id,
+                   coalesce(nullif(a.display_name, ''), a.username) as owner_label
+            from omni.sys_tasks t
+            left join omni.auth_users a on a.id = t.owner_user_id
+            """;
+
+    /**
      * 查询最近更新的任务。
      *
      * @param limit 返回数量上限
@@ -42,12 +55,9 @@ public class TaskRecordAdminRepository {
      */
     @SuppressWarnings("unchecked")
     public List<Object[]> findRecent(int limit) {
-        Query query = entityManager.createNativeQuery("""
-                select id, task_type, status, progress, routing_key,
-                       error_summary, retry_count, created_at, updated_at
-                from omni.sys_tasks
-                order by updated_at desc, id desc
-                """);
+        Query query = entityManager.createNativeQuery(
+                TASK_PROJECTION + " order by t.updated_at desc, t.id desc"
+        );
         query.setMaxResults(Math.min(Math.max(1, limit), MAX_RECENT_LIMIT));
         return query.getResultList();
     }
@@ -75,28 +85,30 @@ public class TaskRecordAdminRepository {
             boolean ascending
     ) {
         String filters = """
-                where (:status = '' or status = :status)
-                  and (:taskType = '' or task_type = :taskType)
+                where (:status = '' or t.status = :status)
+                  and (:taskType = '' or t.task_type = :taskType)
                   and (
                     :searchPattern = ''
-                    or lower(task_type) like :searchPattern
-                    or lower(coalesce(routing_key, '')) like :searchPattern
-                    or lower(coalesce(error_summary, '')) like :searchPattern
-                    or cast(id as text) like :searchPattern
+                    or lower(t.task_type) like :searchPattern
+                    or lower(coalesce(t.routing_key, '')) like :searchPattern
+                    or lower(coalesce(t.error_summary, '')) like :searchPattern
+                    or cast(t.id as text) like :searchPattern
+                    or lower(coalesce(a.username, '')) like :searchPattern
+                    or lower(coalesce(a.display_name, '')) like :searchPattern
                   )
                 """;
-        Query contentQuery = entityManager.createNativeQuery("""
-                select id, task_type, status, progress, routing_key,
-                       error_summary, retry_count, created_at, updated_at
-                from omni.sys_tasks
-                """ + filters + taskOrderClause(sortColumn, ascending));
+        Query contentQuery = entityManager.createNativeQuery(
+                TASK_PROJECTION + filters + taskOrderClause(sortColumn, ascending)
+        );
         bindPageFilters(contentQuery, status, taskType, searchPattern);
         int boundedSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
         contentQuery.setFirstResult(Math.max(0, page) * boundedSize);
         contentQuery.setMaxResults(boundedSize);
 
         Query countQuery = entityManager.createNativeQuery(
-                "select count(*) from omni.sys_tasks " + filters
+                "select count(*) from omni.sys_tasks t "
+                        + "left join omni.auth_users a on a.id = t.owner_user_id "
+                        + filters
         );
         bindPageFilters(countQuery, status, taskType, searchPattern);
         long totalElements = numberValue(countQuery.getSingleResult());
@@ -178,10 +190,11 @@ public class TaskRecordAdminRepository {
 
     /**
      * 构建任务排序子句：列不在白名单时回退为更新时间，并追加 id 倒序兜底。
+     * 投影联表后列名需带任务表别名，否则与用户表的同名列冲突。
      */
     private String taskOrderClause(String column, boolean ascending) {
         String safe = TASK_ORDERABLE_COLUMNS.contains(column) ? column : "updated_at";
-        return "order by " + safe + (ascending ? " asc" : " desc") + ", id desc";
+        return " order by t." + safe + (ascending ? " asc" : " desc") + ", t.id desc";
     }
 
     public record TaskPage(List<Object[]> items, long totalElements) {

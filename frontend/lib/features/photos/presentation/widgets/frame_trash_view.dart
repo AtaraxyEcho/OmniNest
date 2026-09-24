@@ -54,6 +54,9 @@ class _FrameTrashViewState extends State<FrameTrashView> {
     widget.onDeleteForever(photo);
   }
 
+  static const double _tileGap = 10;
+  static const double _rowGap = 14;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -64,100 +67,139 @@ class _FrameTrashViewState extends State<FrameTrashView> {
         SliverLayoutBuilder(
           builder: (context, constraints) {
             final padding = constraints.crossAxisExtent > 768 ? 24.0 : 16.0;
-            final columns =
-                constraints.crossAxisExtent > 1280
-                    ? 4
-                    : constraints.crossAxisExtent > 900
-                    ? 3
-                    : 2;
+            final columns = _columnCount(constraints.crossAxisExtent);
             return SliverPadding(
               padding: EdgeInsets.all(padding),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              frameViewLabel(l10n, FrameView.trash),
-                              style: TextStyle(
-                                fontFamily: FramePalette.serifFamily,
-                                fontFamilyFallback: FramePalette.serifFallback,
-                                color: colors.ink,
-                                fontSize: AppTypography.headlineSmall,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              l10n.photosTrashSubtitle(widget.photos.length),
-                              style: TextStyle(
-                                color: colors.muted,
-                                fontSize: AppTypography.bodySmall,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      if (widget.photos.isNotEmpty)
-                        _EmptyTrashButton(onTap: _confirmEmptyTrash),
-                    ],
+              sliver: SliverMainAxisGroup(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: _buildHeader(context, l10n, colors),
                   ),
-                  const SizedBox(height: 24),
+                  const SliverToBoxAdapter(child: SizedBox(height: 24)),
                   if (widget.errorMessage != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: Text(
-                        widget.errorMessage!,
-                        style: TextStyle(
-                          color: const Color(0xFFEF4444),
-                          fontSize: AppTypography.bodyMedium,
-                        ),
-                      ),
-                    )
+                    SliverToBoxAdapter(child: _buildError())
                   else if (widget.photos.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 64),
-                      child: FrameEmptyView(
-                        icon: Icons.delete_outlined,
-                        message: l10n.photosFrameTrashEmpty,
-                        hint: l10n.photosFrameTrashEmptyHint,
-                      ),
-                    )
+                    SliverToBoxAdapter(child: _buildEmpty(l10n))
                   else
-                    LayoutBuilder(
-                      builder: (context, gridConstraints) {
-                        final gap = 10.0;
-                        final itemWidth =
-                            (gridConstraints.maxWidth - (columns - 1) * gap) /
-                            columns;
-                        return Wrap(
-                          spacing: gap,
-                          runSpacing: 14,
-                          children: [
-                            for (final photo in widget.photos)
-                              SizedBox(
-                                width: itemWidth,
-                                child: _TrashTile(
-                                  key: ValueKey('trash-${photo.id}'),
-                                  photo: photo,
-                                  onRestore: () => widget.onRestore(photo),
-                                  onDeleteForever:
-                                      () => _confirmDeleteForever(photo),
-                                ),
-                              ),
-                          ],
-                        );
-                      },
+                    _buildTileRows(
+                      constraints.crossAxisExtent - padding * 2,
+                      columns,
                     ),
-                ]),
+                ],
               ),
             );
           },
         ),
       ],
+    );
+  }
+
+  /// 列数阈值按视口宽度取，与内边距无关（与原 Wrap 布局同源）。
+  static int _columnCount(double viewportWidth) {
+    if (viewportWidth > 1280) {
+      return 4;
+    }
+    if (viewportWidth > 900) {
+      return 3;
+    }
+    return 2;
+  }
+
+  /// 按行分块懒建。原先整片 Wrap 塞在单个 sliver 里，回收站照片再多数也全量构建；
+  /// 逐格宽高比不同，不能换成固定比例的 SliverGrid。
+  /// 格宽向下取整，避免浮点余量把整行最后一格挤成次行。
+  Widget _buildTileRows(double contentWidth, int columns) {
+    final itemWidth =
+        ((contentWidth - (columns - 1) * _tileGap) / columns).floorToDouble();
+    final rowCount = (widget.photos.length + columns - 1) ~/ columns;
+    return SliverList.separated(
+      itemCount: rowCount,
+      separatorBuilder: (context, index) => const SizedBox(height: _rowGap),
+      itemBuilder: (context, row) {
+        final start = row * columns;
+        final end =
+            (start + columns) > widget.photos.length
+                ? widget.photos.length
+                : start + columns;
+        return Wrap(
+          spacing: _tileGap,
+          children: [
+            for (var index = start; index < end; index++)
+              SizedBox(
+                width: itemWidth,
+                child: _TrashTile(
+                  key: ValueKey('trash-${widget.photos[index].id}'),
+                  photo: widget.photos[index],
+                  onRestore: () => widget.onRestore(widget.photos[index]),
+                  onDeleteForever:
+                      () => _confirmDeleteForever(widget.photos[index]),
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildHeader(
+    BuildContext context,
+    AppLocalizations l10n,
+    FrameColors colors,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                frameViewLabel(l10n, FrameView.trash),
+                style: TextStyle(
+                  fontFamily: FramePalette.serifFamily,
+                  fontFamilyFallback: FramePalette.serifFallback,
+                  color: colors.ink,
+                  fontSize: AppTypography.headlineSmall,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                l10n.photosTrashSubtitle(widget.photos.length),
+                style: TextStyle(
+                  color: colors.muted,
+                  fontSize: AppTypography.bodySmall,
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (widget.photos.isNotEmpty)
+          _EmptyTrashButton(onTap: _confirmEmptyTrash),
+      ],
+    );
+  }
+
+  Widget _buildError() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Text(
+        widget.errorMessage!,
+        style: TextStyle(
+          color: const Color(0xFFEF4444),
+          fontSize: AppTypography.bodyMedium,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmpty(AppLocalizations l10n) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 64),
+      child: FrameEmptyView(
+        icon: Icons.delete_outlined,
+        message: l10n.photosFrameTrashEmpty,
+        hint: l10n.photosFrameTrashEmptyHint,
+      ),
     );
   }
 }

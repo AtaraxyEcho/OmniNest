@@ -13,7 +13,6 @@ class _HostedPortalContent extends ConsumerWidget {
     final reader = ref.watch(portalReaderDashboardProvider);
     final photos = ref.watch(portalPhotoDashboardProvider);
     final storage = ref.watch(portalStorageStatsProvider);
-    final tasks = ref.watch(activeTaskSummaryProvider);
     final online = ref.watch(appOnlineStatusProvider).asData?.value != false;
     final backdropState =
         ref.watch(appBackdropControllerProvider).asData?.value;
@@ -74,7 +73,6 @@ class _HostedPortalContent extends ConsumerWidget {
                     const SizedBox(height: 8),
                     _PortalSystemSummary(
                       storage: storage,
-                      tasks: tasks,
                       online: online,
                       onStorageRetry:
                           () => retry(PortalDashboardSection.storage),
@@ -764,13 +762,11 @@ class _PortalRecentPhotoGridState
 class _PortalSystemSummary extends StatelessWidget {
   const _PortalSystemSummary({
     required this.storage,
-    required this.tasks,
     required this.online,
     required this.onStorageRetry,
   });
 
   final AsyncValue<FileStorageStats> storage;
-  final AsyncValue<ActiveTaskSummary> tasks;
   final bool online;
   final VoidCallback onStorageRetry;
 
@@ -778,7 +774,6 @@ class _PortalSystemSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final storageValue = storage.asData?.value;
-    final taskValue = tasks.asData?.value;
     return DecoratedBox(
       decoration: BoxDecoration(
         color: context.mobileColors.surface,
@@ -813,21 +808,7 @@ class _PortalSystemSummary extends StatelessWidget {
                 online
                     ? context.mobileColors.success
                     : context.mobileColors.warmAccent,
-            onTap: () => context.push('/notifications-tasks'),
-          ),
-          Divider(height: 1, color: context.mobileColors.outline),
-          _PortalSystemRow(
-            icon: Icons.task_alt_rounded,
-            label: l10n.portalTaskTitle,
-            value: l10n.portalMobileTaskSummary(
-              taskValue?.activeCount ?? 0,
-              taskValue?.failedCount ?? 0,
-            ),
-            accent:
-                (taskValue?.failedCount ?? 0) > 0
-                    ? context.mobileColors.danger
-                    : context.mobileColors.musicAccent,
-            onTap: () => context.push('/notifications-tasks?tab=tasks'),
+            onTap: () => context.push('/notifications'),
           ),
         ],
       ),
@@ -841,7 +822,6 @@ class _PortalSystemRow extends StatelessWidget {
     required this.label,
     required this.value,
     required this.onTap,
-    this.accent,
     this.statusColor,
   });
 
@@ -850,15 +830,13 @@ class _PortalSystemRow extends StatelessWidget {
   final String value;
   final VoidCallback onTap;
 
-  /// 图标用色；缺省用模块主题色，三行保持同一视觉权重。
-  final Color? accent;
-
   /// 行尾状态色点（在线/离线等状态语义），不再通过图标变色表达。
   final Color? statusColor;
 
   @override
   Widget build(BuildContext context) {
-    final iconAccent = accent ?? context.mobileColors.musicAccent;
+    // 三行图标同色，保持同一视觉权重。
+    final iconAccent = context.mobileColors.musicAccent;
     final statusColor = this.statusColor;
     return MobilePressable(
       onTap: onTap,

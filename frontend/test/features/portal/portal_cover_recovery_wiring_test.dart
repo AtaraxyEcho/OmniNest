@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cached_network_image_platform_interface/cached_network_image_platform_interface.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -129,6 +130,7 @@ void main() {
       expect(image.cacheKey, 'portal-preview:photos:p1');
       // 签名直链不接管缓存：沿用默认缓存路径，行为与历史一致。
       expect(image.cacheManager, isNull);
+      expect(_renderMethodForWeb(tester), ImageRenderMethodForWeb.HtmlImage);
     });
 
     testWidgets('本地音乐封面 API 路径接鉴权缓存管理器', (tester) async {
@@ -148,6 +150,22 @@ void main() {
         find.byType(CachedNetworkImage),
       );
       expect(image.cacheManager, isNotNull);
+      // Web 端 HtmlImage 会绕过管理器、按页面 origin 直连且不带 Bearer，
+      // 鉴权封面必须切 HttpGet 才能拿到字节。
+      expect(_renderMethodForWeb(tester), ImageRenderMethodForWeb.HttpGet);
     });
   });
+}
+
+/// `CachedNetworkImage` 不把渲染方式暴露成字段，只能读它构造出的 provider。
+ImageRenderMethodForWeb _renderMethodForWeb(WidgetTester tester) {
+  final image = tester.widget<Image>(
+    find
+        .descendant(
+          of: find.byType(CachedNetworkImage),
+          matching: find.byType(Image),
+        )
+        .last,
+  );
+  return (image.image as CachedNetworkImageProvider).imageRenderMethodForWeb;
 }

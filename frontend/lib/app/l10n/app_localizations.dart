@@ -134,12 +134,6 @@ abstract class AppLocalizations {
   /// **'Reading'**
   String get mobileNavReader;
 
-  /// No description provided for @mobileNotificationTaskCenter.
-  ///
-  /// In en, this message translates to:
-  /// **'Notifications & Tasks'**
-  String get mobileNotificationTaskCenter;
-
   /// No description provided for @mobileOfflineBanner.
   ///
   /// In en, this message translates to:
@@ -235,150 +229,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Photos'**
   String get searchGroupPhoto;
-
-  /// No description provided for @tasksTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Tasks'**
-  String get tasksTitle;
-
-  /// No description provided for @tasksEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No tasks'**
-  String get tasksEmpty;
-
-  /// No description provided for @tasksEmptyHint.
-  ///
-  /// In en, this message translates to:
-  /// **'System tasks will appear here'**
-  String get tasksEmptyHint;
-
-  /// No description provided for @tasksFilterAll.
-  ///
-  /// In en, this message translates to:
-  /// **'All'**
-  String get tasksFilterAll;
-
-  /// No description provided for @tasksFilterPending.
-  ///
-  /// In en, this message translates to:
-  /// **'Pending'**
-  String get tasksFilterPending;
-
-  /// No description provided for @tasksFilterRunning.
-  ///
-  /// In en, this message translates to:
-  /// **'Running'**
-  String get tasksFilterRunning;
-
-  /// No description provided for @tasksFilterCompleted.
-  ///
-  /// In en, this message translates to:
-  /// **'Completed'**
-  String get tasksFilterCompleted;
-
-  /// No description provided for @tasksFilterFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Failed'**
-  String get tasksFilterFailed;
-
-  /// No description provided for @tasksRetry.
-  ///
-  /// In en, this message translates to:
-  /// **'Retry'**
-  String get tasksRetry;
-
-  /// No description provided for @tasksStatusPending.
-  ///
-  /// In en, this message translates to:
-  /// **'Pending'**
-  String get tasksStatusPending;
-
-  /// No description provided for @tasksStatusRunning.
-  ///
-  /// In en, this message translates to:
-  /// **'Running'**
-  String get tasksStatusRunning;
-
-  /// No description provided for @tasksStatusCompleted.
-  ///
-  /// In en, this message translates to:
-  /// **'Done'**
-  String get tasksStatusCompleted;
-
-  /// No description provided for @tasksStatusFailed.
-  ///
-  /// In en, this message translates to:
-  /// **'Failed'**
-  String get tasksStatusFailed;
-
-  /// No description provided for @tasksRetryCount.
-  ///
-  /// In en, this message translates to:
-  /// **'Retry'**
-  String get tasksRetryCount;
-
-  /// No description provided for @tasksRetryProgress.
-  ///
-  /// In en, this message translates to:
-  /// **'Retries: {current}/{maximum}'**
-  String tasksRetryProgress(Object current, Object maximum);
-
-  /// No description provided for @tasksStatusRetryWait.
-  ///
-  /// In en, this message translates to:
-  /// **'Waiting to retry'**
-  String get tasksStatusRetryWait;
-
-  /// No description provided for @tasksStatusNeedsAttention.
-  ///
-  /// In en, this message translates to:
-  /// **'Needs attention'**
-  String get tasksStatusNeedsAttention;
-
-  /// No description provided for @tasksStatusCancelled.
-  ///
-  /// In en, this message translates to:
-  /// **'Cancelled'**
-  String get tasksStatusCancelled;
-
-  /// No description provided for @tasksPhasePlanning.
-  ///
-  /// In en, this message translates to:
-  /// **'Planning resource deletion'**
-  String get tasksPhasePlanning;
-
-  /// No description provided for @tasksPhaseDeletingObjects.
-  ///
-  /// In en, this message translates to:
-  /// **'Deleting object data'**
-  String get tasksPhaseDeletingObjects;
-
-  /// No description provided for @tasksPhaseVerifyingReferences.
-  ///
-  /// In en, this message translates to:
-  /// **'Checking resource references'**
-  String get tasksPhaseVerifyingReferences;
-
-  /// No description provided for @tasksPhaseFinalizingDatabase.
-  ///
-  /// In en, this message translates to:
-  /// **'Cleaning up business data'**
-  String get tasksPhaseFinalizingDatabase;
-
-  /// No description provided for @tasksPhaseWaiting.
-  ///
-  /// In en, this message translates to:
-  /// **'Waiting for progress'**
-  String get tasksPhaseWaiting;
-
-  /// No description provided for @tasksTimeJustNow.
-  ///
-  /// In en, this message translates to:
-  /// **'Just now'**
-  String get tasksTimeJustNow;
 
   /// No description provided for @tasksTimeMinutesAgo.
   ///
@@ -4183,12 +4033,6 @@ abstract class AppLocalizations {
   /// **'{used} GiB / Unlimited'**
   String portalStorageUnlimited(Object used);
 
-  /// No description provided for @portalTaskTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Tasks'**
-  String get portalTaskTitle;
-
   /// No description provided for @portalTaskRunning.
   ///
   /// In en, this message translates to:
@@ -4746,12 +4590,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Offline, waiting to sync'**
   String get portalMobileSyncOffline;
-
-  /// No description provided for @portalMobileTaskSummary.
-  ///
-  /// In en, this message translates to:
-  /// **'{active} active, {failed} failed'**
-  String portalMobileTaskSummary(Object active, Object failed);
 
   /// No description provided for @portalMobileStorageUsed.
   ///
@@ -6102,6 +5940,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Task name'**
   String get adminTaskName;
+
+  /// No description provided for @adminTaskOwner.
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get adminTaskOwner;
 
   /// No description provided for @adminTaskExecutionStatus.
   ///
