@@ -8,6 +8,7 @@ class PlatformCapabilities {
     required this.supportsSystemTray,
     required this.supportsHoverPointer,
     required this.supportsDragAndDropUpload,
+    required this.supportsFullscreenToggle,
   });
 
   /// 根据当前运行平台返回对应的能力集。
@@ -32,6 +33,12 @@ class PlatformCapabilities {
   /// 是否支持把文件拖放进窗口（`desktop_drop` 仅覆盖桌面原生端）。
   final bool supportsDragAndDropUpload;
 
+  /// 是否存在可用的全屏切换入口。
+  ///
+  /// 桌面原生走窗口 API、Web 走 Fullscreen API；Android/iOS 的播放页已由
+  /// 沉浸租约覆盖系统栏，再放一个全屏钮只会点了没反应。
+  final bool supportsFullscreenToggle;
+
   /// 是否存在可产生 hover 事件的指针设备。
   ///
   /// 触屏浏览器与触屏应用不会触发 `MouseRegion.onEnter`，因此仅靠 hover
@@ -47,6 +54,7 @@ class PlatformCapabilities {
       supportsSystemTray: false,
       supportsHoverPointer: !hostIsTouch,
       supportsDragAndDropUpload: false,
+      supportsFullscreenToggle: true,
     );
   }
 
@@ -54,23 +62,27 @@ class PlatformCapabilities {
     supportsSystemTray: false,
     supportsHoverPointer: false,
     supportsDragAndDropUpload: false,
+    supportsFullscreenToggle: false,
   );
 
   factory PlatformCapabilities.ios() => const PlatformCapabilities(
     supportsSystemTray: false,
     supportsHoverPointer: false,
     supportsDragAndDropUpload: false,
+    supportsFullscreenToggle: false,
   );
 
   factory PlatformCapabilities.desktop() => const PlatformCapabilities(
     supportsSystemTray: true,
     supportsHoverPointer: true,
     supportsDragAndDropUpload: true,
+    supportsFullscreenToggle: true,
   );
 
   factory PlatformCapabilities.fallback() => const PlatformCapabilities(
     supportsSystemTray: false,
     supportsHoverPointer: false,
     supportsDragAndDropUpload: false,
+    supportsFullscreenToggle: false,
   );
 }

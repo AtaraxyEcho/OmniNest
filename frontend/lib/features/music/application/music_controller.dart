@@ -77,6 +77,18 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
 
   MusicCenterState? get _currentState => state.asData?.value;
 
+  /// 补齐外部平台歌单曲目：`ref` 只能在类体内取用，队列命令扩展经此转接。
+  Future<List<OnlineTrack>> _loadAllPlatformPlaylistTracks(
+    OnlinePlaylist playlist,
+  ) async {
+    final notifier = ref.read(musicPlatformLibraryProvider.notifier);
+    final tracks = await notifier.loadAllPlaylistTracks(playlist);
+    if (_controllerDisposed) {
+      return const <OnlineTrack>[];
+    }
+    return tracks;
+  }
+
   void _replaceState(MusicCenterState value) {
     state = AsyncData(value);
   }

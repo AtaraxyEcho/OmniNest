@@ -25,6 +25,7 @@ class MusicPlatformLibraryState {
     this.likedTracksByPlatform = const <String, List<OnlineTrack>>{},
     this.playlistTracks = const <String, MusicPagedResult<OnlineTrack>>{},
     this.loadingPlaylistKeys = const <String>{},
+    this.appendingPlaylistKeys = const <String>{},
     this.failures = const <String, String>{},
   });
 
@@ -32,9 +33,12 @@ class MusicPlatformLibraryState {
   final Map<String, List<OnlinePlaylist>> playlistsByPlatform;
   final Map<String, List<OnlineTrack>> likedTracksByPlatform;
 
-  /// 已加载的平台歌单曲目分页：预热只落首页，打开歌单时补齐整页。
+  /// 已加载的平台歌单曲目分页：预热与首屏只落部分页，滚动续载按页追加。
   final Map<String, MusicPagedResult<OnlineTrack>> playlistTracks;
   final Set<String> loadingPlaylistKeys;
+
+  /// 正在追加下一页的歌单键：详情页保留列表，只在底部提示续载。
+  final Set<String> appendingPlaylistKeys;
   final Map<String, String> failures;
 
   /// 返回已连接且可用的平台状态。
@@ -72,6 +76,7 @@ class MusicPlatformLibraryState {
     Map<String, List<OnlineTrack>>? likedTracksByPlatform,
     Map<String, MusicPagedResult<OnlineTrack>>? playlistTracks,
     Set<String>? loadingPlaylistKeys,
+    Set<String>? appendingPlaylistKeys,
     Map<String, String>? failures,
   }) {
     return MusicPlatformLibraryState(
@@ -81,6 +86,8 @@ class MusicPlatformLibraryState {
           likedTracksByPlatform ?? this.likedTracksByPlatform,
       playlistTracks: playlistTracks ?? this.playlistTracks,
       loadingPlaylistKeys: loadingPlaylistKeys ?? this.loadingPlaylistKeys,
+      appendingPlaylistKeys:
+          appendingPlaylistKeys ?? this.appendingPlaylistKeys,
       failures: failures ?? this.failures,
     );
   }
@@ -105,10 +112,21 @@ class MusicPlatformLibraryController
   /// 预热每个歌单只取封面与预览够用的条数：整表下发会在设备侧解析数百 KB JSON。
   static const int _playlistPreloadTrackPageSize = 50;
 
-  /// 打开歌单时一次取满后端上限，保持详情与播放队列的既有语义。
-  static const int _playlistTrackPageSize = 1000;
+  /// 打开歌单只取首屏页，其余页由详情滚动续载。
+  static const int _playlistTrackPageSize = 200;
+
+  /// 播放整队时一次取满后端单页上限，保持"整个歌单入队"的既有语义。
+  static const int _playlistFullTrackPageSize = 1000;
 
   int _preloadGeneration = 0;
+
+  /// 每个歌单最近一次发起的曲目请求序号。只有最新发起的响应可以写状态：
+  /// 预热首页、首屏、续载和整表共用同一个键，晚到的首页不能把更大的结果截断。
+  final Map<String, int> _trackRequestSeq = <String, int>{};
+
+  /// 整表加载按歌单去重，连续点击播放只回源一次。
+  final Map<String, Future<List<OnlineTrack>>> _fullTrackFlights =
+      <String, Future<List<OnlineTrack>>>{};
 
   @override
   Future<MusicPlatformLibraryState> build() {
@@ -136,31 +154,30 @@ class MusicPlatformLibraryController
     state = AsyncData(refreshed);
   }
 
-  /// 按需加载一个在线歌单的曲目。
+  /// 按需加载一个在线歌单的首屏曲目。
   ///
-  /// 预热只落首页，因此命中预热分页时仍要按整页补齐，避免详情与播放队列被首页截断。
+  /// 命中预热首页（页数不足首屏）时补齐首屏；已有首屏或续载页时直接复用，
+  /// 剩余页由 [loadMorePlaylistTracks] 续载，整表由 [loadAllPlaylistTracks] 补齐。
   /// [forceRefresh] 用于用户点开歌单：跳过该歌单的后端短期缓存，拿到改动后的曲目。
   Future<List<OnlineTrack>> loadPlaylistTracks(
     OnlinePlaylist playlist, {
     bool forceRefresh = false,
   }) async {
-    if (!ref.mounted) {
-      return const <OnlineTrack>[];
-    }
     final current = state.asData?.value;
-    if (current == null) {
+    if (current == null || !ref.mounted) {
       return const <OnlineTrack>[];
     }
     final key = _playlistKey(playlist.platform, playlist.playlistId);
     final cached = current.playlistTracks[key];
-    if (cached != null && !cached.hasMore && !forceRefresh) {
+    final coversFirstScreen =
+        cached != null &&
+        cached.size >= _playlistTrackPageSize &&
+        (cached.items.isNotEmpty || !cached.hasMore);
+    if (coversFirstScreen && !forceRefresh) {
       return cached.items;
     }
-    state = AsyncData(
-      current.copyWith(
-        loadingPlaylistKeys: <String>{...current.loadingPlaylistKeys, key},
-      ),
-    );
+    final seq = _beginTrackRequest(key);
+    _setPlaylistLoading(key, loading: true);
     try {
       final page = await ref
           .read(musicApiProvider)
@@ -173,35 +190,206 @@ class MusicPlatformLibraryController
       if (!ref.mounted) {
         return const <OnlineTrack>[];
       }
-      final latest = state.asData?.value ?? current;
-      state = AsyncData(
-        latest.copyWith(
-          playlistTracks: <String, MusicPagedResult<OnlineTrack>>{
-            ...latest.playlistTracks,
-            key: page,
-          },
-          loadingPlaylistKeys: <String>{...latest.loadingPlaylistKeys}
-            ..remove(key),
-        ),
-      );
+      if (_ownsTrackRequest(key, seq)) {
+        _publishTrackPage(key, page);
+      }
       return page.items;
     } on Object catch (error) {
       if (!ref.mounted) {
         return const <OnlineTrack>[];
       }
-      final latest = state.asData?.value ?? current;
-      state = AsyncData(
-        latest.copyWith(
-          loadingPlaylistKeys: <String>{...latest.loadingPlaylistKeys}
-            ..remove(key),
-          failures: <String, String>{
-            ...latest.failures,
-            key: describeUserFacingError(error).message,
-          },
+      _recordPlaylistFailure(key, describeUserFacingError(error).message);
+      return cached?.items ?? const <OnlineTrack>[];
+    } finally {
+      _setPlaylistLoading(key, loading: false);
+    }
+  }
+
+  /// 详情页滚动到底时追加下一页。
+  ///
+  /// 无更多页、已有请求在途或该歌单已按整表页落地时不发请求：整表页页数与
+  /// 续载页页数不同，混用会让 `hasMore` 按错误的页宽推导。
+  Future<void> loadMorePlaylistTracks(OnlinePlaylist playlist) async {
+    final current = state.asData?.value;
+    if (current == null ||
+        !ref.mounted ||
+        _fullTrackFlights.containsKey(
+          _playlistKey(playlist.platform, playlist.playlistId),
+        )) {
+      return;
+    }
+    final key = _playlistKey(playlist.platform, playlist.playlistId);
+    final cached = current.playlistTracks[key];
+    if (cached == null ||
+        !cached.hasMore ||
+        cached.size != _playlistTrackPageSize ||
+        current.loadingPlaylistKeys.contains(key) ||
+        current.appendingPlaylistKeys.contains(key)) {
+      return;
+    }
+    final seq = _beginTrackRequest(key);
+    _setPlaylistAppending(key, appending: true);
+    try {
+      final page = await ref
+          .read(musicApiProvider)
+          .platformPlaylistTracks(
+            playlist.platform,
+            playlist.playlistId,
+            page: cached.page + 1,
+            size: _playlistTrackPageSize,
+          );
+      if (!ref.mounted || !_ownsTrackRequest(key, seq)) {
+        return;
+      }
+      final latest = state.asData?.value;
+      final base = latest?.playlistTracks[key];
+      // 页序仍是发起时那一页之后才追加：期间若有首屏或整表结果落地，本页作废。
+      if (latest == null ||
+          base == null ||
+          base.page != cached.page ||
+          base.size != cached.size) {
+        return;
+      }
+      _publishTrackPage(
+        key,
+        MusicPagedResult(
+          items: <OnlineTrack>[...base.items, ...page.items],
+          page: page.page,
+          size: page.size,
+          totalElements: page.totalElements,
         ),
       );
+    } on Object catch (error) {
+      if (!ref.mounted || !_ownsTrackRequest(key, seq)) {
+        return;
+      }
+      _recordPlaylistFailure(key, describeUserFacingError(error).message);
+    } finally {
+      _setPlaylistAppending(key, appending: false);
+    }
+  }
+
+  /// 补齐整个在线歌单供入队播放，返回可直接播放的曲目列表。
+  ///
+  /// 在线歌单的队列来源是瞬态的（重启后无法按来源重建），因此入队必须持有
+  /// 完整列表；整表按后端单页上限一次取回，与历史行为一致。
+  Future<List<OnlineTrack>> loadAllPlaylistTracks(OnlinePlaylist playlist) {
+    final key = _playlistKey(playlist.platform, playlist.playlistId);
+    return _fullTrackFlights[key] ??= _trackAllFlight(key, playlist);
+  }
+
+  Future<List<OnlineTrack>> _trackAllFlight(
+    String key,
+    OnlinePlaylist playlist,
+  ) async {
+    final cached = state.asData?.value.playlistTracks[key];
+    if (!ref.mounted) {
       return const <OnlineTrack>[];
     }
+    final seq = _beginTrackRequest(key);
+    _setPlaylistLoading(key, loading: true);
+    try {
+      final page = await ref
+          .read(musicApiProvider)
+          .platformPlaylistTracks(
+            playlist.platform,
+            playlist.playlistId,
+            size: _playlistFullTrackPageSize,
+          );
+      if (!ref.mounted) {
+        return const <OnlineTrack>[];
+      }
+      if (_ownsTrackRequest(key, seq)) {
+        _publishTrackPage(key, page);
+      }
+      return page.items;
+    } on Object catch (error) {
+      if (!ref.mounted) {
+        return const <OnlineTrack>[];
+      }
+      _recordPlaylistFailure(key, describeUserFacingError(error).message);
+      // 整表失败时退回已加载页，点击播放不至于空队列。
+      return cached?.items ?? const <OnlineTrack>[];
+    } finally {
+      _fullTrackFlights.remove(key);
+      _setPlaylistLoading(key, loading: false);
+    }
+  }
+
+  int _beginTrackRequest(String key) {
+    final seq = (_trackRequestSeq[key] ?? 0) + 1;
+    _trackRequestSeq[key] = seq;
+    return seq;
+  }
+
+  bool _ownsTrackRequest(String key, int seq) => _trackRequestSeq[key] == seq;
+
+  void _publishTrackPage(String key, MusicPagedResult<OnlineTrack> page) {
+    final current = state.asData?.value;
+    if (current == null) {
+      return;
+    }
+    state = AsyncData(
+      current.copyWith(
+        playlistTracks: <String, MusicPagedResult<OnlineTrack>>{
+          ...current.playlistTracks,
+          key: page,
+        },
+      ),
+    );
+  }
+
+  void _setPlaylistLoading(String key, {required bool loading}) {
+    _setPlaylistFlag(key, loading: loading, appending: null);
+  }
+
+  void _setPlaylistAppending(String key, {required bool appending}) {
+    _setPlaylistFlag(key, loading: null, appending: appending);
+  }
+
+  void _setPlaylistFlag(
+    String key, {
+    required bool? loading,
+    required bool? appending,
+  }) {
+    final current = state.asData?.value;
+    if (current == null) {
+      return;
+    }
+    final loadingKeys = <String>{...current.loadingPlaylistKeys};
+    final appendingKeys = <String>{...current.appendingPlaylistKeys};
+    if (loading ?? false) {
+      loadingKeys.add(key);
+    } else if (loading != null) {
+      loadingKeys.remove(key);
+    }
+    if (appending ?? false) {
+      appendingKeys.add(key);
+    } else if (appending != null) {
+      appendingKeys.remove(key);
+    }
+    state = AsyncData(
+      current.copyWith(
+        loadingPlaylistKeys: loadingKeys,
+        appendingPlaylistKeys: appendingKeys,
+      ),
+    );
+  }
+
+  void _recordPlaylistFailure(String key, String message) {
+    final current = state.asData?.value;
+    if (current == null) {
+      return;
+    }
+    state = AsyncData(
+      current.copyWith(
+        loadingPlaylistKeys: <String>{...current.loadingPlaylistKeys}
+          ..remove(key),
+        appendingPlaylistKeys: <String>{...current.appendingPlaylistKeys}
+          ..remove(key),
+        failures: <String, String>{...current.failures, key: message},
+      ),
+    );
   }
 
   /// 加载平台账号内容。
@@ -325,6 +513,9 @@ class MusicPlatformLibraryController
     if (keyed.isEmpty) {
       return;
     }
+    final seqByKey = <String, int>{
+      for (final key in keyed.keys) key: _beginTrackRequest(key),
+    };
     state = AsyncData(
       before.copyWith(
         loadingPlaylistKeys: <String>{
@@ -368,11 +559,18 @@ class MusicPlatformLibraryController
     if (latest == null) {
       return;
     }
+    // 期间被首屏或整表请求接管的键丢弃预热结果：预热页更小，合并会把
+    // 已经加载好的列表截回首页条数。
+    final fresh = <String, MusicPagedResult<OnlineTrack>>{
+      for (final entry in tracksByKey.entries)
+        if (_ownsTrackRequest(entry.key, seqByKey[entry.key]!))
+          entry.key: entry.value,
+    };
     state = AsyncData(
       latest.copyWith(
         playlistTracks: <String, MusicPagedResult<OnlineTrack>>{
           ...latest.playlistTracks,
-          ...tracksByKey,
+          ...fresh,
         },
         loadingPlaylistKeys: <String>{...latest.loadingPlaylistKeys}
           ..removeAll(keyed.keys),

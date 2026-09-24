@@ -6,7 +6,7 @@
 
 ## 项目与事实来源
 
-OmniNest 是自托管的个人数字生活中心，涵盖文件、影视、音乐、相册、阅读、同步、离线和系统管理。系统采用模块化单体：Spring Boot 提供 API、Worker 和 Scheduler 运行角色，Flutter 统一 Web、Android 与 Desktop 客户端。
+OmniNest 是自托管的媒体中心，涵盖文件、影视、音乐、相册、阅读、同步、离线和系统管理。系统采用模块化单体：Spring Boot 提供 API、Worker 和 Scheduler 运行角色，Flutter 统一 Web、Android 与 Desktop 客户端。
 
 设计与实现冲突时按以下优先级取舍：
 

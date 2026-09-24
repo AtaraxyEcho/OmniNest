@@ -393,7 +393,7 @@ class _Backdrop extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 16,
+            top: 16 + MediaQuery.paddingOf(context).top,
             left: 20,
             child: Material(
               color: Colors.black.withValues(alpha: 0.45),
@@ -425,7 +425,7 @@ class _Backdrop extends StatelessWidget {
             ),
           ),
           Positioned(
-            top: 16,
+            top: 16 + MediaQuery.paddingOf(context).top,
             right: 20,
             child: Row(
               mainAxisSize: MainAxisSize.min,

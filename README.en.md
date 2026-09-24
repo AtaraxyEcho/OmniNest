@@ -6,7 +6,7 @@
   <strong>OmniNest</strong>
 </p>
 
-<h3 align="center">Self-hosted personal digital life center</h3>
+<h3 align="center">Self-hosted media center</h3>
 
 <p align="center">
   Files · Movies · Music · Photos · Reader — one account, permissions, storage, and background tasks
@@ -14,7 +14,7 @@
 
 ---
 
-OmniNest is a **self-hosted** digital life center for personal and family use. It organizes file management, movies, music, photos, and reading under one account, permission, object-storage, and async-task system. You deploy it; you keep the data.
+OmniNest is a **self-hosted** media center for personal and family use. It organizes file management, movies, music, photos, and reading under one account, permission, object-storage, and async-task system. You deploy it; you keep the data.
 
 This repository is a **modular monolith**: Spring Boot for API / Worker / Scheduler, and Flutter for clients. See [backend/README.en.md](backend/README.en.md), [frontend/README.en.md](frontend/README.en.md), and [deploy/README.md](deploy/README.md). Chinese editions: [README.md](README.md).
 

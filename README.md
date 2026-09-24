@@ -6,7 +6,7 @@
   <strong>OmniNest</strong>
 </p>
 
-<h3 align="center">自托管个人数字生活中心</h3>
+<h3 align="center">自托管媒体中心</h3>
 
 <p align="center">
   文件 · 影视 · 音乐 · 相册 · 阅读 —— 统一账户、权限、存储与后台任务
@@ -14,7 +14,7 @@
 
 ---
 
-OmniNest 是一个面向个人与家庭场景的**自托管**数字生活中心。它把文件管理、影视、音乐、相册和阅读组织在同一套账户、权限、对象存储与异步任务体系中，由你自己部署、自己持有数据。
+OmniNest 是一个面向个人与家庭场景的**自托管**媒体中心。它把文件管理、影视、音乐、相册和阅读组织在同一套账户、权限、对象存储与异步任务体系中，由你自己部署、自己持有数据。
 
 本仓库为**模块化单体**：Spring Boot 提供 API / Worker / Scheduler，Flutter 提供客户端。后端与 API 见 [backend/README.md](backend/README.md)，客户端见 [frontend/README.md](frontend/README.md)，部署见 [deploy/README.md](deploy/README.md)。
 

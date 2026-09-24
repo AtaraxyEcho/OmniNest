@@ -84,6 +84,27 @@ extension MusicPlaybackQueueCommands on MusicCenterController {
     );
   }
 
+  /// 播放外部平台歌单：先补齐整表再入队。
+  ///
+  /// 在线歌单的队列来源是瞬态的（重启后无法按来源重建），入队必须持有完整列表；
+  /// 详情列表因此按页展示，只有真正播放时才回源整表。起始曲按 playableKey 定位，
+  /// 避免补齐期间顺序变化导致播错曲目。
+  Future<void> playPlatformPlaylist(
+    OnlinePlaylist playlist, {
+    required MusicPlayableItem startItem,
+    MusicQueueSource source = MusicQueueSource.transient,
+  }) async {
+    final tracks = await _loadAllPlatformPlaylistTracks(playlist);
+    if (_controllerDisposed || tracks.isEmpty) {
+      return;
+    }
+    final items = tracks.map(MusicPlayableItem.online).toList(growable: false);
+    final index = items.indexWhere(
+      (item) => item.playableKey == startItem.playableKey,
+    );
+    await playItems(items, startIndex: index < 0 ? 0 : index, source: source);
+  }
+
   /// 将可播放对象插入当前曲目之后（下一首播放），已存在时不重复添加。
   void enqueue(MusicPlayableItem item) {
     final current = _currentState;

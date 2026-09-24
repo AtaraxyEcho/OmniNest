@@ -26,6 +26,13 @@ part 'music_controller_first_frame_test_part.dart';
 part 'music_controller_queue_test_part.dart';
 part 'music_controller_queue_source_test_part.dart';
 
+class _HeldPlaylistTracks {
+  _HeldPlaylistTracks(this.value);
+
+  final MusicPagedResult<OnlineTrack> value;
+  final Completer<void> released = Completer<void>();
+}
+
 MusicPagedResult<T> _paged<T>(List<T> items, int page, int size) {
   final from = (page * size).clamp(0, items.length);
   final to = (from + size).clamp(0, items.length);
@@ -834,6 +841,11 @@ class _FakeMusicApi implements MusicApi {
   /// 歌单曲目条数与每次请求的页大小，用于断言预热与按需加载的载荷差别。
   int playlistTrackCount = 1;
   final Map<String, int> platformPlaylistTrackSizes = <String, int>{};
+  final Map<String, int> platformPlaylistTrackPages = <String, int>{};
+
+  /// 挂起平台歌单曲目响应，供测试自行决定到达顺序（构造交错写入）。
+  bool holdPlaylistTracks = false;
+  final List<_HeldPlaylistTracks> heldPlaylistTracks = <_HeldPlaylistTracks>[];
 
   /// 最近一次平台列表请求是否要求跳过短期缓存。
   final Map<String, bool> platformListRefreshFlags = <String, bool>{};
@@ -968,8 +980,16 @@ class _FakeMusicApi implements MusicApi {
     platformPlaylistTrackRequests.add('$platform:$playlistId');
     platformListRefreshFlags['playlistTracks'] = refresh;
     platformPlaylistTrackSizes['$platform:$playlistId'] = size;
-    await playlistTracksGate?.future;
-    return _paged(_playlistTracks(platform), page, size);
+    platformPlaylistTrackPages['$platform:$playlistId'] = page;
+    final result = _paged(_playlistTracks(platform), page, size);
+    if (holdPlaylistTracks) {
+      final held = _HeldPlaylistTracks(result);
+      heldPlaylistTracks.add(held);
+      await held.released.future;
+    } else {
+      await playlistTracksGate?.future;
+    }
+    return result;
   }
 
   List<OnlineTrack> _playlistTracks(String platform) {

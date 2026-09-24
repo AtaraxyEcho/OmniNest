@@ -7,6 +7,7 @@ import 'package:omninest/features/video/domain/movie_models.dart'
 import 'package:omninest/features/video/presentation/widgets/movie_player_controls.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_progress_bar.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_volume.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 播放器底部控制栏，根据输入方式使用桌面或移动布局。
 class MoviePlayerBottomBar extends StatelessWidget {
@@ -264,18 +265,21 @@ class MoviePlayerBottomBar extends StatelessWidget {
                 onPressed: onSettingsTap,
                 size: targetSize,
               ),
-              MoviePlayerIconButton(
-                icon:
-                    isFullscreen
-                        ? Icons.fullscreen_exit_rounded
-                        : Icons.fullscreen_rounded,
-                tooltip:
-                    isFullscreen
-                        ? l10n.videoExitFullscreen
-                        : l10n.videoEnterFullscreen,
-                onPressed: onFullscreenTap,
-                size: targetSize,
-              ),
+              // Android/iOS 无全屏 API：本页已由沉浸租约覆盖系统栏，
+              // 保留钮只会给出一个点了没反应且图标状态恒定的控件。
+              if (PlatformCapabilities.current().supportsFullscreenToggle)
+                MoviePlayerIconButton(
+                  icon:
+                      isFullscreen
+                          ? Icons.fullscreen_exit_rounded
+                          : Icons.fullscreen_rounded,
+                  tooltip:
+                      isFullscreen
+                          ? l10n.videoExitFullscreen
+                          : l10n.videoEnterFullscreen,
+                  onPressed: onFullscreenTap,
+                  size: targetSize,
+                ),
             ],
           ),
         ),

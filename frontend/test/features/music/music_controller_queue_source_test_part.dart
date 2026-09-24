@@ -627,6 +627,40 @@ void registerMusicQueuePersistenceTests() {
       expect(decoded.items, hasLength(100));
     },
   );
+
+  test('播放在线歌单入队整表而不是首屏页', () async {
+    final api =
+        _FakeMusicApi()
+          ..platformStatuses = const <MusicPlatformStatus>[
+            _connectedNeteaseStatus,
+          ]
+          ..neteasePlaylists = _onlinePlaylists(1)
+          ..playlistTrackCount = 800;
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    await container.read(musicPlatformLibraryProvider.future);
+    await pumpEventQueue();
+    final library = container.read(musicPlatformLibraryProvider).value!;
+    final playlist = library.playlists.first;
+    final firstScreen = await container
+        .read(musicPlatformLibraryProvider.notifier)
+        .loadPlaylistTracks(playlist);
+    expect(firstScreen, hasLength(200));
+    final startItem = MusicPlayableItem.online(firstScreen[150]);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .playPlatformPlaylist(playlist, startItem: startItem);
+
+    // 在线歌单没有可重建的队列来源，入队必须已经补齐整表。
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.playbackItems, hasLength(800));
+    expect(state.currentItem?.playableKey, startItem.playableKey);
+    expect(state.queueSource.kind, MusicQueueSourceKind.transient);
+  });
 }
 
 List<String> _shuffledKeys(List<String> keys, Random random) {

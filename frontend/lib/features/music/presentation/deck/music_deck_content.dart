@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -795,6 +797,38 @@ class _CollectionDetail extends ConsumerWidget {
       ),
       _ => const MusicQueueSource(),
     };
+    // 在线歌单只展示已加载页：入队前由播放命令补齐整表。
+    final platformPlaylist = switch (selection) {
+      OnlineMusicDeckCollection(:final playlist) => playlist,
+      _ => null,
+    };
+    final playlistKey =
+        platformPlaylist == null
+            ? null
+            : '${platformPlaylist.platform}:${platformPlaylist.playlistId}';
+    final canLoadMorePlaylistTracks =
+        playlistKey != null &&
+        (platform.playlistTracks[playlistKey]?.hasMore ?? false);
+    final playlistTracksLoadingMore =
+        playlistKey != null &&
+        platform.appendingPlaylistKeys.contains(playlistKey);
+    void playAt(int index) {
+      final centerNotifier = ref.read(musicCenterControllerProvider.notifier);
+      if (platformPlaylist != null) {
+        unawaited(
+          centerNotifier.playPlatformPlaylist(
+            platformPlaylist,
+            startItem: items[index],
+            source: queueSource,
+          ),
+        );
+        return;
+      }
+      unawaited(
+        centerNotifier.playItems(items, startIndex: index, source: queueSource),
+      );
+    }
+
     return Column(
       children: [
         _CollectionDetailHeader(
@@ -803,31 +837,34 @@ class _CollectionDetail extends ConsumerWidget {
           imageUrl: imageUrl,
           source: source,
           onBack: onBack,
-          onPlay:
-              items.isEmpty
-                  ? null
-                  : () => ref
-                      .read(musicCenterControllerProvider.notifier)
-                      .playItems(items, startIndex: 0, source: queueSource),
+          onPlay: items.isEmpty ? null : () => playAt(0),
         ),
         const SizedBox(height: 18),
         if (selection case ArtistMusicDeckCollection(:final artist))
           _ArtistAlbumsShelf(artistId: artist.id),
         Expanded(
           child:
-              loading
+              loading && items.isEmpty
                   ? const Center(child: CircularProgressIndicator())
                   : MusicDeckTrackList(
                     items: items,
                     currentPlayableKey: center.currentItem?.playableKey,
-                    onPlay:
-                        (index) => ref
-                            .read(musicCenterControllerProvider.notifier)
-                            .playItems(
-                              items,
-                              startIndex: index,
-                              source: queueSource,
+                    onPlay: playAt,
+                    onReachEnd:
+                        platformPlaylist == null || !canLoadMorePlaylistTracks
+                            ? null
+                            : () => unawaited(
+                              ref
+                                  .read(musicPlatformLibraryProvider.notifier)
+                                  .loadMorePlaylistTracks(platformPlaylist),
                             ),
+                    footer:
+                        playlistTracksLoadingMore
+                            ? const SizedBox.square(
+                              dimension: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                            : null,
                     onToggleFavorite: _favoriteHandler(ref),
                     onDelete: _deleteTrackHandler(context, ref),
                     onEnqueue: _enqueueTrackHandler(context, ref),

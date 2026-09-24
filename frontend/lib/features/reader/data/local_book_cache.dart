@@ -212,7 +212,8 @@ class LocalBookCache {
     return sessionFile;
   }
 
-  /// 带超时的下载
+  /// 带超时的下载。失败必须抛出：返回空字节会让上层把「取不到」当成
+  /// 「该书没有正文」，章节页只剩空白且没有重试入口。
   Future<Uint8List> _downloadWithTimeout(
     Future<Uint8List> Function() downloader,
     String itemId,
@@ -221,10 +222,10 @@ class LocalBookCache {
       final bytes = await downloader().timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          if (kDebugMode) {
-            readerDebugLog('LocalBookCache: download timeout for $itemId');
-          }
-          return Uint8List(0);
+          throw const AppException(
+            code: 'READER_BOOK_DOWNLOAD_TIMEOUT',
+            message: '书籍内容下载超时',
+          );
         },
       );
       if (kDebugMode) {
@@ -241,7 +242,11 @@ class LocalBookCache {
       if (kDebugMode) {
         readerDebugLog('LocalBookCache: download failed for $itemId: $e');
       }
-      return Uint8List(0);
+      throw AppException(
+        code: 'READER_BOOK_DOWNLOAD_FAILED',
+        message: '书籍内容下载失败',
+        details: {'itemId': itemId, 'cause': e.toString()},
+      );
     }
   }
 

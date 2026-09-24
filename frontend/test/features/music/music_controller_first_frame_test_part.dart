@@ -245,7 +245,7 @@ void registerMusicPlaylistPreloadTests() {
     expect(state.loadingPlaylistKeys, isEmpty);
   });
 
-  test('预热只取首页曲目，打开歌单时补齐整页', () async {
+  test('预热只取首页曲目，打开歌单时补齐首屏页', () async {
     final api =
         _FakeMusicApi()
           ..platformStatuses = const <MusicPlatformStatus>[
@@ -277,10 +277,20 @@ void registerMusicPlaylistPreloadTests() {
         .read(musicPlatformLibraryProvider.notifier)
         .loadPlaylistTracks(preloaded.playlists.first);
 
-    expect(api.platformPlaylistTrackSizes['netease:list-0'], 1000);
-    expect(opened, hasLength(800));
+    // 打开只取首屏页：详情按滚动续载，整表留给播放补齐。
+    expect(api.platformPlaylistTrackSizes['netease:list-0'], 200);
+    expect(opened, hasLength(200));
     final loaded = container.read(musicPlatformLibraryProvider).value!;
-    expect(loaded.playlistTracks['netease:list-0']!.hasMore, isFalse);
+    expect(loaded.playlistTracks['netease:list-0']!.hasMore, isTrue);
+
+    final all = await container
+        .read(musicPlatformLibraryProvider.notifier)
+        .loadAllPlaylistTracks(preloaded.playlists.first);
+
+    expect(api.platformPlaylistTrackSizes['netease:list-0'], 1000);
+    expect(all, hasLength(800));
+    final full = container.read(musicPlatformLibraryProvider).value!;
+    expect(full.playlistTracks['netease:list-0']!.hasMore, isFalse);
   });
 
   test('显式刷新只回源列表，打开歌单才单独取新页', () async {
@@ -313,7 +323,7 @@ void registerMusicPlaylistPreloadTests() {
         .read(musicPlatformLibraryProvider.notifier)
         .loadPlaylistTracks(playlist, forceRefresh: true);
 
-    expect(api.platformPlaylistTrackSizes['netease:list-0'], 1000);
+    expect(api.platformPlaylistTrackSizes['netease:list-0'], 200);
     expect(api.platformListRefreshFlags['playlistTracks'], isTrue);
     expect(api.platformPlaylistTrackRequests, hasLength(preloadRequests + 1));
   });
@@ -338,5 +348,108 @@ void registerMusicPlaylistPreloadTests() {
     ]);
     final state = container.read(musicPlatformLibraryProvider).value!;
     expect(state.playlists, hasLength(10));
+  });
+
+  test('晚到的预热首页不会截断已加载的歌单详情', () async {
+    final api =
+        _FakeMusicApi()
+          ..platformStatuses = const <MusicPlatformStatus>[
+            _connectedNeteaseStatus,
+          ]
+          ..neteasePlaylists = _onlinePlaylists(1)
+          ..playlistTrackCount = 800
+          ..holdPlaylistTracks = true;
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(musicPlatformLibraryProvider.future);
+    await pumpEventQueue();
+    final playlist =
+        container.read(musicPlatformLibraryProvider).value!.playlists.first;
+    // 预热首页仍被挂起时打开歌单：两个请求同时在途，谁都可以先回。
+    final opening = container
+        .read(musicPlatformLibraryProvider.notifier)
+        .loadPlaylistTracks(playlist);
+    await pumpEventQueue();
+    expect(api.heldPlaylistTracks, hasLength(2));
+
+    api.heldPlaylistTracks[1].released.complete();
+    expect(await opening, hasLength(200));
+    // 预热页更小且更晚到达：必须丢弃，否则列表被截回首页条数。
+    api.heldPlaylistTracks[0].released.complete();
+    await pumpEventQueue();
+
+    final state = container.read(musicPlatformLibraryProvider).value!;
+    final page = state.playlistTracks['netease:list-0']!;
+    expect(page.items, hasLength(200));
+    expect(page.size, 200);
+    expect(state.loadingPlaylistKeys, isEmpty);
+  });
+
+  test('详情续载按页追加且不会并发重复请求', () async {
+    final api =
+        _FakeMusicApi()
+          ..platformStatuses = const <MusicPlatformStatus>[
+            _connectedNeteaseStatus,
+          ]
+          ..neteasePlaylists = _onlinePlaylists(1)
+          ..playlistTrackCount = 800;
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicPlatformLibraryProvider.future);
+    await pumpEventQueue();
+    final notifier = container.read(musicPlatformLibraryProvider.notifier);
+    final playlist =
+        container.read(musicPlatformLibraryProvider).value!.playlists.first;
+    await notifier.loadPlaylistTracks(playlist);
+    final requests = api.platformPlaylistTrackRequests.length;
+
+    final first = notifier.loadMorePlaylistTracks(playlist);
+    final second = notifier.loadMorePlaylistTracks(playlist);
+    await Future.wait(<Future<void>>[first, second]);
+
+    expect(api.platformPlaylistTrackRequests, hasLength(requests + 1));
+    expect(api.platformPlaylistTrackPages['netease:list-0'], 1);
+    final state = container.read(musicPlatformLibraryProvider).value!;
+    final page = state.playlistTracks['netease:list-0']!;
+    expect(page.items, hasLength(400));
+    // 追加后仍有下一页，且续载结束后不再显示底部进度。
+    expect(page.hasMore, isTrue);
+    expect(state.appendingPlaylistKeys, isEmpty);
+  });
+
+  test('连续点击播放整队只回源一次', () async {
+    final api =
+        _FakeMusicApi()
+          ..platformStatuses = const <MusicPlatformStatus>[
+            _connectedNeteaseStatus,
+          ]
+          ..neteasePlaylists = _onlinePlaylists(1)
+          ..playlistTrackCount = 800;
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicPlatformLibraryProvider.future);
+    await pumpEventQueue();
+    final notifier = container.read(musicPlatformLibraryProvider.notifier);
+    final playlist =
+        container.read(musicPlatformLibraryProvider).value!.playlists.first;
+    final requests = api.platformPlaylistTrackRequests.length;
+
+    final first = notifier.loadAllPlaylistTracks(playlist);
+    final second = notifier.loadAllPlaylistTracks(playlist);
+
+    expect(await first, hasLength(800));
+    expect(await second, hasLength(800));
+    expect(api.platformPlaylistTrackRequests, hasLength(requests + 1));
+    expect(api.platformPlaylistTrackSizes['netease:list-0'], 1000);
+    final state = container.read(musicPlatformLibraryProvider).value!;
+    expect(state.playlistTracks['netease:list-0']!.items, hasLength(800));
+    expect(state.loadingPlaylistKeys, isEmpty);
   });
 }

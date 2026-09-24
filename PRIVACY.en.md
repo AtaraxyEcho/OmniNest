@@ -7,7 +7,7 @@
 
 ## 1. What OmniNest is
 
-OmniNest is a self-hosted personal digital life center covering files, movies, music, photos, reading, sync, offline, and system management.
+OmniNest is a self-hosted media center covering files, movies, music, photos, reading, sync, offline, and system management.
 It is distributed as source code, and **your data stays on the server and storage you deploy yourself**.
 
 **Core principle: the OmniNest project developers do not run any public server, and do not collect or upload your library contents.**
