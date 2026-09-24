@@ -54,6 +54,11 @@ ClamAV 是可选服务，通过 `.env` 的 `COMPOSE_PROFILES=clamav` 控制：
 `prod/nginx/`、`prod/certbot/` 包含生产专属的镜像定义与脚本；backend、netease-api
 与图像分析侧车的镜像定义统一位于 deploy 根目录。Compose 从项目源码构建镜像，不复制业务源码到部署目录。
 
+**子路径部署**：默认挂在站点根。若必须由反代挂在子路径（如 `https://nas.example.com/omninest/`），构建镜像前设
+`OMNINEST_WEB_BASE_HREF=/omninest/`（值必须以 `/` 开头并以 `/` 结尾，否则构建失败）。镜像会按该 base-href 构建
+Flutter Web，并把产物摆到 `html/<前缀>/` 下，因此代理需**原样保留前缀**转发给容器，不要 strip；Canvaskit 与
+SQLite WASM/Worker 都按页面基准解析，无需额外配置。前端使用 hash 路由，子路径下的深链不需要服务端 rewrite。
+
 ### 资源要求与安全扫描
 
 **日志路径**：后端应用日志默认写在容器内 `logs/omninest.log`（`OMNINEST_LOG_PATH`，相对 `/app`）。本地开发对应 `backend/logs/`；测试与构建日志请写入各模块自己的 `logs/`，勿放在源码根目录。

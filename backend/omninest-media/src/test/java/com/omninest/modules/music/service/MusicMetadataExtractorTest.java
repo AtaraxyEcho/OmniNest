@@ -125,6 +125,132 @@ class MusicMetadataExtractorTest {
         return block.toByteArray();
     }
 
+    @Test
+    void extractsMp3DurationFromTlenFrame() throws Exception {
+        byte[] audio = id3Tag(
+                textFrame("TIT2", "Night Drive"),
+                textFrame("TLEN", "212")
+        );
+
+        MusicMetadataExtractor.Metadata metadata =
+                extractor.extract(new ByteArrayInputStream(audio), "Night Drive.mp3", "audio/mpeg");
+
+        assertThat(metadata.durationSeconds()).isEqualTo(212);
+    }
+
+    @Test
+    void extractsMp3DurationFromXingFrameCount() throws Exception {
+        byte[] tag = id3Tag(textFrame("TIT2", "Night Drive"));
+        // MPEG1 Layer3 128kbps 44.1kHz：帧长 417，Xing 侧信息里带总帧数。
+        byte[] frame = concat(
+                new byte[] {(byte) 0xFF, (byte) 0xFB, (byte) 0x90, (byte) 0x00},
+                new byte[16]
+        );
+        byte[] xing = concat(
+                "Xing".getBytes(StandardCharsets.ISO_8859_1),
+                int32BE(0x3),
+                int32BE(7679),
+                int32BE(0)
+        );
+        byte[] audio = concat(tag, frame, xing, new byte[512]);
+
+        MusicMetadataExtractor.Metadata metadata = extractor.extract(
+                new ByteArrayInputStream(audio), "Night Drive.mp3", "audio/mpeg", audio.length);
+
+        assertThat(metadata.sampleRate()).isEqualTo(44100);
+        assertThat(metadata.bitrate()).isEqualTo(128);
+        // 7679 帧 × 1152 采样 ÷ 44100Hz ≈ 200.6 秒。
+        assertThat(metadata.durationSeconds()).isEqualTo(200);
+    }
+
+    @Test
+    void estimatesConstantBitrateMp3DurationWithoutXingHeader() throws Exception {
+        byte[] tag = id3Tag(textFrame("TIT2", "Night Drive"));
+        byte[] frame = concat(
+                new byte[] {(byte) 0xFF, (byte) 0xFB, (byte) 0x90, (byte) 0x00},
+                new byte[64]
+        );
+        byte[] audio = concat(tag, frame);
+        // 音频段（去掉标签与帧头之后）按 128kbps 计 60 秒。
+        long fileSize = tag.length + 960_000L;
+
+        MusicMetadataExtractor.Metadata metadata = extractor.extract(
+                new ByteArrayInputStream(audio), "Night Drive.mp3", "audio/mpeg", fileSize);
+
+        assertThat(metadata.durationSeconds()).isEqualTo(60);
+    }
+
+    @Test
+    void extractsFlacDurationAndSampleRateFromStreamInfo() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write("fLaC".getBytes(StandardCharsets.ISO_8859_1));
+        byte[] streamInfo = flacStreamInfo(44100, 44100L * 183L);
+        out.write(int32BE(streamInfo.length)); // type = STREAMINFO，非最后一块
+        out.write(streamInfo);
+        out.write(vorbisCommentBlock("reference libFLAC 1.3.3"));
+
+        MusicMetadataExtractor.Metadata metadata = extractor.extract(
+                new ByteArrayInputStream(out.toByteArray()), "test.flac", "audio/flac");
+
+        assertThat(metadata.sampleRate()).isEqualTo(44100);
+        assertThat(metadata.durationSeconds()).isEqualTo(183);
+    }
+
+    @Test
+    void extractsWavDurationFromFmtAndDataChunks() throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        out.write("RIFF".getBytes(StandardCharsets.ISO_8859_1));
+        out.write(int32LE(4 + 8 + 16 + 8 + 10_000));
+        out.write("WAVE".getBytes(StandardCharsets.ISO_8859_1));
+        out.write("fmt ".getBytes(StandardCharsets.ISO_8859_1));
+        out.write(int32LE(16));
+        out.write(new byte[] {1, 0, 2, 0});
+        out.write(int32LE(44100));
+        out.write(int32LE(1000)); // byteRate
+        out.write(new byte[] {4, 0, 16, 0});
+        out.write("data".getBytes(StandardCharsets.ISO_8859_1));
+        out.write(int32LE(10_000));
+        out.write(new byte[10_000]);
+        byte[] wav = out.toByteArray();
+
+        MusicMetadataExtractor.Metadata metadata = extractor.extract(
+                new ByteArrayInputStream(wav), "take.wav", "audio/wav", wav.length);
+
+        assertThat(metadata.durationSeconds()).isEqualTo(10);
+    }
+
+    /**
+     * 按 FLAC STREAMINFO 的位布局打包：采样率占第 68-87 位，总采样数占第 108-143 位。
+     */
+    private byte[] flacStreamInfo(int sampleRate, long totalSamples) {
+        byte[] info = new byte[34];
+        writeBitsBE(info, 0, 10, 4096);
+        writeBitsBE(info, 10, 10, 4096);
+        writeBitsBE(info, 68, 20, sampleRate);
+        writeBitsBE(info, 88, 8, 1);
+        writeBitsBE(info, 96, 12, 15);
+        writeBitsBE(info, 108, 36, totalSamples);
+        return info;
+    }
+
+    private void writeBitsBE(byte[] target, int bitOffset, int bitLength, long value) {
+        for (int bit = 0; bit < bitLength; bit++) {
+            long sourceBit = (value >>> (bitLength - 1 - bit)) & 1;
+            int absolute = bitOffset + bit;
+            int byteIndex = absolute >>> 3;
+            int bitInByte = 7 - (absolute & 7);
+            target[byteIndex] |= (byte) (sourceBit << bitInByte);
+        }
+    }
+
+    private byte[] concat(byte[]... parts) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        for (byte[] part : parts) {
+            out.writeBytes(part);
+        }
+        return out.toByteArray();
+    }
+
     private byte[] int32BE(int value) {
         return new byte[] {
                 (byte) ((value >>> 24) & 0xFF),

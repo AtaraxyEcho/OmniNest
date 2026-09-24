@@ -21,6 +21,25 @@ public class MusicMetadataExtractor {
     private static final int MAX_TAG_BYTES = 8 * 1024 * 1024;
 
     public Metadata extract(InputStream inputStream, String fileName, String mimeType) throws IOException {
+        return extract(inputStream, fileName, mimeType, 0L);
+    }
+
+    /**
+     * 提取音频元数据。
+     *
+     * @param inputStream 音频内容流，只读取前 {@value #MAX_TAG_BYTES} 字节
+     * @param fileName 文件名，仅用于日志与无标签兜底
+     * @param mimeType 声明的 MIME 类型
+     * @param fileSizeBytes 音频总字节数，用于恒定码率 MP3 的时长估算；0 表示未知
+     * @return 解析出的元数据，未识别容器时为空值
+     * @throws IOException 内容读取失败
+     */
+    public Metadata extract(
+            InputStream inputStream,
+            String fileName,
+            String mimeType,
+            long fileSizeBytes
+    ) throws IOException {
         log.debug("提取音乐元数据: fileName={}", fileName);
         byte[] bytes = inputStream.readNBytes(MAX_TAG_BYTES);
         if (bytes.length < 4) {
@@ -28,7 +47,7 @@ public class MusicMetadataExtractor {
         }
         // 按 magic bytes 分发到对应解析器
         if (bytes[0] == 'I' && bytes[1] == 'D' && bytes[2] == '3') {
-            return parseId3v2(bytes, fileName);
+            return parseId3v2(bytes, fileName, fileSizeBytes);
         }
         if (bytes[0] == 'f' && bytes[1] == 'L' && bytes[2] == 'a' && bytes[3] == 'C') {
             return parseFlac(bytes, fileName);
@@ -43,10 +62,10 @@ public class MusicMetadataExtractor {
         // WAV: RIFF....WAVE
         if (bytes[0] == 'R' && bytes[1] == 'I' && bytes[2] == 'F' && bytes[3] == 'F'
                 && bytes.length >= 12 && bytes[8] == 'W' && bytes[9] == 'A' && bytes[10] == 'V' && bytes[11] == 'E') {
-            return parseWav(bytes, fileName);
+            return parseWav(bytes, fileName, fileSizeBytes);
         }
         // 兜底：某些 MP3 文件在 ID3 标签之前有垃圾数据，尝试在前 4KB 内搜索 ID3
-        Metadata id3Fallback = searchId3v2(bytes, Math.min(bytes.length, 4096), fileName);
+        Metadata id3Fallback = searchId3v2(bytes, Math.min(bytes.length, 4096), fileName, fileSizeBytes);
         if (id3Fallback != null) {
             return id3Fallback;
         }
@@ -56,7 +75,7 @@ public class MusicMetadataExtractor {
 
     // ─── ID3v2（MP3 / 嵌入 ID3 的 WAV）────────────────────────────────────
 
-    private Metadata parseId3v2(byte[] bytes, String fileName) {
+    private Metadata parseId3v2(byte[] bytes, String fileName, long fileSizeBytes) {
         int majorVersion = bytes[3] & 0xFF;
         int tagSize = synchsafeInt(bytes, 6);
         int tagEnd = Math.min(bytes.length, 10 + tagSize);
@@ -79,8 +98,8 @@ public class MusicMetadataExtractor {
             }
             offset += 10 + frameSize;
         }
-        // 从 ID3 标签之后的 MPEG 帧头提取 bitrate 和 sampleRate
-        parseMp3FrameHeader(bytes, tagEnd, metadata);
+        // 从 ID3 标签之后的 MPEG 帧头提取 bitrate、sampleRate 与时长
+        parseMp3FrameHeader(bytes, tagEnd, metadata, fileSizeBytes);
         return metadata.toMetadata();
     }
 
@@ -92,6 +111,7 @@ public class MusicMetadataExtractor {
             case "TCON" -> metadata.genre = decodeId3TextFrame(frame);
             case "TRCK" -> metadata.trackNumber = decodeId3TextFrame(frame);
             case "TPOS" -> metadata.discNumber = decodeId3TextFrame(frame);
+            case "TLEN" -> metadata.durationSeconds = parsePositiveInt(decodeId3TextFrame(frame));
             case "USLT" -> metadata.lyricsRaw = decodeId3UnsynchronizedLyrics(frame);
             case "APIC" -> metadata.coverDataUrl = decodeId3AttachedPicture(frame);
             default -> { }
@@ -99,10 +119,16 @@ public class MusicMetadataExtractor {
     }
 
     /**
-     * 解析 ID3 标签之后的第一个 MPEG 帧头，提取 bitrate 和 sampleRate。
-     * MP3 帧头: 4 bytes, 同步字 0xFFE0。
+     * 解析 ID3 标签之后的第一个 MPEG 帧头，提取 bitrate、sampleRate 与时长。
+     * MP3 帧头: 4 bytes, 同步字 0xFFE0。时长优先用 Xing/Info 帧数（VBR 精确），
+     * 缺失时按恒定码率用总字节估算；两者都拿不到时留空。
      */
-    private void parseMp3FrameHeader(byte[] bytes, int searchFrom, MutableMetadata metadata) {
+    private void parseMp3FrameHeader(
+            byte[] bytes,
+            int searchFrom,
+            MutableMetadata metadata,
+            long fileSizeBytes
+    ) {
         // MPEG1 Layer3 bitrate 表 (index 1-14)
         int[] mp3Bitrates = {0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320};
         // MPEG1 sampleRate 表 (index 0-2)
@@ -121,13 +147,19 @@ public class MusicMetadataExtractor {
                 int layerBits = (header >> 17) & 0x3;       // Layer
                 int bitrateIndex = (header >> 12) & 0xF;    // bitrate index
                 int sampleRateIndex = (header >> 10) & 0x3; // sampleRate index
+                int padding = (header >> 9) & 1;
 
                 // 只处理 MPEG1 Layer3 (version=3, layer=1)
                 if (versionBits == 3 && layerBits == 1
                         && bitrateIndex > 0 && bitrateIndex < 15
                         && sampleRateIndex < 3) {
-                    metadata.bitrate = mp3Bitrates[bitrateIndex];
-                    metadata.sampleRate = mp3SampleRates[sampleRateIndex];
+                    int bitrate = mp3Bitrates[bitrateIndex];
+                    int sampleRate = mp3SampleRates[sampleRateIndex];
+                    metadata.bitrate = bitrate;
+                    metadata.sampleRate = sampleRate;
+                    int frameLength = (144 * bitrate * 1000) / sampleRate + padding * 4;
+                    metadata.durationSeconds = resolveMp3Duration(
+                            bytes, i, frameLength, bitrate, sampleRate, searchFrom, fileSizeBytes);
                 }
                 return;
             }
@@ -135,13 +167,61 @@ public class MusicMetadataExtractor {
     }
 
     /**
+     * Xing/Info 帧数优先，其次按恒定码率用音频字节数估算。
+     */
+    private Integer resolveMp3Duration(
+            byte[] bytes,
+            int frameStart,
+            int frameLength,
+            int bitrate,
+            int sampleRate,
+            int audioStart,
+            long fileSizeBytes
+    ) {
+        int frames = findXingFrameCount(bytes, frameStart, frameLength);
+        if (frames > 0 && sampleRate > 0) {
+            // MPEG1 Layer3 每帧 1152 个采样。
+            return (int) ((long) frames * 1152 / sampleRate);
+        }
+        long audioBytes = fileSizeBytes - audioStart;
+        if (audioBytes > 0 && bitrate > 0) {
+            return (int) (audioBytes * 8L / (bitrate * 1000L));
+        }
+        return null;
+    }
+
+    /**
+     * 在首帧侧信息区查找 Xing/Info 标志并取帧数（flags 第 0 位表示带帧数）。
+     */
+    private int findXingFrameCount(byte[] bytes, int frameStart, int frameLength) {
+        if (frameLength <= 0) {
+            return 0;
+        }
+        int scanFrom = frameStart + 4;
+        int scanTo = Math.min(bytes.length, frameStart + frameLength);
+        for (int pos = scanFrom; pos + 12 <= scanTo; pos++) {
+            boolean xing = bytes[pos] == 'X' && bytes[pos + 1] == 'i'
+                    && bytes[pos + 2] == 'n' && bytes[pos + 3] == 'g';
+            boolean info = bytes[pos] == 'I' && bytes[pos + 1] == 'n'
+                    && bytes[pos + 2] == 'f' && bytes[pos + 3] == 'o';
+            if (!xing && !info) {
+                continue;
+            }
+            int flags = int32BE(bytes, pos + 4);
+            return (flags & 1) == 1 ? int32BE(bytes, pos + 8) : 0;
+        }
+        return 0;
+    }
+
+    /**
      * 在字节范围内搜索 ID3 标签（兜底处理含前置垃圾数据的 MP3）。
      */
-    private Metadata searchId3v2(byte[] bytes, int searchEnd, String fileName) {
+    private Metadata searchId3v2(byte[] bytes, int searchEnd, String fileName, long fileSizeBytes) {
         for (int i = 0; i + 10 <= searchEnd; i++) {
             if (bytes[i] == 'I' && bytes[i + 1] == 'D' && bytes[i + 2] == '3') {
                 byte[] shifted = Arrays.copyOfRange(bytes, i, bytes.length);
-                return parseId3v2(shifted, fileName);
+                // 前置垃圾数据不计入音频长度，估算误差按一个标签量级处理。
+                return parseId3v2(shifted, fileName, fileSizeBytes - i);
             }
         }
         return null;
@@ -162,12 +242,16 @@ public class MusicMetadataExtractor {
             if (offset + blockLength > bytes.length) {
                 break;
             }
-            if (blockType == 0 && blockLength >= 14) {
-                // STREAMINFO block: bytes 8-10 包含 sampleRate (20 bits)
-                int sr1 = bytes[offset + 8] & 0xFF;
-                int sr2 = bytes[offset + 9] & 0xFF;
-                int sr3 = (bytes[offset + 10] & 0xF0) >> 4;
-                metadata.sampleRate = (sr1 << 12) | (sr2 << 4) | sr3;
+            if (blockType == 0 && blockLength >= 18) {
+                // STREAMINFO: sampleRate 占第 68-87 位，总采样数占第 108-143 位。
+                int sampleRate = (int) readBitsBE(bytes, (offset * 8L) + 68, 20);
+                long totalSamples = readBitsBE(bytes, (offset * 8L) + 108, 36);
+                if (sampleRate > 0) {
+                    metadata.sampleRate = sampleRate;
+                }
+                if (sampleRate > 0 && totalSamples > 0) {
+                    metadata.durationSeconds = (int) (totalSamples / sampleRate);
+                }
             }
             if (blockType == 4) {
                 // VORBIS_COMMENT block
@@ -290,7 +374,58 @@ public class MusicMetadataExtractor {
         metadata.discNumber = parseMp4DiscAtom(atoms.get("disk"));
         metadata.lyricsRaw = parseMp4TextAtom(atoms.get("©lyr"));
         metadata.coverDataUrl = parseMp4CoverAtom(atoms.get("covr"));
+        metadata.durationSeconds = findMp4DurationSeconds(bytes);
         return metadata.toMetadata();
+    }
+
+    /**
+     * 从 moov &gt; mvhd 取时长。moov 位于文件尾部（非 fast-start 编码）时读不到，留空。
+     */
+    private Integer findMp4DurationSeconds(byte[] bytes) {
+        int pos = 0;
+        while (pos + 8 <= bytes.length) {
+            long size = int32BE(bytes, pos) & 0xFFFFFFFFL;
+            if (size < 8 || pos + size > bytes.length) {
+                break;
+            }
+            String type = new String(bytes, pos + 4, 4, StandardCharsets.ISO_8859_1);
+            if ("moov".equals(type)) {
+                return mvhdDuration(Arrays.copyOfRange(bytes, pos + 8, pos + (int) size));
+            }
+            pos += (int) size;
+        }
+        return null;
+    }
+
+    private Integer mvhdDuration(byte[] moov) {
+        int pos = 0;
+        while (pos + 8 <= moov.length) {
+            long size = int32BE(moov, pos) & 0xFFFFFFFFL;
+            if (size < 8 || pos + size > moov.length) {
+                break;
+            }
+            String type = new String(moov, pos + 4, 4, StandardCharsets.ISO_8859_1);
+            if ("mvhd".equals(type) && size >= 28) {
+                int version = moov[pos + 8] & 0xFF;
+                if (version == 1 && size >= 40) {
+                    long timescale = int32BE(moov, pos + 28) & 0xFFFFFFFFL;
+                    return toSeconds(timescale, int64BE(moov, pos + 32));
+                }
+                if (version == 0) {
+                    long timescale = int32BE(moov, pos + 20) & 0xFFFFFFFFL;
+                    return toSeconds(timescale, int32BE(moov, pos + 24) & 0xFFFFFFFFL);
+                }
+            }
+            pos += (int) size;
+        }
+        return null;
+    }
+
+    private Integer toSeconds(long timescale, long duration) {
+        if (timescale <= 0 || duration <= 0) {
+            return null;
+        }
+        return (int) (duration / timescale);
     }
 
     /**
@@ -409,15 +544,26 @@ public class MusicMetadataExtractor {
 
     // ─── WAV（RIFF INFO chunks）────────────────────────────────────────────
 
-    private Metadata parseWav(byte[] bytes, String fileName) {
+    private Metadata parseWav(byte[] bytes, String fileName, long fileSizeBytes) {
         MutableMetadata metadata = new MutableMetadata();
         // RIFF 结构: "RIFF"[4 bytes size]["WAVE" + chunks]
         // 在 chunks 中找 "LIST" -> "INFO" 子 chunk
         int pos = 12; // 跳过 RIFF header
+        int byteRate = 0;
+        int dataStart = 0;
+        long dataSize = 0;
         while (pos + 8 <= bytes.length) {
             String chunkId = new String(bytes, pos, 4, StandardCharsets.ISO_8859_1);
             int chunkSize = int32LE(bytes, pos + 4);
             if (chunkSize < 0 || pos + 8 + chunkSize > bytes.length) break;
+            if ("fmt ".equals(chunkId) && chunkSize >= 16 && pos + 24 <= bytes.length) {
+                // fmt data: [2 format][2 channels][4 sampleRate][4 byteRate]...
+                byteRate = int32LE(bytes, pos + 8 + 8);
+            }
+            if ("data".equals(chunkId)) {
+                dataStart = pos + 8;
+                dataSize = chunkSize;
+            }
             if ("LIST".equals(chunkId) && pos + 12 <= bytes.length) {
                 String listType = new String(bytes, pos + 8, 4, StandardCharsets.ISO_8859_1);
                 if ("INFO".equals(listType)) {
@@ -428,7 +574,7 @@ public class MusicMetadataExtractor {
             if ("id3 ".equals(chunkId) || "ID3 ".equals(chunkId)) {
                 byte[] id3Bytes = Arrays.copyOfRange(bytes, pos + 8, pos + 8 + chunkSize);
                 if (id3Bytes.length >= 10 && id3Bytes[0] == 'I' && id3Bytes[1] == 'D' && id3Bytes[2] == '3') {
-                    Metadata id3 = parseId3v2(id3Bytes, fileName);
+                    Metadata id3 = parseId3v2(id3Bytes, fileName, fileSizeBytes);
                     if (id3.hasAnyValue()) {
                         return id3;
                     }
@@ -438,7 +584,28 @@ public class MusicMetadataExtractor {
             // RIFF chunks 必须 2-byte 对齐
             if (chunkSize % 2 != 0) pos++;
         }
+        metadata.durationSeconds = wavDuration(byteRate, dataStart, dataSize, fileSizeBytes);
         return metadata.toMetadata();
+    }
+
+    /**
+     * 用 data 段字节数与 byteRate 求时长；流式写入的 WAV 会把 data 长度记成 0 或
+     * 上限值，此时按文件总长扣除 data 之前的头部估算。
+     */
+    private Integer wavDuration(int byteRate, int dataStart, long dataSize, long fileSizeBytes) {
+        if (byteRate <= 0 || dataStart <= 0) {
+            return null;
+        }
+        long usable = dataSize;
+        if (usable <= 0 || usable >= 0xFFFFF000L) {
+            usable = fileSizeBytes - dataStart;
+        } else if (fileSizeBytes > 0) {
+            usable = Math.min(usable, fileSizeBytes - dataStart);
+        }
+        if (usable <= 0) {
+            return null;
+        }
+        return (int) (usable / byteRate);
     }
 
     /**
@@ -549,6 +716,57 @@ public class MusicMetadataExtractor {
                 | (bytes[offset + 3] & 0xFF);
     }
 
+    private long int64BE(byte[] bytes, int offset) {
+        long value = 0;
+        for (int index = 0; index < 8; index++) {
+            value = (value << 8) | (bytes[offset + index] & 0xFFL);
+        }
+        return value;
+    }
+
+    /**
+     * 按大端位序读取跨字节的字段（FLAC STREAMINFO 的采样率与总采样数都不是字节对齐的）。
+     *
+     * @param bitOffset 从数组起始算起的位偏移
+     * @param bitLength 读取位数，不超过 64
+     * @return 读取到的无符号值；越界时返回 0
+     */
+    private long readBitsBE(byte[] bytes, long bitOffset, int bitLength) {
+        if (bitLength <= 0 || bitLength > 64) {
+            return 0;
+        }
+        long lastBit = bitOffset + bitLength;
+        if (lastBit > (long) bytes.length * 8) {
+            return 0;
+        }
+        long value = 0;
+        for (long bit = bitOffset; bit < lastBit; bit++) {
+            int byteIndex = (int) (bit >>> 3);
+            int bitInByte = (int) (7 - (bit & 7));
+            value = (value << 1) | ((bytes[byteIndex] >>> bitInByte) & 1);
+        }
+        return value;
+    }
+
+    /**
+     * 解析标签里的十进制长度字段；非数字或空值返回 null，不抛异常。
+     */
+    private Integer parsePositiveInt(String value) {
+        if (value == null) {
+            return null;
+        }
+        String digits = value.trim();
+        if (digits.isEmpty()) {
+            return null;
+        }
+        try {
+            int parsed = Integer.parseInt(digits);
+            return parsed > 0 ? parsed : null;
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
     private int int32LE(byte[] bytes, int offset) {
         return (bytes[offset] & 0xFF)
                 | ((bytes[offset + 1] & 0xFF) << 8)
@@ -621,12 +839,17 @@ public class MusicMetadataExtractor {
             String trackNumber,
             String discNumber,
             Integer bitrate,
-            Integer sampleRate
+            Integer sampleRate,
+            Integer durationSeconds
     ) {
         static Metadata empty() {
-            return new Metadata(null, null, null, null, null, null, null, null, null, null);
+            return new Metadata(null, null, null, null, null, null, null, null, null, null, null);
         }
 
+        /**
+         * 是否含可写入标签的用户元数据。时长与码率属于容器技术信息，
+         * 不参与判定，否则仅有长度的文件会被标成已匹配而不再进刮削队列。
+         */
         boolean hasAnyValue() {
             return hasText(title)
                     || hasText(artistName)
@@ -654,9 +877,11 @@ public class MusicMetadataExtractor {
         private String discNumber;
         private Integer bitrate;
         private Integer sampleRate;
+        private Integer durationSeconds;
 
         private Metadata toMetadata() {
-            return new Metadata(title, artistName, albumTitle, genre, lyricsRaw, coverDataUrl, trackNumber, discNumber, bitrate, sampleRate);
+            return new Metadata(title, artistName, albumTitle, genre, lyricsRaw, coverDataUrl, trackNumber,
+                    discNumber, bitrate, sampleRate, durationSeconds);
         }
     }
 }

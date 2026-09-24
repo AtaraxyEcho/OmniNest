@@ -56,6 +56,7 @@ The platform integrations are for personal study and research, local client expe
 
 - **Web** is served by the deployment stack's Nginx and connects same-origin.
 - **Android / Windows** packages ship without a baked-in server address: on first launch a setup page asks for your self-hosted server address (`host`, `host:port`, or a full URL), validates it, then continues to login or the install wizard; signed-in users can change it under Profile → Server & connection.
+- **Known Web limits**: the browser does not persist whole books (the cache lives in the current page session and re-downloads after a refresh), and in-memory parsing caps at 32 MiB per book — larger books fail with an explicit error instead of truncating. Use the Android or Windows client for offline reading or large books.
 - Custom builds: `frontend/scripts/build_signed_*_release.ps1` accept an optional `-ApiBaseUrl` preset (family distribution; address changes propagate with app updates) and `-RequireHttps` for HTTPS-only strict builds. The server ships as Docker images only; there is no standalone jar (see deploy/README.md).
 
 ### Privacy and data

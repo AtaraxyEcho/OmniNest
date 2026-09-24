@@ -218,7 +218,7 @@ class _PortalMusicFocusPreview extends ConsumerWidget {
                 subtitle: item.track.artistName,
                 route: '/music',
                 module: PortalFocusModule.music,
-                imageUrl: item.track.coverUrl,
+                imageUrl: item.track.listCoverUrl,
                 cacheKey: 'portal-preview:music:${item.track.id}',
                 onTap:
                     () => unawaited(

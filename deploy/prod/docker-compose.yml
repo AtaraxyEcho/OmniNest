@@ -112,6 +112,8 @@ services:
     build:
       context: ../..
       dockerfile: deploy/prod/nginx/Dockerfile
+      args:
+        WEB_BASE_HREF: ${OMNINEST_WEB_BASE_HREF:-/}
     environment:
       OMNINEST_HTTPS_ENABLED: ${OMNINEST_HTTPS_ENABLED:-false}
       OMNINEST_PUBLIC_HOST: ${OMNINEST_PUBLIC_HOST:-localhost}

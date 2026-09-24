@@ -7,12 +7,17 @@ import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 /// 桌面形态低于 1024 固定宽度横向滚动并改写 MediaQuery 宽度；
 /// 移动形态与 ≥1024 直通。
 void main() {
-  Widget host({required bool mobileForm, required Size viewport}) {
+  Widget host({
+    required bool mobileForm,
+    required Size viewport,
+    bool hoverCapable = true,
+  }) {
     return MaterialApp(
       home: MediaQuery(
         data: MediaQueryData(size: viewport),
         child: DesktopFormMinWidth(
           mobileForm: mobileForm,
+          hoverCapable: hoverCapable,
           child: Builder(
             builder:
                 (context) => Text(
@@ -29,12 +34,19 @@ void main() {
     WidgetTester tester,
     Size viewport, {
     required bool mobileForm,
+    bool hoverCapable = true,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = viewport;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(host(mobileForm: mobileForm, viewport: viewport));
+    await tester.pumpWidget(
+      host(
+        mobileForm: mobileForm,
+        viewport: viewport,
+        hoverCapable: hoverCapable,
+      ),
+    );
     await tester.pump();
   }
 
@@ -50,6 +62,22 @@ void main() {
       find.text('1024', findRichText: false),
       findsOneWidget,
       reason: '子树 MediaQuery 宽度被改写为护栏宽度',
+    );
+  });
+
+  testWidgets('无 hover 指针的窄窗直通，交给模块窄屏分支', (tester) async {
+    await pumpAt(
+      tester,
+      const Size(700, 900),
+      mobileForm: false,
+      hoverCapable: false,
+    );
+
+    expect(find.byType(SingleChildScrollView), findsNothing);
+    expect(
+      find.text('700', findRichText: false),
+      findsOneWidget,
+      reason: '触屏笔电/平板桌面模式不应被撑到 1024 再横向滚动',
     );
   });
 

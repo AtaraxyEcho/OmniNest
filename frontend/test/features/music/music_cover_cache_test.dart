@@ -60,6 +60,41 @@ void main() {
       expect(utf8.decode(bytes), 'cover-bytes');
     });
 
+    test('后端根相对封面路径不会被重复拼上 /api/v1', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'http://localhost:9090/api/v1'));
+      final adapter = _StubAdapter(
+        bodyBytes: Uint8List(4),
+        contentType: 'image/jpeg',
+      );
+      dio.httpClientAdapter = adapter;
+      final service = MusicCoverFileService(dio);
+
+      await service.get('/api/v1/music/covers/abc/thumbnail');
+
+      // baseUrl 自带 /api/v1，直接交给 Dio 会请求 /api/v1/api/v1/...（后端 404）。
+      expect(
+        adapter.requestedUri.toString(),
+        'http://localhost:9090/api/v1/music/covers/abc/thumbnail',
+      );
+    });
+
+    test('外部 CDN 地址不经过绝对化改写', () async {
+      final dio = Dio(BaseOptions(baseUrl: 'http://localhost:9090/api/v1'));
+      final adapter = _StubAdapter(
+        bodyBytes: Uint8List(4),
+        contentType: 'image/jpeg',
+      );
+      dio.httpClientAdapter = adapter;
+      final service = MusicCoverFileService(dio);
+
+      await service.get('https://p1.music.126.net/abc.jpg');
+
+      expect(
+        adapter.requestedUri.toString(),
+        'https://p1.music.126.net/abc.jpg',
+      );
+    });
+
     test('immutable 缓存指令决定有效期内 30 天', () async {
       final dio = Dio(BaseOptions(baseUrl: 'http://localhost:9090/api/v1'));
       dio.httpClientAdapter = _StubAdapter(
@@ -105,6 +140,9 @@ class _StubAdapter implements HttpClientAdapter {
   final String? cacheControl;
   final int? _explicitContentLength;
 
+  /// 最近一次实际请求的绝对地址，用于断言 baseUrl 合并结果。
+  Uri? requestedUri;
+
   @override
   void close({bool force = false}) {}
 
@@ -114,6 +152,7 @@ class _StubAdapter implements HttpClientAdapter {
     Stream<Uint8List>? requestStream,
     Future<void>? cancelFuture,
   ) async {
+    requestedUri = options.uri;
     return ResponseBody(
       Stream.value(bodyBytes),
       200,

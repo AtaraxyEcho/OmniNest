@@ -27,6 +27,7 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_host.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/notifications/presentation/widgets/notification_foreground_toast.dart';
 import 'package:omninest/core/deep_link/deep_link_service.dart';
@@ -141,17 +142,24 @@ class _OmniNestAppState extends ConsumerState<OmniNestApp> {
           child: content,
         );
         // 桌面形态最小内容宽护栏：桌面浏览器缩窗低于 1024 时固定宽度横向
-        // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支。
+        // 滚动，不落入各模块与移动壳层并行的窄窗自适配分支；无 hover 指针的
+        // 设备例外，让它们直接走模块窄屏布局。
         final mobileForm = shouldUseResponsiveMobileShell(
           mobilePlatform: isMobilePlatform,
           width: mediaQuery.size.width,
         );
+        final hoverCapable =
+            PlatformCapabilities.current().supportsHoverPointer;
         return FontScaleScope(
           // 供自绘排版取用的「仅系统缩放」口径同样封顶，否则阅读页测量
           // 会与实际渲染字号在超大无障碍档位下分叉。
           systemScaler: ComposedScaler(systemScaler, 1),
           child: NotificationForegroundToast(
-            child: DesktopFormMinWidth(mobileForm: mobileForm, child: content),
+            child: DesktopFormMinWidth(
+              mobileForm: mobileForm,
+              hoverCapable: hoverCapable,
+              child: content,
+            ),
           ),
         );
       },

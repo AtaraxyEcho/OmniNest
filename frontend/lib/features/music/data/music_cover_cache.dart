@@ -63,11 +63,27 @@ class MusicCoverFileService extends FileService {
     Map<String, String>? headers,
   }) async {
     final response = await _dio.get<ResponseBody>(
-      url,
+      resolveApiAbsoluteUrl(_dio, url),
       options: Options(responseType: ResponseType.stream, headers: headers),
     );
     return DioCoverFileResponse(response.data!);
   }
+}
+
+/// 把后端下发的根相对 API 路径（`/api/v1/...`）换算成绝对请求地址。
+///
+/// Dio 的 baseUrl 已带 `/api/v1` 前缀，直接把 `/api/v1/music/covers/x` 交给它会被
+/// 拼成 `/api/v1/api/v1/...` 并返回"接口不存在"；绝对地址绕过 baseUrl 合并，
+/// 鉴权拦截器照常生效。其它形态（CDN 直链、无 prefixes 的相对资源路径）原样交给 Dio。
+String resolveApiAbsoluteUrl(Dio dio, String url) {
+  if (!url.startsWith('/api/v1/')) {
+    return url;
+  }
+  final base = Uri.tryParse(dio.options.baseUrl);
+  if (base == null || !base.hasScheme || base.authority.isEmpty) {
+    return url;
+  }
+  return '${base.scheme}://${base.authority}$url';
 }
 
 /// [ResponseBody] 到 [FileServiceResponse] 的适配。

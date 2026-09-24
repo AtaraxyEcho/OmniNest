@@ -23,12 +23,15 @@ void main() {
     expect(indexSource, isNot(contains('flutter_bootstrap_config')));
   });
 
-  test('Web bootstrap loads the self-hosted CanvasKit runtime', () {
+  test('Web bootstrap loads the self-hosted CanvasKit runtime from the page base', () {
     final bootstrapSource = File('web/flutter_bootstrap.js').readAsStringSync();
 
     expect(bootstrapSource, contains('{{flutter_js}}'));
     expect(bootstrapSource, contains('{{flutter_build_config}}'));
-    expect(bootstrapSource, contains("canvasKitBaseUrl: '/canvaskit/'"));
+    // CanvasKit 只允许自托管，且路径跟随 <base href> 以便子路径部署。
+    expect(bootstrapSource, contains("document.querySelector('base')"));
+    expect(bootstrapSource, contains("baseHref + 'canvaskit/'"));
+    expect(bootstrapSource, isNot(contains("canvasKitBaseUrl: '/canvaskit/'")));
     expect(bootstrapSource, isNot(contains('gstatic')));
   });
 }

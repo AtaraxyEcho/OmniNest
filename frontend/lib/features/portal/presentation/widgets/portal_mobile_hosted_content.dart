@@ -416,7 +416,7 @@ class _PortalContinueStrip extends ConsumerWidget {
           _PortalContinueItem(
             title: track.title,
             subtitle: track.artistName,
-            imageUrl: track.coverUrl,
+            imageUrl: track.listCoverUrl,
             progress: null,
             icon: Icons.music_note_outlined,
             // 点击就地切歌（与音乐页最近列表同语义），停留门户由

@@ -2,10 +2,12 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
+import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/reader/reader_cover_ui.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 
@@ -608,7 +610,7 @@ class _AmbientCoverBackdrop extends StatelessWidget {
   }
 }
 
-class _AdaptiveCoverImage extends StatelessWidget {
+class _AdaptiveCoverImage extends ConsumerWidget {
   const _AdaptiveCoverImage({
     required this.fallbackColors,
     required this.foregroundFit,
@@ -630,7 +632,7 @@ class _AdaptiveCoverImage extends StatelessWidget {
   final bool directImage;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final itemId = readerItemId?.trim();
     final resolvedImageUrl = imageUrl?.trim();
     final hasReaderCover = itemId != null && itemId.isNotEmpty;
@@ -653,6 +655,11 @@ class _AdaptiveCoverImage extends StatelessWidget {
       return CachedNetworkImage(
         imageUrl: networkCoverUrl!,
         cacheKey: coverCacheKey,
+        // 本地音乐封面走稳定鉴权 API 路径，需要音乐专域的 Dio 缓存管理器；
+        // 其他模块的签名直链与非音乐地址返回 null，行为不变。
+        cacheManager: ref.watch(
+          musicCoverCacheManagerProvider(networkCoverUrl),
+        ),
         fit: BoxFit.cover,
         alignment: Alignment.center,
         filterQuality: FilterQuality.medium,
@@ -738,7 +745,7 @@ class _ReaderAdaptiveCoverImage extends StatelessWidget {
   }
 }
 
-class _NetworkAdaptiveCoverImage extends StatelessWidget {
+class _NetworkAdaptiveCoverImage extends ConsumerWidget {
   const _NetworkAdaptiveCoverImage({
     required this.imageUrl,
     required this.fallbackColors,
@@ -756,8 +763,9 @@ class _NetworkAdaptiveCoverImage extends StatelessWidget {
   final VoidCallback? onCoverError;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final fallback = _CoverImageFallback(colors: fallbackColors);
+    final cacheManager = ref.watch(musicCoverCacheManagerProvider(imageUrl));
     void notifyCoverError() {
       // 签名 URL 失效是 hero 封面失败主因：post-frame 通知上层重签，
       // 避免在图片流回调（可发生于 build 期）中直接触发状态改写。
@@ -774,6 +782,7 @@ class _NetworkAdaptiveCoverImage extends StatelessWidget {
           child: CachedNetworkImage(
             imageUrl: imageUrl,
             cacheKey: cacheKey,
+            cacheManager: cacheManager,
             fit: BoxFit.cover,
             alignment: Alignment.center,
             filterQuality: FilterQuality.medium,
@@ -793,6 +802,7 @@ class _NetworkAdaptiveCoverImage extends StatelessWidget {
           child: CachedNetworkImage(
             imageUrl: imageUrl,
             cacheKey: cacheKey,
+            cacheManager: cacheManager,
             fit: foregroundFit,
             alignment: Alignment.center,
             filterQuality: FilterQuality.high,

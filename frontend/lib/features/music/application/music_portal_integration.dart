@@ -28,13 +28,19 @@ class MusicPortalTrack {
     required this.albumTitle,
     required this.lyrics,
     this.coverUrl,
+    this.listCoverUrl,
   });
 
   final String id;
   final String title;
   final String artistName;
   final String albumTitle;
+
+  /// 原图地址：hero 大图用，避免 300px 派生图在高分屏上发虚。
   final String? coverUrl;
+
+  /// 缩放位地址：列表与小卡片用。
+  final String? listCoverUrl;
   final List<MusicPortalLyricLine> lyrics;
 }
 
@@ -44,11 +50,13 @@ class MusicPortalAlbum {
     required this.title,
     required this.artistName,
     this.coverUrl,
+    this.listCoverUrl,
   });
 
   final String title;
   final String artistName;
   final String? coverUrl;
+  final String? listCoverUrl;
 }
 
 /// Portal 使用的有界音乐状态投影。
@@ -266,7 +274,8 @@ MusicPortalTrack? _projectTrack(MusicTrack? track) {
     title: track.title,
     artistName: track.artistName,
     albumTitle: track.albumTitle,
-    coverUrl: track.listCoverUrl,
+    coverUrl: track.coverUrl,
+    listCoverUrl: track.listCoverUrl,
     lyrics: List<MusicPortalLyricLine>.unmodifiable(
       track.lyricLines.map(
         (line) => MusicPortalLyricLine(
@@ -286,6 +295,7 @@ MusicPortalAlbum? _projectAlbum(MusicAlbum? album) {
   return MusicPortalAlbum(
     title: album.title,
     artistName: album.artistName,
-    coverUrl: album.listCoverUrl,
+    coverUrl: album.coverUrl,
+    listCoverUrl: album.listCoverUrl,
   );
 }

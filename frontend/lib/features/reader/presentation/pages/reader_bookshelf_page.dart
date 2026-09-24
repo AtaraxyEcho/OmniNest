@@ -23,6 +23,9 @@ class ReaderBookshelfPage extends ConsumerWidget {
     final shelved = state?.bookshelfItems ?? const <ReaderItem>[];
     return ReaderPageScaffold(
       target: ReaderPageTarget.bookshelf,
+      // 书架自带滚动体：外层若是页级 SingleChildScrollView，列表的
+      // builder 惰性会失效（需按内容固有高度全量布局）。
+      childOwnScroll: true,
       onRefresh:
           () => ref.read(readerCenterControllerProvider.notifier).refresh(),
       header: Column(
@@ -58,29 +61,30 @@ class ReaderBookshelfPage extends ConsumerWidget {
         ],
       ),
       child: ReaderParseFeedback(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(
+            parent: BouncingScrollPhysics(),
+          ),
+          slivers: [
             if (shelved.isEmpty)
-              ReaderEmptyState(
-                title: AppLocalizations.of(context).readerShelfEmpty,
-                subtitle: AppLocalizations.of(context).readerShelfEmptyHint,
-                icon: Icons.auto_stories_outlined,
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: ReaderEmptyState(
+                  title: AppLocalizations.of(context).readerShelfEmpty,
+                  subtitle: AppLocalizations.of(context).readerShelfEmptyHint,
+                  icon: Icons.auto_stories_outlined,
+                ),
               )
             else
-              Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(
-                      color: rc.outlineVariant.withValues(alpha: 0.6),
-                    ),
-                  ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(
+                  MediaQuery.sizeOf(context).width >= 1024 ? 32 : 24,
+                  0,
+                  MediaQuery.sizeOf(context).width >= 1024 ? 32 : 24,
+                  40,
                 ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: shelved.length,
-                  itemBuilder: (context, index) {
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
                     final item = shelved[index];
                     return Container(
                       decoration: BoxDecoration(
@@ -96,7 +100,7 @@ class ReaderBookshelfPage extends ConsumerWidget {
                         onTap: () => context.push('/reader/items/${item.id}'),
                       ),
                     );
-                  },
+                  }, childCount: shelved.length),
                 ),
               ),
           ],

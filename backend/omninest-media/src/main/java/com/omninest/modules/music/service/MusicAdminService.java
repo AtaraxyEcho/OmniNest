@@ -353,6 +353,7 @@ public class MusicAdminService {
         track.setDiscNumber(parseNullableInt(metadata.discNumber()));
         track.setBitrate(metadata.bitrate());
         track.setSampleRate(metadata.sampleRate());
+        applyDuration(track, metadata);
         track.setArtistId(artist.getId());
         track.setAlbumId(album.getId());
         track.setFormat(formatFromFileName(file.name()));
@@ -423,6 +424,7 @@ public class MusicAdminService {
         track.setDiscNumber(parseNullableInt(metadata.discNumber()));
         track.setBitrate(metadata.bitrate());
         track.setSampleRate(metadata.sampleRate());
+        applyDuration(track, metadata);
         track.setArtistId(artist.getId());
         track.setAlbumId(album.getId());
         track.setFormat(formatFromFileName(file.name()));
@@ -562,11 +564,26 @@ public class MusicAdminService {
     private record EmbeddedCover(String mimeType, String extension, byte[] bytes) {
     }
 
+    /**
+     * 只在解析出时长时写入：部分容器（moov 在尾部的 M4A、无 Xing 且长度未知的流式 WAV）
+     * 读不出时长，重扫时不能把已有的正确值抹成空。
+     */
+    private void applyDuration(MusicTrack track, MusicMetadataExtractor.Metadata metadata) {
+        if (metadata.durationSeconds() != null && metadata.durationSeconds() > 0) {
+            track.setDurationSeconds(metadata.durationSeconds());
+        }
+    }
+
     private MusicMetadataExtractor.Metadata extractMetadata(FileDescriptor file) {
         try (FileContentStream content = fileQueryService.openOwnedFileContent(
                 file.ownerUserId(),
                 file.id())) {
-            return metadataExtractor.extract(content.inputStream(), file.name(), file.mimeType());
+            return metadataExtractor.extract(
+                    content.inputStream(),
+                    file.name(),
+                    file.mimeType(),
+                    file.sizeBytes()
+            );
         } catch (IOException | RuntimeException exception) {
             log.warn("音乐元数据提取失败: fileNodeId={}, fileName={}", file.id(), file.name(), exception);
             return MusicMetadataExtractor.Metadata.empty();

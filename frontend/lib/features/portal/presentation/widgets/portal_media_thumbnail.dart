@@ -1,8 +1,10 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/features/music/music_portal.dart';
 
 /// Portal 通用媒体缩略图。
-class PortalMediaThumbnail extends StatelessWidget {
+class PortalMediaThumbnail extends ConsumerWidget {
   const PortalMediaThumbnail({
     required this.imageUrl,
     required this.fallback,
@@ -33,7 +35,7 @@ class PortalMediaThumbnail extends StatelessWidget {
   final VoidCallback? onLoadError;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final url = imageUrl?.trim();
     Widget child;
     if (url == null || url.isEmpty) {
@@ -42,6 +44,10 @@ class PortalMediaThumbnail extends StatelessWidget {
       child = CachedNetworkImage(
         imageUrl: url,
         cacheKey: cacheKey,
+        // 本地音乐封面是稳定鉴权 API 路径：相对地址要经 baseUrl 拼接，
+        // 且必须带 Bearer；其他模块的签名直链与非音乐地址返回 null，
+        // 走默认缓存路径与历史行为一致。
+        cacheManager: ref.watch(musicCoverCacheManagerProvider(url)),
         fit: fit,
         width: width,
         height: height,
