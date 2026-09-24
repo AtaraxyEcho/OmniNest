@@ -2185,6 +2185,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get portalNoPhotos => 'No photos';
 
   @override
+  String photosSlideshowPosition(Object index, Object total) {
+    return '$index of $total';
+  }
+
+  @override
   String portalPhotoCount(Object count) {
     return '$count photos';
   }

@@ -16,13 +16,23 @@ const String musicCoverThumbnailSuffix = '/thumbnail';
 /// 天然不匹配本前缀，Authorization 头不会外发给第三方域名。
 bool isMusicCoverApiPath(String url) => url.startsWith(musicCoverApiPathPrefix);
 
+/// 判断地址是否为内联封面数据地址（`data:image/...;base64,`）。
+///
+/// 内嵌标签封面在入库前会以这种形式整段进出接口与本地缓存，
+/// 需要按字节的场合（快照、远端上报）单独识别并剔除。
+bool isInlineCoverDataUrl(String url) => url.startsWith('data:image/');
+
 /// 本地封面的缩略图路径：稳定 API 路径追加后缀，外部地址与空值原样返回。
 ///
-/// 后端在缩略图不可派生时回退原图，因此本方法不表达"缩略图一定存在"。
+/// 后端在缩略图不可派生时回退原图，因此本方法不表达"缩略图一定存在"。已经带后缀的
+/// 地址原样返回：展示地址可能被再次喂回本方法（如卡片复用），拼出二级后缀会直接 404。
 String? musicCoverThumbnailPath(String? coverUrl) {
   final url = coverUrl?.trim();
   if (url == null || url.isEmpty || !isMusicCoverApiPath(url)) {
     return coverUrl;
+  }
+  if (url.endsWith(musicCoverThumbnailSuffix)) {
+    return url;
   }
   return '$url$musicCoverThumbnailSuffix';
 }

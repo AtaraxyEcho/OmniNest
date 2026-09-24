@@ -95,8 +95,11 @@ public class MusicController {
     /** 稳定封面路径可被客户端私有缓存无限期复用。 */
     private static final String IMMUTABLE_CACHE_CONTROL = "private, max-age=2592000, immutable";
 
-    /** 缩略图回退原图时只做短期缓存，稍后重试即可拿到真正的派生图。 */
-    private static final String THUMBNAIL_FALLBACK_CACHE_CONTROL = "private, max-age=60";
+    /** 缩略图回退且不会再有缩略图：按天缓存，既不让大原图反复下载，也留出更正机会。 */
+    private static final String THUMBNAIL_STABLE_FALLBACK_CACHE_CONTROL = "private, max-age=86400";
+
+    /** 缩略图回退且值得重试（派生繁忙或临时失败）：只缓存一分钟，下次进入即拿到缩略图。 */
+    private static final String THUMBNAIL_RETRY_CACHE_CONTROL = "private, max-age=60";
 
     private final CurrentUserContext currentUserContext;
     private final MusicOnlineDispatcher onlineDispatcher;
@@ -455,11 +458,17 @@ public class MusicController {
             return ResponseEntity.ok()
                     .contentType(MediaType.parseMediaType(descriptor.contentType()))
                     .contentLength(descriptor.sizeBytes())
-                    .header(HttpHeaders.CACHE_CONTROL, thumbnail.derived()
-                            ? IMMUTABLE_CACHE_CONTROL
-                            : THUMBNAIL_FALLBACK_CACHE_CONTROL)
+                    .header(HttpHeaders.CACHE_CONTROL, coverCacheControl(thumbnail.freshness()))
                     .body(body);
         });
+    }
+
+    private static String coverCacheControl(MusicCoverService.ThumbnailFreshness freshness) {
+        return switch (freshness) {
+            case DERIVED -> IMMUTABLE_CACHE_CONTROL;
+            case STABLE_FALLBACK -> THUMBNAIL_STABLE_FALLBACK_CACHE_CONTROL;
+            case RETRY_SOON -> THUMBNAIL_RETRY_CACHE_CONTROL;
+        };
     }
 
     @PostMapping("/api/v1/admin/music/scan")

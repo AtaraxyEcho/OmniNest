@@ -2110,6 +2110,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get portalNoPhotos => '暂无照片';
 
   @override
+  String photosSlideshowPosition(Object index, Object total) {
+    return '第 $index / 共 $total 张';
+  }
+
+  @override
   String portalPhotoCount(Object count) {
     return '$count 张照片';
   }

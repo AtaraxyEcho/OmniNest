@@ -508,40 +508,99 @@ class SlideshowSegments extends StatelessWidget {
   final ValueListenable<double> progress;
   final void Function(int index) onTap;
 
+  /// 单格可点准所需宽度（含每格 4dp 间隙）与格数上下限。
+  static const double _tickSlotWidth = 36;
+  static const int _minTicks = 4;
+  static const int _maxTicks = 12;
+
+  /// 可逐格展示的相册上限：格数再多就点不准，也看不清。
+  static int maxTickCount(double width) {
+    if (!width.isFinite) {
+      return _maxTicks;
+    }
+    return ((width + 4) / _tickSlotWidth).floor().clamp(_minTicks, _maxTicks);
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 2,
-      child: Row(
-        children: [
-          for (var i = 0; i < count; i++)
-            Expanded(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: () => onTap(i),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 2),
-                  child: RepaintBoundary(
-                    // 隔离绘制：进度 tick 的重绘不传播到页面根。
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(2),
-                      // 仅当前段跟随进度逐帧刷新；其余段为静态，避免照片多时每 30ms 重建全部段。
-                      child:
-                          i == current
-                              ? ValueListenableBuilder<double>(
-                                valueListenable: progress,
-                                builder:
-                                    (context, value, _) =>
-                                        _buildSegmentBar(_valueFor(i, value)),
-                              )
-                              : _buildSegmentBar(_valueFor(i, 0)),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (count > maxTickCount(constraints.maxWidth)) {
+          return _buildTrack(context);
+        }
+        return SizedBox(
+          height: 2,
+          child: Row(
+            children: [
+              for (var i = 0; i < count; i++)
+                Expanded(
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () => onTap(i),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: RepaintBoundary(
+                        // 隔离绘制：进度 tick 的重绘不传播到页面根。
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(2),
+                          // 仅当前段跟随进度逐帧刷新；其余段为静态，避免照片多时每 30ms 重建全部段。
+                          child:
+                              i == current
+                                  ? ValueListenableBuilder<double>(
+                                    valueListenable: progress,
+                                    builder:
+                                        (context, value, _) => _buildSegmentBar(
+                                          _valueFor(i, value),
+                                        ),
+                                  )
+                                  : _buildSegmentBar(_valueFor(i, 0)),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// 大相册形态：单条整体进度 + 序号，精确跳转交给缩略图条。
+  Widget _buildTrack(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: SizedBox(
+            height: 2,
+            child: ValueListenableBuilder<double>(
+              valueListenable: progress,
+              builder:
+                  (context, value, _) => ClipRRect(
+                    borderRadius: BorderRadius.circular(2),
+                    child: _buildSegmentBar(
+                      count == 0
+                          ? 0
+                          : ((current + (isPlaying ? value : 0)) / count).clamp(
+                            0.0,
+                            1.0,
+                          ),
+                    ),
+                  ),
             ),
-        ],
-      ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          l10n.photosSlideshowPosition(current + 1, count),
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.55),
+            fontSize: AppTypography.labelSmall,
+            letterSpacing: 0.06,
+          ),
+        ),
+      ],
     );
   }
 

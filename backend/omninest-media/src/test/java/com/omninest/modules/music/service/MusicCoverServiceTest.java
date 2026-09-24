@@ -154,11 +154,12 @@ class MusicCoverServiceTest {
                 .thenReturn(Optional.of(imageDescriptor("image/png", 4096)));
         when(fileMetadataQueryService.findActiveById(THUMBNAIL_ID))
                 .thenReturn(Optional.of(imageDescriptor(THUMBNAIL_ID, "image/jpeg", 900)));
-        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096)).thenReturn(Optional.of(THUMBNAIL_ID));
+        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096))
+                .thenReturn(MusicCoverThumbnailService.ThumbnailResult.derived(THUMBNAIL_ID));
 
         var stream = coverService.prepareThumbnailStream(OWNER_ID, FILE_ID);
 
-        assertThat(stream.derived()).isTrue();
+        assertThat(stream.freshness()).isEqualTo(MusicCoverService.ThumbnailFreshness.DERIVED);
         assertThat(stream.descriptor().fileId()).isEqualTo(THUMBNAIL_ID);
         assertThat(stream.descriptor().contentType()).isEqualTo("image/jpeg");
         verify(fileQueryService).validateOwnedImage(OWNER_ID, FILE_ID);
@@ -166,16 +167,29 @@ class MusicCoverServiceTest {
     }
 
     @Test
-    void prepareThumbnailStreamFallsBackToOriginalCover() {
+    void prepareThumbnailStreamFallsBackForRetryableMiss() {
         when(fileMetadataQueryService.findActiveById(FILE_ID))
-                .thenReturn(Optional.of(imageDescriptor("image/png", 12L * 1024 * 1024)));
-        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 12L * 1024 * 1024))
-                .thenReturn(Optional.empty());
+                .thenReturn(Optional.of(imageDescriptor("image/png", 4096)));
+        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 4096))
+                .thenReturn(new MusicCoverThumbnailService.ThumbnailResult(null, true));
 
         var stream = coverService.prepareThumbnailStream(OWNER_ID, FILE_ID);
 
-        assertThat(stream.derived()).isFalse();
+        assertThat(stream.freshness()).isEqualTo(MusicCoverService.ThumbnailFreshness.RETRY_SOON);
         assertThat(stream.descriptor().fileId()).isEqualTo(FILE_ID);
+    }
+
+    @Test
+    void prepareThumbnailStreamMarksCoverWithoutThumbnailAsStableFallback() {
+        when(fileMetadataQueryService.findActiveById(FILE_ID))
+                .thenReturn(Optional.of(imageDescriptor("image/png", 12L * 1024 * 1024)));
+        when(coverThumbnailService.ensureThumbnail(OWNER_ID, FILE_ID, 12L * 1024 * 1024))
+                .thenReturn(new MusicCoverThumbnailService.ThumbnailResult(null, false));
+
+        var stream = coverService.prepareThumbnailStream(OWNER_ID, FILE_ID);
+
+        // oversized 封面永远派生不出缩略图：不能按重试节奏反复下载 12MB 原图。
+        assertThat(stream.freshness()).isEqualTo(MusicCoverService.ThumbnailFreshness.STABLE_FALLBACK);
         assertThat(stream.descriptor().sizeBytes()).isEqualTo(12L * 1024 * 1024);
     }
 

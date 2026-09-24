@@ -31,6 +31,10 @@ part 'music_providers.dart';
 class MusicCenterController extends AsyncNotifier<MusicCenterState> {
   int _playRequestGeneration = 0;
   int _refreshGeneration = 0;
+
+  /// 首帧之后待补齐的恢复队列来源，以及取消在途回填的代次。
+  _QueueRebuildIntent? _pendingQueueRebuild;
+  int _queueRebuildGeneration = 0;
   late _MusicQueuePersistenceCoordinator _queuePersistence;
   String? _queuePersistenceErrorMessage;
   bool _controllerDisposed = false;
@@ -390,7 +394,11 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     var resolvedQueueSource =
         playback?.queueSource ?? MusicQueueSource.transient;
     if (restorePlaybackQueue && resolvedQueue.isEmpty) {
-      resolvedQueue = _restorePlaybackQueue(queueSnapshot, tracks);
+      resolvedQueue = _restorePlaybackQueue(
+        queueSnapshot,
+        tracks,
+        libraryLoadedCompletely: !hasMoreTracks,
+      );
       final restoredKey = queueSnapshot.currentItem?.playableKey;
       resolvedQueueIndex = resolvedQueue.indexWhere(
         (item) => item.playableKey == restoredKey,
@@ -402,25 +410,18 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
         repeatMode: queueSnapshot.repeatMode,
         shuffleEnabled: queueSnapshot.shuffleEnabled,
       );
-      // 来源不可重建时降级为窗口快照（transient）。
-      resolvedQueueSource = MusicQueueSource.transient;
-      if (queueSnapshot.source.rebuildable && restoredKey != null) {
-        final rebuilt = await _rebuildQueueFromSource(
-          queueSnapshot.source,
-          restoredKey,
-          tracks,
-        );
-        if (rebuilt != null) {
-          resolvedQueue = rebuilt.items;
-          resolvedQueueIndex = rebuilt.index;
-          resolvedQueueSource = rebuilt.source;
-          tracks = rebuilt.tracks;
-          hasMoreTracks = rebuilt.hasMore;
-          if (rebuilt.nextPage != null) {
-            _libraryNextPage = rebuilt.nextPage;
-          }
-        }
-      }
+      // 来源重建最多要串行取 20 页曲库，压在首帧里会让整个模块停在加载态；
+      // 首帧先用窗口快照可用，回填在帧后完成（_completePendingQueueRebuild）。
+      // 来源不可重建时才降级为 transient。
+      final rebuildIntent =
+          queueSnapshot.source.rebuildable && restoredKey != null
+              ? _QueueRebuildIntent(
+                source: queueSnapshot.source,
+                currentKey: restoredKey,
+              )
+              : null;
+      _pendingQueueRebuild = rebuildIntent;
+      resolvedQueueSource = rebuildIntent?.source ?? MusicQueueSource.transient;
     }
     final restoredCurrentItem =
         currentItem ??
@@ -500,6 +501,22 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     final trackById = <String, MusicTrack>{
       for (final track in tracks) track.id: track,
     };
+    // 恢复分支的队列项来自窗口快照，这里统一按曲库投影补齐；当前曲可能落在已加载
+    // 页之外（此时 selectedItem 已由 lastPlayed 等来源水合），要回写到队列位上，
+    // 否则切到下一首再切回来又退回缺歌词的快照项。重建分支返回的是不可变列表，
+    // 后续按失败剔除还需要可写，因此这里一律以可写副本承载。
+    resolvedQueue = List<MusicPlayableItem>.of(
+      _hydrateQueueFromLibrary(resolvedQueue, trackById),
+    );
+    final selectedKey = selectedItem?.playableKey;
+    if (selectedItem != null && selectedKey != null) {
+      final selectedIndex = resolvedQueue.indexWhere(
+        (item) => item.playableKey == selectedKey,
+      );
+      if (selectedIndex >= 0) {
+        resolvedQueue[selectedIndex] = selectedItem;
+      }
+    }
     // 保留打开中的歌单曲目，同步收藏状态并剔除已删除曲目。
     final resolvedPlaylistTracks =
         selectedPlaylistTracks == null
@@ -524,6 +541,12 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
           ? null
           : (track) => track.artistName == resolvedArtist.name,
     );
+    if (_pendingQueueRebuild != null) {
+      // 让首帧先落地，再在帧后补齐来源队列。
+      unawaited(
+        Future<void>.delayed(Duration.zero, _completePendingQueueRebuild),
+      );
+    }
     return MusicCenterState(
       dashboard: dashboard,
       tracks: tracks,
@@ -573,6 +596,32 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     return tracks.where(filter).toList(growable: false);
   }
 
+  /// 用曲库投影替换队列里的窗口快照项。
+  ///
+  /// 快照只带标题/艺人/封面等少数字段，歌词、收藏与码率都在曲目实体上；恢复的
+  /// 会话若不补齐，详情页就取不到歌词（内嵌封面被快照剔除后也靠这里回填）。
+  List<MusicPlayableItem> _hydrateQueueFromLibrary(
+    List<MusicPlayableItem> items,
+    Map<String, MusicTrack> trackById,
+  ) {
+    if (items.isEmpty || trackById.isEmpty) {
+      return items;
+    }
+    var changed = false;
+    final hydrated = <MusicPlayableItem>[];
+    for (final item in items) {
+      final ref = item.ref;
+      final refreshed = ref is LocalMusicRef ? trackById[ref.trackId] : null;
+      if (refreshed == null) {
+        hydrated.add(item);
+        continue;
+      }
+      changed = true;
+      hydrated.add(MusicPlayableItem.local(refreshed));
+    }
+    return changed ? hydrated : items;
+  }
+
   MusicPlayableItem? _refreshPlayableItem(
     MusicPlayableItem? currentItem, {
     required List<MusicPlayableItem> recentItems,
@@ -603,6 +652,11 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     final refreshed = _findTrack(tracks, trackId);
     if (refreshed != null) {
       return MusicPlayableItem.local(refreshed);
+    }
+    if (lastPlayed != null && lastPlayed.id == trackId) {
+      // 恢复的当前曲常在已加载页之外（曲库按 100 条分页），lastPlayed 就是它的
+      // 完整投影，缺了这一步重启后详情页取不到歌词。
+      return MusicPlayableItem.local(lastPlayed);
     }
     return _resolveLocalFallback(
       recentItems: recentItems,
@@ -1032,8 +1086,11 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
       }
       final mergedTracks = List<MusicTrack>.of(latest.tracks)
         ..addAll(freshTracks);
-      final mergedQueue = List<MusicPlayableItem>.of(latest.playbackItems)
-        ..addAll(freshItems);
+      final mergedQueue = List<MusicPlayableItem>.of(
+        _hydrateQueueFromLibrary(latest.playbackItems, {
+          for (final track in freshTracks) track.id: track,
+        }),
+      )..addAll(freshItems);
       _replaceState(
         latest.copyWith(
           tracks: List<MusicTrack>.unmodifiable(mergedTracks),

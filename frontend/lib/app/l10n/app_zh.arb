@@ -755,6 +755,13 @@
   "portalNoPlayHistory": "暂无播放记录",
   "portalNoReadingHistory": "暂无阅读记录",
   "portalNoPhotos": "暂无照片",
+  "photosSlideshowPosition": "第 {index} / 共 {total} 张",
+  "@photosSlideshowPosition": {
+    "placeholders": {
+      "index": {},
+      "total": {}
+    }
+  },
   "portalPhotoCount": "{count} 张照片",
   "@portalPhotoCount": {
     "placeholders": {

@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Iterator;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,9 +30,9 @@ import org.springframework.stereotype.Service;
  * 音乐封面缩略图的按需派生服务。
  *
  * <p>列表与封面格子只需要小尺寸图像，直接回源原图会放大传输与解码开销。首次请求
- * 缩略图时把原图缩到 300px 存为派生资产，之后按同一对象键复用。源图超出受理上限、
- * 编码不受支持、并发派生达到上限或生成失败时返回空，由调用方回退原图，展示链路不会
- * 因派生失败而缺图。</p>
+ * 缩略图时把原图缩到 300px 存为派生资产，之后按同一对象键复用。派生不成时回退原图，
+ * 展示链路不会因派生失败而缺图，但调用方要按结果区分缓存时长：本就不会有缩略图的
+ * 封面不能按重试节奏反复下载原图。</p>
  *
  * <p>派生键以封面文件标识作资源标识（{@code MUSIC_COVER/{coverFileId}/THUMBNAIL}），
  * 与上传、刮削写入原图时各自随机的资源标识解耦，因此两条写入路径的封面都能命中。</p>
@@ -74,8 +73,24 @@ public class MusicCoverThumbnailService {
     private final FileQueryService fileQueryService;
 
     /** 同一封面的并发首请求只派生一次，其余请求等待结果后复用同一对象键。 */
-    private final ConcurrentHashMap<UUID, CompletableFuture<UUID>> inFlight = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<UUID, CompletableFuture<ThumbnailResult>> inFlight = new ConcurrentHashMap<>();
     private final Semaphore derivationPermits = new Semaphore(MAX_CONCURRENT_DERIVATIONS);
+
+    /**
+     * 缩略图解析结果。
+     *
+     * @param fileId 缩略图文件节点 ID；未派生时为空
+     * @param retryLater 未派生时是否值得稍后重试；{@code false} 表示这张封面不会再有缩略图
+     */
+    public record ThumbnailResult(UUID fileId, boolean retryLater) {
+
+        private static final ThumbnailResult NOT_APPLICABLE = new ThumbnailResult(null, false);
+        private static final ThumbnailResult RETRY_SOON = new ThumbnailResult(null, true);
+
+        static ThumbnailResult derived(UUID fileId) {
+            return new ThumbnailResult(fileId, false);
+        }
+    }
 
     /**
      * 查询封面缩略图的派生文件节点，缺失时按需生成。
@@ -83,65 +98,66 @@ public class MusicCoverThumbnailService {
      * @param ownerUserId 所有者用户 ID
      * @param coverFileId 封面原图文件节点 ID
      * @param sourceSizeBytes 封面原图字节数，用于跳过不受理的大图
-     * @return 缩略图文件节点 ID；原图不受理、并发达到上限或生成失败时返回空
+     * @return 缩略图节点与是否值得重试；调用方据此决定响应的缓存时长
      */
-    public Optional<UUID> ensureThumbnail(UUID ownerUserId, UUID coverFileId, long sourceSizeBytes) {
-        Optional<UUID> stored = findStored(ownerUserId, coverFileId);
-        if (stored.isPresent()) {
-            return stored;
+    public ThumbnailResult ensureThumbnail(UUID ownerUserId, UUID coverFileId, long sourceSizeBytes) {
+        UUID stored = derivedAssetStorageService.findStoredFileNodeId(
+                ownerUserId,
+                RESOURCE_TYPE,
+                coverFileId,
+                ASSET_TYPE,
+                FILE_NAME
+        ).orElse(null);
+        if (stored != null) {
+            return ThumbnailResult.derived(stored);
         }
         if (sourceSizeBytes > MAX_SOURCE_BYTES) {
-            return Optional.empty();
+            return ThumbnailResult.NOT_APPLICABLE;
         }
-        CompletableFuture<UUID> future = new CompletableFuture<>();
-        CompletableFuture<UUID> running = inFlight.putIfAbsent(coverFileId, future);
+        CompletableFuture<ThumbnailResult> future = new CompletableFuture<>();
+        CompletableFuture<ThumbnailResult> running = inFlight.putIfAbsent(coverFileId, future);
         if (running != null) {
             return awaitRunning(running, coverFileId);
         }
-        UUID generated = null;
+        ThumbnailResult generated = ThumbnailResult.RETRY_SOON;
         try {
             generated = generate(ownerUserId, coverFileId);
         } finally {
             inFlight.remove(coverFileId, future);
             future.complete(generated);
         }
-        return Optional.ofNullable(generated);
+        return generated;
     }
 
-    private Optional<UUID> findStored(UUID ownerUserId, UUID coverFileId) {
-        return derivedAssetStorageService.findStoredFileNodeId(
-                ownerUserId,
-                RESOURCE_TYPE,
-                coverFileId,
-                ASSET_TYPE,
-                FILE_NAME
-        );
-    }
-
-    private Optional<UUID> awaitRunning(CompletableFuture<UUID> running, UUID coverFileId) {
+    private ThumbnailResult awaitRunning(CompletableFuture<ThumbnailResult> running, UUID coverFileId) {
         try {
-            return Optional.ofNullable(running.get(GENERATION_WAIT.toSeconds(), TimeUnit.SECONDS));
+            return running.get(GENERATION_WAIT.toSeconds(), TimeUnit.SECONDS);
         } catch (InterruptedException ex) {
             Thread.currentThread().interrupt();
-            return Optional.empty();
+            return ThumbnailResult.RETRY_SOON;
         } catch (TimeoutException | ExecutionException ex) {
             log.warn("等待封面缩略图生成失败: coverFileId={}, errorType={}",
                     coverFileId, ex.getClass().getSimpleName());
-            return Optional.empty();
+            return ThumbnailResult.RETRY_SOON;
         }
     }
 
-    private UUID generate(UUID ownerUserId, UUID coverFileId) {
+    private ThumbnailResult generate(UUID ownerUserId, UUID coverFileId) {
         if (!derivationPermits.tryAcquire()) {
-            log.info("封面缩略图并发派生已达上限，本次回退原图: coverFileId={}", coverFileId);
-            return null;
+            log.debug("封面缩略图并发派生已达上限，本次回退原图: coverFileId={}", coverFileId);
+            return ThumbnailResult.RETRY_SOON;
         }
         Path source = null;
         Path output = null;
         try {
             source = stageSource(ownerUserId, coverFileId);
-            if (source == null || !isWithinDecodeLimits(source)) {
-                return null;
+            if (source == null) {
+                return ThumbnailResult.RETRY_SOON;
+            }
+            if (!isWithinDecodeLimits(source)) {
+                deleteQuietly(source);
+                source = null;
+                return ThumbnailResult.NOT_APPLICABLE;
             }
             Files.createDirectories(PROCESSING_ROOT);
             output = Files.createTempFile(PROCESSING_ROOT, "thumbnail-", "." + OUTPUT_FORMAT);
@@ -152,7 +168,7 @@ public class MusicCoverThumbnailService {
                     .outputFormat(OUTPUT_FORMAT)
                     .outputQuality(OUTPUT_QUALITY)
                     .toFile(output.toFile());
-            return derivedAssetStorageService.store(
+            return ThumbnailResult.derived(derivedAssetStorageService.store(
                     ownerUserId,
                     RESOURCE_TYPE,
                     coverFileId,
@@ -160,11 +176,11 @@ public class MusicCoverThumbnailService {
                     FILE_NAME,
                     OUTPUT_MIME_TYPE,
                     output
-            );
+            ));
         } catch (IOException | RuntimeException ex) {
             log.warn("封面缩略图生成失败: coverFileId={}, errorType={}",
                     coverFileId, ex.getClass().getSimpleName());
-            return null;
+            return ThumbnailResult.RETRY_SOON;
         } finally {
             deleteQuietly(source);
             deleteQuietly(output);
@@ -173,7 +189,7 @@ public class MusicCoverThumbnailService {
     }
 
     /**
-     * 把原图落到临时目录，超过受理上限或读不到内容时返回空。
+     * 把原图落到临时目录；读不到内容或超过受理上限时返回空。
      */
     private Path stageSource(UUID ownerUserId, UUID coverFileId) throws IOException {
         Files.createDirectories(PROCESSING_ROOT);
@@ -208,7 +224,8 @@ public class MusicCoverThumbnailService {
     }
 
     /**
-     * 仅读图像头信息校验格式与像素总量，不做完整解码。
+     * 仅读图像头信息校验格式与像素总量，不做完整解码。返回 false 表示这张封面
+     * 不受派生受理（格式不认识或像素超限），重试也不会变好；真正的读取异常向上抛出。
      */
     private boolean isWithinDecodeLimits(Path source) throws IOException {
         try (ImageInputStream imageInput = ImageIO.createImageInputStream(source.toFile())) {
@@ -227,9 +244,6 @@ public class MusicCoverThumbnailService {
             } finally {
                 reader.dispose();
             }
-        } catch (IOException | RuntimeException ex) {
-            log.warn("封面缩略图源图检查失败: errorType={}", ex.getClass().getSimpleName());
-            return false;
         }
     }
 

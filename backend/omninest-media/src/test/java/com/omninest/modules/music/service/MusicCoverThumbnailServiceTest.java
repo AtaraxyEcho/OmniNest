@@ -58,9 +58,9 @@ class MusicCoverThumbnailServiceTest {
         when(storageService.findStoredFileNodeId(OWNER_ID, "MUSIC_COVER", COVER_ID, "THUMBNAIL", FILE_NAME))
                 .thenReturn(Optional.of(THUMBNAIL_ID));
 
-        Optional<UUID> result = service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
+        MusicCoverThumbnailService.ThumbnailResult result = service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
 
-        assertThat(result).contains(THUMBNAIL_ID);
+        assertThat(result.fileId()).isEqualTo(THUMBNAIL_ID);
         verify(fileQueryService, never()).openReadableFileContent(any(), any());
     }
 
@@ -68,9 +68,12 @@ class MusicCoverThumbnailServiceTest {
     void skipsDerivationForSourcesAboveAcceptedSize() {
         when(storageService.findStoredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
-        Optional<UUID> result = service.ensureThumbnail(OWNER_ID, COVER_ID, MAX_SOURCE_BYTES + 1);
+        MusicCoverThumbnailService.ThumbnailResult result =
+                service.ensureThumbnail(OWNER_ID, COVER_ID, MAX_SOURCE_BYTES + 1);
 
-        assertThat(result).isEmpty();
+        assertThat(result.fileId()).isNull();
+        // 受理判定只取决于原图字节数，重试不会变好：调用方据此拉长回退响应的缓存。
+        assertThat(result.retryLater()).isFalse();
         verify(fileQueryService, never()).openReadableFileContent(any(), any());
     }
 
@@ -85,9 +88,9 @@ class MusicCoverThumbnailServiceTest {
                 });
         stubSource(jpeg(900, 600));
 
-        Optional<UUID> result = service.ensureThumbnail(OWNER_ID, COVER_ID, 4096);
+        MusicCoverThumbnailService.ThumbnailResult result = service.ensureThumbnail(OWNER_ID, COVER_ID, 4096);
 
-        assertThat(result).contains(THUMBNAIL_ID);
+        assertThat(result.fileId()).isEqualTo(THUMBNAIL_ID);
         ArgumentCaptor<String> resourceType = ArgumentCaptor.forClass(String.class);
         ArgumentCaptor<UUID> resourceId = ArgumentCaptor.forClass(UUID.class);
         ArgumentCaptor<String> assetType = ArgumentCaptor.forClass(String.class);
@@ -108,9 +111,11 @@ class MusicCoverThumbnailServiceTest {
         when(storageService.findStoredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         stubSource("not-an-image".getBytes(StandardCharsets.US_ASCII));
 
-        Optional<UUID> result = service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
+        MusicCoverThumbnailService.ThumbnailResult result = service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
 
-        assertThat(result).isEmpty();
+        assertThat(result.fileId()).isNull();
+        // 编码不认识属于确定性结论，不必按重试节奏回源。
+        assertThat(result.retryLater()).isFalse();
         verify(storageService, never()).store(any(), any(), any(), any(), any(), any(), any(Path.class));
     }
 
@@ -132,9 +137,10 @@ class MusicCoverThumbnailServiceTest {
         stubSource(jpeg(800, 800));
         ExecutorService executor = Executors.newFixedThreadPool(2);
         try {
-            Future<Optional<UUID>> first = executor.submit(() -> service.ensureThumbnail(OWNER_ID, COVER_ID, 4096));
+            Future<MusicCoverThumbnailService.ThumbnailResult> first =
+                    executor.submit(() -> service.ensureThumbnail(OWNER_ID, COVER_ID, 4096));
             assertThat(firstStoreEntered.await(10, TimeUnit.SECONDS)).isTrue();
-            Future<Optional<UUID>> second = executor.submit(() -> {
+            Future<MusicCoverThumbnailService.ThumbnailResult> second = executor.submit(() -> {
                 secondThread.set(Thread.currentThread());
                 secondCallStarted.countDown();
                 return service.ensureThumbnail(OWNER_ID, COVER_ID, 4096);
@@ -143,8 +149,8 @@ class MusicCoverThumbnailServiceTest {
             awaitWaitingOnInFlight(secondThread.get());
             releaseStores.countDown();
 
-            assertThat(first.get(10, TimeUnit.SECONDS)).contains(THUMBNAIL_ID);
-            assertThat(second.get(10, TimeUnit.SECONDS)).contains(THUMBNAIL_ID);
+            assertThat(first.get(10, TimeUnit.SECONDS).fileId()).isEqualTo(THUMBNAIL_ID);
+            assertThat(second.get(10, TimeUnit.SECONDS).fileId()).isEqualTo(THUMBNAIL_ID);
             assertThat(storeCalls.get()).isEqualTo(1);
         } finally {
             executor.shutdownNow();
@@ -171,19 +177,22 @@ class MusicCoverThumbnailServiceTest {
         });
         ExecutorService executor = Executors.newFixedThreadPool(5);
         try {
-            List<Future<Optional<UUID>>> busy = new ArrayList<>();
+            List<Future<MusicCoverThumbnailService.ThumbnailResult>> busy = new ArrayList<>();
             for (int index = 0; index < 4; index++) {
                 UUID coverId = UUID.randomUUID();
                 busy.add(executor.submit(() -> service.ensureThumbnail(OWNER_ID, coverId, 4096)));
             }
             assertThat(parked.await(10, TimeUnit.SECONDS)).isTrue();
-            Future<Optional<UUID>> extra = executor.submit(
+            Future<MusicCoverThumbnailService.ThumbnailResult> extra = executor.submit(
                     () -> service.ensureThumbnail(OWNER_ID, UUID.randomUUID(), 4096));
 
-            assertThat(extra.get(10, TimeUnit.SECONDS)).isEmpty();
+            MusicCoverThumbnailService.ThumbnailResult result = extra.get(10, TimeUnit.SECONDS);
+            assertThat(result.fileId()).isNull();
+            // 并发繁忙是可恢复的：调用方要按短缓存让客户端很快再来一趟。
+            assertThat(result.retryLater()).isTrue();
             assertThat(openedCovers).hasSize(4);
             release.countDown();
-            for (Future<Optional<UUID>> task : busy) {
+            for (Future<MusicCoverThumbnailService.ThumbnailResult> task : busy) {
                 task.get(10, TimeUnit.SECONDS);
             }
         } finally {

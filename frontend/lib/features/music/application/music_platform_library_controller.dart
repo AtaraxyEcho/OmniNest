@@ -210,15 +210,11 @@ class MusicPlatformLibraryController
   /// 无更多页、已有请求在途或该歌单已按整表页落地时不发请求：整表页页数与
   /// 续载页页数不同，混用会让 `hasMore` 按错误的页宽推导。
   Future<void> loadMorePlaylistTracks(OnlinePlaylist playlist) async {
+    final key = _playlistKey(playlist.platform, playlist.playlistId);
     final current = state.asData?.value;
-    if (current == null ||
-        !ref.mounted ||
-        _fullTrackFlights.containsKey(
-          _playlistKey(playlist.platform, playlist.playlistId),
-        )) {
+    if (current == null || !ref.mounted || _fullTrackFlights.containsKey(key)) {
       return;
     }
-    final key = _playlistKey(playlist.platform, playlist.playlistId);
     final cached = current.playlistTracks[key];
     if (cached == null ||
         !cached.hasMore ||

@@ -13,10 +13,15 @@ extension _MusicQueueRestore on MusicCenterController {
   /// 两种情况下都返回 null，按它过滤会在瞬时故障时静默丢弃用户队列。平台断开后的清理
   /// 由注销流程的确定性剔除 + 远端回写完成（远端较新时本地会整体采用远端快照），
   /// 多端场景同样覆盖。
+  ///
+  /// [libraryLoadedCompletely] 表示已加载的曲目就是全量曲库。只有此时"本地项找不到曲目"
+  /// 才能判定为曲目已被删除；曲库还在分页阶段时，未命中只是尚未取到，剪掉会让每次重启
+  /// 丢掉首页之后的整段队列，保留后由后续页投影补齐。
   List<MusicPlayableItem> _restorePlaybackQueue(
     MusicPlaybackQueueSnapshot snapshot,
-    List<MusicTrack> tracks,
-  ) {
+    List<MusicTrack> tracks, {
+    required bool libraryLoadedCompletely,
+  }) {
     final restored = <MusicPlayableItem>[];
     final keys = <String>{};
     for (final item in snapshot.items) {
@@ -24,9 +29,10 @@ extension _MusicQueueRestore on MusicCenterController {
       switch (item.ref) {
         case LocalMusicRef(:final trackId):
           final track = _findTrack(tracks, trackId);
-          if (track != null) {
-            resolved = MusicPlayableItem.local(track);
-          }
+          resolved =
+              track != null
+                  ? MusicPlayableItem.local(track)
+                  : (libraryLoadedCompletely ? null : item);
         case OnlineMusicRef():
           resolved = item;
       }

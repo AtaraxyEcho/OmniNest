@@ -11,6 +11,7 @@ import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDescriptor;
+import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FilePermissionService;
 import com.omninest.modules.file.service.FileQueryService;
@@ -36,7 +37,10 @@ import com.omninest.modules.task.service.TaskRecordService;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,6 +66,13 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MusicAdminService {
 
+    /** 派生封面存储的资源类型与资产类型，与手动上传共用同一前缀。 */
+    private static final String COVER_RESOURCE_TYPE = "MUSIC_COVER";
+    private static final String COVER_ASSET_TYPE = "COVER";
+
+    /** 超过该字节数的内嵌封面维持内联，避免为罕见大图在扫描流程写对象存储。 */
+    private static final int MAX_EMBEDDED_COVER_BYTES = 8 * 1024 * 1024;
+
     private final MusicScanJobRepository scanJobRepository;
     private final MusicTrackRepository trackRepository;
     private final MusicAlbumRepository albumRepository;
@@ -78,6 +89,7 @@ public class MusicAdminService {
     private final MediaSyncEventService syncEventService;
     private final ReadThroughCache readThroughCache;
     private final PlatformTransactionManager transactionManager;
+    private final DerivedAssetStorageService derivedAssetStorageService;
     private TransactionTemplate transactionTemplate;
 
     /**
@@ -356,9 +368,7 @@ public class MusicAdminService {
         if (metadata.discNumber() != null) {
             track.getProviderMetadata().put("discNumber", metadata.discNumber());
         }
-        if (metadata.coverDataUrl() != null && !metadata.coverDataUrl().isBlank()) {
-            track.getProviderMetadata().put("coverDataUrl", metadata.coverDataUrl());
-        }
+        storeEmbeddedCover(ownerUserId, track, file, metadata.coverDataUrl());
         track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
         catalogService.refreshStatistics(ownerUserId, previousArtistId, previousAlbumId, track);
@@ -428,9 +438,7 @@ public class MusicAdminService {
         if (metadata.discNumber() != null) {
             track.getProviderMetadata().put("discNumber", metadata.discNumber());
         }
-        if (metadata.coverDataUrl() != null && !metadata.coverDataUrl().isBlank()) {
-            track.getProviderMetadata().put("coverDataUrl", metadata.coverDataUrl());
-        }
+        storeEmbeddedCover(ownerUserId, track, file, metadata.coverDataUrl());
         track.setMetadataStatus(metadata.hasAnyValue() || hasText(lyricsRaw) ? MetadataStatus.MATCHED.getValue() : MetadataStatus.PENDING.getValue());
         trackRepository.save(track);
 
@@ -439,6 +447,119 @@ public class MusicAdminService {
         affectedArtistIds.add(artist.getId());
         if (previousAlbumId != null) affectedAlbumIds.add(previousAlbumId);
         affectedAlbumIds.add(album.getId());
+    }
+
+    /**
+     * 把音频内嵌封面落成派生资产并回填 coverFileId，成功后移除内联地址。
+     *
+     * <p>内联 data URL 会随曲目列表与播放队列快照整段进出（单条几百 KB），是曲库首屏
+     * 与重启恢复的主要载荷来源；资产化后列表只剩稳定 API 路径，列表位还能用派生缩略图。
+     * 存储键以音频文件节点为资源标识，重复扫描命中同一 normalizedPath 复用节点，不新增对象。
+     * 地址形态不认识、超限或存储失败时保留内联，展示不回退。</p>
+     */
+    private void storeEmbeddedCover(
+            UUID ownerUserId,
+            MusicTrack track,
+            FileDescriptor sourceFile,
+            String coverDataUrl
+    ) {
+        if (coverDataUrl == null || coverDataUrl.isBlank()) {
+            return;
+        }
+        if (track.getCoverFileId() != null) {
+            // 已有封面文件时列表不会用到内联地址，直接清掉这份冗余字节。
+            track.getProviderMetadata().remove("coverDataUrl");
+            return;
+        }
+        EmbeddedCover cover = parseEmbeddedCover(coverDataUrl);
+        if (cover == null || !storeCoverAsset(ownerUserId, track, sourceFile, cover)) {
+            track.getProviderMetadata().put("coverDataUrl", coverDataUrl);
+            return;
+        }
+        track.getProviderMetadata().remove("coverDataUrl");
+    }
+
+    private boolean storeCoverAsset(
+            UUID ownerUserId,
+            MusicTrack track,
+            FileDescriptor sourceFile,
+            EmbeddedCover cover
+    ) {
+        Path staged = null;
+        try {
+            staged = Files.createTempFile("omninest-music-cover-", "." + cover.extension());
+            Files.write(staged, cover.bytes());
+            track.setCoverFileId(derivedAssetStorageService.store(
+                    ownerUserId,
+                    COVER_RESOURCE_TYPE,
+                    sourceFile.id(),
+                    COVER_ASSET_TYPE,
+                    "cover." + cover.extension(),
+                    cover.mimeType(),
+                    staged
+            ));
+            return true;
+        } catch (IOException | RuntimeException ex) {
+            log.warn("音乐内嵌封面资产化失败，保留内联地址: fileNodeId={}, errorType={}",
+                    sourceFile.id(), ex.getClass().getSimpleName());
+            return false;
+        } finally {
+            deleteQuietly(staged);
+        }
+    }
+
+    private EmbeddedCover parseEmbeddedCover(String coverDataUrl) {
+        int comma = coverDataUrl.indexOf(',');
+        if (comma <= 0) {
+            return null;
+        }
+        String header = coverDataUrl.substring(0, comma).toLowerCase(Locale.ROOT);
+        if (!header.startsWith("data:image/") || !header.endsWith(";base64")) {
+            return null;
+        }
+        String mimeType = header.substring("data:".length(), header.length() - ";base64".length());
+        String extension = coverExtension(mimeType);
+        if (extension == null) {
+            return null;
+        }
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(coverDataUrl.substring(comma + 1));
+        } catch (IllegalArgumentException ex) {
+            log.warn("音乐内嵌封面 base64 解码失败: errorType={}", ex.getClass().getSimpleName());
+            return null;
+        }
+        if (bytes.length == 0 || bytes.length > MAX_EMBEDDED_COVER_BYTES) {
+            return null;
+        }
+        return new EmbeddedCover(mimeType, extension, bytes);
+    }
+
+    private String coverExtension(String mimeType) {
+        return switch (mimeType) {
+            case "image/jpeg" -> "jpg";
+            case "image/png" -> "png";
+            case "image/gif" -> "gif";
+            case "image/webp" -> "webp";
+            default -> null;
+        };
+    }
+
+    private void deleteQuietly(Path file) {
+        if (file == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(file);
+        } catch (IOException ex) {
+            log.debug("音乐封面临时文件清理失败: errorType={}", ex.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * 解码后的内嵌封面：MIME、派生文件名后缀与原始字节。
+     */
+    private record EmbeddedCover(String mimeType, String extension, byte[] bytes) {
     }
 
     private MusicMetadataExtractor.Metadata extractMetadata(FileDescriptor file) {

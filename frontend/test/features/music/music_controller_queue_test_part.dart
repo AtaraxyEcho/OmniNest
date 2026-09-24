@@ -37,6 +37,116 @@ void registerMusicQueueTests() {
     expect(api.onlinePlaybackRequests, ['netease:188888']);
   });
 
+  test('恢复的本地队列项按曲库投影补齐歌词与封面', () async {
+    final api = _FakeMusicApi();
+    final full = MusicTrack(
+      id: 'track-9',
+      fileNodeId: 'file-9',
+      title: 'Deep Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+      lyricsRaw: '[00:01.00]Rolling',
+      coverUrl: '/api/v1/music/covers/cover-9',
+    );
+    api.libraryTracks.add(full);
+    // 快照窗口项只带标题等少数字段，与重启后从本地缓存读回的形状一致。
+    final snapshotItem = MusicPlayableItem.fromQueueJson(
+      MusicPlayableItem.local(full).toQueueJson(),
+    );
+    expect(snapshotItem.track.lyricsRaw, isNull);
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[snapshotItem],
+      currentIndex: 0,
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    expect(state.currentItem?.track.lyricsRaw, '[00:01.00]Rolling');
+    expect(state.playbackItems.single.track.lyricsRaw, '[00:01.00]Rolling');
+    expect(
+      state.playbackItems.single.track.coverUrl,
+      '/api/v1/music/covers/cover-9',
+    );
+  });
+
+  test('当前曲在已加载页之外时用最近播放投影补齐歌词', () async {
+    final api = _FakeMusicApi();
+    // 曲库超过一页：分页仍有剩余时"首页找不到"不等于"曲目已删除"。
+    for (var index = 0; index < 120; index++) {
+      api.libraryTracks.add(_fillerTrack('filler-$index'));
+    }
+    final full = MusicTrack(
+      id: 'track-outside-page',
+      fileNodeId: 'file-outside-page',
+      title: 'Deep Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+      lyricsRaw: '[00:02.00]Far',
+    );
+    // 该曲不在曲库首页里，只有 last-played 接口带得出歌词。
+    api.lastPlayedTrack = full;
+    final snapshotItem = MusicPlayableItem.fromQueueJson(
+      MusicPlayableItem.local(full).toQueueJson(),
+    );
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[snapshotItem],
+      currentIndex: 0,
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    // 未被首页命中也必须保留：否则每次重启都会丢掉首页之后的整段队列。
+    expect(state.playbackItems, hasLength(1));
+    expect(state.currentItem?.playableKey, 'local:track-outside-page');
+    expect(state.currentItem?.track.lyricsRaw, '[00:02.00]Far');
+    // 水合后的当前曲要回写队列位，否则再次切回该曲又退回缺歌词的快照项。
+    expect(state.playbackItems.single.track.lyricsRaw, '[00:02.00]Far');
+  });
+
+  test('曲库已完整加载时才把找不到的本地曲按已删除剪掉', () async {
+    final api = _FakeMusicApi();
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[
+        MusicPlayableItem.local(api.track),
+        MusicPlayableItem.fromQueueJson(
+          MusicPlayableItem.local(_fillerTrack('gone')).toQueueJson(),
+        ),
+      ],
+      currentIndex: 0,
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    expect(state.playbackItems.map((item) => item.playableKey), <String>[
+      'local:track-1',
+    ]);
+  });
+
   test(
     'startup prefers a newer local queue and synchronizes it remotely',
     () async {
@@ -891,4 +1001,16 @@ void registerMusicQueueTests() {
       'local:cap-49',
     );
   });
+}
+
+MusicTrack _fillerTrack(String id) {
+  return MusicTrack(
+    id: id,
+    fileNodeId: 'file-$id',
+    title: 'Filler $id',
+    artistName: 'Omni Band',
+    albumTitle: 'City Lights',
+    format: 'flac',
+    favorite: false,
+  );
 }

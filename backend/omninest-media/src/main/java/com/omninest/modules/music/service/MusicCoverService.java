@@ -81,20 +81,33 @@ public class MusicCoverService {
     }
 
     /**
+     * 缩略图响应的可缓存程度，决定客户端多久后会再看到真正的缩略图。
+     */
+    public enum ThumbnailFreshness {
+        /** 派生缩略图：路径稳定且内容不变，可长期缓存。 */
+        DERIVED,
+        /** 回退原图且这张封面不会再有缩略图：按原图节奏缓存，避免反复下载大文件。 */
+        STABLE_FALLBACK,
+        /** 回退原图且值得重试（并发繁忙或临时失败）：只短期缓存。 */
+        RETRY_SOON
+    }
+
+    /**
      * 缩略图流式读取结果。
      *
      * @param descriptor 实际写出的内容描述
-     * @param derived 内容是否为派生缩略图；回退原图时为 false
+     * @param freshness 响应的可缓存程度
      */
-    public record ThumbnailStream(CoverStreamDescriptor descriptor, boolean derived) {
+    public record ThumbnailStream(CoverStreamDescriptor descriptor, ThumbnailFreshness freshness) {
     }
 
     /**
      * 校验封面缩略图可被当前用户读取并返回流式描述。
      *
      * <p>缩略图缺失时按需派生；原图不受理、派生并发达到上限或生成失败时回退原图描述，
-     * 因此该入口始终能渲染出图像，只是尺寸可能未缩小。调用方须按 {@code derived}
-     * 区分缓存策略，避免回退的原图把稳定缩略图路径长期占住。</p>
+     * 因此该入口始终能渲染出图像，只是尺寸可能未缩小。调用方须按
+     * {@link ThumbnailStream#freshness()} 区分缓存策略：回退的原图既不能长期占住稳定
+     * 缩略图路径，也不能按分钟反复下载。</p>
      *
      * @param ownerUserId 所属用户标识
      * @param fileId 封面原图文件标识
@@ -102,15 +115,27 @@ public class MusicCoverService {
      */
     public ThumbnailStream prepareThumbnailStream(UUID ownerUserId, UUID fileId) {
         CoverStreamDescriptor source = prepareCoverStream(ownerUserId, fileId);
-        UUID thumbnailFileId = coverThumbnailService.ensureThumbnail(
+        MusicCoverThumbnailService.ThumbnailResult result = coverThumbnailService.ensureThumbnail(
                 ownerUserId,
                 fileId,
                 source.sizeBytes()
-        ).orElse(null);
-        if (thumbnailFileId == null || thumbnailFileId.equals(fileId)) {
-            return new ThumbnailStream(source, false);
+        );
+        UUID thumbnailFileId = result.fileId();
+        if (thumbnailFileId == null) {
+            return new ThumbnailStream(
+                    source,
+                    result.retryLater()
+                            ? ThumbnailFreshness.RETRY_SOON
+                            : ThumbnailFreshness.STABLE_FALLBACK
+            );
         }
-        return new ThumbnailStream(prepareCoverStream(ownerUserId, thumbnailFileId), true);
+        if (thumbnailFileId.equals(fileId)) {
+            return new ThumbnailStream(source, ThumbnailFreshness.DERIVED);
+        }
+        return new ThumbnailStream(
+                prepareCoverStream(ownerUserId, thumbnailFileId),
+                ThumbnailFreshness.DERIVED
+        );
     }
 
     /**

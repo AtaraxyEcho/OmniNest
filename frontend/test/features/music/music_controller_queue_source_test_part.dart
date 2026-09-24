@@ -279,7 +279,17 @@ void registerMusicQueueSourceTests() {
       );
       addTearDown(container.dispose);
 
-      final state = await container.read(musicCenterControllerProvider.future);
+      final firstFrame = await container.read(
+        musicCenterControllerProvider.future,
+      );
+      // 首帧不被来源重建拖住：先用窗口快照，来源已经标对。
+      expect(firstFrame.playbackItems.map((item) => item.playableKey), [
+        'local:track-2',
+      ]);
+      expect(firstFrame.queueSource.kind, MusicQueueSourceKind.playlist);
+
+      await pumpEventQueue();
+      final state = container.read(musicCenterControllerProvider).value!;
 
       expect(state.playbackItems.map((item) => item.playableKey).toList(), [
         'local:track-1',
@@ -319,13 +329,16 @@ void registerMusicQueueSourceTests() {
       );
       addTearDown(container.dispose);
 
-      final state = await container.read(musicCenterControllerProvider.future);
+      await container.read(musicCenterControllerProvider.future);
+      await pumpEventQueue();
+      final state = container.read(musicCenterControllerProvider).value!;
 
       expect(state.playbackItems.map((item) => item.playableKey), [
         'local:track-2',
       ]);
-      expect(state.queueSource.kind, MusicQueueSourceKind.transient);
       expect(state.playbackIndex, 0);
+      // 重建失败仍保留声明来源：降级成 transient 会让下次重启再也没有可重建的线索。
+      expect(state.queueSource.kind, MusicQueueSourceKind.playlist);
     },
   );
 
@@ -363,7 +376,15 @@ void registerMusicQueueSourceTests() {
       );
       addTearDown(container.dispose);
 
-      final state = await container.read(musicCenterControllerProvider.future);
+      final firstFrame = await container.read(
+        musicCenterControllerProvider.future,
+      );
+      // 当前曲在首页之外：首帧只带窗口快照，不去串行取满 20 页。
+      expect(firstFrame.playbackItems, hasLength(1));
+      expect(firstFrame.queueSource.isPureLocalLibrary, isTrue);
+
+      await pumpEventQueue();
+      final state = container.read(musicCenterControllerProvider).value!;
 
       // fake 构造器自带 track-1/track-2，曲库共 152 首：页 0 = track-1、track-2、bulk-0..97。
       expect(state.playbackItems, hasLength(152));

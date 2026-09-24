@@ -881,6 +881,13 @@
   "portalNoPlayHistory": "No play history",
   "portalNoReadingHistory": "No reading history",
   "portalNoPhotos": "No photos",
+  "photosSlideshowPosition": "{index} of {total}",
+  "@photosSlideshowPosition": {
+    "placeholders": {
+      "index": {},
+      "total": {}
+    }
+  },
   "portalPhotoCount": "{count} photos",
   "@portalPhotoCount": {
     "placeholders": {

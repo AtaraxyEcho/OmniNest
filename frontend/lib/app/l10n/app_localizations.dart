@@ -4087,6 +4087,12 @@ abstract class AppLocalizations {
   /// **'No photos'**
   String get portalNoPhotos;
 
+  /// No description provided for @photosSlideshowPosition.
+  ///
+  /// In en, this message translates to:
+  /// **'{index} of {total}'**
+  String photosSlideshowPosition(Object index, Object total);
+
   /// No description provided for @portalPhotoCount.
   ///
   /// In en, this message translates to:

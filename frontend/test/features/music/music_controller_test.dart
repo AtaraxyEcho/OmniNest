@@ -775,6 +775,9 @@ class _FakeMusicApi implements MusicApi {
   final recordedHistoryKeys = <String>[];
   MusicPlaybackQueueSnapshot restoredPlaybackQueue =
       const MusicPlaybackQueueSnapshot();
+
+  /// 最近播放曲目的完整投影，用于模拟当前曲落在曲库分页之外的恢复场景。
+  MusicTrack? lastPlayedTrack;
   final savedPlaybackQueues = <MusicPlaybackQueueSnapshot>[];
   int playbackQueueLoadAttempts = 0;
   int queueSaveAttempts = 0;
@@ -1125,7 +1128,7 @@ class _FakeMusicApi implements MusicApi {
   }
 
   @override
-  Future<MusicTrack?> lastPlayed() async => null;
+  Future<MusicTrack?> lastPlayed() async => lastPlayedTrack;
 
   @override
   Future<MusicPlaylist> addPlaylistItems(

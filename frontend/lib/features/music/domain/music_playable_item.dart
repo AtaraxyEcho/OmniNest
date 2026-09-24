@@ -1,3 +1,4 @@
+import 'package:omninest/features/music/domain/music_cover_paths.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 
 /// 音乐内容来源平台。
@@ -134,17 +135,28 @@ class MusicPlayableItem {
   }
 
   /// 转换为不包含凭据和临时播放地址的队列快照。
+  ///
+  /// 内嵌封面地址（data URL）按曲带几百 KB，会把本地快照与远端上报撑成 MB 级
+  /// 并在主 isolate 解析；这类地址不入快照，恢复后由曲库投影回填。
   Map<String, dynamic> toQueueJson() {
     return <String, dynamic>{
       'playableKey': playableKey,
       'title': track.title,
       'artistName': track.artistName,
       'albumTitle': track.albumTitle,
-      'coverUrl': track.coverUrl ?? '',
+      'coverUrl': _snapshotCoverUrl(track.coverUrl),
       'durationSeconds': track.durationSeconds,
       'format': track.format,
     };
   }
+}
+
+String _snapshotCoverUrl(String? coverUrl) {
+  final url = coverUrl?.trim() ?? '';
+  if (url.isEmpty || isInlineCoverDataUrl(url)) {
+    return '';
+  }
+  return url;
 }
 
 /// 播放队列来源类型。

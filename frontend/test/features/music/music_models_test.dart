@@ -410,5 +410,10 @@ void main() {
     );
     expect(musicCoverThumbnailPath(''), '');
     expect(musicCoverThumbnailPath(null), isNull);
+    // 展示地址可安全回流：二级缩略后缀会直接 404。
+    expect(
+      musicCoverThumbnailPath('/api/v1/music/covers/x/thumbnail'),
+      '/api/v1/music/covers/x/thumbnail',
+    );
   });
 }
