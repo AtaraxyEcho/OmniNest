@@ -623,7 +623,10 @@ class MusicApi {
     );
   }
 
-  /// 获取平台登录信息
+  /// 获取平台登录信息。
+  ///
+  /// 未绑定（401 / 平台未连接 / userId 为空）返回 null；
+  /// 网络或其他失败抛出 [AppException]，由上层区分「未连接」与「请求失败」。
   Future<PlatformUserInfo?> platformInfo(String platform) async {
     try {
       final resp = await apiClient.dio.get<Map<String, dynamic>>(
@@ -634,9 +637,39 @@ class MusicApi {
         return null;
       }
       return PlatformUserInfo.fromJson(data);
-    } catch (_) {
-      return null;
+    } on DioException catch (error) {
+      final statusCode = error.response?.statusCode;
+      final errorName = _backendErrorName(error);
+      if (statusCode == 401 ||
+          errorName == 'MUSIC_PLATFORM_NOT_CONNECTED' ||
+          errorName == 'MUSIC_PLATFORM_AUTH_EXPIRED') {
+        return null;
+      }
+      if (error.type == DioExceptionType.connectionError ||
+          error.type == DioExceptionType.connectionTimeout ||
+          error.type == DioExceptionType.sendTimeout ||
+          error.type == DioExceptionType.receiveTimeout ||
+          error.type == DioExceptionType.transformTimeout) {
+        throw AppException(
+          code: 'NETWORK_ERROR',
+          message: '网络请求失败',
+          details: {'platform': platform, 'cause': error.message},
+        );
+      }
+      throw AppException(
+        code: 'MUSIC_PLATFORM_INFO_FAILED',
+        message: '获取平台登录信息失败',
+        details: {'platform': platform, 'cause': error.message},
+      );
     }
+  }
+
+  static String? _backendErrorName(DioException error) {
+    final data = error.response?.data;
+    if (data is Map) {
+      return data['errorName']?.toString();
+    }
+    return null;
   }
 
   static MusicPlaybackPlan parsePlaybackPlan(Map<String, dynamic> data) {

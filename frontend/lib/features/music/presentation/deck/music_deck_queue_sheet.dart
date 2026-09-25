@@ -7,6 +7,7 @@ import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/player/music_playback_settings_dialog.dart';
+import 'package:omninest/features/music/presentation/widgets/music_playing_bars.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
 /// 显示当前播放队列的响应式抽屉。
@@ -321,8 +322,8 @@ class _MusicQueueRow extends StatelessWidget {
       onDismissed: (_) => onDismissed(),
       child: ListTile(
         selected: selected,
-        // 与曲目行同一语义：正在播放行使用播放行背景，权重高于悬停反馈。
-        selectedTileColor: colors.playingRowBg,
+        // 与曲目行一致：播放中不用背景条，改用动态竖条 + 主色标题。
+        selectedTileColor: Colors.transparent,
         contentPadding: const EdgeInsets.symmetric(horizontal: 8),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         onTap: onTap,
@@ -360,7 +361,14 @@ class _MusicQueueRow extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (selected)
-              Icon(Icons.graphic_eq_rounded, size: 16, color: colors.primary),
+              SizedBox(
+                width: 16,
+                child: MusicPlayingBars(
+                  color: colors.primary,
+                  size: 14,
+                  active: true,
+                ),
+              ),
             // 下一首播放：把该行移动到当前曲目之后（当前行置灰）。
             IconButton(
               tooltip: l10n.musicPlayNext,

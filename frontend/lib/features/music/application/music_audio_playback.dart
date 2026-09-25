@@ -543,6 +543,9 @@ class MusicAudioPlayer implements MusicAudioPlayback {
 }
 
 /// 由播放器时钟驱动的稳定频谱采样器。
+///
+/// 纯 UI 高频动画采样（ValueListenable），按 AGENTS 允许保留 ChangeNotifier；
+/// 业务播放状态在 [MusicCenterController] / 播放会话中管理。
 class MusicSpectrumSampler extends ChangeNotifier
     implements ValueListenable<MusicSpectrumFrame> {
   MusicSpectrumSampler({

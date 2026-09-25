@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login_form.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// 平台登录底部弹出面板（跟随宿主主题：浅色实体、深色实体、浅色 + 动态壁纸的
 /// 烟熏玻璃三种场景都使用 Music 已解析色阶）。
@@ -23,10 +24,10 @@ class PlatformLoginSheet extends ConsumerWidget {
   static const double _contentTargetHeight = 300;
 
   /// 浅色模式抽屉底色：样例 `bg-white/90` 的白色磨砂。
-  static const Color _lightSheetFill = Color(0xF2FFFFFF);
+  static const Color _lightSheetFill = MusicChromeColors.lightSheetFill;
 
   /// 品牌图标底座：样例 `bg-neutral-900` 的深色圆角块，仅用于浅色模式。
-  static const Color _lightBrandTileColor = Color(0xFF17181B);
+  static const Color _lightBrandTileColor = MusicChromeColors.lightBrandTile;
 
   static Future<void> show(BuildContext context) {
     final colors = context.musicColors;

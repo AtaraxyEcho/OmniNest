@@ -72,6 +72,38 @@ void main() {
       }
     });
   }
+
+  testWidgets('长曲名使用省略号截断而非 FittedBox 缩字号', (tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      _testApp(
+        scale: 1,
+        longTitle: true,
+        child: const SizedBox(
+          width: 196,
+          height: 51.5,
+          child: MusicDeckMiniPlayer(
+            compact: true,
+            embedded: true,
+            managePlaybackSession: false,
+            onOpenQueue: _noop,
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(tester.takeException(), isNull);
+    // 省略号方案下不得再出现包住曲名/歌手名的 FittedBox。
+    expect(find.byType(FittedBox), findsNothing);
+    final titleText = tester.widget<Text>(find.textContaining('超长歌曲名称'));
+    expect(titleText.maxLines, 1);
+    expect(titleText.overflow, TextOverflow.ellipsis);
+  });
 }
 
 void _noop() {}
@@ -86,8 +118,23 @@ const MusicTrack track = MusicTrack(
   favorite: false,
 );
 
-Widget _testApp({required double scale, required Widget child}) {
-  final item = MusicPlayableItem.local(track);
+const MusicTrack longTrack = MusicTrack(
+  id: 'track-2',
+  fileNodeId: 'file-2',
+  title: '超长歌曲名称超长歌曲名称超长歌曲名称超长歌曲名称超长歌曲名称超长歌曲名称',
+  artistName: '超长歌手名称超长歌手名称超长歌手名称超长歌手名称',
+  albumTitle: 'Album',
+  format: 'FLAC',
+  favorite: false,
+);
+
+Widget _testApp({
+  required double scale,
+  required Widget child,
+  bool longTitle = false,
+}) {
+  final displayTrack = longTitle ? longTrack : track;
+  final item = MusicPlayableItem.local(displayTrack);
   final center = MusicCenterState(
     dashboard: MusicDashboard.empty(),
     tracks: const [track],

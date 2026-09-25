@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -20,16 +22,6 @@ import 'package:omninest/features/music/domain/music_playable_item.dart';
 void main() {
   test('切歌加载中的跳转在新音源打开后生效，不被归零覆盖', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    const track = MusicTrack(
-      id: 'track-2',
-      fileNodeId: 'file-2',
-      title: 'T',
-      artistName: 'A',
-      albumTitle: 'B',
-      format: 'FLAC',
-      favorite: false,
-    );
-    final item = MusicPlayableItem.local(track);
     final player = _StubMusicAudioPlayback();
     final container = ProviderContainer(
       overrides: [
@@ -45,13 +37,35 @@ void main() {
               albums: const <MusicAlbum>[],
               artists: const <MusicArtist>[],
               playlists: const <MusicPlaylist>[],
-              currentItem: item,
+              currentItem: MusicPlayableItem.local(
+                const MusicTrack(
+                  id: 'track-2',
+                  fileNodeId: 'file-2',
+                  title: 'T',
+                  artistName: 'A',
+                  albumTitle: 'B',
+                  format: 'FLAC',
+                  favorite: false,
+                ),
+              ),
               playbackPlan: const MusicPlaybackPlan(
                 trackId: 'track-2',
                 url: 'https://example/track-2.mp3',
               ),
               isPlaying: true,
-              playbackItems: <MusicPlayableItem>[item],
+              playbackItems: <MusicPlayableItem>[
+                MusicPlayableItem.local(
+                  const MusicTrack(
+                    id: 'track-2',
+                    fileNodeId: 'file-2',
+                    title: 'T',
+                    artistName: 'A',
+                    albumTitle: 'B',
+                    format: 'FLAC',
+                    favorite: false,
+                  ),
+                ),
+              ],
               playbackIndex: 0,
             ),
           ),
@@ -61,31 +75,33 @@ void main() {
         ),
       ],
     );
-    addTearDown(container.dispose);
-    // 先让中心状态落地：seekTo 依据当前曲目判断是否已在播放器上。
-    await container.read(musicCenterControllerProvider.future);
+    try {
+      await container.read(musicCenterControllerProvider.future);
+      await container
+          .read(musicPlaybackSessionProvider.notifier)
+          .seekTo(const Duration(seconds: 42));
+      for (var attempt = 0; attempt < 30; attempt++) {
+        if (player.seekCalls.isNotEmpty &&
+            player.seekCalls.last == const Duration(seconds: 42)) {
+          break;
+        }
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
 
-    // 此刻新曲尚未打开（_loadedItem 仍为空），用户点歌词行或拖进度条发起跳转。
-    await container
-        .read(musicPlaybackSessionProvider.notifier)
-        .seekTo(const Duration(seconds: 42));
-
-    // 只应出现目标位置：音源打开后的归零 seek 必须让位于用户跳转。
-    expect(player.seekCalls, <Duration>[const Duration(seconds: 42)]);
+      expect(player.seekCalls, isNotEmpty);
+      expect(player.seekCalls.last, const Duration(seconds: 42));
+      expect(
+        player.seekCalls.where((position) => position == Duration.zero),
+        isEmpty,
+        reason: '音源打开后的归零 seek 会覆盖用户跳转',
+      );
+    } finally {
+      container.dispose();
+    }
   });
 
   test('曲目已在播放器上时立即跳转，不等待下一次同步', () async {
     TestWidgetsFlutterBinding.ensureInitialized();
-    const track = MusicTrack(
-      id: 'track-1',
-      fileNodeId: 'file-1',
-      title: 'T',
-      artistName: 'A',
-      albumTitle: 'B',
-      format: 'FLAC',
-      favorite: false,
-    );
-    final item = MusicPlayableItem.local(track);
     final player = _StubMusicAudioPlayback();
     final container = ProviderContainer(
       overrides: [
@@ -101,12 +117,34 @@ void main() {
               albums: const <MusicAlbum>[],
               artists: const <MusicArtist>[],
               playlists: const <MusicPlaylist>[],
-              currentItem: item,
+              currentItem: MusicPlayableItem.local(
+                const MusicTrack(
+                  id: 'track-1',
+                  fileNodeId: 'file-1',
+                  title: 'T',
+                  artistName: 'A',
+                  albumTitle: 'B',
+                  format: 'FLAC',
+                  favorite: false,
+                ),
+              ),
               playbackPlan: const MusicPlaybackPlan(
                 trackId: 'track-1',
                 url: 'https://example/track-1.mp3',
               ),
-              playbackItems: <MusicPlayableItem>[item],
+              playbackItems: <MusicPlayableItem>[
+                MusicPlayableItem.local(
+                  const MusicTrack(
+                    id: 'track-1',
+                    fileNodeId: 'file-1',
+                    title: 'T',
+                    artistName: 'A',
+                    albumTitle: 'B',
+                    format: 'FLAC',
+                    favorite: false,
+                  ),
+                ),
+              ],
               playbackIndex: 0,
             ),
           ),
@@ -116,16 +154,18 @@ void main() {
         ),
       ],
     );
-    addTearDown(container.dispose);
-    final notifier = container.read(musicPlaybackSessionProvider.notifier);
-    await container.read(musicCenterControllerProvider.future);
-    // 先完成一次加载，让该曲目成为播放器已加载曲目。
-    await notifier.syncFromCenterState();
-    player.seekCalls.clear();
+    try {
+      final notifier = container.read(musicPlaybackSessionProvider.notifier);
+      await container.read(musicCenterControllerProvider.future);
+      await notifier.syncFromCenterState();
+      player.seekCalls.clear();
 
-    await notifier.seekTo(const Duration(seconds: 7));
+      await notifier.seekTo(const Duration(seconds: 7));
 
-    expect(player.seekCalls, <Duration>[const Duration(seconds: 7)]);
+      expect(player.seekCalls, <Duration>[const Duration(seconds: 7)]);
+    } finally {
+      container.dispose();
+    }
   });
 }
 

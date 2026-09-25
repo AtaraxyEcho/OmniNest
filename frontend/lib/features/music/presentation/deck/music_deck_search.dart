@@ -12,6 +12,7 @@ import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_add_to_playlist_sheet.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// 桌面端 Music Deck 搜索输入框。
 class MusicDeckSearchField extends StatelessWidget {
@@ -198,7 +199,7 @@ class _MusicDeckMobileSearchPageState
     final l10n = AppLocalizations.of(context);
     final search = ref.watch(musicDeckSearchProvider);
     return Scaffold(
-      backgroundColor: const Color(0xF20A1218),
+      backgroundColor: MusicChromeColors.searchOverlayBg,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         titleSpacing: 0,
@@ -358,7 +359,7 @@ class _SearchSourceGroup extends StatelessWidget {
               child: Text(
                 failure!,
                 style: const TextStyle(
-                  color: Color(0xFFFFB4AB),
+                  color: MusicChromeColors.redError,
                   fontSize: AppTypography.bodySmall,
                 ),
               ),

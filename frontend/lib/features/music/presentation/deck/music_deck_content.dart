@@ -25,6 +25,7 @@ import 'package:omninest/features/music/presentation/deck/music_deck_models.dart
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_track_list.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 part 'music_deck_content_actions.dart';
 
@@ -113,7 +114,6 @@ class MusicDeckContent extends ConsumerWidget {
         center: center,
         isRecentSection: true,
       ),
-      MusicDeckSection.offline => const _OfflineContent(),
       MusicDeckSection.localManagement => _LocalManagementContent(
         center: center,
       ),
@@ -873,26 +873,6 @@ class _CollectionDetail extends ConsumerWidget {
                     onAddToPlaylist: _addToPlaylistHandler(context, ref),
                   ),
         ),
-      ],
-    );
-  }
-}
-
-class _OfflineContent extends StatelessWidget {
-  const _OfflineContent();
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _ContentHeader(
-          title: l10n.musicDeckOffline,
-          subtitle: l10n.musicDeckOfflineSubtitle,
-        ),
-        const SizedBox(height: 18),
-        Expanded(child: _InlineEmpty(message: l10n.musicDeckOfflineEmpty)),
       ],
     );
   }

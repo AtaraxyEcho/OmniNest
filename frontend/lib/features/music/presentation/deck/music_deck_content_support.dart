@@ -295,7 +295,10 @@ class _PartialFailureBanner extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       child: Row(
         children: [
-          const Icon(Icons.sync_problem_rounded, color: Color(0xFFF0CD76)),
+          const Icon(
+            Icons.sync_problem_rounded,
+            color: MusicChromeColors.goldWarning,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -556,7 +559,7 @@ Future<void> _confirmDeletePlaylist(
             ),
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFC8353D),
+                backgroundColor: MusicChromeColors.brandRed,
                 foregroundColor: context.musicColors.onSurface,
               ),
               onPressed: () => Navigator.of(dialogContext).pop(true),

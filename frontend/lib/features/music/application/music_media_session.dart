@@ -16,6 +16,7 @@ class MusicMediaCommandCallbacks {
     required this.onPrevious,
     required this.onPlayPauseToggle,
     required this.onSeek,
+    this.onAudioDuck,
   });
 
   final Future<void> Function() onPlay;
@@ -27,6 +28,9 @@ class MusicMediaCommandCallbacks {
   final Future<void> Function() onPlayPauseToggle;
 
   final Future<void> Function(Duration position) onSeek;
+
+  /// 音频焦点 duck（压低音量）/结束 duck（恢复）。true=压低，false=恢复。
+  final Future<void> Function(bool ducked)? onAudioDuck;
 }
 
 /// 音乐系统媒体会话处理：Android/iOS 通知栏媒体卡片与系统媒体键的统一出口。
@@ -190,9 +194,12 @@ Future<void> _bindAudioFocus(
           _resumeAfterInterruption = true;
           await callbacks.onPause();
         case AudioInterruptionType.duck:
-          break;
+          await callbacks.onAudioDuck?.call(true);
       }
       return;
+    }
+    if (event.type == AudioInterruptionType.duck) {
+      await callbacks.onAudioDuck?.call(false);
     }
     if (_resumeAfterInterruption) {
       _resumeAfterInterruption = false;

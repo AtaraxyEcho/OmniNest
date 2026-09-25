@@ -15,6 +15,7 @@ import 'package:omninest/features/music/presentation/player/music_immersive_play
 import 'package:omninest/features/music/application/music_sleep_timer_controller.dart';
 import 'package:omninest/features/music/application/music_immersive_controller.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// Music Deck 使用的全平台沉浸播放覆盖层。
 class MusicImmersiveOverlay extends ConsumerStatefulWidget {
@@ -180,7 +181,7 @@ class _MusicImmersiveOverlayState extends ConsumerState<MusicImmersiveOverlay> {
       tooltip: MaterialLocalizations.of(context).backButtonTooltip,
       onPressed: widget.onClose,
       style: IconButton.styleFrom(
-        backgroundColor: const Color(0xB812222A),
+        backgroundColor: MusicChromeColors.immersiveOverlayBg,
         foregroundColor: Colors.white,
         side: BorderSide(color: Colors.white.withValues(alpha: 0.18)),
       ),

@@ -5,6 +5,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// Music Deck 封面内容模型。
 class MusicDeckCoverItem {
@@ -256,7 +257,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                           duration: const Duration(milliseconds: 150),
                           child: DecoratedBox(
                             decoration: const BoxDecoration(
-                              color: Color(0xE6F4D77E),
+                              color: MusicChromeColors.goldBorder,
                               shape: BoxShape.circle,
                             ),
                             child: const SizedBox.square(
@@ -264,7 +265,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                               child: Icon(
                                 Icons.arrow_forward_rounded,
                                 size: 17,
-                                color: Color(0xFF11171B),
+                                color: MusicChromeColors.coverCardBg,
                               ),
                             ),
                           ),
@@ -383,7 +384,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                         action.icon,
                         color:
                             action.destructive
-                                ? const Color(0xFFFF8F91)
+                                ? MusicChromeColors.redSoft
                                 : context.musicColors.onSurface,
                       ),
                       title: Text(
@@ -391,7 +392,7 @@ class _MusicDeckCoverTileState extends State<_MusicDeckCoverTile> {
                         style: TextStyle(
                           color:
                               action.destructive
-                                  ? const Color(0xFFFF8F91)
+                                  ? MusicChromeColors.redSoft
                                   : context.musicColors.onSurface,
                         ),
                       ),
@@ -416,7 +417,9 @@ class _ActionLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color =
-        action.destructive ? const Color(0xFFC8353D) : const Color(0xFF1D252A);
+        action.destructive
+            ? MusicChromeColors.brandRed
+            : MusicChromeColors.actionBarBg;
     return Row(
       children: [
         Icon(action.icon, size: 18, color: color),

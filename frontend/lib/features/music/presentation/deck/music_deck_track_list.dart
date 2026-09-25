@@ -5,6 +5,8 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_primitives.dart';
+import 'package:omninest/features/music/presentation/widgets/music_playing_bars.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// 支持来源标识、键盘激活和局部悬停反馈的歌曲列表。
 class MusicDeckTrackList extends StatefulWidget {
@@ -197,14 +199,9 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
         selected: widget.selected,
         label: '${track.title}, ${track.artistName}',
         child: Material(
-          // 播放行为持久激活态、悬停为瞬态反馈：hoverBg 弱于 playingRowBg，
-          // selected 分支优先于悬停，播放行不再被悬停实底冲淡。
-          color:
-              widget.selected
-                  ? colors.playingRowBg
-                  : _hovered
-                  ? colors.hoverBg
-                  : Colors.transparent,
+          // 播放中不使用背景条：靠动态竖条 + 主色标题表达「正在播放」；
+          // 悬停仅保留瞬态弱 tint，权重低于播放指示。
+          color: _hovered ? colors.hoverBg : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           child: InkWell(
             borderRadius: BorderRadius.circular(6),
@@ -230,6 +227,19 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                       ),
                     ),
                   const SizedBox(width: 10),
+                  // 固定槽位避免播放指示出现时标题横移。
+                  SizedBox(
+                    width: 18,
+                    child:
+                        widget.selected
+                            ? MusicPlayingBars(
+                              color: colors.primary,
+                              size: 16,
+                              active: true,
+                            )
+                            : null,
+                  ),
+                  const SizedBox(width: 6),
                   Expanded(
                     flex: 5,
                     child: Column(
@@ -292,13 +302,6 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                         ),
                       ),
                     ),
-                  ] else if (widget.selected) ...[
-                    const SizedBox(width: 8),
-                    Icon(
-                      Icons.graphic_eq_rounded,
-                      size: 18,
-                      color: colors.primary,
-                    ),
                   ],
                   if (widget.onToggleFavorite != null) ...[
                     const SizedBox(width: 4),
@@ -315,7 +318,7 @@ class _MusicDeckTrackRowState extends State<_MusicDeckTrackRow> {
                         size: 18,
                         color:
                             track.favorite
-                                ? const Color(0xFFF28C9A)
+                                ? MusicChromeColors.redSoftAlt
                                 : colors.onSurfaceVariant,
                       ),
                     ),

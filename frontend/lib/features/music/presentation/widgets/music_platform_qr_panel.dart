@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/application/music_platform_qr_session_controller.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_login_controls.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// 账号窗口内的内联二维码登录面板（配色随宿主主题，浅色与深色共用同一套色阶）。
 ///
@@ -189,7 +190,7 @@ class _QrEntry extends StatelessWidget {
         const SizedBox(height: kMusicPlatformBlockGap),
         MusicPlatformPrimaryButton(
           key: MusicPlatformQrPanel.startButtonKey,
-          color: const Color(0xFFEC4141),
+          color: MusicChromeColors.platformRed,
           icon: Icons.qr_code_rounded,
           label: l10n.musicPlatformQrAction,
           busy: starting,
@@ -237,7 +238,7 @@ class _QrFrame extends StatelessWidget {
       decoration: BoxDecoration(
         // 浅色取实色浅灰（样例 neutral-50）：在白色磨砂抽屉上形成"凹槽"层级；
         // 深色沿用模块色阶。
-        color: isLight ? const Color(0xFFF7F8F9) : colors.fieldFill,
+        color: isLight ? MusicChromeColors.lightIconBg : colors.fieldFill,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.fieldBorder),
       ),
@@ -609,7 +610,7 @@ class _QrImage extends StatelessWidget {
   final PlatformQrSessionState session;
 
   /// 白卡上的占位图标色：取中性灰，保证在固定白底上可读。
-  static const Color _placeholderColor = Color(0xFF8A8A8E);
+  static const Color _placeholderColor = MusicChromeColors.placeholder;
 
   @override
   Widget build(BuildContext context) {

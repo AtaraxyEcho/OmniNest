@@ -57,8 +57,7 @@ void main() {
     // 单次大位移会级联交换，首行直接拖到队尾验证后移换算。
     await gesture.moveTo(tester.getCenter(firstHandle) + const Offset(0, 200));
     await gesture.up();
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 250));
+    await _pumpBounded(tester);
 
     final state = harness.container.read(musicCenterControllerProvider);
     expect(
@@ -86,8 +85,7 @@ void main() {
     await gesture.moveTo(start - const Offset(0, 175));
     await tester.pump();
     await gesture.up();
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 250));
+    await _pumpBounded(tester);
 
     final state = harness.container.read(musicCenterControllerProvider);
     expect(
@@ -102,8 +100,9 @@ void main() {
     final harness = await _pumpQueueSheet(tester);
 
     await tester.drag(find.text('Queue Beta'), const Offset(-480, 0));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 250));
+    await _pumpBounded(tester);
+    // 队列持久化防抖 160ms，需再推进时钟以关闭 Timer。
+    await tester.pump(const Duration(milliseconds: 300));
 
     expect(find.text('Queue Beta'), findsNothing);
     final state = harness.container.read(musicCenterControllerProvider);
@@ -117,8 +116,7 @@ void main() {
     final harness = await _pumpQueueSheet(tester);
 
     await tester.tap(find.text('清空队列'));
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(milliseconds: 250));
+    await _pumpBounded(tester);
 
     expect(find.text('播放队列为空'), findsOneWidget);
     final state = harness.container.read(musicCenterControllerProvider);
@@ -157,8 +155,7 @@ void main() {
 
     // 点击队尾 Gamma 行：Gamma 移动到当前曲目之后。
     await tester.tap(playNextButtons.at(2));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 250));
+    await _pumpBounded(tester);
 
     final state = harness.container.read(musicCenterControllerProvider);
     expect(state.asData!.value.playbackItems.map((item) => item.track.title), [
@@ -190,6 +187,15 @@ void main() {
     // 当前行已进入视口（懒加载列表只构建可见行）。
     expect(find.text('Track 8'), findsOneWidget);
   });
+}
+
+/// 播放中竖条为持续动画，`pumpAndSettle` 无法结束；用有界 pump 推进布局、
+/// 手势收尾，并覆盖队列持久化防抖 Timer（160ms）。
+Future<void> _pumpBounded(WidgetTester tester) async {
+  for (var i = 0; i < 8; i++) {
+    await tester.pump(const Duration(milliseconds: 50));
+  }
+  await tester.pump(const Duration(milliseconds: 250));
 }
 
 Future<_QueueSheetHarness> _pumpQueueSheet(
@@ -230,7 +236,7 @@ Future<_QueueSheetHarness> _pumpQueueSheet(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  await _pumpBounded(tester);
   return _QueueSheetHarness(container);
 }
 

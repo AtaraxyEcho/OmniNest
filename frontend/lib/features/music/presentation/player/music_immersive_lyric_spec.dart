@@ -6,6 +6,10 @@ const Color kMusicLyricTranslationColor = Color(0xFFC4C7CA);
 const Color kMusicLyricActiveTextColor = Color(0xFFFFFFFF);
 const Color kMusicLyricSideActiveTranslationColor = Color(0xFFBDC7D4);
 
+/// 歌词渐变遮罩端点：全透明黑与全透明白（渐变起止用）。
+const Color kMusicLyricFadeClear = Color(0x00000000);
+const Color kMusicLyricFadeClearWhite = Color(0x00FFFFFF);
+
 /// 在读行时间参考胶囊的底色与描边：样例 `bg-surface-container-lowest/90`
 /// 与 `border-white/25`。
 const Color kMusicLyricAuxPillFill = Color(0xE60C0E11);

@@ -70,34 +70,42 @@ void main() {
     final source = _readFlat(
       'lib/features/music/presentation/player/music_immersive_cover_deck.dart',
     );
+    final cardSource = _readFlat(
+      'lib/features/music/presentation/player/music_immersive_cover_deck_card.dart',
+    );
+    final combined = '$source$cardSource';
 
-    expect(source, _flatLacks('AnimatedOpacity'));
-    expect(source, _flatLacks('final opacity ='));
-    expect(source, _flatContains('palette.surfaceStrong.withValues('));
-    expect(source, _flatContains('alpha: 1'));
+    expect(combined, _flatLacks('AnimatedOpacity'));
+    expect(combined, _flatLacks('final opacity ='));
+    expect(combined, _flatContains('palette.surfaceStrong.withValues('));
+    expect(combined, _flatContains('alpha: 1'));
   });
 
   test('沉浸右侧封面卡片使用独立指针跟踪', () {
     final source = _readFlat(
       'lib/features/music/presentation/player/music_immersive_cover_deck.dart',
     );
+    final cardSource = _readFlat(
+      'lib/features/music/presentation/player/music_immersive_cover_deck_card.dart',
+    );
+    final combined = '$source$cardSource';
 
-    expect(source, _flatContains('_dragPointer'));
-    expect(source, _flatContains('_handlePointerMove'));
-    expect(source, _flatContains('SystemMouseCursors.grabbing'));
-    expect(source, _flatContains('_dominantDrag'));
-    expect(source, _flatContains('_resolveDragDelta'));
-    expect(source, _flatContains('_deckPaintOrder = <int>[4, 3, 2, 1]'));
-    expect(source, _flatContains('_buildActiveDeckCard()'));
-    expect(source, _flatContains('dragOffset: _activeCardDragOffset'));
-    expect(source, _flatContains('onPointerDown: _handlePointerDown'));
-    expect(source, _flatLacks('onLongPressStart'));
-    expect(source, _flatContains('child: RepaintBoundary('));
+    expect(combined, _flatContains('_dragPointer'));
+    expect(combined, _flatContains('_handlePointerMove'));
+    expect(combined, _flatContains('SystemMouseCursors.grabbing'));
+    expect(combined, _flatContains('_dominantDrag'));
+    expect(combined, _flatContains('_resolveDragDelta'));
+    expect(combined, _flatContains('_deckPaintOrder = <int>[4, 3, 2, 1]'));
+    expect(combined, _flatContains('_buildActiveDeckCard()'));
+    expect(combined, _flatContains('dragOffset: _activeCardDragOffset'));
+    expect(combined, _flatContains('onPointerDown: _handlePointerDown'));
+    expect(combined, _flatLacks('onLongPressStart'));
+    expect(combined, _flatContains('child: RepaintBoundary('));
     // 拖拽反馈是挂在卡面最内层的纯平移：档位变换与拖拽位移互不污染。
-    expect(source, _flatContains('resolveMusicDeckCard(layout, slot)'));
-    expect(source, _flatContains('dragOffset.dx * 0.62'));
-    expect(source, _flatContains('dragOffset.dy * 0.28'));
-    expect(source, _flatLacks('dx + dragOffset.dx'));
+    expect(combined, _flatContains('resolveMusicDeckCard(layout, slot)'));
+    expect(combined, _flatContains('dragOffset.dx * 0.62'));
+    expect(combined, _flatContains('dragOffset.dy * 0.28'));
+    expect(combined, _flatLacks('dx + dragOffset.dx'));
   });
 
   test('沉浸封面堆叠使用完整播放队列且最多绘制五张', () {

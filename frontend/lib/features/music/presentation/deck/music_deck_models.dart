@@ -4,13 +4,14 @@ import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 
 /// Music Deck 一级内容意图。
+///
+/// 不提供「离线内容/离线下载」分区（产品决策 D7：版权原因暂不提供离线下载）。
 enum MusicDeckSection {
   home(Icons.home_outlined, Icons.home_rounded),
   library(Icons.library_music_outlined, Icons.library_music_rounded),
   playlists(Icons.queue_music_outlined, Icons.queue_music_rounded),
   favorites(Icons.favorite_border_rounded, Icons.favorite_rounded),
   recent(Icons.history_rounded, Icons.history_toggle_off_rounded),
-  offline(Icons.download_outlined, Icons.download_done_rounded),
   localManagement(Icons.tune_rounded, Icons.library_music_rounded);
 
   const MusicDeckSection(this.icon, this.selectedIcon);
@@ -24,7 +25,6 @@ enum MusicDeckSection {
     MusicDeckSection.playlists => l10n.musicDeckPlaylists,
     MusicDeckSection.favorites => l10n.musicDeckFavorites,
     MusicDeckSection.recent => l10n.musicDeckRecent,
-    MusicDeckSection.offline => l10n.musicDeckOffline,
     MusicDeckSection.localManagement => l10n.musicDeckLocalManagement,
   };
 }

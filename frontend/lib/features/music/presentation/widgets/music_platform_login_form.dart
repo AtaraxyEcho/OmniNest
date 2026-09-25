@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_logged_in_card.dart';
 import 'package:omninest/features/music/presentation/widgets/music_platform_qr_panel.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// 网易云登录区块：只保留扫码登录。
 ///
@@ -22,7 +23,7 @@ class NeteaseLoginSection extends StatelessWidget {
     return user != null
         ? MusicPlatformLoggedInCard(
           user: user,
-          accentColor: const Color(0xFFEC4141),
+          accentColor: MusicChromeColors.platformRed,
         )
         : const MusicPlatformQrPanel();
   }

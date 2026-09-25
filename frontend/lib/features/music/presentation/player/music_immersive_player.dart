@@ -29,8 +29,10 @@ import 'package:omninest/features/music/presentation/player/music_immersive_styl
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 part 'music_immersive_cover_deck.dart';
+part 'music_immersive_cover_deck_card.dart';
 part 'music_immersive_cover_deck_widgets.dart';
 part 'music_immersive_controls.dart';
 part 'music_immersive_deck_spec.dart';

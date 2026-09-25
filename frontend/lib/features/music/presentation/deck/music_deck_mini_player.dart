@@ -16,6 +16,7 @@ import 'package:omninest/features/music/presentation/player/music_playback_setti
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
 import 'package:omninest/features/music/presentation/widgets/music_volume_button.dart';
 import 'package:omninest/core/log/dev_log.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// Mini Player 可注入配色。
 class MusicMiniPlayerPalette {
@@ -155,39 +156,54 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
               ),
             ),
             const SizedBox(width: 11),
+            // 长曲名/歌手名禁止 FittedBox 缩字号：固定字号 + 单行省略号截断。
+            // OverflowBox 仅放开高度，避免高文本缩放档位触发 RenderFlex 溢出。
             Expanded(
               flex: 3,
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      track?.title ??
-                          AppLocalizations.of(context).musicNotPlaying,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _palette(context).text,
-                        fontSize: AppTypography.bodyMedium,
-                        fontWeight: FontWeight.w700,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return ClipRect(
+                    child: OverflowBox(
+                      alignment: Alignment.centerLeft,
+                      minWidth: constraints.maxWidth,
+                      maxWidth: constraints.maxWidth,
+                      minHeight: 0,
+                      maxHeight: double.infinity,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            track?.title ??
+                                AppLocalizations.of(context).musicNotPlaying,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _palette(context).text,
+                              fontSize: AppTypography.bodyMedium,
+                              fontWeight: FontWeight.w700,
+                              height: 1.15,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            track?.artistName ??
+                                AppLocalizations.of(
+                                  context,
+                                ).musicDeckSelectTrack,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: _palette(context).muted,
+                              fontSize: AppTypography.labelSmall,
+                              height: 1.15,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      track?.artistName ??
-                          AppLocalizations.of(context).musicDeckSelectTrack,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: _palette(context).muted,
-                        fontSize: AppTypography.labelSmall,
-                      ),
-                    ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
             const SizedBox(width: 16),
@@ -231,7 +247,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                   track == null ? null : () => _togglePlayback(track, item),
               backgroundColor:
                   Color.lerp(
-                    const Color(0xFF153C43),
+                    MusicChromeColors.tealPanel,
                     _palette(context).accent,
                     0.18,
                   )!,
@@ -303,7 +319,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
               mutedIconColor: _palette(context).muted.withValues(alpha: 0.7),
               activeColor: _palette(context).accent,
               panelTextColor: _palette(context).text,
-              panelBackground: const Color(0xF00E151B),
+              panelBackground: MusicChromeColors.panelBackground,
               iconSize: 22,
             ),
             IconButton(
@@ -404,35 +420,48 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                       onTap: widget.onOpenPlayer,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                track?.title ?? l10n.musicNotPlaying,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: _palette(context).text,
-                                  fontSize: AppTypography.bodyMedium,
-                                  fontWeight: FontWeight.w700,
+                        // 与标准岛一致：固定字号 + 省略号，禁止 FittedBox 缩字号。
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return ClipRect(
+                              child: OverflowBox(
+                                alignment: Alignment.centerLeft,
+                                minWidth: constraints.maxWidth,
+                                maxWidth: constraints.maxWidth,
+                                minHeight: 0,
+                                maxHeight: double.infinity,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      track?.title ?? l10n.musicNotPlaying,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: _palette(context).text,
+                                        fontSize: AppTypography.bodyMedium,
+                                        fontWeight: FontWeight.w700,
+                                        height: 1.15,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      track?.artistName ??
+                                          l10n.musicDeckSelectTrack,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        color: _palette(context).muted,
+                                        fontSize: AppTypography.labelSmall,
+                                        height: 1.15,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 3),
-                              Text(
-                                track?.artistName ?? l10n.musicDeckSelectTrack,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: _palette(context).muted,
-                                  fontSize: AppTypography.labelSmall,
-                                ),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -445,7 +474,7 @@ class _MusicDeckMiniPlayerState extends ConsumerState<MusicDeckMiniPlayer> {
                         track == null
                             ? null
                             : () => _togglePlayback(track, item),
-                    backgroundColor: const Color(0xFF153C43),
+                    backgroundColor: MusicChromeColors.tealPanel,
                     accentColor: _palette(context).accent,
                     foregroundColor: _palette(context).onAccent,
                   ),

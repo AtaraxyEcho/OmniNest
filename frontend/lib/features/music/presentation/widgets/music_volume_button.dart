@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// Music 音量按钮的呈现风格，与所在播放条的按钮语言对齐。
 enum MusicVolumeButtonStyle { glass, flat }
@@ -18,7 +19,7 @@ class MusicVolumeButton extends StatefulWidget {
     this.iconColor,
     this.mutedIconColor,
     this.activeColor,
-    this.panelBackground = const Color(0xF00E151B),
+    this.panelBackground = MusicChromeColors.panelBackground,
     this.panelTextColor,
     this.buttonSize = 36,
     this.iconSize = 20,

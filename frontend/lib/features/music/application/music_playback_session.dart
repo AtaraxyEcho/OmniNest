@@ -82,6 +82,9 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   StreamSubscription<Duration>? _mediaPositionSub;
   DateTime _lastMediaSyncAt = DateTime.fromMillisecondsSinceEpoch(0);
 
+  /// 音频焦点 duck 前的音量（0-100）；null 表示当前未压低。
+  double? _volumeBeforeDuck;
+
   @override
   MusicPlaybackSession build() {
     _player = ref.watch(musicAudioPlaybackProvider);
@@ -90,6 +93,7 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     _loadedUrl = null;
     _loadedItem = null;
     _lastSavedSecond = -1;
+    _volumeBeforeDuck = null;
     _completedSub = _player.stream.completed.listen((completed) {
       if (!completed) {
         return;
@@ -107,7 +111,13 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
     ref.listen(musicCenterControllerProvider, (previous, next) {
       _syncSystemMediaState(force: true);
     });
-    unawaited(_restorePlaybackSpeed());
+    unawaited(
+      _restorePlaybackSpeed().catchError((Object error) {
+        if (kDebugMode) {
+          devLog('[_restorePlaybackSpeed] $error');
+        }
+      }),
+    );
     ref.onDispose(() {
       _lifecycleListener?.dispose();
       _lifecycleListener = null;
@@ -172,6 +182,18 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
           (position) => _runMediaCommand(() async {
             await seekTo(position);
           }),
+      onAudioDuck: (ducked) async {
+        if (ducked) {
+          _volumeBeforeDuck ??= _player.state.volume;
+          _player.setVolume((_volumeBeforeDuck! * 0.3).clamp(0, 100));
+        } else {
+          final restore = _volumeBeforeDuck;
+          _volumeBeforeDuck = null;
+          if (restore != null) {
+            _player.setVolume(restore);
+          }
+        }
+      },
     );
     if (kIsWeb) {
       _webMediaBinder = WebMediaSessionBinder.register(
@@ -191,15 +213,22 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
       return;
     }
     unawaited(
-      ensureMusicMediaSession(commands).then((handler) {
-        // 会话可能在等待平台通道期间被销毁（登出/换号 invalidate）：此时
-        // 继续用 ref 读中心状态会命中 Riverpod 的失效 Ref 断言。
-        if (!ref.mounted) {
-          return;
-        }
-        _mediaHandler = handler;
-        _syncSystemMediaState();
-      }),
+      ensureMusicMediaSession(commands)
+          .then((handler) {
+            // 会话可能在等待平台通道期间被销毁（登出/换号 invalidate）：此时
+            // 继续用 ref 读中心状态会命中 Riverpod 的失效 Ref 断言。
+            if (!ref.mounted) {
+              return;
+            }
+            _mediaHandler = handler;
+            _syncSystemMediaState();
+          })
+          .catchError((Object error) {
+            if (kDebugMode) {
+              devLog('[MusicMediaSession] 初始化失败: $error');
+            }
+            return null;
+          }),
     );
     _mediaPositionSub = _player.stream.position.listen((_) {
       _syncSystemMediaState();
@@ -215,43 +244,49 @@ class MusicPlaybackSessionController extends Notifier<MusicPlaybackSession> {
   ///
   /// [force] 为 true 时跳过节流（切歌/暂停等关键状态变化），进度流按 1s 节流。
   void _syncSystemMediaState({bool force = false}) {
-    final now = DateTime.now();
-    if (!force &&
-        now.difference(_lastMediaSyncAt) < const Duration(seconds: 1)) {
-      return;
-    }
-    _lastMediaSyncAt = now;
-    final center = ref.read(musicCenterControllerProvider).asData?.value;
-    final track = center?.currentItem?.track;
-    final playing = _player.state.playing && (center?.isPlaying ?? false);
-    final position = _player.state.position;
-    final duration = _player.state.duration;
-    _mediaHandler?.updateNowPlaying(
-      track: track,
-      playing: playing,
-      position: position,
-      duration: duration,
-    );
-    final binder = _webMediaBinder;
-    if (binder != null && track != null) {
-      final coverUrl = track.listCoverUrl;
-      binder.updateMetadata(
-        title: track.title,
-        artistName: track.artistName,
-        albumTitle: track.albumTitle,
-        coverUrl: coverUrl,
-        // 本地封面是需鉴权的稳定 API 路径：浏览器直连拿不到字节，改由共享 Dio 取。
-        coverLoader:
-            coverUrl != null && isMusicCoverApiPath(coverUrl)
-                ? _loadCoverBytes
-                : null,
+    try {
+      final now = DateTime.now();
+      if (!force &&
+          now.difference(_lastMediaSyncAt) < const Duration(seconds: 1)) {
+        return;
+      }
+      _lastMediaSyncAt = now;
+      final center = ref.read(musicCenterControllerProvider).asData?.value;
+      final track = center?.currentItem?.track;
+      final playing = _player.state.playing && (center?.isPlaying ?? false);
+      final position = _player.state.position;
+      final duration = _player.state.duration;
+      _mediaHandler?.updateNowPlaying(
+        track: track,
+        playing: playing,
+        position: position,
+        duration: duration,
       );
+      final binder = _webMediaBinder;
+      if (binder != null && track != null) {
+        final coverUrl = track.listCoverUrl;
+        binder.updateMetadata(
+          title: track.title,
+          artistName: track.artistName,
+          albumTitle: track.albumTitle,
+          coverUrl: coverUrl,
+          // 本地封面是需鉴权的稳定 API 路径：浏览器直连拿不到字节，改由共享 Dio 取。
+          coverLoader:
+              coverUrl != null && isMusicCoverApiPath(coverUrl)
+                  ? _loadCoverBytes
+                  : null,
+        );
+      }
+      binder?.updatePlaybackState(
+        playing: playing,
+        position: position,
+        duration: duration,
+      );
+    } on Object catch (error) {
+      if (kDebugMode) {
+        devLog('[_syncSystemMediaState] $error');
+      }
     }
-    binder?.updatePlaybackState(
-      playing: playing,
-      position: position,
-      duration: duration,
-    );
   }
 
   Future<Uint8List?> _loadCoverBytes(String url) async {

@@ -20,6 +20,7 @@ import 'package:omninest/features/music/presentation/player/music_immersive_lyri
 import 'package:omninest/features/music/presentation/player/music_immersive_preset_editor.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
 import 'package:omninest/features/music/presentation/widgets/music_playback_controls.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// 移动端音乐播放详情页。
 class MusicMobileNowPlaying extends ConsumerStatefulWidget {
@@ -360,7 +361,7 @@ class _MobileCoverBackdrop extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0x33000000), Color(0xB3000000)],
+          colors: [MusicChromeColors.scrimStart, MusicChromeColors.scrimEnd],
           stops: [0.35, 1],
         ),
       ),
@@ -478,7 +479,7 @@ class _MobileViewButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final color =
         selected
-            ? const Color(0xFF72D6C9)
+            ? MusicChromeColors.tealAccent
             : Colors.white.withValues(alpha: 0.58);
     return Tooltip(
       message: tooltip,
@@ -603,7 +604,7 @@ class _MobileTrackHeader extends StatelessWidget {
                 key: ValueKey<bool>(track?.favorite == true),
                 color:
                     track?.favorite == true
-                        ? const Color(0xFFF2D986)
+                        ? MusicChromeColors.gold
                         : Colors.white.withValues(alpha: 0.84),
               ),
             ),
@@ -663,7 +664,7 @@ class _MobilePlaybackControls extends StatelessWidget {
                 MusicPlaybackProgressBar(
                   value: progress,
                   semanticLabel: l10n.portalMusicVisualizerSeek,
-                  activeColor: const Color(0xFF72D6C9),
+                  activeColor: MusicChromeColors.tealAccent,
                   inactiveColor: Colors.white.withValues(alpha: 0.14),
                   thumbColor: Colors.white,
                   onChanged:
@@ -698,7 +699,7 @@ class _MobilePlaybackControls extends StatelessWidget {
                           iconSize: 20,
                           padding: 10,
                           idleColor: Colors.white.withValues(alpha: 0.62),
-                          activeColor: const Color(0xFF72D6C9),
+                          activeColor: MusicChromeColors.tealAccent,
                         ),
                       ),
                     ),
@@ -714,8 +715,8 @@ class _MobilePlaybackControls extends StatelessWidget {
                       tooltip: isPlaying ? l10n.musicPause : l10n.musicPlay,
                       onPressed: enabled ? onTogglePlayback : null,
                       buttonSize: MusicPlaybackButtonSize.regular,
-                      backgroundColor: const Color(0xFF153C43),
-                      accentColor: const Color(0xFF72D6C9),
+                      backgroundColor: MusicChromeColors.tealPanel,
+                      accentColor: MusicChromeColors.tealAccent,
                       foregroundColor: Colors.white,
                     ),
                     const SizedBox(width: 10),

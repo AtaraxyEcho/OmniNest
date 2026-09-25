@@ -79,7 +79,7 @@ class _DockGlassChrome {
       progressActive: Colors.white,
       progressInactive: Colors.white.withValues(alpha: 0.16),
       progressThumb: Colors.white,
-      volumePanelBackground: const Color(0xF00E151B),
+      volumePanelBackground: MusicChromeColors.panelBackground,
       volumePanelText: Colors.white,
     );
   }

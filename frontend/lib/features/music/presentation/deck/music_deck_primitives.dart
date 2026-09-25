@@ -10,6 +10,7 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/music/application/music_cover_artwork.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// Music Deck 局部玻璃表面。
 class MusicDeckGlass extends StatelessWidget {
@@ -228,9 +229,9 @@ class MusicDeckSourceBadge extends StatelessWidget {
   static Color badgeColor(MusicPlatform platform, bool light) {
     return switch (platform) {
       MusicPlatform.local =>
-        light ? const Color(0xFF58605B) : const Color(0xFFC4CCC8),
+        light ? MusicChromeColors.rowSubLight : MusicChromeColors.rowSubDark,
       MusicPlatform.netease =>
-        light ? const Color(0xFF9A3037) : const Color(0xFFF28C8C),
+        light ? MusicChromeColors.redDeep : MusicChromeColors.redMuted,
     };
   }
 

@@ -6,9 +6,10 @@ import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/music/domain/music_playable_item.dart';
 import 'package:omninest/features/music/presentation/deck/music_deck_track_list.dart';
+import 'package:omninest/features/music/presentation/widgets/music_playing_bars.dart';
 
-/// 曲目行状态色契约：播放行为持久激活态（playingRowBg 权重高于悬停），
-/// 选中分支优先于悬停反馈，普通行保持透明。
+/// 曲目行状态契约：播放中不使用背景条，改由动态竖条 + 主色标题表达；
+/// 悬停仅保留瞬态弱 tint，普通/播放行默认透明底。
 void main() {
   final track = MusicTrack(
     id: 'track-1',
@@ -19,33 +20,24 @@ void main() {
     format: 'AUDIO',
     favorite: false,
   );
+  final otherTrack = MusicTrack(
+    id: 'track-2',
+    fileNodeId: '',
+    title: '第二首歌',
+    artistName: '歌手',
+    albumTitle: '专辑',
+    format: 'AUDIO',
+    favorite: false,
+  );
 
-  /// 混合后不透明度权重对比：以 a 通道（0-255）近似强度阶梯。
-  int weight(MusicColors colors, Color value) => (value.a * 255).round();
-
-  MusicColors colorsOf(WidgetTester tester) {
-    return tester.element(find.byType(MusicDeckTrackList)).musicColors;
-  }
-
-  List<Material> rowMaterials(WidgetTester tester) {
-    return tester
-        .widgetList<Material>(find.byType(Material))
-        .where((material) => material.borderRadius is BorderRadius)
-        .toList();
-  }
-
-  Future<void> pumpList(
-    WidgetTester tester,
-    Brightness brightness, {
-    String? currentKey,
-  }) async {
-    final item = MusicPlayableItem.local(track);
+  Future<void> pumpList(WidgetTester tester, {String? currentKey}) async {
+    final items = [
+      MusicPlayableItem.local(track),
+      MusicPlayableItem.local(otherTrack),
+    ];
     await tester.pumpWidget(
       MaterialApp(
-        theme:
-            brightness == Brightness.light
-                ? OmniNestTheme.light()
-                : OmniNestTheme.dark(),
+        theme: OmniNestTheme.dark(),
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         locale: const Locale('zh'),
@@ -55,7 +47,7 @@ void main() {
               width: 800,
               height: 132,
               child: MusicDeckTrackList(
-                items: [item, item],
+                items: items,
                 currentPlayableKey: currentKey,
                 onPlay: (_) {},
               ),
@@ -64,25 +56,19 @@ void main() {
         ),
       ),
     );
-    await tester.pumpAndSettle();
+    await tester.pump();
   }
 
-  testWidgets('深色主题：播放行为 music primary @ 24% 且权重高于悬停 tint', (tester) async {
-    await pumpList(tester, Brightness.dark);
-    final colors = colorsOf(tester);
-    // Music 模块专属主色（非全局 primary）叠加 24% alpha（withValues 浮点精度，
-    // RGB 通道逐位相等、alpha 用浮点近似断言）。
-    const primary = Color(0xFF8BD9D5);
-    expect(
-      colors.playingRowBg.toARGB32() & 0x00FFFFFF,
-      primary.toARGB32() & 0x00FFFFFF,
-    );
-    expect(colors.playingRowBg.a, moreOrLessEquals(0.24, epsilon: 0.001));
-    expect(
-      weight(colors, colors.playingRowBg),
-      greaterThan(weight(colors, colors.hoverBg)),
-    );
-    // 普通行保持透明底。
+  List<Material> rowMaterials(WidgetTester tester) {
+    return tester
+        .widgetList<Material>(find.byType(Material))
+        .where((material) => material.borderRadius is BorderRadius)
+        .toList();
+  }
+
+  testWidgets('普通行与播放行均无背景条', (tester) async {
+    final item = MusicPlayableItem.local(track);
+    await pumpList(tester, currentKey: item.playableKey);
     final materials = rowMaterials(tester);
     expect(materials, hasLength(2));
     for (final material in materials) {
@@ -90,26 +76,27 @@ void main() {
     }
   });
 
-  testWidgets('浅色主题：播放行为 music primary @ 14% 且权重高于悬停 tint', (tester) async {
-    await pumpList(tester, Brightness.light);
-    final colors = colorsOf(tester);
-    const primary = Color(0xFF176B72);
-    expect(
-      colors.playingRowBg.toARGB32() & 0x00FFFFFF,
-      primary.toARGB32() & 0x00FFFFFF,
-    );
-    expect(colors.playingRowBg.a, moreOrLessEquals(0.14, epsilon: 0.001));
-    expect(
-      weight(colors, colors.playingRowBg),
-      greaterThan(weight(colors, colors.hoverBg)),
-    );
+  testWidgets('播放行显示动态竖条，非播放行不显示', (tester) async {
+    await pumpList(tester);
+    expect(find.byType(MusicPlayingBars), findsNothing);
+
+    final item = MusicPlayableItem.local(track);
+    await pumpList(tester, currentKey: item.playableKey);
+    expect(find.byType(MusicPlayingBars), findsOneWidget);
   });
 
-  testWidgets('播放行选中分支优先于悬停反馈', (tester) async {
+  testWidgets('播放行标题使用 music primary', (tester) async {
     final item = MusicPlayableItem.local(track);
-    await pumpList(tester, Brightness.dark, currentKey: item.playableKey);
-    final colors = colorsOf(tester);
-    final material = rowMaterials(tester).first;
-    expect(material.color, colors.playingRowBg);
+    await pumpList(tester, currentKey: item.playableKey);
+    final titleText = tester.widget<Text>(
+      find
+          .descendant(
+            of: find.byType(MusicDeckTrackList),
+            matching: find.text('第一首歌'),
+          )
+          .first,
+    );
+    final colors = tester.element(find.byType(MusicDeckTrackList)).musicColors;
+    expect(titleText.style?.color, colors.primary);
   });
 }

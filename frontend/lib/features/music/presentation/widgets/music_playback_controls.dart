@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
+import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
 
 /// Music 播放按钮的视觉层级。
 enum MusicPlaybackButtonSize { regular, compact, inline }
@@ -13,9 +14,9 @@ class MusicPlaybackButton extends StatefulWidget {
     required this.tooltip,
     required this.onPressed,
     this.buttonSize = MusicPlaybackButtonSize.regular,
-    this.backgroundColor = const Color(0xFF28676B),
-    this.accentColor = const Color(0xFF79D6D2),
-    this.foregroundColor = const Color(0xFFF7FCFC),
+    this.backgroundColor = MusicChromeColors.tealDeep,
+    this.accentColor = MusicChromeColors.tealSoft,
+    this.foregroundColor = MusicChromeColors.nearWhite,
     super.key,
   });
 
@@ -187,9 +188,9 @@ class MusicPlaybackProgressBar extends StatelessWidget {
     required this.value,
     required this.onChanged,
     required this.semanticLabel,
-    this.activeColor = const Color(0xFF79D6D2),
-    this.inactiveColor = const Color(0x29FFFFFF),
-    this.thumbColor = const Color(0xFFF7FCFC),
+    this.activeColor = MusicChromeColors.tealSoft,
+    this.inactiveColor = MusicChromeColors.inactiveTrack,
+    this.thumbColor = MusicChromeColors.nearWhite,
     super.key,
   });
 

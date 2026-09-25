@@ -4,6 +4,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/music/domain/music_visualizer_preset.dart';
 import 'package:omninest/features/music/presentation/player/music_immersive_style.dart';
+import 'package:omninest/features/music/presentation/theme/music_visual_swatches.dart';
 
 /// 编辑视觉窗口的歌词颜色字段：点击色块打开调色盘弹窗。
 ///
@@ -94,31 +95,7 @@ class MusicVisualPaintField extends StatelessWidget {
 }
 
 /// 预设色板：白灰、黑金、暖色、冷色四组主流音乐应用常用色。
-const List<Color> _visualPresetColors = <Color>[
-  // 白灰系
-  Color(0xFFFFFFFF),
-  Color(0xFFDCE6E8),
-  Color(0xFFA8B8BD),
-  Color(0xFF8DA2A7),
-  // 金色系（黑金经典）
-  Color(0xFFF2D986),
-  Color(0xFFD9B36C),
-  Color(0xFFB08D57),
-  // 暖色系
-  Color(0xFFF2C55C),
-  Color(0xFFF0A46B),
-  Color(0xFFE87878),
-  Color(0xFFDD4A4A),
-  Color(0xFFE97FA9),
-  // 冷色系
-  Color(0xFF72D6C9),
-  Color(0xFF31C27C),
-  Color(0xFF83C982),
-  Color(0xFF58B7D9),
-  Color(0xFF4A90D9),
-  Color(0xFF6F92E8),
-  Color(0xFFA78BE8),
-];
+const List<Color> _visualPresetColors = MusicVisualSwatchColors.presets;
 
 class _VisualPaintDialog extends StatefulWidget {
   const _VisualPaintDialog({
@@ -182,7 +159,7 @@ class _VisualPaintDialogState extends State<_VisualPaintDialog> {
     return Theme(
       data: musicVisualEditorDarkTheme,
       child: AlertDialog(
-        backgroundColor: const Color(0xFF111A20),
+        backgroundColor: MusicVisualSwatchColors.dialogBg,
         title: Text(
           widget.title,
           style: TextStyle(color: musicVisualEditorDarkPalette.text),
@@ -783,15 +760,7 @@ class _VisualHueBar extends StatelessWidget {
   final String semanticLabel;
   final ValueChanged<double> onChanged;
 
-  static const List<Color> _hueStops = <Color>[
-    Color(0xFFFF0000),
-    Color(0xFFFFFF00),
-    Color(0xFF00FF00),
-    Color(0xFF00FFFF),
-    Color(0xFF0000FF),
-    Color(0xFFFF00FF),
-    Color(0xFFFF0000),
-  ];
+  static const List<Color> _hueStops = MusicVisualSwatchColors.hueStops;
 
   static const double _thumbDiameter = 16;
 
