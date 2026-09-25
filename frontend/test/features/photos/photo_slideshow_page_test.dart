@@ -103,11 +103,18 @@ class _MockImageHttpResponse extends Stream<List<int>>
 }
 
 class _MockImageHttpRequest implements HttpClientRequest {
+  _MockImageHttpRequest({this.responseGate});
+
+  final Future<void>? responseGate;
+
   @override
   final HttpHeaders headers = _MockImageHttpHeaders();
 
   @override
-  Future<HttpClientResponse> close() async => _MockImageHttpResponse();
+  Future<HttpClientResponse> close() async {
+    await responseGate;
+    return _MockImageHttpResponse();
+  }
 
   // http 包 IOClient 发送前会无条件调用 flush；这些 Future 型成员若走
   // noSuchMethod 返回 null 会抛类型错误并被缓存层吞掉，导致图片加载挂起。
@@ -125,10 +132,16 @@ class _MockImageHttpRequest implements HttpClientRequest {
 }
 
 /// 对任意 GET 请求返回固定图片字节的 HttpClient 桩。
+///
+/// [responseGate] 非空时响应等待其完成，用于稳定停留在 loading 阶段。
 class _MockImageHttpClient implements HttpClient {
+  _MockImageHttpClient({this.responseGate});
+
+  final Future<void>? responseGate;
+
   @override
   Future<HttpClientRequest> openUrl(String method, Uri url) async =>
-      _MockImageHttpRequest();
+      _MockImageHttpRequest(responseGate: responseGate);
 
   @override
   Future<void> close({bool force = false}) async {}
@@ -138,10 +151,13 @@ class _MockImageHttpClient implements HttpClient {
 }
 
 /// 在覆盖区内执行测试体，使 CachedNetworkImageProvider 的下载命中 mock。
-Future<void> _mockNetworkImages(Future<void> Function() body) {
+Future<void> _mockNetworkImages(
+  Future<void> Function() body, {
+  Future<void>? responseGate,
+}) {
   return HttpOverrides.runZoned(
     body,
-    createHttpClient: (_) => _MockImageHttpClient(),
+    createHttpClient: (_) => _MockImageHttpClient(responseGate: responseGate),
   );
 }
 
@@ -553,7 +569,7 @@ void main() {
     });
   });
 
-  testWidgets('桌面端吸附前先压暗到全黑并在全屏首帧后淡回', (tester) async {
+  testWidgets('桌面端压暗为多帧渐变并覆盖吸附，随后缓慢淡回', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     _mockPathProvider();
     final photos = [_photoWithUrl('photo-1')];
@@ -571,40 +587,50 @@ void main() {
         await tester.pump();
 
         final dipFinder = find.byKey(slideshowDipOverlayKey);
-        expect(dipFinder, findsOneWidget, reason: '桌面端应挂黑场遮罩');
+        expect(dipFinder, findsOneWidget, reason: '桌面端应挂软压暗遮罩');
         double dipOpacity() =>
             tester.widget<FadeTransition>(dipFinder).opacity.value;
 
-        // 路由过渡期内：黑场未启动。
+        // 路由过渡期内：压暗未启动，内容层已在树中。
         expect(chromeHidden.value, isFalse);
         expect(dipOpacity(), 0);
 
-        // 推进到吸附发生的那一帧：吸附必须落在黑场底部（压暗已完成），
-        // 否则原生交换链重建的黑帧会裸露。
-        double? dipAtSnap;
-        for (var i = 0; i < 200 && chromeHidden.value == false; i++) {
-          await tester.pump(const Duration(milliseconds: 16));
-          if (chromeHidden.value) {
-            dipAtSnap = dipOpacity();
-          }
+        // 压暗淡入必须是多帧渐变，禁止一帧到 1 造成闪烁。
+        final inSamples = <double>[];
+        for (var i = 0; i < 40 && dipOpacity() < 1; i++) {
+          await tester.pump(const Duration(milliseconds: 40));
+          inSamples.add(dipOpacity());
         }
-        expect(chromeHidden.value, isTrue, reason: '压暗完成后应申请沉浸租约');
-        expect(dipAtSnap, isNotNull);
-        expect(dipAtSnap!, greaterThan(0.95), reason: '吸附发生在黑场未满时，交换链重建黑帧会裸露');
+        expect(dipOpacity(), greaterThan(0.95), reason: '压暗应到达全黑底部');
+        expect(
+          inSamples.where((v) => v > 0 && v < 1).length,
+          greaterThanOrEqualTo(2),
+          reason: '压暗淡入应有多个中间帧',
+        );
 
-        // 全屏首帧后黑场反向淡回透明：必须是多帧渐变。曾出现淡入被
-        // 表面重建吞掉、黑场"一瞬间直接消失"的观感问题。
-        final samples = <double>[];
+        // 吸附发生在压暗底部。
+        for (var i = 0; i < 20 && chromeHidden.value == false; i++) {
+          await tester.pump(const Duration(milliseconds: 30));
+        }
+        expect(chromeHidden.value, isTrue);
+        expect(dipOpacity(), greaterThan(0.95));
+
+        // 淡回同样多帧，最终退回透明；总黑场不得拖到 2 秒级。
+        final outSamples = <double>[];
         for (var i = 0; i < 40 && dipOpacity() > 0; i++) {
           await tester.pump(const Duration(milliseconds: 50));
-          samples.add(dipOpacity());
+          outSamples.add(dipOpacity());
         }
-        expect(dipOpacity(), 0, reason: '内容应在全屏上淡回，黑场退回透明');
+        expect(dipOpacity(), 0, reason: '内容应淡回，压暗退回透明');
         expect(
-          samples.where((value) => value > 0 && value < 1).length,
+          outSamples.where((v) => v > 0 && v < 1).length,
           greaterThanOrEqualTo(2),
-          reason: '黑场淡回应有多个中间帧，而非一帧内直接消失',
+          reason: '淡回应有多个中间帧，而非瞬间消失',
         );
+        expect(find.byType(RawImage), findsWidgets);
+        // preview 升级的吸附落定超时（400ms）是 Future.timeout 计时器；
+        // 推进到其触发，避免用例结束时残留 pending timer。
+        await tester.pump(const Duration(milliseconds: 500));
         expect(tester.takeException(), isNull);
       });
     } finally {
@@ -613,12 +639,13 @@ void main() {
     }
   });
 
-  testWidgets('非桌面端不引入黑场遮罩', (tester) async {
+  testWidgets('非桌面端不引入压暗遮罩', (tester) async {
     _mockPathProvider();
     final photos = [_photoWithUrl('photo-1')];
     final chromeHidden = ValueNotifier<bool>(false);
     addTearDown(chromeHidden.dispose);
     await _mockNetworkImages(() async {
+      await _warmImageCache(tester, [(photos[0], ImageQuality.thumbnail, 400)]);
       await _pumpSlideshowViaPush(tester, photos, chromeHidden);
       await tester.tap(find.text('open-slideshow'));
       await tester.pump();
@@ -626,7 +653,7 @@ void main() {
       expect(
         find.byKey(slideshowDipOverlayKey),
         findsNothing,
-        reason: '非桌面端无原生窗口几何切换，不应插入黑场',
+        reason: '非桌面端无原生窗口几何切换，不应插入压暗遮罩',
       );
     });
   });
@@ -654,9 +681,17 @@ void main() {
 
   testWidgets('加载层以模糊封面打底而非纯黑', (tester) async {
     _mockPathProvider();
-    final photos = [_photoWithUrl('photo-1')];
+    // 独立 id/URL，避免命中此前用例写入全局 ImageCache 的解码结果。
+    final photos = [_photoWithUrl('photo-loading-blur')];
     final chromeHidden = ValueNotifier<bool>(false);
     addTearDown(chromeHidden.dispose);
+    // 图片响应未完成时页面应停留在 loading，且由模糊封面占满画面。
+    final imageGate = Completer<void>();
+    addTearDown(() {
+      if (!imageGate.isCompleted) {
+        imageGate.complete();
+      }
+    });
     await _mockNetworkImages(() async {
       await _pumpSlideshowViaPush(tester, photos, chromeHidden);
       await tester.tap(find.text('open-slideshow'));
@@ -667,7 +702,12 @@ void main() {
       expect(find.byType(SlideshowLoadingStage), findsOneWidget);
       expect(find.byType(SlideshowBlurredCover), findsOneWidget);
       expect(tester.takeException(), isNull);
-    });
+      // 响应被闸门挂起时 obtain 的 15s 超时 Timer 会残留；推进时间触发超时
+      // 以释放 Future.timeout 计时器（thumbnail + preview 各一枚）。
+      imageGate.complete();
+      await tester.pump(const Duration(seconds: 16));
+      await tester.pump(const Duration(seconds: 16));
+    }, responseGate: imageGate.future);
   });
 
   testWidgets('缩略图条瓦片按瓦片尺寸解码而非全分辨率', (tester) async {

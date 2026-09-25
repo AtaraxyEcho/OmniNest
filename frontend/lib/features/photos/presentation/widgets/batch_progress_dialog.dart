@@ -47,12 +47,17 @@ class _BatchProgressDialogState extends ConsumerState<BatchProgressDialog> {
         }
         return;
       }
-      final savedPath = await controller.saveBatchArchiveToDisk(ticket);
-      if (savedPath == null) return;
+      final exportResult = await controller.saveBatchArchiveToDisk(ticket);
+      if (exportResult is PhotoExportCancelled) return;
       if (messenger.mounted) {
-        messenger.showSnackBar(
-          SnackBar(content: Text(l10n.photosArchiveSaved(savedPath))),
-        );
+        final message = switch (exportResult) {
+          PhotoExportSaved(:final path) => l10n.photosArchiveSaved(path),
+          PhotoExportShared() => l10n.photosExportShared,
+          PhotoExportCancelled() => null,
+        };
+        if (message != null) {
+          messenger.showSnackBar(SnackBar(content: Text(message)));
+        }
       }
     } on Exception {
       if (messenger.mounted) {

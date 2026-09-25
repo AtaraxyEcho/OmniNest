@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:omninest/app/session/session_epoch.dart';
 import 'dart:typed_data';
 
-import 'package:file_selector/file_selector.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/errors/error_message.dart';
@@ -19,6 +18,7 @@ import 'package:omninest/features/photos/domain/photo_group.dart';
 import 'package:omninest/features/photos/domain/photo_repository.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/domain/photo_timeline.dart';
+import 'package:omninest/features/photos/platform/photo_save_channel.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -28,6 +28,7 @@ export 'package:omninest/features/photos/application/photo_center_models.dart';
 export 'package:omninest/features/photos/application/photo_detail_memory_cache.dart';
 export 'package:omninest/features/photos/application/photo_period_controller.dart';
 export 'package:omninest/features/photos/application/photo_repository_providers.dart';
+export 'package:omninest/features/photos/platform/photo_save_channel.dart';
 export 'package:omninest/features/photos/application/photo_viewer_providers.dart';
 
 part 'photo_controller_commands.dart';

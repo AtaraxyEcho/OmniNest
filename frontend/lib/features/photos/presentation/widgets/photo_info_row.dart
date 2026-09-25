@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
 
 /// 照片信息行：左标签右数值、底部分隔线（设计稿 Photo Info 行样式）。
 ///
@@ -11,9 +13,9 @@ class PhotoInfoRow extends StatelessWidget {
   const PhotoInfoRow({
     required this.label,
     required this.value,
-    this.labelColor = const Color(0x59FFFFFF),
-    this.valueColor = const Color(0xC0FFFFFF),
-    this.dividerColor = const Color(0x14FFFFFF),
+    this.labelColor = PhotosChromeColors.white59,
+    this.valueColor = PhotosChromeColors.whiteC0,
+    this.dividerColor = PhotosChromeColors.white14,
     super.key,
   });
 
@@ -145,7 +147,7 @@ List<PhotoInfoEntry> buildPhotoInfoEntries(
     l10n.photosFormat,
     photo.format.isNotEmpty ? photo.format.toUpperCase() : null,
   );
-  add(l10n.photosFileSize, photo.fileSizeDisplay);
+  add(l10n.photosFileSize, formatFileSize(photo.fileSize));
   add(l10n.photosResolution, photo.resolutionDisplay);
   if (photo.dateTaken != null) {
     final d = photo.dateTaken!;

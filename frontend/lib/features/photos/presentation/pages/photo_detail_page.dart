@@ -313,17 +313,22 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
         );
         return;
       }
-      final savedPath = await ref
+      final exportResult = await ref
           .read(photoCenterControllerProvider.notifier)
           .savePhotoFileToDisk(
             url: sourceUrl,
             sizeBytes: photo.fileSize,
             suggestedName: fileName,
           );
-      if (!mounted || savedPath == null) return;
-      messenger.showSnackBar(
-        SnackBar(content: Text(l10n.photosDownloadSaved(savedPath))),
-      );
+      if (!mounted || exportResult is PhotoExportCancelled) return;
+      final message = switch (exportResult) {
+        PhotoExportSaved(:final path) => l10n.photosDownloadSaved(path),
+        PhotoExportShared() => l10n.photosExportShared,
+        PhotoExportCancelled() => null,
+      };
+      if (message != null) {
+        messenger.showSnackBar(SnackBar(content: Text(message)));
+      }
     } on Exception {
       if (!mounted) return;
       messenger.showSnackBar(
@@ -335,11 +340,18 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
   /// 启动沉浸幻灯片页；关闭后按回传结果恢复查看器位置。
   Future<void> _launchSlideshow() async {
     final scope = ref.read(photoBrowseScopeProvider);
+    final startIndex = _currentPage.clamp(
+      0,
+      _pages.isEmpty ? 0 : _pages.length - 1,
+    );
+    final startPhoto =
+        _pages.isEmpty ? _current : _pages[startIndex];
     final result = await context.push<Object>(
       '/photos/slideshow',
       extra: {
         'photos': _pages,
-        'initialIndex': _currentPage,
+        'initialIndex': startIndex,
+        'initialPhotoId': startPhoto.id,
         'source': scope.source,
         'sourceKey': scope.sourceKey,
       },

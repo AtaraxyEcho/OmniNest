@@ -39,14 +39,17 @@ class SlideshowImageCache {
 
   /// preview 档解码宽:绑定显示器物理像素而非窗口尺寸——全屏切换/窗口缩放
   /// 不更换解码键,且可在进入全屏吸附前预解码出最终档位,首屏不再等
-  /// "窗口宽→全屏宽"的二次解码。上限 4096 覆盖 4K 全宽且不超常规纹理上限。
+  /// "窗口宽→全屏宽"的二次解码。
+  ///
+  /// 上限 2560：全屏 contain 显示在 4K 屏上也够锐，而 3840–4096 档的
+  /// 解码+纹理上传会把进场后的光栅线程压到数秒级卡顿。
   @visibleForTesting
   static int previewDecodeWidthFor({
     required double dpr,
     required double fallbackWidth,
   }) {
     final displayWidth = _displayPhysicalWidth() ?? fallbackWidth;
-    return (displayWidth * dpr).round().clamp(1, 4096);
+    return (displayWidth * dpr).round().clamp(1, 2560);
   }
 
   /// 单张解码兜底超时：超时进入 failed（页面提供重试），避免无限 spinner。

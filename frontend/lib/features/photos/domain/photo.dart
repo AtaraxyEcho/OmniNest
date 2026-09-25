@@ -223,14 +223,7 @@ class PhotoItem {
     return looksLikeExtension ? name : '$name.$ext';
   }
 
-  /// 文件大小可读格式
-  String get fileSizeDisplay {
-    if (fileSize < 1024) return '$fileSize B';
-    if (fileSize < 1024 * 1024) {
-      return '${(fileSize / 1024).toStringAsFixed(1)} KB';
-    }
-    return '${(fileSize / (1024 * 1024)).toStringAsFixed(1)} MB';
-  }
+  /// 文件大小展示由 presentation 层使用 [formatFileSize] 格式化。
 
   /// 分辨率可读格式
   String? get resolutionDisplay {

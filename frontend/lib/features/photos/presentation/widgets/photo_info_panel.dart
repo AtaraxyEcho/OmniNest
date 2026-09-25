@@ -8,6 +8,8 @@ import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_info_row.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart';
+import 'package:omninest/app/theme/severity_colors.dart';
+import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
 
 export 'package:omninest/features/photos/presentation/widgets/photo_panel_host.dart'
     show photoInfoPanelWidth;
@@ -28,12 +30,12 @@ class PhotoInfoPanel extends ConsumerWidget {
   /// 底部 Share 按钮：由宿主关闭信息面板并打开分享侧栏。
   final VoidCallback onShare;
 
-  static const Color _pillBackground = Color(0x12FFFFFF);
-  static const Color _pillForeground = Color(0x99FFFFFF);
+  static const Color _pillBackground = PhotosChromeColors.white12;
+  static const Color _pillForeground = PhotosChromeColors.white99;
 
   /// 眉题/分区标题样式。
   static const TextStyle _eyebrowStyle = TextStyle(
-    color: Color(0x4DFFFFFF),
+    color: PhotosChromeColors.white30,
     fontSize: AppTypography.labelSmall,
     letterSpacing: 0.14,
   );
@@ -97,7 +99,7 @@ class PhotoInfoPanel extends ConsumerWidget {
                               : Icons.favorite_border_rounded,
                       iconColor:
                           fresh.favorite
-                              ? const Color(0xFFFB7185)
+                              ? SeverityColors.dangerSoft
                               : Colors.white.withValues(alpha: 0.80),
                       label:
                           fresh.favorite

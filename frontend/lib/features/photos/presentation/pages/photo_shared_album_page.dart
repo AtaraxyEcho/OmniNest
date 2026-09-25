@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo_share_link.dart';
@@ -69,10 +70,9 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
       if (!mounted || generation != _loadGeneration) {
         return;
       }
-      // 后端密码校验失败返回 400 +「密码错误」文案；据此进入密码流程，
-      // 并在二次输入失败时给出可区分的错误提示。
-      final msg = e.toString();
-      if (msg.contains('password') || msg.contains('密码')) {
+      // 稳定错误码判断是否进入密码流程，避免依赖服务端文案。
+      final code = describeUserFacingError(e).code;
+      if (_isSharePasswordError(code)) {
         setState(() {
           _needPassword = true;
           _loading = false;
@@ -88,6 +88,12 @@ class _PhotoSharedAlbumPageState extends ConsumerState<PhotoSharedAlbumPage> {
         });
       }
     }
+  }
+
+  static bool _isSharePasswordError(String? code) {
+    return code == AppErrorCodes.needPassword ||
+        code == AppErrorCodes.passwordInvalid ||
+        code == AppErrorCodes.sharePasswordRequired;
   }
 
   @override

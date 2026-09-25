@@ -27,11 +27,32 @@ const _transitionDuration = Duration(milliseconds: 450);
 const _idleHideDuration = Duration(seconds: 3);
 const _transitionCurve = Curves.easeOutCubic;
 
-/// 黑场压暗时长（桌面端吸附前）；淡回内容使用 [_dipFadeInDuration]。
-const _dipOutDuration = Duration(milliseconds: 160);
-const _dipFadeInDuration = Duration(milliseconds: 450);
+/// 入场扩缩时长：略长于压暗淡入的前半段，避免缩放突然弹出。
+const _entryDuration = Duration(milliseconds: 320);
 
-/// 黑场遮罩标识：测试据此断言压暗与原生吸附的先后关系。
+/// 压暗淡入 / 淡回时长。
+///
+/// 淡入要慢：此前 80ms 压暗接近一帧完成，叠加原生吸附丢帧会看成闪烁。
+/// 淡回同样放缓，让画面从暗到亮连续，而不是“瞬间亮起”。
+const _dipOutDuration = Duration(milliseconds: 280);
+const _dipFadeInDuration = Duration(milliseconds: 420);
+
+/// 吸附落定等待上限（压暗底部）。
+///
+/// 只等交换链重建所需的短窗，不再 `await applied` 2 秒。超时也继续淡回，
+/// 黑场时长可控，不会把用户钉在纯黑上。
+const _dipChromeSettle = Duration(milliseconds: 450);
+
+/// preview 高清档升级前，等待原生吸附落定的上限。
+///
+/// 吸附与首图上屏并行；大图纹理上传很重，等吸附落定再升级，避免与
+/// 交换链重建抢光栅预算。超时兜底，不阻塞用户已看到的画面。
+const _previewUpgradeChromeSettle = Duration(milliseconds: 400);
+
+/// 判定为卡顿/停帧的单帧间隔；超过则重置自动播放计时。
+const _frameGapFreezeThreshold = Duration(milliseconds: 800);
+
+/// 黑场遮罩标识：测试据此断言压暗为多帧渐变且会退回透明。
 @visibleForTesting
 const slideshowDipOverlayKey = ValueKey<String>('slideshow-dip-overlay');
 
@@ -39,15 +60,17 @@ const slideshowDipOverlayKey = ValueKey<String>('slideshow-dip-overlay');
 ///
 /// Black full-bleed photos, dual-layer crossfade, segmented progress, collapsible
 /// thumb strip, info panel, keyboard and fullscreen. Chrome auto-hides after
-/// 3s idle; canvas tap toggles chrome. Native immersive snap starts only after
-/// the route entrance transition settles, so the monitor snap's resize first
-/// frame never relayouts the page stack below (Windows black-flash source).
+/// 3s idle; canvas tap toggles chrome. Entry uses a slow soft dim: content is
+/// already painted underneath, then dimmed over ~280ms, the native snap runs
+/// under that dim, and the frame eases back in over ~420ms. No multi-second
+/// black hold, no one-frame blink.
 class PhotoSlideshowPage extends ConsumerStatefulWidget {
   const PhotoSlideshowPage({
     required this.photos,
     required this.source,
     this.sourceKey,
     this.initialIndex = 0,
+    this.initialPhotoId,
     super.key,
   });
 
@@ -55,6 +78,9 @@ class PhotoSlideshowPage extends ConsumerStatefulWidget {
   final PhotoBrowseSource source;
   final String? sourceKey;
   final int initialIndex;
+
+  /// 起播照片 id：列表扩展/重排时按 id 锚定，避免下标错位播错张。
+  final String? initialPhotoId;
 
   @override
   ConsumerState<PhotoSlideshowPage> createState() => _PhotoSlideshowPageState();
@@ -79,13 +105,24 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 纹理上传与原生吸附恢复期争抢光栅预算；页面销毁时兜底置位以释放等待方。
   final Completer<void> _entrySettled = Completer<void>();
 
-  /// 入场自绘扩缩：原生窗口切换为一步吸附，丝滑过渡由内容层缩放+淡入承担。
+  /// 画面开始对用户可见（入场扩缩启动）。
+  ///
+  /// 自动播放计时从此刻起算：此前启动的 forward 会在停帧期间按墙钟补算，
+  /// 导致用户看到首帧时已经跳到下一张。
+  final Completer<void> _presentationVisible = Completer<void>();
+
+  /// 起播锚点照片 id（优先于下标）。
+  String? _anchorPhotoId;
+
+  /// 上一帧时间戳：用于检测启动期停帧并重置自动播放计时。
+  DateTime? _lastFrameAt;
+
+  /// 入场自绘扩缩：原生窗口一步吸附，丝滑过渡由内容层缩放 + 压暗淡回承担。
   late final AnimationController _entryController;
   late final Animation<double> _entryScale;
   late final Animation<double> _entryFade;
 
-  /// 黑场控制器（桌面端）：压暗到全黑后才吸附原生窗口，交换链重建的
-  /// 黑帧因此落入设计内的黑场；全屏首帧后再淡回内容。
+  /// 压暗遮罩：淡入盖住吸附窗口，吸附落定后缓慢淡回。
   late final AnimationController _dipController;
   late final Animation<double> _dipOpacity;
 
@@ -110,6 +147,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 页面阶段：loading（首图解码中）/ ready（可播放）/ failed（首图加载失败）。
   SlideshowPhase _phase = SlideshowPhase.loading;
 
+  /// 首图加载只启动一次（预热链与 bootstrap 可能同时触发）。
+  bool _initialLoadStarted = false;
+
   @override
   void initState() {
     super.initState();
@@ -118,6 +158,11 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         widget.photos.isEmpty
             ? 0
             : widget.initialIndex.clamp(0, _photos.length - 1);
+    _anchorPhotoId =
+        widget.initialPhotoId ??
+        (widget.photos.isEmpty ? null : widget.photos[_current].id);
+    // 按 id 锚定起播张，防止传入下标与后续列表扩展错位。
+    _resolveAnchorIndex();
     // 进度条经 ValueListenableBuilder 局部刷新，避免 30ms tick 触发整页重建。
     _progressController = AnimationController(
       vsync: this,
@@ -135,17 +180,17 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     );
     _entryController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 320),
+      duration: _entryDuration,
     )..addStatusListener(_onEntryStatus);
     final entryCurve = CurvedAnimation(
       parent: _entryController,
-      curve: Curves.easeOutCubic,
+      // 对称缓入缓出：缩放与压暗淡回同一节奏，避免“弹一下”的突兀感。
+      curve: Curves.easeInOutCubic,
     );
-    // 不从 opacity 0 淡入：原生窗口切到全屏时会露出纯黑窗口。
-    // 仅做轻微 scale，保证切换过程中画面始终可见。
-    _entryScale = Tween<double>(begin: 0.96, end: 1).animate(entryCurve);
+    // 不从 opacity 0 淡入：淡入交给压暗层，内容本身始终可绘制。
+    _entryScale = Tween<double>(begin: 0.985, end: 1).animate(entryCurve);
     _entryFade = const AlwaysStoppedAnimation<double>(1);
-    // 压暗快、淡回慢：吸附发生在黑场底部，返回时留足淡入观感。
+    // 压暗/淡回都用长时长 + easeInOut，保证多帧渐变，消除闪烁。
     _dipController = AnimationController(
       vsync: this,
       duration: _dipOutDuration,
@@ -154,6 +199,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     _dipOpacity = CurvedAnimation(
       parent: _dipController,
       curve: Curves.easeInOut,
+      reverseCurve: Curves.easeInOutCubic,
     );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -161,42 +207,37 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     });
   }
 
-  /// 先画封面/加载态，等路由入场过渡完成后再进沉浸全屏，最后解码位图。
+  /// 内容先画、再软压暗、吸附、缓慢亮回。
   ///
-  /// 吸附必须等过渡完成：过渡期间下层页面仍在舞台上，中途切换原生窗口
-  /// 几何会让新尺寸首帧叠加下层整树重排，Windows 上表现为约 1 秒黑屏卡顿。
-  /// 过渡完成后下层已 offstage（不布局不绘制），吸附首帧只需布局本页。
-  /// 桌面端吸附前先压暗到全黑（黑场）：原生交换链重建的黑帧量级由引擎
-  /// 决定、应用层无法消除，落在设计内的黑场里即不可见。
+  /// 淡入必须多帧完成：过快的压暗会在吸附丢帧时看成闪烁。黑场只覆盖
+  /// 吸附短窗（[_dipChromeSettle]），不再 `await applied` 数秒。
   Future<void> _bootstrapSlideshow() async {
-    // 进场即预热首图两档:取图/解码与路由过渡、原生全屏吸附并行。preview 档
-    // 解码宽绑定显示器物理尺寸(见 SlideshowImageCache),预解码即终档,吸附
-    // 完成时高清档大概率已在缓存中等待原位升级。
+    // 进场即预热首图两档并尝试上屏：取图/解码与路由过渡并行。
     unawaited(_prewarmInitialImage());
+    unawaited(_loadInitialImage());
     if (!await _waitForRouteTransition()) {
       return;
     }
     if (!mounted) {
       return;
     }
-    if (!await _dipToBlack()) {
-      return;
+    // 桌面：在已有内容上缓慢压暗，为原生吸附铺一层视觉缓冲。
+    if (isDesktopPlatform) {
+      await _dipToBlack();
+      if (!mounted) {
+        return;
+      }
     }
-    if (!mounted) {
-      return;
-    }
+    // 沉浸租约与压暗底部重叠：吸附黑帧落入遮罩之下。
     _windowChromeLease = ref
         .read(windowChromeControllerProvider.notifier)
         .acquireImmersive(owner: 'photos.slideshow');
     if (isDesktopPlatform) {
-      // 原生吸附期间引擎重建渲染表面、不产帧：必须等吸附落定（含几何自愈与
-      // DwmFlush 往返）再开始淡入，否则淡入的前半段被吞掉，黑场在观感上表现
-      // 为"一瞬间直接消失"。上限 400ms 兜底：原生通道无回包时不能停在黑场。
       try {
         await ref
             .read(windowChromeControllerProvider.notifier)
             .applied
-            .timeout(const Duration(milliseconds: 400), onTimeout: () {});
+            .timeout(_dipChromeSettle, onTimeout: () {});
       } on Exception catch (error) {
         devLog('Window chrome apply wait failed: $error');
       }
@@ -204,21 +245,15 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         return;
       }
     }
-    // 等新客户区首帧呈现后再放行淡入。
-    await WidgetsBinding.instance.endOfFrame;
-    if (!mounted) {
-      return;
+    // 呈现与淡回、扩缩同刻启动：用户看到的是连续的“暗 → 亮 + 轻微推近”。
+    if (!_presentationVisible.isCompleted) {
+      _presentationVisible.complete();
     }
-    // 吸附落定后的首帧起：内容轻微扩缩 + 黑场反向淡回（见 _entryScale），
-    // 二者同刻收尾，整体读作一次连续的"暗 → 吸附 → 亮"。
     _entryController.forward();
     unawaited(_dipController.reverse());
-    await _loadInitialImage();
   }
 
-  /// 桌面端吸附前压暗到全黑；非桌面端无原生窗口几何切换，不做黑场。
-  ///
-  /// 页面在压暗途中退出时等待链随 State 一并回收，返回 false 放弃吸附。
+  /// 桌面端软压暗到全黑；非桌面端无原生几何切换，不做遮罩。
   Future<bool> _dipToBlack() async {
     if (!isDesktopPlatform) {
       return true;
@@ -265,14 +300,20 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     if (!_hasImage(photo)) {
       return;
     }
+    // 只预热缩略图（cover@400，毫秒级）。preview 档解码宽绑定显示器物理
+    // 像素、首绘纹理上传很重，必须等入场/吸附落定后再做（见
+    // _upgradeCurrentImage），否则启动阶段会卡死 UI 数秒。
     await _imageCache.obtain(photo, ImageQuality.thumbnail, context);
-    if (mounted) {
-      await _imageCache.obtain(photo, ImageQuality.preview, context);
-    }
   }
 
   void _onProgressStatus(AnimationStatus status) {
-    if (status == AnimationStatus.completed) _goNext();
+    // 入场/吸附未完成时不自动切图：启动期帧停顿会让 ticker 按墙钟一次跳完，
+    // 用户刚看到画面就已经是下一张。展示开始后由 [_startProgressWhenPresented]
+    // 重新计时。
+    if (status == AnimationStatus.completed &&
+        _presentationVisible.isCompleted) {
+      _goNext();
+    }
   }
 
   /// 入场扩缩动画结束即置位 [_entrySettled]，放行 preview 大图原位升级。
@@ -316,6 +357,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     if (!_entrySettled.isCompleted) {
       _entrySettled.complete();
     }
+    if (!_presentationVisible.isCompleted) {
+      _presentationVisible.complete();
+    }
     _entryController.dispose();
     _dipController.dispose();
     _windowChromeLease?.release();
@@ -328,13 +372,19 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   PhotoItem get _currentPhoto => _photos[_current];
 
   /// 首图加载：成功进入 ready；失败进入 failed（UI 提供重试）；无图照片按占位层就绪。
+  ///
+  /// 与原生吸附解耦：缩略图就绪即上屏，避免用户在黑场/吸附链上干等。
+  /// 进度条在入场扩缩结束后才启动，保证「可见后再计时」。
   Future<void> _loadInitialImage() async {
+    if (_initialLoadStarted && _phase != SlideshowPhase.failed) {
+      return;
+    }
+    _initialLoadStarted = true;
     if (!_hasImage(_photos[_current])) {
       setState(() {
         _phase = SlideshowPhase.ready;
       });
-      _progressController.forward(from: 0);
-      _preloadNeighbors();
+      unawaited(_startProgressWhenPresented());
       return;
     }
     final photo = _photos[_current];
@@ -350,8 +400,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         _currentFrame = SlideFrame(photo, peeked);
         _phase = SlideshowPhase.ready;
       });
-      _progressController.forward(from: 0);
-      _preloadNeighbors();
+      unawaited(_startProgressWhenPresented());
       unawaited(_upgradeCurrentImage());
       return;
     }
@@ -362,24 +411,21 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         context,
       );
       if (!mounted) return;
+      // 以发起加载时的 photo 为准，避免 await 期间列表扩展/重锚导致写错帧。
       setState(() {
         if (image != null) {
           _imageCache.retain(
-            SlideshowImageCache.keyFor(
-              _photos[_current].id,
-              ImageQuality.thumbnail,
-            ),
+            SlideshowImageCache.keyFor(photo.id, ImageQuality.thumbnail),
             image,
           );
-          _currentFrame = SlideFrame(_photos[_current], image);
+          _currentFrame = SlideFrame(photo, image);
           _phase = SlideshowPhase.ready;
         } else {
           _phase = SlideshowPhase.failed;
         }
       });
       if (image != null) {
-        _progressController.forward(from: 0);
-        _preloadNeighbors();
+        unawaited(_startProgressWhenPresented());
         // 首图先以缩略图档立即显示，preview 高清档后台解码完成后原位替换。
         unawaited(_upgradeCurrentImage());
       }
@@ -392,19 +438,57 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     }
   }
 
+  /// 画面开始可见后再启动自动播放计时。
+  ///
+  /// 启动期原生吸附/大图解码会停帧，AnimationController 按墙钟补算，
+  /// 若在不可见阶段就 forward，用户看到首帧时进度可能已走完并跳到下一张。
+  Future<void> _startProgressWhenPresented() async {
+    await _presentationVisible.future;
+    if (!mounted || _phase != SlideshowPhase.ready) {
+      return;
+    }
+    if (!_isPlaying) {
+      return;
+    }
+    _progressController.forward(from: 0);
+    // 入场扩缩落定后再预热邻居，避免与首图/preview 解码抢光栅预算。
+    unawaited(() async {
+      await _entrySettled.future;
+      if (mounted) {
+        _preloadNeighbors();
+      }
+    }());
+  }
+
   /// 首图加载失败后的重试入口。
   Future<void> _retryInitialLoad() async {
     if (_phase != SlideshowPhase.failed) return;
     setState(() => _phase = SlideshowPhase.loading);
+    _initialLoadStarted = false;
     await _loadInitialImage();
   }
 
   /// 当前帧为缩略图档时，后台解码 preview 档并原位替换（渐进升级）。
   ///
-  /// 解码期间可能已切到其他照片，回写前按照片 id 校验，避免旧图覆盖新帧；
-  /// 位图已缓存或与当前帧同源时直接跳过。大图首次绘制的纹理上传较重，
-  /// 替换动作等待入场扩缩动画结束后执行，不与原生吸附恢复期争抢光栅预算。
+  /// 必须等入场扩缩落定后再启动 preview 解码：该档解码宽绑定显示器物理
+  /// 像素且首绘纹理上传很重，放在启动路径上会把 UI 冻住数秒。
+  /// 解码期间可能已切到其他照片，回写前按照片 id 校验，避免旧图覆盖新帧。
   Future<void> _upgradeCurrentImage() async {
+    await _entrySettled.future;
+    if (!mounted) return;
+    // 与原生吸附错峰：大图纹理上传等交换链重建落定后再做，避免进场后
+    // 数秒光栅卡顿。超时兜底，不把升级无限期挂起。
+    if (isDesktopPlatform) {
+      try {
+        await ref
+            .read(windowChromeControllerProvider.notifier)
+            .applied
+            .timeout(_previewUpgradeChromeSettle, onTimeout: () {});
+      } on Exception catch (error) {
+        devLog('Window chrome settle wait failed: $error');
+      }
+    }
+    if (!mounted) return;
     final photo = _currentPhoto;
     if (!_hasImage(photo)) return;
     final image = await _imageCache.obtain(
@@ -413,8 +497,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       context,
     );
     if (!mounted || image == null) return;
-    await _entrySettled.future;
-    if (!mounted) return;
     final frame = _currentFrame;
     if (frame == null || frame.photo.id != photo.id) return;
     if (identical(frame.image, image)) return;
@@ -432,32 +514,67 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   /// 当前缓存窗口由 SlideshowImageCache 内部管理（current ± radius）。
 
+  /// 将 [_current] 对齐到 [_anchorPhotoId]；找不到时保持原下标。
+  void _resolveAnchorIndex() {
+    final anchorId = _anchorPhotoId;
+    if (anchorId == null || _photos.isEmpty) {
+      return;
+    }
+    final index = _photos.indexWhere((p) => p.id == anchorId);
+    if (index >= 0) {
+      _current = index;
+    }
+  }
+
   /// 播放集合随来源类型实时扩展：库/收藏跟随分页控制器，影集/标签为全量查询。
   /// 地点/时间线为进入时锁定的子集，不做全库回退替换。
+  ///
+  /// 扩展列表时必须按照片 id 重锚 [_current]：传入子集的下标与全量列表
+  /// 不是对齐关系，直接沿用会把起播张换成另一张（常表现为「一进来就第二张」）。
+  /// 锚点不在新列表时不扩展，避免起播张被顶掉。
   void _ensurePlaylist() {
-    switch (widget.source) {
-      case PhotoBrowseSource.library:
-        final live =
-            ref.read(photoCenterControllerProvider).asData?.value.photos;
-        if (live != null && live.length > _photos.length) _photos = live;
-      case PhotoBrowseSource.favorites:
-        final live =
-            ref.read(photoCenterControllerProvider).asData?.value.favorites;
-        if (live != null && live.length > _photos.length) _photos = live;
-      case PhotoBrowseSource.album:
-        final detail =
-            ref.read(photoAlbumDetailProvider(widget.sourceKey!)).asData?.value;
-        final photos = detail?.photos;
-        if (photos != null && photos.length > _photos.length) _photos = photos;
-      case PhotoBrowseSource.tag:
-        final tagged =
-            ref.read(photosByTagProvider(widget.sourceKey!)).asData?.value;
-        if (tagged != null && tagged.length > _photos.length) _photos = tagged;
-      case PhotoBrowseSource.locations:
-      case PhotoBrowseSource.timeline:
-        // 地点=进入时锁定的该地点照片；时间线范围播放由批次 B 的
-        // by-period 端点接入。两者均保留传入子集。
-        break;
+    final List<PhotoItem>? live = switch (widget.source) {
+      PhotoBrowseSource.library =>
+        ref.read(photoCenterControllerProvider).asData?.value.photos,
+      PhotoBrowseSource.favorites =>
+        ref.read(photoCenterControllerProvider).asData?.value.favorites,
+      PhotoBrowseSource.album =>
+        ref
+            .read(photoAlbumDetailProvider(widget.sourceKey!))
+            .asData
+            ?.value
+            .photos,
+      PhotoBrowseSource.tag =>
+        ref.read(photosByTagProvider(widget.sourceKey!)).asData?.value,
+      PhotoBrowseSource.locations || PhotoBrowseSource.timeline => null,
+    };
+    if (live == null || live.length <= _photos.length) {
+      return;
+    }
+    final anchorId = _anchorPhotoId;
+    if (anchorId != null && !live.any((p) => p.id == anchorId)) {
+      return;
+    }
+    _photos = live;
+    _resolveAnchorIndex();
+  }
+
+  /// 单帧间隔过大（原生吸附/大图解码停帧）时重置自动播放计时。
+  ///
+  /// AnimationController 按墙钟补算会把停帧算进播放时长；重置后用户
+  /// 至少能看到当前张完整的展示间隔，不会「一露脸就下一张」。
+  void _noteFrameGap() {
+    final now = DateTime.now();
+    final previous = _lastFrameAt;
+    _lastFrameAt = now;
+    if (previous == null || !_presentationVisible.isCompleted) {
+      return;
+    }
+    if (now.difference(previous) < _frameGapFreezeThreshold) {
+      return;
+    }
+    if (_isPlaying && _phase == SlideshowPhase.ready && !_transitioning) {
+      _progressController.forward(from: 0);
     }
   }
 
@@ -508,7 +625,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         _current = target;
         _transitioning = true;
       });
-      if (_isPlaying) {
+      if (_isPlaying && _presentationVisible.isCompleted) {
         _progressController.forward(from: 0);
       }
       unawaited(_transitionController.forward(from: 0));
@@ -517,15 +634,14 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     setState(() => _awaitingTarget = true);
 
     try {
-      // 列表种子（如首页最近照片）常只有 coverUrl、没有 sourceUrl：
-      // preview 档会静默失败导致无法切换，必须回退到 thumbnail 档。
+      // 先取缩略图秒显，preview 高清档等当前帧升级链路处理；
+      // 切换路径若直接等 preview，大图解码会把切换拖成数秒卡顿。
       final targetPhoto = _photos[target];
-      final hasSource = targetPhoto.sourceUrl?.isNotEmpty == true;
-      var quality = hasSource ? ImageQuality.preview : ImageQuality.thumbnail;
+      var quality = ImageQuality.thumbnail;
       var image = await _imageCache.obtain(targetPhoto, quality, context);
       if (!mounted) return;
-      if (image == null && hasSource && _hasImage(targetPhoto)) {
-        quality = ImageQuality.thumbnail;
+      if (image == null && _hasImage(targetPhoto)) {
+        quality = ImageQuality.preview;
         image = await _imageCache.obtain(targetPhoto, quality, context);
       }
 
@@ -538,7 +654,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
           _awaitingTarget = false;
           _pendingTarget = null;
         });
-        if (_isPlaying) {
+        if (_isPlaying && _presentationVisible.isCompleted) {
           _progressController.forward(from: 0);
         }
         return;
@@ -559,10 +675,13 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         _transitioning = true;
       });
 
-      if (_isPlaying) {
+      if (_isPlaying && _presentationVisible.isCompleted) {
         _progressController.forward(from: 0);
       }
       unawaited(_transitionController.forward(from: 0));
+      if (quality == ImageQuality.thumbnail) {
+        unawaited(_upgradeCurrentImage());
+      }
     } catch (error, stackTrace) {
       devLog('Slideshow transition failed: $error');
       devLogStack(stackTrace: stackTrace);
@@ -570,7 +689,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       if (!mounted) return;
 
       setState(() => _awaitingTarget = false);
-      if (_isPlaying) {
+      if (_isPlaying && _presentationVisible.isCompleted) {
         _progressController.forward(from: 0);
       }
     }
@@ -597,7 +716,9 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     setState(() {
       _isPlaying = !_isPlaying;
       if (_isPlaying) {
-        _progressController.forward(from: 0);
+        if (_presentationVisible.isCompleted) {
+          _progressController.forward(from: 0);
+        }
       } else {
         _progressController.reset();
         _idleTimer?.cancel();
@@ -720,21 +841,25 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
         );
         return;
       }
-      final savedPath = await ref
+      final exportResult = await ref
           .read(photoCenterControllerProvider.notifier)
           .savePhotoFileToDisk(
             url: sourceUrl,
             sizeBytes: photo.fileSize,
             suggestedName: photo.downloadFileName,
           );
-      if (!mounted || savedPath == null) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context).photosDownloadSaved(savedPath),
-          ),
-        ),
-      );
+      if (!mounted || exportResult is PhotoExportCancelled) return;
+      final l10n = AppLocalizations.of(context);
+      final message = switch (exportResult) {
+        PhotoExportSaved(:final path) => l10n.photosDownloadSaved(path),
+        PhotoExportShared() => l10n.photosExportShared,
+        PhotoExportCancelled() => null,
+      };
+      if (message != null) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
     } on Exception {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -747,6 +872,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
 
   @override
   Widget build(BuildContext context) {
+    _noteFrameGap();
     _ensurePlaylist();
     final photo = _currentPhoto;
     final showControls = _controlsVisible;
@@ -773,9 +899,8 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                     child: _buildStage(context, photo, showControls),
                   ),
                 ),
-                // 黑场遮罩（桌面端）：吸附前压暗到全黑，使原生交换链重建的
-                // 黑帧落入设计内的黑场；全屏首帧后反向淡回。非桌面端无原生
-                // 窗口几何切换，不引入多余黑场。
+                // 软压暗遮罩（桌面端）：缓慢淡入盖住吸附，再缓慢淡回。
+                // 非桌面端无原生窗口几何切换，不引入多余黑场。
                 if (isDesktopPlatform)
                   IgnorePointer(
                     child: FadeTransition(
@@ -792,7 +917,7 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     );
   }
 
-  /// 舞台内容（照片层、控件与面板）：由 build 挂入场扩缩与黑场之下。
+  /// 舞台内容（照片层、控件与面板）：由 build 挂入场扩缩之下。
   Widget _buildStage(BuildContext context, PhotoItem photo, bool showControls) {
     return Stack(
       fit: StackFit.expand,

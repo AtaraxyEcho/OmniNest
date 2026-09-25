@@ -120,36 +120,40 @@ mixin PhotoCenterControllerCommands on AsyncNotifier<PhotoCenterState> {
 
   /// 弹出系统保存对话框并下载批量 ZIP 到所选位置。
   ///
-  /// 返回保存路径；用户取消选择时返回 null。
-  Future<String?> saveBatchArchiveToDisk(
+  /// 移动端落到临时目录后打开系统分享；用户取消时返回 [PhotoExportCancelled]。
+  Future<PhotoExportResult> saveBatchArchiveToDisk(
     PhotoBatchDownloadTicket ticket,
   ) async {
-    final location = await getSaveLocation(suggestedName: ticket.fileName);
-    if (location == null) {
-      return null;
+    final targetPath = await resolvePhotoExportPath(
+      suggestedName: ticket.fileName,
+    );
+    if (targetPath == null) {
+      return const PhotoExportCancelled();
     }
-    await _repo.downloadBatchArchive(ticket, location.path);
-    return location.path;
+    await _repo.downloadBatchArchive(ticket, targetPath);
+    return deliverPhotoExport(path: targetPath, fileName: ticket.fileName);
   }
 
-  /// 弹出系统保存对话框并下载单张照片原片到所选位置。
+  /// 导出单张照片原片到系统保存位置或系统分享入口。
   ///
-  /// 返回保存路径；用户取消选择时返回 null。
-  Future<String?> savePhotoFileToDisk({
+  /// 移动端落到临时目录后打开系统分享；用户取消时返回 [PhotoExportCancelled]。
+  Future<PhotoExportResult> savePhotoFileToDisk({
     required String url,
     required int sizeBytes,
     required String suggestedName,
   }) async {
-    final location = await getSaveLocation(suggestedName: suggestedName);
-    if (location == null) {
-      return null;
+    final targetPath = await resolvePhotoExportPath(
+      suggestedName: suggestedName,
+    );
+    if (targetPath == null) {
+      return const PhotoExportCancelled();
     }
     await _repo.downloadPhotoFile(
       url: url,
       sizeBytes: sizeBytes,
-      destinationPath: location.path,
+      destinationPath: targetPath,
     );
-    return location.path;
+    return deliverPhotoExport(path: targetPath, fileName: suggestedName);
   }
 
   /// 应用编辑操作

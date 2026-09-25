@@ -8,6 +8,7 @@ import 'package:omninest/features/photos/presentation/widgets/frame_empty_view.d
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_view_meta.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
+import 'package:omninest/app/theme/severity_colors.dart';
 
 /// Frame 回收站视图：衬线标题 + 计数说明 + 清空按钮 + 暗化瀑布流。
 ///
@@ -185,7 +186,7 @@ class _FrameTrashViewState extends State<FrameTrashView> {
       child: Text(
         widget.errorMessage!,
         style: TextStyle(
-          color: const Color(0xFFEF4444),
+          color: SeverityColors.danger,
           fontSize: AppTypography.bodyMedium,
         ),
       ),
@@ -231,14 +232,14 @@ class _EmptyTrashButtonState extends State<_EmptyTrashButton> {
           decoration: BoxDecoration(
             color:
                 _hovering
-                    ? const Color(0xFFEF4444).withValues(alpha: 0.08)
+                    ? SeverityColors.danger.withValues(alpha: 0.08)
                     : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Text(
             AppLocalizations.of(context).photosEmptyTrash,
             style: const TextStyle(
-              color: Color(0xFFEF4444),
+              color: SeverityColors.danger,
               fontSize: AppTypography.bodyLarge,
             ),
           ),
@@ -301,11 +302,11 @@ class _TrashTileState extends State<_TrashTile> {
               ListTile(
                 leading: const Icon(
                   Icons.delete_outline_rounded,
-                  color: Color(0xFFEF4444),
+                  color: SeverityColors.danger,
                 ),
                 title: Text(
                   l10n.photosDeletePermanently,
-                  style: const TextStyle(color: Color(0xFFEF4444)),
+                  style: const TextStyle(color: SeverityColors.danger),
                 ),
                 onTap: () {
                   Navigator.of(sheetContext).pop();
@@ -380,7 +381,7 @@ class _TrashTileState extends State<_TrashTile> {
                                       AppLocalizations.of(
                                         context,
                                       ).photosDeletePermanently,
-                                  background: const Color(0xFFEF4444),
+                                  background: SeverityColors.danger,
                                   foreground: Colors.white,
                                   onTap: widget.onDeleteForever,
                                 ),

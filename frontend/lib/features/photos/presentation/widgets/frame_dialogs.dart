@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
+import 'package:omninest/app/theme/severity_colors.dart';
 
 /// Frame 风格对话框：Photos 模块统一的最小化弹窗（searchFill 底、
 /// 12px 圆角、衬线标题、TextButton 动作，主操作 btnBg 底、危险操作红色）。
@@ -276,7 +277,7 @@ class FrameDialogActionButton extends StatelessWidget {
     return TextButton(
       onPressed: onPressed,
       style: TextButton.styleFrom(
-        backgroundColor: destructive ? const Color(0xFFEF4444) : colors.btnBg,
+        backgroundColor: destructive ? SeverityColors.danger : colors.btnBg,
         foregroundColor: destructive ? Colors.white : colors.onBtn,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
 
 /// 照片详情/幻灯片信息与分享面板的宿主。
 ///
@@ -77,13 +78,13 @@ const double photoPanelCompactBreakpoint = 700;
 BoxDecoration photoPanelContainerDecoration(BuildContext context) {
   if (MediaQuery.sizeOf(context).width < photoPanelCompactBreakpoint) {
     return const BoxDecoration(
-      color: Color(0xF00A0A0A),
+      color: PhotosChromeColors.panelFill,
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      border: Border(top: BorderSide(color: Color(0x12FFFFFF))),
+      border: Border(top: BorderSide(color: PhotosChromeColors.white12)),
     );
   }
   return const BoxDecoration(
-    color: Color(0xF00A0A0A),
-    border: Border(left: BorderSide(color: Color(0x12FFFFFF))),
+    color: PhotosChromeColors.panelFill,
+    border: Border(left: BorderSide(color: PhotosChromeColors.white12)),
   );
 }
