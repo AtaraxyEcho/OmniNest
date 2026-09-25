@@ -7,6 +7,7 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/video/application/movie_center_state.dart';
 import 'package:omninest/features/video/application/movie_playback_service.dart';
+import 'package:omninest/features/video/application/movie_progress_sync_service.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/data/movie_playback_repository_impl.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
@@ -33,6 +34,16 @@ final moviePlaybackRepositoryProvider = Provider<MoviePlaybackRepository>((
 final moviePlaybackServiceProvider = Provider<MoviePlaybackService>((ref) {
   return MoviePlaybackService(ref.watch(moviePlaybackRepositoryProvider));
 });
+
+/// 播放进度周期同步服务：定时器由服务持有，Provider dispose 时取消。
+final movieProgressSyncServiceProvider =
+    Provider.autoDispose<MovieProgressSyncService>((ref) {
+      final service = MovieProgressSyncService(
+        ref.watch(moviePlaybackServiceProvider),
+      );
+      ref.onDispose(service.stop);
+      return service;
+    });
 
 /// 提供影视模块的首页摘要只读视图。
 final movieDashboardProvider = FutureProvider<MovieDashboard>((ref) {

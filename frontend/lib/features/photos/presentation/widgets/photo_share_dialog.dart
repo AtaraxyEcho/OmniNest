@@ -6,6 +6,7 @@ import 'package:omninest/features/photos/domain/photo_share_link.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_common_widgets.dart';
+import 'package:omninest/app/theme/severity_colors.dart';
 
 /// 照片/相册分享管理对话框：密码 + 有效期 + 现有链接管理（Frame 极简风格）。
 ///
@@ -184,7 +185,7 @@ Future<(String, String)?> showPhotoShareDialog(
                                             ctx,
                                           ).photosShareRevokeAll,
                                           style: TextStyle(
-                                            color: const Color(0xFFEF4444),
+                                            color: SeverityColors.danger,
                                             fontSize: AppTypography.labelSmall,
                                           ),
                                         ),
@@ -197,7 +198,7 @@ Future<(String, String)?> showPhotoShareDialog(
                                   Text(
                                     revokeError!,
                                     style: TextStyle(
-                                      color: const Color(0xFFEF4444),
+                                      color: SeverityColors.danger,
                                       fontSize: AppTypography.labelSmall,
                                     ),
                                   ),
@@ -250,7 +251,7 @@ Future<(String, String)?> showPhotoShareDialog(
                                           icon: const Icon(
                                             Icons.delete_outline,
                                             size: 18,
-                                            color: Color(0xFFEF4444),
+                                            color: SeverityColors.danger,
                                           ),
                                           onPressed: () async {
                                             try {

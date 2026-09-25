@@ -1,13 +1,13 @@
-part of 'movie_detail_page.dart';
+part of 'series_detail_page.dart';
 
-/// 影片详情页头部区块：背景、海报信息与播放按钮。
+/// 详情页头部区块：压题图、返回样式、海报元信息行与播放按钮。
 class _Backdrop extends StatelessWidget {
   const _Backdrop({
     required this.backdropUrl,
+    required this.backdropCacheKey,
     required this.favorited,
     required this.canEdit,
     required this.editMode,
-    required this.backdropCacheKey,
     required this.saving,
     required this.onBack,
     required this.onToggleEdit,
@@ -37,11 +37,7 @@ class _Backdrop extends StatelessWidget {
             MoviePosterImage(
               imageUrl: backdropUrl,
               cacheKey: backdropCacheKey,
-              cacheWidth: MoviePosterImage.decodeWidth(
-                context,
-                MediaQuery.sizeOf(context).width,
-                cap: 1600,
-              ),
+              fit: BoxFit.cover,
               alignment: Alignment.topCenter,
               fallback: const ColoredBox(color: MovieDetailTheme.surface),
             )
@@ -179,25 +175,21 @@ class MovieDetailBackTextStyle extends TextStyle {
       );
 }
 
-class _PosterMetaRow extends StatelessWidget {
-  const _PosterMetaRow({
-    required this.item,
+class _SeriesPosterMetaRow extends StatelessWidget {
+  const _SeriesPosterMetaRow({
+    required this.series,
+    required this.seasonCount,
     required this.editMode,
     required this.titleController,
   });
 
-  final MovieVideoItem item;
+  final MovieSeries series;
+  final int seasonCount;
   final bool editMode;
   final TextEditingController titleController;
 
   @override
   Widget build(BuildContext context) {
-    final director =
-        item.crewMembers
-            .where((member) => member.job?.toLowerCase() == 'director')
-            .map((member) => member.name)
-            .firstOrNull;
-    final l10n = AppLocalizations.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -209,8 +201,8 @@ class _PosterMetaRow extends StatelessWidget {
             border: Border.all(color: MovieDetailTheme.border),
           ),
           child: _CoverImage(
-            url: item.posterImageUrl,
-            cacheKey: 'movie-poster:${item.id}',
+            url: series.posterImageUrl,
+            cacheKey: 'movie-series-poster:${series.id}',
           ),
         ),
         const SizedBox(width: 24),
@@ -239,7 +231,7 @@ class _PosterMetaRow extends StatelessWidget {
                   )
                 else
                   Text(
-                    item.title,
+                    series.title,
                     style: MovieDetailTheme.serif(
                       AppTypography.headlineLarge,
                       height: 1.15,
@@ -251,24 +243,25 @@ class _PosterMetaRow extends StatelessWidget {
                   runSpacing: 4,
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    if (item.rating != null)
+                    if (series.rating != null)
                       Text(
-                        item.rating!.toStringAsFixed(1),
+                        series.rating!.toStringAsFixed(1),
                         style: MovieDetailTheme.mono(
                           12,
                           color: MovieDetailTheme.accent,
                         ),
                       ),
                     Text(
-                      item.year,
+                      series.year,
                       style: MovieDetailTheme.mono(AppTypography.bodySmall),
                     ),
-                    if (item.runtimeSeconds != null && item.runtimeSeconds! > 0)
-                      Text(
-                        item.runtimeText,
-                        style: MovieDetailTheme.mono(AppTypography.bodySmall),
-                      ),
-                    for (final genre in item.genres.take(3))
+                    Text(
+                      AppLocalizations.of(
+                        context,
+                      ).videoDetailSeasonCount(seasonCount),
+                      style: MovieDetailTheme.mono(AppTypography.bodySmall),
+                    ),
+                    for (final genre in series.genres.take(3))
                       Container(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 6,
@@ -282,14 +275,24 @@ class _PosterMetaRow extends StatelessWidget {
                           style: MovieDetailTheme.mono(AppTypography.bodySmall),
                         ),
                       ),
-                    _StatusChip(status: item.metadataStatus),
+                    _SeriesStatusChip(status: series.metadataStatus),
                   ],
                 ),
                 const SizedBox(height: 8),
-                if (director != null && director.isNotEmpty)
-                  Text(
-                    '${l10n.videoDetailDirector} ${director.toUpperCase()}',
-                    style: MovieDetailTheme.mono(AppTypography.bodySmall),
+                if (series.overview != null &&
+                    series.overview!.trim().isNotEmpty)
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 672),
+                    child: Text(
+                      series.overview!,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: MovieDetailTheme.body(
+                        14,
+                        color: MovieDetailTheme.secondaryText,
+                        height: 1.6,
+                      ),
+                    ),
                   ),
               ],
             ),
@@ -315,15 +318,15 @@ class _CoverImage extends StatelessWidget {
     return MoviePosterImage(
       imageUrl: resolved,
       cacheKey: cacheKey,
-      cacheWidth: MoviePosterImage.decodeWidth(context, 160, cap: 480),
+      fit: BoxFit.cover,
       alignment: Alignment.topCenter,
       fallback: const ColoredBox(color: MovieDetailTheme.surface),
     );
   }
 }
 
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
+class _SeriesStatusChip extends StatelessWidget {
+  const _SeriesStatusChip({required this.status});
 
   final String status;
 
@@ -349,24 +352,21 @@ class _StatusChip extends StatelessWidget {
   }
 }
 
-class _PlayButton extends ConsumerWidget {
-  const _PlayButton({required this.item});
+class _SeriesPlayButton extends StatelessWidget {
+  const _SeriesPlayButton({required this.onTap, required this.busy});
 
-  final MovieVideoItem item;
+  final VoidCallback onTap;
+  final bool busy;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final history = ref.watch(movieItemHistoryProvider(item.id));
-    final progress = history.asData?.value?.progressPercent ?? 0;
-    final showProgress = progress > 0 && progress < 100;
     return MouseRegion(
-      cursor: SystemMouseCursors.click,
+      cursor: busy ? MouseCursor.defer : SystemMouseCursors.click,
       child: Material(
-        color: MovieDetailTheme.foreground,
+        color: busy ? MovieDetailTheme.mutedText : MovieDetailTheme.foreground,
         child: InkWell(
-          onTap: () => context.push('/video/${item.id}/play'),
-          hoverColor: MovieDetailTheme.accent,
+          onTap: busy ? null : onTap,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
             child: Row(
@@ -382,14 +382,6 @@ class _PlayButton extends ConsumerWidget {
                     letterSpacing: 2,
                   ),
                 ),
-                if (showProgress)
-                  Text(
-                    ' (${progress.round()}%)',
-                    style: MovieDetailTheme.mono(
-                      12,
-                      color: MovieDetailTheme.background,
-                    ),
-                  ),
               ],
             ),
           ),

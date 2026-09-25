@@ -8,13 +8,17 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
+import 'package:omninest/features/video/application/movie_detail_action_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 
 part 'movie_detail_page_sections.dart';
+part 'movie_detail_page_tabs.dart';
+part 'movie_detail_page_subtitles.dart';
 
 /// 影片详情页：暗色金调整页视图（对应 Movies Module Design/components/Detail.tsx）。
 ///
@@ -119,9 +123,6 @@ class _MovieDetailView extends ConsumerStatefulWidget {
 class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
   _DetailTab _tab = _DetailTab.overview;
   bool _editMode = false;
-  bool _saving = false;
-  bool _uploading = false;
-  bool? _favoritedOverride;
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _overviewController = TextEditingController();
   String? _initializedForId;
@@ -145,25 +146,26 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
 
   Future<void> _saveEdits(MovieVideoItem item) async {
     final title = _titleController.text.trim();
-    if (title.isEmpty || _saving) {
+    if (title.isEmpty) {
       return;
     }
-    setState(() => _saving = true);
+    final actions = ref.read(movieDetailActionProvider.notifier);
     try {
-      // 走控制器以联动中心数据刷新，避免列表页标题停留旧值。
-      await ref
-          .read(movieCenterControllerProvider.notifier)
-          .updateMetadata(
-            videoItemId: item.id,
-            title: title,
-            originalTitle: item.originalTitle,
-            releaseDate: item.releaseDate,
-            overview: _overviewController.text.trim(),
-            posterFileId: item.posterFileId,
-            backdropFileId: item.backdropFileId,
-            runtimeSeconds: item.runtimeSeconds,
-            metadataStatus: item.metadataStatus,
-          );
+      await actions.save(
+        () => ref
+            .read(movieCenterControllerProvider.notifier)
+            .updateMetadata(
+              videoItemId: item.id,
+              title: title,
+              originalTitle: item.originalTitle,
+              releaseDate: item.releaseDate,
+              overview: _overviewController.text.trim(),
+              posterFileId: item.posterFileId,
+              backdropFileId: item.backdropFileId,
+              runtimeSeconds: item.runtimeSeconds,
+              metadataStatus: item.metadataStatus,
+            ),
+      );
       if (!mounted) {
         return;
       }
@@ -173,21 +175,19 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
       if (mounted) {
         showMovieFeedback(context, movieErrorMessage(error), isError: true);
       }
-    } finally {
-      if (mounted) {
-        setState(() => _saving = false);
-      }
     }
   }
 
   Future<void> _toggleFavorite(bool current) async {
-    final next = !current;
-    setState(() => _favoritedOverride = next);
+    final actions = ref.read(movieDetailActionProvider.notifier);
     try {
-      // 走控制器刷新收藏列表等中心数据，收藏分区 pop 回来即时反映。
-      await ref
-          .read(movieCenterControllerProvider.notifier)
-          .toggleFavorite(widget.item, favorite: next);
+      await actions.toggleFavorite(
+        current: current,
+        apply:
+            (next) => ref
+                .read(movieCenterControllerProvider.notifier)
+                .toggleFavorite(widget.item, favorite: next),
+      );
       if (!mounted) {
         return;
       }
@@ -196,7 +196,6 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
       if (!mounted) {
         return;
       }
-      setState(() => _favoritedOverride = current);
       showMovieFeedback(context, movieErrorMessage(error), isError: true);
     }
   }
@@ -219,17 +218,19 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
     if (language == null || language.isEmpty || !mounted) {
       return;
     }
-    setState(() => _uploading = true);
+    final actions = ref.read(movieDetailActionProvider.notifier);
     try {
-      await ref
-          .read(movieCenterControllerProvider.notifier)
-          .uploadSubtitle(
-            videoItemId: widget.item.id,
-            fileName: file.name,
-            bytes: file.bytes!,
-            mimeType: _subtitleMime(file.extension),
-            language: language,
-          );
+      await actions.upload(
+        () => ref
+            .read(movieCenterControllerProvider.notifier)
+            .uploadSubtitle(
+              videoItemId: widget.item.id,
+              fileName: file.name,
+              bytes: file.bytes!,
+              mimeType: _subtitleMime(file.extension),
+              language: language,
+            ),
+      );
       if (!mounted) {
         return;
       }
@@ -240,10 +241,6 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
         return;
       }
       showMovieFeedback(context, movieErrorMessage(error), isError: true);
-    } finally {
-      if (mounted) {
-        setState(() => _uploading = false);
-      }
     }
   }
 
@@ -270,8 +267,9 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
             .contains('media:write') ??
         false;
     final favoriteAsync = ref.watch(videoFavoriteStatusProvider(item.id));
+    final actionState = ref.watch(movieDetailActionProvider);
     final favorited =
-        _favoritedOverride ?? favoriteAsync.asData?.value ?? false;
+        actionState.favoritedOverride ?? favoriteAsync.asData?.value ?? false;
     return Scaffold(
       backgroundColor: MovieDetailTheme.background,
       // 压题图与内容同处一个滚动域：-64px 海报叠压不会被滚动区上边缘裁切。
@@ -283,16 +281,10 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
               backdropUrl: item.backdropImageUrl ?? item.posterImageUrl,
               backdropCacheKey: 'movie-backdrop:${item.id}',
               favorited: favorited,
-              canEdit: canEdit && !_saving,
+              canEdit: canEdit && !actionState.saving,
               editMode: _editMode,
-              saving: _saving,
-              onBack: () {
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go('/video');
-                }
-              },
+              saving: actionState.saving,
+              onBack: () => exitDetailRoute(context, fallbackRoute: '/video'),
               onToggleEdit: () {
                 if (_editMode) {
                   unawaited(_saveEdits(item));
@@ -338,7 +330,7 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
                         _DetailTab.versions => _VersionsTab(item: item),
                         _DetailTab.subtitles => _SubtitlesTab(
                           item: item,
-                          uploading: _uploading,
+                          uploading: actionState.uploading,
                           onUpload: _pickAndUploadSubtitle,
                         ),
                       },
