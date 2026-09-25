@@ -1,4 +1,4 @@
-import 'dart:ui' as ui show Image, ImageFilter;
+import 'dart:ui' as ui show Image;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart';
@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_slideshow_chrome.dart';
 import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.dart';
+import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
 
 /// 幻灯片帧：页面上的一层画面（照片 + 已解码位图）。
 ///
@@ -23,6 +24,8 @@ class SlideFrame {
 ///
 /// 加载层与 ready 背景层共用：同一缓存键（coverCacheKey@96）、同一观感，
 /// 进场前后画面连续，96px 解码毫秒级且无需额外预热。
+/// 不叠 ImageFilter.blur：全屏 blur 在首绘/切换时会把光栅线程冻住
+/// 数百毫秒到数秒（Windows 尤甚），96px 放大后模糊程度已经足够。
 class SlideshowBlurredCover extends StatelessWidget {
   const SlideshowBlurredCover({required this.photo, super.key});
 
@@ -37,25 +40,22 @@ class SlideshowBlurredCover extends StatelessWidget {
     return RepaintBoundary(
       child: Transform.scale(
         scale: 1.12,
-        child: ImageFiltered(
-          imageFilter: ui.ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CachedNetworkImage(
-                imageUrl: thumb,
-                cacheKey: photo.coverCacheKey,
-                memCacheWidth: 96,
-                fit: BoxFit.cover,
-                filterQuality: FilterQuality.medium,
-                fadeInDuration: Duration.zero,
-                errorWidget:
-                    (context, url, error) =>
-                        const ColoredBox(color: Colors.black),
-              ),
-              ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
-            ],
-          ),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            CachedNetworkImage(
+              imageUrl: thumb,
+              cacheKey: photo.coverCacheKey,
+              memCacheWidth: 96,
+              fit: BoxFit.cover,
+              filterQuality: FilterQuality.low,
+              fadeInDuration: Duration.zero,
+              errorWidget:
+                  (context, url, error) =>
+                      const ColoredBox(color: Colors.black),
+            ),
+            ColoredBox(color: Colors.black.withValues(alpha: 0.35)),
+          ],
         ),
       ),
     );
@@ -190,7 +190,7 @@ class SlideshowLoadingStage extends StatelessWidget {
               dimension: 28,
               child: CircularProgressIndicator(
                 strokeWidth: 2.5,
-                color: Color(0x66FFFFFF),
+                color: PhotosChromeColors.white40,
               ),
             ),
           ),
@@ -220,8 +220,8 @@ class SlideshowGradients extends StatelessWidget {
                   begin: Alignment.bottomCenter,
                   end: Alignment(0, -0.4),
                   colors: [
-                    Color(0xB8000000),
-                    Color(0x2E000000),
+                    PhotosChromeColors.scrimB8,
+                    PhotosChromeColors.scrim2E,
                     Colors.transparent,
                   ],
                   stops: [0, 0.35, 0.6],
@@ -237,7 +237,7 @@ class SlideshowGradients extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment(0, 0.3),
-                  colors: [Color(0x80000000), Colors.transparent],
+                  colors: [PhotosChromeColors.scrim80, Colors.transparent],
                 ),
               ),
             ),
@@ -275,6 +275,8 @@ class SlideshowArrow extends StatelessWidget {
           child: AnimatedOpacity(
             opacity: visible ? 1 : 0,
             duration: const Duration(milliseconds: 400),
+            // 语义子树常驻：opacity 归零默认摘除语义，会触发 Windows 桥更新失败。
+            alwaysIncludeSemantics: true,
             child: AnimatedSlide(
               offset: visible ? Offset.zero : Offset(right ? 0.08 : -0.08, 0),
               duration: const Duration(milliseconds: 400),
@@ -351,6 +353,8 @@ class SlideshowBottomArea extends StatelessWidget {
         child: AnimatedOpacity(
           opacity: visible ? 1 : 0,
           duration: const Duration(milliseconds: 400),
+          // 语义子树常驻：opacity 归零默认摘除语义，会触发 Windows 桥更新失败。
+          alwaysIncludeSemantics: true,
           child: AnimatedSlide(
             offset: visible ? Offset.zero : const Offset(0, 0.12),
             duration: const Duration(milliseconds: 400),
@@ -465,7 +469,7 @@ class SlideshowErrorRetry extends StatelessWidget {
           const Icon(
             Icons.error_outline_rounded,
             size: 44,
-            color: Color(0x66FFFFFF),
+            color: PhotosChromeColors.white40,
           ),
           const SizedBox(height: 12),
           Text(
@@ -609,7 +613,9 @@ class SlideshowSegments extends StatelessWidget {
       value: value,
       minHeight: 2,
       backgroundColor: Colors.white.withValues(alpha: 0.20),
-      valueColor: const AlwaysStoppedAnimation<Color>(Color(0xE6FFFFFF)),
+      valueColor: const AlwaysStoppedAnimation<Color>(
+        PhotosChromeColors.whiteE6,
+      ),
     );
   }
 

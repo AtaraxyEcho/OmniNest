@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/core/theme/motion_token.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 
 /// 影片资料库分区的方向感切换动画。
@@ -40,12 +41,10 @@ class _MovieSectionTransitionState extends State<MovieSectionTransition> {
         switchInCurve: MotionToken.pageCurve,
         switchOutCurve: MotionToken.curveIn,
         layoutBuilder: (currentChild, previousChildren) {
-          return Stack(
+          return excludeExitingSemanticsStack(
+            currentChild,
+            previousChildren,
             alignment: Alignment.topLeft,
-            children: <Widget>[
-              ...previousChildren,
-              if (currentChild != null) currentChild,
-            ],
           );
         },
         transitionBuilder: (child, animation) {

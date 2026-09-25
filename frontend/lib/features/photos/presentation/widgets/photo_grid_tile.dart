@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:intl/intl.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
@@ -89,6 +88,11 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
                     MediaQuery.disableAnimationsOf(context)
                         ? Duration.zero
                         : const Duration(milliseconds: 150),
+                // 透明度归零会整棵摘掉遮罩语义（含收藏/选择节点），悬停进出再
+                // 整棵加回：Windows 辅助功能桥会在仍持有旧节点 id 时更新失败
+                // （"will not be in the tree and is not the new root"）。
+                // 交互由外层 IgnorePointer 屏蔽，读屏仍可停留在稳定节点上。
+                alwaysIncludeSemantics: true,
                 child: ColoredBox(
                   color: Colors.black.withValues(alpha: 0.22),
                   child: Padding(
@@ -168,14 +172,22 @@ class _PhotoGridTileState extends State<PhotoGridTile> {
       ),
     );
 
-    Widget card = GestureDetector(
-      excludeFromSemantics: true,
+    Widget card = Semantics(
+      container: true,
+      explicitChildNodes: true,
+      button: true,
+      label: photo.title,
       onTap: widget.onTap,
       onLongPress: widget.onLongPress,
-      child:
-          widget.enableHero
-              ? Hero(tag: 'photo-cover-${photo.id}', child: body)
-              : body,
+      child: GestureDetector(
+        excludeFromSemantics: true,
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        child:
+            widget.enableHero
+                ? Hero(tag: 'photo-cover-${photo.id}', child: body)
+                : body,
+      ),
     );
 
     if (widget.aspectRatio != null && widget.aspectRatio! > 0) {
@@ -206,9 +218,11 @@ class _SelectionCircle extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.frameColors;
     return Semantics(
-      button: true,
+      button: onTap != null,
+      enabled: onTap != null,
       selected: selected,
       label: semanticLabel,
+      onTap: onTap,
       child: GestureDetector(
         excludeFromSemantics: true,
         onTap: onTap,
@@ -255,14 +269,12 @@ class _FavoriteHeart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.frameColors;
-    final customActions =
-        onTap == null
-            ? null
-            : <CustomSemanticsAction, VoidCallback>{
-              CustomSemanticsAction(label: semanticLabel): onTap!,
-            };
     return Semantics(
-      customSemanticsActions: customActions,
+      button: onTap != null,
+      enabled: onTap != null,
+      selected: favorite,
+      label: semanticLabel,
+      onTap: onTap,
       child: GestureDetector(
         excludeFromSemantics: true,
         onTap: onTap,

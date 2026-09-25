@@ -18,6 +18,7 @@ import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/download_url_opener.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/app_form_factor.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/core/widgets/hosted_touch_canvas.dart';

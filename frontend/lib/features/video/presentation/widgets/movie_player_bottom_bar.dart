@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/video/domain/movie_models.dart'
     hide SubtitleTrack;
 import 'package:omninest/features/video/presentation/widgets/movie_player_controls.dart';
@@ -156,6 +157,8 @@ class MoviePlayerBottomBar extends StatelessWidget {
                               : const Duration(milliseconds: 160),
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
+                      // 密度切换会整棵替换控制条，退场子树排除语义。
+                      layoutBuilder: excludeExitingSemanticsStack,
                       child: switch (density) {
                         _MoviePlayerControlDensity.compact =>
                           _buildCompactControls(context),

@@ -3,6 +3,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 
 enum ProfileSection {
@@ -138,6 +139,7 @@ class ProfileDesktopShell extends StatelessWidget {
                                       : const Duration(milliseconds: 180),
                               switchInCurve: Curves.easeOutQuart,
                               switchOutCurve: Curves.easeInCubic,
+                              layoutBuilder: excludeExitingSemanticsStack,
                               child: KeyedSubtree(
                                 key: ValueKey(selectedSection),
                                 child: child,

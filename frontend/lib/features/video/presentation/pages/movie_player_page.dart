@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/platform/android/pip_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +17,7 @@ import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/application/movie_playback_service.dart';
+import 'package:omninest/features/video/application/movie_progress_sync_service.dart';
 import 'package:omninest/features/video/application/video_local_preferences_controller.dart';
 import 'package:omninest/features/video/domain/movie_models.dart'
     hide SubtitleTrack;
@@ -49,8 +51,8 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
   late final Player _player;
   late final VideoController _controller;
   String? _loadedUrl;
-  Timer? _progressTimer;
   late final MoviePlaybackService _playbackService;
+  late final MovieProgressSyncService _progressSyncService;
   late final WindowChromeController _windowChromeController;
   WindowChromeLease? _windowChromeLease;
   int _currentDurationSeconds = 0;
@@ -130,6 +132,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
     _player = Player();
     _controller = VideoController(_player);
     _playbackService = ref.read(moviePlaybackServiceProvider);
+    _progressSyncService = ref.read(movieProgressSyncServiceProvider);
     _windowChromeController = ref.read(windowChromeControllerProvider.notifier);
     // 显式设置音量，确保有声音
     _player.setVolume(_volume);
@@ -160,7 +163,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
     _openGeneration++;
     _seekGeneration++;
     _subtitleGeneration++;
-    _progressTimer?.cancel();
+    _progressSyncService.stop();
     _hideTimer?.cancel();
     _feedbackTimer?.cancel();
     _tracksSub?.cancel();
@@ -358,6 +361,10 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
                           ? Duration.zero
                           : const Duration(milliseconds: 180),
                   curve: Curves.easeOutCubic,
+                  // 透明度归零会整棵摘掉控制条语义，再显示时整棵加回：
+                  // Windows 辅助功能桥会在仍持有旧节点 id 时更新失败。
+                  // 交互由外层 IgnorePointer 屏蔽。
+                  alwaysIncludeSemantics: true,
                   child: Stack(
                     children: [
                       MoviePlayerTopBar(
@@ -502,26 +509,18 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
   }
 
   void _startProgressSync(PlaybackPlan plan) {
-    _progressTimer?.cancel();
-    _progressTimer = Timer.periodic(const Duration(seconds: 20), (_) async {
-      if (_isSeeking) return;
-      final position = _player.state.position.inSeconds;
-      final duration =
-          _player.state.duration.inSeconds > 0
-              ? _player.state.duration.inSeconds
-              : plan.durationSeconds;
-      if (position <= 0 && duration <= 0) return;
-      try {
-        await _playbackService.updateProgress(
-          videoItemId: widget.videoItemId,
-          positionSeconds: position,
-          durationSeconds: duration,
-          completed: isMoviePlaybackCompleted(position, duration),
-        );
-      } catch (_) {
-        devLog('周期性进度同步失败');
-      }
-    });
+    _progressSyncService.start(
+      videoItemId: widget.videoItemId,
+      interval: const Duration(seconds: 20),
+      readPositionSeconds: () => _player.state.position.inSeconds,
+      readDurationSeconds: () {
+        final playerDuration = _player.state.duration.inSeconds;
+        return playerDuration > 0 ? playerDuration : plan.durationSeconds;
+      },
+      computeCompleted:
+          (position, duration) => isMoviePlaybackCompleted(position, duration),
+      shouldSkip: () => _isSeeking,
+    );
   }
 
   void _seekRelative(int seconds) {

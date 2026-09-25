@@ -295,6 +295,8 @@ class _AnimatedSectionBody extends StatelessWidget {
       duration: MotionToken.normal,
       switchInCurve: MotionToken.curve,
       switchOutCurve: MotionToken.curveIn,
+      // 退场子树排除语义，避免与入场子树同批更新触发 Windows 桥失败。
+      layoutBuilder: excludeExitingSemanticsStack,
       transitionBuilder: (child, animation) {
         final curved = CurvedAnimation(
           parent: animation,

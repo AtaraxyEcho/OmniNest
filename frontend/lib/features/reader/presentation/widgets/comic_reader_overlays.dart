@@ -23,6 +23,7 @@ class ComicReaderTopBar extends StatelessWidget {
     required this.onShowSettings,
     required this.onShowShortcuts,
     this.onSwitchReadingMode,
+    this.visible = true,
     super.key,
   });
 
@@ -35,6 +36,9 @@ class ComicReaderTopBar extends StatelessWidget {
   final VoidCallback onShowShortcuts;
   final VoidCallback? onSwitchReadingMode;
 
+  /// 控件条显隐：子树常驻语义树，隐藏时仅淡出并屏蔽指针。
+  final bool visible;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -42,129 +46,144 @@ class ComicReaderTopBar extends StatelessWidget {
       top: 0,
       left: 0,
       right: 0,
-      child: Material(
-        color: settings.controlSurfaceColor.withValues(alpha: 0.94),
-        child: SafeArea(
-          bottom: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final layout = ReaderControlLayout.resolve(
-                viewport: Size(
-                  constraints.maxWidth,
-                  MediaQuery.sizeOf(context).height,
-                ),
-                fontSize: AppTypography.titleMedium,
-              );
-              return SizedBox(
-                height: 56,
-                child: Padding(
-                  padding: EdgeInsets.symmetric(
-                    horizontal:
-                        layout.density == ReaderControlDensity.compact ? 4 : 12,
-                  ),
-                  child: Row(
-                    children: [
-                      IconButton(
-                        tooltip: l10n.coreBack,
-                        icon: const Icon(Icons.arrow_back_rounded),
-                        color: settings.onSurfaceColor,
-                        onPressed: onBack,
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration:
+              MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+          // 条件挂载会让父 Stack 存续期间整棵摘除/加回语义子树，触发
+          // Windows 辅助功能桥 "will not be in the tree" 更新失败。
+          alwaysIncludeSemantics: true,
+          child: Material(
+            color: settings.controlSurfaceColor.withValues(alpha: 0.94),
+            child: SafeArea(
+              bottom: false,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final layout = ReaderControlLayout.resolve(
+                    viewport: Size(
+                      constraints.maxWidth,
+                      MediaQuery.sizeOf(context).height,
+                    ),
+                    fontSize: AppTypography.titleMedium,
+                  );
+                  return SizedBox(
+                    height: 56,
+                    child: Padding(
+                      padding: EdgeInsets.symmetric(
+                        horizontal:
+                            layout.density == ReaderControlDensity.compact
+                                ? 4
+                                : 12,
                       ),
-                      const SizedBox(width: 4),
-                      Expanded(
-                        child: Text(
-                          catalogTitle,
-                          style: TextStyle(
+                      child: Row(
+                        children: [
+                          IconButton(
+                            tooltip: l10n.coreBack,
+                            icon: const Icon(Icons.arrow_back_rounded),
                             color: settings.onSurfaceColor,
-                            fontSize: AppTypography.titleMedium,
-                            fontWeight: FontWeight.w700,
+                            onPressed: onBack,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
+                          const SizedBox(width: 4),
+                          Expanded(
+                            child: Text(
+                              catalogTitle,
+                              style: TextStyle(
+                                color: settings.onSurfaceColor,
+                                fontSize: AppTypography.titleMedium,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (layout.density != ReaderControlDensity.compact)
+                            _ComicControlButton(
+                              icon: Icons.toc_rounded,
+                              tooltip: l10n.readerTableOfContents,
+                              settings: settings,
+                              onPressed: onShowContents,
+                            ),
+                          if (onSwitchReadingMode != null)
+                            _ComicControlButton(
+                              icon:
+                                  isPageMode
+                                      ? Icons.swap_vert_rounded
+                                      : Icons.swap_horiz_rounded,
+                              tooltip:
+                                  isPageMode
+                                      ? l10n.readerComicModeScroll
+                                      : l10n.readerComicModePage,
+                              settings: settings,
+                              onPressed: onSwitchReadingMode!,
+                            ),
+                          if (layout.density != ReaderControlDensity.compact)
+                            _ComicControlButton(
+                              icon: Icons.tune_rounded,
+                              tooltip: l10n.readerSettingsTitle,
+                              settings: settings,
+                              onPressed: onShowSettings,
+                            ),
+                          if (layout.density == ReaderControlDensity.expanded)
+                            _ComicControlButton(
+                              icon: Icons.keyboard_rounded,
+                              tooltip: l10n.readerShortcutsTitle,
+                              settings: settings,
+                              onPressed: onShowShortcuts,
+                            ),
+                          if (layout.density == ReaderControlDensity.compact)
+                            PopupMenuButton<_ComicTopAction>(
+                              tooltip:
+                                  MaterialLocalizations.of(
+                                    context,
+                                  ).moreButtonTooltip,
+                              color: settings.controlSurfaceColor,
+                              icon: Icon(
+                                Icons.more_vert_rounded,
+                                color: settings.onSurfaceVariantColor,
+                              ),
+                              onSelected: (action) {
+                                switch (action) {
+                                  case _ComicTopAction.contents:
+                                    onShowContents();
+                                    return;
+                                  case _ComicTopAction.settings:
+                                    onShowSettings();
+                                    return;
+                                  case _ComicTopAction.shortcuts:
+                                    onShowShortcuts();
+                                    return;
+                                }
+                              },
+                              itemBuilder:
+                                  (context) => [
+                                    _menuItem(
+                                      _ComicTopAction.contents,
+                                      Icons.toc_rounded,
+                                      l10n.readerTableOfContents,
+                                    ),
+                                    _menuItem(
+                                      _ComicTopAction.settings,
+                                      Icons.tune_rounded,
+                                      l10n.readerSettingsTitle,
+                                    ),
+                                    _menuItem(
+                                      _ComicTopAction.shortcuts,
+                                      Icons.keyboard_rounded,
+                                      l10n.readerShortcutsTitle,
+                                    ),
+                                  ],
+                            ),
+                        ],
                       ),
-                      if (layout.density != ReaderControlDensity.compact)
-                        _ComicControlButton(
-                          icon: Icons.toc_rounded,
-                          tooltip: l10n.readerTableOfContents,
-                          settings: settings,
-                          onPressed: onShowContents,
-                        ),
-                      if (onSwitchReadingMode != null)
-                        _ComicControlButton(
-                          icon:
-                              isPageMode
-                                  ? Icons.swap_vert_rounded
-                                  : Icons.swap_horiz_rounded,
-                          tooltip:
-                              isPageMode
-                                  ? l10n.readerComicModeScroll
-                                  : l10n.readerComicModePage,
-                          settings: settings,
-                          onPressed: onSwitchReadingMode!,
-                        ),
-                      if (layout.density != ReaderControlDensity.compact)
-                        _ComicControlButton(
-                          icon: Icons.tune_rounded,
-                          tooltip: l10n.readerSettingsTitle,
-                          settings: settings,
-                          onPressed: onShowSettings,
-                        ),
-                      if (layout.density == ReaderControlDensity.expanded)
-                        _ComicControlButton(
-                          icon: Icons.keyboard_rounded,
-                          tooltip: l10n.readerShortcutsTitle,
-                          settings: settings,
-                          onPressed: onShowShortcuts,
-                        ),
-                      if (layout.density == ReaderControlDensity.compact)
-                        PopupMenuButton<_ComicTopAction>(
-                          tooltip:
-                              MaterialLocalizations.of(
-                                context,
-                              ).moreButtonTooltip,
-                          color: settings.controlSurfaceColor,
-                          icon: Icon(
-                            Icons.more_vert_rounded,
-                            color: settings.onSurfaceVariantColor,
-                          ),
-                          onSelected: (action) {
-                            switch (action) {
-                              case _ComicTopAction.contents:
-                                onShowContents();
-                                return;
-                              case _ComicTopAction.settings:
-                                onShowSettings();
-                                return;
-                              case _ComicTopAction.shortcuts:
-                                onShowShortcuts();
-                                return;
-                            }
-                          },
-                          itemBuilder:
-                              (context) => [
-                                _menuItem(
-                                  _ComicTopAction.contents,
-                                  Icons.toc_rounded,
-                                  l10n.readerTableOfContents,
-                                ),
-                                _menuItem(
-                                  _ComicTopAction.settings,
-                                  Icons.tune_rounded,
-                                  l10n.readerSettingsTitle,
-                                ),
-                                _menuItem(
-                                  _ComicTopAction.shortcuts,
-                                  Icons.keyboard_rounded,
-                                  l10n.readerShortcutsTitle,
-                                ),
-                              ],
-                        ),
-                    ],
-                  ),
-                ),
-              );
-            },
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),
@@ -208,6 +227,7 @@ class ComicReaderBottomBar extends StatelessWidget {
     required this.onSeek,
     required this.onShowContents,
     this.onSwitchReadingMode,
+    this.visible = true,
     super.key,
   });
 
@@ -221,6 +241,9 @@ class ComicReaderBottomBar extends StatelessWidget {
   final VoidCallback onShowContents;
   final VoidCallback? onSwitchReadingMode;
 
+  /// 控件条显隐：子树常驻语义树，隐藏时仅淡出并屏蔽指针。
+  final bool visible;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -229,97 +252,109 @@ class ComicReaderBottomBar extends StatelessWidget {
       left: 0,
       right: 0,
       bottom: 0,
-      child: Material(
-        color: settings.controlSurfaceColor.withValues(alpha: 0.94),
-        child: SafeArea(
-          top: false,
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final layout = ReaderControlLayout.resolve(
-                viewport: Size(
-                  constraints.maxWidth,
-                  MediaQuery.sizeOf(context).height,
-                ),
-                fontSize: AppTypography.titleMedium,
-              );
-              final compact = layout.density == ReaderControlDensity.compact;
-              return Padding(
-                padding: EdgeInsets.fromLTRB(
-                  compact ? 6 : 16,
-                  0,
-                  compact ? 6 : 16,
-                  4,
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _ComicPageSlider(
-                      currentPageIndex: currentPageIndex,
-                      totalPages: totalPages,
-                      maxPage: maxPage,
-                      settings: settings,
-                      onSeek: onSeek,
+      child: IgnorePointer(
+        ignoring: !visible,
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration:
+              MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+          alwaysIncludeSemantics: true,
+          child: Material(
+            color: settings.controlSurfaceColor.withValues(alpha: 0.94),
+            child: SafeArea(
+              top: false,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final layout = ReaderControlLayout.resolve(
+                    viewport: Size(
+                      constraints.maxWidth,
+                      MediaQuery.sizeOf(context).height,
                     ),
-                    SizedBox(
-                      height: 48,
-                      child: Row(
-                        children: [
-                          _ComicControlButton(
-                            icon: Icons.chevron_left_rounded,
-                            tooltip: l10n.readerPreviousPage,
-                            settings: settings,
-                            onPressed: onPrevious,
-                          ),
-                          Expanded(
-                            child: Text(
-                              totalPages <= 0
-                                  ? '0 / 0'
-                                  : '${currentPageIndex + 1} / $totalPages',
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: settings.onSurfaceColor,
-                                fontSize: AppTypography.bodyMedium,
-                                fontWeight: FontWeight.w700,
-                                fontFeatures: const [
-                                  FontFeature.tabularFigures(),
-                                ],
+                    fontSize: AppTypography.titleMedium,
+                  );
+                  final compact =
+                      layout.density == ReaderControlDensity.compact;
+                  return Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 6 : 16,
+                      0,
+                      compact ? 6 : 16,
+                      4,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _ComicPageSlider(
+                          currentPageIndex: currentPageIndex,
+                          totalPages: totalPages,
+                          maxPage: maxPage,
+                          settings: settings,
+                          onSeek: onSeek,
+                        ),
+                        SizedBox(
+                          height: 48,
+                          child: Row(
+                            children: [
+                              _ComicControlButton(
+                                icon: Icons.chevron_left_rounded,
+                                tooltip: l10n.readerPreviousPage,
+                                settings: settings,
+                                onPressed: onPrevious,
                               ),
-                            ),
+                              Expanded(
+                                child: Text(
+                                  totalPages <= 0
+                                      ? '0 / 0'
+                                      : '${currentPageIndex + 1} / $totalPages',
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: settings.onSurfaceColor,
+                                    fontSize: AppTypography.bodyMedium,
+                                    fontWeight: FontWeight.w700,
+                                    fontFeatures: const [
+                                      FontFeature.tabularFigures(),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              _ComicControlButton(
+                                icon: Icons.chevron_right_rounded,
+                                tooltip: l10n.readerNextPage,
+                                settings: settings,
+                                onPressed: onNext,
+                              ),
+                              _ComicControlButton(
+                                icon: Icons.toc_rounded,
+                                tooltip: l10n.readerTableOfContents,
+                                settings: settings,
+                                onPressed: onShowContents,
+                              ),
+                              if (!compact && onSwitchReadingMode != null)
+                                _ComicControlButton(
+                                  icon:
+                                      isPageMode
+                                          ? Icons.swap_vert_rounded
+                                          : Icons.swap_horiz_rounded,
+                                  tooltip:
+                                      isPageMode
+                                          ? l10n.readerComicModeScroll
+                                          : l10n.readerComicModePage,
+                                  settings: settings,
+                                  onPressed: onSwitchReadingMode!,
+                                ),
+                            ],
                           ),
-                          _ComicControlButton(
-                            icon: Icons.chevron_right_rounded,
-                            tooltip: l10n.readerNextPage,
-                            settings: settings,
-                            onPressed: onNext,
-                          ),
-                          _ComicControlButton(
-                            icon: Icons.toc_rounded,
-                            tooltip: l10n.readerTableOfContents,
-                            settings: settings,
-                            onPressed: onShowContents,
-                          ),
-                          if (!compact && onSwitchReadingMode != null)
-                            _ComicControlButton(
-                              icon:
-                                  isPageMode
-                                      ? Icons.swap_vert_rounded
-                                      : Icons.swap_horiz_rounded,
-                              tooltip:
-                                  isPageMode
-                                      ? l10n.readerComicModeScroll
-                                      : l10n.readerComicModePage,
-                              settings: settings,
-                              onPressed: onSwitchReadingMode!,
-                            ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              );
-            },
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),
@@ -395,11 +430,15 @@ class ComicPageIndicator extends StatelessWidget {
   const ComicPageIndicator({
     required this.currentPageIndex,
     required this.totalPages,
+    this.visible = true,
     super.key,
   });
 
   final int currentPageIndex;
   final int totalPages;
+
+  /// 页码显隐：与控件条互斥，子树常驻语义树。
+  final bool visible;
 
   @override
   Widget build(BuildContext context) {
@@ -407,25 +446,36 @@ class ComicPageIndicator extends StatelessWidget {
       bottom: MediaQuery.paddingOf(context).bottom + 10,
       left: 0,
       right: 0,
-      child: Center(
-        child: IgnorePointer(
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.62),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              child: Text(
-                totalPages <= 0
-                    ? '0 / 0'
-                    : '${currentPageIndex + 1} / $totalPages',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: AppTypography.bodySmall,
-                  fontWeight: FontWeight.w700,
-                  fontFeatures: [FontFeature.tabularFigures()],
+      child: IgnorePointer(
+        child: AnimatedOpacity(
+          opacity: visible ? 1 : 0,
+          duration:
+              MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 180),
+          alwaysIncludeSemantics: true,
+          child: Center(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.62),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                child: Text(
+                  totalPages <= 0
+                      ? '0 / 0'
+                      : '${currentPageIndex + 1} / $totalPages',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: AppTypography.bodySmall,
+                    fontWeight: FontWeight.w700,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
             ),

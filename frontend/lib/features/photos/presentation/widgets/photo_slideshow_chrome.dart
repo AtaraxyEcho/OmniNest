@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
+import 'package:omninest/app/theme/severity_colors.dart';
 
 /// Slideshow top-bar icon button: transparent, compact density.
 class SlideshowIconButton extends StatelessWidget {
@@ -96,7 +97,7 @@ class PhotoSlideshowTopBar extends StatelessWidget {
                 : Icons.favorite_border_rounded,
         color:
             photo.favorite
-                ? const Color(0xFFFB7185)
+                ? SeverityColors.dangerSoft
                 : Colors.white.withValues(alpha: 0.70),
         onTap: onToggleFavorite,
       ),
@@ -136,6 +137,8 @@ class PhotoSlideshowTopBar extends StatelessWidget {
         child: AnimatedOpacity(
           opacity: visible ? 1 : 0,
           duration: const Duration(milliseconds: 400),
+          // 语义子树常驻：opacity 归零默认摘除语义，会触发 Windows 桥更新失败。
+          alwaysIncludeSemantics: true,
           child: AnimatedSlide(
             offset: visible ? Offset.zero : const Offset(0, -0.2),
             duration: const Duration(milliseconds: 400),
@@ -245,8 +248,10 @@ class SlideshowSlideLayer extends StatelessWidget {
             ? RawImage(
               image: image,
               fit: BoxFit.contain,
-              // High quality for the main image during zoom; thumbs/backdrop stay medium.
-              filterQuality: FilterQuality.high,
+              // Medium: full-screen contain already scales the decode to the
+              // display; high-quality sampling on multi-megapixel bitmaps
+              // stalls the raster thread for seconds on entry.
+              filterQuality: FilterQuality.medium,
             )
             : const ColoredBox(color: Colors.black);
     return Transform(

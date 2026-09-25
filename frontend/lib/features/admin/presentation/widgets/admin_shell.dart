@@ -8,6 +8,8 @@ import 'package:omninest/app/theme/feature/admin_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/theme/motion_token.dart';
 import 'package:omninest/core/utils/file_size_formatter.dart';
+import 'package:omninest/core/utils/route_exit.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/workbench_top_bar.dart';
 import 'package:omninest/core/widgets/font_scale_control.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -165,6 +167,8 @@ class _AdminShellBody extends StatelessWidget {
       duration: MotionToken.normal,
       switchInCurve: MotionToken.curve,
       switchOutCurve: MotionToken.curveIn,
+      // 分区切换会整棵替换内容，退场子树排除语义。
+      layoutBuilder: excludeExitingSemanticsStack,
       transitionBuilder: (child, animation) {
         final curved = CurvedAnimation(
           parent: animation,
@@ -203,11 +207,7 @@ class _AdminShellBody extends StatelessWidget {
 
 /// 返回 Portal：优先 pop（保留 Portal shell 状态），无栈可弹时兜底 go。
 void _backToPortal(BuildContext context) {
-  if (context.canPop()) {
-    context.pop();
-  } else {
-    context.go('/portal');
-  }
+  exitDetailRoute(context, fallbackRoute: '/portal');
 }
 
 class AdminSidebar extends ConsumerStatefulWidget {

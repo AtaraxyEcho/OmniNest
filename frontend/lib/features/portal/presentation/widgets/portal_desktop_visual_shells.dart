@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
 import 'package:omninest/core/widgets/app_fullscreen_control.dart';
@@ -37,6 +38,7 @@ import 'package:omninest/features/portal/presentation/widgets/weather_detail_dia
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/reader_cover_ui.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
+import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
 
 part 'portal_desktop_companions.dart';
 part 'portal_desktop_dock_weather_effects.dart';
@@ -320,14 +322,13 @@ class _PortalDesktopVisualHostState
                 switchOutCurve: Curves.easeInCubic,
                 // 默认 layoutBuilder 以非定位子节点排版，会让沉浸层丢掉
                 // Positioned.fill 的铺满约束（塌陷且过渡看不出来）。这里显式
-                // 让每一帧都撑满父级。
+                // 让每一帧都撑满父级，并排除退场子树语义，避免 Windows 桥
+                // 报 "will not be in the tree"。
                 layoutBuilder:
-                    (current, previousChildren) => Stack(
+                    (current, previousChildren) => excludeExitingSemanticsStack(
+                      current,
+                      previousChildren,
                       fit: StackFit.expand,
-                      children: <Widget>[
-                        ...previousChildren,
-                        if (current != null) current,
-                      ],
                     ),
                 transitionBuilder: (child, animation) {
                   final curved = CurvedAnimation(

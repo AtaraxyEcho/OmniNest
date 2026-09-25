@@ -329,6 +329,187 @@ class _FileRowState extends State<_FileRow> {
   bool _hovering = false;
   bool _focused = false;
 
+  void _onMenuAction(FileNode file, _FileListAction action) {
+    switch (action) {
+      case _FileListAction.rename:
+        widget.onRename(file);
+      case _FileListAction.versions:
+        widget.onShowVersions?.call(file);
+      case _FileListAction.copy:
+        widget.onCopy?.call(file);
+      case _FileListAction.move:
+        widget.onMove?.call(file);
+      case _FileListAction.moveToShared:
+        widget.onMoveToSharedSpace?.call(file);
+      case _FileListAction.moveToPersonal:
+        widget.onMoveToPersonalSpace?.call(file);
+      case _FileListAction.download:
+        widget.onDownload?.call(file);
+      case _FileListAction.share:
+        widget.onShare?.call(file);
+      case _FileListAction.favorite:
+        widget.onToggleFavorite?.call(file);
+      case _FileListAction.delete:
+        widget.onDelete(file);
+      case _FileListAction.restore:
+        widget.onRestore(file);
+      case _FileListAction.purge:
+        widget.onPurge(file);
+    }
+  }
+
+  List<PopupMenuEntry<_FileListAction>> _buildActionMenuItems(
+    BuildContext context,
+    FileNode file,
+  ) {
+    if (widget.showingRecycleBin) {
+      return [
+        PopupMenuItem(
+          value: _FileListAction.restore,
+          child: ListTile(
+            leading: Icon(Icons.restore_rounded),
+            title: Text(AppLocalizations.of(context).filesRestore),
+            dense: true,
+          ),
+        ),
+        PopupMenuItem(
+          value: _FileListAction.purge,
+          child: ListTile(
+            leading: Icon(
+              Icons.delete_forever_outlined,
+              color: context.filesColors.error,
+            ),
+            title: Text(
+              AppLocalizations.of(context).filesPurge,
+              style: TextStyle(color: context.filesColors.error),
+            ),
+            dense: true,
+          ),
+        ),
+      ];
+    }
+    return [
+      PopupMenuItem(
+        value: _FileListAction.rename,
+        child: ListTile(
+          leading: Icon(Icons.drive_file_rename_outline),
+          title: Text(AppLocalizations.of(context).filesRename),
+          dense: true,
+        ),
+      ),
+      if (widget.onShowVersions != null && !file.isFolder)
+        PopupMenuItem(
+          value: _FileListAction.versions,
+          child: ListTile(
+            leading: const Icon(Icons.history_outlined),
+            title: Text(AppLocalizations.of(context).filesVersionsTitle),
+            dense: true,
+          ),
+        ),
+      if (widget.onCopy != null && !file.isFolder)
+        PopupMenuItem(
+          value: _FileListAction.copy,
+          child: ListTile(
+            leading: const Icon(Icons.file_copy_outlined),
+            title: Text(AppLocalizations.of(context).filesCopyToEllipsis),
+            dense: true,
+          ),
+        ),
+      if (widget.onMove != null)
+        PopupMenuItem(
+          value: _FileListAction.move,
+          child: ListTile(
+            leading: Icon(Icons.drive_file_move_outlined),
+            title: Text(AppLocalizations.of(context).filesMoveToEllipsis),
+            dense: true,
+          ),
+        ),
+      if (widget.onMoveToSharedSpace != null)
+        PopupMenuItem(
+          value: _FileListAction.moveToShared,
+          child: ListTile(
+            leading: Icon(Icons.workspaces_outlined),
+            title: Text(AppLocalizations.of(context).filesMoveToShared),
+            dense: true,
+          ),
+        ),
+      if (widget.onMoveToPersonalSpace != null)
+        PopupMenuItem(
+          value: _FileListAction.moveToPersonal,
+          child: ListTile(
+            leading: Icon(Icons.person_outline),
+            title: Text(AppLocalizations.of(context).filesMoveToPersonal),
+            dense: true,
+          ),
+        ),
+      if (widget.onDownload != null && !file.isFolder)
+        PopupMenuItem(
+          value: _FileListAction.download,
+          child: ListTile(
+            leading: Icon(Icons.download_outlined),
+            title: Text(AppLocalizations.of(context).filesDownload),
+            dense: true,
+          ),
+        ),
+      if (widget.onShare != null && !file.isFolder)
+        PopupMenuItem(
+          value: _FileListAction.share,
+          child: ListTile(
+            leading: Icon(Icons.share_outlined),
+            title: Text(AppLocalizations.of(context).filesShare),
+            dense: true,
+          ),
+        ),
+      if (widget.onToggleFavorite != null && !file.isFolder)
+        PopupMenuItem(
+          value: _FileListAction.favorite,
+          child: ListTile(
+            leading: Icon(
+              widget.showingFavorites
+                  ? Icons.star_border_rounded
+                  : Icons.star_rounded,
+            ),
+            title: Text(
+              widget.showingFavorites
+                  ? AppLocalizations.of(context).filesRemoveFavorite
+                  : AppLocalizations.of(context).filesAddFavorite,
+            ),
+            dense: true,
+          ),
+        ),
+      PopupMenuItem(
+        value: _FileListAction.delete,
+        child: ListTile(
+          leading: Icon(
+            Icons.delete_outline_rounded,
+            color: context.filesColors.error,
+          ),
+          title: Text(
+            AppLocalizations.of(context).filesDelete,
+            style: TextStyle(color: context.filesColors.error),
+          ),
+          dense: true,
+        ),
+      ),
+    ];
+  }
+
+  Future<void> _showContextMenuAt(BuildContext context, Offset global) async {
+    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+    final action = await showMenu<_FileListAction>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromLTWH(global.dx, global.dy, 0, 0),
+        Offset.zero & overlay.size,
+      ),
+      items: _buildActionMenuItems(context, widget.file),
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+    _onMenuAction(widget.file, action);
+  }
+
   @override
   Widget build(BuildContext context) {
     final file = widget.file;
@@ -354,8 +535,10 @@ class _FileRowState extends State<_FileRow> {
             : null;
     final row = Semantics(
       button: activate != null,
+      enabled: activate != null,
       label: file.name,
       onTap: activate,
+      onLongPress: longPress,
       child: FocusableActionDetector(
         enabled: activate != null,
         onShowFocusHighlight: (focused) => setState(() => _focused = focused),
@@ -379,8 +562,15 @@ class _FileRowState extends State<_FileRow> {
                   ? SystemMouseCursors.click
                   : SystemMouseCursors.basic,
           child: GestureDetector(
+            excludeFromSemantics: true,
             onTap: activate,
             onLongPress: longPress,
+            // 桌面右键与行内「更多」共用同一操作菜单。
+            onSecondaryTapUp:
+                widget.enabled
+                    ? (details) =>
+                        _showContextMenuAt(context, details.globalPosition)
+                    : null,
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 150),
               // 行内操作钮命中盒 48，纵向留白相应收到 2，行高与抬上前一致（52）。
@@ -473,221 +663,9 @@ class _FileRowState extends State<_FileRow> {
                     tooltip: AppLocalizations.of(context).filesMoreActions,
                     itemBuilder:
                         (context) =>
-                            widget.showingRecycleBin
-                                ? [
-                                  PopupMenuItem(
-                                    value: _FileListAction.restore,
-                                    child: ListTile(
-                                      leading: Icon(Icons.restore_rounded),
-                                      title: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        ).filesRestore,
-                                      ),
-                                      dense: true,
-                                    ),
-                                  ),
-                                  PopupMenuItem(
-                                    value: _FileListAction.purge,
-                                    child: ListTile(
-                                      leading: Icon(
-                                        Icons.delete_forever_outlined,
-                                        color: context.filesColors.error,
-                                      ),
-                                      title: Text(
-                                        AppLocalizations.of(context).filesPurge,
-                                        style: TextStyle(
-                                          color: context.filesColors.error,
-                                        ),
-                                      ),
-                                      dense: true,
-                                    ),
-                                  ),
-                                ]
-                                : [
-                                  PopupMenuItem(
-                                    value: _FileListAction.rename,
-                                    child: ListTile(
-                                      leading: Icon(
-                                        Icons.drive_file_rename_outline,
-                                      ),
-                                      title: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        ).filesRename,
-                                      ),
-                                      dense: true,
-                                    ),
-                                  ),
-                                  if (widget.onShowVersions != null &&
-                                      !file.isFolder)
-                                    PopupMenuItem(
-                                      value: _FileListAction.versions,
-                                      child: ListTile(
-                                        leading: const Icon(
-                                          Icons.history_outlined,
-                                        ),
-                                        title: Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          ).filesVersionsTitle,
-                                        ),
-                                        dense: true,
-                                      ),
-                                    ),
-                                  if (widget.onCopy != null && !file.isFolder)
-                                    PopupMenuItem(
-                                      value: _FileListAction.copy,
-                                      child: ListTile(
-                                        leading: const Icon(
-                                          Icons.file_copy_outlined,
-                                        ),
-                                        title: Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          ).filesCopyToEllipsis,
-                                        ),
-                                        dense: true,
-                                      ),
-                                    ),
-                                  if (widget.onMove != null)
-                                    PopupMenuItem(
-                                      value: _FileListAction.move,
-                                      child: ListTile(
-                                        leading: Icon(
-                                          Icons.drive_file_move_outlined,
-                                        ),
-                                        title: Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          ).filesMoveToEllipsis,
-                                        ),
-                                        dense: true,
-                                      ),
-                                    ),
-                                  if (widget.onMoveToSharedSpace != null)
-                                    PopupMenuItem(
-                                      value: _FileListAction.moveToShared,
-                                      child: ListTile(
-                                        leading: Icon(
-                                          Icons.workspaces_outlined,
-                                        ),
-                                        title: Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          ).filesMoveToShared,
-                                        ),
-                                        dense: true,
-                                      ),
-                                    ),
-                                  if (widget.onMoveToPersonalSpace != null)
-                                    PopupMenuItem(
-                                      value: _FileListAction.moveToPersonal,
-                                      child: ListTile(
-                                        leading: Icon(Icons.person_outline),
-                                        title: Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          ).filesMoveToPersonal,
-                                        ),
-                                        dense: true,
-                                      ),
-                                    ),
-                                  if (widget.onDownload != null &&
-                                      !file.isFolder)
-                                    PopupMenuItem(
-                                      value: _FileListAction.download,
-                                      child: ListTile(
-                                        leading: Icon(Icons.download_outlined),
-                                        title: Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          ).filesDownload,
-                                        ),
-                                        dense: true,
-                                      ),
-                                    ),
-                                  if (widget.onShare != null && !file.isFolder)
-                                    PopupMenuItem(
-                                      value: _FileListAction.share,
-                                      child: ListTile(
-                                        leading: Icon(Icons.share_outlined),
-                                        title: Text(
-                                          AppLocalizations.of(
-                                            context,
-                                          ).filesShare,
-                                        ),
-                                        dense: true,
-                                      ),
-                                    ),
-                                  if (widget.onToggleFavorite != null &&
-                                      !file.isFolder)
-                                    PopupMenuItem(
-                                      value: _FileListAction.favorite,
-                                      child: ListTile(
-                                        leading: Icon(
-                                          widget.showingFavorites
-                                              ? Icons.star_border_rounded
-                                              : Icons.star_rounded,
-                                        ),
-                                        title: Text(
-                                          widget.showingFavorites
-                                              ? AppLocalizations.of(
-                                                context,
-                                              ).filesRemoveFavorite
-                                              : AppLocalizations.of(
-                                                context,
-                                              ).filesAddFavorite,
-                                        ),
-                                        dense: true,
-                                      ),
-                                    ),
-                                  PopupMenuItem(
-                                    value: _FileListAction.delete,
-                                    child: ListTile(
-                                      leading: Icon(
-                                        Icons.delete_outline_rounded,
-                                        color: context.filesColors.error,
-                                      ),
-                                      title: Text(
-                                        AppLocalizations.of(
-                                          context,
-                                        ).filesDelete,
-                                        style: TextStyle(
-                                          color: context.filesColors.error,
-                                        ),
-                                      ),
-                                      dense: true,
-                                    ),
-                                  ),
-                                ],
+                            _buildActionMenuItems(context, widget.file),
                     onSelected: (action) {
-                      switch (action) {
-                        case _FileListAction.rename:
-                          widget.onRename(file);
-                        case _FileListAction.versions:
-                          widget.onShowVersions?.call(file);
-                        case _FileListAction.copy:
-                          widget.onCopy?.call(file);
-                        case _FileListAction.move:
-                          widget.onMove?.call(file);
-                        case _FileListAction.moveToShared:
-                          widget.onMoveToSharedSpace?.call(file);
-                        case _FileListAction.moveToPersonal:
-                          widget.onMoveToPersonalSpace?.call(file);
-                        case _FileListAction.download:
-                          widget.onDownload?.call(file);
-                        case _FileListAction.share:
-                          widget.onShare?.call(file);
-                        case _FileListAction.favorite:
-                          widget.onToggleFavorite?.call(file);
-                        case _FileListAction.delete:
-                          widget.onDelete(file);
-                        case _FileListAction.restore:
-                          widget.onRestore(file);
-                        case _FileListAction.purge:
-                          widget.onPurge(file);
-                      }
+                      _onMenuAction(widget.file, action);
                     },
                   ),
                 ],

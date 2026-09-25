@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/widgets/animated_switcher_semantics.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_video_session.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
@@ -132,6 +133,7 @@ class AppBackdropControls extends StatelessWidget {
               ),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 180),
+                layoutBuilder: excludeExitingSemanticsStack,
                 child:
                     settings.separateDeviceBackdrops
                         ? _BackdropTargetNotice(

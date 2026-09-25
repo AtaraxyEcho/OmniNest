@@ -35,6 +35,8 @@ class _FrameViewContent extends ConsumerWidget {
           MediaQuery.disableAnimationsOf(context)
               ? Duration.zero
               : const Duration(milliseconds: 200),
+      // 视图切换会整棵替换内容，退场子树排除语义。
+      layoutBuilder: excludeExitingSemanticsStack,
       child: switch (state.frameView) {
         FrameView.grid || FrameView.favorites => _buildGrid(context, ref),
         FrameView.timeline => _compactRefreshable(

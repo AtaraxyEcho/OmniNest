@@ -208,6 +208,8 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
             MediaQuery.disableAnimationsOf(context)
                 ? Duration.zero
                 : const Duration(milliseconds: 180),
+        // 语义子树常驻：opacity 归零默认摘除语义，会触发 Windows 桥更新失败。
+        alwaysIncludeSemantics: true,
         child: IgnorePointer(
           ignoring: !_showControls,
           child: MouseRegion(
@@ -259,6 +261,7 @@ extension _ReaderViewPageBuild on _ReaderViewPageState {
             MediaQuery.disableAnimationsOf(context)
                 ? Duration.zero
                 : const Duration(milliseconds: 180),
+        alwaysIncludeSemantics: true,
         child: IgnorePointer(
           ignoring: !_showControls,
           child: MouseRegion(

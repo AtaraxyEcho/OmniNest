@@ -1,4 +1,5 @@
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
@@ -122,5 +123,106 @@ void main() {
 
     expect(find.text(photo.title), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('悬停进出不摘除遮罩语义节点', (tester) async {
+    final photo = PhotoItem(
+      id: 'photo-1',
+      fileNodeId: 'file-1',
+      title: 'photo.jpg',
+      format: 'jpg',
+      fileSize: 1,
+      metadataStatus: 'READY',
+      favorite: false,
+      createdAt: DateTime(2026),
+      coverUrl: 'https://example.test/photo.jpg',
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OmniNestTheme.light(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 240,
+              height: 240,
+              child: PhotoGridTile(
+                photo: photo,
+                onTap: () {},
+                onToggleFavorite: () {},
+                onToggleSelection: () {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final handle = tester.ensureSemantics();
+    await tester.pump();
+    await tester.pump();
+
+    // 收藏/选择节点在遮罩隐藏时仍常驻语义树（alwaysIncludeSemantics）。
+    expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    final center = tester.getCenter(find.byType(PhotoGridTile));
+    final enterHit = HitTestResult();
+    tester.binding.hitTestInView(enterHit, center, tester.view.viewId);
+    tester.binding.dispatchEvent(pointer.hover(center), enterHit);
+    await tester.pump(const Duration(milliseconds: 200));
+
+    final away = const Offset(4, 4);
+    final exitHit = HitTestResult();
+    tester.binding.hitTestInView(exitHit, away, tester.view.viewId);
+    tester.binding.dispatchEvent(pointer.hover(away), exitHit);
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(find.byIcon(Icons.favorite_border), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    handle.dispose();
+  });
+
+  testWidgets('收藏语义为稳定 button 而非 CustomSemanticsAction', (tester) async {
+    final photo = PhotoItem(
+      id: 'photo-1',
+      fileNodeId: 'file-1',
+      title: 'photo.jpg',
+      format: 'jpg',
+      fileSize: 1,
+      metadataStatus: 'READY',
+      favorite: true,
+      createdAt: DateTime(2026),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: OmniNestTheme.light(),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        locale: const Locale('en'),
+        home: SizedBox(
+          width: 240,
+          height: 240,
+          child: PhotoGridTile(
+            photo: photo,
+            onTap: () {},
+            onToggleFavorite: () {},
+          ),
+        ),
+      ),
+    );
+    final handle = tester.ensureSemantics();
+    await tester.pump();
+
+    expect(find.byIcon(Icons.favorite), findsOneWidget);
+    // 不使用 CustomSemanticsAction：收藏通过稳定的 button + onTap 表达。
+    final semantics = tester.getSemantics(find.byIcon(Icons.favorite));
+    expect(semantics.label, isNotEmpty);
+    expect(tester.takeException(), isNull);
+    handle.dispose();
   });
 }

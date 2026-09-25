@@ -233,8 +233,10 @@ class _FileTileState extends State<_FileTile> {
             : null;
     return Semantics(
       button: activate != null,
+      enabled: activate != null,
       label: widget.file.name,
       onTap: activate,
+      onLongPress: longPress,
       child: FocusableActionDetector(
         enabled: activate != null,
         onShowFocusHighlight: (focused) => setState(() => _focused = focused),
@@ -258,6 +260,7 @@ class _FileTileState extends State<_FileTile> {
                   ? SystemMouseCursors.click
                   : SystemMouseCursors.basic,
           child: GestureDetector(
+            excludeFromSemantics: true,
             onTap: activate,
             onLongPress: longPress,
             child: AnimatedContainer(

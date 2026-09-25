@@ -104,6 +104,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
                 duration: MotionToken.resolve(context, MotionToken.normal),
                 switchInCurve: Curves.easeOutCubic,
                 switchOutCurve: Curves.easeInCubic,
+                layoutBuilder: excludeExitingSemanticsStack,
                 child:
                     state.isBusy && state.section == FileManagerSection.allFiles
                         ? KeyedSubtree(
@@ -224,6 +225,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
                       ),
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: excludeExitingSemanticsStack,
                       child:
                           state.isBusy &&
                                   state.section == FileManagerSection.allFiles
