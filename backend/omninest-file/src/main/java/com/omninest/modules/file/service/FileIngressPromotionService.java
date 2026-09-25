@@ -51,7 +51,7 @@ public class FileIngressPromotionService {
     private final FileUploadSessionRepository uploadSessionRepository;
     private final FileObjectRepository fileObjectRepository;
     private final FileNodeRepository fileNodeRepository;
-    private final FileManagerService fileManagerService;
+    private final FileVersionService fileVersionService;
     private final FileContentChangePublisher fileContentChangePublisher;
     private final StorageQuotaService storageQuotaService;
     private final ObjectStorageClient objectStorageClient;
@@ -173,7 +173,7 @@ public class FileIngressPromotionService {
         FileNode target = fileNodeRepository
                 .findByIdAndOwnerUserIdAndDeletedFalse(asVersionOfFileId, item.getOwnerUserId())
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "版本目标文件不存在"));
-        fileManagerService.saveNewVersion(
+        fileVersionService.saveNewVersion(
                 item.getOwnerUserId(),
                 asVersionOfFileId,
                 savedObject.getId(),

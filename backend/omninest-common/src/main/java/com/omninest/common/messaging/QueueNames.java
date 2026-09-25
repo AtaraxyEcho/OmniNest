@@ -23,6 +23,8 @@ public final class QueueNames {
     public static final String TEXT_EXTRACTION_ROUTING_KEY = "text.extract";
     public static final String MEDIA_QUEUE = "omni.task.media";
     public static final String MEDIA_SCRAPE_ROUTING_KEY = "media.scrape";
+    public static final String MEDIA_SCAN_QUEUE = "omni.task.media-scan";
+    public static final String MEDIA_SCAN_ROUTING_KEY = "media.scan";
     public static final String OFFLINE_DOWNLOAD_QUEUE = "omni.task.offline-download";
     public static final String OFFLINE_DOWNLOAD_ROUTING_KEY = "offline.download";
     public static final String VIDEO_TRANSCODE_QUEUE = "omni.task.video-transcode";
@@ -77,6 +79,7 @@ public final class QueueNames {
             MEDIA_AUTO_IMPORT_QUEUE,
             TEXT_EXTRACTION_QUEUE,
             MEDIA_QUEUE,
+            MEDIA_SCAN_QUEUE,
             OFFLINE_DOWNLOAD_QUEUE,
             VIDEO_TRANSCODE_QUEUE,
             LOCAL_VIDEO_LIBRARY_SCAN_QUEUE,
@@ -86,6 +89,7 @@ public final class QueueNames {
             MUSIC_SCRAPE_QUEUE,
             THUMBNAIL_QUEUE,
             PHOTO_SCAN_QUEUE,
+            PHOTO_THUMBNAILS_QUEUE,
             PHOTO_INDEX_QUEUE,
             PHOTO_BATCH_QUEUE,
             PHOTO_AI_QUEUE,

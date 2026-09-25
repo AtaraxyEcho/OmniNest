@@ -1,4 +1,5 @@
 package com.omninest.modules.music.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -34,7 +35,7 @@ class MusicCoverServiceTest {
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
     private final FileMetadataQueryService fileMetadataQueryService = mock(FileMetadataQueryService.class);
     private final MusicCoverThumbnailService coverThumbnailService = mock(MusicCoverThumbnailService.class);
-    private final MusicCoverService coverService = new MusicCoverService(
+    private final MusicCoverService coverService = new MusicCoverService(new MediaProcessingLimitsProperties(),
             storageService,
             fileQueryService,
             fileMetadataQueryService,

@@ -1,4 +1,5 @@
 package com.omninest.modules.video.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -29,11 +30,12 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class SubtitleManagementService {
-    private static final long MAX_SUBTITLE_BYTES = 10L * 1024 * 1024;
+
     private static final Set<String> SUBTITLE_EXTENSIONS = Set.of(
             "srt", "vtt", "ass", "ssa", "sub", "ttml"
     );
 
+    private final MediaProcessingLimitsProperties processingLimits;
     private final MediaSubtitleTrackRepository subtitleTrackRepository;
     private final MediaVideoItemRepository videoItemRepository;
     private final FileLifecycleGuard fileLifecycleGuard;
@@ -135,7 +137,7 @@ public class SubtitleManagementService {
         if (!"FILE".equals(file.nodeType())) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "字幕来源必须是文件");
         }
-        if (file.sizeBytes() <= 0 || file.sizeBytes() > MAX_SUBTITLE_BYTES) {
+        if (file.sizeBytes() <= 0 || file.sizeBytes() > processingLimits.getMaxSubtitleBytes()) {
             throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "字幕文件大小不能超过 10MB");
         }
         String fileName = file.name() == null ? "" : file.name();

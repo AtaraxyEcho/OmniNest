@@ -10,8 +10,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -20,7 +21,8 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Table(name = "photo_batch_tasks", schema = "omni")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class PhotoBatchTask {
@@ -77,5 +79,27 @@ public class PhotoBatchTask {
     @PreUpdate
     void preUpdate() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof PhotoBatchTask other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "PhotoBatchTask{id=" + id + ", ownerUserId=" + ownerUserId + ", taskId=" + taskId
+                + ", taskType=" + taskType + ", status=" + status + "}";
     }
 }

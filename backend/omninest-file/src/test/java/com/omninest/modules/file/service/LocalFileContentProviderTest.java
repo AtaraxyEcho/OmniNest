@@ -55,7 +55,7 @@ class LocalFileContentProviderTest {
     }
 
     @Test
-    void findRangeResource_restoresAvailabilityWhenFileIsReadable(
+    void findRangeResource_doesNotWriteAvailabilityOnRead(
             @org.junit.jupiter.api.io.TempDir Path tempDir
     ) throws Exception {
         Path file = tempDir.resolve("movie.mkv");
@@ -71,16 +71,13 @@ class LocalFileContentProviderTest {
         when(contentRefRepository.findByFileNodeId(FILE_ID)).thenReturn(Optional.of(reference));
         when(storageLocationRepository.findById(LOCATION_ID)).thenReturn(Optional.of(location));
         when(pathResolver.resolveFile(location, "movies/movie.mkv")).thenReturn(file);
-        when(contentRefRepository.save(any(FileContentRef.class)))
-                .thenAnswer(invocation -> invocation.getArgument(0));
 
         var resource = provider.findRangeResource(node);
 
         assertThat(resource).isPresent();
-        assertThat(reference.getAvailabilityStatus()).isEqualTo("AVAILABLE");
-        assertThat(reference.getMissingSince()).isNull();
-        assertThat(reference.getMissingConfirmations()).isZero();
-        verify(contentRefRepository).save(reference);
+        // C3：读路径不写库，可用性由扫描/维护流程更新。
+        assertThat(reference.getAvailabilityStatus()).isEqualTo("MISSING");
+        verify(contentRefRepository, never()).save(any(FileContentRef.class));
     }
 
     @Test

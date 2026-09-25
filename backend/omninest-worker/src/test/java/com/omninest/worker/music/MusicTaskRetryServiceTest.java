@@ -66,7 +66,7 @@ class MusicTaskRetryServiceTest {
                 new IllegalStateException("network")
         );
 
-        verify(taskRecordService).markDeadLetter(TASK_ID, "IllegalStateException");
+        verify(taskRecordService).markDeadLetter(eq(TASK_ID), eq("IllegalStateException"), anyString());
         verify(taskDispatchService, never()).enqueueAt(any(), anyString(), anyString(), any(), any());
     }
 

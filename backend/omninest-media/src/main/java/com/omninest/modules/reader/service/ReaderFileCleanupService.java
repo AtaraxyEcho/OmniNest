@@ -4,7 +4,7 @@ import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.event.FileNodesSoftDeletedEvent;
 import com.omninest.modules.file.service.FileBusinessReference;
 import com.omninest.modules.file.service.FilePurgeParticipant;
-import com.omninest.modules.file.service.LegacyObjectReference;
+import com.omninest.modules.reader.domain.ReaderPageAsset;
 import com.omninest.modules.file.service.PurgeContext;
 import com.omninest.modules.file.service.PurgeContributionWriter;
 import com.omninest.modules.media.service.MediaFileVisibilitySyncParticipant;
@@ -107,8 +107,8 @@ public class ReaderFileCleanupService implements
         writer.addFileNodeIds(itemSourceRepository.findByReaderItemIdIn(itemIds).stream()
                 .map(ReaderItemSource::getFileNodeId)
                 .toList());
-        writer.addLegacyObjects(pageAssetRepository.findByReaderItemIdIn(itemIds).stream()
-                .map(asset -> new LegacyObjectReference(asset.getBucketName(), asset.getObjectKey()))
+        writer.addFileNodeIds(pageAssetRepository.findByReaderItemIdIn(itemIds).stream()
+                .map(ReaderPageAsset::getFileNodeId)
                 .toList());
     }
 

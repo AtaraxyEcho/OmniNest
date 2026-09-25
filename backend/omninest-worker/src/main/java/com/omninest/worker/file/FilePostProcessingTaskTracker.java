@@ -2,6 +2,7 @@ package com.omninest.worker.file;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -114,14 +115,14 @@ public class FilePostProcessingTaskTracker {
             return;
         }
         if (isNonRetryable(exception)) {
-            taskRecordService.markDeadLetter(taskId, errorSummary);
+            taskRecordService.markDeadLetter(taskId, errorSummary, StackSummaries.summarize(exception));
             log.warn("文件后处理任务因业务错误进入死信终态: taskId={}, taskType={}, errorType={}",
                     taskId, taskType, errorSummary);
             return;
         }
         int currentRetries = taskRecordService.retryCount(taskId);
         if (currentRetries >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(taskId, errorSummary);
+            taskRecordService.markDeadLetter(taskId, errorSummary, StackSummaries.summarize(exception));
             log.error("文件后处理任务达到最大重试次数并进入死信: taskId={}, taskType={}, errorType={}",
                     taskId, taskType, errorSummary);
             return;

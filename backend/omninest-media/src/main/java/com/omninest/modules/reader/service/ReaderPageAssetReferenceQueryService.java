@@ -1,36 +1,26 @@
 package com.omninest.modules.reader.service;
 
-import com.omninest.modules.reader.repository.ReaderPageAssetRepository;
 import java.util.Collection;
 import java.util.Set;
-import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 基于漫画页面元数据实现对象存储引用查询。
+ * 漫画页面资产引用查询实现。
+ *
+ * <p>页面资产的物理对象经 DerivedAssetStorageService 写入 FileObject，
+ * 孤儿扫描的 FileObject 引用查询已保护这些对象键。此处返回空集，
+ * 仅在业务侧出现“无 FileObject 但仍被页面资产引用”的历史数据时才需要扩展。</p>
  *
  * @author OmniNest
  */
 @Service
-@RequiredArgsConstructor
 public class ReaderPageAssetReferenceQueryService implements ReaderPageAssetReferenceQuery {
 
-    private final ReaderPageAssetRepository readerPageAssetRepository;
-
     /**
-     * 查询候选对象键中已有漫画页面元数据引用的键。
-     *
-     * @param bucketName 存储桶名称
-     * @param objectKeys 候选对象键
-     * @return 已引用对象键
+     * {@inheritDoc}
      */
     @Override
-    @Transactional(readOnly = true)
     public Set<String> findReferencedObjectKeys(String bucketName, Collection<String> objectKeys) {
-        if (objectKeys == null || objectKeys.isEmpty()) {
-            return Set.of();
-        }
-        return Set.copyOf(readerPageAssetRepository.findReferencedObjectKeys(bucketName, objectKeys));
+        return Set.of();
     }
 }

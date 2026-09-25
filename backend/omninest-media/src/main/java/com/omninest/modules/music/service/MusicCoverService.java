@@ -1,4 +1,5 @@
 package com.omninest.modules.music.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -12,6 +13,7 @@ import com.omninest.modules.music.dto.MusicDtos.MusicCoverUploadDto;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PushbackInputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
@@ -29,14 +31,15 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 @RequiredArgsConstructor
 public class MusicCoverService {
-    private static final long MAX_COVER_SIZE_BYTES = 8L * 1024 * 1024;
+
 
     /**
      * 流式读取防御上限。仅作恶意/异常资源护栏：刮削下载与派生存储
      * 不经过上传入口的 8MB 校验，正常封面远小于此值。
      */
-    private static final long MAX_STREAM_COVER_SIZE_BYTES = 32L * 1024 * 1024;
 
+
+    private final MediaProcessingLimitsProperties processingLimits;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
     private final FileMetadataQueryService fileMetadataQueryService;
@@ -70,7 +73,7 @@ public class MusicCoverService {
         FileDescriptor node = fileMetadataQueryService.findActiveById(fileId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在"));
         if (!NodeType.FILE.getValue().equals(node.nodeType())
-                || node.sizeBytes() > MAX_STREAM_COVER_SIZE_BYTES) {
+                || node.sizeBytes() > processingLimits.getMaxStreamCoverBytes()) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在");
         }
         String contentType = node.mimeType();
@@ -163,14 +166,16 @@ public class MusicCoverService {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面文件不能为空");
         }
-        if (file.getSize() > MAX_COVER_SIZE_BYTES) {
+        if (file.getSize() > processingLimits.getMaxCoverUploadBytes()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面文件不能超过 8MB");
         }
         try {
-            byte[] bytes = file.getBytes();
-            ImageType imageType = detectImageType(bytes);
-            UUID resourceId = UUID.randomUUID();
-            try (InputStream input = new ByteArrayInputStream(bytes)) {
+            try (InputStream raw = file.getInputStream();
+                 PushbackInputStream input = new PushbackInputStream(raw, 32)) {
+                byte[] header = input.readNBytes(32);
+                input.unread(header);
+                ImageType imageType = detectImageType(header);
+                UUID resourceId = UUID.randomUUID();
                 UUID fileId = derivedAssetStorageService.store(
                         ownerUserId,
                         "MUSIC_COVER",

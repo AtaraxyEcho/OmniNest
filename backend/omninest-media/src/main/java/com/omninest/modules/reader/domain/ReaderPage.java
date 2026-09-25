@@ -8,15 +8,17 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 漫画页面实体，记录单页图像在来源文件中的位置及元数据。
  */
 @Entity
 @Table(name = "reader_pages", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ReaderPage {
@@ -85,5 +87,26 @@ public class ReaderPage {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof ReaderPage other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "ReaderPage{id=" + id + ", readerItemId=" + readerItemId + ", pageIndex=" + pageIndex + "}";
     }
 }

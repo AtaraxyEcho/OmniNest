@@ -1,4 +1,5 @@
 package com.omninest.modules.reader.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -28,8 +29,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ReaderCoverExtractionService {
 
-    private static final int MAX_COVER_BYTES = 20 * 1024 * 1024;
 
+
+    private final MediaProcessingLimitsProperties processingLimits;
     private final ReaderItemRepository itemRepository;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final MediaSyncEventService syncEventService;
@@ -59,7 +61,7 @@ public class ReaderCoverExtractionService {
         if (cover == null || cover.content() == null || cover.content().length == 0) {
             return false;
         }
-        if (cover.content().length > MAX_COVER_BYTES) {
+        if (cover.content().length > processingLimits.getMaxReaderCoverBytes()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面图片超过大小限制");
         }
 

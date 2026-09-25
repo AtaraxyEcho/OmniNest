@@ -12,8 +12,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 系统实例单例，保存首次安装状态和实例基础信息。
@@ -22,7 +23,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "system_instances", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class SystemInstance {
@@ -103,5 +105,23 @@ public class SystemInstance {
     @PreUpdate
     void touchUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof SystemInstance other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "SystemInstance{id=" + id + ", installationId=" + installationId
+                + ", setupState=" + setupState + "}";
     }
 }

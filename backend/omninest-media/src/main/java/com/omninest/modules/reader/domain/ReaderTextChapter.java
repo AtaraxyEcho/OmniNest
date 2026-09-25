@@ -9,8 +9,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 文本书籍章节清单，保存服务端解析得到的稳定阅读顺序和源文件定位信息。
@@ -19,7 +20,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "reader_text_chapters", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ReaderTextChapter {
@@ -69,5 +71,27 @@ public class ReaderTextChapter {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof ReaderTextChapter other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "ReaderTextChapter{id=" + id + ", readerItemId=" + readerItemId + ", chapterIndex=" + chapterIndex
+                + ", title=" + title + "}";
     }
 }

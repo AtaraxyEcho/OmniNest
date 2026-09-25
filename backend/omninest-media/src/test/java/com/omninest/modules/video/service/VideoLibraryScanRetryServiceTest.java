@@ -72,6 +72,6 @@ class VideoLibraryScanRetryServiceTest {
                 new BusinessException(ErrorCode.FILE_PATH_INVALID, "路径无效")
         );
 
-        verify(taskRecordService).markFailed(TASK_ID, "FILE_PATH_INVALID");
+        verify(taskRecordService).markFailed(eq(TASK_ID), eq("FILE_PATH_INVALID"), any());
     }
 }

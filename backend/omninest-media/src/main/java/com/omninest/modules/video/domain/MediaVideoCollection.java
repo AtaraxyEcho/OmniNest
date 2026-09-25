@@ -11,12 +11,14 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "media_video_collections", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class MediaVideoCollection {
@@ -65,5 +67,26 @@ public class MediaVideoCollection {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MediaVideoCollection other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "MediaVideoCollection{id=" + id + ", ownerUserId=" + ownerUserId + ", name=" + name + "}";
     }
 }

@@ -69,7 +69,8 @@ class PhotoAiTaskRetryServiceTest {
         service.handlePhotoAiFailure(event, new BusinessException(
                 com.omninest.common.enums.ErrorCode.BAD_REQUEST, "不支持的模式"));
 
-        Mockito.verify(taskRecordService).markDeadLetter(event.taskId(), "BAD_REQUEST");
+        Mockito.verify(taskRecordService).markDeadLetter(
+                Mockito.eq(event.taskId()), Mockito.eq("BAD_REQUEST"), Mockito.anyString());
         Mockito.verifyNoInteractions(taskDispatchService);
     }
 
@@ -85,7 +86,7 @@ class PhotoAiTaskRetryServiceTest {
                 Mockito.eq("TASK_DEPENDENCY_NOT_READY"),
                 Mockito.any(Instant.class));
         Mockito.verify(taskRecordService, Mockito.never()).markDeadLetter(
-                Mockito.any(UUID.class), Mockito.anyString());
+                Mockito.any(UUID.class), Mockito.anyString(), Mockito.any());
         ArgumentCaptor<Instant> retryAtCaptor = ArgumentCaptor.forClass(Instant.class);
         Mockito.verify(taskDispatchService).enqueueAt(
                 Mockito.eq(event.taskId()),
@@ -106,7 +107,8 @@ class PhotoAiTaskRetryServiceTest {
         service.handlePhotoAiFailure(event, new BusinessException(
                 com.omninest.common.enums.ErrorCode.TASK_DEPENDENCY_NOT_READY, "照片封面尚未生成，等待缩略图任务回填"));
 
-        Mockito.verify(taskRecordService).markDeadLetter(event.taskId(), "TASK_DEPENDENCY_NOT_READY");
+        Mockito.verify(taskRecordService).markDeadLetter(
+                Mockito.eq(event.taskId()), Mockito.eq("TASK_DEPENDENCY_NOT_READY"), Mockito.anyString());
         Mockito.verify(taskRecordService, Mockito.never()).markRetryWait(
                 Mockito.any(UUID.class), Mockito.anyString(), Mockito.any(Instant.class));
         Mockito.verifyNoInteractions(taskDispatchService);
@@ -119,7 +121,8 @@ class PhotoAiTaskRetryServiceTest {
 
         service.handlePhotoAiFailure(event, new IllegalStateException("sidecar unavailable"));
 
-        Mockito.verify(taskRecordService).markDeadLetter(event.taskId(), "IllegalStateException");
+        Mockito.verify(taskRecordService).markDeadLetter(
+                Mockito.eq(event.taskId()), Mockito.eq("IllegalStateException"), Mockito.anyString());
         Mockito.verify(taskRecordService, Mockito.never()).markRetryWait(
                 Mockito.any(UUID.class), Mockito.anyString(), Mockito.any(Instant.class));
         Mockito.verifyNoInteractions(taskDispatchService);

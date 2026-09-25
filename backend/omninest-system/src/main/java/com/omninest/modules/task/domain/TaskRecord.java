@@ -10,15 +10,17 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 系统任务记录实体
  */
 @Entity
 @Table(name = "sys_tasks", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class TaskRecord {
@@ -128,5 +130,25 @@ public class TaskRecord {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof TaskRecord other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与任务状态，避免 TEXT 载荷、结果和错误详情进入日志。
+     */
+    @Override
+    public String toString() {
+        return "TaskRecord{id=" + id + ", taskType=" + taskType + ", status=" + status + "}";
     }
 }

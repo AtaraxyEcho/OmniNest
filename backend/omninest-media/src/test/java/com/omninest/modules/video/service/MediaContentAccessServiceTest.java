@@ -66,7 +66,7 @@ class MediaContentAccessServiceTest {
 
         assertThatThrownBy(() -> service.openVideoAsset("token", ITEM_ID, FILE_ID))
                 .isInstanceOf(BusinessException.class);
-        verify(fileContentAccessService, never()).openAuthorizedMediaStream(any(), any());
+        verify(fileContentAccessService, never()).openAuthorizedMediaStream(any(), any(), any());
     }
 
     @Test
@@ -139,7 +139,7 @@ class MediaContentAccessServiceTest {
                 Instant.now().plusSeconds(60)
         ));
         when(videoItemRepository.findById(ITEM_ID)).thenReturn(Optional.of(item));
-        when(fileContentAccessService.openAuthorizedMediaResource(FILE_ID, com.omninest.modules.file.domain.MediaContentPurpose.MEDIA_PLAYBACK))
+        when(fileContentAccessService.openAuthorizedMediaResource(FILE_ID, com.omninest.modules.file.domain.MediaContentPurpose.MEDIA_PLAYBACK, USER_ID))
                 .thenReturn(new com.omninest.modules.file.dto.FileContentResource(
                         new org.springframework.core.io.ByteArrayResource(new byte[0]),
                         "night.webm",

@@ -1,6 +1,7 @@
 package com.omninest.modules.backdrop.service;
 
 import com.alibaba.fastjson2.JSON;
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.backdrop.domain.BackdropAsset;
 import com.omninest.modules.backdrop.domain.BackdropAssetStatus;
@@ -58,7 +59,7 @@ public class BackdropScanRetryService {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (exception instanceof FileIngressRejectedException || currentRetries >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(event.taskId(), errorSummary);
+            taskRecordService.markDeadLetter(event.taskId(), errorSummary, StackSummaries.summarize(exception));
             settleTerminal(event, "安全扫描未通过", "背景素材「" + assetTitle(event.assetId())
                     + "」安全扫描未通过或重试耗尽，已释放占用量");
             log.error("背景素材安全扫描任务进入死信终态: taskId={}, retryCount={}, errorType={}",

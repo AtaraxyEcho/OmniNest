@@ -40,6 +40,8 @@ class ConfigDefinitionCatalogTest {
         assertThat(ConfigDefinitionCatalog.isKnownHidden("rate-limit.default-limit")).isTrue();
         assertThat(ConfigDefinitionCatalog.isKnownHidden("transcode.enabled")).isTrue();
         assertThat(ConfigDefinitionCatalog.find("transcode.enabled")).isEmpty();
+        assertThat(ConfigDefinitionCatalog.find("media.transcode.enabled"))
+                .hasValueSatisfying(definition -> assertThat(definition.defaultValue()).isEqualTo("false"));
         assertThat(ConfigDefinitionCatalog.find("rate-limit.default-limit")).isEmpty();
         assertThat(ConfigDefinitionCatalog.find("media.tmdb.url")).isPresent();
         assertThat(ConfigDefinitionCatalog.find("weather.qweather.url")).isPresent();

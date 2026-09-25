@@ -6,7 +6,10 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 照片列表查询使用的轻量投影，不加载详情页专用 JSONB 字段。
+ * 照片列表查询使用的轻量投影。
+ *
+ * <p>不加载详情专用大字段（providerMetadata、EXIF 宽表等）；description 供客户端
+ * 本地过滤，gpsLocation 供卡片/幻灯片位置文案，故保留在列表投影中。</p>
  *
  * @author OmniNest
  */

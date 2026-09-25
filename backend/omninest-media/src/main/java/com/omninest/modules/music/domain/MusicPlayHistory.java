@@ -9,8 +9,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 保存用户对本地或在线音乐的播放历史快照。
@@ -19,7 +20,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "music_play_history", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class MusicPlayHistory {
@@ -77,5 +79,27 @@ public class MusicPlayHistory {
         if (playedAt == null) {
             playedAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MusicPlayHistory other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "MusicPlayHistory{id=" + id + ", ownerUserId=" + ownerUserId + ", trackId=" + trackId
+                + ", title=" + title + "}";
     }
 }

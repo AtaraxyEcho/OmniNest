@@ -8,15 +8,17 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 活跃会话实体，用于登录互斥和会话管理。
  */
 @Entity
 @Table(name = "auth_active_sessions", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class AuthActiveSession {
@@ -76,5 +78,26 @@ public class AuthActiveSession {
      */
     public boolean isRevoked() {
         return revokedAt != null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof AuthActiveSession other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与客户端平台，避免设备和网络信息进入日志。
+     */
+    @Override
+    public String toString() {
+        return "AuthActiveSession{id=" + id + ", userId=" + userId
+                + ", clientPlatform=" + clientPlatform + "}";
     }
 }

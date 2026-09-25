@@ -1,4 +1,5 @@
 package com.omninest.modules.music.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -79,7 +80,7 @@ class MusicAdminServiceTest {
             mock(DerivedAssetStorageService.class);
     private final MusicCoverRetentionService coverRetentionService =
             mock(MusicCoverRetentionService.class);
-    private final MusicAdminService adminService = new MusicAdminService(
+    private final MusicAdminService adminService = new MusicAdminService(new MediaProcessingLimitsProperties(),
             scanJobRepository,
             trackRepository,
             albumRepository,

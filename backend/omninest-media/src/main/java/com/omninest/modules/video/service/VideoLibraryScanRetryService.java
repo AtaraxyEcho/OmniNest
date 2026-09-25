@@ -2,6 +2,7 @@ package com.omninest.modules.video.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -36,14 +37,15 @@ public class VideoLibraryScanRetryService {
     @Transactional(rollbackFor = Exception.class)
     public void handleFailure(LocalVideoLibraryScanRequestedEvent event, Throwable exception) {
         String errorSummary = errorSummary(exception);
+        String stackSummary = StackSummaries.summarize(exception);
         if (!isRetryable(exception)) {
-            taskRecordService.markFailed(event.taskId(), errorSummary);
+            taskRecordService.markFailed(event.taskId(), errorSummary, stackSummary);
             log.warn("本地影视库扫描因业务错误终止: taskId={}, error={}", event.taskId(), errorSummary);
             return;
         }
         int currentRetries = taskRecordService.retryCount(event.taskId());
         if (currentRetries >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(event.taskId(), errorSummary);
+            taskRecordService.markDeadLetter(event.taskId(), errorSummary, stackSummary);
             log.error("本地影视库扫描进入死信终态: taskId={}, retryCount={}, error={}",
                     event.taskId(), currentRetries, errorSummary);
             return;

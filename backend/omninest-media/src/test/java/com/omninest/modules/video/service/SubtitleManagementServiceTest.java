@@ -1,4 +1,5 @@
 package com.omninest.modules.video.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import org.mockito.ArgumentCaptor;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -66,7 +67,7 @@ class SubtitleManagementServiceTest {
         mediaPlaybackTokenService = mock(MediaPlaybackTokenService.class);
         syncEventService = mock(MediaSyncEventService.class);
 
-        service = new SubtitleManagementService(
+        service = new SubtitleManagementService(new MediaProcessingLimitsProperties(),
                 subtitleTrackRepository,
                 videoItemRepository,
                 fileLifecycleGuard,

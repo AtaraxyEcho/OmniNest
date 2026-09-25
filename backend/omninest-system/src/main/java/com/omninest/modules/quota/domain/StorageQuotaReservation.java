@@ -10,8 +10,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 持久化一次文件写入所占用的存储配额预留。
@@ -20,7 +21,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "storage_quota_reservations", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class StorageQuotaReservation {
@@ -78,5 +80,23 @@ public class StorageQuotaReservation {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof StorageQuotaReservation other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "StorageQuotaReservation{id=" + id + ", ownerUserId=" + ownerUserId
+                + ", sourceId=" + sourceId + ", status=" + status + "}";
     }
 }

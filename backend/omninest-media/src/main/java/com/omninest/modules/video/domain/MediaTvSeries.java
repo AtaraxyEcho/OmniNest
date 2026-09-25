@@ -17,14 +17,16 @@ import java.util.UUID;
 import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.video.domain.SeriesType;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "media_tv_series", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class MediaTvSeries {
@@ -170,5 +172,27 @@ public class MediaTvSeries {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MediaTvSeries other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "MediaTvSeries{id=" + id + ", ownerUserId=" + ownerUserId + ", title=" + title
+                + ", tmdbId=" + tmdbId + ", seriesType=" + seriesType + "}";
     }
 }

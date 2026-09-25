@@ -1,11 +1,18 @@
 package com.omninest.common.error;
 
+import com.alibaba.fastjson2.JSON;
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.enums.ErrorCode;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.ConstraintViolationException;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.format.DateTimeParseException;
+import java.util.Locale;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -14,11 +21,11 @@ import org.springframework.transaction.IllegalTransactionStateException;
 import org.springframework.validation.BindException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
-import java.time.format.DateTimeParseException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -36,7 +43,7 @@ public class GlobalExceptionHandler {
     ResponseEntity<ApiResponse<Void>> handleBusiness(BusinessException exception) {
         log.warn("业务异常: code={}, message={}", exception.errorCode().getCode(), exception.getMessage());
         HttpStatus status = switch (exception.errorCode()) {
-            case UNAUTHORIZED -> HttpStatus.UNAUTHORIZED;
+            case UNAUTHORIZED, PASSWORD_INVALID, SHARE_PASSWORD_REQUIRED -> HttpStatus.UNAUTHORIZED;
             case FORBIDDEN, REGISTRATION_DISABLED -> HttpStatus.FORBIDDEN;
             case NOT_FOUND, TASK_NOT_FOUND, CONFIG_NOT_FOUND, FILE_NOT_FOUND,
                     MEDIA_NOT_FOUND, BOOK_NOT_FOUND, BACKDROP_NOT_FOUND -> HttpStatus.NOT_FOUND;
@@ -51,6 +58,7 @@ public class GlobalExceptionHandler {
         };
         Object details = exception.details().isEmpty() ? null : exception.details();
         return ResponseEntity.status(status)
+                .contentType(MediaType.APPLICATION_JSON)
                 .body(ApiResponse.error(exception.errorCode(), exception.getMessage(), details));
     }
 
@@ -152,6 +160,34 @@ public class GlobalExceptionHandler {
     }
 
     /**
+     * 异步请求超时（含流式响应被容器回收）不再写入错误体。
+     *
+     * <p>流式接口返回时已预设 {@code audio/*} 等媒体 Content-Type，
+     * 全局异常再写 {@link ApiResponse} 会触发 {@code HttpMessageNotWritableException}
+     * 并二次打错误日志。超时属可预期生命周期，按客户端侧中断降级处理。</p>
+     */
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    void handleAsyncRequestTimeout(AsyncRequestTimeoutException exception) {
+        log.debug("异步请求超时: {}", exception.getMessage());
+    }
+
+    /**
+     * 客户端断开或上游读中断导致的 IO 异常不写入 JSON 错误体。
+     *
+     * <p>StreamingResponseBody 在写出阶段抛出的 IOException 常常伴随
+     * InterruptedException 包装（HttpClient 响应流被取消），此时响应头已固定为
+     * 媒体类型，继续返回 ApiResponse 会触发转换器失败。</p>
+     */
+    @ExceptionHandler(IOException.class)
+    void handleIoException(IOException exception) {
+        if (isClientDisconnect(exception)) {
+            log.debug("流式响应已中断: {}", exception.getMessage());
+            return;
+        }
+        log.warn("IO 异常: {}", exception.getMessage());
+    }
+
+    /**
      * 事务传播状态错误是编程错误而非运行环境故障。
      *
      * <p>典型场景：以 {@code Propagation.MANDATORY} 声明的记录器被无事务的调用方调用，
@@ -168,10 +204,63 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    ResponseEntity<ApiResponse<Void>> handleUnexpected(Exception exception) {
+    void handleUnexpected(Exception exception, HttpServletResponse response) throws IOException {
+        if (isClientDisconnect(exception) || exception instanceof AsyncRequestTimeoutException) {
+            log.debug("请求已中断，跳过错误响应: {}", exception.getMessage());
+            return;
+        }
         log.error("未知系统异常", exception);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(ApiResponse.error(ErrorCode.INTERNAL_ERROR, "系统繁忙，请稍后重试"));
+        if (response.isCommitted()) {
+            log.warn("响应已提交，跳过错误体写出: status={}", response.getStatus());
+            return;
+        }
+        response.setStatus(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        if (!isJsonWritable(response)) {
+            log.warn("Content-Type 非 JSON，跳过错误体写出: contentType={}", response.getContentType());
+            return;
+        }
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.getWriter().write(JSON.toJSONString(
+                ApiResponse.error(ErrorCode.INTERNAL_ERROR, "系统繁忙，请稍后重试")));
+    }
+
+    /**
+     * 流式响应预设了媒体 Content-Type 后，不能再按 JSON 写出 ApiResponse。
+     */
+    private boolean isJsonWritable(HttpServletResponse response) {
+        String contentType = response.getContentType();
+        if (contentType == null || contentType.isBlank()) {
+            return true;
+        }
+        String lower = contentType.toLowerCase(Locale.ROOT);
+        return lower.contains("json") || lower.startsWith("text/");
+    }
+
+    /**
+     * 判断异常是否属于客户端断开或异步取消导致的中断。
+     */
+    private boolean isClientDisconnect(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof InterruptedException
+                    || current instanceof AsyncRequestNotUsableException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase(Locale.ROOT);
+                if (lower.contains("broken pipe")
+                        || lower.contains("connection reset")
+                        || lower.contains("connection aborted")
+                        || lower.contains("client abort")
+                        || lower.contains("an established connection was aborted")) {
+                    return true;
+                }
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return false;
     }
 
     private String resolveValidationMessage(Exception exception) {

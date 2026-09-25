@@ -2,6 +2,7 @@ package com.omninest.worker.photos;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.photos.event.PhotoGeoImportEvent;
 import com.omninest.modules.photos.service.GeoDatasetService;
@@ -73,14 +74,15 @@ public class PhotoGeoImportRetryService {
 
     private void handleFailure(UUID taskId, Throwable exception, EventSupplier eventSupplier) {
         String errorSummary = errorSummary(exception);
+        String stackSummary = StackSummaries.summarize(exception);
         if (isNonRetryable(exception)) {
-            taskRecordService.markDeadLetter(taskId, errorSummary);
+            taskRecordService.markDeadLetter(taskId, errorSummary, stackSummary);
             log.warn("GeoNames 任务因业务错误进入死信终态: taskId={}, errorType={}", taskId, errorSummary);
             return;
         }
         int currentRetries = taskRecordService.retryCount(taskId);
         if (currentRetries >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(taskId, errorSummary);
+            taskRecordService.markDeadLetter(taskId, errorSummary, stackSummary);
             log.error("GeoNames 任务达到最大重试次数并进入死信: taskId={}, retryCount={}, errorType={}",
                     taskId, currentRetries, errorSummary);
             return;

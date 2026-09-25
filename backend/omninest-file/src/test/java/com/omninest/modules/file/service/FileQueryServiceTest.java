@@ -17,6 +17,7 @@ import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.file.domain.FileNode;
+import com.omninest.modules.file.dto.BatchItemResult;
 import com.omninest.modules.file.domain.FileObject;
 import com.omninest.modules.file.domain.FilePermission;
 import com.omninest.modules.file.domain.SourceType;
@@ -565,7 +566,8 @@ class FileQueryServiceTest {
         assertThat(child.getDeletedBy()).isEqualTo(OWNER_ID);
         assertThat(standalone.getDeletedBy()).isEqualTo(OWNER_ID);
         assertThat(result).hasSize(2);
-        assertThat(result).extracting("name").containsExactlyInAnyOrder("Docs", "readme.md");
+        assertThat(result).extracting("status").containsOnly("SUCCESS");
+        assertThat(result).extracting("id").containsExactlyInAnyOrder(folderId, fileId);
     }
 
     @Test
@@ -597,7 +599,7 @@ class FileQueryServiceTest {
         var result = fileQueryService.batchDeleteNodes(
                 OWNER_ID, List.of(UUID.fromString("60000000-0000-0000-0000-000000000099")));
 
-        assertThat(result).isEmpty();
+        assertThat(result).extracting("status").containsExactly("SKIPPED");
         verify(eventPublisher, never()).publishEvent(any());
     }
 
@@ -627,7 +629,8 @@ class FileQueryServiceTest {
         assertThat(folder.isDeleted()).isFalse();
         assertThat(child.isDeleted()).isFalse();
         assertThat(result).hasSize(1);
-        assertThat(result).extracting("name").containsExactly("Docs");
+        assertThat(result).extracting("status").containsExactly("SUCCESS");
+        assertThat(result).extracting("id").containsExactly(folderId);
     }
 
     @Test
@@ -665,10 +668,9 @@ class FileQueryServiceTest {
                 OWNER_ID, "conflict.txt"))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> fileQueryService.batchRestoreNodes(OWNER_ID, List.of(fileId)))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.CONFLICT);
+        var conflictResult = fileQueryService.batchRestoreNodes(OWNER_ID, List.of(fileId));
+        assertThat(conflictResult).extracting("status").containsExactly("FAILED");
+        assertThat(conflictResult).extracting("errorCode").containsExactly("CONFLICT");
     }
 
     @Test
@@ -695,6 +697,7 @@ class FileQueryServiceTest {
         assertThat(file.getParentId()).isEqualTo(targetFolderId);
         assertThat(file.getNormalizedPath()).isEqualTo("/Archive/doc.pdf");
         assertThat(result).hasSize(1);
+        assertThat(result.get(0).status()).isEqualTo("SUCCESS");
     }
 
     @Test
@@ -711,10 +714,9 @@ class FileQueryServiceTest {
                 OWNER_ID, List.of(folderId)))
                 .thenReturn(List.of(folder));
 
-        assertThatThrownBy(() -> fileQueryService.batchMoveNodes(
-                OWNER_ID, List.of(folderId), childFolderId))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("不能移动到自身子目录");
+        var moveResult = fileQueryService.batchMoveNodes(OWNER_ID, List.of(folderId), childFolderId);
+        assertThat(moveResult).extracting("status").containsExactly("FAILED");
+        assertThat(moveResult).extracting("errorCode").containsExactly("FILE_PATH_INVALID");
     }
 
     @Test
@@ -734,11 +736,9 @@ class FileQueryServiceTest {
                 OWNER_ID, targetFolderId, "doc.pdf"))
                 .thenReturn(true);
 
-        assertThatThrownBy(() -> fileQueryService.batchMoveNodes(
-                OWNER_ID, List.of(fileId), targetFolderId))
-                .isInstanceOf(BusinessException.class)
-                .extracting(exception -> ((BusinessException) exception).errorCode())
-                .isEqualTo(ErrorCode.CONFLICT);
+        var nameConflictResult = fileQueryService.batchMoveNodes(OWNER_ID, List.of(fileId), targetFolderId);
+        assertThat(nameConflictResult).extracting("status").containsExactly("FAILED");
+        assertThat(nameConflictResult).extracting("errorCode").containsExactly("CONFLICT");
     }
 
     @Test
@@ -757,7 +757,7 @@ class FileQueryServiceTest {
                 List.of(UUID.fromString("60000000-0000-0000-0000-000000000099")),
                 targetFolderId);
 
-        assertThat(result).isEmpty();
+        assertThat(result).extracting("status").containsExactly("SKIPPED");
     }
 
     private FileNode node(UUID ownerId, UUID parentId, String type, String name, String normalizedPath) {

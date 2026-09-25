@@ -13,6 +13,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 /**
  * 通用外部集成账号服务测试。
@@ -28,7 +30,7 @@ class IntegrationAccountServiceTest {
         AtomicReference<IntegrationAccount> stored = new AtomicReference<>();
         when(repository.findByOwnerUserIdAndIntegrationTypeAndProvider(OWNER_ID, "MUSIC", "NETEASE"))
                 .thenAnswer(invocation -> Optional.ofNullable(stored.get()));
-        when(repository.save(any(IntegrationAccount.class))).thenAnswer(invocation -> {
+        when(repository.saveAndFlush(any(IntegrationAccount.class))).thenAnswer(invocation -> {
             IntegrationAccount account = invocation.getArgument(0);
             stored.set(account);
             return account;
@@ -38,7 +40,13 @@ class IntegrationAccountServiceTest {
         when(credentialCipher.currentKeyVersion()).thenReturn(1);
         when(credentialCipher.decrypt("encrypted-credentials"))
                 .thenReturn("{\"cookie\":\"MUSIC_U=secret-cookie\"}");
-        IntegrationAccountService service = new IntegrationAccountService(repository, credentialCipher);
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        IntegrationAccountService service = new IntegrationAccountService(
+                repository,
+                credentialCipher,
+                transactionManager
+        );
 
         service.save(
                 OWNER_ID,
@@ -54,5 +62,40 @@ class IntegrationAccountServiceTest {
         IntegrationAccountData restored = service.find(OWNER_ID, "music", "netease").orElseThrow();
         assertThat(restored.credentials()).containsEntry("cookie", "MUSIC_U=secret-cookie");
         assertThat(restored.ownerUserId()).isEqualTo(OWNER_ID);
+    }
+
+    @Test
+    void saveRetriesOnceOnOptimisticLockingConflict() {
+        IntegrationAccountRepository repository = mock(IntegrationAccountRepository.class);
+        when(repository.findByOwnerUserIdAndIntegrationTypeAndProvider(OWNER_ID, "MUSIC", "NETEASE"))
+                .thenReturn(Optional.empty())
+                .thenReturn(Optional.empty());
+        when(repository.saveAndFlush(any(IntegrationAccount.class)))
+                .thenThrow(new org.springframework.orm.ObjectOptimisticLockingFailureException(
+                        IntegrationAccount.class, "1"))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        CredentialCipher credentialCipher = mock(CredentialCipher.class);
+        when(credentialCipher.encrypt(any(String.class))).thenReturn("encrypted-credentials");
+        when(credentialCipher.currentKeyVersion()).thenReturn(1);
+        when(credentialCipher.decrypt("encrypted-credentials")).thenReturn("{\"cookie\":\"cookie\"}");
+        PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
+        when(transactionManager.getTransaction(any())).thenReturn(mock(TransactionStatus.class));
+        IntegrationAccountService service = new IntegrationAccountService(
+                repository,
+                credentialCipher,
+                transactionManager
+        );
+
+        IntegrationAccountData saved = service.save(
+                OWNER_ID,
+                "music",
+                "netease",
+                "external-user",
+                "Music User",
+                null,
+                Map.of("cookie", "cookie")
+        );
+
+        assertThat(saved.ownerUserId()).isEqualTo(OWNER_ID);
     }
 }

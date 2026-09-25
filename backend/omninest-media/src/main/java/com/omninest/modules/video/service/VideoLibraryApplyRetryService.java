@@ -2,6 +2,7 @@ package com.omninest.modules.video.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -27,13 +28,14 @@ public class VideoLibraryApplyRetryService {
     @Transactional(rollbackFor = Exception.class)
     public void handleFailure(LocalVideoLibraryApplyRequestedEvent event, Throwable exception) {
         String errorSummary = errorSummary(exception);
+        String stackSummary = StackSummaries.summarize(exception);
         if (!isRetryable(exception)) {
-            taskRecordService.markFailed(event.taskId(), errorSummary);
+            taskRecordService.markFailed(event.taskId(), errorSummary, stackSummary);
             return;
         }
         int currentRetries = taskRecordService.retryCount(event.taskId());
         if (currentRetries >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(event.taskId(), errorSummary);
+            taskRecordService.markDeadLetter(event.taskId(), errorSummary, stackSummary);
             return;
         }
         Instant nextRetryAt = Instant.now().plus(retryDelay(currentRetries + 1));

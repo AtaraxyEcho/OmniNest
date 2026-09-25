@@ -7,6 +7,7 @@ import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.media.domain.MediaPlaybackProgress;
 import com.omninest.modules.media.domain.MediaPlaybackType;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 import com.omninest.modules.media.service.MediaPlaybackProgressService;
 import com.omninest.modules.video.domain.MediaSubtitleTrack;
 import com.omninest.modules.video.domain.MediaVideoItem;
@@ -19,7 +20,6 @@ import com.omninest.modules.video.repository.MediaMovieRepository;
 import com.omninest.modules.video.repository.MediaTvEpisodeRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -42,7 +42,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MoviePlaybackService {
-    private static final int MAX_SUBTITLE_BYTES = 10 * 1024 * 1024;
+
 
     private final MediaVideoItemRepository videoItemRepository;
     private final MediaMovieRepository movieRepository;
@@ -52,6 +52,8 @@ public class MoviePlaybackService {
     private final FileQueryService fileQueryService;
     private final MediaWatchHistoryRepository historyRepository;
     private final MovieTaskService movieTaskService;
+    private final MediaProcessingLimitsProperties processingLimits;
+    private final MediaRuntimeConfigService mediaRuntimeConfigService;
     private final PlatformTransactionManager transactionManager;
     private final VideoTranscodeService videoTranscodeService;
     private final MediaContentAccessService mediaContentAccessService;
@@ -183,57 +185,59 @@ public class MoviePlaybackService {
         );
     }
 
-    /** 使用媒体短期令牌读取字幕，且每次请求重新校验媒体库授权。 */
+    /** 使用媒体短期令牌流式写出字幕，且每次请求重新校验媒体库授权。 */
     @Transactional(readOnly = true)
-    public String getSubtitleContentByToken(String token, UUID videoItemId, UUID subtitleId) {
+    public void writeSubtitleContentByToken(String token, UUID videoItemId, UUID subtitleId, java.io.OutputStream out)
+            throws java.io.IOException {
         MediaPlaybackTokenService.MediaGrant grant = mediaPlaybackTokenService.requireGrant(token, videoItemId);
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
         if (!videoItemId.equals(track.getVideoItemId())) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "媒体令牌不能访问其他影片的字幕");
         }
-        return getSubtitleContent(grant.requesterUserId(), subtitleId);
+        writeSubtitleContent(grant.requesterUserId(), subtitleId, out);
     }
 
     /**
-     * 获取字幕文件内容（文本）。
-     * 外挂字幕：从 MinIO 读取原始文件（SRT/ASS/VTT）。
-     * 内嵌字幕：从 MinIO 读取探测时提取的 WebVTT；若未提取则实时提取。
+     * 流式写出字幕文件内容。
+     * 外挂字幕：从 File 模块受控内容流拷贝（SRT/ASS/VTT）。
+     * 内嵌字幕：从 File 读取探测时提取的 WebVTT；若未提取则实时提取。
      */
     @Transactional(readOnly = true)
-    public String getSubtitleContent(UUID ownerUserId, UUID subtitleId) {
+    public void writeSubtitleContent(UUID ownerUserId, UUID subtitleId, java.io.OutputStream out)
+            throws java.io.IOException {
         MediaSubtitleTrack track = subtitleTrackRepository.findById(subtitleId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道不存在"));
         MediaVideoItem item = mediaContentAccessService.requireReadableVideo(ownerUserId, track.getVideoItemId());
         UUID catalogOwnerId = item.getOwnerUserId();
         try {
             if (track.getFileNodeId() != null) {
-                // 文件模块统一执行所有权校验并提供受控内容流。
                 try (FileContentStream content = fileQueryService.openOwnedFileContent(
                         catalogOwnerId,
                         track.getFileNodeId()
                 )) {
-                    if (content.sizeBytes() > MAX_SUBTITLE_BYTES) {
+                    if (content.sizeBytes() > processingLimits.getMaxSubtitleBytes()) {
                         throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "字幕文件超过大小限制");
                     }
-                    byte[] bytes = content.inputStream().readNBytes(MAX_SUBTITLE_BYTES + 1);
-                    if (bytes.length > MAX_SUBTITLE_BYTES) {
-                        throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "字幕文件超过大小限制");
-                    }
-                    return new String(bytes, StandardCharsets.UTF_8);
+                    content.inputStream().transferTo(out);
                 }
             } else if (track.getStreamIndex() != null) {
-                // 内嵌字幕未提取：实时提取 WebVTT
                 Path vttFile = videoTranscodeService.extractSubtitleToWebVtt(
                         catalogOwnerId, item.getFileNodeId(), item.getId(), track.getStreamIndex());
                 try {
-                    return Files.readString(vttFile, StandardCharsets.UTF_8);
+                    if (Files.size(vttFile) > processingLimits.getMaxSubtitleBytes()) {
+                        throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "字幕文件超过大小限制");
+                    }
+                    Files.copy(vttFile, out);
                 } finally {
                     Files.deleteIfExists(vttFile);
                 }
+            } else {
+                throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道无可用内容");
             }
-            throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕轨道无可用内容");
         } catch (BusinessException e) {
+            throw e;
+        } catch (java.io.IOException e) {
             throw e;
         } catch (Exception e) {
             throw new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "字幕内容读取失败: " + e.getMessage());
@@ -307,6 +311,9 @@ public class MoviePlaybackService {
      * 在独立写事务中执行，与 playbackPlan 的只读事务隔离。
      */
     private void autoTriggerAudioTranscode(UUID ownerUserId, PlaybackPlanDto plan) {
+        if (!mediaRuntimeConfigService.transcodeEnabled()) {
+            return;
+        }
         if (!"TRANSCODE_REQUIRED".equals(plan.mode())) {
             return;
         }

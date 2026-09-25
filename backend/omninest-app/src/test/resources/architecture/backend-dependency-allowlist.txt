@@ -1,2 +1,1 @@
-CONTROLLER_REPOSITORY omninest-system/src/main/java/com/omninest/modules/user/controller/TwoFactorController.java -> com.omninest.modules.user.repository.AuthUserRepository
 CROSS_MODULE_REPOSITORY omninest-system/src/main/java/com/omninest/modules/user/service/InitialSetupService.java -> com.omninest.modules.configcenter.repository.ConfigEntryRepository

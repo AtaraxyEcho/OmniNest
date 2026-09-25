@@ -13,12 +13,14 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "auth_roles", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class AuthRole {
@@ -54,5 +56,25 @@ public class AuthRole {
         if (id == null) {
             id = UUID.randomUUID();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof AuthRole other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与业务键，避免懒加载权限集合进入日志。
+     */
+    @Override
+    public String toString() {
+        return "AuthRole{id=" + id + ", code=" + code + ", name=" + name + "}";
     }
 }

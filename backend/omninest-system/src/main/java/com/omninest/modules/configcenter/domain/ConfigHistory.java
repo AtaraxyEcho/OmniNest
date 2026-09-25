@@ -8,12 +8,14 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "config_histories", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ConfigHistory {
@@ -46,5 +48,25 @@ public class ConfigHistory {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ConfigHistory other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与配置键，避免新旧配置值（可能含密）进入日志。
+     */
+    @Override
+    public String toString() {
+        return "ConfigHistory{id=" + id + ", configKey=" + configKey + "}";
     }
 }

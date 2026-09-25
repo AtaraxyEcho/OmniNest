@@ -1,5 +1,6 @@
 package com.omninest.worker.reader;
 
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.reader.event.ReaderParseTaskEvent;
@@ -45,7 +46,7 @@ public class ReaderTextParseRetryService {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {
-            if (!taskRecordService.markDeadLetter(event.taskId(), errorSummary)) {
+            if (!taskRecordService.markDeadLetter(event.taskId(), errorSummary, StackSummaries.summarize(exception))) {
                 return;
             }
             // 重试耗尽进入 DLQ 时回写条目失败状态并发布 READER 事件，

@@ -11,14 +11,16 @@ import java.time.Instant;
 import java.util.UUID;
 import com.omninest.modules.task.domain.TaskStatus;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 @Entity
 @Table(name = "music_scan_jobs", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class MusicScanJob {
@@ -71,5 +73,27 @@ public class MusicScanJob {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MusicScanJob other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "MusicScanJob{id=" + id + ", ownerUserId=" + ownerUserId + ", taskId=" + taskId
+                + ", status=" + status + "}";
     }
 }

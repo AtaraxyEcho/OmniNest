@@ -25,14 +25,15 @@ class DeadLetterConsumerTest {
     @Test
     void handleUsesTaskIdHeaderAndAcknowledgesMessage() throws IOException {
         UUID taskId = UUID.randomUUID();
-        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString()))
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
                 .thenReturn(true);
 
         consumer.handle(message(taskId.toString(), "{}", "file.index"), channel);
 
         Mockito.verify(taskRecordService).markDeadLetter(
-                taskId,
-                "消息进入死信队列，原始路由键: file.index"
+                Mockito.eq(taskId),
+                Mockito.eq("消息进入死信队列，原始路由键: file.index"),
+                Mockito.isNull()
         );
         Mockito.verify(channel).basicAck(1L, false);
     }
@@ -40,7 +41,7 @@ class DeadLetterConsumerTest {
     @Test
     void handleRecordsDispatchFailureContextFromOutboxDeadLetter() throws IOException {
         UUID taskId = UUID.randomUUID();
-        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString()))
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
                 .thenReturn(true);
         String body = "{\"taskId\":\"" + taskId + "\",\"errorCode\":\"BROKER_UNAVAILABLE\","
                 + "\"failureType\":\"AmqpConnectException\",\"instanceId\":\"api-1\","
@@ -49,7 +50,11 @@ class DeadLetterConsumerTest {
         consumer.handle(message(taskId.toString(), body, "media.scrape"), channel);
 
         ArgumentCaptor<String> summaryCaptor = ArgumentCaptor.forClass(String.class);
-        Mockito.verify(taskRecordService).markDeadLetter(Mockito.eq(taskId), summaryCaptor.capture());
+        Mockito.verify(taskRecordService).markDeadLetter(
+                Mockito.eq(taskId),
+                summaryCaptor.capture(),
+                Mockito.isNull()
+        );
         Mockito.verify(channel).basicAck(1L, false);
         Assertions.assertThat(summaryCaptor.getValue())
                 .contains("原始路由键: media.scrape")
@@ -59,26 +64,43 @@ class DeadLetterConsumerTest {
     }
 
     @Test
+    void handlePassesStackSummaryFieldAsThirdArgument() throws IOException {
+        UUID taskId = UUID.randomUUID();
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
+                .thenReturn(true);
+        String body = "{\"taskId\":\"" + taskId + "\",\"stackSummary\":\"java.lang.IllegalStateException: boom\"}";
+
+        consumer.handle(message(taskId.toString(), body, "file.index"), channel);
+
+        Mockito.verify(taskRecordService).markDeadLetter(
+                Mockito.eq(taskId),
+                Mockito.anyString(),
+                Mockito.eq("java.lang.IllegalStateException: boom")
+        );
+        Mockito.verify(channel).basicAck(1L, false);
+    }
+
+    @Test
     void handleUsesTaskIdFromJsonBody() throws IOException {
         UUID taskId = UUID.randomUUID();
-        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString()))
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
                 .thenReturn(true);
 
         consumer.handle(message(null, "{\"taskId\":\"" + taskId + "\"}", "text.extract"), channel);
 
-        Mockito.verify(taskRecordService).markDeadLetter(Mockito.eq(taskId), Mockito.anyString());
+        Mockito.verify(taskRecordService).markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.isNull());
         Mockito.verify(channel).basicAck(1L, false);
     }
 
     @Test
     void handleFallsBackToBodyWhenHeaderIsInvalid() throws IOException {
         UUID taskId = UUID.randomUUID();
-        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString()))
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
                 .thenReturn(true);
 
         consumer.handle(message("invalid", "{\"taskId\":\"" + taskId + "\"}", "file.index"), channel);
 
-        Mockito.verify(taskRecordService).markDeadLetter(Mockito.eq(taskId), Mockito.anyString());
+        Mockito.verify(taskRecordService).markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.isNull());
         Mockito.verify(channel).basicAck(1L, false);
     }
 
@@ -95,12 +117,12 @@ class DeadLetterConsumerTest {
     @Test
     void handleAcknowledgesWhenTaskDoesNotExist() throws IOException {
         UUID taskId = UUID.randomUUID();
-        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString()))
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
                 .thenReturn(false);
 
         consumer.handle(message(taskId.toString(), "{}", "file.index"), channel);
 
-        Mockito.verify(taskRecordService).markDeadLetter(Mockito.eq(taskId), Mockito.anyString());
+        Mockito.verify(taskRecordService).markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.isNull());
         Mockito.verify(channel).basicAck(1L, false);
     }
 
@@ -115,7 +137,7 @@ class DeadLetterConsumerTest {
     @Test
     void handleNacksWhenTaskServiceFails() throws IOException {
         UUID taskId = UUID.randomUUID();
-        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString()))
+        Mockito.when(taskRecordService.markDeadLetter(Mockito.eq(taskId), Mockito.anyString(), Mockito.any()))
                 .thenThrow(new IllegalStateException("database unavailable"));
 
         consumer.handle(message(taskId.toString(), "{}", "file.index"), channel);

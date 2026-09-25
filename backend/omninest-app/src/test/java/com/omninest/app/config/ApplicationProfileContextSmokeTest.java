@@ -160,7 +160,16 @@ class DevApplicationProfileContextSmokeTest extends ApplicationProfileContextSmo
                 "omninest.setup.persistent-state-enabled=false",
                 "reader.comic-parser.consume-in-api=false",
                 "file.local-media.enabled=false",
-                "omninest.search.index-path=${java.io.tmpdir}/omninest-smoke-prod"
+                "omninest.search.index-path=${java.io.tmpdir}/omninest-smoke-prod",
+                "omninest.security.jwt-secret=smoke-test-jwt-secret-at-least-32-bytes-long!",
+                "spring.rabbitmq.password=smoke-rabbit-password",
+                "spring.data.redis.password=smoke-redis-password",
+                "omninest.minio.access-key=smoke-minio-access",
+                "omninest.minio.secret-key=smoke-minio-secret",
+                "omninest.rclone.password=smoke-rclone-password",
+                "omninest.aria2.rpc-secret=smoke-aria2-secret",
+                "photo.ai.secret=smoke-ai-sidecar-secret",
+                "omninest.setup.enabled=false"
         }
 )
 @ActiveProfiles("prod")

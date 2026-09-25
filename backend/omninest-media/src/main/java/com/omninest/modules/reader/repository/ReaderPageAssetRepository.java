@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
+
+
 
 /**
  * 漫画页面派生资源仓储。
@@ -64,20 +64,18 @@ public interface ReaderPageAssetRepository extends JpaRepository<ReaderPageAsset
     void deleteByReaderItemIdIn(Collection<UUID> readerItemIds);
 
     /**
-     * 查询候选对象键中已有漫画页面元数据引用的键。
+     * 批量查询仍被页面资产引用的派生 FileNode。
      *
-     * @param bucketName 存储桶名称
-     * @param objectKeys 候选对象键
-     * @return 已引用对象键
+     * @param fileNodeIds 候选派生 FileNode ID
+     * @return 仍被引用的派生资产
      */
-    @Query("""
-            select asset.objectKey
-            from ReaderPageAsset asset
-            where asset.bucketName = :bucketName
-              and asset.objectKey in :objectKeys
-            """)
-    List<String> findReferencedObjectKeys(
-            @Param("bucketName") String bucketName,
-            @Param("objectKeys") Collection<String> objectKeys
-    );
+    List<ReaderPageAsset> findByFileNodeIdIn(Collection<UUID> fileNodeIds);
+
+    /**
+     * 判断派生 FileNode 是否仍被页面资产引用。
+     *
+     * @param fileNodeId 派生 FileNode ID
+     * @return 是否存在引用
+     */
+    boolean existsByFileNodeId(UUID fileNodeId);
 }

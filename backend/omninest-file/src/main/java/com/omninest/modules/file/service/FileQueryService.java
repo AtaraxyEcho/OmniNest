@@ -13,6 +13,7 @@ import com.omninest.modules.file.domain.NodeType;
 import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.dto.CreateFolderRequest;
+import com.omninest.modules.file.dto.BatchItemResult;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
 import com.omninest.modules.file.dto.FileNodeDto;
@@ -32,6 +33,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -272,16 +274,26 @@ public class FileQueryService {
      * 批量软删除文件节点及其后代
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<FileNodeDto> batchDeleteNodes(UUID ownerUserId, List<UUID> fileIds) {
-        List<FileNode> nodes = fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds);
-        if (nodes.isEmpty()) {
-            return List.of();
-        }
-        nodes.forEach(this::requireManagedNode);
+    public List<BatchItemResult> batchDeleteNodes(UUID ownerUserId, List<UUID> fileIds) {
+        List<BatchItemResult> results = new ArrayList<>();
+        Map<UUID, FileNode> nodesById = fileNodeRepository
+                .findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds).stream()
+                .collect(Collectors.toMap(FileNode::getId, node -> node, (left, right) -> left));
         Instant deletedAt = Instant.now();
         List<UUID> allDeletedIds = new ArrayList<>();
         List<FileNode> allToSave = new ArrayList<>();
-        for (FileNode node : nodes) {
+        for (UUID fileId : fileIds) {
+            FileNode node = nodesById.get(fileId);
+            if (node == null) {
+                results.add(BatchItemResult.skipped(fileId, "文件不存在或已删除"));
+                continue;
+            }
+            try {
+                requireManagedNode(node);
+            } catch (BusinessException exception) {
+                results.add(BatchItemResult.failed(fileId, exception.errorCode().name(), exception.getMessage()));
+                continue;
+            }
             markDeleted(node, ownerUserId, deletedAt);
             allToSave.add(node);
             allDeletedIds.add(node.getId());
@@ -291,36 +303,46 @@ public class FileQueryService {
             descendants.forEach(d -> markDeleted(d, ownerUserId, deletedAt));
             allToSave.addAll(descendants);
             descendants.stream().map(FileNode::getId).forEach(allDeletedIds::add);
+            results.add(BatchItemResult.success(fileId));
         }
-        fileNodeRepository.saveAll(allToSave);
-        fileSearchIndexService.deleteFiles(allDeletedIds, ownerUserId);
-        eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, allDeletedIds, deletedAt));
-        recordLibraryInvalidation(ownerUserId, SyncAction.DELETED, allDeletedIds.size());
-        return nodes.stream().map(this::toDto).toList();
+        if (!allToSave.isEmpty()) {
+            fileNodeRepository.saveAll(allToSave);
+            fileSearchIndexService.deleteFiles(allDeletedIds, ownerUserId);
+            eventPublisher.publishEvent(new FileNodesSoftDeletedEvent(ownerUserId, allDeletedIds, deletedAt));
+            recordLibraryInvalidation(ownerUserId, SyncAction.DELETED, allDeletedIds.size());
+        }
+        return results;
     }
 
     /**
      * 批量恢复已删除的文件节点及其后代
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<FileNodeDto> batchRestoreNodes(UUID ownerUserId, List<UUID> fileIds) {
-        List<FileNode> nodes = fileIds.stream()
-                .map(id -> fileNodeRepository.findByIdAndOwnerUserId(id, ownerUserId)
-                        .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在")))
-                .filter(FileNode::isDeleted)
-                .toList();
-        if (nodes.isEmpty()) {
-            return List.of();
-        }
-        nodes.forEach(this::requireManagedNode);
+    public List<BatchItemResult> batchRestoreNodes(UUID ownerUserId, List<UUID> fileIds) {
+        List<BatchItemResult> results = new ArrayList<>();
         Instant restoredAt = Instant.now();
         List<UUID> restoredIds = new ArrayList<>();
         List<FileNode> allToSave = new ArrayList<>();
-        for (FileNode node : nodes) {
-            fileLifecycleGuard.requireRestorable(ownerUserId, node.getId());
-            ensureParentAvailable(ownerUserId, node);
-            if (sameNameExists(ownerUserId, node.getParentId(), node.getName())) {
-                throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件: " + node.getName());
+        for (UUID fileId : fileIds) {
+            FileNode node = fileNodeRepository.findByIdAndOwnerUserId(fileId, ownerUserId).orElse(null);
+            if (node == null) {
+                results.add(BatchItemResult.failed(fileId, "FILE_NOT_FOUND", "文件不存在"));
+                continue;
+            }
+            if (!node.isDeleted()) {
+                results.add(BatchItemResult.skipped(fileId, "文件未删除"));
+                continue;
+            }
+            try {
+                requireManagedNode(node);
+                fileLifecycleGuard.requireRestorable(ownerUserId, node.getId());
+                ensureParentAvailable(ownerUserId, node);
+                if (sameNameExists(ownerUserId, node.getParentId(), node.getName())) {
+                    throw new BusinessException(ErrorCode.CONFLICT, "同级目录下已存在同名文件: " + node.getName());
+                }
+            } catch (BusinessException exception) {
+                results.add(BatchItemResult.failed(fileId, exception.errorCode().name(), exception.getMessage()));
+                continue;
             }
             markRestored(node);
             allToSave.add(node);
@@ -331,55 +353,61 @@ public class FileQueryService {
             descendants.forEach(this::markRestored);
             allToSave.addAll(descendants);
             descendants.stream().map(FileNode::getId).forEach(restoredIds::add);
+            results.add(BatchItemResult.success(fileId));
         }
-        fileNodeRepository.saveAll(allToSave);
-        eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerUserId, List.copyOf(restoredIds), restoredAt));
-        recordLibraryInvalidation(ownerUserId, SyncAction.RESTORED, restoredIds.size());
-        return nodes.stream().map(this::toDto).toList();
+        if (!allToSave.isEmpty()) {
+            fileNodeRepository.saveAll(allToSave);
+            eventPublisher.publishEvent(new FileNodesRestoredEvent(ownerUserId, List.copyOf(restoredIds), restoredAt));
+            recordLibraryInvalidation(ownerUserId, SyncAction.RESTORED, restoredIds.size());
+        }
+        return results;
     }
 
     /**
      * 批量移动文件节点到目标文件夹
      */
     @Transactional(rollbackFor = Exception.class)
-    public List<FileNodeDto> batchMoveNodes(UUID ownerUserId, List<UUID> fileIds, UUID targetParentId) {
+    public List<BatchItemResult> batchMoveNodes(UUID ownerUserId, List<UUID> fileIds, UUID targetParentId) {
         FileNode targetParent = resolveParent(ownerUserId, targetParentId);
-        List<FileNode> nodes = fileNodeRepository.findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds);
-        if (nodes.isEmpty()) {
-            return List.of();
-        }
-        nodes.forEach(this::requireManagedNode);
-        // 先验证所有节点，避免部分移动
-        for (FileNode node : nodes) {
-            if (Objects.equals(node.getParentId(), targetParentId)) {
+        List<BatchItemResult> results = new ArrayList<>();
+        Map<UUID, FileNode> nodesById = fileNodeRepository
+                .findByOwnerUserIdAndIdInAndDeletedFalse(ownerUserId, fileIds).stream()
+                .collect(Collectors.toMap(FileNode::getId, node -> node, (left, right) -> left));
+        int movedCount = 0;
+        for (UUID fileId : fileIds) {
+            FileNode node = nodesById.get(fileId);
+            if (node == null) {
+                results.add(BatchItemResult.skipped(fileId, "文件不存在或已删除"));
                 continue;
             }
-            validateSameSpace(node, targetParent);
-            if (targetParent != null && isSelfOrDescendant(node, targetParent)) {
-                throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "不能移动到自身子目录: " + node.getName());
-            }
-            if (sameNameExists(ownerUserId, targetParentId, node.getName())) {
-                throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件: " + node.getName());
+            try {
+                requireManagedNode(node);
+                if (!Objects.equals(node.getParentId(), targetParentId)) {
+                    validateSameSpace(node, targetParent);
+                    if (targetParent != null && isSelfOrDescendant(node, targetParent)) {
+                        throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "不能移动到自身子目录: " + node.getName());
+                    }
+                    if (sameNameExists(ownerUserId, targetParentId, node.getName())) {
+                        throw new BusinessException(ErrorCode.CONFLICT, "目标目录下已存在同名文件: " + node.getName());
+                    }
+                    String oldPath = node.getNormalizedPath();
+                    String newPath = resolveChildPath(targetParent, node.getName());
+                    node.setParentId(targetParentId);
+                    node.setNormalizedPath(newPath);
+                    updateActiveDescendantPaths(ownerUserId, oldPath, newPath);
+                    fileNodeRepository.save(node);
+                    movedCount++;
+                }
+                results.add(BatchItemResult.success(fileId));
+            } catch (BusinessException exception) {
+                results.add(BatchItemResult.failed(fileId, exception.errorCode().name(), exception.getMessage()));
             }
         }
-        // 执行移动
-        List<FileNode> result = new ArrayList<>();
-        for (FileNode node : nodes) {
-            if (Objects.equals(node.getParentId(), targetParentId)) {
-                result.add(node);
-                continue;
-            }
-            String oldPath = node.getNormalizedPath();
-            String newPath = resolveChildPath(targetParent, node.getName());
-            node.setParentId(targetParentId);
-            node.setNormalizedPath(newPath);
-            updateActiveDescendantPaths(ownerUserId, oldPath, newPath);
-            result.add(fileNodeRepository.save(node));
+        if (movedCount > 0) {
+            recordLibraryInvalidation(ownerUserId, SyncAction.UPDATED, movedCount);
         }
-        recordLibraryInvalidation(ownerUserId, SyncAction.UPDATED, result.size());
-        return result.stream().map(this::toDto).toList();
+        return results;
     }
-
     @Transactional(readOnly = true)
     public FileDownloadUrlDto createDownloadUrl(UUID ownerUserId, UUID fileId) {
         FileNode node = findActiveNode(ownerUserId, fileId);

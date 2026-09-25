@@ -1,4 +1,5 @@
 package com.omninest.modules.reader.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -117,6 +118,9 @@ class ReaderItemServiceTest {
     private TaskRecordService taskRecordService;
     @Mock
     private PhotoInputGuard photoInputGuard;
+
+    @org.mockito.Spy
+    private MediaProcessingLimitsProperties processingLimits = new MediaProcessingLimitsProperties();
 
     @InjectMocks
     private ReaderItemService itemService;

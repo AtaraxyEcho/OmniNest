@@ -152,6 +152,34 @@ public class DerivedAssetStorageService {
                 .map(FileNode::getId);
     }
 
+    /**
+     * 按派生 FileNode ID 删除物理对象与元数据。
+     *
+     * <p>供业务清理流程在缺少所有者上下文时使用；节点必须是 DERIVED 来源。</p>
+     *
+     * @param fileNodeId 派生资产 FileNode ID
+     * @return 是否删除了节点
+     */
+    public boolean deleteDerivedFileNode(UUID fileNodeId) {
+        if (fileNodeId == null) {
+            return false;
+        }
+        FileNode node = fileNodeRepository.findById(fileNodeId)
+                .filter(candidate -> SOURCE_TYPE_DERIVED.equals(candidate.getSourceType()))
+                .orElse(null);
+        if (node == null) {
+            return false;
+        }
+        if (node.getCurrentObjectId() != null) {
+            fileObjectRepository.findById(node.getCurrentObjectId()).ifPresent(object -> {
+                deleteObject(new LegacyObjectReference(object.getBucketName(), object.getObjectKey()));
+                fileObjectRepository.delete(object);
+            });
+        }
+        fileNodeRepository.delete(node);
+        return true;
+    }
+
     public boolean deleteOwned(UUID ownerUserId, UUID fileNodeId) {
         return deleteOwnedInCurrentTransaction(ownerUserId, fileNodeId);
     }

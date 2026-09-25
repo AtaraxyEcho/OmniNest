@@ -135,54 +135,60 @@ class ApplicationEnvironmentContractTest {
         List<String> synchronizedProperties = List.of(
                 "spring.datasource.url",
                 "spring.datasource.username",
-                "spring.datasource.password",
                 "spring.rabbitmq.host",
                 "spring.rabbitmq.username",
-                "spring.rabbitmq.password",
                 "spring.data.redis.host",
-                "spring.data.redis.password",
                 "server.port",
                 "music.providers.music-brainz-user-agent",
                 "music.providers.netease-base-url",
                 "photo.ai.endpoint",
-                "photo.ai.secret",
                 "file.local-media.enabled",
                 "file.local-media.mounts.media.host-path",
                 "file.local-media.mounts.media.process-path",
                 "omninest.setup.enabled",
-                "omninest.setup.token",
                 "omninest.setup.persistent-state-enabled",
-                "omninest.security.jwt-secret",
                 "omninest.security.credential-encryption-key",
                 "omninest.security.registration-enabled",
                 "omninest.security.trusted-proxies",
                 "omninest.security.allowed-origins",
                 "omninest.aria2.rpc-url",
-                "omninest.aria2.rpc-secret",
                 "omninest.aria2.download-root",
                 "omninest.clamav.enabled",
                 "omninest.clamav.host",
                 "omninest.clamav.port",
                 "omninest.rclone.endpoint",
                 "omninest.rclone.username",
-                "omninest.rclone.password",
                 "omninest.rclone.local-host-path",
                 "omninest.rclone.import-host-path",
                 "omninest.rclone.import-container-path",
                 "omninest.minio.endpoint",
                 "omninest.minio.public-endpoint",
                 "omninest.minio.docker-endpoint",
-                "omninest.minio.access-key",
-                "omninest.minio.secret-key",
                 "omninest.search.index-path",
                 "omninest.search.photo-index-path",
                 "logging.file.name"
         );
+        // 口令/密钥项允许 dev 与 prod 默认值不同：prod 禁止弱默认，运行时由
+        // ProductionSecretsValidator / JwtSecretValidator 拒绝空白或示例值。
         for (String property : synchronizedProperties) {
             assertThat(prod.getProperty(property))
                     .as("dev/prod 配置项 %s 应使用同一变量和默认值", property)
                     .isEqualTo(dev.getProperty(property));
         }
+        assertThat(dev.getProperty("spring.datasource.password"))
+                .isEqualTo("${OMNINEST_DB_PASSWORD:omninest}");
+        assertThat(prod.getProperty("spring.datasource.password"))
+                .isEqualTo("${OMNINEST_DB_PASSWORD:}");
+        assertThat(prod.getProperty("spring.rabbitmq.password"))
+                .isEqualTo("${OMNINEST_RABBITMQ_PASSWORD:}");
+        assertThat(prod.getProperty("omninest.minio.access-key"))
+                .isEqualTo("${OMNINEST_MINIO_ACCESS_KEY:}");
+        assertThat(prod.getProperty("omninest.minio.secret-key"))
+                .isEqualTo("${OMNINEST_MINIO_SECRET_KEY:}");
+        assertThat(prod.getProperty("omninest.rclone.password"))
+                .isEqualTo("${OMNINEST_RCLONE_RC_PASS:}");
+        assertThat(prod.getProperty("omninest.aria2.rpc-secret"))
+                .isEqualTo("${OMNINEST_ARIA2_RPC_SECRET:}");
     }
 
     private Set<String> applicationVariables(String resourceName) throws IOException {

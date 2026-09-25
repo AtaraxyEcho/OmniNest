@@ -7,6 +7,7 @@ import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.FileMetadataQueryService;
+import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.service.TaskRecordService;
 import com.omninest.modules.video.domain.MediaVideoItem;
 import com.omninest.modules.video.dto.MovieDtos.MovieScanRequest;
@@ -14,8 +15,8 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.video.dto.MovieDtos.MovieTaskDto;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
+import com.omninest.modules.video.event.MediaLibraryScanRequestedEvent;
 import com.omninest.modules.video.event.TranscodeRequestedEvent;
-import com.omninest.modules.video.repository.MediaTaskRepository;
 import com.omninest.modules.video.repository.MediaVideoItemRepository;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -40,6 +41,7 @@ public class MovieTaskService {
     private static final String MEDIA_SCAN = "MEDIA_SCAN";
     private static final String VIDEO_TRANSCODE = "VIDEO_TRANSCODE";
     private static final String WEB_OPTIMIZE = "WEB_OPTIMIZE";
+    private static final int DEFAULT_TASK_LIMIT = 100;
 
     /**
      * 影视模块任务类型白名单：进度列表只展示本模块任务，避免串入文件/相册等其它任务。
@@ -54,7 +56,6 @@ public class MovieTaskService {
             "LOCAL_VIDEO_LIBRARY_APPLY"
     );
 
-    private final MediaTaskRepository mediaTaskRepository;
     private final TaskRecordService taskRecordService;
     private final MediaVideoItemRepository videoItemRepository;
     private final MediaContentAccessService mediaContentAccessService;
@@ -62,17 +63,30 @@ public class MovieTaskService {
     private final SimpleFileNameParser fileNameParser;
     private final MovieScrapeService scrapeService;
     private final TaskDispatchService taskDispatchService;
+    private final MediaRuntimeConfigService mediaRuntimeConfigService;
 
     @Transactional(readOnly = true)
     public List<MovieTaskDto> list(UUID ownerUserId, String taskType) {
         String normalized = normalizeTaskType(taskType);
         if (normalized == null) {
-            return mediaTaskRepository.listTasksByTypes(ownerUserId, VIDEO_TASK_TYPES);
+            return toTaskDtos(taskRecordService.listTasksByTypes(ownerUserId, VIDEO_TASK_TYPES, DEFAULT_TASK_LIMIT));
         }
         if (!VIDEO_TASK_TYPES.contains(normalized)) {
             return List.of();
         }
-        return mediaTaskRepository.listTasks(ownerUserId, normalized);
+        return toTaskDtos(taskRecordService.listTasks(ownerUserId, normalized, DEFAULT_TASK_LIMIT));
+    }
+
+    private List<MovieTaskDto> toTaskDtos(List<TaskRecord> records) {
+        return records.stream().map(record -> new MovieTaskDto(
+                record.getId(),
+                record.getTaskType(),
+                record.getStatus(),
+                record.getProgress(),
+                record.getRoutingKey(),
+                record.getErrorMessage(),
+                record.getUpdatedAt()
+        )).toList();
     }
 
     @Transactional(rollbackFor = Exception.class)
@@ -82,6 +96,9 @@ public class MovieTaskService {
 
     @Transactional(rollbackFor = Exception.class)
     public ScrapeTaskDto createTranscodeTask(UUID requesterUserId, UUID videoItemId, boolean audioOnly) {
+        if (!mediaRuntimeConfigService.transcodeEnabled()) {
+            throw new BusinessException(ErrorCode.CONFLICT, "媒体转码未启用，请在配置中心开启 media.transcode.enabled");
+        }
         MediaVideoItem videoItem = mediaContentAccessService.requireReadableVideo(requesterUserId, videoItemId);
         UUID catalogOwnerUserId = videoItem.getOwnerUserId();
         String taskType = audioOnly ? "AUDIO_EXTRACT" : VIDEO_TRANSCODE;
@@ -113,6 +130,9 @@ public class MovieTaskService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ScrapeTaskDto createWebOptimizeTask(UUID requesterUserId, UUID videoItemId) {
+        if (!mediaRuntimeConfigService.transcodeEnabled()) {
+            throw new BusinessException(ErrorCode.CONFLICT, "媒体转码未启用，请在配置中心开启 media.transcode.enabled");
+        }
         MediaVideoItem videoItem = mediaContentAccessService.requireReadableVideo(requesterUserId, videoItemId);
         UUID catalogOwnerUserId = videoItem.getOwnerUserId();
         UUID taskId = UUID.randomUUID();
@@ -138,6 +158,9 @@ public class MovieTaskService {
         return new ScrapeTaskDto(taskId, TaskStatus.QUEUED.getValue(), "Web 优化转码任务已进入队列");
     }
 
+    /**
+     * 创建媒体库扫描任务并投递到 Worker 异步执行，请求线程不扫描目录。
+     */
     @Transactional(rollbackFor = Exception.class)
     public ScrapeTaskDto scanLibrary(UUID ownerUserId, MovieScanRequest request) {
         UUID taskId = UUID.randomUUID();
@@ -145,19 +168,36 @@ public class MovieTaskService {
                 taskId,
                 ownerUserId,
                 MEDIA_SCAN,
-                "media.scan",
+                QueueNames.MEDIA_SCAN_ROUTING_KEY,
                 Map.of(
                         "rootFolderId", request.rootFolderId() == null ? "" : request.rootFolderId().toString(),
                         "incremental", request.incremental()
                 )
         );
-        ScanResult result = scan(ownerUserId, request);
-        taskRecordService.markCompleted(taskId, result.toMap());
-        return new ScrapeTaskDto(
+        MediaLibraryScanRequestedEvent event = new MediaLibraryScanRequestedEvent(
                 taskId,
-                TaskStatus.COMPLETED.getValue(),
-                "媒体库扫描完成，发现 " + result.videoCount() + " 个视频，登记 " + result.registeredCount() + " 个媒体条目"
+                ownerUserId,
+                request.rootFolderId(),
+                request.incremental()
         );
+        taskDispatchService.enqueue(
+                taskId,
+                QueueNames.TASK_EXCHANGE,
+                QueueNames.MEDIA_SCAN_ROUTING_KEY,
+                event
+        );
+        return new ScrapeTaskDto(taskId, TaskStatus.QUEUED.getValue(), "媒体库扫描任务已进入队列");
+    }
+
+    /**
+     * Worker 执行媒体库扫描。
+     *
+     * @param event 扫描请求事件
+     */
+    public void executeScan(MediaLibraryScanRequestedEvent event) {
+        MovieScanRequest request = new MovieScanRequest(event.rootFolderId(), event.incremental());
+        ScanResult result = scan(event.ownerUserId(), request);
+        taskRecordService.markCompleted(event.taskId(), result.toMap());
     }
 
     private ScanResult scan(UUID ownerUserId, MovieScanRequest request) {

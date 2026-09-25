@@ -10,8 +10,9 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 外部存储导入任务。
@@ -22,7 +23,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "storage_import_tasks", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class StorageImportTask {
@@ -112,5 +114,28 @@ public class StorageImportTask {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof StorageImportTask other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "StorageImportTask{id=" + id + ", ownerUserId=" + ownerUserId
+                + ", status=" + status + ", fileName=" + fileName
+                + ", totalBytes=" + totalBytes + ", transferredBytes=" + transferredBytes + "}";
     }
 }

@@ -85,7 +85,7 @@ public class MediaRuntimeConfigService extends BaseRuntimeConfigService {
     }
 
     public boolean transcodeEnabled() {
-        return booleanWithLegacy(TRANSCODE_ENABLED, "transcode.enabled", true);
+        return booleanWithLegacy(TRANSCODE_ENABLED, "transcode.enabled", false);
     }
 
     /**

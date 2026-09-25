@@ -1,5 +1,6 @@
 package com.omninest.modules.user.repository;
 
+import com.omninest.common.api.SafeOrderSpec;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
 import java.util.List;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class TaskRecordAdminRepository {
     private static final int MAX_RECENT_LIMIT = 500;
-    private static final int MAX_PAGE_SIZE = 100;
 
     private final EntityManager entityManager;
 
@@ -101,7 +101,7 @@ public class TaskRecordAdminRepository {
                 TASK_PROJECTION + filters + taskOrderClause(sortColumn, ascending)
         );
         bindPageFilters(contentQuery, status, taskType, searchPattern);
-        int boundedSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
+        int boundedSize = com.omninest.common.api.PageClamps.safeSize(size, 100);
         contentQuery.setFirstResult(Math.max(0, page) * boundedSize);
         contentQuery.setMaxResults(boundedSize);
 
@@ -185,15 +185,12 @@ public class TaskRecordAdminRepository {
     /**
      * 任务排序白名单：仅允许固定列，防止动态排序注入。
      */
-    private static final java.util.Set<String> TASK_ORDERABLE_COLUMNS =
-            java.util.Set.of("updated_at", "created_at", "progress", "task_type", "status");
-
     /**
      * 构建任务排序子句：列不在白名单时回退为更新时间，并追加 id 倒序兜底。
      * 投影联表后列名需带任务表别名，否则与用户表的同名列冲突。
      */
     private String taskOrderClause(String column, boolean ascending) {
-        String safe = TASK_ORDERABLE_COLUMNS.contains(column) ? column : "updated_at";
+        String safe = SafeOrderSpec.resolve(column).column();
         return " order by t." + safe + (ascending ? " asc" : " desc") + ", t.id desc";
     }
 

@@ -62,11 +62,11 @@ class ComicParseRetryServiceTest {
     @Test
     void marksSourceFailedWhenRetriesAreExhausted() {
         when(taskRecordService.retryCount(TASK_ID)).thenReturn(3);
-        when(taskRecordService.markDeadLetter(TASK_ID, "IllegalStateException")).thenReturn(true);
+        when(taskRecordService.markDeadLetter(eq(TASK_ID), eq("IllegalStateException"), any())).thenReturn(true);
 
         retryService.handleFailure(event(true), new IllegalStateException("storage unavailable"));
 
-        verify(taskRecordService).markDeadLetter(TASK_ID, "IllegalStateException");
+        verify(taskRecordService).markDeadLetter(eq(TASK_ID), eq("IllegalStateException"), anyString());
         verify(manifestService).markSourceFailed(
                 eq(ITEM_ID),
                 eq(SOURCE_ID),
@@ -86,7 +86,7 @@ class ComicParseRetryServiceTest {
     @Test
     void duplicateTerminalDeliveryDoesNotNotifyAgain() {
         when(taskRecordService.retryCount(TASK_ID)).thenReturn(3);
-        when(taskRecordService.markDeadLetter(TASK_ID, "IllegalStateException")).thenReturn(false);
+        when(taskRecordService.markDeadLetter(eq(TASK_ID), eq("IllegalStateException"), any())).thenReturn(false);
 
         retryService.handleFailure(event(true), new IllegalStateException("storage unavailable"));
 

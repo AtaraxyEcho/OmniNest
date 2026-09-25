@@ -18,6 +18,12 @@ server:
 spring:
   application:
     name: omninest
+  mvc:
+    # 音视频流式响应依赖 StreamingResponseBody 异步写出；容器默认约 30s 超时会在
+    # 整曲/整片传输中途打断线程，导致 HttpClient InterruptedException 与客户端断流。
+    # 默认 30 分钟，覆盖整曲/整片传输；超长媒体可用环境变量覆盖。
+    async:
+      request-timeout: ${OMNINEST_MVC_ASYNC_REQUEST_TIMEOUT:1800000}
   # 项目仅通过 RedisTemplate 使用 Redis，不存在 Spring Data Redis Repository，排除后避免多数据模块仓库扫描噪音
   autoconfigure:
     exclude: org.springframework.boot.data.redis.autoconfigure.DataRedisRepositoriesAutoConfiguration
@@ -117,6 +123,8 @@ reader:
 omninest:
   runtime:
     role: ${OMNINEST_ROLE:api}
+  processing:
+    root: ${OMNINEST_PROCESSING_ROOT:${java.io.tmpdir}/omninest-processing}
   music:
     history-retention-days: 90
   setup:
@@ -156,7 +164,8 @@ omninest:
     refresh-token-ttl: 30d
     refresh-session-max-lifetime: 90d
     allow-credentials: true
-    content-security-policy: "default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+    # script-src 无 unsafe-inline；style-src 保留给 Flutter Web 引擎运行时内联样式。
+    content-security-policy: "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: http: https:; media-src 'self' blob: http: https:; connect-src 'self' http: https: ws: wss:; frame-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
     permissions-policy: "camera=(), microphone=(), geolocation=(), payment=()"
   worker:
     runtime:

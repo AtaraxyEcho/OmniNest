@@ -2,6 +2,7 @@ package com.omninest.modules.photos.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.photos.domain.PhotoItem;
 import com.omninest.modules.photos.event.PhotoMotionRescanEvent;
@@ -157,7 +158,7 @@ public class PhotoMotionRescanService {
                 ? businessException.errorCode().name()
                 : exception.getClass().getSimpleName();
         if (taskRecordService.retryCount(taskId) >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(taskId, errorSummary);
+            taskRecordService.markDeadLetter(taskId, errorSummary, StackSummaries.summarize(exception));
             log.error("动态照片回扫任务达到最大重试次数并进入死信: taskId={}", taskId);
             return;
         }

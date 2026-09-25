@@ -11,8 +11,9 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -21,7 +22,8 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Table(name = "photo_edit_versions", schema = "omni")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class PhotoEditVersion {
@@ -65,5 +67,27 @@ public class PhotoEditVersion {
     @PreUpdate
     void preUpdate() {
         // 仅 updatedAt 需要更新，但此实体无 updatedAt 字段
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof PhotoEditVersion other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "PhotoEditVersion{id=" + id + ", photoId=" + photoId + ", versionNumber=" + versionNumber
+                + ", editType=" + editType + "}";
     }
 }

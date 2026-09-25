@@ -2,6 +2,7 @@ package com.omninest.modules.file.controller;
 
 import com.omninest.common.api.ApiResponse;
 import com.omninest.common.api.PageResponse;
+import com.omninest.common.security.ClientIpResolver;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.file.domain.SpaceType;
@@ -22,6 +23,7 @@ import com.omninest.modules.file.dto.CreateOfflineDownloadRequest;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
 import com.omninest.modules.file.dto.ExternalStorageAccountDto;
 import com.omninest.modules.file.dto.FileDownloadUrlDto;
+import com.omninest.modules.file.dto.BatchItemResult;
 import com.omninest.modules.file.dto.FileNodeDto;
 import com.omninest.modules.file.dto.FilePermissionDto;
 import com.omninest.modules.file.dto.FilePurgeImpactDto;
@@ -45,11 +47,17 @@ import com.omninest.modules.file.dto.PermissionRequest;
 import com.omninest.modules.file.dto.RenameFileNodeRequest;
 import com.omninest.modules.file.dto.SharedFileDto;
 import com.omninest.modules.file.dto.UpdateExternalStorageRequest;
+import com.omninest.modules.file.service.ExternalStorageAccountService;
+import com.omninest.modules.file.service.FileFavoriteService;
 import com.omninest.modules.file.service.FileManagerService;
 import com.omninest.modules.file.service.FileDeletionService;
 import com.omninest.modules.file.service.FileQueryService;
+import com.omninest.modules.file.service.FileShareAccessService;
+import com.omninest.modules.file.service.FileShareService;
 import com.omninest.modules.file.service.FileStorageMetricsService;
+import com.omninest.modules.file.service.FileUploadQueueService;
 import com.omninest.modules.file.service.FileUploadSessionService;
+import com.omninest.modules.file.service.FileVersionService;
 import com.omninest.modules.file.service.OfflineDownloadRequestService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -85,9 +93,16 @@ public class FileController {
     private final FileDeletionService fileDeletionService;
     private final FileUploadSessionService fileUploadSessionService;
     private final FileManagerService fileManagerService;
+    private final FileFavoriteService fileFavoriteService;
+    private final FileVersionService fileVersionService;
+    private final FileShareService fileShareService;
+    private final FileShareAccessService fileShareAccessService;
+    private final FileUploadQueueService fileUploadQueueService;
+    private final ExternalStorageAccountService externalStorageAccountService;
     private final FileStorageMetricsService fileStorageMetricsService;
     private final OfflineDownloadRequestService offlineDownloadRequestService;
     private final CurrentUserContext currentUserContext;
+    private final ClientIpResolver clientIpResolver;
 
     @Operation(summary = "列出文件", description = "按父目录或分类分页列出当前用户的文件节点")
     @GetMapping("/api/v1/files")
@@ -155,7 +170,7 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var files = fileManagerService.listFavoriteFilesPage(ownerUserId, page, size);
+        var files = fileFavoriteService.listFavoriteFilesPage(ownerUserId, page, size);
         return ApiResponse.success(PageResponse.of(
                 files.getContent(),
                 files.getNumber(),
@@ -206,7 +221,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<List<FileVersionDto>> listFileVersions(@PathVariable UUID fileId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.listVersions(ownerUserId, fileId));
+        return ApiResponse.success(fileVersionService.listVersions(ownerUserId, fileId));
     }
 
     @Operation(
@@ -220,7 +235,7 @@ public class FileController {
             @Valid @RequestBody SaveFileVersionRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.saveNewVersion(
+        return ApiResponse.success(fileVersionService.saveNewVersion(
                 ownerUserId,
                 fileId,
                 body.objectId(),
@@ -237,7 +252,7 @@ public class FileController {
             @PathVariable UUID versionId
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.restoreVersion(ownerUserId, fileId, versionId));
+        return ApiResponse.success(fileVersionService.restoreVersion(ownerUserId, fileId, versionId));
     }
 
     @Operation(summary = "删除文件", description = "将文件移入回收站（软删除）")
@@ -301,7 +316,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<FileNodeDto> addFavorite(@PathVariable UUID fileId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.addFavorite(ownerUserId, fileId));
+        return ApiResponse.success(fileFavoriteService.addFavorite(ownerUserId, fileId));
     }
 
     @Operation(summary = "取消收藏", description = "将文件从收藏夹移除")
@@ -309,7 +324,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> removeFavorite(@PathVariable UUID fileId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.removeFavorite(ownerUserId, fileId);
+        fileFavoriteService.removeFavorite(ownerUserId, fileId);
         return ApiResponse.success();
     }
 
@@ -318,7 +333,7 @@ public class FileController {
     @Operation(summary = "批量删除文件", description = "批量将多个文件移入回收站")
     @PostMapping("/api/v1/files/batch/delete")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
-    ApiResponse<List<FileNodeDto>> batchDeleteFiles(
+    ApiResponse<List<BatchItemResult>> batchDeleteFiles(
             @Valid @RequestBody BatchFileOperationRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
@@ -328,7 +343,7 @@ public class FileController {
     @Operation(summary = "批量恢复文件", description = "批量从回收站恢复多个文件")
     @PostMapping("/api/v1/files/batch/restore")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
-    ApiResponse<List<FileNodeDto>> batchRestoreFiles(
+    ApiResponse<List<BatchItemResult>> batchRestoreFiles(
             @Valid @RequestBody BatchFileOperationRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
@@ -355,7 +370,7 @@ public class FileController {
     @Operation(summary = "批量移动文件", description = "批量将多个文件移动到指定目录")
     @PostMapping("/api/v1/files/batch/move")
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
-    ApiResponse<List<FileNodeDto>> batchMoveFiles(
+    ApiResponse<List<BatchItemResult>> batchMoveFiles(
             @Valid @RequestBody BatchMoveFileNodeRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
@@ -369,7 +384,7 @@ public class FileController {
             @Valid @RequestBody BatchFileOperationRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.batchAddFavorites(ownerUserId, body.fileIds()));
+        return ApiResponse.success(fileFavoriteService.batchAddFavorites(ownerUserId, body.fileIds()));
     }
 
     @Operation(summary = "批量取消收藏", description = "批量将多个文件从收藏夹移除")
@@ -379,7 +394,7 @@ public class FileController {
             @Valid @RequestBody BatchFileOperationRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.batchRemoveFavorites(ownerUserId, body.fileIds());
+        fileFavoriteService.batchRemoveFavorites(ownerUserId, body.fileIds());
         return ApiResponse.success();
     }
 
@@ -432,7 +447,7 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var items = fileManagerService.listSharedWithMePage(ownerUserId, page, size);
+        var items = fileShareService.listSharedWithMePage(ownerUserId, page, size);
         return ApiResponse.success(PageResponse.of(
                 items.getContent(),
                 items.getNumber(),
@@ -448,7 +463,7 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var items = fileManagerService.listMySharesPage(ownerUserId, page, size);
+        var items = fileShareService.listMySharesPage(ownerUserId, page, size);
         return ApiResponse.success(PageResponse.of(
                 items.getContent(),
                 items.getNumber(),
@@ -463,7 +478,7 @@ public class FileController {
             @Valid @RequestBody CreateShareLinkRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.createShare(ownerUserId, body));
+        return ApiResponse.success(fileShareService.createShare(ownerUserId, body));
     }
 
     @Operation(summary = "撤销分享链接", description = "撤销指定的分享链接")
@@ -471,7 +486,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> revokeShare(@PathVariable UUID shareId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.revokeShare(ownerUserId, shareId);
+        fileShareService.revokeShare(ownerUserId, shareId);
         return ApiResponse.success();
     }
 
@@ -483,8 +498,8 @@ public class FileController {
             HttpServletRequest request
     ) {
         String password = body == null ? null : body.password();
-        return ApiResponse.success(fileManagerService.issueShareSession(
-                token, password, request.getRemoteAddr()));
+        return ApiResponse.success(fileShareAccessService.issueShareSession(
+                token, password, resolveClientIp(request)));
     }
 
     @Operation(summary = "访问分享链接", description = "通过短期分享会话访问共享文件")
@@ -493,7 +508,7 @@ public class FileController {
             @PathVariable String token,
             @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken
     ) {
-        return ApiResponse.success(fileManagerService.shareAccessSession(token, sessionToken));
+        return ApiResponse.success(fileShareAccessService.shareAccessSession(token, sessionToken));
     }
 
     @Operation(summary = "预览分享文件", description = "通过分享令牌预览共享文件内容")
@@ -502,7 +517,7 @@ public class FileController {
             @PathVariable String token,
             @RequestHeader(value = "X-OmniNest-Share-Session", required = false) String sessionToken
     ) {
-        return ApiResponse.success(fileManagerService.previewShareSession(token, sessionToken));
+        return ApiResponse.success(fileShareAccessService.previewShareSession(token, sessionToken));
     }
 
     @Operation(summary = "接受分享", description = "接受共享文件，将其保存到自己的文件空间")
@@ -513,7 +528,7 @@ public class FileController {
             @RequestBody(required = false) AcceptShareRequest body
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();
-        fileManagerService.acceptShareSession(userId, token, sessionToken, body);
+        fileShareAccessService.acceptShareSession(userId, token, sessionToken, body);
         return ApiResponse.success();
     }
 
@@ -540,7 +555,7 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var items = fileManagerService.listUploadQueue(ownerUserId);
+        var items = fileUploadQueueService.listUploadQueue(ownerUserId);
         return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
     }
 
@@ -662,7 +677,7 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        var items = fileManagerService.listExternalAccounts(ownerUserId);
+        var items = externalStorageAccountService.listExternalAccounts(ownerUserId);
         return ApiResponse.success(PageResponse.of(items, page, size, items.size()));
     }
 
@@ -673,7 +688,7 @@ public class FileController {
             @Valid @RequestBody CreateExternalStorageRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.createExternalAccount(ownerUserId, body));
+        return ApiResponse.success(externalStorageAccountService.createExternalAccount(ownerUserId, body));
     }
 
     @Operation(summary = "更新外部存储", description = "更新指定外部存储账户的配置信息")
@@ -684,7 +699,7 @@ public class FileController {
             @Valid @RequestBody UpdateExternalStorageRequest body
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.updateExternalAccount(ownerUserId, accountId, body));
+        return ApiResponse.success(externalStorageAccountService.updateExternalAccount(ownerUserId, accountId, body));
     }
 
     @Operation(summary = "禁用外部存储", description = "禁用指定的外部存储账户")
@@ -692,7 +707,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> disableExternalStorage(@PathVariable UUID accountId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.disableExternalAccount(ownerUserId, accountId);
+        externalStorageAccountService.disableExternalAccount(ownerUserId, accountId);
         return ApiResponse.success();
     }
 
@@ -701,7 +716,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> deleteExternalStorage(@PathVariable UUID accountId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.deleteExternalAccount(ownerUserId, accountId);
+        externalStorageAccountService.deleteExternalAccount(ownerUserId, accountId);
         return ApiResponse.success();
     }
 
@@ -712,7 +727,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
     ApiResponse<Void> toggleShared(@PathVariable UUID fileId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.toggleShared(ownerUserId, fileId);
+        fileShareService.toggleShared(ownerUserId, fileId);
         return ApiResponse.success();
     }
 
@@ -724,7 +739,7 @@ public class FileController {
             @RequestParam boolean shared
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.toggleSharedRecursive(ownerUserId, fileId, shared);
+        fileShareService.toggleSharedRecursive(ownerUserId, fileId, shared);
         return ApiResponse.success();
     }
 
@@ -736,7 +751,7 @@ public class FileController {
             @RequestParam(defaultValue = "200") int size
     ) {
         UUID userId = currentUserContext.requireCurrentUserId();
-        var files = fileManagerService.listSharedFilesPage(userId, page, size);
+        var files = fileShareService.listSharedFilesPage(userId, page, size);
         return ApiResponse.success(PageResponse.of(
                 files.getContent(),
                 files.getNumber(),
@@ -754,7 +769,7 @@ public class FileController {
             @RequestBody PermissionRequest request
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.setGlobalPermission(ownerUserId, fileId, request);
+        fileShareService.setGlobalPermission(ownerUserId, fileId, request);
         return ApiResponse.success();
     }
 
@@ -767,7 +782,7 @@ public class FileController {
             @RequestBody PermissionRequest request
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.setUserPermission(ownerUserId, fileId, granteeUserId, request);
+        fileShareService.setUserPermission(ownerUserId, fileId, granteeUserId, request);
         return ApiResponse.success();
     }
 
@@ -779,7 +794,7 @@ public class FileController {
             @PathVariable UUID granteeUserId
     ) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        fileManagerService.removeUserPermission(ownerUserId, fileId, granteeUserId);
+        fileShareService.removeUserPermission(ownerUserId, fileId, granteeUserId);
         return ApiResponse.success();
     }
 
@@ -788,7 +803,7 @@ public class FileController {
     @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
     ApiResponse<List<FilePermissionDto>> listPermissions(@PathVariable UUID fileId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
-        return ApiResponse.success(fileManagerService.listPermissions(ownerUserId, fileId));
+        return ApiResponse.success(fileShareService.listPermissions(ownerUserId, fileId));
     }
 
     @Operation(summary = "获取共享文件下载链接", description = "为共享文件生成临时下载链接")
@@ -797,5 +812,13 @@ public class FileController {
     ApiResponse<FileDownloadUrlDto> getSharedDownloadUrl(@PathVariable UUID fileId) {
         UUID userId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(fileQueryService.createDownloadUrlForShared(userId, fileId));
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        return clientIpResolver.resolve(
+                request.getRemoteAddr(),
+                request.getHeader("X-Forwarded-For"),
+                request.getHeader("X-Real-IP")
+        );
     }
 }

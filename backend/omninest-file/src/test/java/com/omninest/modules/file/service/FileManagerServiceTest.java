@@ -22,6 +22,7 @@ import com.omninest.modules.file.domain.FileAccessRecord;
 import com.omninest.modules.file.domain.FileFavorite;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.FileObject;
+import com.omninest.modules.file.domain.FileVersion;
 import com.omninest.modules.file.domain.ShareLink;
 import com.omninest.modules.file.dto.AcceptShareRequest;
 import com.omninest.modules.file.dto.CreateShareLinkRequest;
@@ -101,29 +102,28 @@ class FileManagerServiceTest {
         return null;
     });
 
+    private final FileNodeSupport fileNodeSupport = new FileNodeSupport(fileNodeRepository);
+    private final FileSyncEventWriter syncEventWriter = new FileSyncEventWriter(syncEventRecorder);
+    private final FileFavoriteService fileFavoriteService = new FileFavoriteService(
+            favoriteRepository, fileNodeRepository, fileNodeSupport, syncEventWriter);
+    private final FileVersionService fileVersionService = new FileVersionService(
+            fileNodeRepository, fileObjectRepository, fileVersionRepository, uploadSessionRepository,
+            fileContentChangePublisher, fileNodeSupport, syncEventWriter);
+    private final FileShareService fileShareService = new FileShareService(
+            fileNodeRepository, shareLinkRepository, shareRecipientRepository, passwordEncoder,
+            filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
+    private final FileShareAccessService fileShareAccessService = new FileShareAccessService(
+            fileNodeRepository, shareLinkRepository, passwordEncoder, rateLimitService,
+            notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport);
+    private final FileUploadQueueService fileUploadQueueService = new FileUploadQueueService(uploadSessionRepository);
+    private final ExternalStorageAccountService externalStorageAccountService = new ExternalStorageAccountService(
+            externalAccountRepository, externalStorageService, mock(ExternalStorageCredentialService.class));
     private final FileManagerService fileManagerService = new FileManagerService(
             fileNodeRepository,
             accessRecordRepository,
-            favoriteRepository,
-            shareLinkRepository,
-            shareRecipientRepository,
-            uploadSessionRepository,
-            externalAccountRepository,
-            userAccountQuery,
             fileObjectRepository,
-            fileVersionRepository,
-            fileContentChangePublisher,
             objectStorageClient,
-            passwordEncoder,
-            fileQueryService,
-            filePermissionService,
-            rateLimitService,
-            notificationService,
-            externalStorageService,
-            mock(ExternalStorageCredentialService.class),
-            readThroughCache,
-            syncEventRecorder,
-            resourceShareLinkService
+            fileNodeSupport
     );
 
     @Test
@@ -148,7 +148,7 @@ class FileManagerServiceTest {
                 .thenReturn(new org.springframework.data.domain.PageImpl<>(List.of(FILE_ID)));
         when(fileNodeRepository.findAllById(List.of(FILE_ID))).thenReturn(List.of(file));
 
-        var result = fileManagerService.listFavoriteFilesPage(OWNER_ID, 0, 100);
+        var result = fileFavoriteService.listFavoriteFilesPage(OWNER_ID, 0, 100);
 
         assertThat(result.getContent()).extracting("name").containsExactly("starred.pdf");
         verify(fileNodeRepository).findAllById(List.of(FILE_ID));
@@ -173,7 +173,7 @@ class FileManagerServiceTest {
         when(favoriteRepository.existsByOwnerUserIdAndFileNode_Id(OWNER_ID, file2Id))
                 .thenReturn(false);
 
-        var result = fileManagerService.batchAddFavorites(OWNER_ID, List.of(file1Id, file2Id));
+        var result = fileFavoriteService.batchAddFavorites(OWNER_ID, List.of(file1Id, file2Id));
 
         verify(favoriteRepository, never()).save(argThat(fav ->
                 ((FileFavorite) fav).getFileNode().getId().equals(file1Id)));
@@ -187,7 +187,7 @@ class FileManagerServiceTest {
         UUID file1Id = UUID.fromString("30000000-0000-0000-0000-000000000014");
         UUID file2Id = UUID.fromString("30000000-0000-0000-0000-000000000015");
 
-        fileManagerService.batchRemoveFavorites(OWNER_ID, List.of(file1Id, file2Id));
+        fileFavoriteService.batchRemoveFavorites(OWNER_ID, List.of(file1Id, file2Id));
 
         verify(favoriteRepository).deleteByOwnerUserIdAndFileNode_IdIn(
                 OWNER_ID, List.of(file1Id, file2Id));
@@ -206,7 +206,7 @@ class FileManagerServiceTest {
 
         CreateShareLinkRequest request = new CreateShareLinkRequest(
                 FILE_ID, "FILE", null, true, null, null, null);
-        var result = fileManagerService.createShare(OWNER_ID, request);
+        var result = fileShareService.createShare(OWNER_ID, request);
 
         assertThat(result.generatedPassword()).isNotNull();
         assertThat(result.generatedPassword()).hasSize(6);
@@ -244,7 +244,7 @@ class FileManagerServiceTest {
 
         CreateShareLinkRequest request = new CreateShareLinkRequest(
                 FILE_ID, "FILE", "mypass", false, null, null, null);
-        var result = fileManagerService.createShare(OWNER_ID, request);
+        var result = fileShareService.createShare(OWNER_ID, request);
 
         assertThat(result.generatedPassword()).isNull();
         verify(passwordEncoder).encode("mypass");
@@ -259,7 +259,7 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.of(file));
 
-        FileSharePreviewDto result = fileManagerService.previewShare("rawtoken", null);
+        FileSharePreviewDto result = fileShareAccessService.previewShare("rawtoken", null);
 
         assertThat(result.fileName()).isEqualTo("doc.pdf");
         assertThat(result.sizeBytes()).isEqualTo(2048);
@@ -274,9 +274,9 @@ class FileManagerServiceTest {
         when(shareLinkRepository.findByTokenHash(any())).thenReturn(Optional.of(link));
         when(passwordEncoder.matches("wrong", "$2a$10$hashed")).thenReturn(false);
 
-        assertThatThrownBy(() -> fileManagerService.previewShare("rawtoken", "wrong"))
+        assertThatThrownBy(() -> fileShareAccessService.previewShare("rawtoken", "wrong"))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNAUTHORIZED);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PASSWORD_INVALID);
     }
 
     @Test
@@ -286,7 +286,7 @@ class FileManagerServiceTest {
         when(rateLimitService.tryAcquire(any(), ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
         when(shareLinkRepository.findByTokenHash(any())).thenReturn(Optional.of(link));
 
-        assertThatThrownBy(() -> fileManagerService.previewShare("rawtoken", null))
+        assertThatThrownBy(() -> fileShareAccessService.previewShare("rawtoken", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("过期");
     }
@@ -298,7 +298,7 @@ class FileManagerServiceTest {
         when(rateLimitService.tryAcquire(any(), ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
         when(shareLinkRepository.findByTokenHash(any())).thenReturn(Optional.of(link));
 
-        assertThatThrownBy(() -> fileManagerService.previewShare("rawtoken", null))
+        assertThatThrownBy(() -> fileShareAccessService.previewShare("rawtoken", null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("撤销");
     }
@@ -319,7 +319,7 @@ class FileManagerServiceTest {
         when(shareLinkRepository.save(any(ShareLink.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        fileManagerService.acceptShare(RECIPIENT_ID, "rawtoken", new AcceptShareRequest(null, null));
+        fileShareAccessService.acceptShare(RECIPIENT_ID, "rawtoken", new AcceptShareRequest(null, null));
 
         ArgumentCaptor<FileNode> captor = ArgumentCaptor.forClass(FileNode.class);
         verify(fileNodeRepository).save(captor.capture());
@@ -345,7 +345,7 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
                 .thenReturn(Optional.of(existing));
 
-        assertThatThrownBy(() -> fileManagerService.acceptShare(
+        assertThatThrownBy(() -> fileShareAccessService.acceptShare(
                 RECIPIENT_ID, "rawtoken", new AcceptShareRequest(null, null)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("已存在");
@@ -358,10 +358,10 @@ class FileManagerServiceTest {
         when(shareLinkRepository.findByTokenHash(any())).thenReturn(Optional.of(link));
         when(passwordEncoder.matches("wrong", "$2a$10$hashed")).thenReturn(false);
 
-        assertThatThrownBy(() -> fileManagerService.acceptShare(
+        assertThatThrownBy(() -> fileShareAccessService.acceptShare(
                 RECIPIENT_ID, "rawtoken", new AcceptShareRequest("wrong", null)))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNAUTHORIZED);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PASSWORD_INVALID);
     }
 
     @Test
@@ -372,7 +372,7 @@ class FileManagerServiceTest {
         when(fileNodeRepository.findByIdAndOwnerUserIdAndDeletedFalse(FILE_ID, OWNER_ID))
                 .thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> fileManagerService.acceptShare(
+        assertThatThrownBy(() -> fileShareAccessService.acceptShare(
                 RECIPIENT_ID, "rawtoken", new AcceptShareRequest(null, null)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不存在或已被删除");
@@ -395,7 +395,7 @@ class FileManagerServiceTest {
         when(shareLinkRepository.save(any(ShareLink.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        fileManagerService.acceptShare(RECIPIENT_ID, "rawtoken", new AcceptShareRequest(null, null));
+        fileShareAccessService.acceptShare(RECIPIENT_ID, "rawtoken", new AcceptShareRequest(null, null));
 
         assertThat(link.getAccessCount()).isEqualTo(6);
     }
@@ -408,7 +408,7 @@ class FileManagerServiceTest {
         when(rateLimitService.tryAcquire(any(), ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
         when(shareLinkRepository.findByTokenHash(any())).thenReturn(Optional.of(link));
 
-        assertThatThrownBy(() -> fileManagerService.acceptShare(
+        assertThatThrownBy(() -> fileShareAccessService.acceptShare(
                 RECIPIENT_ID, "rawtoken", new AcceptShareRequest(null, null)))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("访问次数已达上限");
@@ -531,11 +531,34 @@ class FileManagerServiceTest {
         when(fileNodeRepository.save(any(FileNode.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        var result = fileManagerService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, "replace");
+        var result = fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, "replace");
 
         assertThat(result.sizeBytes()).isEqualTo(200L);
         assertThat(result.mimeType()).isEqualTo("text/plain");
         verify(fileContentChangePublisher).publish(any(FileNode.class), any(FileObject.class), any(UUID.class));
+    }
+
+    @Test
+    void saveNewVersion_rejectsLocalReadonlyNode() {
+        FileNode node = node("movie.mkv", "video/x-matroska", 100);
+        node.setCurrentObjectId(OBJECT_ID);
+        node.setSourceType("LOCAL_FILESYSTEM");
+        UUID newObjectId = UUID.fromString("50000000-0000-0000-0000-000000000010");
+        FileObject newObject = new FileObject();
+        newObject.setId(newObjectId);
+        newObject.setObjectKey("users/" + OWNER_ID + "/movie.mkv");
+        newObject.setSizeBytes(200L);
+
+        when(fileNodeRepository.findOwnedForUpdate(FILE_ID, OWNER_ID))
+                .thenReturn(Optional.of(node));
+        when(fileObjectRepository.findById(newObjectId))
+                .thenReturn(Optional.of(newObject));
+
+        assertThatThrownBy(() ->
+                fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, newObjectId, 200L, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("本地只读");
+        verify(fileVersionRepository, never()).save(any(FileVersion.class));
     }
 
     @Test
@@ -554,7 +577,7 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(foreignObject));
 
         assertThatThrownBy(() ->
-                fileManagerService.saveNewVersion(OWNER_ID, FILE_ID, foreignObjectId, 100L, null))
+                fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, foreignObjectId, 100L, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("不属于");
     }
@@ -579,7 +602,7 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.of(other));
 
         assertThatThrownBy(() ->
-                fileManagerService.saveNewVersion(OWNER_ID, FILE_ID, objectId, 100L, null))
+                fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, objectId, 100L, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("已被其他文件");
     }
@@ -604,7 +627,7 @@ class FileManagerServiceTest {
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
-                fileManagerService.saveNewVersion(OWNER_ID, FILE_ID, objectId, 100L, null))
+                fileVersionService.saveNewVersion(OWNER_ID, FILE_ID, objectId, 100L, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("上传会话");
     }
@@ -744,17 +767,12 @@ class FileManagerServiceTest {
         // 使用真实的 BCrypt 编码器验证完整密码流程
         BCryptPasswordEncoder realEncoder =
                 new BCryptPasswordEncoder();
-        FileManagerService realService = new FileManagerService(
-                fileNodeRepository, accessRecordRepository, favoriteRepository,
-                shareLinkRepository, shareRecipientRepository, uploadSessionRepository,
-                externalAccountRepository, userAccountQuery, fileObjectRepository, fileVersionRepository,
-                fileContentChangePublisher,
-                objectStorageClient,
-                realEncoder, fileQueryService, filePermissionService,
-                rateLimitService, notificationService,
-                externalStorageService, mock(ExternalStorageCredentialService.class), readThroughCache, syncEventRecorder,
-                resourceShareLinkService
-        );
+        FileShareService realShareService = new FileShareService(
+                fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder,
+                filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
+        FileShareAccessService realAccessService = new FileShareAccessService(
+                fileNodeRepository, shareLinkRepository, realEncoder, rateLimitService,
+                notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport);
 
         // 模拟：文件存在
         FileNode file = node("report.xlsx", "application/vnd.ms-excel", 4096);
@@ -775,7 +793,7 @@ class FileManagerServiceTest {
         // 步骤1：创建带随机密码的分享
         CreateShareLinkRequest createRequest = new CreateShareLinkRequest(
                 FILE_ID, "FILE", null, true, null, null, null);
-        var createResult = realService.createShare(OWNER_ID, createRequest);
+        var createResult = realShareService.createShare(OWNER_ID, createRequest);
 
         assertThat(createResult.generatedPassword()).isNotNull();
         assertThat(createResult.generatedPassword()).hasSize(6);
@@ -801,15 +819,15 @@ class FileManagerServiceTest {
         stubAccessConsumption(previewLink);
         when(shareLinkRepository.findByTokenHash(any())).thenReturn(Optional.of(previewLink));
 
-        FileSharePreviewDto preview = realService.previewShare("rawtoken", plainPassword);
+        FileSharePreviewDto preview = realAccessService.previewShare("rawtoken", plainPassword);
         assertThat(preview.fileName()).isEqualTo("report.xlsx");
         assertThat(preview.hasPassword()).isTrue();
         assertThat(previewLink.getAccessCount()).isEqualTo(0); // 预览不计数
 
         // 步骤3：用错误密码预览 → 失败
-        assertThatThrownBy(() -> realService.previewShare("rawtoken", "wrongpassword"))
+        assertThatThrownBy(() -> realAccessService.previewShare("rawtoken", "wrongpassword"))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNAUTHORIZED);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PASSWORD_INVALID);
 
         // 步骤4：用正确密码接受 → 成功
         when(fileNodeRepository.findActiveByOwnerUserIdAndObjectId(RECIPIENT_ID, OBJECT_ID))
@@ -817,7 +835,7 @@ class FileManagerServiceTest {
         when(fileNodeRepository.save(any(FileNode.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
-        realService.acceptShare(RECIPIENT_ID, "rawtoken", new AcceptShareRequest(plainPassword, null));
+        realAccessService.acceptShare(RECIPIENT_ID, "rawtoken", new AcceptShareRequest(plainPassword, null));
 
         ArgumentCaptor<FileNode> nodeCaptor = ArgumentCaptor.forClass(FileNode.class);
         verify(fileNodeRepository).save(nodeCaptor.capture());
@@ -829,27 +847,22 @@ class FileManagerServiceTest {
         assertThat(previewLink.getAccessCount()).isEqualTo(1); // 接受时计数
 
         // 步骤5：用错误密码接受 → 失败
-        assertThatThrownBy(() -> realService.acceptShare(
+        assertThatThrownBy(() -> realAccessService.acceptShare(
                 RECIPIENT_ID, "rawtoken", new AcceptShareRequest("wrongpassword", null)))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNAUTHORIZED);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PASSWORD_INVALID);
     }
 
     @Test
     void shareFlowCreatePreviewAcceptWithCustomPassword() {
         BCryptPasswordEncoder realEncoder =
                 new BCryptPasswordEncoder();
-        FileManagerService realService = new FileManagerService(
-                fileNodeRepository, accessRecordRepository, favoriteRepository,
-                shareLinkRepository, shareRecipientRepository, uploadSessionRepository,
-                externalAccountRepository, userAccountQuery, fileObjectRepository, fileVersionRepository,
-                fileContentChangePublisher,
-                objectStorageClient,
-                realEncoder, fileQueryService, filePermissionService,
-                rateLimitService, notificationService,
-                externalStorageService, mock(ExternalStorageCredentialService.class), readThroughCache, syncEventRecorder,
-                resourceShareLinkService
-        );
+        FileShareService realShareService = new FileShareService(
+                fileNodeRepository, shareLinkRepository, shareRecipientRepository, realEncoder,
+                filePermissionService, userAccountQuery, fileNodeSupport, syncEventWriter, readThroughCache);
+        FileShareAccessService realAccessService = new FileShareAccessService(
+                fileNodeRepository, shareLinkRepository, realEncoder, rateLimitService,
+                notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport);
 
         FileNode file = node("photo.jpg", "image/jpeg", 2048);
         file.setCurrentObjectId(OBJECT_ID);
@@ -869,7 +882,7 @@ class FileManagerServiceTest {
         // 创建带自定义密码的分享
         CreateShareLinkRequest createRequest = new CreateShareLinkRequest(
                 FILE_ID, "FILE", "MySecret123", false, null, null, null);
-        var createResult = realService.createShare(OWNER_ID, createRequest);
+        var createResult = realShareService.createShare(OWNER_ID, createRequest);
 
         // 自定义密码不应返回 generatedPassword
         assertThat(createResult.generatedPassword()).isNull();
@@ -892,13 +905,13 @@ class FileManagerServiceTest {
         stubAccessConsumption(previewLink);
         when(shareLinkRepository.findByTokenHash(any())).thenReturn(Optional.of(previewLink));
 
-        FileSharePreviewDto preview = realService.previewShare("rawtoken", "MySecret123");
+        FileSharePreviewDto preview = realAccessService.previewShare("rawtoken", "MySecret123");
         assertThat(preview.fileName()).isEqualTo("photo.jpg");
 
         // 用错误密码预览
-        assertThatThrownBy(() -> realService.previewShare("rawtoken", "wrong"))
+        assertThatThrownBy(() -> realAccessService.previewShare("rawtoken", "wrong"))
                 .isInstanceOf(BusinessException.class)
-                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.UNAUTHORIZED);
+                .hasFieldOrPropertyWithValue("errorCode", ErrorCode.PASSWORD_INVALID);
     }
 
     private FileAccessRecord accessRecord(FileNode node, String lastAccessedAt) {

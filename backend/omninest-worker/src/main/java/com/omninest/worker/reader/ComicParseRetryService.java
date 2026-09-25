@@ -1,5 +1,6 @@
 package com.omninest.worker.reader;
 
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.reader.event.ComicParseTaskEvent;
@@ -46,7 +47,7 @@ public class ComicParseRetryService {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {
-            if (!taskRecordService.markDeadLetter(event.taskId(), errorSummary)) {
+            if (!taskRecordService.markDeadLetter(event.taskId(), errorSummary, StackSummaries.summarize(exception))) {
                 return;
             }
             markSourceFailed(event, errorSummary);

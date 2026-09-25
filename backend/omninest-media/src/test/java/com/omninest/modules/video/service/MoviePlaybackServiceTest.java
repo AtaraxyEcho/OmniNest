@@ -1,8 +1,12 @@
 package com.omninest.modules.video.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.omninest.modules.file.dto.FileContentStream;
@@ -51,6 +55,7 @@ class MoviePlaybackServiceTest {
     private final MediaWatchHistoryRepository historyRepository =
             mock(MediaWatchHistoryRepository.class);
     private final MovieTaskService movieTaskService = mock(MovieTaskService.class);
+    private final MediaRuntimeConfigService mediaRuntimeConfigService = mock(MediaRuntimeConfigService.class);
     private final PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
     private final VideoTranscodeService videoTranscodeService = mock(VideoTranscodeService.class);
     private final MediaContentAccessService mediaContentAccessService = mock(MediaContentAccessService.class);
@@ -59,11 +64,11 @@ class MoviePlaybackServiceTest {
     private final MoviePlaybackService playbackService = new MoviePlaybackService(
             videoItemRepository, movieRepository, episodeRepository, progressService,
             subtitleTrackRepository, fileQueryService, historyRepository,
-            movieTaskService, transactionManager, videoTranscodeService,
+            movieTaskService, new MediaProcessingLimitsProperties(), mediaRuntimeConfigService, transactionManager, videoTranscodeService,
             mediaContentAccessService, mediaPlaybackTokenService);
 
     @Test
-    void getSubtitleContentReadsOwnedFileThroughFileService() {
+    void writeSubtitleContentStreamsOwnedFileThroughFileService() throws Exception {
         MediaSubtitleTrack track = new MediaSubtitleTrack();
         track.setId(SUBTITLE_ID);
         track.setOwnerUserId(OWNER_ID);
@@ -81,8 +86,10 @@ class MoviePlaybackServiceTest {
                 "text/vtt"
         ));
 
-        String content = playbackService.getSubtitleContent(OWNER_ID, SUBTITLE_ID);
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        playbackService.writeSubtitleContent(OWNER_ID, SUBTITLE_ID, out);
 
+        String content = out.toString(StandardCharsets.UTF_8);
         assertThat(content).contains("WEBVTT").contains("字幕");
     }
 
@@ -165,5 +172,43 @@ class MoviePlaybackServiceTest {
         assertThat(plan.mode())
                 .as("matroska 容器中 av1+opus 属 WebM 家族，应直接播放")
                 .isEqualTo("DIRECT_PLAY");
+    }
+
+    @Test
+    void doesNotAutoTriggerTranscodeWhenDisabled() {
+        TransactionStatus txStatus = new SimpleTransactionStatus();
+        when(transactionManager.getTransaction(any())).thenReturn(txStatus);
+
+        MediaVideoItem movie = new MediaVideoItem();
+        movie.setId(MOVIE_ID);
+        movie.setOwnerUserId(OWNER_ID);
+        movie.setFileNodeId(FILE_ID);
+        movie.setContainerFormat("mp4");
+        movie.setVideoCodec("h264");
+        movie.setAudioCodec("aac");
+        movie.setMetadataStatus("MATCHED");
+
+        when(mediaContentAccessService.requireReadableVideo(OWNER_ID, MOVIE_ID)).thenReturn(movie);
+        when(mediaPlaybackTokenService.issue(OWNER_ID, MOVIE_ID)).thenReturn(
+                new MediaPlaybackTokenService.IssuedMediaToken(
+                        "media-token",
+                        Instant.parse("2026-05-21T11:00:00Z")
+                )
+        );
+        when(progressService.find(OWNER_ID, MediaPlaybackType.VIDEO, MOVIE_ID.toString()))
+                .thenReturn(Optional.empty());
+        when(subtitleTrackRepository.findByOwnerUserIdAndVideoItemIdOrderBySortOrderAsc(OWNER_ID, MOVIE_ID))
+                .thenReturn(List.of());
+        when(fileQueryService.createDownloadUrl(OWNER_ID, FILE_ID)).thenReturn(new FileDownloadUrlDto(
+                FILE_ID,
+                "movie.mp4",
+                "http://localhost:9000/movie.mp4",
+                Instant.parse("2026-05-21T11:00:00Z")
+        ));
+        when(mediaRuntimeConfigService.transcodeEnabled()).thenReturn(false);
+
+        playbackService.playbackPlan(OWNER_ID, MOVIE_ID);
+
+        verify(movieTaskService, never()).createTranscodeTask(any(), any(), anyBoolean());
     }
 }

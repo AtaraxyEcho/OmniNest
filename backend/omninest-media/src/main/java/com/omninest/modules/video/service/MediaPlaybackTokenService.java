@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class MediaPlaybackTokenService {
-    private static final Duration TOKEN_TTL = Duration.ofHours(6);
+    private static final Duration TOKEN_TTL = Duration.ofMinutes(30);
     private static final int TOKEN_BYTES = 32;
     private static final int MAXIMUM_TOKENS = 20000;
 

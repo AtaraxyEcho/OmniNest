@@ -10,8 +10,10 @@ import io.swagger.v3.oas.annotations.Operation;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.ContentDisposition;
@@ -29,6 +31,7 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
  *
  * @author OmniNest
  */
+@Slf4j
 @RestController
 @RequiredArgsConstructor
 public class MediaPublicContentController {
@@ -85,10 +88,10 @@ public class MediaPublicContentController {
             @RequestParam String token,
             HttpServletResponse response
     ) throws IOException {
-        String content = moviePlaybackService.getSubtitleContentByToken(token, videoItemId, subtitleId);
         response.setContentType("text/plain; charset=utf-8");
         response.setHeader(HttpHeaders.CACHE_CONTROL, "no-store");
-        response.getWriter().write(content);
+        moviePlaybackService.writeSubtitleContentByToken(
+                token, videoItemId, subtitleId, response.getOutputStream());
     }
 
     @Operation(summary = "读取影片派生资源", description = "校验影片令牌和资源归属后转发海报或背景图")
@@ -122,6 +125,12 @@ public class MediaPublicContentController {
         StreamingResponseBody body = outputStream -> {
             try (content) {
                 content.inputStream().transferTo(outputStream);
+            } catch (IOException exception) {
+                if (isClientDisconnect(exception)) {
+                    log.debug("视频派生资源流已中断: message={}", exception.getMessage());
+                } else {
+                    log.warn("视频派生资源流输出失败: message={}", exception.getMessage());
+                }
             }
         };
         return ResponseEntity.ok().headers(headers).body(body);
@@ -136,5 +145,32 @@ public class MediaPublicContentController {
         } catch (IllegalArgumentException e) {
             return MediaType.APPLICATION_OCTET_STREAM;
         }
+    }
+
+    /**
+     * 判断异常是否属于客户端断开或异步取消。
+     *
+     * <p>流式写出被中断不代表内容源故障，不应升级为错误响应。</p>
+     */
+    private boolean isClientDisconnect(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof InterruptedException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase(Locale.ROOT);
+                if (lower.contains("broken pipe")
+                        || lower.contains("connection reset")
+                        || lower.contains("connection aborted")
+                        || lower.contains("client abort")
+                        || lower.contains("an established connection was aborted")) {
+                    return true;
+                }
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return false;
     }
 }

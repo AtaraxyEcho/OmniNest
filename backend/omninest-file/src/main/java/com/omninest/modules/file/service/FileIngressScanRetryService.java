@@ -1,6 +1,7 @@
 package com.omninest.modules.file.service;
 
 import com.alibaba.fastjson2.JSON;
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FileUploadSession;
 import com.omninest.modules.file.domain.UploadStatus;
@@ -53,7 +54,7 @@ public class FileIngressScanRetryService {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (exception instanceof FileIngressRejectedException || currentRetries >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(event.taskId(), errorSummary);
+            taskRecordService.markDeadLetter(event.taskId(), errorSummary, StackSummaries.summarize(exception));
             settleTerminal(event, "安全扫描未完成", "文件「" + targetName(event.ingressItemId())
                     + "」安全扫描未通过或重试耗尽，请重新上传或联系管理员");
             log.error("文件安全扫描任务进入死信终态: taskId={}, retryCount={}, errorType={}",

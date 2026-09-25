@@ -8,8 +8,9 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 外部存储远程目录元数据缓存。
@@ -18,7 +19,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "storage_remote_metadata_cache", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class StorageRemoteMetadataCache {
@@ -50,5 +52,27 @@ public class StorageRemoteMetadataCache {
         if (cachedAt == null) {
             cachedAt = now;
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof StorageRemoteMetadataCache other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "StorageRemoteMetadataCache{id=" + id + ", externalAccountId=" + externalAccountId
+                + ", remotePath=" + remotePath + ", cachedAt=" + cachedAt + "}";
     }
 }

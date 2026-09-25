@@ -6,6 +6,7 @@ import com.omninest.common.storage.ObjectStorageKey;
 import com.omninest.common.storage.ObjectStorageObject;
 import com.omninest.common.storage.ObjectStoragePage;
 import com.omninest.common.util.RedisUtil;
+import com.omninest.modules.file.service.DerivedObjectReferenceQuery;
 import com.omninest.modules.file.service.FileObjectReferenceQuery;
 import com.omninest.modules.reader.service.ReaderPageAssetReferenceQuery;
 import com.omninest.modules.user.service.UserAvatarObjectReferenceQuery;
@@ -24,6 +25,9 @@ import org.springframework.stereotype.Service;
 /**
  * 分页审计派生资源存储桶，并按配置清理没有元数据引用的对象。
  *
+ * <p>引用源通过统一 SPI 报告：FileObject（含 Photo 缩略图/Transcode/Backdrop/
+ * Music 封面等 DerivedAssetStorageService 写入）、Reader 页面资产与用户头像。</p>
+ *
  * @author OmniNest
  */
 @Slf4j
@@ -39,6 +43,8 @@ public class DerivedAssetOrphanScanner {
     private final FileObjectReferenceQuery fileObjectReferenceQuery;
     private final ReaderPageAssetReferenceQuery readerPageAssetReferenceQuery;
     private final UserAvatarObjectReferenceQuery userAvatarObjectReferenceQuery;
+    /** 额外派生对象引用源；FileObject 已单独注入，这里放其余 SPI 实现。 */
+    private final List<DerivedObjectReferenceQuery> derivedObjectReferenceQueries;
     private final RedisUtil redisUtil;
     private final DerivedAssetOrphanScanProperties properties;
 
@@ -177,6 +183,11 @@ public class DerivedAssetOrphanScanner {
         Set<String> referencedKeys = new HashSet<>(
                 fileObjectReferenceQuery.findReferencedObjectKeys(bucket, candidateKeys)
         );
+        if (derivedObjectReferenceQueries != null) {
+            for (DerivedObjectReferenceQuery query : derivedObjectReferenceQueries) {
+                referencedKeys.addAll(query.findReferencedObjectKeys(bucket, candidateKeys));
+            }
+        }
         referencedKeys.addAll(readerPageAssetReferenceQuery.findReferencedObjectKeys(bucket, candidateKeys));
         referencedKeys.addAll(userAvatarObjectReferenceQuery.findReferencedObjectKeys(candidateKeys));
         referencedKeys.retainAll(candidateKeys);

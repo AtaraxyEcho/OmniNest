@@ -1,30 +1,5 @@
--- OmniNest 当前版本数据库基线。
+-- OmniNest 当前版本数据库基线（由项目维护，禁止再写入导出工具元数据）。
 CREATE SCHEMA IF NOT EXISTS omni;
-
-/*
- Navicat Premium Dump SQL
-
- Source Server         : omninest
- Source Server Type    : PostgreSQL
- Source Server Version : 180004 (180004)
- Source Host           : localhost:5432
- Source Catalog        : omninest
- Source Schema         : omni
-
- Target Server Type    : PostgreSQL
- Target Server Version : 180004 (180004)
- File Encoding         : 65001
-
- Date: 04/08/2026 11:05:18
-*/
-
-
-CREATE SEQUENCE "omni"."sync_events_sequence_no_seq"
-INCREMENT 1
-MINVALUE  1
-MAXVALUE 9223372036854775807
-START 1
-CACHE 1;
 
 CREATE TABLE "omni"."audit_logs" (
   "id" uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -546,7 +521,7 @@ COMMENT ON COLUMN "omni"."file_nodes"."mime_type" IS 'MIME类型';
 COMMENT ON COLUMN "omni"."file_nodes"."category" IS '业务分类：image/video/audio/document/novel/comic/archive/other，仅FILE写入';
 COMMENT ON COLUMN "omni"."file_nodes"."size_bytes" IS '大小字节数';
 COMMENT ON COLUMN "omni"."file_nodes"."current_object_id" IS '当前文件对象ID，关联file_objects';
-COMMENT ON COLUMN "omni"."file_nodes"."source_type" IS '来源类型：LOCAL / EXTERNAL / DERIVED';
+COMMENT ON COLUMN "omni"."file_nodes"."source_type" IS '来源类型：LOCAL / LOCAL_FILESYSTEM / EXTERNAL / DERIVED / RCLONE / SHARE';
 COMMENT ON COLUMN "omni"."file_nodes"."is_deleted" IS '是否已删除（软删除）';
 COMMENT ON COLUMN "omni"."file_nodes"."deleted_at" IS '删除时间';
 COMMENT ON COLUMN "omni"."file_nodes"."deleted_by" IS '删除用户ID，关联auth_users';
@@ -569,7 +544,9 @@ CREATE TABLE "omni"."file_objects" (
   "mime_type" varchar(160),
   "storage_class" varchar(32) NOT NULL DEFAULT 'STANDARD'::character varying,
   "encryption_status" varchar(32) NOT NULL DEFAULT 'SERVER_SIDE'::character varying,
-  "created_at" timestamptz(6) NOT NULL DEFAULT now()
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "version" int8 NOT NULL DEFAULT 0
 )
 ;
 COMMENT ON COLUMN "omni"."file_objects"."id" IS '对象唯一标识，主键';
@@ -797,7 +774,7 @@ COMMENT ON COLUMN "omni"."file_upload_sessions"."total_parts" IS '总分片数';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."uploaded_parts" IS '已上传分片数';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."mime_type" IS 'MIME类型';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."sha256" IS '文件SHA-256摘要';
-COMMENT ON COLUMN "omni"."file_upload_sessions"."status" IS '状态：CREATED / UPLOADING / COMPLETED / FAILED / CANCELLED / EXPIRED';
+COMMENT ON COLUMN "omni"."file_upload_sessions"."status" IS '状态：CREATED / UPLOADING / FINALIZING / SCANNING / COMPLETED / REJECTED / FAILED / CANCELLED / EXPIRED';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."upload_id" IS '对象存储分片上传ID';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."target_bucket" IS '目标对象存储桶';
 COMMENT ON COLUMN "omni"."file_upload_sessions"."target_object_key" IS '目标对象存储键';
@@ -822,7 +799,8 @@ CREATE TABLE "omni"."file_versions" (
   "change_type" varchar(32) NOT NULL,
   "remark" varchar(500),
   "created_by" uuid,
-  "created_at" timestamptz(6) NOT NULL DEFAULT now()
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "version" int8 NOT NULL DEFAULT 0
 )
 ;
 COMMENT ON COLUMN "omni"."file_versions"."id" IS '版本唯一标识，主键';
@@ -959,6 +937,7 @@ CREATE TABLE "omni"."media_playback_progresses" (
   "position_seconds" int8 NOT NULL DEFAULT 0,
   "duration_seconds" int8 NOT NULL DEFAULT 0,
   "completed" bool NOT NULL DEFAULT false,
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
   "client_updated_at" timestamptz(6) NOT NULL DEFAULT now(),
   "device_id" varchar(128) NOT NULL DEFAULT 'legacy',
@@ -1015,7 +994,7 @@ COMMENT ON COLUMN "omni"."media_subtitle_tracks"."video_item_id" IS '视频条�
 COMMENT ON COLUMN "omni"."media_subtitle_tracks"."file_node_id" IS '字幕文件节点ID，关联file_nodes';
 COMMENT ON COLUMN "omni"."media_subtitle_tracks"."language" IS '字幕语言';
 COMMENT ON COLUMN "omni"."media_subtitle_tracks"."label" IS '字幕显示名称';
-COMMENT ON COLUMN "omni"."media_subtitle_tracks"."track_kind" IS '轨道类型：SUBTITLE / CAPTION';
+COMMENT ON COLUMN "omni"."media_subtitle_tracks"."track_kind" IS '轨道类型：SUBTITLE / CAPTION / EXTERNAL';
 COMMENT ON COLUMN "omni"."media_subtitle_tracks"."stream_index" IS '内嵌字幕流索引（ffprobe），外挂字幕为NULL';
 COMMENT ON COLUMN "omni"."media_subtitle_tracks"."sort_order" IS '排序值';
 COMMENT ON COLUMN "omni"."media_subtitle_tracks"."created_at" IS '创建时间';
@@ -1848,7 +1827,8 @@ CREATE TABLE "omni"."photo_face_clusters" (
   "cover_face_id" uuid,
   "face_count" int4 NOT NULL DEFAULT 0,
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
-  "updated_at" timestamptz(6) NOT NULL DEFAULT now()
+  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "version" int8 NOT NULL DEFAULT 0
 )
 ;
 
@@ -1862,7 +1842,9 @@ CREATE TABLE "omni"."photo_faces" (
   "bbox_h" int4 NOT NULL,
   "embedding" bytea,
   "cluster_id" uuid,
-  "created_at" timestamptz(6) NOT NULL DEFAULT now()
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "version" int8 NOT NULL DEFAULT 0
 )
 ;
 
@@ -1939,6 +1921,7 @@ CREATE UNIQUE INDEX "uk_geo_dataset_version" ON "omni"."geo_dataset" USING btree
 ;
 
 CREATE TABLE "omni"."geo_cities" (
+  "id" uuid NOT NULL DEFAULT gen_random_uuid(),
   "dataset_id" uuid NOT NULL,
   "geoname_id" int8 NOT NULL,
   "name" varchar(200) NOT NULL,
@@ -1953,7 +1936,8 @@ CREATE TABLE "omni"."geo_cities" (
   "population" int8 NOT NULL DEFAULT 0,
   "feature_code" varchar(10),
   "created_at" timestamptz(6) NOT NULL DEFAULT now(),
-  CONSTRAINT "pk_geo_cities" PRIMARY KEY ("dataset_id", "geoname_id")
+  CONSTRAINT "pk_geo_cities" PRIMARY KEY ("id"),
+  CONSTRAINT "uk_geo_cities_dataset_geoname" UNIQUE ("dataset_id", "geoname_id")
 )
 ;
 
@@ -1977,7 +1961,9 @@ CREATE TABLE "omni"."photo_tags" (
   "owner_user_id" uuid NOT NULL,
   "photo_id" uuid NOT NULL,
   "tag" varchar(100) NOT NULL,
-  "created_at" timestamptz(6) NOT NULL DEFAULT now()
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
+  "version" int8 NOT NULL DEFAULT 0
 )
 ;
 
@@ -2181,8 +2167,7 @@ CREATE TABLE "omni"."reader_page_assets" (
   "reader_item_id" uuid NOT NULL,
   "source_id" uuid NOT NULL,
   "manifest_version" int4 NOT NULL,
-  "bucket_name" varchar(100) NOT NULL,
-  "object_key" varchar(1000) NOT NULL,
+  "file_node_id" uuid NOT NULL,
   "mime_type" varchar(50) NOT NULL,
   "byte_size" int8 NOT NULL,
   "checksum" varchar(64),
@@ -2194,8 +2179,8 @@ COMMENT ON COLUMN "omni"."reader_page_assets"."page_id" IS '漫画页面 ID，�
 COMMENT ON COLUMN "omni"."reader_page_assets"."reader_item_id" IS '阅读条目 ID，由应用层关联 reader_items';
 COMMENT ON COLUMN "omni"."reader_page_assets"."source_id" IS '漫画来源文件 ID，由应用层关联 reader_item_sources';
 COMMENT ON COLUMN "omni"."reader_page_assets"."manifest_version" IS '漫画清单版本号';
-COMMENT ON COLUMN "omni"."reader_page_assets"."bucket_name" IS '对象存储桶名称';
-COMMENT ON COLUMN "omni"."reader_page_assets"."object_key" IS '对象存储键';
+COMMENT ON COLUMN "omni"."reader_page_assets"."file_node_id" IS '派生资产 FileNode ID，对象定位由 File 模块解析';
+
 COMMENT ON COLUMN "omni"."reader_page_assets"."mime_type" IS '图片 MIME 类型';
 COMMENT ON COLUMN "omni"."reader_page_assets"."byte_size" IS '图片字节大小';
 COMMENT ON COLUMN "omni"."reader_page_assets"."checksum" IS '图片校验值';
@@ -2228,6 +2213,7 @@ CREATE TABLE "omni"."reader_progress" (
   "char_offset" int8 NOT NULL DEFAULT 0,
   "progress_percent" numeric(8,5) NOT NULL DEFAULT 0,
   "reading_mode" varchar(16) NOT NULL DEFAULT 'scroll'::character varying,
+  "created_at" timestamptz(6) NOT NULL DEFAULT now(),
   "updated_at" timestamptz(6) NOT NULL DEFAULT now(),
   "version" int8 NOT NULL DEFAULT 0,
   "chapter_id" varchar(128) NOT NULL DEFAULT ''::character varying,
@@ -2616,9 +2602,6 @@ COMMENT ON COLUMN "omni"."user_preferences"."updated_at" IS '更新时间。';
 COMMENT ON COLUMN "omni"."user_preferences"."version" IS '乐观锁版本号。';
 COMMENT ON COLUMN "omni"."user_preferences"."created_at" IS '创建时间。';
 COMMENT ON TABLE "omni"."user_preferences" IS '用户偏好设置表，按子系统 scope 分组保存个性化配置。';
-
-ALTER SEQUENCE "omni"."sync_events_sequence_no_seq"
-OWNED BY "omni"."sync_events"."sequence_no";
 
 CREATE INDEX "idx_audit_logs_actor_created" ON "omni"."audit_logs" USING btree (
   "actor_user_id" "pg_catalog"."uuid_ops" ASC NULLS LAST,

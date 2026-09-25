@@ -30,7 +30,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class SyncEventQueryService {
 
     static final int SCHEMA_VERSION = 1;
-    static final int MAX_PAGE_SIZE = 200;
     static final String RETENTION_FLOOR_KEY = "retention_floor";
 
     private final SyncEventRepository syncEventRepository;
@@ -98,7 +97,7 @@ public class SyncEventQueryService {
         if (after < 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "同步游标不能小于零");
         }
-        if (limit < 1 || limit > MAX_PAGE_SIZE) {
+        if (limit < 1 || limit > com.omninest.common.api.PageClamps.MAX_SIZE) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "同步事件分页大小必须在 1 到 200 之间");
         }
     }

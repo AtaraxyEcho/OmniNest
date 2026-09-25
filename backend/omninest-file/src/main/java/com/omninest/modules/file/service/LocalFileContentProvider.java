@@ -103,14 +103,7 @@ public class LocalFileContentProvider implements FileContentProvider {
             throw unavailable("存储位置已停用或类型不匹配");
         }
         Path path = pathResolver.resolveFile(location, reference.getRelativePath());
-        // NAS 短暂离线后恢复时，播放请求可直接把引用拉回 AVAILABLE，避免等待下次扫描。
-        if (!AVAILABLE.equals(reference.getAvailabilityStatus())) {
-            reference.setAvailabilityStatus(AVAILABLE);
-            reference.setMissingSince(null);
-            reference.setMissingConfirmations(0);
-            reference.setLastSeenAt(java.time.Instant.now());
-            contentRefRepository.save(reference);
-        }
+        // 读路径不写 availabilityStatus，可用性由扫描/维护流程更新。
         return new ResolvedContent(reference, location, path);
     }
 

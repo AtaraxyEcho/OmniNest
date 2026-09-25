@@ -141,7 +141,7 @@ class OfflineDownloadExecutionServiceTest {
         service.execute(event);
 
         // 验证源地址解析被调用（SSRF 验证入口）
-        Mockito.verify(sourceResolver).resolve("https://example.com/file.zip");
+        Mockito.verify(sourceResolver, Mockito.atLeastOnce()).resolve("https://example.com/file.zip");
     }
 
     @Test

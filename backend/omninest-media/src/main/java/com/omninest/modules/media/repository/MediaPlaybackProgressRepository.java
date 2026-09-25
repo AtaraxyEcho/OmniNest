@@ -62,10 +62,10 @@ public interface MediaPlaybackProgressRepository extends JpaRepository<MediaPlay
     @Query(value = """
             INSERT INTO omni.media_playback_progresses (
                 id, owner_user_id, position_seconds, duration_seconds, completed,
-                updated_at, client_updated_at, device_id, version, media_type, media_key
+                created_at, updated_at, client_updated_at, device_id, version, media_type, media_key
             ) VALUES (
                 :id, :ownerUserId, :positionSeconds, :durationSeconds, :completed,
-                :serverUpdatedAt, :clientUpdatedAt, :deviceId, 0, :mediaType, :mediaKey
+                :serverUpdatedAt, :serverUpdatedAt, :clientUpdatedAt, :deviceId, 0, :mediaType, :mediaKey
             )
             ON CONFLICT (owner_user_id, media_type, media_key) DO UPDATE SET
                 position_seconds = EXCLUDED.position_seconds,
@@ -81,7 +81,8 @@ public interface MediaPlaybackProgressRepository extends JpaRepository<MediaPlay
                     AND EXCLUDED.device_id > media_playback_progresses.device_id
                )
             RETURNING id, owner_user_id, video_item_id, position_seconds, duration_seconds,
-                completed, updated_at, client_updated_at, device_id, version, media_type, media_key
+                completed, created_at, updated_at, client_updated_at, device_id, version,
+                media_type, media_key
             """, nativeQuery = true)
     Optional<MediaPlaybackProgress> upsertIfNewer(
             @Param("id") UUID id,

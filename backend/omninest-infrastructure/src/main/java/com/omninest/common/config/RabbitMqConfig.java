@@ -101,6 +101,11 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Queue mediaScanQueue() {
+        return durableQueue(QueueNames.MEDIA_SCAN_QUEUE);
+    }
+
+    @Bean
     Queue offlineDownloadQueue() {
         return durableQueue(QueueNames.OFFLINE_DOWNLOAD_QUEUE);
     }
@@ -245,6 +250,11 @@ public class RabbitMqConfig {
     }
 
     @Bean
+    Binding mediaScanBinding(Queue mediaScanQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(mediaScanQueue).to(taskExchange).with(QueueNames.MEDIA_SCAN_ROUTING_KEY);
+    }
+
+    @Bean
     Binding offlineDownloadBinding(Queue offlineDownloadQueue, DirectExchange taskExchange) {
         return BindingBuilder.bind(offlineDownloadQueue).to(taskExchange).with(QueueNames.OFFLINE_DOWNLOAD_ROUTING_KEY);
     }
@@ -291,6 +301,11 @@ public class RabbitMqConfig {
     @Bean
     Binding photoScanBinding(Queue photoScanQueue, DirectExchange taskExchange) {
         return BindingBuilder.bind(photoScanQueue).to(taskExchange).with(QueueNames.PHOTO_SCAN_ROUTING_KEY);
+    }
+
+    @Bean
+    Binding photoThumbnailsBinding(Queue photoThumbnailsQueue, DirectExchange taskExchange) {
+        return BindingBuilder.bind(photoThumbnailsQueue).to(taskExchange).with(QueueNames.PHOTO_THUMBNAILS_ROUTING_KEY);
     }
 
     @Bean

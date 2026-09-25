@@ -1,4 +1,5 @@
 package com.omninest.modules.music.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.config.ProcessingTempProperties;
 import com.omninest.modules.file.dto.FileContentStream;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileQueryService;
@@ -50,8 +52,9 @@ class MusicCoverThumbnailServiceTest {
 
     private final DerivedAssetStorageService storageService = mock(DerivedAssetStorageService.class);
     private final FileQueryService fileQueryService = mock(FileQueryService.class);
+    private final ProcessingTempProperties processingTempProperties = new ProcessingTempProperties();
     private final MusicCoverThumbnailService service =
-            new MusicCoverThumbnailService(storageService, fileQueryService);
+            new MusicCoverThumbnailService(new MediaProcessingLimitsProperties(), processingTempProperties, storageService, fileQueryService);
 
     @Test
     void reusesStoredThumbnailWithoutDecodingSource() {

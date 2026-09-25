@@ -80,6 +80,8 @@ class ResourceShareLinkServiceTest {
      */
     @Test
     void authorizeIncrementsAccessCount() {
+        when(rateLimitService.tryAcquire(anyString(),
+                org.mockito.ArgumentMatchers.anyInt(), any(Duration.class))).thenReturn(true);
         ShareLink share = new ShareLink();
         share.setId(SHARE_ID);
         share.setOwnerUserId(OWNER_ID);

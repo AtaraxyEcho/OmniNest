@@ -9,13 +9,18 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.Objects;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
+import lombok.ToString;
 
 @Entity
 @Table(name = "share_links", schema = "omni")
-@Data
+@Getter
+@Setter
+@ToString(onlyExplicitlyIncluded = true)
 @AllArgsConstructor
 @NoArgsConstructor
 public class ShareLink {
@@ -68,6 +73,32 @@ public class ShareLink {
     @Version
     @Column(nullable = false)
     private long version;
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof ShareLink that)) {
+            return false;
+        }
+        return id != null && Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        // 稳定 hash：id 在 PrePersist 前可能为 null，不能参与 hash 否则入集合后丢失。
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出非敏感标识，避免 token/密码哈希进入日志。
+     */
+    @Override
+    public String toString() {
+        return "ShareLink{id=" + id + ", resourceType=" + resourceType
+                + ", resourceId=" + resourceId + ", accessCount=" + accessCount + "}";
+    }
 
     @PrePersist
     void fillCreatedFields() {

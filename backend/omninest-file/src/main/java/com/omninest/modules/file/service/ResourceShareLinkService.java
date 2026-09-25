@@ -17,6 +17,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * @author OmniNest
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ResourceShareLinkService {
@@ -251,6 +253,7 @@ public class ResourceShareLinkService {
         try {
             return credentialCipher.decrypt(cipher);
         } catch (RuntimeException error) {
+            log.debug("分享令牌解密失败，按无地址处理: errorType={}", error.getClass().getSimpleName());
             return null;
         }
     }
@@ -320,9 +323,19 @@ public class ResourceShareLinkService {
     }
 
     private void verifyPassword(ShareLink link, String password) {
-        if (link.getPasswordHash() != null
-                && (password == null || !passwordEncoder.matches(password, link.getPasswordHash()))) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "密码错误");
+        if (link.getPasswordHash() == null) {
+            return;
+        }
+        String attemptKey = "share-pwd-attempt:" + link.getTokenHash();
+        if (!rateLimitService.tryAcquire(attemptKey, 5, Duration.ofMinutes(15))) {
+            throw new BusinessException(ErrorCode.RATE_LIMITED, "访问过于频繁，请稍后再试");
+        }
+        if (password == null || !passwordEncoder.matches(password, link.getPasswordHash())) {
+            throw new BusinessException(
+                    password == null || password.isBlank()
+                            ? ErrorCode.SHARE_PASSWORD_REQUIRED
+                            : ErrorCode.PASSWORD_INVALID,
+                    password == null || password.isBlank() ? "需要访问密码" : "密码错误");
         }
     }
 

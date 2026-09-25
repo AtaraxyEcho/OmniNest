@@ -16,7 +16,19 @@ public final class PageClamps {
     }
 
     public static int safeSize(int size) {
-        return Math.min(Math.max(1, size <= 0 ? DEFAULT_SIZE : size), MAX_SIZE);
+        return safeSize(size, MAX_SIZE);
+    }
+
+    /**
+     * 按域上限夹取每页数量。
+     *
+     * @param size 请求每页数量
+     * @param maxSize 该域允许的最大每页数量
+     * @return 夹取后的每页数量
+     */
+    public static int safeSize(int size, int maxSize) {
+        int limit = Math.min(Math.max(1, maxSize), MAX_SIZE);
+        return Math.min(Math.max(1, size <= 0 ? DEFAULT_SIZE : size), limit);
     }
 
     public static int safeLimit(int limit, int defaultLimit) {

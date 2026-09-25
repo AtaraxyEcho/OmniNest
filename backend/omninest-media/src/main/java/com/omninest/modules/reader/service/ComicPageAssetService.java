@@ -1,4 +1,5 @@
 package com.omninest.modules.reader.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
@@ -7,7 +8,7 @@ import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
-import com.omninest.modules.file.service.LegacyObjectReference;
+
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderItemSource;
 import com.omninest.modules.reader.domain.ReaderPage;
@@ -41,7 +42,8 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ComicPageAssetService {
 
-    private static final long MAX_PAGE_IMAGE_SIZE = 20L * 1024 * 1024;
+
+    private final MediaProcessingLimitsProperties processingLimits;
     private final ReaderItemRepository itemRepository;
     private final ReaderItemSourceRepository sourceRepository;
     private final ReaderPageRepository pageRepository;
@@ -107,12 +109,10 @@ public class ComicPageAssetService {
         if (!descriptor.sourceArchive()) {
             ReaderPageAsset asset = pageAssetRepository.findById(descriptor.derivedAssetId())
                     .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "漫画页面资源不存在"));
-            LegacyObjectReference reference = new LegacyObjectReference(
-                    asset.getBucketName(),
-                    asset.getObjectKey()
-            );
-            try (InputStream inputStream = derivedAssetStorageService.openLegacyObject(reference)) {
-                copyBounded(inputStream, outputStream, MAX_PAGE_IMAGE_SIZE);
+            try (FileContentStream content = fileQueryService.openOwnedFileContent(
+                    descriptor.ownerUserId(), asset.getFileNodeId());
+                 InputStream inputStream = content.inputStream()) {
+                copyBounded(inputStream, outputStream, processingLimits.getMaxComicPageImageBytes());
             }
             return;
         }
@@ -133,9 +133,7 @@ public class ComicPageAssetService {
             return;
         }
         for (ReaderPageAsset asset : assets) {
-            derivedAssetStorageService.deleteObject(
-                    new LegacyObjectReference(asset.getBucketName(), asset.getObjectKey())
-            );
+            derivedAssetStorageService.deleteDerivedFileNode(asset.getFileNodeId());
         }
         pageAssetRepository.deleteAllById(assets.stream().map(ReaderPageAsset::getId).toList());
     }
@@ -152,9 +150,7 @@ public class ComicPageAssetService {
         RuntimeException firstFailure = null;
         for (ReaderPageAsset asset : assets) {
             try {
-                derivedAssetStorageService.deleteObject(
-                        new LegacyObjectReference(asset.getBucketName(), asset.getObjectKey())
-                );
+                derivedAssetStorageService.deleteDerivedFileNode(asset.getFileNodeId());
             } catch (RuntimeException exception) {
                 if (firstFailure == null) {
                     firstFailure = exception;
@@ -254,14 +250,14 @@ public class ComicPageAssetService {
                         && (descriptor.entryIndex() == null || currentEntryIndex == descriptor.entryIndex());
                 EntryReadGuard guard = session.beginEntry(
                         entry,
-                        targetEntry ? MAX_PAGE_IMAGE_SIZE : Long.MAX_VALUE
+                        targetEntry ? processingLimits.getMaxComicPageImageBytes() : Long.MAX_VALUE
                 );
                 if (entry.isDirectory()) {
                     guard.complete(entry);
                     continue;
                 }
                 if (targetEntry) {
-                    copyArchiveEntry(input, outputStream, guard, MAX_PAGE_IMAGE_SIZE);
+                    copyArchiveEntry(input, outputStream, guard, processingLimits.getMaxComicPageImageBytes());
                     guard.complete(entry);
                     return;
                 }
@@ -318,7 +314,7 @@ public class ComicPageAssetService {
     }
 
     private void validatePageImageSize(long sizeBytes) {
-        if (sizeBytes > MAX_PAGE_IMAGE_SIZE) {
+        if (sizeBytes > processingLimits.getMaxComicPageImageBytes()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "图片过大");
         }
     }

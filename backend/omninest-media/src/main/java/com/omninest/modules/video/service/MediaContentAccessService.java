@@ -77,7 +77,8 @@ public class MediaContentAccessService {
         MediaVideoItem item = requireReadableVideo(grant.requesterUserId(), videoItemId);
         FileContentResource content = fileContentAccessService.openAuthorizedMediaResource(
                 item.getFileNodeId(),
-                MediaContentPurpose.MEDIA_PLAYBACK
+                MediaContentPurpose.MEDIA_PLAYBACK,
+                item.getOwnerUserId()
         );
         return withWebmFamilyMimeType(item, content);
     }
@@ -132,7 +133,8 @@ public class MediaContentAccessService {
         if (!linked) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "媒体令牌不能访问其他影片的派生资源");
         }
-        return fileContentAccessService.openAuthorizedMediaStream(fileNodeId, MediaContentPurpose.MEDIA_ASSET);
+        return fileContentAccessService.openAuthorizedMediaStream(
+                fileNodeId, MediaContentPurpose.MEDIA_ASSET, item.getOwnerUserId());
     }
 
     /** 使用系列令牌读取与该系列关联的 MinIO 派生资源。 */
@@ -151,7 +153,8 @@ public class MediaContentAccessService {
         if (!linked) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "媒体令牌不能访问其他系列的派生资源");
         }
-        return fileContentAccessService.openAuthorizedMediaStream(fileNodeId, MediaContentPurpose.MEDIA_ASSET);
+        return fileContentAccessService.openAuthorizedMediaStream(
+                fileNodeId, MediaContentPurpose.MEDIA_ASSET, series.getOwnerUserId());
     }
 
     /**

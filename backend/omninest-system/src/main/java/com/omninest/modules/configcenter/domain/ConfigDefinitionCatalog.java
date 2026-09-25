@@ -107,7 +107,7 @@ public final class ConfigDefinitionCatalog {
         Map<String, ConfigDefinition> values = new LinkedHashMap<>();
 
         // 系统与业务行为。
-        add(values, bool("media.transcode.enabled", true, "media", ConfigSurface.GENERAL,
+        add(values, bool("media.transcode.enabled", false, "media", ConfigSurface.GENERAL,
                 "config.media.transcode", "是否启用媒体转码"));
         add(values, bool("media.import.enabled", true, "media", ConfigSurface.GENERAL,
                 "config.media.autoImport", "是否启用媒体自动导入"));
@@ -217,7 +217,7 @@ public final class ConfigDefinitionCatalog {
         add(values, string("music.netease.hosts", "music.126.net,music.163.com", "music", ConfigSurface.INTEGRATION,
                 "config.integration.netease.hosts", "网易云音乐播放域名后缀", false, 512));
 
-        add(values, bool("photo.ai.enabled", true, "photo", ConfigSurface.INTEGRATION,
+        add(values, bool("photo.ai.enabled", false, "photo", ConfigSurface.INTEGRATION,
                 "config.integration.photoAi.enabled", "是否启用图像分析"));
         add(values, string("photo.ai.url", "http://localhost:8090", "photo", ConfigSurface.INTEGRATION,
                 "config.integration.photoAi.endpoint", "图像分析服务地址", false, 512));

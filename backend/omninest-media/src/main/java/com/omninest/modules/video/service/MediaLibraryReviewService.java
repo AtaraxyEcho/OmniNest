@@ -42,7 +42,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class MediaLibraryReviewService {
     private static final String APPLY_TASK_TYPE = "LOCAL_VIDEO_LIBRARY_APPLY";
-    private static final int MAX_PAGE_SIZE = 200;
 
     private final MediaScanRunRepository runRepository;
     private final MediaScanCandidateRepository candidateRepository;
@@ -72,7 +71,7 @@ public class MediaLibraryReviewService {
     public PageResponse<UnavailableMediaDto> unavailable(UUID operatorUserId, int page, int size) {
         accessService.requireManagePermission(operatorUserId);
         int safePage = Math.max(0, page);
-        int safeSize = Math.max(1, Math.min(MAX_PAGE_SIZE, size));
+        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
         List<UUID> sourceIds = sourceRepository.findAllByOrderByNameAsc().stream()
                 .map(VideoLibrarySource::getId)
                 .toList();
@@ -108,7 +107,7 @@ public class MediaLibraryReviewService {
         UUID catalogOwnerId = run.getOwnerUserId();
         VideoLibrarySource source = requireSource(ownerUserId, run.getLibrarySourceId());
         int safePage = Math.max(0, page);
-        int safeSize = Math.max(1, Math.min(MAX_PAGE_SIZE, size));
+        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
         String parent = parentNodeId == null || parentNodeId.isBlank() ? "ROOT" : parentNodeId;
         if ("ROOT".equals(parent)) {
             return rootNodes(catalogOwnerId, runId, source, safePage, safeSize);

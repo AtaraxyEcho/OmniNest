@@ -1,4 +1,5 @@
 package com.omninest.modules.reader.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.modules.file.domain.SpaceType;
@@ -16,7 +17,7 @@ import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.file.service.FilePurgeOrigin;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
-import com.omninest.modules.file.service.LegacyObjectReference;
+
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.photos.service.PhotoInputGuard;
 import com.omninest.modules.reader.domain.ReaderBookshelf;
@@ -75,8 +76,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Transactional(readOnly = true)
 public class ReaderItemService {
 
-    private static final long MAX_COVER_BYTES = 20L * 1024 * 1024;
 
+
+    private final MediaProcessingLimitsProperties processingLimits;
     private final ReaderItemRepository itemRepository;
     private final ReaderProgressRepository progressRepository;
     private final ReaderBookshelfRepository bookshelfRepository;
@@ -311,9 +313,7 @@ public class ReaderItemService {
             boolean allDeleted = true;
             for (ReaderPageAsset asset : assets) {
                 try {
-                    derivedAssetStorageService.deleteObject(
-                            new LegacyObjectReference(asset.getBucketName(), asset.getObjectKey())
-                    );
+                    derivedAssetStorageService.deleteDerivedFileNode(asset.getFileNodeId());
                 } catch (RuntimeException exception) {
                     allDeleted = false;
                     log.warn("阅读旧页面对象清理失败，将保留资产记录: assetId={}, errorType={}",
@@ -413,7 +413,7 @@ public class ReaderItemService {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面文件不能为空");
         }
-        if (file.getSize() <= 0 || file.getSize() > MAX_COVER_BYTES) {
+        if (file.getSize() <= 0 || file.getSize() > processingLimits.getMaxReaderCoverBytes()) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "封面文件大小超出限制");
         }
         ReaderItem item = requireOwnedItem(ownerUserId, itemId);
@@ -492,7 +492,7 @@ public class ReaderItemService {
         if (fileNode.deleted() || !"FILE".equals(fileNode.nodeType())) {
             throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在");
         }
-        if (fileNode.sizeBytes() > MAX_COVER_BYTES) {
+        if (fileNode.sizeBytes() > processingLimits.getMaxReaderCoverBytes()) {
             throw new BusinessException(ErrorCode.FILE_SIZE_EXCEEDED, "封面文件超过读取限制");
         }
         String contentType = fileNode.mimeType();
@@ -678,7 +678,8 @@ public class ReaderItemService {
         try (FileContentStream content = descriptor.mediaAsset()
                 ? fileContentAccessService.openAuthorizedMediaStream(
                         descriptor.fileNodeId(),
-                        MediaContentPurpose.MEDIA_ASSET)
+                        MediaContentPurpose.MEDIA_ASSET,
+                        descriptor.requesterUserId())
                 : fileQueryService.openReadableFileContent(
                         descriptor.requesterUserId(),
                         descriptor.fileNodeId())) {

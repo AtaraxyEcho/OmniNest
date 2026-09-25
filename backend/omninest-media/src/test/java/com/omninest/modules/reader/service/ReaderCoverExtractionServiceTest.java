@@ -1,4 +1,5 @@
 package com.omninest.modules.reader.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -44,7 +45,7 @@ class ReaderCoverExtractionServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ReaderCoverExtractionService(itemRepository, derivedAssetStorageService, syncEventService);
+        service = new ReaderCoverExtractionService(new MediaProcessingLimitsProperties(), itemRepository, derivedAssetStorageService, syncEventService);
     }
 
     @Test

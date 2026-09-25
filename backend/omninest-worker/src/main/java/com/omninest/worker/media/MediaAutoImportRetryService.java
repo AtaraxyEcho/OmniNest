@@ -1,5 +1,6 @@
 package com.omninest.worker.media;
 
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.event.MediaAutoImportRequestedEvent;
@@ -40,7 +41,7 @@ public class MediaAutoImportRetryService {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(event.taskId(), errorSummary);
+            taskRecordService.markDeadLetter(event.taskId(), errorSummary, StackSummaries.summarize(exception));
             log.error("媒体自动导入任务进入死信终态: taskId={}, retryCount={}, errorType={}",
                     event.taskId(), currentRetries, errorSummary);
             return;

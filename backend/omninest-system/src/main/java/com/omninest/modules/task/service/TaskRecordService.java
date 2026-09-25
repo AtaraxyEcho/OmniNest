@@ -314,12 +314,26 @@ public class TaskRecordService {
      */
     @Transactional(rollbackFor = Exception.class)
     public boolean markDeadLetter(UUID taskId, String errorMessage) {
+        return markDeadLetter(taskId, errorMessage, null);
+    }
+
+    /**
+     * 将任务标记为死信，并保留脱敏后的堆栈摘要。
+     *
+     * @param taskId 任务 ID
+     * @param errorMessage 错误摘要
+     * @param stackSummary 脱敏堆栈摘要，可为 null
+     * @return 任务存在并完成更新时返回 true
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public boolean markDeadLetter(UUID taskId, String errorMessage, String stackSummary) {
         TaskRecord record = taskRecordRepository.findById(taskId).orElse(null);
         if (record == null || isTerminal(record)) {
             return false;
         }
         record.setStatus(TaskStatus.DLQ.getValue());
         record.setErrorMessage(errorMessage);
+        record.setStackSummary(stackSummary);
         record.setCompletedAt(Instant.now());
         record.setNextRetryAt(null);
         taskRecordRepository.save(record);

@@ -7,6 +7,7 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.DownloadOfflineTask;
 import com.omninest.modules.file.domain.FileNode;
 import com.omninest.modules.file.domain.NodeType;
+import com.omninest.modules.file.domain.SourceType;
 import com.omninest.modules.file.dto.CreateOfflineDownloadRequest;
 import com.omninest.modules.file.dto.OfflineDownloadTaskDto;
 import com.omninest.modules.file.event.OfflineDownloadRequestedEvent;
@@ -156,6 +157,9 @@ public class OfflineDownloadRequestService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "目标文件夹不存在"));
         if (!NodeType.FOLDER.getValue().equals(parent.getNodeType())) {
             throw new BusinessException(ErrorCode.FILE_PATH_INVALID, "目标父级必须是文件夹");
+        }
+        if (SourceType.LOCAL_FILESYSTEM.getValue().equals(parent.getSourceType())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "本地只读影视库不支持写入离线下载结果");
         }
         return parent;
     }

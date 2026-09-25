@@ -10,8 +10,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 同步事件保留水位检查点。
@@ -20,7 +21,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "sync_event_checkpoints", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class SyncEventCheckpoint {
@@ -61,5 +63,23 @@ public class SyncEventCheckpoint {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof SyncEventCheckpoint other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "SyncEventCheckpoint{id=" + id + ", checkpointKey=" + checkpointKey
+                + ", sequenceNo=" + sequenceNo + "}";
     }
 }

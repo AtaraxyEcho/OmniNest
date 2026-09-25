@@ -30,8 +30,7 @@ class ModuleDependencyBoundaryTest {
     /** 0.1.0 发布前登记的存量超长源码；禁止新增，拆分完成后移除。 */
     private static final Set<String> ALLOWED_OVERSIZED_SOURCES = Set.of(
             "omninest-worker/src/main/java/com/omninest/worker/tika/TextExtractionConsumer.java",
-            "omninest-media/src/main/java/com/omninest/modules/photos/repository/PhotoItemRepository.java",
-            "omninest-file/src/main/java/com/omninest/modules/file/service/FileManagerService.java"
+            "omninest-media/src/main/java/com/omninest/modules/photos/repository/PhotoItemRepository.java"
     );
     private static final List<String> MODULES = List.of(
             "omninest-common",

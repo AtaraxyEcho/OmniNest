@@ -11,12 +11,14 @@ import java.util.UUID;
 import com.omninest.modules.configcenter.domain.ConfigValueType;
 import com.omninest.modules.configcenter.domain.RefreshScope;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "config_entries", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ConfigEntry {
@@ -73,5 +75,25 @@ public class ConfigEntry {
     @PreUpdate
     void fillUpdateFields() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ConfigEntry other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与配置键，避免可能含密的配置值进入日志。
+     */
+    @Override
+    public String toString() {
+        return "ConfigEntry{id=" + id + ", configKey=" + configKey + ", category=" + category + "}";
     }
 }

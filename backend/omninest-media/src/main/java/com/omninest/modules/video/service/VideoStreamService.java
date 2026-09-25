@@ -28,6 +28,7 @@ public class VideoStreamService {
     private static final int BUFFER_SIZE = 64 * 1024;
     /** 流式转码超时（秒）：4 小时 */
     private static final long STREAM_TRANSCODE_TIMEOUT_SECONDS = 4 * 3600;
+    private static final long TIMEOUT_JOIN_MILLIS = 5_000L;
 
     /** Web 端浏览器原生不支持的音频编码（flac/vorbis 现代浏览器已支持，不再列入） */
     public static final List<String> WEB_UNSUPPORTED_AUDIO = List.of(
@@ -141,7 +142,7 @@ public class VideoStreamService {
                 }
             }
 
-            timeoutThread.join();
+            timeoutThread.join(TIMEOUT_JOIN_MILLIS);
             if (timedOut.get()) {
                 log.warn("ffmpeg 流式转码超时: videoItemId={}, timeout={}s", videoItemId, STREAM_TRANSCODE_TIMEOUT_SECONDS);
                 return;
@@ -158,9 +159,7 @@ public class VideoStreamService {
             Thread.currentThread().interrupt();
             log.warn("流式转码被中断: videoItemId={}", videoItemId);
         } finally {
-            if (process != null && process.isAlive()) {
-                process.destroyForcibly();
-            }
+            terminateProcess(process);
         }
     }
 
@@ -235,7 +234,7 @@ public class VideoStreamService {
                 }
             }
 
-            timeoutThread.join();
+            timeoutThread.join(TIMEOUT_JOIN_MILLIS);
             if (timedOut.get()) {
                 log.warn(
                         "ffmpeg mux 超时: sourceVideoItemId={}, timeout={}s",
@@ -256,9 +255,7 @@ public class VideoStreamService {
             Thread.currentThread().interrupt();
             log.warn("mux 被中断: sourceVideoItemId={}", sourceVideoItemId);
         } finally {
-            if (process != null && process.isAlive()) {
-                process.destroyForcibly();
-            }
+            terminateProcess(process);
         }
     }
 
@@ -289,6 +286,33 @@ public class VideoStreamService {
                 "pipe:1"
         ));
         return cmd.toArray(new String[0]);
+    }
+
+    private void terminateProcess(Process process) {
+        if (process == null) {
+            return;
+        }
+        process.destroyForcibly();
+        try {
+            process.waitFor(2, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        try {
+            process.getInputStream().close();
+        } catch (IOException e) {
+            log.debug("关闭已销毁进程流失败: {}", e.getMessage());
+        }
+        try {
+            process.getErrorStream().close();
+        } catch (IOException e) {
+            log.debug("关闭已销毁进程流失败: {}", e.getMessage());
+        }
+        try {
+            process.getOutputStream().close();
+        } catch (IOException e) {
+            log.debug("关闭已销毁进程流失败: {}", e.getMessage());
+        }
     }
 
     private Thread startTimeoutMonitor(Process process, AtomicBoolean timedOut) {

@@ -54,7 +54,7 @@ class MediaScrapeRetryServiceTest {
                 eq(event),
                 eq(nextRetryAt.getValue())
         );
-        verify(taskRecordService, never()).markDeadLetter(eq(TASK_ID), any());
+        verify(taskRecordService, never()).markDeadLetter(eq(TASK_ID), any(), any());
     }
 
     @Test
@@ -64,7 +64,7 @@ class MediaScrapeRetryServiceTest {
 
         retryService.handleFailure(event, new IllegalStateException("provider unavailable"));
 
-        verify(taskRecordService).markDeadLetter(eq(TASK_ID), any());
+        verify(taskRecordService).markDeadLetter(eq(TASK_ID), any(), any());
         verify(taskRecordService, never()).markRetryWait(eq(TASK_ID), any(), any());
         verify(taskDispatchService, never()).enqueueAt(any(), any(), any(), any(), any());
     }

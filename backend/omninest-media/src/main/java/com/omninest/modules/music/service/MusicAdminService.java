@@ -1,4 +1,5 @@
 package com.omninest.modules.music.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import com.omninest.common.cache.ReadThroughCache;
 import com.omninest.common.enums.ErrorCode;
@@ -71,8 +72,9 @@ public class MusicAdminService {
     private static final String COVER_ASSET_TYPE = "COVER";
 
     /** 超过该字节数的内嵌封面维持内联，避免为罕见大图在扫描流程写对象存储。 */
-    private static final int MAX_EMBEDDED_COVER_BYTES = 8 * 1024 * 1024;
 
+
+    private final MediaProcessingLimitsProperties processingLimits;
     private final MusicScanJobRepository scanJobRepository;
     private final MusicTrackRepository trackRepository;
     private final MusicAlbumRepository albumRepository;
@@ -527,14 +529,20 @@ public class MusicAdminService {
         if (extension == null) {
             return null;
         }
+        String payload = coverDataUrl.substring(comma + 1);
+        long maxBytes = processingLimits.getMaxEmbeddedCoverBytes();
+        long maxEncodedChars = (maxBytes / 3L + 1L) * 4L;
+        if (payload.isEmpty() || payload.length() > maxEncodedChars) {
+            return null;
+        }
         byte[] bytes;
         try {
-            bytes = Base64.getDecoder().decode(coverDataUrl.substring(comma + 1));
+            bytes = Base64.getDecoder().decode(payload);
         } catch (IllegalArgumentException ex) {
             log.warn("音乐内嵌封面 base64 解码失败: errorType={}", ex.getClass().getSimpleName());
             return null;
         }
-        if (bytes.length == 0 || bytes.length > MAX_EMBEDDED_COVER_BYTES) {
+        if (bytes.length == 0 || bytes.length > maxBytes) {
             return null;
         }
         return new EmbeddedCover(mimeType, extension, bytes);

@@ -13,8 +13,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 媒体文件条目，仅承载文件级信息（编码、分辨率等）和版本关联。
@@ -22,7 +23,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "media_video_items", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class MediaVideoItem {
@@ -128,5 +130,27 @@ public class MediaVideoItem {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MediaVideoItem other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "MediaVideoItem{id=" + id + ", fileNodeId=" + fileNodeId + ", mediaType=" + mediaType
+                + ", movieId=" + movieId + ", episodeId=" + episodeId + "}";
     }
 }

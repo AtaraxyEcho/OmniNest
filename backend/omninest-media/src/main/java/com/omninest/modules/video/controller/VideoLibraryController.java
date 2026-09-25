@@ -389,10 +389,9 @@ public class VideoLibraryController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
     @GetMapping("/api/v1/video/subtitles/{subtitleId}/content")
     void subtitleContent(@PathVariable UUID subtitleId, HttpServletResponse response) throws IOException {
-        String content = moviePlaybackService.getSubtitleContent(
-                currentUserContext.requireCurrentUserId(), subtitleId);
         response.setContentType("text/plain; charset=utf-8");
-        response.getWriter().write(content);
+        moviePlaybackService.writeSubtitleContent(
+                currentUserContext.requireCurrentUserId(), subtitleId, response.getOutputStream());
     }
 
     @Operation(summary = "获取刮削候选", description = "从 TMDB 获取指定文件的元数据候选")

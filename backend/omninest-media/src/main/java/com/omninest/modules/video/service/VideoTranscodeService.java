@@ -1,5 +1,6 @@
 package com.omninest.modules.video.service;
 
+import com.omninest.common.config.ProcessingTempProperties;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import java.io.IOException;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 public class VideoTranscodeService {
     private static final String DOCKER_CONTAINER = "omninest-ffmpeg";
     private static final String DOCKER_TRANSCODE_DIR = "/tmp/transcode";
+    private final ProcessingTempProperties processingTempProperties;
     private final VideoSourceInputResolver sourceInputResolver;
     private final VideoProcessExecutor processExecutor;
 
@@ -34,9 +36,11 @@ public class VideoTranscodeService {
      * @param processExecutor  视频外部进程执行器
      */
     public VideoTranscodeService(
+            ProcessingTempProperties processingTempProperties,
             VideoSourceInputResolver sourceInputResolver,
             VideoProcessExecutor processExecutor
     ) {
+        this.processingTempProperties = processingTempProperties;
         this.sourceInputResolver = sourceInputResolver;
         this.processExecutor = processExecutor;
     }
@@ -132,7 +136,10 @@ public class VideoTranscodeService {
             exec(cmd.toArray(new String[0]));
             log.info("字幕提取 ffmpeg 完成: videoItemId={}, streamIndex={}", videoItemId, streamIndex);
 
-            Path tempOutput = Files.createTempFile("subtitle-" + videoItemId + "-" + streamIndex, ".vtt");
+            Path tempOutput = Files.createTempFile(
+                    processingTempProperties.ensureSubdirectory("transcode"),
+                    "subtitle-" + videoItemId + "-" + streamIndex,
+                    ".vtt");
             VideoProcessExecutor.Result copyResult = copyFromContainer(containerOutput, tempOutput);
             if (copyResult.timedOut()) {
                 Files.deleteIfExists(tempOutput);
@@ -191,7 +198,10 @@ public class VideoTranscodeService {
             log.info("{} ffmpeg 完成: videoItemId={}", logLabel, videoItemId);
 
             log.info("{} 复制到宿主机: videoItemId={}", logLabel, videoItemId);
-            Path tempOutput = Files.createTempFile("transcode-" + videoItemId, ext);
+            Path tempOutput = Files.createTempFile(
+                    processingTempProperties.ensureSubdirectory("transcode"),
+                    "transcode-" + videoItemId,
+                    ext);
             VideoProcessExecutor.Result copyResult = copyFromContainer(containerOutput, tempOutput);
             if (copyResult.timedOut()) {
                 Files.deleteIfExists(tempOutput);

@@ -72,7 +72,10 @@ public enum ErrorCode {
     // ==================== 认证扩展 9xxx ====================
     TWO_FACTOR_INVALID_CODE(9001, "两步验证码错误"),
     TWO_FACTOR_NOT_CONFIGURED(9002, "两步验证未配置"),
-    TWO_FACTOR_ALREADY_ENABLED(9003, "两步验证已开启");
+    TWO_FACTOR_ALREADY_ENABLED(9003, "两步验证已开启"),
+    PASSWORD_INVALID(9004, "密码错误"),
+    OLD_PASSWORD_INVALID(9005, "原密码错误"),
+    SHARE_PASSWORD_REQUIRED(9006, "需要访问密码");
 
     private final Integer code;
     private final String message;

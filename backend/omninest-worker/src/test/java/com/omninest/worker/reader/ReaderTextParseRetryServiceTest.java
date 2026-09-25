@@ -67,7 +67,7 @@ class ReaderTextParseRetryServiceTest {
 
         retryService.handleFailure(event(false), new RuntimeException("boom"));
 
-        verify(taskRecordService, never()).markDeadLetter(eq(TASK_ID), anyString());
+        verify(taskRecordService, never()).markDeadLetter(eq(TASK_ID), anyString(), any());
         verify(manifestService, never()).markFailed(any(), any(), any());
         verify(taskDispatchService).enqueueAt(
                 eq(TASK_ID), any(), any(), any(), any());
@@ -76,11 +76,11 @@ class ReaderTextParseRetryServiceTest {
     @Test
     void maxRetriesMarksItemFailedAndDeadLetter() {
         when(taskRecordService.retryCount(TASK_ID)).thenReturn(3);
-        when(taskRecordService.markDeadLetter(eq(TASK_ID), anyString())).thenReturn(true);
+        when(taskRecordService.markDeadLetter(eq(TASK_ID), anyString(), any())).thenReturn(true);
 
         retryService.handleFailure(event(false), new RuntimeException("boom"));
 
-        verify(taskRecordService).markDeadLetter(eq(TASK_ID), anyString());
+        verify(taskRecordService).markDeadLetter(eq(TASK_ID), anyString(), anyString());
         verify(manifestService).markFailed(
                 eq(ITEM_ID),
                 eq("READER_PARSE_FAILED"),

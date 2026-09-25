@@ -49,7 +49,8 @@ public class DeadLetterConsumer {
             extractTaskId(message, body).ifPresent(taskId -> {
                 boolean updated = taskRecordService.markDeadLetter(
                         taskId,
-                        describeDeadLetter(body, routingKey)
+                        describeDeadLetter(body, routingKey),
+                        extractStackSummary(body)
                 );
                 if (updated) {
                     log.info("任务状态已更新为 DLQ: taskId={}", taskId);
@@ -61,6 +62,19 @@ public class DeadLetterConsumer {
         } catch (Throwable e) {
             log.error("死信处理失败", e);
             channel.basicNack(deliveryTag, false, false);
+        }
+    }
+
+    /**
+     * 从死信消息体提取堆栈摘要字段，缺失或非 JSON 时返回 null。
+     */
+    private String extractStackSummary(String body) {
+        try {
+            JSONObject json = JSONObject.parseObject(body);
+            return json == null ? null : json.getString("stackSummary");
+        } catch (RuntimeException exception) {
+            log.debug("死信消息体不是 JSON，不提取堆栈摘要");
+            return null;
         }
     }
 

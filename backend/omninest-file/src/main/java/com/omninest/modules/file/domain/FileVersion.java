@@ -5,11 +5,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 文件历史版本对象引用。
@@ -18,7 +20,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "file_versions", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class FileVersion {
@@ -49,6 +52,10 @@ public class FileVersion {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Version
+    @Column(nullable = false)
+    private long version;
+
     @PrePersist
     void fillDefaults() {
         if (id == null) {
@@ -57,5 +64,28 @@ public class FileVersion {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof FileVersion other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "FileVersion{id=" + id + ", fileNodeId=" + fileNodeId
+                + ", objectId=" + objectId + ", versionNo=" + versionNo
+                + ", changeType=" + changeType + "}";
     }
 }

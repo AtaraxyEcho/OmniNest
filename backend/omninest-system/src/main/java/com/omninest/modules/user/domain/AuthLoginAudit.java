@@ -8,15 +8,17 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 登录审计实体，记录所有登录尝试。
  */
 @Entity
 @Table(name = "auth_login_audit", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class AuthLoginAudit {
@@ -62,5 +64,25 @@ public class AuthLoginAudit {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof AuthLoginAudit other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与登录结果，避免设备和网络信息进入日志。
+     */
+    @Override
+    public String toString() {
+        return "AuthLoginAudit{id=" + id + ", username=" + username + ", loginResult=" + loginResult + "}";
     }
 }

@@ -45,7 +45,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class PhotoAlbumService {
 
     private static final int DEFAULT_PAGE_SIZE = 50;
-    private static final int MAX_PAGE_SIZE = 100;
 
     private final PhotoAlbumRepository albumRepository;
     private final PhotoAlbumItemRepository albumItemRepository;
@@ -126,7 +125,7 @@ public class PhotoAlbumService {
     public Page<PhotoItemDto> albumPhotosPage(UUID ownerUserId, UUID albumId, int page, int size) {
         requireAlbum(ownerUserId, albumId);
         int safePage = Math.max(0, page);
-        int safeSize = Math.min(Math.max(1, size), MAX_PAGE_SIZE);
+        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
         long total = albumItemRepository.countByAlbumId(albumId);
         List<UUID> photoIds = albumItemRepository.findPhotoIdsByAlbumId(
                 albumId, PageRequest.of(safePage, safeSize));

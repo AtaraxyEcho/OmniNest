@@ -1,4 +1,5 @@
 package com.omninest.modules.reader.service;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -13,7 +14,7 @@ import com.omninest.modules.file.dto.FileDescriptor;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileMetadataQueryService;
 import com.omninest.modules.file.service.FileQueryService;
-import com.omninest.modules.file.service.LegacyObjectReference;
+
 import com.omninest.modules.reader.domain.ReaderItem;
 import com.omninest.modules.reader.domain.ReaderItemSource;
 import com.omninest.modules.reader.domain.ReaderPage;
@@ -71,6 +72,9 @@ class ComicPageAssetServiceTest {
     @Mock
     private ReaderArchiveSafetyPolicy archiveSafetyPolicy;
 
+    @org.mockito.Spy
+    private MediaProcessingLimitsProperties processingLimits = new MediaProcessingLimitsProperties();
+
     @InjectMocks
     private ComicPageAssetService service;
 
@@ -91,8 +95,7 @@ class ComicPageAssetServiceTest {
         item.setOwnerUserId(ownerUserId);
         item.setManifestVersion(3);
         ReaderPageAsset asset = new ReaderPageAsset();
-        asset.setBucketName("reader");
-        asset.setObjectKey("derived/page.jpg");
+        asset.setFileNodeId(UUID.randomUUID());
         asset.setMimeType("image/jpeg");
         asset.setByteSize(5L);
         asset.setId(UUID.randomUUID());
@@ -113,9 +116,9 @@ class ComicPageAssetServiceTest {
 
         byte[] imageBytes = "image".getBytes(StandardCharsets.UTF_8);
         when(pageAssetRepository.findById(asset.getId())).thenReturn(Optional.of(asset));
-        when(derivedAssetStorageService.openLegacyObject(
-                new LegacyObjectReference("reader", "derived/page.jpg")
-        )).thenReturn(new ByteArrayInputStream(imageBytes));
+        when(fileQueryService.openOwnedFileContent(ownerUserId, asset.getFileNodeId()))
+                .thenReturn(new FileContentStream(
+                        new ByteArrayInputStream(imageBytes), "page.jpg", imageBytes.length, "image/jpeg"));
         ByteArrayOutputStream output = new ByteArrayOutputStream();
 
         service.streamPageImage(descriptor, output);

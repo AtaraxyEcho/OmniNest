@@ -10,15 +10,17 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 搜索索引状态实体，记录索引版本和重建信息。
  */
 @Entity
 @Table(name = "search_index_states", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class SearchIndexState {
@@ -67,5 +69,28 @@ public class SearchIndexState {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof SearchIndexState other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "SearchIndexState{id=" + id + ", ownerUserId=" + ownerUserId
+                + ", status=" + status + ", schemaVersion=" + schemaVersion
+                + ", analyzerName=" + analyzerName + "}";
     }
 }

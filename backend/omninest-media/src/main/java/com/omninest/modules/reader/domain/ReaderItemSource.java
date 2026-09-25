@@ -10,15 +10,17 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 漫画来源实体，一个阅读条目可对应多个来源文件。
  */
 @Entity
 @Table(name = "reader_item_sources", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ReaderItemSource {
@@ -106,5 +108,27 @@ public class ReaderItemSource {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof ReaderItemSource other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "ReaderItemSource{id=" + id + ", readerItemId=" + readerItemId + ", fileNodeId=" + fileNodeId
+                + ", fileFormat=" + fileFormat + "}";
     }
 }

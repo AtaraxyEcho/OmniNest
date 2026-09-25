@@ -59,6 +59,7 @@ public class VideoProbeService {
     private final MediaSubtitleTrackRepository subtitleTrackRepository;
     private final TaskRecordService taskRecordService;
     private final MovieTaskService movieTaskService;
+    private final MediaRuntimeConfigService mediaRuntimeConfigService;
     private final VideoTranscodeService videoTranscodeService;
     private final VideoProcessExecutor processExecutor;
     private final DerivedAssetStorageService derivedAssetStorageService;
@@ -201,6 +202,9 @@ public class VideoProbeService {
                 "videoItemId",
                 videoItemId.toString(),
                 List.of(TaskStatus.QUEUED.getValue(), TaskStatus.RUNNING.getValue()))) {
+            return;
+        }
+        if (!mediaRuntimeConfigService.transcodeEnabled()) {
             return;
         }
         // 独立写事务：任务创建失败不影响探测结果

@@ -9,8 +9,9 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -19,7 +20,8 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Table(name = "audit_logs", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class AuditLog {
@@ -66,5 +68,25 @@ public class AuditLog {
         if (metadata == null) {
             metadata = Map.of();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof AuditLog other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与操作类型，避免 JSON 元数据和客户端信息进入日志。
+     */
+    @Override
+    public String toString() {
+        return "AuditLog{id=" + id + ", action=" + action + ", resourceType=" + resourceType + "}";
     }
 }

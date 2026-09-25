@@ -56,4 +56,13 @@ class MediaRuntimeConfigServiceTest {
         assertThat(configService.tmdbAccessToken()).isEqualTo("tmdb-token");
         assertThat(configService.transcodeEnabled()).isFalse();
     }
+
+    @Test
+    void transcodeDefaultsToDisabled() {
+        when(configValueProvider.findByKey(MediaRuntimeConfigService.TRANSCODE_ENABLED))
+                .thenReturn(Optional.empty());
+        when(configValueProvider.findByKey("transcode.enabled")).thenReturn(Optional.empty());
+
+        assertThat(configService.transcodeEnabled()).isFalse();
+    }
 }

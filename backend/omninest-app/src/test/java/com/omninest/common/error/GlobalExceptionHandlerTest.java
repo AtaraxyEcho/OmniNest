@@ -5,14 +5,17 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.omninest.common.enums.ErrorCode;
+import java.io.IOException;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
@@ -137,5 +140,51 @@ class GlobalExceptionHandlerTest {
 
         Assertions.assertThatCode(() -> handler.handleAsyncRequestNotUsable(exception))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("异步请求超时不再生成错误响应")
+    void handleAsyncRequestTimeout_doesNotWriteResponse() {
+        AsyncRequestTimeoutException exception = new AsyncRequestTimeoutException();
+
+        Assertions.assertThatCode(() -> handler.handleAsyncRequestTimeout(exception))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("流式响应中断的 IOException 不写入错误体")
+    void handleIoException_clientDisconnectDoesNotWriteResponse() {
+        IOException exception = new IOException(
+                "java.lang.InterruptedException",
+                new InterruptedException("sleep interrupted"));
+
+        Assertions.assertThatCode(() -> handler.handleIoException(exception))
+                .doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("预设媒体 Content-Type 时跳过 JSON 错误体写出")
+    void handleUnexpected_skipsJsonBodyWhenContentTypeIsMedia() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        response.setContentType("audio/mpeg;charset=UTF-8");
+        Exception exception = new IllegalStateException("stream failed");
+
+        handler.handleUnexpected(exception, response);
+
+        Assertions.assertThat(response.getContentAsString()).isEmpty();
+        Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+    }
+
+    @Test
+    @DisplayName("JSON 可写出时未知异常仍返回统一 500 错误体")
+    void handleUnexpected_writesJsonWhenContentTypeIsWritable() throws IOException {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        Exception exception = new IllegalStateException("boom");
+
+        handler.handleUnexpected(exception, response);
+
+        Assertions.assertThat(response.getStatus()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR.value());
+        Assertions.assertThat(response.getContentType()).contains("application/json");
+        Assertions.assertThat(response.getContentAsString()).contains(ErrorCode.INTERNAL_ERROR.getCode().toString());
     }
 }

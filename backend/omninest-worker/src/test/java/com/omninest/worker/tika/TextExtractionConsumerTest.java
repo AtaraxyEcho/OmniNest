@@ -1,8 +1,8 @@
 package com.omninest.worker.tika;
 
 import com.omninest.common.messaging.QueueNames;
-import com.omninest.common.storage.ObjectStorageClient;
-import com.omninest.common.storage.ObjectStorageKey;
+import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.modules.file.service.FileQueryService;
 import com.omninest.modules.file.event.FileUploadedEvent;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.search.service.FileSearchIndexService;
@@ -25,7 +25,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.core.Message;
@@ -42,13 +41,13 @@ import static org.mockito.Mockito.when;
 
 /**
  * TextExtractionConsumer 单元测试。
- * 验证文本提取流程：从对象存储读取文件 → Tika 提取文本 → 写入索引。
+ * 验证文本提取流程：经 File 统一内容接口读取文件 → Tika 提取文本 → 写入索引。
  */
 @ExtendWith(MockitoExtension.class)
 class TextExtractionConsumerTest {
 
     @Mock
-    private ObjectStorageClient objectStorageClient;
+    private FileQueryService fileQueryService;
 
     @Mock
     private FileSearchIndexService fileSearchIndexService;
@@ -62,7 +61,6 @@ class TextExtractionConsumerTest {
     @Mock
     private Channel channel;
 
-    @InjectMocks
     private TextExtractionConsumer textExtractionConsumer;
 
     @Captor
@@ -73,6 +71,12 @@ class TextExtractionConsumerTest {
 
     @BeforeEach
     void allowFileProcessing() {
+        textExtractionConsumer = new TextExtractionConsumer(
+                new TextExtractionService(fileQueryService),
+                fileSearchIndexService,
+                fileLifecycleGuard,
+                taskTracker
+        );
         when(fileLifecycleGuard.isOwnedProcessable(any(), any())).thenReturn(true);
         lenient().when(taskTracker.begin(any(), anyString(), any(), anyString()))
                 .thenReturn(new FilePostProcessingTaskTracker.TrackedTask(UUID.randomUUID(), true));
@@ -111,7 +115,7 @@ class TextExtractionConsumerTest {
         // 使用包含纯文本内容的输入流，Tika 可以直接提取
         String fileContent = "这是一段可以提取的中文文本内容用于测试";
         InputStream inputStream = new ByteArrayInputStream(fileContent.getBytes());
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
+        when(fileQueryService.openOwnedFileContent(any(), any())).thenReturn(new FileContentStream(inputStream, "sample.bin", 1L, "application/octet-stream"));
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
@@ -135,7 +139,7 @@ class TextExtractionConsumerTest {
         // 约 120 万字，应拆成多个 50 万字块。
         String longText = "长".repeat(1_200_000);
         InputStream inputStream = new ByteArrayInputStream(longText.getBytes(StandardCharsets.UTF_8));
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
+        when(fileQueryService.openOwnedFileContent(any(), any())).thenReturn(new FileContentStream(inputStream, "sample.bin", 1L, "application/octet-stream"));
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
@@ -158,7 +162,7 @@ class TextExtractionConsumerTest {
     @DisplayName("对象存储抛出异常时经任务跟踪器失败处理且不调用索引服务")
     void handle_whenStorageThrows_shouldNotCallIndexService() throws IOException {
         FileUploadedEvent event = createEvent("broken.pdf", "application/pdf");
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class)))
+        when(fileQueryService.openOwnedFileContent(any(), any()))
                 .thenThrow(new RuntimeException("MinIO 连接失败"));
 
         textExtractionConsumer.handle(event, createMessage(), channel);
@@ -181,7 +185,7 @@ class TextExtractionConsumerTest {
     void handle_whenErrorThrownFromPipeline_shouldRouteToFailurePath() throws IOException {
         FileUploadedEvent event = createEvent("poison.epub", "application/epub+zip");
         // 复现依赖版本冲突场景：Error 不允许穿透消费者导致应用退出。
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class)))
+        when(fileQueryService.openOwnedFileContent(any(), any()))
                 .thenThrow(new NoSuchMethodError("模拟 FontBox API 缺失"));
 
         textExtractionConsumer.handle(event, createMessage(), channel);
@@ -205,7 +209,7 @@ class TextExtractionConsumerTest {
         FileUploadedEvent event = createEvent("empty.pdf", "application/pdf");
         // 空输入流无法解析出文本内容，触发异常并进入跟踪器失败处理
         InputStream emptyStream = new ByteArrayInputStream(new byte[0]);
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(emptyStream);
+        when(fileQueryService.openOwnedFileContent(any(), any())).thenReturn(new FileContentStream(emptyStream, "empty.bin", 0L, "application/octet-stream"));
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
@@ -239,11 +243,11 @@ class TextExtractionConsumerTest {
                 Instant.now()
         );
         InputStream inputStream = new ByteArrayInputStream("文档内容".getBytes());
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
+        when(fileQueryService.openOwnedFileContent(any(), any())).thenReturn(new FileContentStream(inputStream, "sample.bin", 1L, "application/octet-stream"));
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
-        verify(objectStorageClient).getObject(any(ObjectStorageKey.class));
+        verify(fileQueryService).openOwnedFileContent(any(), any());
         verify(channel).basicAck(1L, false);
     }
 
@@ -252,8 +256,8 @@ class TextExtractionConsumerTest {
     void handle_withEpubContainingEmbeddedFont_shouldExtractText() throws IOException {
         FileUploadedEvent event = createEvent("sample.epub", "application/epub+zip");
         byte[] epubBytes = buildEpubWithEmbeddedFont(loadEmbeddedFontBytes());
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class)))
-                .thenReturn(new ByteArrayInputStream(epubBytes));
+        when(fileQueryService.openOwnedFileContent(any(), any()))
+                .thenReturn(new FileContentStream(new ByteArrayInputStream(epubBytes), "sample.epub", epubBytes.length, "application/epub+zip"));
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 
@@ -369,7 +373,7 @@ class TextExtractionConsumerTest {
                 Instant.now()
         );
         InputStream inputStream = new ByteArrayInputStream("some text content".getBytes());
-        when(objectStorageClient.getObject(any(ObjectStorageKey.class))).thenReturn(inputStream);
+        when(fileQueryService.openOwnedFileContent(any(), any())).thenReturn(new FileContentStream(inputStream, "sample.bin", 1L, "application/octet-stream"));
 
         textExtractionConsumer.handle(event, createMessage(), channel);
 

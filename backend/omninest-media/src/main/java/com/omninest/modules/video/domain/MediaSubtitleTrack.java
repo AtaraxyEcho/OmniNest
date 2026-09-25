@@ -9,12 +9,14 @@ import java.time.Instant;
 import java.util.UUID;
 import com.omninest.modules.video.domain.TrackKind;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "media_subtitle_tracks", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class MediaSubtitleTrack {
@@ -56,5 +58,27 @@ public class MediaSubtitleTrack {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof MediaSubtitleTrack other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "MediaSubtitleTrack{id=" + id + ", videoItemId=" + videoItemId + ", language=" + language
+                + ", label=" + label + "}";
     }
 }

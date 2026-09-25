@@ -61,6 +61,7 @@ class DerivedAssetOrphanScannerTest {
                 fileObjectReferenceQuery,
                 readerPageAssetReferenceQuery,
                 userAvatarObjectReferenceQuery,
+                List.of(),
                 redisUtil,
                 properties
         );

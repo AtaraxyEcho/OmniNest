@@ -28,6 +28,9 @@ import com.omninest.modules.file.service.FileIngressLifecycleService.IngressComm
 import com.omninest.modules.file.repository.DownloadOfflineTaskRepository;
 import com.omninest.modules.file.repository.FileNodeRepository;
 import com.omninest.modules.file.repository.FileObjectRepository;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.EnumSet;
+import java.util.Set;
 import com.omninest.modules.notification.port.NotificationPublisher;
 import com.omninest.modules.quota.service.StorageQuotaService;
 import com.omninest.modules.task.service.TaskRecordService;
@@ -45,7 +48,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.EnumSet;
+
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -155,20 +158,14 @@ public class OfflineDownloadExecutionService {
         Files.createDirectories(taskDirectory);
         try {
             // Aria2 容器常以非 root 用户写入同一挂载；目录需对其可写。
-            java.util.Set<java.nio.file.attribute.PosixFilePermission> perms = EnumSet.of(
-                    java.nio.file.attribute.PosixFilePermission.OWNER_READ,
-                    java.nio.file.attribute.PosixFilePermission.OWNER_WRITE,
-                    java.nio.file.attribute.PosixFilePermission.OWNER_EXECUTE,
-                    java.nio.file.attribute.PosixFilePermission.GROUP_READ,
-                    java.nio.file.attribute.PosixFilePermission.GROUP_WRITE,
-                    java.nio.file.attribute.PosixFilePermission.GROUP_EXECUTE,
-                    java.nio.file.attribute.PosixFilePermission.OTHERS_READ,
-                    java.nio.file.attribute.PosixFilePermission.OTHERS_WRITE,
-                    java.nio.file.attribute.PosixFilePermission.OTHERS_EXECUTE
+            Set<PosixFilePermission> perms = EnumSet.of(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE,
+                    PosixFilePermission.OWNER_EXECUTE
             );
             Files.setPosixFilePermissions(taskDirectory, perms);
-        } catch (UnsupportedOperationException ignored) {
-            // 非 POSIX 文件系统忽略
+        } catch (UnsupportedOperationException exception) {
+            log.debug("skip posix permission tighten on non-posix fs: {}", taskDirectory);
         }
     }
 
@@ -185,7 +182,48 @@ public class OfflineDownloadExecutionService {
             byte[] torrent = downloadTorrent(source.uri());
             return offlineDownloadGateway.submitTorrent(torrent, options);
         }
+        if (source.kind() == SourceKind.HTTP) {
+            // 应用侧逐跳校验重定向后再投递最终地址，并禁止 Aria2 继续跟随跳转。
+            URI finalUri = resolveFinalSafeHttpUri(source.uri());
+            options.put("max-redirect", "0");
+            return offlineDownloadGateway.submitUri(finalUri.toString(), options);
+        }
         return offlineDownloadGateway.submitUri(source.uri().toString(), options);
+    }
+
+    /**
+     * 逐跳校验并解析 HTTP(S) 重定向，返回最终安全地址。
+     */
+    private URI resolveFinalSafeHttpUri(URI uri) {
+        URI current = uri;
+        for (int redirect = 0; redirect <= MAX_HTTP_REDIRECTS; redirect++) {
+            safeUrlValidator.requireSafeHost(current);
+            sourceResolver.resolve(current.toString());
+            HttpRequest request = HttpRequest.newBuilder(current)
+                    .timeout(Duration.ofSeconds(30))
+                    .method("HEAD", HttpRequest.BodyPublishers.noBody())
+                    .build();
+            try {
+                HttpResponse<Void> response = httpClient.send(
+                        request,
+                        HttpResponse.BodyHandlers.discarding()
+                );
+                int statusCode = response.statusCode();
+                if (statusCode >= 300 && statusCode < 400) {
+                    String location = response.headers().firstValue("location")
+                            .orElseThrow(() -> new BusinessException(ErrorCode.BAD_REQUEST, "下载源重定向缺少地址"));
+                    current = current.resolve(location);
+                    continue;
+                }
+                return current;
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("下载源重定向解析被中断", exception);
+            } catch (IOException exception) {
+                throw new IllegalStateException("下载源重定向解析失败", exception);
+            }
+        }
+        throw new BusinessException(ErrorCode.BAD_REQUEST, "下载源重定向次数过多");
     }
 
     private byte[] downloadTorrent(URI uri) {

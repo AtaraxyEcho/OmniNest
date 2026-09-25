@@ -20,7 +20,6 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class StorageDirectoryService {
-    private static final int MAX_PAGE_SIZE = 200;
 
     private final StorageLocationService storageLocationService;
     private final LocalMediaPathResolver pathResolver;
@@ -61,7 +60,7 @@ public class StorageDirectoryService {
         Path locationRoot = pathResolver.resolveLocationRoot(location);
         Path directory = pathResolver.resolveDirectory(location, parent);
         int safePage = Math.max(0, page);
-        int safeSize = Math.max(1, Math.min(MAX_PAGE_SIZE, size));
+        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
         try (Stream<Path> children = Files.list(directory)) {
             List<Path> directories = children
                     .filter(path -> Files.isDirectory(path, LinkOption.NOFOLLOW_LINKS))

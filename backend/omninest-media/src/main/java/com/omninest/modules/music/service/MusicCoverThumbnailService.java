@@ -1,6 +1,8 @@
 package com.omninest.modules.music.service;
 
 import com.omninest.modules.file.dto.FileContentStream;
+import com.omninest.common.config.ProcessingTempProperties;
+import com.omninest.modules.media.config.MediaProcessingLimitsProperties;
 import com.omninest.modules.file.service.DerivedAssetStorageService;
 import com.omninest.modules.file.service.FileQueryService;
 import java.awt.image.BufferedImage;
@@ -58,7 +60,7 @@ public class MusicCoverThumbnailService {
      * 受理缩略图派生的原图字节上限。与上传入口一致：更大的原图只可能来自刮削或
      * 历史数据，为其整段解码换一张 300px 小图不划算，直接回退原图。
      */
-    private static final long MAX_SOURCE_BYTES = 8L * 1024 * 1024;
+
 
     /** 解码前的像素总量上限，拦截字节数合规但尺寸巨大的图像占满堆内存。 */
     private static final long MAX_SOURCE_PIXELS = 25_000_000L;
@@ -67,9 +69,8 @@ public class MusicCoverThumbnailService {
     private static final int MAX_CONCURRENT_DERIVATIONS = 4;
 
     private static final Duration GENERATION_WAIT = Duration.ofSeconds(60);
-    private static final Path PROCESSING_ROOT = Path.of(
-            System.getProperty("java.io.tmpdir"), "omninest-music-cover");
-
+    private final MediaProcessingLimitsProperties processingLimits;
+    private final ProcessingTempProperties processingTempProperties;
     private final DerivedAssetStorageService derivedAssetStorageService;
     private final FileQueryService fileQueryService;
 
@@ -132,7 +133,7 @@ public class MusicCoverThumbnailService {
         if (stored != null) {
             return ThumbnailResult.derived(stored);
         }
-        if (sourceSizeBytes > MAX_SOURCE_BYTES) {
+        if (sourceSizeBytes > processingLimits.getMaxCoverThumbnailSourceBytes()) {
             return ThumbnailResult.NOT_APPLICABLE;
         }
         CompletableFuture<ThumbnailResult> future = new CompletableFuture<>();
@@ -180,8 +181,8 @@ public class MusicCoverThumbnailService {
                 source = null;
                 return ThumbnailResult.NOT_APPLICABLE;
             }
-            Files.createDirectories(PROCESSING_ROOT);
-            output = Files.createTempFile(PROCESSING_ROOT, "thumbnail-", "." + OUTPUT_FORMAT);
+            Path processingRoot = processingTempProperties.ensureSubdirectory("music-cover");
+            output = Files.createTempFile(processingRoot, "thumbnail-", "." + OUTPUT_FORMAT);
             Thumbnails.of(source.toFile())
                     .size(THUMBNAIL_SIZE_PX, THUMBNAIL_SIZE_PX)
                     .keepAspectRatio(true)
@@ -213,8 +214,8 @@ public class MusicCoverThumbnailService {
      * 把原图落到临时目录；读不到内容或超过受理上限时返回空。
      */
     private Path stageSource(UUID ownerUserId, UUID coverFileId) throws IOException {
-        Files.createDirectories(PROCESSING_ROOT);
-        Path target = Files.createTempFile(PROCESSING_ROOT, "source-", ".img");
+        Path processingRoot = processingTempProperties.ensureSubdirectory("music-cover");
+        Path target = Files.createTempFile(processingRoot, "source-", ".img");
         try (FileContentStream content = fileQueryService.openReadableFileContent(ownerUserId, coverFileId);
              InputStream input = content.inputStream();
              OutputStream output = Files.newOutputStream(target)) {
@@ -236,7 +237,7 @@ public class MusicCoverThumbnailService {
         int read;
         while ((read = input.read(buffer)) != -1) {
             copied += read;
-            if (copied > MAX_SOURCE_BYTES) {
+            if (copied > processingLimits.getMaxCoverThumbnailSourceBytes()) {
                 return -1;
             }
             output.write(buffer, 0, read);

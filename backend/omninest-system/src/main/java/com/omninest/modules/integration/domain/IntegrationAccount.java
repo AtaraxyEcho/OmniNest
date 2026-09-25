@@ -9,9 +9,11 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import java.util.Objects;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 用户绑定的外部集成账号及其加密凭据。
@@ -20,7 +22,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "integration_accounts", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class IntegrationAccount {
@@ -70,6 +73,31 @@ public class IntegrationAccount {
     /**
      * 初始化主键和审计时间。
      */
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof IntegrationAccount that)) {
+            return false;
+        }
+        return id != null && Objects.equals(id, that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id);
+    }
+
+    /**
+     * 仅输出非敏感标识，避免加密凭据进入日志。
+     */
+    @Override
+    public String toString() {
+        return "IntegrationAccount{id=" + id + ", integrationType=" + integrationType
+                + ", provider=" + provider + ", status=" + status + "}";
+    }
+
     @PrePersist
     void fillCreatedFields() {
         if (id == null) {

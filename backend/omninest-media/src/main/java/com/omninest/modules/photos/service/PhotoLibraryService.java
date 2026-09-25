@@ -1,6 +1,7 @@
 package com.omninest.modules.photos.service;
 
 import com.omninest.common.cache.ReadThroughCache;
+import com.omninest.common.api.PageClamps;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
@@ -68,7 +69,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class PhotoLibraryService {
 
     private static final int DEFAULT_PAGE_SIZE = 50;
-    private static final int MAX_PAGE_SIZE = 100;
+    /** 列表/回收站单页上限，与全局 PageClamps 一致。 */
+    private static final int LIST_PAGE_MAX = PageClamps.MAX_SIZE;
+    /** 时间线/分组预览页上限：卡片预览不宜一次拉过多。 */
+    private static final int PREVIEW_PAGE_MAX = 100;
     private static final Map<String, String> SORT_FIELDS = Map.of(
             "createdAt", "createdAt",
             "dateTaken", "dateTaken",
@@ -219,7 +223,7 @@ public class PhotoLibraryService {
             return mapPhotoItemDtos(ownerUserId, items, favoriteIdsFor(ownerUserId, photoIds(items)));
         }
         List<PhotoItem> fallback = photoItemRepository.searchByOwnerUserIdAndKeyword(
-                ownerUserId, query, PageRequest.of(0, MAX_PAGE_SIZE));
+                ownerUserId, query, PageRequest.of(0, LIST_PAGE_MAX));
         return mapPhotoItemDtos(ownerUserId, fallback, favoriteIdsFor(ownerUserId, photoIds(fallback)));
     }
 
@@ -328,7 +332,7 @@ public class PhotoLibraryService {
     public Page<PhotoListItemDto> listTrashPage(UUID ownerUserId, int page, int size) {
         Pageable pageable = PageRequest.of(
                 Math.max(page, 0),
-                Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
+                PageClamps.safeSize(size),
                 Sort.by(Sort.Direction.DESC, "deletedAt")
         );
         return mapListPage(ownerUserId, photoItemRepository.findTrashPage(ownerUserId, pageable), false);
@@ -590,7 +594,7 @@ public class PhotoLibraryService {
      */
     @Transactional(readOnly = true)
     public PhotoTimelineDto timeline(UUID ownerUserId) {
-        return timeline(ownerUserId, MAX_PAGE_SIZE);
+        return timeline(ownerUserId, PREVIEW_PAGE_MAX);
     }
 
     /**
@@ -767,7 +771,7 @@ public class PhotoLibraryService {
      */
     @Transactional(readOnly = true)
     public List<PhotoGroupDto> groupBy(UUID ownerUserId, GroupBy groupBy) {
-        return groupBy(ownerUserId, groupBy, MAX_PAGE_SIZE);
+        return groupBy(ownerUserId, groupBy, PREVIEW_PAGE_MAX);
     }
 
     /**
@@ -994,7 +998,8 @@ public class PhotoLibraryService {
     }
 
     private int boundedPageSize(int size) {
-        return Math.min(MAX_PAGE_SIZE, Math.max(1, size == 0 ? DEFAULT_PAGE_SIZE : size));
+        // 时间线/分组预览页单页条目上限取域内 100，避免预览卡片一次拉过多。
+        return PageClamps.safeSize(size, PREVIEW_PAGE_MAX);
     }
 
     private Sort.Direction parseSortDirection(String direction) {

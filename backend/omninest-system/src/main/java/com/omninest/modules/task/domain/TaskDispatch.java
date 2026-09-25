@@ -10,8 +10,9 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 异步任务可靠投递记录。
@@ -20,7 +21,8 @@ import lombok.NoArgsConstructor;
  */
 @Entity
 @Table(name = "sys_task_dispatches", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class TaskDispatch {
@@ -93,5 +95,25 @@ public class TaskDispatch {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof TaskDispatch other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与投递状态，避免 TEXT 载荷进入日志。
+     */
+    @Override
+    public String toString() {
+        return "TaskDispatch{id=" + id + ", taskId=" + taskId + ", status=" + status + "}";
     }
 }

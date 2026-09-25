@@ -108,7 +108,7 @@ class FilePostProcessingTaskTrackerTest {
         verify(taskDispatchService).enqueueAt(
                 eq(TASK), eq(QueueNames.TASK_EXCHANGE), eq(QueueNames.THUMBNAIL_ROUTING_KEY),
                 any(), any());
-        verify(taskRecordService, never()).markDeadLetter(any(), anyString());
+        verify(taskRecordService, never()).markDeadLetter(any(), anyString(), any());
     }
 
     @Test
@@ -118,7 +118,7 @@ class FilePostProcessingTaskTrackerTest {
         tracker.handleFailure("THUMBNAIL", QueueNames.THUMBNAIL_ROUTING_KEY, TASK, event(),
                 new IllegalStateException("boom"));
 
-        verify(taskRecordService).markDeadLetter(eq(TASK), anyString());
+        verify(taskRecordService).markDeadLetter(eq(TASK), anyString(), anyString());
         verify(taskDispatchService, never()).enqueueAt(any(), any(), any(), any(), any());
     }
 
@@ -127,7 +127,7 @@ class FilePostProcessingTaskTrackerTest {
         tracker.handleFailure("THUMBNAIL", QueueNames.THUMBNAIL_ROUTING_KEY, TASK, event(),
                 new BusinessException(ErrorCode.FILE_NOT_FOUND, "missing"));
 
-        verify(taskRecordService).markDeadLetter(eq(TASK), eq("FILE_NOT_FOUND"));
+        verify(taskRecordService).markDeadLetter(eq(TASK), eq("FILE_NOT_FOUND"), anyString());
         verify(taskRecordService, never()).markRetryWait(any(), anyString(), any());
     }
 
@@ -137,7 +137,7 @@ class FilePostProcessingTaskTrackerTest {
                 "THUMBNAIL", QueueNames.THUMBNAIL_ROUTING_KEY, null, event(),
                 new IllegalStateException("boom")));
         verify(taskRecordService, never()).markRetryWait(any(), anyString(), any());
-        verify(taskRecordService, never()).markDeadLetter(any(), anyString());
+        verify(taskRecordService, never()).markDeadLetter(any(), anyString(), any());
         verify(taskDispatchService, never()).enqueueAt(any(), any(), any(), any(), any());
     }
 }

@@ -2,6 +2,7 @@ package com.omninest.modules.reader.service;
 
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.error.BusinessException;
+import com.omninest.common.error.StackSummaries;
 import com.omninest.modules.file.service.FileLifecycleGuard;
 import com.omninest.modules.reader.domain.ReaderItemSource;
 import com.omninest.modules.reader.domain.ReaderSourceStatus;
@@ -51,7 +52,7 @@ public class ComicParseTaskService {
         ReaderItemSource source = sourceRepository.findById(event.sourceId()).orElse(null);
         if (source == null) {
             log.warn("漫画来源不存在，跳过解析任务: sourceId={}", event.sourceId());
-            markTaskFailed(event, "漫画来源不存在");
+            markTaskFailed(event, "漫画来源不存在", null);
             return;
         }
         if (source.getStatus() == ReaderSourceStatus.READY) {
@@ -120,7 +121,7 @@ public class ComicParseTaskService {
             sourceRepository.save(failedSource);
         }
         comicManifestService.refreshItemImportStatus(event.itemId());
-        markTaskFailed(event, exception.getMessage());
+        markTaskFailed(event, exception.getMessage(), StackSummaries.summarize(exception));
     }
 
     private boolean claimTask(ComicParseTaskEvent event) {
@@ -157,9 +158,9 @@ public class ComicParseTaskService {
     /**
      * 标记统一任务失败，兼容历史消息没有任务记录的情况。
      */
-    private void markTaskFailed(ComicParseTaskEvent event, String errorMessage) {
+    private void markTaskFailed(ComicParseTaskEvent event, String errorMessage, String stackSummary) {
         try {
-            taskRecordService.markFailed(event.taskId(), errorMessage);
+            taskRecordService.markFailed(event.taskId(), errorMessage, stackSummary);
         } catch (BusinessException exception) {
             if (ErrorCode.TASK_NOT_FOUND.equals(exception.errorCode())) {
                 log.debug("漫画解析任务记录不存在，跳过失败回写: taskId={}", event.taskId());

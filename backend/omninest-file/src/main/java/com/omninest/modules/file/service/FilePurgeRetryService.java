@@ -1,5 +1,6 @@
 package com.omninest.modules.file.service;
 
+import com.omninest.common.error.StackSummaries;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.file.domain.FilePurgeState;
 import com.omninest.modules.file.event.FilePurgeRequestedEvent;
@@ -40,7 +41,7 @@ public class FilePurgeRetryService {
         int currentRetries = taskRecordService.retryCount(event.taskId());
         String errorSummary = exception.getClass().getSimpleName();
         if (currentRetries >= MAX_RETRIES) {
-            taskRecordService.markDeadLetter(event.taskId(), errorSummary);
+            taskRecordService.markDeadLetter(event.taskId(), errorSummary, StackSummaries.summarize(exception));
             stateService.updateNodeState(event.taskId(), FilePurgeState.FAILED);
             log.error("文件永久删除任务进入死信终态: taskId={}, retryCount={}, errorType={}",
                     event.taskId(), currentRetries, errorSummary);

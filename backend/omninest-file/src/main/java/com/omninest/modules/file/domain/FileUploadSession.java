@@ -14,12 +14,14 @@ import java.util.UUID;
 import com.omninest.modules.file.domain.SpaceType;
 import com.omninest.modules.file.domain.UploadStatus;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "file_upload_sessions", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class FileUploadSession {
@@ -114,5 +116,28 @@ public class FileUploadSession {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof FileUploadSession other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "FileUploadSession{id=" + id + ", ownerUserId=" + ownerUserId
+                + ", fileName=" + fileName + ", status=" + status
+                + ", totalSizeBytes=" + totalSizeBytes + ", uploadedParts=" + uploadedParts + "}";
     }
 }

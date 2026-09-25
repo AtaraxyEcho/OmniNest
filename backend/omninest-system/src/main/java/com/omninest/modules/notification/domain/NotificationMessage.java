@@ -9,8 +9,9 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -19,7 +20,8 @@ import org.hibernate.type.SqlTypes;
  */
 @Entity
 @Table(name = "notification_messages", schema = "omni")
-@Data
+@Getter
+@Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class NotificationMessage {
@@ -64,5 +66,25 @@ public class NotificationMessage {
      */
     public boolean isRead() {
         return readAt != null;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof NotificationMessage other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    /**
+     * 仅输出标识与通知类型，避免正文和 JSON 元数据进入日志。
+     */
+    @Override
+    public String toString() {
+        return "NotificationMessage{id=" + id + ", notificationType=" + notificationType + ", title=" + title + "}";
     }
 }

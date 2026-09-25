@@ -1,4 +1,5 @@
 package com.omninest.modules.reader.domain;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -7,17 +8,21 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
- * 漫画页面派生资源实体，记录阅读态可直接读取的页面图片对象。
+ * 漫画页面派生资源实体，记录阅读态可直接读取的页面图片 FileNode。
+ *
+ * <p>对象定位（bucket/object key）由 File 模块持有，本实体只保留业务关联与派生 FileNode ID。</p>
  *
  * @author OmniNest
  */
 @Entity
 @Table(name = "reader_page_assets", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ReaderPageAsset {
@@ -41,13 +46,9 @@ public class ReaderPageAsset {
     @Column(name = "manifest_version", nullable = false)
     private int manifestVersion;
 
-    /** 对象存储 bucket */
-    @Column(name = "bucket_name", nullable = false, length = 100)
-    private String bucketName;
-
-    /** 对象存储 key */
-    @Column(name = "object_key", nullable = false, length = 1000)
-    private String objectKey;
+    /** 派生资产 FileNode ID，对象定位由 File 模块解析 */
+    @Column(name = "file_node_id", nullable = false)
+    private UUID fileNodeId;
 
     /** 图片 MIME 类型 */
     @Column(name = "mime_type", nullable = false, length = 50)
@@ -72,5 +73,26 @@ public class ReaderPageAsset {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof ReaderPageAsset that)) {
+            return false;
+        }
+        return id != null && id.equals(that.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return id == null ? ReaderPageAsset.class.hashCode() : id.hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "ReaderPageAsset{id=" + id + ", pageId=" + pageId + ", fileNodeId=" + fileNodeId + "}";
     }
 }

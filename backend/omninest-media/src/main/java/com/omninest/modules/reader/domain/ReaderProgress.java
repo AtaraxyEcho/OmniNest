@@ -11,12 +11,14 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Table(name = "reader_progress", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ReaderProgress {
@@ -73,6 +75,9 @@ public class ReaderProgress {
     @Column(name = "manifest_version")
     private Integer manifestVersion = 0;
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private Instant createdAt;
+
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
@@ -85,6 +90,9 @@ public class ReaderProgress {
         if (id == null) {
             id = UUID.randomUUID();
         }
+        if (createdAt == null) {
+            createdAt = Instant.now();
+        }
         if (updatedAt == null) {
             updatedAt = Instant.now();
         }
@@ -93,5 +101,26 @@ public class ReaderProgress {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof ReaderProgress other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "ReaderProgress{id=" + id + ", readerItemId=" + readerItemId + "}";
     }
 }

@@ -71,6 +71,20 @@ public class MusicStreamGatewayService {
                     outputStream.flush();
                 } catch (AsyncRequestNotUsableException exception) {
                     log.debug("音乐播放客户端已断开: sessionId={}", session.sessionId());
+                } catch (IOException exception) {
+                    if (isClientDisconnect(exception)) {
+                        log.debug("音乐播放流已中断: sessionId={}, message={}", session.sessionId(), exception.getMessage());
+                    } else {
+                        log.warn("音乐播放流输出失败: sessionId={}, message={}", session.sessionId(), exception.getMessage());
+                    }
+                } catch (RuntimeException exception) {
+                    if (isClientDisconnect(exception)) {
+                        log.debug("音乐播放流已中断: sessionId={}, message={}", session.sessionId(), exception.getMessage());
+                    } else {
+                        throw exception;
+                    }
+                } finally {
+                    Thread.interrupted();
                 }
             };
             ResponseEntity.BodyBuilder builder = ResponseEntity.status(statusCode)
@@ -132,6 +146,35 @@ public class MusicStreamGatewayService {
         if (session.sourceType() == MusicPlaybackSourceType.ONLINE) {
             sourceUrlPolicy.requireAllowed(session.sourcePlatform(), uri);
         }
+    }
+
+    /**
+     * 判断异常是否属于客户端断开或异步取消。
+     *
+     * <p>流式响应被中断时 JDK HttpClient 会把 {@link InterruptedException} 包成
+     * {@link IOException}，Tomcat 在客户端断开时也会抛出连接类 IOException。
+     * 这类中断不代表上游或系统故障，应静默结束而不是进入全局异常。</p>
+     */
+    private boolean isClientDisconnect(Throwable throwable) {
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof InterruptedException
+                    || current instanceof AsyncRequestNotUsableException) {
+                return true;
+            }
+            String message = current.getMessage();
+            if (message != null) {
+                String lower = message.toLowerCase(Locale.ROOT);
+                if (lower.contains("broken pipe")
+                        || lower.contains("connection reset")
+                        || lower.contains("connection aborted")
+                        || lower.contains("client abort")) {
+                    return true;
+                }
+            }
+            current = current.getCause() == current ? null : current.getCause();
+        }
+        return false;
     }
 
     private boolean isRedirect(int statusCode) {

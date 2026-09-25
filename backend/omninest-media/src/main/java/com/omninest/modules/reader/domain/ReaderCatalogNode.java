@@ -9,15 +9,17 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 漫画目录节点，支持季/卷/话/合集/番外多层结构。
  */
 @Entity
 @Table(name = "reader_catalog_nodes", schema = "omni")
-@Data
+@Getter
+@Setter
 @AllArgsConstructor
 @NoArgsConstructor
 public class ReaderCatalogNode {
@@ -77,5 +79,27 @@ public class ReaderCatalogNode {
         if (createdAt == null) {
             createdAt = Instant.now();
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof ReaderCatalogNode other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "ReaderCatalogNode{id=" + id + ", readerItemId=" + readerItemId + ", nodeType=" + nodeType
+                + ", title=" + title + "}";
     }
 }

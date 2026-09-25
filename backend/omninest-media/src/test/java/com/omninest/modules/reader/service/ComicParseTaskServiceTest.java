@@ -76,7 +76,7 @@ class ComicParseTaskServiceTest {
         taskService.process(event());
 
         Mockito.verify(taskRecordService).claimForExecution(TASK_ID, "PARSING_SOURCE");
-        Mockito.verify(taskRecordService).markFailed(TASK_ID, "漫画来源不存在");
+        Mockito.verify(taskRecordService).markFailed(TASK_ID, "漫画来源不存在", null);
         Mockito.verifyNoInteractions(comicManifestService);
     }
 
@@ -121,7 +121,8 @@ class ComicParseTaskServiceTest {
         Assertions.assertThat(source.getErrorMessage()).isEqualTo("parse failed");
         Mockito.verify(sourceRepository).save(source);
         Mockito.verify(comicManifestService).refreshItemImportStatus(ITEM_ID);
-        Mockito.verify(taskRecordService).markFailed(TASK_ID, "parse failed");
+        Mockito.verify(taskRecordService).markFailed(
+                Mockito.eq(TASK_ID), Mockito.eq("parse failed"), Mockito.anyString());
     }
 
     @Test
@@ -136,7 +137,8 @@ class ComicParseTaskServiceTest {
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("database unavailable");
         Mockito.verify(sourceRepository, Mockito.never()).save(Mockito.any());
-        Mockito.verify(taskRecordService, Mockito.never()).markFailed(Mockito.eq(TASK_ID), Mockito.any());
+        Mockito.verify(taskRecordService, Mockito.never()).markFailed(
+                Mockito.eq(TASK_ID), Mockito.any(), Mockito.any());
     }
 
     @Test

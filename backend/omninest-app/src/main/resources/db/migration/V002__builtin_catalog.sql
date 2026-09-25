@@ -23,7 +23,7 @@ INSERT INTO omni.config_entries (
     description,
     is_sensitive
 ) VALUES
-    ('media.transcode.enabled', 'true', 'BOOLEAN', 'media', 'HOT', '是否启用媒体转码', false),
+    ('media.transcode.enabled', 'false', 'BOOLEAN', 'media', 'HOT', '是否启用媒体转码', false),
     ('app.version.latest', '', 'STRING', 'general', 'HOT', '客户端最新版本号（留空表示已最新）', false),
     ('app.version.release-notes-url', '', 'STRING', 'general', 'HOT', '当前版本发布说明地址', false),
     ('app.version.download-url', '', 'STRING', 'general', 'HOT', '安装包下载页地址', false),
@@ -77,7 +77,7 @@ INSERT INTO omni.config_entries (
     ('music.netease.enabled', 'true', 'BOOLEAN', 'music', 'HOT', '网易云音乐平台开关', false),
     ('music.netease.url', 'http://localhost:3001', 'STRING', 'music', 'HOT', '网易云音乐 API 地址', false),
     ('music.netease.hosts', 'music.126.net,music.163.com', 'STRING', 'music', 'HOT', '网易云音乐播放域名后缀', false),
-    ('photo.ai.enabled', 'true', 'BOOLEAN', 'photo', 'HOT', '是否启用图像分析', false),
+    ('photo.ai.enabled', 'false', 'BOOLEAN', 'photo', 'HOT', '是否启用图像分析（侧车不可用时保持关闭）', false),
     ('photo.ai.url', 'http://localhost:8090', 'STRING', 'photo', 'HOT', '图像分析服务地址', false),
     ('photo.ai.timeout', '30', 'NUMBER', 'photo', 'HOT', '图像分析请求超时（秒）', false),
     ('backdrop.max-image-bytes', '20971520', 'NUMBER', 'backdrop', 'HOT', '背景图片单文件大小上限（字节）', false),

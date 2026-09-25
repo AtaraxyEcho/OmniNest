@@ -73,7 +73,7 @@ class FileIngressPromotionServiceTest {
         uploadSessionRepository = mock(FileUploadSessionRepository.class);
         fileObjectRepository = mock(FileObjectRepository.class);
         fileNodeRepository = mock(FileNodeRepository.class);
-        FileManagerService fileManagerService = mock(FileManagerService.class);
+        FileVersionService fileVersionService = mock(FileVersionService.class);
         postProcessingTaskService = mock(FilePostProcessingTaskService.class);
         FileContentChangePublisher fileContentChangePublisher = new FileContentChangePublisher(postProcessingTaskService);
         storageQuotaService = mock(StorageQuotaService.class);
@@ -89,7 +89,7 @@ class FileIngressPromotionServiceTest {
                 uploadSessionRepository,
                 fileObjectRepository,
                 fileNodeRepository,
-                fileManagerService,
+                fileVersionService,
                 fileContentChangePublisher,
                 storageQuotaService,
                 objectStorageClient,

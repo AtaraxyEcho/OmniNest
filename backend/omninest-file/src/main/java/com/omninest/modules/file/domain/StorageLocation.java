@@ -10,15 +10,17 @@ import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.AllArgsConstructor;
-import lombok.Data;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 /**
  * 由部署配置提供物理根目录的存储位置。
  *
  * @author OmniNest
  */
-@Data
+@Getter
+@Setter
 @Entity
 @Table(name = "storage_locations", schema = "omni")
 @AllArgsConstructor
@@ -82,5 +84,28 @@ public class StorageLocation {
     @PreUpdate
     void fillUpdatedAt() {
         updatedAt = Instant.now();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof StorageLocation other)) {
+            return false;
+        }
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
+    }
+
+    @Override
+    public String toString() {
+        return "StorageLocation{id=" + id + ", name=" + name
+                + ", providerType=" + providerType + ", managementMode=" + managementMode
+                + ", mountKey=" + mountKey + ", enabled=" + enabled + "}";
     }
 }

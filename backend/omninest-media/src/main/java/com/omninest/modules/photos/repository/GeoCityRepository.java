@@ -1,7 +1,7 @@
 package com.omninest.modules.photos.repository;
 
 import com.omninest.modules.photos.domain.GeoCity;
-import com.omninest.modules.photos.domain.GeoCityId;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -14,7 +14,7 @@ import org.springframework.data.repository.query.Param;
  *
  * @author OmniNest
  */
-public interface GeoCityRepository extends JpaRepository<GeoCity, GeoCityId> {
+public interface GeoCityRepository extends JpaRepository<GeoCity, UUID> {
 
     /**
      * 快照加载投影：仅取索引与双语展示所需字段，避免长事务内的持久化上下文开销。
@@ -36,9 +36,9 @@ public interface GeoCityRepository extends JpaRepository<GeoCity, GeoCityId> {
 
         String getProvinceNameZh();
 
-        java.math.BigDecimal getLatitude();
+        BigDecimal getLatitude();
 
-        java.math.BigDecimal getLongitude();
+        BigDecimal getLongitude();
     }
 
     /** @return 指定数据集的城市行（索引快照加载用，约数万行） */
@@ -111,8 +111,8 @@ public interface GeoCityRepository extends JpaRepository<GeoCity, GeoCityId> {
             @Param("countryNameZh") String countryNameZh,
             @Param("provinceNameEn") String provinceNameEn,
             @Param("provinceNameZh") String provinceNameZh,
-            @Param("latitude") java.math.BigDecimal latitude,
-            @Param("longitude") java.math.BigDecimal longitude,
+            @Param("latitude") BigDecimal latitude,
+            @Param("longitude") BigDecimal longitude,
             @Param("population") long population,
             @Param("featureCode") String featureCode
     );

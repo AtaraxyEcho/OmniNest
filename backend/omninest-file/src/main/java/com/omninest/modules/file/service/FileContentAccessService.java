@@ -98,12 +98,14 @@ public class FileContentAccessService {
      * @param purpose 媒体读取用途
      * @return Range 资源
      */
-    public FileContentResource openAuthorizedMediaResource(UUID fileId, MediaContentPurpose purpose) {
+    public FileContentResource openAuthorizedMediaResource(
+            UUID fileId, MediaContentPurpose purpose, UUID expectedOwnerUserId) {
         if (purpose != MediaContentPurpose.MEDIA_PLAYBACK) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "媒体 Range 读取用途无效");
         }
         FileNode node = fileNodeRepository.findByIdAndDeletedFalse(fileId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        requireOwner(node, expectedOwnerUserId);
         return requireProvider(node).findRangeResource(node)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "当前内容提供者不支持 Range 读取"));
     }
@@ -118,13 +120,21 @@ public class FileContentAccessService {
      * @param purpose 媒体读取用途
      * @return 受控内容流
      */
-    public FileContentStream openAuthorizedMediaStream(UUID fileId, MediaContentPurpose purpose) {
+    public FileContentStream openAuthorizedMediaStream(
+            UUID fileId, MediaContentPurpose purpose, UUID expectedOwnerUserId) {
         if (purpose == null || purpose == MediaContentPurpose.MEDIA_PLAYBACK) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "媒体顺序读取用途无效");
         }
         FileNode node = fileNodeRepository.findByIdAndDeletedFalse(fileId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "文件不存在"));
+        requireOwner(node, expectedOwnerUserId);
         return requireProvider(node).open(node);
+    }
+
+    private void requireOwner(FileNode node, UUID expectedOwnerUserId) {
+        if (expectedOwnerUserId == null || !expectedOwnerUserId.equals(node.getOwnerUserId())) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "无权访问该文件内容");
+        }
     }
 
     private FileContentProvider requireProvider(FileNode node) {
