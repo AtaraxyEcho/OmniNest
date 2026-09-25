@@ -1,8 +1,7 @@
-import 'dart:io';
-
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/platform/desktop/desktop_hotkey_service.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -41,7 +40,7 @@ void main() {
     final service = DesktopHotkeyService();
     await service.registerMediaKeys();
 
-    if (!Platform.isWindows) {
+    if (!PlatformCapabilities.current().supportsMediaKeys) {
       expect(registeredCalls, isEmpty);
       return;
     }

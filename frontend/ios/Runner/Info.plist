@@ -70,12 +70,14 @@
 	<string>OmniNest 需要访问照片库以进行备份和浏览</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>OmniNest 需要保存照片到相册</string>
+	<key>NSCameraUsageDescription</key>
+	<string>OmniNest 需要使用相机拍摄照片或视频并上传到您的媒体库</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>OmniNest 在录制视频时需要麦克风采集声音</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>OmniNest 需要位置信息以提供天气服务</string>
 	<key>UIBackgroundModes</key>
 	<array>
-		<string>fetch</string>
-		<string>processing</string>
 		<string>audio</string>
 	</array>
 <key>CFBundleURLTypes</key>

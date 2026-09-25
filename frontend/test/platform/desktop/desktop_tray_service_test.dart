@@ -1,23 +1,86 @@
+// 测试断言依赖 legacy Menu/MenuItem 的 key/type/label 契约。
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
+import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/platform/desktop/desktop_tray_port.dart';
 import 'package:omninest/platform/desktop/desktop_tray_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// 记录托盘原生调用的假端口：不触碰 tray_manager FFI。
+class _FakeTrayPort implements DesktopTrayPort {
+  final List<TrayListener> listeners = <TrayListener>[];
+  String? iconPath;
+  bool? isTemplate;
+  String? toolTip;
+  Menu? menu;
+  bool? bringAppToFront;
+  int destroyCount = 0;
+
+  List<Map<String, Object?>> menuItems() {
+    final items = menu?.items ?? const <MenuItem>[];
+    return [
+      for (final item in items)
+        <String, Object?>{
+          'key': item.key,
+          'type': item.type,
+          'label': item.label ?? '',
+          'disabled': item.disabled,
+        },
+    ];
+  }
+
+  @override
+  void addListener(TrayListener listener) {
+    listeners.add(listener);
+  }
+
+  @override
+  void removeListener(TrayListener listener) {
+    listeners.remove(listener);
+  }
+
+  @override
+  Future<void> setIcon(String path, {bool isTemplate = false}) async {
+    iconPath = path;
+    this.isTemplate = isTemplate;
+  }
+
+  @override
+  Future<void> setToolTip(String text) async {
+    toolTip = text;
+  }
+
+  @override
+  Future<void> setContextMenu(Menu value) async {
+    menu = value;
+  }
+
+  @override
+  Future<void> popUpContextMenu({bool bringAppToFront = false}) async {
+    this.bringAppToFront = bringAppToFront;
+  }
+
+  @override
+  Future<void> destroy() async {
+    destroyCount += 1;
+  }
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  const trayChannel = MethodChannel('tray_manager');
   const windowFrameChannel = MethodChannel('omninest/window_frame');
-  final channelCalls = <MethodCall>[];
   final frameChannelCalls = <MethodCall>[];
 
+  late _FakeTrayPort tray;
+
   setUp(() {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(trayChannel, (call) async {
-          channelCalls.add(call);
-          return null;
-        });
+    tray = _FakeTrayPort();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(windowFrameChannel, (call) async {
           frameChannelCalls.add(call);
@@ -27,26 +90,11 @@ void main() {
 
   tearDown(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(trayChannel, null);
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(windowFrameChannel, null);
-    channelCalls.clear();
     frameChannelCalls.clear();
   });
 
-  List<Map<Object?, Object?>> menuItems() {
-    final contextCall = channelCalls.singleWhere(
-      (call) => call.method == 'setContextMenu',
-    );
-    final menu =
-        (contextCall.arguments as Map<Object?, Object?>)['menu']
-            as Map<Object?, Object?>;
-    return (menu['items'] as List<Object?>)
-        .map((item) => item as Map<Object?, Object?>)
-        .toList();
-  }
-
-  void expectThreeSectionStructure(List<Map<Object?, Object?>> items) {
+  void expectThreeSectionStructure(List<Map<String, Object?>> items) {
     final types = items.map((item) => item['type']).toList();
     final disabled =
         items
@@ -73,13 +121,16 @@ void main() {
 
   test('托盘右键菜单文案按设备语言进入 ARB 并保持三段结构', () async {
     SharedPreferences.setMockInitialValues({localeDeviceLanguageKey: 'zh'});
-    final service = DesktopTrayService();
+    final service = DesktopTrayService(tray: tray);
     await service.init();
 
     expect(DesktopTrayService.instance, same(service));
-    final items = menuItems();
+    expect(tray.toolTip, 'OmniNest');
+    // 单元测试默认 target 为 Android，走 POSIX 托盘图（PNG）。
+    expect(tray.iconPath, BrandLogo.assetPath);
+    final items = tray.menuItems();
     expectThreeSectionStructure(items);
-    expect(items.map((item) => item['label']), <String>[
+    expect(items.map((item) => item['label']).toList(), <String>[
       'OmniNest',
       '',
       '显示主窗口',
@@ -90,15 +141,14 @@ void main() {
 
   test('运行期语言变化时托盘菜单按 ARB 刷新', () async {
     SharedPreferences.setMockInitialValues({localeDeviceLanguageKey: 'zh'});
-    final service = DesktopTrayService();
+    final service = DesktopTrayService(tray: tray);
     await service.init();
 
-    channelCalls.clear();
     await service.applyLanguage('en');
 
-    final items = menuItems();
+    final items = tray.menuItems();
     expectThreeSectionStructure(items);
-    expect(items.map((item) => item['label']), <String>[
+    expect(items.map((item) => item['label']).toList(), <String>[
       'OmniNest',
       '',
       'Show Main Window',
@@ -109,22 +159,28 @@ void main() {
 
   test('右键弹出菜单请求前台归属，关闭后补投收尾消息', () async {
     SharedPreferences.setMockInitialValues({localeDeviceLanguageKey: 'zh'});
-    final service = DesktopTrayService();
+    final service = DesktopTrayService(tray: tray);
     await service.init();
 
-    channelCalls.clear();
     frameChannelCalls.clear();
     await service.popUpMenu();
 
-    final popupCall = channelCalls.singleWhere(
-      (call) => call.method == 'popUpContextMenu',
-    );
-    expect(
-      (popupCall.arguments as Map<Object?, Object?>)['bringAppToFront'],
-      isTrue,
-    );
+    expect(tray.bringAppToFront, isTrue);
     expect(frameChannelCalls.map((call) => call.method), <String>[
       'finishTrayMenuPopup',
+    ]);
+  });
+
+  test('buildTrayMenu 输出三段稳定 key 契约', () {
+    final l10n = lookupAppLocalizations(const Locale('zh'));
+    final menu = DesktopTrayService.buildTrayMenu(l10n);
+    final items = menu.items ?? const <MenuItem>[];
+    expect(items.map((item) => item.key), <String?>[
+      'brand',
+      null,
+      'show',
+      null,
+      'quit',
     ]);
   });
 }

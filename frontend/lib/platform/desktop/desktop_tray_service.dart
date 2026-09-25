@@ -1,3 +1,7 @@
+// 经 DesktopTrayPort 使用 tray_manager 0.7 的 legacy 桥接类型；
+// 上游迁移完成前这些符号仅在端口层可见，业务调用面保持稳定。
+// ignore_for_file: deprecated_member_use
+
 import 'dart:async';
 import 'dart:io';
 
@@ -9,8 +13,8 @@ import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/preferences/app_bootstrap_data.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/window/desktop_close_flow.dart';
+import 'package:omninest/platform/desktop/desktop_tray_port.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
@@ -28,8 +32,12 @@ import 'package:omninest/core/log/dev_log.dart';
 ///
 /// 右键菜单文案进入 ARB：初始化时按持久化的设备语言解析，运行期语言
 /// 变化由应用层绑定经 [applyLanguage] 刷新。
+///
+/// 托盘原生操作经 [DesktopTrayPort] 注入：默认走 `tray_manager` 0.7 的
+/// legacy 桥接层，测试可注入假实现而不触碰 FFI。
 class DesktopTrayService with TrayListener, WindowListener {
-  DesktopTrayService();
+  DesktopTrayService({DesktopTrayPort? tray})
+    : _tray = tray ?? const LegacyDesktopTrayPort();
 
   /// 当前实例；应用层语言绑定经此刷新托盘文案，未初始化时为 null。
   static DesktopTrayService? get instance => _instance;
@@ -51,6 +59,7 @@ class DesktopTrayService with TrayListener, WindowListener {
     'omninest/window_frame',
   );
 
+  final DesktopTrayPort _tray;
   bool _initialized = false;
   bool _quitting = false;
 
@@ -59,12 +68,12 @@ class DesktopTrayService with TrayListener, WindowListener {
     if (_initialized) {
       return;
     }
-    trayManager.addListener(this);
+    _tray.addListener(this);
     windowManager.addListener(this);
 
     await _setIcon();
     try {
-      await trayManager.setToolTip('OmniNest');
+      await _tray.setToolTip('OmniNest');
     } on Object catch (error) {
       devLog('托盘提示文案设置失败: $error');
     }
@@ -88,7 +97,7 @@ class DesktopTrayService with TrayListener, WindowListener {
             ? windowsTrayIconAsset
             : posixTrayIconAsset;
     try {
-      await trayManager.setIcon(iconPath, isTemplate: false);
+      await _tray.setIcon(iconPath, isTemplate: false);
     } on Object catch (error) {
       devLog('托盘图标设置失败: $error');
     }
@@ -96,10 +105,10 @@ class DesktopTrayService with TrayListener, WindowListener {
 
   /// 移除托盘图标并注销监听。
   Future<void> dispose() async {
-    trayManager.removeListener(this);
+    _tray.removeListener(this);
     windowManager.removeListener(this);
     if (_initialized) {
-      await trayManager.destroy();
+      await _tray.destroy();
     }
     _initialized = false;
     _instance = null;
@@ -110,20 +119,26 @@ class DesktopTrayService with TrayListener, WindowListener {
     final resolved = languageCode ?? await _resolveLanguageCode();
     final l10n = lookupAppLocalizations(Locale(resolved));
     try {
-      await trayManager.setContextMenu(
-        Menu(
-          items: [
-            MenuItem(key: 'brand', label: 'OmniNest', disabled: true),
-            MenuItem.separator(),
-            MenuItem(key: 'show', label: l10n.trayShowMainWindow),
-            MenuItem.separator(),
-            MenuItem(key: 'quit', label: l10n.trayQuit),
-          ],
-        ),
-      );
+      await _tray.setContextMenu(buildTrayMenu(l10n));
     } on Object catch (error) {
       devLog('托盘菜单设置失败: $error');
     }
+  }
+
+  /// 组装右键菜单：品牌禁用项 + 显示主窗口 + 退出。
+  ///
+  /// 抽为纯函数便于测试断言三段结构与 ARB 文案，不触碰托盘原生层。
+  @visibleForTesting
+  static Menu buildTrayMenu(AppLocalizations l10n) {
+    return Menu(
+      items: [
+        MenuItem(key: 'brand', label: 'OmniNest', disabled: true),
+        MenuItem.separator(),
+        MenuItem(key: 'show', label: l10n.trayShowMainWindow),
+        MenuItem.separator(),
+        MenuItem(key: 'quit', label: l10n.trayQuit),
+      ],
+    );
   }
 
   /// 解析托盘文案语言：设备偏好优先，缺失时跟随系统。
@@ -159,7 +174,7 @@ class DesktopTrayService with TrayListener, WindowListener {
 
   Future<void> _cleanupBeforeExit() async {
     try {
-      await trayManager.destroy();
+      await _tray.destroy();
     } on Object catch (error) {
       devLog('托盘销毁失败（忽略继续退出）: $error');
     }
@@ -182,17 +197,13 @@ class DesktopTrayService with TrayListener, WindowListener {
 
   /// 弹出托盘右键菜单。
   ///
-  /// `bringAppToFront` 触发原生 `SetForegroundWindow`，菜单归属前台窗口后
-  /// 点击桌面等外部区域才能正常收起；菜单关闭后补投 WM_NULL 收尾消息，
-  /// 避免下一次点击托盘时新菜单被旧菜单状态立即吞掉。
+  /// `bringAppToFront` 在 `tray_manager` 0.7 中已被上游忽略（仅保留参数
+  /// 形状）；仍显式传 true，跟进上游若恢复该行为时无需再改调用点。
+  /// 菜单关闭后补投 WM_NULL 收尾消息，避免下一次点击托盘时新菜单被旧
+  /// 菜单状态立即吞掉。
   Future<void> popUpMenu() async {
     try {
-      await trayManager.popUpContextMenu(
-        // 仅 Windows 实现该参数，也是托盘菜单可被外部点击收起的关键；
-        // 上游标记弃用但未提供替代，跟随上游演进前必须保留。
-        // ignore: deprecated_member_use
-        bringAppToFront: true,
-      );
+      await _tray.popUpContextMenu(bringAppToFront: true);
     } on Object catch (error) {
       devLog('托盘右键菜单弹出失败: $error');
       return;

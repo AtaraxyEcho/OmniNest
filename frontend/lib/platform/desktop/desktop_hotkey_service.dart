@@ -1,14 +1,13 @@
 import 'dart:async';
 
-import 'dart:io';
-
 import 'package:flutter/services.dart';
-import 'package:hotkey_manager/hotkey_manager.dart';
-import 'package:window_manager/window_manager.dart';
 import 'package:omninest/features/music/application/music_media_session.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 /// Desktop 全局快捷键服务。
-/// 注册系统级快捷键用于快速显示/隐藏窗口，并桥接系统媒体键命令。
+///
+/// 当前仅桥接系统媒体键命令（播放/暂停、上一首、下一首）。
+/// 系统级全局显隐热键不提供（未接线能力不得写入注释或能力位）。
 class DesktopHotkeyService {
   DesktopHotkeyService();
 
@@ -24,33 +23,9 @@ class DesktopHotkeyService {
   static const int _vkMediaPrevTrack = 0xB1;
   static const int _vkMediaPlayPause = 0xB3;
 
-  final List<HotKey> _registered = [];
   final Map<String, void Function()> _mediaKeyDownHandlers =
       <String, void Function()>{};
   StreamSubscription<Object?>? _mediaKeyEventSub;
-
-  /// 注册全局快捷键。
-  Future<void> registerGlobalHotkeys() async {
-    // Cmd/Ctrl + Shift + O: 显示/隐藏窗口
-    final toggleHotKey = HotKey(
-      key: PhysicalKeyboardKey.keyO,
-      modifiers: [HotKeyModifier.shift, HotKeyModifier.meta],
-      scope: HotKeyScope.system,
-    );
-
-    await hotKeyManager.register(
-      toggleHotKey,
-      keyDownHandler: (_) async {
-        if (await windowManager.isVisible()) {
-          await windowManager.hide();
-        } else {
-          await windowManager.show();
-          await windowManager.focus();
-        }
-      },
-    );
-    _registered.add(toggleHotKey);
-  }
 
   /// 注册系统级媒体键（播放/暂停、上一首、下一首）。
   ///
@@ -59,8 +34,10 @@ class DesktopHotkeyService {
   /// 映射为 null，原生层反序列化 null keyCode 会 fail-fast 终止整个进程。
   /// 此处直连同一平台通道并改用显式 Windows VK 码，命令经 MusicMediaKeyBridge
   /// 转接音乐播放会话层注入的命令。
+  ///
+  /// 能力由 [PlatformCapabilities.supportsMediaKeys] 驱动（当前仅 Windows）。
   Future<void> registerMediaKeys() async {
-    if (!Platform.isWindows) {
+    if (!PlatformCapabilities.current().supportsMediaKeys) {
       return;
     }
     _mediaKeyEventSub ??= _hotkeyEventChannel.receiveBroadcastStream().listen(
@@ -133,9 +110,5 @@ class DesktopHotkeyService {
       });
     }
     _mediaKeyDownHandlers.clear();
-    for (final hotKey in _registered) {
-      await hotKeyManager.unregister(hotKey);
-    }
-    _registered.clear();
   }
 }

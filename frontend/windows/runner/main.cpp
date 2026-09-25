@@ -22,6 +22,8 @@
 namespace {
 
 constexpr wchar_t kSingleInstanceMutexName[] = L"Local\\OmniNestSingleInstance";
+// Must match kOmniNestSingleInstancePort in
+// lib/platform/desktop/desktop_single_instance.dart. Change both together.
 constexpr int kActivatePort = 47683;
 
 bool ContainsDeepLink(const std::vector<std::string>& args, std::string* out_uri) {

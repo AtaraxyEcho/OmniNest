@@ -1,10 +1,11 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 通用系统通知器：后台任务完成/失败等场景的系统级通知。
 ///
+/// 能力由 [PlatformCapabilities.supportsSystemNotifications] 驱动：
 /// Android/iOS/macOS/Linux 生效；Web 与 Windows 为空操作
-/// （flutter_local_notifications 0.18 不覆盖 Windows）。
+/// （flutter_local_notifications 0.18 不覆盖 Windows，任务提醒走站内）。
 class SystemNotifier {
   SystemNotifier._();
 
@@ -15,15 +16,8 @@ class SystemNotifier {
 
   bool _initialized = false;
 
-  bool get isSupported {
-    if (kIsWeb) {
-      return false;
-    }
-    return defaultTargetPlatform == TargetPlatform.android ||
-        defaultTargetPlatform == TargetPlatform.iOS ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux;
-  }
+  bool get isSupported =>
+      PlatformCapabilities.current().supportsSystemNotifications;
 
   Future<void> initialize() async {
     if (_initialized || !isSupported) {

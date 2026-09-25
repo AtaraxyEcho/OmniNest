@@ -289,7 +289,10 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
                        SWP_NOCOPYBITS);
     }
     SyncFlutterViewChild();
-    DwmFlush();
+    // Do not DwmFlush here: the flush blocks the platform thread (and the
+    // method-channel reply) until DWM composition finishes, which can take
+    // 1-2s while the Flutter surface rebuilds. ForceFlutterRedraw already
+    // queues the next frame; callers must not await presentation.
     ForceFlutterRedraw();
     return;
   }
@@ -316,7 +319,7 @@ void FlutterWindow::ApplyWindowChrome(bool hidden, bool fullscreen) {
                      SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOCOPYBITS);
   }
   SyncFlutterViewChild();
-  DwmFlush();
+  // See immersive path: never block the platform thread on DWM composition.
   ForceFlutterRedraw();
 }
 
@@ -382,7 +385,7 @@ bool FlutterWindow::VerifyWindowFrame() {
     }
   }
   if (adjusted) {
-    DwmFlush();
+    // Geometry self-heal already re-asserted the frame; do not block on DWM.
     ForceFlutterRedraw();
   }
   return adjusted;

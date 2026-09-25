@@ -6,7 +6,6 @@ import android.os.Build
 import android.util.Rational
 import android.view.KeyEvent
 import com.ryanheise.audioservice.AudioServiceActivity
-import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
@@ -24,7 +23,9 @@ class MainActivity : AudioServiceActivity() {
         ).setMethodCallHandler { call, result ->
             when (call.method) {
                 "setVideoPlaybackActive" -> {
-                    pipEligible = call.argument<Boolean>("active") ?: false
+                    val active = call.argument<Boolean>("active") ?: false
+                    pipEligible = active
+                    applyPipParams(active)
                     result.success(true)
                 }
                 "isInPipMode" -> result.success(isInPictureInPictureMode)
@@ -55,6 +56,31 @@ class MainActivity : AudioServiceActivity() {
         )
     }
 
+    // 构建 PiP 参数；Android 12+ 支持 auto-enter。
+    private fun buildPipParams(autoEnter: Boolean): PictureInPictureParams? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return null
+        }
+        val builder = PictureInPictureParams.Builder()
+            .setAspectRatio(Rational(16, 9))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            builder.setAutoEnterEnabled(autoEnter)
+        }
+        return builder.build()
+    }
+
+    private fun applyPipParams(videoActive: Boolean) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+            return
+        }
+        val params = buildPipParams(autoEnter = videoActive) ?: return
+        try {
+            setPictureInPictureParams(params)
+        } catch (_: IllegalStateException) {
+            // 不在可更新 PiP 参数的状态（如已 finish）时忽略。
+        }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (volumeKeyPagingEnabled) {
             when (event.keyCode) {
@@ -74,12 +100,11 @@ class MainActivity : AudioServiceActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (!pipEligible || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        // Android 12+ 靠 auto-enter；更早版本在此手动进入。
+        if (!pipEligible || Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             return
         }
-        val params = PictureInPictureParams.Builder()
-            .setAspectRatio(Rational(16, 9))
-            .build()
+        val params = buildPipParams(autoEnter = false) ?: return
         enterPictureInPictureMode(params)
     }
 

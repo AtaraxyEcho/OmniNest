@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 /// 视频画中画（PiP）服务：仅 Android 实现有效，其它平台为空操作。
 ///
@@ -35,16 +35,38 @@ class PipService {
   }
 
   /// 标记视频播放页活跃：退后台时允许进入 PiP。
+  ///
+  /// Android 12+ 由原生 `setAutoEnterEnabled` 自动进入；更早版本在
+  /// `onUserLeaveHint` 手动进入。调用后同步一次 [isInPipMode]。
   Future<void> setVideoPlaybackActive({required bool active}) async {
-    if (_isNotAndroid) {
+    if (!PlatformCapabilities.current().supportsPictureInPicture) {
       return;
     }
     try {
       await _channel.invokeMethod<bool>('setVideoPlaybackActive', {
         'active': active,
       });
+      await refreshPipMode();
     } on PlatformException {
       // 原生侧不可用时忽略（低版本系统/平台差异）。
+    }
+  }
+
+  /// 向原生查询当前是否处于 PiP，并在变化时通知监听者。
+  Future<void> refreshPipMode() async {
+    if (!PlatformCapabilities.current().supportsPictureInPicture) {
+      return;
+    }
+    try {
+      final inPip = await _channel.invokeMethod<bool>('isInPipMode') ?? false;
+      if (inPip != _pipMode) {
+        _pipMode = inPip;
+        for (final listener in List<_PipListener>.of(_listeners)) {
+          listener(_pipMode);
+        }
+      }
+    } on PlatformException {
+      // 查询失败保持已有状态。
     }
   }
 
@@ -53,9 +75,6 @@ class PipService {
     _listeners.add(listener);
     return () => _listeners.remove(listener);
   }
-
-  bool get _isNotAndroid =>
-      kIsWeb || defaultTargetPlatform != TargetPlatform.android;
 }
 
 typedef _PipListener = void Function(bool inPipMode);
