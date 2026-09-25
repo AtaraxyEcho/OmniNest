@@ -234,6 +234,56 @@ class SsrfSafeUrlValidatorTest {
     }
 
     @Nested
+    @DisplayName("IPv6 embedded IPv4 blocking")
+    class EmbeddedIpv4 {
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "http://[::ffff:127.0.0.1]/admin",
+                "http://[::ffff:169.254.169.254]/metadata",
+                "http://[::ffff:10.0.0.1]/admin",
+                "http://[::ffff:192.168.1.1]/admin"
+        })
+        @DisplayName("block IPv4-mapped IPv6 loopback/metadata/private")
+        void blocksIpv4Mapped(String url) {
+            assertThatThrownBy(() -> validator.requireSafeHttpUrl(url))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("block NAT64 64:ff9b::/96 embedded private IPv4")
+        void blocksNat64MappedPrivate() {
+            assertThatThrownBy(() -> validator.requireSafeHttpUrl("http://[64:ff9b::a00:1]/admin"))
+                    .isInstanceOf(BusinessException.class);
+        }
+
+        @Test
+        @DisplayName("block 6to4 2002::/16 embedded loopback IPv4")
+        void blocks6to4MappedLoopback() {
+            assertThatThrownBy(() -> validator.requireSafeHttpUrl("http://[2002:7f00:1::]/admin"))
+                    .isInstanceOf(BusinessException.class);
+        }
+    }
+
+    @Nested
+    @DisplayName("documentation and reserved IPv4 blocking")
+    class DocumentationAndReserved {
+
+        @ParameterizedTest
+        @ValueSource(strings = {
+                "http://192.0.0.1/test",
+                "http://192.88.99.1/test",
+                "http://198.51.100.1/test",
+                "http://203.0.113.1/test"
+        })
+        @DisplayName("block TEST-NET and documentation ranges")
+        void blocksDocumentationRanges(String url) {
+            assertThatThrownBy(() -> validator.requireSafeHttpUrl(url))
+                    .isInstanceOf(BusinessException.class);
+        }
+    }
+
+    @Nested
     @DisplayName("多播地址拦截")
     class Multicast {
 
@@ -277,22 +327,70 @@ class SsrfSafeUrlValidatorTest {
     class SafeUrls {
 
         @Test
-        @DisplayName("公网域名应通过校验")
+        @DisplayName("公网域名应通过校验（固定 DNS stub）")
+        void allowsPublicDomainWithStubbedDns() throws Exception {
+            InetAddress publicAddress = InetAddress.getByName("8.8.8.8");
+            SafeUrlValidator stubbed = new SsrfSafeUrlValidator(host -> new InetAddress[] {publicAddress});
+            assertDoesNotThrow(() -> stubbed.requireSafeHttpUrl("https://files.example.com/file.zip"));
+        }
+
+        @Test
+        @DisplayName("公网域名应通过校验（真实 DNS，可跳过）")
         void allowsPublicDomain() {
             /* 公网域名解析后得到非保留 IP，不应被拦截。
-               DNS 解析依赖运行环境网络，使用 Assumptions 处理无网络场景。 */
+               DNS 解析依赖运行环境网络，使用 Assumptions 处理无网络场景；
+               本机/代理环境可能把 example.com 解析到保留地址，同样跳过。 */
             Assumptions.assumeTrue(
-                    isDnsAvailable("example.com"), "跳过：运行环境无法解析 example.com");
+                    resolvesToPublicAddress("example.com"),
+                    "跳过：运行环境无法将 example.com 解析为公网地址");
             assertDoesNotThrow(() -> validator.requireSafeHttpUrl("https://example.com/file.zip"));
         }
 
-        private boolean isDnsAvailable(String host) {
+        private boolean resolvesToPublicAddress(String host) {
             try {
-                InetAddress.getByName(host);
+                for (InetAddress address : InetAddress.getAllByName(host)) {
+                    if (isBlockedLikeProduction(address)) {
+                        return false;
+                    }
+                }
                 return true;
             } catch (UnknownHostException exception) {
                 return false;
             }
+        }
+
+        /** 与生产 isBlockedAddress 同口径：本机 DNS 可能把公网名解析到基准测试段。 */
+        private boolean isBlockedLikeProduction(InetAddress address) {
+            if (address.isAnyLocalAddress()
+                    || address.isLoopbackAddress()
+                    || address.isLinkLocalAddress()
+                    || address.isSiteLocalAddress()
+                    || address.isMulticastAddress()) {
+                return true;
+            }
+            byte[] bytes = address.getAddress();
+            if (bytes.length == 4) {
+                int first = bytes[0] & 0xFF;
+                int second = bytes[1] & 0xFF;
+                return first == 0
+                        || first == 10
+                        || first == 127
+                        || (first == 100 && second >= 64 && second <= 127)
+                        || (first == 169 && second == 254)
+                        || (first == 172 && second >= 16 && second <= 31)
+                        || (first == 192 && second == 168)
+                        || (first == 198 && (second == 18 || second == 19));
+            }
+            if (bytes.length == 16) {
+                int first = bytes[0] & 0xFF;
+                // 2001:2::/48 基准测试段；fc00::/7 唯一本地
+                if (first == 0x20 && (bytes[1] & 0xFF) == 0x01 && (bytes[2] & 0xFF) == 0x00
+                        && (bytes[3] & 0xFF) == 0x02) {
+                    return true;
+                }
+                return (first & 0xFE) == 0xFC;
+            }
+            return false;
         }
     }
 

@@ -8,7 +8,6 @@ import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorEnableResponse;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupRequest;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorSetupResponse;
 import com.omninest.modules.user.dto.TwoFactorDtos.TwoFactorStatusResponse;
-import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.modules.user.service.TwoFactorPolicyService;
 import com.omninest.modules.user.service.TwoFactorService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,7 +32,6 @@ public class TwoFactorController {
 
     private final TwoFactorService twoFactorService;
     private final TwoFactorPolicyService twoFactorPolicyService;
-    private final AuthUserRepository authUserRepository;
     private final CurrentUserContext currentUserContext;
 
     @Operation(summary = "两步验证状态", description = "返回当前用户是否已开启以及策略是否强制要求开启")
@@ -41,9 +39,7 @@ public class TwoFactorController {
     ApiResponse<TwoFactorStatusResponse> status() {
         UUID userId = currentUserContext.requireCurrentUserId();
         boolean enabled = twoFactorService.isEnabled(userId);
-        boolean required = authUserRepository.findWithRolesById(userId)
-                .map(twoFactorPolicyService::isRequired)
-                .orElse(false);
+        boolean required = twoFactorPolicyService.isRequired(userId);
         return ApiResponse.success(new TwoFactorStatusResponse(enabled, required));
     }
 

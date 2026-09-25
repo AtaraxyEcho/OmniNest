@@ -332,6 +332,27 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
 - Redis、RabbitMQ、Lucene 索引均为可重建数据，不在备份范围。
 - 跨版本恢复前先阅读根仓库发布说明，确认 Flyway 基线兼容。
 
+## 密钥轮换
+
+生产 `.env` 中的密钥不得使用示例值（`CHANGE_ME_*` / `change-me-*` / `minioadmin` / `omninest` /
+`secret` 等）。`deploy/prod` Compose 对缺失变量直接失败，后端 `prod` Profile 由
+`JwtSecretValidator` 与 `ProductionSecretsValidator` 拒绝空白或文档示例默认值。
+
+| 密钥 | 环境变量 | 轮换步骤 |
+|------|----------|----------|
+| JWT 签名密钥 | `OMNINEST_SECURITY_JWT_SECRET` | 生成 ≥32 字节随机值（如 `openssl rand -base64 48`）→ 写入 `.env` → 重启 api/worker/scheduler。旧 access/refresh 令牌立即失效，客户端需重新登录。 |
+| 凭据加密 KEK | `OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY` | `openssl rand -base64 32` → 写入 `.env` → 重启后端。已加密的外部存储凭据需按密钥版本流程重加密后再切换；未配置时保存加密凭据会直接报错。 |
+| 首次安装令牌 | `OMNINEST_SETUP_TOKEN` | 安装完成后保持 `OMNINEST_SETUP_ENABLED=false`；若需再次安装，生成新 ≥32 字节令牌并同步写入 `.env` 后重启。 |
+| PostgreSQL | `POSTGRES_PASSWORD` | 在 PG 内 `ALTER USER` 后更新 `.env` 与应用连接串，重启后端与 postgres。 |
+| RabbitMQ | `RABBITMQ_DEFAULT_PASS` | 管理台或 `rabbitmqctl change_password` 后更新 `.env`，重启 rabbitmq 与后端。 |
+| Redis | `REDIS_PASSWORD` | 更新 redis 配置与 `.env`，重启 redis 与后端。 |
+| MinIO | `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD` | 更新 MinIO 凭据与 `.env`，重启 minio 与后端。 |
+| Rclone RC | `RCLONE_RC_PASS` | 更新 `.env` 后重启 rclone 与后端；口令仅经环境注入，不写入 command 行。 |
+| Aria2 RPC | `RPC_SECRET` | 更新 `.env` 后重启 aria2 与后端。 |
+| AI Sidecar | `OMNINEST_AI_SIDECAR_SECRET` | 更新 `.env` 后重启 ai-sidecar 与后端（启用 photo-ai 时）。 |
+
+轮换后请确认：`docker compose config` 不再出现示例默认值；`ps`/`docker inspect` 中不残留旧口令明文。
+
 ## 运维备忘
 
 - **ClamAV 扫描时限口径**：代码默认 10s / yml 护栏 120s 仅是回退，权威值是配置中心
@@ -345,5 +366,7 @@ sh scripts/restore.sh ./backups/omninest-<时间戳>
   用户与 vhost 定义，属于破坏性操作，必须在停机窗口执行。
 - **Aria2 端口**：6888 tcp/udp 是 BT/DHT 监听口（功能必需、默认映射到宿主机），
   公网部署建议用防火墙限制来源网段。
+- **MinIO 发布面**：托管桶保持私有，下载只签发短期签名 URL；经 Nginx 发布时不开放
+  桶的匿名读，客户端仅通过 `OMNINEST_MINIO_PUBLIC_ENDPOINT` 访问。
 - **备份脚本**：见上文「备份与恢复」章节，宿主 crontab 每日执行。
 

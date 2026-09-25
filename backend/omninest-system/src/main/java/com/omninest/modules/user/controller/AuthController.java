@@ -88,7 +88,9 @@ public class AuthController {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "登录请求过于频繁，请稍后再试");
         }
         // 按用户名限流
-        if (!rateLimitService.tryAcquire("user:" + request.username() + ":login", 5, Duration.ofMinutes(1))) {
+        if (!rateLimitService.tryAcquire(
+                "user:" + normalizeUsernameKey(request.username()) + ":login",
+                5, Duration.ofMinutes(1))) {
             throw new BusinessException(ErrorCode.RATE_LIMITED, "该账号登录尝试过多，请稍后再试");
         }
         AuthTokenResponse token = authService.login(request, clientPlatform, deviceId, deviceName, ip,
@@ -320,6 +322,10 @@ public class AuthController {
                 .maxAge(Duration.ZERO)
                 .build();
         response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+    }
+
+    private String normalizeUsernameKey(String rawUsername) {
+        return rawUsername == null ? "" : rawUsername.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
     private String resolveClientIp(HttpServletRequest request) {

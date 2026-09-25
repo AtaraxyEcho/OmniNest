@@ -248,7 +248,7 @@ public class TwoFactorService {
 
     private void requirePassword(AuthUser user, String password) {
         if (password == null || !passwordEncoder.matches(password, user.getPasswordHash())) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED, "密码错误");
+            throw new BusinessException(ErrorCode.PASSWORD_INVALID, "密码错误");
         }
     }
 

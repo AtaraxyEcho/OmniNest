@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.config.ConfigValueProvider;
+import com.omninest.modules.user.repository.AuthUserRepository;
 import com.omninest.common.config.RuntimeConfigCache;
 import com.omninest.common.security.Roles;
 import com.omninest.modules.user.domain.AuthRole;
@@ -30,7 +31,8 @@ class TwoFactorPolicyServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new TwoFactorPolicyService(configValueProvider, runtimeConfigCache);
+        AuthUserRepository authUserRepository = mock(AuthUserRepository.class);
+        service = new TwoFactorPolicyService(configValueProvider, runtimeConfigCache, authUserRepository);
         when(runtimeConfigCache.get(anyString())).thenReturn(Optional.empty());
         when(configValueProvider.findByKey(anyString())).thenReturn(Optional.empty());
     }

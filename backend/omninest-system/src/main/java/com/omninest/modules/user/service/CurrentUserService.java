@@ -15,6 +15,7 @@ import com.omninest.common.sync.SyncEventCommand;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.common.sync.UserSyncEventRecorder;
 import com.omninest.modules.user.domain.AuthActiveSession;
+import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.modules.user.dto.AuthUserDto;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.util.AuthUserMapper;
@@ -99,8 +100,11 @@ public class CurrentUserService {
     public void changePassword(UUID userId, String oldPassword, String newPassword) {
         AuthUser user = authUserRepository.findById(userId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不存在"));
+        if (!UserStatus.ACTIVE.getValue().equals(user.getStatus())) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "当前用户不可用");
+        }
         if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
-            throw new BusinessException(ErrorCode.BAD_REQUEST, "原密码错误");
+            throw new BusinessException(ErrorCode.OLD_PASSWORD_INVALID, "原密码错误");
         }
         passwordPolicy.validate(user.getUsername(), newPassword);
         user.setPasswordHash(passwordEncoder.encode(newPassword));

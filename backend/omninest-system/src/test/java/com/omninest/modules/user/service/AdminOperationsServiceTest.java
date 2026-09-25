@@ -97,6 +97,14 @@ class AdminOperationsServiceTest {
     );
     private final UUID actorUserId = UUID.fromString("99999999-9999-9999-9999-999999999999");
 
+    private void givenFreshAdminActor() {
+        AuthUser actor = new AuthUser();
+        actor.setId(actorUserId);
+        actor.setStatus("ACTIVE");
+        actor.getRoles().add(role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system")));
+        when(authUserRepository.findWithRolesAndPermissionsById(actorUserId)).thenReturn(Optional.of(actor));
+    }
+
     @Test
     void rolesReturnsRolePermissionDetails() {
         AuthRole admin = role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system"));
@@ -115,6 +123,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void updateRolePermissionsReplacesMutableRolePermissions() {
+        givenFreshAdminActor();
         AuthRole admin = role(Roles.ADMIN, permission(Permissions.SYSTEM_USER_READ, "system"));
         AuthPermission manageUsers = permission(Permissions.SYSTEM_USER_MANAGE, "system");
         AuthUser affectedUser = new AuthUser();
@@ -138,10 +147,29 @@ class AdminOperationsServiceTest {
 
     @Test
     void updateRolePermissionsRejectsSuperAdmin() {
+        givenFreshAdminActor();
         assertThatThrownBy(() -> service.updateRolePermissions(
                 actorUserId,
                 Roles.SUPER_ADMIN,
                 new AdminOperationsDto.UpdateRolePermissionsRequest(Set.of(Permissions.SYSTEM_USER_READ))
+        ))
+                .isInstanceOf(BusinessException.class)
+                .extracting(exception -> ((BusinessException) exception).errorCode())
+                .isEqualTo(ErrorCode.FORBIDDEN);
+    }
+
+    @Test
+    void updateRolePermissionsRejectsActorWithoutAdminRole() {
+        AuthUser actor = new AuthUser();
+        actor.setId(actorUserId);
+        actor.setStatus("ACTIVE");
+        actor.getRoles().add(role(Roles.MEMBER, permission(Permissions.SYSTEM_USER_READ, "system")));
+        when(authUserRepository.findWithRolesAndPermissionsById(actorUserId)).thenReturn(Optional.of(actor));
+
+        assertThatThrownBy(() -> service.updateRolePermissions(
+                actorUserId,
+                Roles.ADMIN,
+                new AdminOperationsDto.UpdateRolePermissionsRequest(Set.of(Permissions.SYSTEM_USER_MANAGE))
         ))
                 .isInstanceOf(BusinessException.class)
                 .extracting(exception -> ((BusinessException) exception).errorCode())
@@ -397,6 +425,7 @@ class AdminOperationsServiceTest {
 
     @Test
     void updateConfigDelegatesToConfigCenter() {
+        givenFreshAdminActor();
         when(configCenterService.update("rate-limit.default-limit", "180", "调整默认限流", actorUserId)).thenReturn(
                 new ConfigEntryDto("rate-limit.default-limit", "180", "STRING", "runtime", "HOT", Instant.now(), null)
         );

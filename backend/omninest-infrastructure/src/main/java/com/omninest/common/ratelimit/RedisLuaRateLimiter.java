@@ -28,7 +28,8 @@ public class RedisLuaRateLimiter implements RateLimitService {
     @Override
     public boolean tryAcquire(String key, int limit, Duration window) {
         if (!properties.enabled()) {
-            return true;
+            // 总开关关闭时高风险路径仍需保护：退化为极小本地限额，避免全局 fail-open。
+            return LocalFallbackRateLimiter.tryAcquire(key, Math.min(limit, 3), window);
         }
         String redisKey = properties.keyPrefix() + ":" + key;
         Long allowed = RedisRateLimitExecutor.execute(

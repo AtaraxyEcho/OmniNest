@@ -27,10 +27,10 @@ class TaskAdminPermissionContractTest {
     }
 
     @Test
-    @DisplayName("全站任务重试仅允许 system:config:manage")
-    void adminTaskRetryRequiresConfigManage() {
+    @DisplayName("全站任务重试使用 task:admin（任务处置，不要求配置写权限）")
+    void adminTaskRetryRequiresTaskAdmin() {
         assertThat(preAuthorizeOf(AdminOperationsController.class, "retryTask"))
-                .contains(Permissions.SYSTEM_CONFIG_MANAGE);
+                .contains(Permissions.TASK_ADMIN);
     }
 
     @Test
@@ -43,12 +43,12 @@ class TaskAdminPermissionContractTest {
     }
 
     @Test
-    @DisplayName("死信队列查看使用 task:admin，重试仍要求 system:config:manage")
-    void dlqEndpointsUseTaskAdminAndConfigManage() {
+    @DisplayName("死信队列查看与重试均使用 task:admin")
+    void dlqEndpointsUseTaskAdmin() {
         assertThat(preAuthorizeOf(TaskController.class, "listDlq"))
                 .contains(Permissions.TASK_ADMIN);
         assertThat(preAuthorizeOf(TaskController.class, "retryDlqEntry"))
-                .contains(Permissions.SYSTEM_CONFIG_MANAGE);
+                .contains(Permissions.TASK_ADMIN);
     }
 
     @Test

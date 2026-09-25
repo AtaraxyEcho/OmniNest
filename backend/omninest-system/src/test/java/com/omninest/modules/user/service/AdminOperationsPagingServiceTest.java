@@ -52,7 +52,8 @@ class AdminOperationsPagingServiceTest {
         UUID taskId = UUID.fromString("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
         List<Object[]> rows = Collections.singletonList(new Object[]{
                 taskId, "FILE_INDEX", "FAILED", 40, "file.index", "失败", 2,
-                Instant.parse("2026-08-25T08:00:00Z"), Instant.parse("2026-08-25T08:01:00Z")
+                Instant.parse("2026-08-25T08:00:00Z"), Instant.parse("2026-08-25T08:01:00Z"),
+                UUID.fromString("99999999-9999-9999-9999-999999999999"), "运维账号"
         });
         when(taskRepository.findPage(0, 100, "FAILED", "FILE_INDEX", "%index%", "updated_at", false))
                 .thenReturn(new TaskRecordAdminRepository.TaskPage(rows, 101));

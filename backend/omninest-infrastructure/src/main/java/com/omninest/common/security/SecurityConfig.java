@@ -92,6 +92,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
+                        // 错误派发必须匿名可达，否则流式响应失败后二次 Access Denied 并掩盖真实异常
+                        .requestMatchers("/error").permitAll()
                         // 托管的前端 SPA（分享链接的 Web 入口）：hash 路由仅需首页与静态资源匿名可达
                         .requestMatchers(
                                 HttpMethod.GET,
@@ -110,6 +112,8 @@ public class SecurityConfig {
                                 "/drift_worker.js",
                                 "/sqlite3.wasm"
                         ).permitAll()
+                        // CSP 禁止内联脚本后，启动脚本与壳样式必须匿名可达
+                        .requestMatchers("/js/**", "/css/**").permitAll()
                         .requestMatchers("/assets/**", "/icons/**", "/canvaskit/**").permitAll()
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/app/version").permitAll()

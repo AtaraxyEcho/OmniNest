@@ -16,6 +16,7 @@ import com.omninest.modules.user.domain.AuthPermission;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
 import com.omninest.modules.user.domain.AuditLog;
+import com.omninest.modules.user.domain.UserStatus;
 import com.omninest.modules.user.dto.AdminConsoleSummaryDto;
 import com.omninest.modules.user.dto.AdminOperationsDto;
 import com.omninest.modules.user.dto.AdminOperationDescription;
@@ -115,6 +116,7 @@ public class AdminOperationsService {
             String roleCode,
             AdminOperationsDto.UpdateRolePermissionsRequest request
     ) {
+        requireFreshAdminActor(actorUserId);
         String normalizedRoleCode = normalizeRoleCode(roleCode);
         if (Roles.SUPER_ADMIN.equals(normalizedRoleCode)) {
             throw new BusinessException(ErrorCode.FORBIDDEN, "超级管理员权限由系统权限全集维护");
@@ -146,6 +148,7 @@ public class AdminOperationsService {
 
     @Transactional(rollbackFor = Exception.class)
     public ConfigEntryDto updateConfig(UUID actorUserId, String key, AdminOperationsDto.UpdateConfigRequest request) {
+        requireFreshAdminActor(actorUserId);
         ConfigEntryDto updated = configCenterService.update(key, request.value(), request.reason(), actorUserId);
         auditLogService.record(actorUserId, "ADMIN_CONFIG_UPDATE", "config_entries", null);
         return updated;
@@ -486,6 +489,20 @@ public class AdminOperationsService {
                 permission.getDescription(),
                 permission.isEnabled()
         );
+    }
+
+    private void requireFreshAdminActor(UUID actorUserId) {
+        AuthUser actor = authUserRepository.findWithRolesAndPermissionsById(actorUserId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED, "操作者不存在"));
+        if (!UserStatus.ACTIVE.getValue().equals(actor.getStatus())) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED, "操作者不可用");
+        }
+        boolean privileged = actor.getRoles().stream()
+                .map(AuthRole::getCode)
+                .anyMatch(code -> Roles.SUPER_ADMIN.equals(code) || Roles.ADMIN.equals(code));
+        if (!privileged) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "操作者已失去管理权限");
+        }
     }
 
     private Set<String> normalizeCodes(Set<String> rawCodes) {

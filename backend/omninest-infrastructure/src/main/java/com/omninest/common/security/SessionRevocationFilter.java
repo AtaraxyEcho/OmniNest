@@ -39,19 +39,23 @@ public class SessionRevocationFilter extends OncePerRequestFilter {
             Jwt jwt = jwtAuth.getToken();
             String sid = jwt.getClaimAsString("sid");
             String sub = jwt.getSubject();
-            if (sid != null && sub != null) {
-                try {
-                    UUID userId = UUID.fromString(sub);
-                    UUID sessionId = UUID.fromString(sid);
-                    if (revocationChecker.isRevoked(userId, sessionId)) {
-                        log.info("会话已被撤销: userId={}, sessionId={}", userId, sessionId);
-                        writeRevokedResponse(response);
-                        return;
-                    }
-                } catch (IllegalArgumentException e) {
-                    // sid 或 sub 格式无效，放行交由后续处理
-                    log.debug("JWT sid/sub 格式无效: sid={}, sub={}", sid, sub);
+            if (sid == null || sid.isBlank() || sub == null || sub.isBlank()) {
+                log.warn("access token missing sid/sub, reject fail-closed");
+                writeRevokedResponse(response);
+                return;
+            }
+            try {
+                UUID userId = UUID.fromString(sub);
+                UUID sessionId = UUID.fromString(sid);
+                if (revocationChecker.isRevoked(userId, sessionId)) {
+                    log.info("session revoked: userId={}, sessionId={}", userId, sessionId);
+                    writeRevokedResponse(response);
+                    return;
                 }
+            } catch (IllegalArgumentException exception) {
+                log.warn("JWT sid/sub invalid, reject fail-closed: sid={}, sub={}", sid, sub);
+                writeRevokedResponse(response);
+                return;
             }
         }
         chain.doFilter(request, response);

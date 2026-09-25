@@ -2,6 +2,7 @@ package com.omninest.common.config;
 
 import io.minio.BucketExistsArgs;
 import io.minio.MinioClient;
+import io.minio.SetBucketPolicyArgs;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -33,5 +34,11 @@ class MinioBucketInitializerTest {
                 .extracting(BucketExistsArgs::bucket)
                 .containsExactly("user-files-test", "derived-assets-test", "file-quarantine-test");
         Mockito.verify(minioClient, Mockito.never()).makeBucket(Mockito.any());
+        ArgumentCaptor<SetBucketPolicyArgs> policyCaptor =
+                ArgumentCaptor.forClass(SetBucketPolicyArgs.class);
+        Mockito.verify(minioClient, Mockito.times(3)).setBucketPolicy(policyCaptor.capture());
+        Assertions.assertThat(policyCaptor.getAllValues())
+                .extracting(SetBucketPolicyArgs::config)
+                .containsOnly("{\"Version\":\"2012-10-17\",\"Statement\":[]}");
     }
 }

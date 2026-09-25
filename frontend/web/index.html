@@ -1,11 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <script>
-    // 在引擎做任何 history 归一化之前捕获原始地址，供冷启动深链恢复使用
-    // （分享链接 /#/s/:token、书签、F5 刷新都必须保留进入位置）。
-    window.__omninestInitialHref = window.location.href;
-  </script>
+  <script src="js/omninest-boot.js"></script>
 
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -37,32 +33,8 @@
 
   <title>OmniNest</title>
   <link rel="manifest" href="manifest.json">
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background-color: #0b0f14;
-      height: 100%;
-    }
-  </style>
-  <script>
-    // 防止 CanvasKit WebGL context lost 导致崩溃
-    // 当 GPU 资源被浏览器回收时，阻止默认行为并尝试恢复
-    window.addEventListener('webglcontextlost', function(e) {
-      e.preventDefault();
-      console.warn('[OmniNest] WebGL context lost, attempting recovery...');
-      setTimeout(function() {
-        var canvas = document.querySelector('canvas');
-        if (canvas) {
-          var gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
-          if (gl && gl.isContextLost()) {
-            var ext = gl.getExtension('WEBGL_lose_context');
-            if (ext) ext.restoreContext();
-          }
-        }
-      }, 1000);
-    }, false);
-  </script>
+  <link rel="stylesheet" href="css/omninest-shell.css">
+  <script src="js/omninest-webgl.js"></script>
 </head>
 <body>
   <!--

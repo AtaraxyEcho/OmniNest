@@ -6,8 +6,10 @@ import com.omninest.common.config.RuntimeConfigCache;
 import com.omninest.common.security.Roles;
 import com.omninest.modules.user.domain.AuthRole;
 import com.omninest.modules.user.domain.AuthUser;
+import com.omninest.modules.user.repository.AuthUserRepository;
 import java.util.Locale;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
@@ -22,6 +24,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class TwoFactorPolicyService extends BaseRuntimeConfigService {
 
+    private final AuthUserRepository authUserRepository;
+
     public static final String REQUIRED_ROLES_KEY = "auth.two-factor.required-roles";
     static final String DEFAULT_REQUIRED_ROLES = Roles.SUPER_ADMIN + "," + Roles.ADMIN;
 
@@ -33,9 +37,11 @@ public class TwoFactorPolicyService extends BaseRuntimeConfigService {
      */
     public TwoFactorPolicyService(
             ConfigValueProvider configValueProvider,
-            RuntimeConfigCache runtimeConfigCache
+            RuntimeConfigCache runtimeConfigCache,
+            AuthUserRepository authUserRepository
     ) {
         super(configValueProvider, runtimeConfigCache);
+        this.authUserRepository = authUserRepository;
     }
 
     /**
@@ -44,6 +50,18 @@ public class TwoFactorPolicyService extends BaseRuntimeConfigService {
      * @param user 已加载角色的用户
      * @return 是否强制
      */
+    /**
+     * 按用户 ID 判断是否强制两步验证。
+     *
+     * @param userId 用户 ID
+     * @return 是否强制
+     */
+    public boolean isRequired(UUID userId) {
+        return authUserRepository.findWithRolesById(userId)
+                .map(this::isRequired)
+                .orElse(false);
+    }
+
     public boolean isRequired(AuthUser user) {
         if (user == null || user.getRoles() == null || user.getRoles().isEmpty()) {
             return false;

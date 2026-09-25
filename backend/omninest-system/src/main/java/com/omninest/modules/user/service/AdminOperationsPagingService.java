@@ -38,8 +38,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AdminOperationsPagingService {
     private static final int DEFAULT_PAGE_SIZE = 25;
-    private static final int MAX_PAGE_SIZE = 100;
-    private static final int MAX_PAGE_INDEX = 1_000_000;
+       private static final int MAX_PAGE_INDEX = 1_000_000;
     private static final int MAX_FILTER_LENGTH = 100;
     private static final int MAX_SEARCH_LENGTH = 200;
 
@@ -295,7 +294,7 @@ public class AdminOperationsPagingService {
 
     private int normalizePageSize(int size) {
         int requested = size <= 0 ? DEFAULT_PAGE_SIZE : size;
-        return Math.min(requested, MAX_PAGE_SIZE);
+        return com.omninest.common.api.PageClamps.safeSize(requested, 100);
     }
 
     private String normalizeFilter(String value, boolean uppercase) {

@@ -43,8 +43,13 @@ public class SecurityProperties implements AuthenticationTokenPolicy, BrowserSec
             "http://127.0.0.1:3000"
     ));
 
+    /**
+     * 浏览器 CSP。script-src 禁止 unsafe-inline（启动脚本已外置到 web/js）。
+     * style-src 保留 unsafe-inline：Flutter Web 引擎/CanvasKit 运行时会注入内联 style，
+     * 去掉会导致文本编辑与渲染层样式失效；待 Flutter 提供 nonce/hash 方案后再收紧。
+     */
     private String contentSecurityPolicy = "default-src 'self'; "
-            + "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'; "
+            + "script-src 'self' 'wasm-unsafe-eval'; "
             + "style-src 'self' 'unsafe-inline'; "
             + "font-src 'self' data:; "
             + "img-src 'self' data: blob: http: https:; "

@@ -29,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class UserDirectoryQueryService {
-    private static final int MAX_PAGE_SIZE = 100;
 
     private final AuthUserRepository userRepository;
 
@@ -55,7 +54,7 @@ public class UserDirectoryQueryService {
     @Transactional(readOnly = true)
     public PageResponse<UserDirectoryEntry> findActiveUsers(String query, int page, int size) {
         int safePage = Math.max(0, page);
-        int safeSize = Math.max(1, Math.min(MAX_PAGE_SIZE, size));
+        int safeSize = com.omninest.common.api.PageClamps.safeSize(size);
         String normalizedQuery = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         Page<AuthUser> users = userRepository.searchByStatus(
                 UserStatus.ACTIVE.getValue(),
