@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
 import 'package:gbk_codec/gbk_codec.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/features/reader/data/epub_archive_loader.dart';
 import 'package:omninest/features/reader/data/epub_archive_source.dart';
 import 'package:omninest/features/reader/domain/parsed_book.dart';
@@ -58,7 +59,7 @@ class EpubParserService {
   static const _maxExpansionRatio = 250;
   static const _ratioCheckThresholdBytes = 64 * 1024 * 1024;
   static const _maxTextEntryBytes = 8 * 1024 * 1024;
-  static const _maxCoverBytes = 12 * 1024 * 1024;
+  static const _maxCoverBytes = FileSizeThresholds.epubCoverMaxBytes;
 
   /// 缓存已解压的 Archive，避免重复解压整个 ZIP 归档。
   Archive? _cachedArchive;
@@ -496,7 +497,11 @@ class EpubParserService {
       if (fallback.isNotEmpty) {
         return fallback.first.innerText.trim();
       }
-    } catch (_) {}
+    } catch (error) {
+      if (kDebugMode) {
+        readerDebugLog('EPUB: _getDcElement($localName) failed: $error');
+      }
+    }
     return null;
   }
 
@@ -831,7 +836,11 @@ class EpubParserService {
         final title = _stripHtml(match.group(1) ?? '').trim();
         if (title.isNotEmpty) return title;
       }
-    } catch (_) {}
+    } catch (error) {
+      if (kDebugMode) {
+        readerDebugLog('EPUB: _extractTitleFromHtml failed: $error');
+      }
+    }
     return null;
   }
 

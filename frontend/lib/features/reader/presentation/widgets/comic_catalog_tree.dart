@@ -15,6 +15,7 @@ class ComicCatalogFlatRow {
 ///
 /// 供盒式列表（[ComicCatalogTree]）与详情页 Sliver 虚拟化列表共用，
 /// 保证两种承载方式的展开行为与当前位置解析完全一致。
+/// 属纯 UI 展开/派生行状态，按 AGENTS 允许 ChangeNotifier；阅读进度在 application 层。
 class ComicCatalogController extends ChangeNotifier {
   ComicCatalogController({
     required List<ComicCatalogNode> nodes,

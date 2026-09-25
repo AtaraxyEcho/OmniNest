@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_content_annotations.dart';
@@ -107,7 +108,7 @@ class ReaderViewContent extends StatefulWidget {
       decorationColor: settings.onSurfaceColor.withValues(alpha: 0.90),
       backgroundColor:
           span.isMarked
-              ? const Color(0xFFFFEB3B).withValues(alpha: 0.30)
+              ? ReaderGeneratedCoverColors.highlightTint.withValues(alpha: 0.30)
               : null,
       fontFeatures: [
         if (span.isSuperscript) const FontFeature.superscripts(),
@@ -416,8 +417,8 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     readerDebugLog(
       '[reader-selection][menu] '
       'mode=${widget.visibleBlocks != null ? 'page' : 'scroll'} '
-      'raw="${_debugPreviewText(_lastSelectionRawText)}" '
-      'trimmed="${_debugPreviewText(_selectedText)}" '
+      'rawLen=${_lastSelectionRawText.length} rawHash=${_debugTextHash(_lastSelectionRawText)} '
+      'trimmedLen=${_selectedText.length} trimmedHash=${_debugTextHash(_selectedText)} '
       'range=${range == null ? 'null' : '(${range.$1}, ${range.$2})'} '
       'annotations=[${_debugDescribeAnnotations(widget.annotations)}] '
       'overlap=[${_debugDescribeAnnotations(overlappingHighlights)}]',
@@ -493,7 +494,7 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     }
     readerDebugLog(
       '[reader-selection][range] 未命中任何 span：候选 ${candidates.length} 个，'
-      '选中 "${_debugPreviewText(selectedText)}"',
+      '选中 len=${selectedText.length} hash=${_debugTextHash(selectedText)}',
     );
     return null;
   }
@@ -509,19 +510,15 @@ class _ReaderViewContentState extends State<ReaderViewContent> {
     readerDebugLog(
       '[reader-selection][range] 命中 $source '
       'span(start=${span.startOffset}, len=${span.text.length}, '
-      'text="${_debugPreviewText(span.text)}") '
+      'hash=${_debugTextHash(span.text)}) '
       '${normalizedMatch ? 'normalized' : 'exact'} local=$localOffset '
       'range=(${range.$1}, ${range.$2})',
     );
     return range;
   }
 
-  String _debugPreviewText(String text) {
-    final escaped = text
-        .replaceAll('\n', r'\n')
-        .replaceAll('\r', r'\r')
-        .replaceAll('\t', r'\t');
-    return escaped.length <= 48 ? escaped : '${escaped.substring(0, 48)}...';
+  String _debugTextHash(String text) {
+    return text.hashCode.toRadixString(16);
   }
 
   String _debugDescribeAnnotations(List<ReaderAnnotation> annotations) {

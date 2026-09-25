@@ -190,14 +190,18 @@ extension _ReaderViewPageCommands on _ReaderViewPageState {
   }
 
   void _toggleReaderFullscreen() {
-    if (isDesktopPlatform) {
-      unawaited(
-        ref.read(windowChromeControllerProvider.notifier).toggleFullscreen(),
-      );
-      return;
-    }
-    if (!kIsWeb) {
-      fs.toggleFullscreen();
+    switch (resolveFullscreenCommandTarget(
+      isWeb: isWebPlatform,
+      isDesktop: isDesktopPlatform,
+    )) {
+      case FullscreenCommandTarget.browser:
+        fs.toggleFullscreen();
+      case FullscreenCommandTarget.windowChrome:
+        unawaited(
+          ref.read(windowChromeControllerProvider.notifier).toggleFullscreen(),
+        );
+      case FullscreenCommandTarget.none:
+        break;
     }
   }
 

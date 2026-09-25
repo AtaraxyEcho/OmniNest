@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
+import 'package:omninest/core/utils/yield_to_event_loop.dart';
 import 'package:omninest/features/reader/data/reader_image_cache.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
@@ -36,11 +37,15 @@ class ReaderContentPreprocessor {
       } else if (archiveBytes != null) {
         try {
           // 整包解压可能处理数十 MB 归档，原生平台放到 isolate 执行；
-          // Web 上 compute 退化为同步执行，维持原行为。
-          final decoded =
-              kIsWeb
-                  ? ZipDecoder().decodeBytes(archiveBytes)
-                  : await compute(_decodeArchiveJob, archiveBytes);
+          // Web 上 compute 退化为同步执行，解码前后让出事件循环。
+          final Archive decoded;
+          if (kIsWeb) {
+            await yieldToEventLoop();
+            decoded = ZipDecoder().decodeBytes(archiveBytes);
+            await yieldToEventLoop();
+          } else {
+            decoded = await compute(_decodeArchiveJob, archiveBytes);
+          }
           body = await _extractImagesToDisk(body, itemId, decoded, contentPath);
         } on FormatException {
           rethrow;
@@ -194,11 +199,17 @@ class ReaderContentPreprocessor {
     if (encoded.length > ((_maxImageBytes + 2) ~/ 3) * 4) {
       throw const FormatException('章节内嵌图片超过 20 MiB');
     }
-    // 最大 20 MiB 的 base64 解码在原生平台移入 isolate，避免卡 UI 线程
-    final bytes =
-        kIsWeb || encoded.length < 1024 * 1024
-            ? base64Decode(encoded)
-            : await compute(_base64DecodeJob, encoded);
+    // 最大 20 MiB 的 base64 解码在原生平台移入 isolate；Web 前后让出事件循环。
+    final Uint8List bytes;
+    if (kIsWeb) {
+      await yieldToEventLoop();
+      bytes = base64Decode(encoded);
+      await yieldToEventLoop();
+    } else if (encoded.length < 1024 * 1024) {
+      bytes = base64Decode(encoded);
+    } else {
+      bytes = await compute(_base64DecodeJob, encoded);
+    }
     final mimeType = source.substring(5, source.indexOf(';', 5)).toLowerCase();
     final extension = switch (mimeType) {
       'image/png' => 'png',

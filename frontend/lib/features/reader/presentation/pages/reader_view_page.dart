@@ -55,19 +55,22 @@ import 'package:omninest/platform/android/reader_volume_key_service.dart';
 
 part 'reader_view_page_commands.dart';
 part 'reader_view_page_layout.dart';
+part 'reader_view_page_progress.dart';
+part 'reader_view_page_build_work.dart';
+part 'reader_view_page_build.dart';
 
 class ReaderViewPage extends ConsumerStatefulWidget {
   const ReaderViewPage({
     required this.itemId,
     required this.chapterId,
-    this.initialProgressPayload,
+    this.initialProgress,
     this.entry,
     super.key,
   });
 
   final String itemId;
   final String chapterId;
-  final Map<String, dynamic>? initialProgressPayload;
+  final ReaderProgressSnapshot? initialProgress;
 
   /// 路由进入语义（`chapter`=目录显式选章进章首，其余=续读恢复）。
   final String? entry;
@@ -85,6 +88,12 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
         ReaderViewPageLibraryActionsMixin,
         ReaderViewPageMixin,
         ReaderViewPageInteractionMixin {
+  void _updateState(VoidCallback update) {
+    if (mounted) {
+      setState(update);
+    }
+  }
+
   // ── 核心组件 ──
   final _positionTracker = ReaderPositionTracker();
   ReaderContentLoader? _contentLoader;
@@ -261,30 +270,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     _scheduleBookProgressRecompute();
   }
 
-  /// 防抖重算全书进度（O 章节），滚动期间最多每 200ms 一次。
-  void _scheduleBookProgressRecompute() {
-    if (_bookProgressRecomputeTimer != null) {
-      return;
-    }
-    final input = _scrollProgressNotifier.value;
-    if ((input - _lastBookProgressInput).abs() < 0.0005) {
-      return;
-    }
-    _bookProgressRecomputeTimer = Timer(const Duration(milliseconds: 200), () {
-      _bookProgressRecomputeTimer = null;
-      if (!mounted) {
-        return;
-      }
-      // 切章/加载期间 tracker 仍是旧章偏移，此时重算会得到错误中间值；
-      // 挂起重算，待加载完成后由 refreshBookProgressNow 一次到位。
-      if (_isSwitchingChapter || _isLoadingChapter) {
-        return;
-      }
-      _lastBookProgressInput = _scrollProgressNotifier.value;
-      _bookProgressNotifier.value = _bookProgress;
-    });
-  }
-
   @override
   void refreshBookProgressNow() {
     if (!mounted) {
@@ -305,47 +290,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   void noteOwnProgressSave(ReaderProgressSnapshot snapshot) {
     _lastOwnProgressSave = snapshot;
-  }
-
-  /// 判断服务端回灌的进度快照是否为本机刚保存的自身回声。
-  ///
-  /// 本机保存→服务端落库→详情 provider 刷新会产生一条与本地快照内容
-  /// 相同、时间戳略新的记录；不跳过就会把刚保存的位置重新施加回 UI，
-  /// 表现为每次滚动/点击后内容回跳"刷新"。跨设备更新时间必然晚于
-  /// 本机保存时刻，不受影响。
-  bool _isOwnProgressEcho(ReaderProgressSnapshot snapshot, DateTime at) {
-    final own = _lastOwnProgressSave;
-    final ownAt = own?.updatedAt;
-    if (own == null || ownAt == null) {
-      return false;
-    }
-    return own.chapterId == snapshot.chapterId &&
-        (own.charOffset - snapshot.charOffset).abs() <= 64 &&
-        (own.progress - snapshot.progress).abs() <= 0.002 &&
-        at.isBefore(ownAt.add(const Duration(seconds: 30)));
-  }
-
-  /// 退出阅读器时把当前记账强制上报服务端。
-  ///
-  /// 书级续读指针以服务端为准，常规上报按节流窗口执行：跳章后未再
-  /// 产生滚动/翻页就退出时，指针仍停在跳章前的章节，下次打开会回退
-  /// 到旧章。退出是强一致节点，必须在页面仍在树内（ref 可用）时发出
-  /// 强制上报，不等待结果，不阻塞返回导航。
-  void _syncProgressOnExit() {
-    final snapshot = buildProgressSnapshot();
-    if (snapshot == null) {
-      return;
-    }
-    noteOwnProgressSave(snapshot);
-    unawaited(
-      _progressSync.sync(
-        itemId: widget.itemId,
-        charOffset: snapshot.charOffset,
-        progressPercent: snapshot.progress,
-        readingMode: snapshot.mode,
-        chapterId: snapshot.chapterId,
-      ),
-    );
   }
 
   @override
@@ -509,29 +453,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   double get bookProgress => _bookProgress;
 
-  /// 按(parsedBook 身份)缓存章节映射，避免每次 build O(章节) 重分配。
-  List<ReaderChapter> _cachedChaptersFor(ParsedBook? parsedBook) {
-    if (parsedBook == null) {
-      return const <ReaderChapter>[];
-    }
-    if (!identical(_chaptersCacheSource, parsedBook)) {
-      _chaptersCacheSource = parsedBook;
-      _chaptersCache =
-          parsedBook.chapters
-              .asMap()
-              .entries
-              .map(
-                (e) => ReaderChapter.fromParsed(
-                  e.key,
-                  e.value.title,
-                  contentPath: e.value.contentPath,
-                ),
-              )
-              .toList();
-    }
-    return _chaptersCache;
-  }
-
   @override
   String get itemId => widget.itemId;
   @override
@@ -539,8 +460,7 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   @override
   set exitRequested(bool value) => _exitRequested = value;
   @override
-  Map<String, dynamic>? get initialProgressPayload =>
-      widget.initialProgressPayload;
+  ReaderProgressSnapshot? get initialProgress => widget.initialProgress;
   @override
   Size? get pageViewportSize => _pageViewportSize;
   @override
@@ -561,71 +481,6 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
   void clearReaderSelection() {
     FocusManager.instance.primaryFocus?.unfocus();
     _selectionActive = false;
-  }
-
-  void _updateState(VoidCallback update) {
-    if (mounted) {
-      setState(update);
-    }
-  }
-
-  /// 当前章节标题，用于加载遮罩显示。
-  String get _currentChapterTitle {
-    // 优先从已加载的章节内容获取
-    if (_cachedContent?.title.isNotEmpty == true) return _cachedContent!.title;
-    // 从 contentLoader 获取
-    final data = _contentLoader?.getByChapterId(_currentChapterId);
-    if (data != null) return data.content.title;
-    // 从章节列表获取
-    final chapters = _contentLoader?.allChapters ?? [];
-    final idx = chapters.indexWhere((c) => c.id == _currentChapterId);
-    if (idx >= 0 && chapters[idx].title.isNotEmpty) return chapters[idx].title;
-    return '';
-  }
-
-  /// 全书进度百分比（0.0-1.0），用于显示和同步。
-  double get _bookProgress {
-    final parsedBook = ref.read(parsedBookProvider(widget.itemId)).value;
-    if (parsedBook == null || parsedBook.chapters.isEmpty) {
-      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
-    }
-    final chapterCharCounts =
-        parsedBook.chapters.map((c) => c.charCount).toList();
-    // 当前章节使用实际解析的 totalChars（与 parsedBook.charCount 可能因 HTML 标签不同）
-    final chapterData = _contentLoader?.getByChapterId(_currentChapterId);
-    final currentChapterIdx =
-        _contentLoader?.allChapters.indexWhere(
-          (c) => c.id == _currentChapterId,
-        ) ??
-        0;
-    if (chapterData != null && currentChapterIdx < chapterCharCounts.length) {
-      chapterCharCounts[currentChapterIdx] = chapterData.totalChars;
-    }
-    final totalBookChars = chapterCharCounts.fold<int>(0, (s, c) => s + c);
-    if (totalBookChars <= 0) {
-      return _scrollProgressNotifier.value.clamp(0.0, 1.0);
-    }
-
-    // 当前章节之前的字符数之和
-    int previousChars = 0;
-    for (
-      var i = 0;
-      i < currentChapterIdx && i < chapterCharCounts.length;
-      i++
-    ) {
-      previousChars += chapterCharCounts[i];
-    }
-    // 当前章节内的字符数：直接用 tracker 的 charOffset，不依赖 _scrollProgress
-    final chapterChars = chapterData?.totalChars ?? 0;
-    final currentChapterChars = _positionTracker.charOffset.clamp(
-      0,
-      chapterChars,
-    );
-
-    return ((previousChars + currentChapterChars) / totalBookChars).clamp(
-      0.0,
-      1.0,
-    );
   }
 
   late ReaderProgressSyncService _progressSync;
@@ -833,198 +688,8 @@ class _ReaderViewPageState extends ConsumerState<ReaderViewPage>
     );
   }
 
-  /// 音量键事件映射为阅读命令：下键向后翻，上键向前翻。
-  void _handleVolumeKeyEvent(ReaderVolumeKeyDirection direction) {
-    if (!mounted) {
-      return;
-    }
-    final forward = direction == ReaderVolumeKeyDirection.down;
-    if (_isPageMode) {
-      final command =
-          forward ? ReaderCommand.nextPage : ReaderCommand.previousPage;
-      if (_requiresReaderCommandGate(command) && !_readerCommandGate.accept()) {
-        return;
-      }
-      if (forward) {
-        _pageTurnController.next();
-      } else {
-        _pageTurnController.previous();
-      }
-      return;
-    }
-    unawaited(_scrollReaderViewport(forward ? 0.88 : -0.88));
-  }
-
-  void _scheduleReaderBuildWork({
-    required ParsedBook? latestParsedBook,
-    required ReaderChapterContent? loadedContent,
-    required List<ReaderChapter> chapters,
-    required bool providerHasError,
-  }) {
-    if (latestParsedBook != null) {
-      _pendingParsedBook = latestParsedBook;
-    }
-    _pendingReaderContent = loadedContent;
-    _pendingReaderChapters = List<ReaderChapter>.of(chapters);
-    _pendingReaderProviderError = providerHasError;
-    if (_readerBuildWorkScheduled) {
-      return;
-    }
-    _readerBuildWorkScheduled = true;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _readerBuildWorkScheduled = false;
-      if (!mounted) {
-        return;
-      }
-
-      final parsedBook = _pendingParsedBook;
-      final content = _pendingReaderContent;
-      final chapters = _pendingReaderChapters ?? const <ReaderChapter>[];
-      final providerHasError = _pendingReaderProviderError;
-      _pendingParsedBook = null;
-      _pendingReaderContent = null;
-      _pendingReaderChapters = null;
-      _pendingReaderProviderError = false;
-
-      if (parsedBook != null) {
-        _parsedBookSnapshot = parsedBook;
-        unawaited(loadChapterContentIfNeeded(parsedBook));
-      }
-
-      var stateChanged = false;
-      if (_isSwitchingChapter && providerHasError && parsedBook == null) {
-        _isSwitchingChapter = false;
-        _showChapterLoadingOverlay = false;
-        stateChanged = true;
-      }
-
-      if (content != null) {
-        if (_contentLoader == null) {
-          initContentLoader(chapters);
-          stateChanged = true;
-        }
-        final chapterData = _contentLoader?.get(_currentChapterId, _settings);
-        if (!_isLoadingChapter &&
-            (_isSwitchingChapter || chapterData == null)) {
-          unawaited(loadCurrentChapter(content));
-        }
-      }
-
-      if (stateChanged && mounted) {
-        setState(() {});
-      }
-    });
-  }
-
   // ── Build ──
 
   @override
-  Widget build(BuildContext context) {
-    final detailAsync = ref.watch(readerItemDetailProvider(widget.itemId));
-    final bookAsync = ref.watch(parsedBookProvider(widget.itemId));
-    if (detailAsync.asData?.value.item.isComic == false) {
-      ref.watch(cachedBookHandleProvider(widget.itemId));
-      ref.watch(epubParserServiceProvider(widget.itemId));
-    }
-
-    // 从已解析的书籍中按需加载当前章节内容
-    final latestParsedBook = bookAsync.asData?.value;
-    final parsedBook = latestParsedBook ?? _parsedBookSnapshot;
-    final loadedContent = _cachedContent;
-    // 章节列表按 parsedBook 身份缓存，避免每次 build O(章节) 重分配。
-    final chapters = _cachedChaptersFor(parsedBook);
-    _scheduleReaderBuildWork(
-      latestParsedBook: latestParsedBook,
-      loadedContent: loadedContent,
-      chapters: chapters,
-      providerHasError: bookAsync.hasError && parsedBook == null,
-    );
-
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (didPop, result) async {
-        if (didPop) return;
-        clearReaderSelection();
-        syncProgressSync();
-        _syncProgressOnExit();
-        ref.invalidate(readerItemDetailProvider(widget.itemId));
-        safePop();
-      },
-      child: Scaffold(
-        backgroundColor: _settings.surfaceColor,
-        body: detailAsync.when(
-          data: (detail) {
-            if (bookAsync.hasError && parsedBook == null) {
-              return AppErrorView(
-                message: AppLocalizations.of(context).readerChapterLoadFailed,
-                onBack: safePop,
-                onRetry: () {
-                  ref.invalidate(parsedBookProvider(widget.itemId));
-                },
-              );
-            }
-            final content = loadedContent ?? _cachedContent;
-
-            if (kDebugMode) {
-              readerDebugLog(
-                'ReaderView build: content=${content != null}, _contentLoader=${_contentLoader != null}, _isLoadingChapter=$_isLoadingChapter, chapters=${chapters.length}',
-              );
-            }
-            if (content == null || _contentLoader == null) {
-              if (parsedBook != null &&
-                  _chapterLoadCoordinator.hasFailed(_currentChapterId)) {
-                return AppErrorView(
-                  message: AppLocalizations.of(context).readerChapterLoadFailed,
-                  onBack: safePop,
-                  onRetry: () {
-                    _chapterLoadCoordinator.clearFailure(_currentChapterId);
-                    setState(() {});
-                    unawaited(loadChapterContentIfNeeded(parsedBook));
-                  },
-                );
-              }
-              if (kDebugMode) {
-                readerDebugLog(
-                  'ReaderView: showing skeleton (content=${content != null}, loader=${_contentLoader != null})',
-                );
-              }
-              if (_isSwitchingChapter && !_showChapterLoadingOverlay) {
-                return ColoredBox(color: _settings.surfaceColor);
-              }
-              return _buildReaderSkeleton();
-            }
-
-            // Provider 数据更新检测：仅在章节加载完成后检查
-            if (!_isLoadingChapter &&
-                _contentLoader!.get(_currentChapterId, _settings) != null) {
-              final latestSnapshot = ReaderProgressSnapshot.fromServer(
-                detailAsync.asData?.value.progress,
-              );
-              final latestTime = latestSnapshot.updatedAt;
-              final shouldApply =
-                  latestSnapshot.chapterId == _currentChapterId &&
-                  latestTime != null &&
-                  (_lastAppliedProgressAt == null ||
-                      latestTime.isAfter(_lastAppliedProgressAt!)) &&
-                  !_isOwnProgressEcho(latestSnapshot, latestTime);
-              if (shouldApply) {
-                scheduleProgressSnapshotApply(latestSnapshot);
-              }
-            }
-
-            return _buildReader(detail, content);
-          },
-          error:
-              (e, _) => AppErrorView(
-                message: e.toString(),
-                onBack: safePop,
-                onRetry:
-                    () =>
-                        ref.invalidate(readerItemDetailProvider(widget.itemId)),
-              ),
-          loading: _buildReaderSkeleton,
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => buildReaderView(context);
 }

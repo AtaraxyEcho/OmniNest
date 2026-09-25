@@ -4,6 +4,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_reading_palette.dart';
+import 'package:omninest/platform/platform_capabilities.dart';
 
 class ReaderViewSettings {
   ReaderViewSettings({
@@ -162,6 +163,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
     required this.settings,
     required this.onSettingsChanged,
     this.embedded = false,
+    this.pageModeEnabled,
     super.key,
   });
 
@@ -169,15 +171,21 @@ class ReaderViewSettingsPanel extends StatelessWidget {
   final ValueChanged<ReaderViewSettings> onSettingsChanged;
   final bool embedded;
 
+  /// 是否提供翻页模式；null 时跟随 [supportsPageMode]（Web 恒 false）。
+  final bool? pageModeEnabled;
+
   @override
   Widget build(BuildContext context) {
+    final showPageMode = pageModeEnabled ?? supportsPageMode;
     final content = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (!embedded) ...[_buildHeader(context), const SizedBox(height: 20)],
-        _buildReadingModeToggle(context),
-        const SizedBox(height: 18),
+        if (showPageMode) ...[
+          _buildReadingModeToggle(context),
+          const SizedBox(height: 18),
+        ],
         _buildPageTransitionToggle(context),
         const SizedBox(height: 18),
         _buildFontSizeControl(context),
@@ -247,6 +255,7 @@ class ReaderViewSettingsPanel extends StatelessWidget {
   }
 
   Widget _buildReadingModeToggle(BuildContext context) {
+    // Web 只开放滚动阅读（产品决策 D3）；整段由 build 的 showPageMode 门控。
     final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -273,20 +282,17 @@ class ReaderViewSettingsPanel extends StatelessWidget {
                     settings.copyWith(readingMode: 'scroll'),
                   ),
             ),
-            if (supportsPageMode) ...[
-              const SizedBox(width: 10),
-              _ReadingModeOption(
-                icon: Icons.swap_horiz_rounded,
-                label: l10n.readerModePage,
-                selected: settings.readingMode == 'page',
-                color: settings.accentColor,
-                surfaceColor: settings.onSurfaceColor,
-                onTap:
-                    () => onSettingsChanged(
-                      settings.copyWith(readingMode: 'page'),
-                    ),
-              ),
-            ],
+            const SizedBox(width: 10),
+            _ReadingModeOption(
+              icon: Icons.swap_horiz_rounded,
+              label: l10n.readerModePage,
+              selected: settings.readingMode == 'page',
+              color: settings.accentColor,
+              surfaceColor: settings.onSurfaceColor,
+              onTap:
+                  () =>
+                      onSettingsChanged(settings.copyWith(readingMode: 'page')),
+            ),
           ],
         ),
       ],
@@ -571,8 +577,8 @@ class ReaderViewSettingsPanel extends StatelessWidget {
   }
 
   Widget _buildVolumeKeyPagingToggle(BuildContext context) {
-    // 音量键翻页依赖原生按键拦截，仅移动端提供设置项。
-    if (!isMobilePlatform) {
+    // 音量键翻页依赖原生按键拦截，仅具备该能力的平台展示（当前 Android）。
+    if (!PlatformCapabilities.current().supportsVolumeKeyPageTurn) {
       return const SizedBox.shrink();
     }
     final l10n = AppLocalizations.of(context);

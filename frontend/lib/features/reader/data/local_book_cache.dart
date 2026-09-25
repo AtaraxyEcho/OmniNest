@@ -154,10 +154,7 @@ class LocalBookCache {
     if (kDebugMode) {
       readerDebugLog('LocalBookCache: downloading $itemId (native)');
     }
-    final downloaded = await _downloadToFile(file, itemId, nativeDownloader);
-    if (!downloaded) {
-      return Uint8List(0);
-    }
+    await _downloadToFile(file, itemId, nativeDownloader);
     await _evictIfNeeded(protectedPath: file.path);
     return _vault.decryptToBytes(
       source: file,
@@ -176,8 +173,7 @@ class LocalBookCache {
       return file;
     }
     if (nativeDownloader == null) return null;
-    final downloaded = await _downloadToFile(file, itemId, nativeDownloader);
-    if (!downloaded) return null;
+    await _downloadToFile(file, itemId, nativeDownloader);
     await _evictIfNeeded(protectedPath: file.path);
     return file;
   }
@@ -197,8 +193,9 @@ class LocalBookCache {
       );
     } on FormatException {
       await cacheFile.delete();
-      if (nativeDownloader == null ||
-          !await _downloadToFile(cacheFile, itemId, nativeDownloader)) {
+      if (nativeDownloader != null) {
+        await _downloadToFile(cacheFile, itemId, nativeDownloader);
+      } else {
         rethrow;
       }
       await _vault.decryptToFile(
@@ -251,7 +248,10 @@ class LocalBookCache {
   }
 
   /// 将网络响应直接写入临时文件，完成后再原子替换缓存文件。
-  Future<bool> _downloadToFile(
+  ///
+  /// 失败抛出 [AppException] 并携带原因，避免上层把「取不到」当成
+  /// 「该书没有正文」。
+  Future<void> _downloadToFile(
     File file,
     String itemId,
     Future<void> Function(String destinationPath) downloader,
@@ -261,7 +261,10 @@ class LocalBookCache {
       await file.parent.create(recursive: true);
       await downloader(partialFile.path).timeout(const Duration(minutes: 15));
       if (!await partialFile.exists() || await partialFile.length() == 0) {
-        return false;
+        throw const AppException(
+          code: 'READER_BOOK_DOWNLOAD_FAILED',
+          message: '书籍内容下载失败',
+        );
       }
       await _vault.encryptFile(
         source: partialFile,
@@ -269,12 +272,29 @@ class LocalBookCache {
         context: _context(itemId),
       );
       await partialFile.delete();
-      return true;
     } catch (error) {
       if (kDebugMode) {
         readerDebugLog('LocalBookCache: download failed for $itemId: $error');
       }
-      return false;
+      if (await partialFile.exists()) {
+        try {
+          await partialFile.delete();
+        } on Exception catch (deleteError) {
+          if (kDebugMode) {
+            readerDebugLog(
+              'LocalBookCache: partial cleanup failed for $itemId: $deleteError',
+            );
+          }
+        }
+      }
+      if (error is AppException) {
+        rethrow;
+      }
+      throw AppException(
+        code: 'READER_BOOK_DOWNLOAD_FAILED',
+        message: '书籍内容下载失败',
+        details: {'itemId': itemId, 'cause': error.toString()},
+      );
     }
   }
 

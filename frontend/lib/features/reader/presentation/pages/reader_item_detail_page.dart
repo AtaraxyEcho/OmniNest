@@ -7,6 +7,7 @@ import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
+import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_comic_service.dart';
@@ -38,11 +39,7 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
   bool _bookshelfBusy = false;
 
   void _handleBack() {
-    if (context.canPop()) {
-      context.pop();
-      return;
-    }
-    context.go('/reader');
+    exitDetailRoute(context, fallbackRoute: '/reader');
   }
 
   @override
@@ -365,7 +362,7 @@ class _PdfDetailContent extends StatelessWidget {
 }
 
 /// 漫画详情包装器 — 加载清单后将目录节点传递给 ComicDetailPage。
-class _ComicDetailWrapper extends ConsumerWidget {
+class _ComicDetailWrapper extends ConsumerStatefulWidget {
   const _ComicDetailWrapper({
     required this.item,
     required this.itemId,
@@ -381,9 +378,50 @@ class _ComicDetailWrapper extends ConsumerWidget {
   final VoidCallback? onDelete;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_ComicDetailWrapper> createState() =>
+      _ComicDetailWrapperState();
+}
+
+class _ComicDetailWrapperState extends ConsumerState<_ComicDetailWrapper> {
+  Timer? _reconcileTimer;
+  bool _reconcileScheduled = false;
+
+  @override
+  void dispose() {
+    _reconcileTimer?.cancel();
+    super.dispose();
+  }
+
+  void _scheduleReconcile() {
+    if (_reconcileScheduled) {
+      return;
+    }
+    _reconcileScheduled = true;
+    _reconcileTimer = Timer(const Duration(milliseconds: 500), () {
+      _reconcileTimer = null;
+      if (!mounted) {
+        return;
+      }
+      ref.invalidate(readerItemDetailProvider(widget.itemId));
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final itemId = widget.itemId;
     final monitor = ref.watch(comicManifestMonitorProvider(itemId));
     final manifest = monitor.asData?.value.manifest;
+    ref.listen(comicManifestMonitorProvider(itemId), (previous, next) {
+      final nextManifest = next.asData?.value.manifest;
+      final terminal =
+          nextManifest != null &&
+          nextManifest.importStatus != ReaderImportStatus.pending &&
+          nextManifest.importStatus != ReaderImportStatus.parsing;
+      if (terminal && item.isParsing) {
+        _scheduleReconcile();
+      }
+    });
     if (manifest == null && monitor.asData?.value.refreshError == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -399,13 +437,7 @@ class _ComicDetailWrapper extends ConsumerWidget {
     if (terminal && item.isParsing) {
       // 后端已终态而本地解析标志未跟上：限流兜底刷新一次，避免以
       // 网络往返为周期的零间隔隐式轮询。
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        Timer(const Duration(milliseconds: 500), () {
-          if (context.mounted) {
-            ref.invalidate(readerItemDetailProvider(itemId));
-          }
-        });
-      });
+      _scheduleReconcile();
     }
     // 外层详情页已提供 ReaderPageScaffold（页头/滚动/材质）；
     // 此处再嵌一层会在无界约束下产生嵌套 Scaffold 布局错误。
@@ -414,13 +446,13 @@ class _ComicDetailWrapper extends ConsumerWidget {
       chapters: manifest.catalog,
       pages: manifest.pages,
       sources: manifest.sources,
-      progress: progress,
+      progress: widget.progress,
       canRead: manifest.pages.isNotEmpty,
       parseProgress: manifest.parseTask?.progress,
       onRetrySource: (source) => _retryComicSource(context, ref, source),
       onDeleteSource: (source) => _deleteComicSource(context, ref, source),
-      onEditMetadata: onEditMetadata,
-      onDelete: onDelete,
+      onEditMetadata: widget.onEditMetadata,
+      onDelete: widget.onDelete,
     );
   }
 
@@ -431,9 +463,9 @@ class _ComicDetailWrapper extends ConsumerWidget {
   ) async {
     final ok = await ref
         .read(readerComicServiceProvider)
-        .retrySource(itemId, source.id);
+        .retrySource(widget.itemId, source.id);
     if (ok && context.mounted) {
-      ref.invalidate(comicManifestMonitorProvider(itemId));
+      ref.invalidate(comicManifestMonitorProvider(widget.itemId));
     }
     return ok;
   }
@@ -446,13 +478,13 @@ class _ComicDetailWrapper extends ConsumerWidget {
     try {
       await ref
           .read(readerComicServiceProvider)
-          .deleteSource(itemId, source.id);
+          .deleteSource(widget.itemId, source.id);
       if (!context.mounted) {
         return true;
       }
-      ref.invalidate(comicManifestMonitorProvider(itemId));
-      ref.invalidate(readerItemDetailProvider(itemId));
-      await ref.read(comicManifestMonitorProvider(itemId).future);
+      ref.invalidate(comicManifestMonitorProvider(widget.itemId));
+      ref.invalidate(readerItemDetailProvider(widget.itemId));
+      await ref.read(comicManifestMonitorProvider(widget.itemId).future);
       return true;
     } on Exception {
       return false;

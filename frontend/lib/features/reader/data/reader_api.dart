@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/reader/data/reader_file_downloader.dart';
@@ -42,9 +43,9 @@ class TextParseTask {
 class ReaderApi {
   const ReaderApi(this.apiClient);
 
-  static const _coverMaxBytes = 12 * 1024 * 1024;
-  static const _webBookMaxBytes = 32 * 1024 * 1024;
-  static const _webPdfMaxBytes = 128 * 1024 * 1024;
+  static const _coverMaxBytes = FileSizeThresholds.readerCoverMaxBytes;
+  static const _webBookMaxBytes = FileSizeThresholds.webBookMaxBytes;
+  static const _webPdfMaxBytes = FileSizeThresholds.webPdfMaxBytes;
 
   final ApiClient apiClient;
 

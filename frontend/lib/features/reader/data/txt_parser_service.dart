@@ -1,9 +1,11 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart' show compute, kIsWeb;
+import 'package:flutter/foundation.dart' show compute, kDebugMode, kIsWeb;
 import 'package:gbk_codec/gbk_codec.dart';
+import 'package:omninest/core/utils/yield_to_event_loop.dart';
 import 'package:omninest/features/reader/domain/parsed_book.dart';
+import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// TXT 文件解析服务
 ///
@@ -108,6 +110,7 @@ class TxtParserService {
   ///
   /// 章节按字符偏移切自整本解码文本；大文件的 GBK 转码与全文换行
   /// 规范化在 isolate 中执行并只做一次，避免每次切章卡顿 UI 线程。
+  /// Web 无 isolate：解码前后让出事件循环，换行规范化按块分片。
   Future<String> ensureDecodedText({
     required String itemId,
     required Uint8List bytes,
@@ -115,13 +118,43 @@ class TxtParserService {
     if (_decodedItemId == itemId && _decodedCacheText != null) {
       return _decodedCacheText!;
     }
-    final text =
-        (kIsWeb || bytes.length < _decodeIsolateThresholdBytes)
-            ? decodeText(bytes)
-            : await compute(decodeTxtBytes, bytes);
+    final String text;
+    if (kIsWeb) {
+      await yieldToEventLoop();
+      text = await _decodeTextYielding(bytes);
+      await yieldToEventLoop();
+    } else if (bytes.length < _decodeIsolateThresholdBytes) {
+      text = decodeText(bytes);
+    } else {
+      text = await compute(decodeTxtBytes, bytes);
+    }
     _decodedItemId = itemId;
     _decodedCacheText = text;
     return text;
+  }
+
+  /// Web 专用：解码后按 512Ki 字符块规范化换行，块间让出事件循环。
+  Future<String> _decodeTextYielding(Uint8List bytes) async {
+    final decoded = _decodeText(bytes);
+    if (decoded.length < 512 * 1024) {
+      return decoded.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+    }
+    final buffer = StringBuffer();
+    const chunk = 512 * 1024;
+    for (var offset = 0; offset < decoded.length; offset += chunk) {
+      final end =
+          (offset + chunk < decoded.length) ? offset + chunk : decoded.length;
+      buffer.write(
+        decoded
+            .substring(offset, end)
+            .replaceAll('\r\n', '\n')
+            .replaceAll('\r', '\n'),
+      );
+      if (end < decoded.length) {
+        await yieldToEventLoop();
+      }
+    }
+    return buffer.toString();
   }
 
   /// 从已解码文本中按字符偏移取单章并转换为 XHTML。
@@ -162,12 +195,22 @@ class TxtParserService {
     // 尝试 UTF-8（严格模式）
     try {
       return utf8.decode(bytes, allowMalformed: false);
-    } catch (_) {}
+    } catch (error) {
+      if (kDebugMode) {
+        readerDebugLog('TxtParser: UTF-8 decode failed, trying GBK: $error');
+      }
+    }
 
     // 尝试 GBK（中文常见编码）
     try {
       return gbk.decode(bytes);
-    } catch (_) {}
+    } catch (error) {
+      if (kDebugMode) {
+        readerDebugLog(
+          'TxtParser: GBK decode failed, falling back to Latin-1: $error',
+        );
+      }
+    }
 
     // 最终回退
     return latin1.decode(bytes);

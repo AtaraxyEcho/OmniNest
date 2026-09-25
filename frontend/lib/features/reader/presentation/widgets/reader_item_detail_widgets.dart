@@ -156,7 +156,7 @@ class ReaderDetailActions extends StatelessWidget {
     required this.bookshelfBusy,
     required this.onToggleBookshelf,
     required this.onReadChapter,
-    this.localPayload,
+    this.localSnapshot,
     this.alignment = Alignment.centerLeft,
     super.key,
   });
@@ -165,13 +165,12 @@ class ReaderDetailActions extends StatelessWidget {
   final bool bookshelfBusy;
   final VoidCallback onToggleBookshelf;
   final void Function(String chapterId, {required bool resume}) onReadChapter;
-  final Map<String, dynamic>? localPayload;
+  final ReaderProgressSnapshot? localSnapshot;
   final AlignmentGeometry alignment;
 
   @override
   Widget build(BuildContext context) {
     final item = detail.item;
-    final localSnapshot = ReaderProgressSnapshot.fromLocal(localPayload);
     final serverSnapshot = ReaderProgressSnapshot.fromServer(detail.progress);
     final progressSnapshot = ReaderProgressSnapshot.latest(
       localSnapshot,

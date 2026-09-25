@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
 
@@ -17,13 +18,8 @@ class ReaderBookCover extends StatelessWidget {
   final ReaderCoverSize size;
 
   /// 生成封面配色对（底色, 强调色），按标题哈希稳定选择。
-  static const List<(Color, Color)> _palettes = [
-    (Color(0xFF2C1A0E), Color(0xFF8B4513)),
-    (Color(0xFF0F1E2E), Color(0xFF2A4A6E)),
-    (Color(0xFF2A1E0A), Color(0xFF7A5A1A)),
-    (Color(0xFF1C2E1C), Color(0xFF3A5A3A)),
-    (Color(0xFF1A1A2C), Color(0xFF3A3A6E)),
-  ];
+  static const List<(Color, Color)> _palettes =
+      ReaderGeneratedCoverColors.palettes;
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +56,7 @@ class _GeneratedCoverChrome extends StatelessWidget {
   final Color background;
   final Color accent;
 
-  static const Color _coverText = Color(0xFFEEEDE9);
+  static const Color _coverText = ReaderGeneratedCoverColors.coverText;
 
   bool get _showTitle => size != ReaderCoverSize.row;
 
