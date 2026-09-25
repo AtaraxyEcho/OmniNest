@@ -1069,8 +1069,8 @@ void main() {
       final second = container.read(appBackdropVideoSessionProvider);
 
       expect(identical(first, second), isTrue);
-      expect(first.diagnostics.textureCount, 0);
-      expect(first.diagnostics.successfulOpenCount, 0);
+      expect(first.diagnostics?.textureCount, 0);
+      expect(first.diagnostics?.successfulOpenCount, 0);
     });
   });
 }

@@ -1,5 +1,6 @@
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/admin/data/admin_api_response.dart';
+import 'package:omninest/features/admin/data/admin_monitoring_dto.dart';
 import 'package:omninest/features/admin/domain/admin_analytics.dart';
 import 'package:omninest/features/admin/domain/admin_console_summary.dart';
 import 'package:omninest/features/admin/domain/admin_operations.dart';
@@ -480,7 +481,11 @@ class AdminOperationsApi {
   }
 
   AdminMonitoringView parseMonitoringResponse(Map<String, dynamic>? body) {
-    return AdminMonitoringView.fromJson(parseData(body));
+    final data = parseData(body);
+    final view = AdminMonitoringView.fromJson(data);
+    return view.copyWith(
+      components: parseAdminMonitoringComponents(data['components']),
+    );
   }
 
   AdminStorageManagementView parseStorageResponse(Map<String, dynamic>? body) {

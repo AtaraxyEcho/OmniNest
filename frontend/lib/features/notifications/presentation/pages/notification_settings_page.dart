@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/utils/color_value.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
 import 'package:omninest/features/notifications/application/notification_type_controller.dart';
@@ -194,11 +195,7 @@ class _NotificationSettingsPageState
   }
 
   Color _parseColor(String? hex, GlobalThemeColors colors) {
-    if (hex == null || hex.isEmpty) return colors.onSurfaceVariant;
-    final cleaned = hex.replaceFirst('#', '');
-    final value = int.tryParse(cleaned, radix: 16);
-    if (value == null) return colors.onSurfaceVariant;
-    return Color(0xFF000000 | value);
+    return parseHexColor(hex, colors.onSurfaceVariant);
   }
 
   IconData _iconFromString(String? name) {

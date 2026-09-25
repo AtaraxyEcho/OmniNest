@@ -12,5 +12,8 @@ abstract final class AppErrorCodes {
   static const unnamedResource = 'UNNAMED_RESOURCE';
   static const uploadUrlMissing = 'UPLOAD_URL_MISSING';
   static const securityScanFailed = 'SECURITY_SCAN_FAILED';
+  static const passwordInvalid = 'PASSWORD_INVALID';
+  static const oldPasswordInvalid = 'OLD_PASSWORD_INVALID';
+  static const sharePasswordRequired = 'SHARE_PASSWORD_REQUIRED';
   static const other = 'OTHER';
 }

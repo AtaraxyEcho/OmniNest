@@ -251,7 +251,9 @@ class _WeatherScenePainter extends CustomPainter {
           ..lineTo(size.width * 0.57, size.height * 0.39);
     final paint =
         Paint()
-          ..color = const Color(0xFFE6F2FF).withValues(alpha: opacity)
+          ..color = WeatherDetailChromeColors.lightning.withValues(
+            alpha: opacity,
+          )
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round

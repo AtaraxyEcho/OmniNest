@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/files/data/file_api_response_parser.dart';
@@ -16,7 +17,8 @@ class FileApi {
   FileApi(this.apiClient, {Dio? uploadDio}) : _uploadDio = uploadDio ?? Dio();
 
   static const String _binaryContentType = 'application/octet-stream';
-  static const int _textPreviewMaxBytes = 1024 * 1024;
+  static const int _textPreviewMaxBytes =
+      FileSizeThresholds.textPreviewMaxBytes;
   static const Duration _externalStorageTimeout = Duration(seconds: 15);
   static const FileApiResponseParser _responseParser = FileApiResponseParser();
 

@@ -214,6 +214,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           final extra = state.extra as Map<String, dynamic>? ?? {};
           final photos = (extra['photos'] as List<PhotoItem>?) ?? [];
           final initialIndex = extra['initialIndex'] as int? ?? 0;
+          final initialPhotoId = extra['initialPhotoId'] as String?;
           final source =
               extra['source'] as PhotoBrowseSource? ??
               PhotoBrowseSource.library;
@@ -229,6 +230,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 source: source,
                 sourceKey: sourceKey,
                 initialIndex: initialIndex,
+                initialPhotoId: initialPhotoId,
               ),
             ),
           );

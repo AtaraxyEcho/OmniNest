@@ -563,7 +563,7 @@ class _PortalCoverEntryButton extends StatelessWidget {
                         ? Icons.graphic_eq_rounded
                         : Icons.open_in_new_rounded,
                     size: 18,
-                    color: const Color(0xEBFFFFFF),
+                    color: PhotosChromeColors.whiteEB,
                   ),
                 ),
               ),

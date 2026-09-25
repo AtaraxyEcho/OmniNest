@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 
@@ -75,7 +76,9 @@ class _MovieRedesignCollectionCardState
                         cacheKey: 'movie-collection:${data.name}',
                       ),
                     ),
-                    const ColoredBox(color: Color(0x4D000000)),
+                    const ColoredBox(
+                      color: MovieChromeColors.collectionCardScrim,
+                    ),
                   ],
                 ),
               ),

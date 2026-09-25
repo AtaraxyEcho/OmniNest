@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 
 /// 新版细进度条：2px 高，海报纸底部与继续观看卡片共用。
 class MovieRedesignProgressBar extends StatelessWidget {
   const MovieRedesignProgressBar({
     required this.value,
-    this.trackColor = const Color(0x66000000),
+    this.trackColor = MovieChromeColors.progressTrack,
     super.key,
   });
 

@@ -214,11 +214,11 @@ extension _MoviePlayerPageTracks on _MoviePlayerPageState {
           AppLocalizations.of(context).videoCompatibleAudioNotice,
           style: const TextStyle(color: Colors.white),
         ),
-        backgroundColor: const Color(0xFF2A2A36),
+        backgroundColor: MovieChromeColors.trackChipBackground,
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
           label: AppLocalizations.of(context).videoGotIt,
-          textColor: const Color(0xFFC3C0FF),
+          textColor: MovieChromeColors.trackChipText,
           onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
         ),
       ),

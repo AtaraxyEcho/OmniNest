@@ -45,4 +45,18 @@ void main() {
     expect(message.message, 'NETWORK_ERROR');
     expect(message.code, 'NETWORK_ERROR');
   });
+
+  test('formats dio transform timeout as request timeout', () {
+    final message = describeUserFacingError(
+      DioException(
+        requestOptions: RequestOptions(path: '/files'),
+        type: DioExceptionType.transformTimeout,
+        message: 'transforming timeout',
+      ),
+    );
+
+    // transformTimeout 与其它超时类型一致，message 为稳定错误码 NETWORK_TIMEOUT。
+    expect(message.message, 'NETWORK_TIMEOUT');
+    expect(message.code, 'REQUEST_TIMEOUT');
+  });
 }

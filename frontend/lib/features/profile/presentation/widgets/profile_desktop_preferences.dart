@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/utils/color_value.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
 import 'package:omninest/features/notifications/domain/notification_preferences.dart';
 import 'package:omninest/features/notifications/domain/notification_type.dart';
@@ -268,13 +269,7 @@ class _ProfileNotificationSettingsCardState
   }
 
   Color _parseColor(String? hex, BuildContext context) {
-    if (hex == null || hex.isEmpty) {
-      return context.globalColors.onSurfaceVariant;
-    }
-    final value = int.tryParse(hex.replaceFirst('#', ''), radix: 16);
-    return value == null
-        ? context.globalColors.onSurfaceVariant
-        : Color(0xFF000000 | value);
+    return parseHexColor(hex, context.globalColors.onSurfaceVariant);
   }
 
   IconData _iconFromString(String? name) {

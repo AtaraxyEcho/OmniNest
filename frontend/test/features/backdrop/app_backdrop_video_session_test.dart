@@ -10,11 +10,11 @@ void main() {
 
   group('AppBackdropVideoSession.configure', () {
     late ProviderContainer container;
-    late AppBackdropVideoSession session;
+    late AppBackdropVideoSessionNotifier notifier;
 
     setUp(() {
       container = ProviderContainer();
-      session = container.read(appBackdropVideoSessionProvider);
+      notifier = container.read(appBackdropVideoSessionProvider.notifier);
     });
 
     tearDown(() {
@@ -26,42 +26,58 @@ void main() {
       const signedA = '$base?X-Amz-Signature=aaa';
       const signedB = '$base?X-Amz-Signature=bbb';
 
-      session.configure(path: signedA, muted: true, active: true);
-      final generationAfterFirst = session.generation;
-      expect(session.sourceIdentity, base);
+      notifier.configure(path: signedA, muted: true, active: true);
+      final generationAfterFirst =
+          container.read(appBackdropVideoSessionProvider).generation;
+      expect(
+        container.read(appBackdropVideoSessionProvider).sourceIdentity,
+        base,
+      );
 
-      session.configure(path: signedB, muted: true, active: true);
+      notifier.configure(path: signedB, muted: true, active: true);
 
-      expect(session.generation, generationAfterFirst);
-      expect(session.sourceIdentity, base);
+      expect(
+        container.read(appBackdropVideoSessionProvider).generation,
+        generationAfterFirst,
+      );
+      expect(
+        container.read(appBackdropVideoSessionProvider).sourceIdentity,
+        base,
+      );
     });
 
     test('资源身份变化会递增 generation', () {
-      session.configure(
+      notifier.configure(
         path: 'http://localhost:9000/a/original.mp4?sig=1',
         muted: true,
         active: true,
       );
-      final first = session.generation;
+      final first = container.read(appBackdropVideoSessionProvider).generation;
 
-      session.configure(
+      notifier.configure(
         path: 'http://localhost:9000/b/original.mp4?sig=1',
         muted: true,
         active: true,
       );
 
-      expect(session.generation, greaterThan(first));
-      expect(session.sourceIdentity, 'http://localhost:9000/b/original.mp4');
+      expect(
+        container.read(appBackdropVideoSessionProvider).generation,
+        greaterThan(first),
+      );
+      expect(
+        container.read(appBackdropVideoSessionProvider).sourceIdentity,
+        'http://localhost:9000/b/original.mp4',
+      );
     });
   });
 
   group('AppBackdropVideoSession.renderable', () {
     late ProviderContainer container;
-    late AppBackdropVideoSession session;
+    late AppBackdropVideoSessionNotifier notifier;
 
     setUp(() {
       container = ProviderContainer();
-      session = container.read(appBackdropVideoSessionProvider);
+      notifier = container.read(appBackdropVideoSessionProvider.notifier);
     });
 
     tearDown(() {
@@ -69,21 +85,29 @@ void main() {
     });
 
     test('后台恢复宽限期内保持纹理，位置未推进再回落海报', () async {
-      expect(session.renderable, isTrue, reason: '初始纹理有效');
-
-      session.updateLifecycleState(AppLifecycleState.hidden);
       expect(
-        session.renderable,
+        container.read(appBackdropVideoSessionProvider).renderable,
+        isTrue,
+        reason: '初始纹理有效',
+      );
+
+      notifier.updateLifecycleState(AppLifecycleState.hidden);
+      expect(
+        container.read(appBackdropVideoSessionProvider).renderable,
         isTrue,
         reason: '后台不可见，保留 renderable，避免恢复瞬间先闪海报',
       );
 
-      session.updateLifecycleState(AppLifecycleState.resumed);
-      expect(session.renderable, isTrue, reason: '恢复宽限期内保持当前纹理可见');
+      notifier.updateLifecycleState(AppLifecycleState.resumed);
+      expect(
+        container.read(appBackdropVideoSessionProvider).renderable,
+        isTrue,
+        reason: '恢复宽限期内保持当前纹理可见',
+      );
 
       await Future<void>.delayed(const Duration(milliseconds: 400));
       expect(
-        session.renderable,
+        container.read(appBackdropVideoSessionProvider).renderable,
         isFalse,
         reason: '宽限期结束且无播放位置推进时回落海报，等待解码帧或重开',
       );

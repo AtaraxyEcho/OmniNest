@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_player_controls.dart';
 
@@ -31,10 +32,7 @@ class MoviePlayerTopBar extends StatelessWidget {
       child: DecoratedBox(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [
-              Color(0xC7000000), // black 0.78
-              Colors.transparent,
-            ],
+            colors: [MovieChromeColors.playerTopBarScrim, Colors.transparent],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),

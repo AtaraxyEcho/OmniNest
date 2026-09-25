@@ -1,5 +1,6 @@
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:flutter/material.dart';
@@ -110,7 +111,7 @@ class ContinueCard extends StatelessWidget {
                     const Center(
                       child: Icon(
                         Icons.play_circle_fill_rounded,
-                        color: Color(0xE6FFFFFF),
+                        color: MovieChromeColors.continueLabelOnImage,
                         size: 48,
                       ),
                     ),

@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/errors/error_codes.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/profile/application/profile_controller.dart';
 
 /// 修改密码对话框。
@@ -174,8 +176,9 @@ class _ChangePasswordDialogState extends ConsumerState<ChangePasswordDialog> {
       }
     } catch (e) {
       if (mounted) {
+        final code = describeUserFacingError(e).code;
         final message =
-            e.toString().contains('原密码错误')
+            code == AppErrorCodes.oldPasswordInvalid
                 ? l10n.changePasswordWrongOld
                 : l10n.changePasswordFailed;
         ScaffoldMessenger.of(

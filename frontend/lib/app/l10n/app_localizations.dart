@@ -1658,6 +1658,48 @@ abstract class AppLocalizations {
   /// **'Clear'**
   String get coreClear;
 
+  /// No description provided for @coreUnknownDate.
+  ///
+  /// In en, this message translates to:
+  /// **'Unknown date'**
+  String get coreUnknownDate;
+
+  /// No description provided for @coreUndetermined.
+  ///
+  /// In en, this message translates to:
+  /// **'Undetermined'**
+  String get coreUndetermined;
+
+  /// No description provided for @videoSubtitleLangZh.
+  ///
+  /// In en, this message translates to:
+  /// **'Chinese'**
+  String get videoSubtitleLangZh;
+
+  /// No description provided for @videoSubtitleLangEn.
+  ///
+  /// In en, this message translates to:
+  /// **'English'**
+  String get videoSubtitleLangEn;
+
+  /// No description provided for @videoSubtitleLangJa.
+  ///
+  /// In en, this message translates to:
+  /// **'Japanese'**
+  String get videoSubtitleLangJa;
+
+  /// No description provided for @videoSubtitleLangKo.
+  ///
+  /// In en, this message translates to:
+  /// **'Korean'**
+  String get videoSubtitleLangKo;
+
+  /// No description provided for @videoSubtitleLangUnd.
+  ///
+  /// In en, this message translates to:
+  /// **'Undetermined'**
+  String get videoSubtitleLangUnd;
+
   /// No description provided for @coreChooseDate.
   ///
   /// In en, this message translates to:
@@ -12833,6 +12875,12 @@ abstract class AppLocalizations {
   /// **'Saved to {path}'**
   String photosDownloadSaved(Object path);
 
+  /// No description provided for @photosExportShared.
+  ///
+  /// In en, this message translates to:
+  /// **'System share opened — save to Photos or another app'**
+  String get photosExportShared;
+
   /// No description provided for @photosDownloadSourceUnavailable.
   ///
   /// In en, this message translates to:
@@ -14327,12 +14375,6 @@ abstract class AppLocalizations {
   /// **'Recently played'**
   String get musicDeckRecent;
 
-  /// No description provided for @musicDeckOffline.
-  ///
-  /// In en, this message translates to:
-  /// **'Offline'**
-  String get musicDeckOffline;
-
   /// No description provided for @musicDeckLocalManagement.
   ///
   /// In en, this message translates to:
@@ -14668,18 +14710,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Local playlist'**
   String get musicDeckLocalPlaylist;
-
-  /// No description provided for @musicDeckOfflineSubtitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Manage content downloaded to this device for offline playback.'**
-  String get musicDeckOfflineSubtitle;
-
-  /// No description provided for @musicDeckOfflineEmpty.
-  ///
-  /// In en, this message translates to:
-  /// **'No music is available offline yet. Downloads will appear after download management is connected.'**
-  String get musicDeckOfflineEmpty;
 
   /// No description provided for @musicDeckRetry.
   ///
@@ -18159,6 +18189,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Enter share password'**
   String get errorNeedPassword;
+
+  /// No description provided for @errorPasswordInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect password'**
+  String get errorPasswordInvalid;
+
+  /// No description provided for @errorOldPasswordInvalid.
+  ///
+  /// In en, this message translates to:
+  /// **'Incorrect current password'**
+  String get errorOldPasswordInvalid;
 
   /// No description provided for @errorShareSessionInvalid.
   ///

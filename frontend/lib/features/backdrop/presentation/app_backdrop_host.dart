@@ -5,6 +5,7 @@ import 'package:omninest/features/backdrop/application/app_backdrop_scene_contro
 import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_surface.dart';
+import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 
 /// 在路由内容下方承载唯一应用背景实例。
 class AppBackdropHost extends ConsumerWidget {
@@ -105,24 +106,24 @@ class _AppBackdropReadabilityLayer extends StatelessWidget {
         Colors.transparent,
       ],
       AppBackdropReadabilityMode.minimal => const <Color>[
-        Color(0x12000000),
-        Color(0x05000000),
-        Color(0x18000000),
+        BackdropScrimColors.minimalTop,
+        BackdropScrimColors.minimalMid,
+        BackdropScrimColors.minimalBottom,
       ],
       AppBackdropReadabilityMode.content => const <Color>[
-        Color(0x40000000),
-        Color(0x12000000),
-        Color(0x4D000000),
+        BackdropScrimColors.contentTop,
+        BackdropScrimColors.contentMid,
+        BackdropScrimColors.contentBottom,
       ],
       AppBackdropReadabilityMode.work => const <Color>[
-        Color(0xEB000000),
-        Color(0xE0000000),
-        Color(0xF0000000),
+        BackdropScrimColors.workTop,
+        BackdropScrimColors.workMid,
+        BackdropScrimColors.workBottom,
       ],
       AppBackdropReadabilityMode.immersive => const <Color>[
-        Color(0x26000000),
-        Color(0x08000000),
-        Color(0x33000000),
+        BackdropScrimColors.immersiveTop,
+        BackdropScrimColors.immersiveMid,
+        BackdropScrimColors.immersiveBottom,
       ],
     };
     return IgnorePointer(

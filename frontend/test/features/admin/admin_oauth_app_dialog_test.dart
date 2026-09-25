@@ -183,12 +183,12 @@ void main() {
                   AdminMonitoringComponent(
                     name: 'PostgreSQL',
                     status: 'UP',
-                    detail: <String, dynamic>{'状态': 'UP'},
+                    detail: <String, String>{'状态': 'UP'},
                   ),
                   AdminMonitoringComponent(
                     name: 'ClamAV',
                     status: 'WARN',
-                    detail: <String, dynamic>{'状态': 'WARN'},
+                    detail: <String, String>{'状态': 'WARN'},
                   ),
                 ],
               ),

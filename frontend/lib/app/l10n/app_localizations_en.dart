@@ -858,6 +858,27 @@ class AppLocalizationsEn extends AppLocalizations {
   String get coreClear => 'Clear';
 
   @override
+  String get coreUnknownDate => 'Unknown date';
+
+  @override
+  String get coreUndetermined => 'Undetermined';
+
+  @override
+  String get videoSubtitleLangZh => 'Chinese';
+
+  @override
+  String get videoSubtitleLangEn => 'English';
+
+  @override
+  String get videoSubtitleLangJa => 'Japanese';
+
+  @override
+  String get videoSubtitleLangKo => 'Korean';
+
+  @override
+  String get videoSubtitleLangUnd => 'Undetermined';
+
+  @override
   String get coreChooseDate => 'Choose date';
 
   @override
@@ -7024,6 +7045,10 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get photosExportShared =>
+      'System share opened — save to Photos or another app';
+
+  @override
   String get photosDownloadSourceUnavailable =>
       'Original file is unavailable for download';
 
@@ -7814,9 +7839,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get musicDeckRecent => 'Recently played';
 
   @override
-  String get musicDeckOffline => 'Offline';
-
-  @override
   String get musicDeckLocalManagement => 'Local resources';
 
   @override
@@ -8011,14 +8033,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get musicDeckLocalPlaylist => 'Local playlist';
-
-  @override
-  String get musicDeckOfflineSubtitle =>
-      'Manage content downloaded to this device for offline playback.';
-
-  @override
-  String get musicDeckOfflineEmpty =>
-      'No music is available offline yet. Downloads will appear after download management is connected.';
 
   @override
   String get musicDeckRetry => 'Retry';
@@ -9951,6 +9965,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get errorNeedPassword => 'Enter share password';
+
+  @override
+  String get errorPasswordInvalid => 'Incorrect password';
+
+  @override
+  String get errorOldPasswordInvalid => 'Incorrect current password';
 
   @override
   String get errorShareSessionInvalid => 'Invalid share session';

@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/search/data/search_api.dart';
@@ -29,28 +30,42 @@ final searchResultsProvider = AsyncNotifierProvider.autoDispose<
 class SearchResultsNotifier extends AsyncNotifier<List<SearchResult>> {
   int _generation = 0;
   List<SearchResult> _lastResults = const [];
+  CancelToken? _cancelToken;
 
   @override
   Future<List<SearchResult>> build() async {
     final query = ref.watch(searchQueryProvider).trim();
     final generation = ++_generation;
+    _cancelToken?.cancel();
+    _cancelToken = null;
+    ref.onDispose(() => _cancelToken?.cancel());
     if (query.isEmpty) {
       _lastResults = const [];
       return _lastResults;
     }
     // 每个字符都打一次搜索接口会放大后端压力，并让旧响应有机会覆盖新结果；
-    // 去抖后仍以 generation 丢弃过期响应。
+    // 去抖后仍以 generation 丢弃过期响应，CancelToken 取消底层请求。
     await Future<void>.delayed(const Duration(milliseconds: 300));
     if (generation != _generation) {
       return _lastResults;
     }
+    final cancelToken = CancelToken();
+    _cancelToken = cancelToken;
     final api = ref.read(searchApiProvider);
-    final results = await api.search(query);
-    if (generation != _generation) {
-      return _lastResults;
+    try {
+      final results = await api.search(query, cancelToken: cancelToken);
+      if (generation != _generation) {
+        return _lastResults;
+      }
+      _lastResults = results;
+      return results;
+    } on Exception catch (error) {
+      if (error is DioException && CancelToken.isCancel(error) ||
+          generation != _generation) {
+        return _lastResults;
+      }
+      rethrow;
     }
-    _lastResults = results;
-    return results;
   }
 
   Future<void> search(String query) async {

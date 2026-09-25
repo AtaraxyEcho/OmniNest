@@ -408,6 +408,10 @@ class _AudioPlayerBodyState extends State<_AudioPlayerBody> {
 
 enum MediaPreviewLoadState { loading, ready, failed }
 
+/// 预览打开进度的 Widget 本地编排器。
+///
+/// 仅承载 presentation 层 loading/ready/failed 与 generation 防串台，
+/// 不持有业务领域状态；按 AGENTS 属于页面私有短生命周期控制。
 class MediaPreviewLoadController extends ChangeNotifier {
   MediaPreviewLoadController({required this.opener});
 

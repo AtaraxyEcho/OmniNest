@@ -145,9 +145,8 @@ class _ProfileAboutPanelState extends ConsumerState<ProfileAboutPanel> {
   }
 
   Future<void> _openDownloadPage(String url) async {
-    // Web 经条件导入新开下载页；桌面/移动展示地址。
-    if (kIsWeb) {
-      openDownloadUrl(url);
+    // Web 经条件导入新开下载页；弹窗拦截时退回展示地址。
+    if (kIsWeb && openDownloadUrl(url)) {
       return;
     }
     if (mounted) {

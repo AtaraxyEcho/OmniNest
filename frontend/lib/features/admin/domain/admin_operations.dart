@@ -325,10 +325,7 @@ class AdminMonitoringView {
   factory AdminMonitoringView.fromJson(Map<String, dynamic> json) {
     return AdminMonitoringView(
       overview: AdminMonitoringOverview.fromJson(_map(json['overview'])),
-      components:
-          _list(
-            json['components'],
-          ).map(AdminMonitoringComponent.fromJson).toList(),
+      components: const [],
       alerts: _list(json['alerts']).map(AdminMonitoringAlert.fromJson).toList(),
       auditRecent:
           _list(json['auditRecent']).map(AdminAuditLog.fromJson).toList(),
@@ -347,6 +344,18 @@ class AdminMonitoringView {
   final List<AdminMonitoringSeries> series;
   final List<AdminHealthItem> health;
   final List<AdminMonitoringMetric> metrics;
+
+  AdminMonitoringView copyWith({List<AdminMonitoringComponent>? components}) {
+    return AdminMonitoringView(
+      overview: overview,
+      components: components ?? this.components,
+      alerts: alerts,
+      auditRecent: auditRecent,
+      series: series,
+      health: health,
+      metrics: metrics,
+    );
+  }
 }
 
 class AdminMonitoringOverview {
@@ -405,17 +414,11 @@ class AdminMonitoringComponent {
     required this.detail,
   });
 
-  factory AdminMonitoringComponent.fromJson(Map<String, dynamic> json) {
-    return AdminMonitoringComponent(
-      name: json['name']?.toString() ?? '',
-      status: json['status']?.toString() ?? 'UNKNOWN',
-      detail: _dynamicMap(json['detail']),
-    );
-  }
-
   final String name;
   final String status;
-  final Map<String, dynamic> detail;
+
+  /// 组件诊断键值，值在数据层已统一为字符串。
+  final Map<String, String> detail;
 }
 
 class AdminMonitoringAlert {
@@ -840,13 +843,6 @@ List<Map<String, dynamic>> _list(Object? value) {
 
 Map<String, dynamic> _map(Object? value) {
   return value is Map<String, dynamic> ? value : <String, dynamic>{};
-}
-
-Map<String, dynamic> _dynamicMap(Object? value) {
-  if (value is! Map) {
-    return const {};
-  }
-  return value.map((key, value) => MapEntry(key.toString(), value));
 }
 
 List<String> _strings(Object? value) {

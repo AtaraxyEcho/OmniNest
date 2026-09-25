@@ -163,7 +163,7 @@ void main() {
     });
 
     expect(view.overview.queueDepth, 27);
-    expect(view.components.single.detail['activeConnections'], 8);
+    expect(view.components.single.detail['activeConnections'], '8');
     expect(view.alerts.single.severity, 'WARNING');
     expect(view.auditRecent.single.action, 'LOGIN');
     expect(view.series.single.points.last.value, 12.4);

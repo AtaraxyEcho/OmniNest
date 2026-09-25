@@ -149,7 +149,8 @@ class ShareApi implements PublicShareRepository {
     return switch (exception.type) {
       DioExceptionType.connectionTimeout ||
       DioExceptionType.sendTimeout ||
-      DioExceptionType.receiveTimeout => AppErrorCodes.networkTimeout,
+      DioExceptionType.receiveTimeout ||
+      DioExceptionType.transformTimeout => AppErrorCodes.networkTimeout,
       _ => AppErrorCodes.networkError,
     };
   }

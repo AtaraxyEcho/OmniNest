@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/feature/residual_chrome_colors.dart';
 
 /// Portal Hero 区域的单行省略标题。
 class PortalHeroEllipsizedTitle extends StatelessWidget {
@@ -38,7 +39,7 @@ class PortalHeroEllipsizedTitle extends StatelessWidget {
           verticalOffset: 12,
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
           decoration: BoxDecoration(
-            color: const Color(0xF21A2228),
+            color: PortalHeroColors.titleBackdrop,
             borderRadius: BorderRadius.circular(6),
             border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
           ),

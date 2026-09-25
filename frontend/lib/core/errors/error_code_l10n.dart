@@ -19,7 +19,12 @@ extension AppErrorCodeL10n on AppLocalizations {
       case AppErrorCodes.unknown:
         return errorUnknown;
       case AppErrorCodes.needPassword:
+      case AppErrorCodes.sharePasswordRequired:
         return errorNeedPassword;
+      case AppErrorCodes.passwordInvalid:
+        return errorPasswordInvalid;
+      case AppErrorCodes.oldPasswordInvalid:
+        return errorOldPasswordInvalid;
       case AppErrorCodes.shareSessionInvalid:
         return errorShareSessionInvalid;
       case AppErrorCodes.unnamedFile:

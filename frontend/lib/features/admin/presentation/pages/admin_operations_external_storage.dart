@@ -435,7 +435,7 @@ class _EmptyText extends StatelessWidget {
   }
 }
 
-String _detailText(Map<String, dynamic> detail, AppLocalizations l10n) {
+String _detailText(Map<String, String> detail, AppLocalizations l10n) {
   if (detail.isEmpty) {
     return l10n.adminNoDetailDiagnostics;
   }

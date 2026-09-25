@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
 import 'package:omninest/features/search/application/search_controller.dart';
 import 'package:omninest/features/search/domain/search_result.dart';
@@ -47,13 +47,8 @@ class _SearchPageState extends ConsumerState<SearchPage> {
         foregroundColor: context.mobileColors.textPrimary,
         leading: IconButton(
           icon: Icon(Icons.arrow_back_rounded),
-          onPressed: () {
-            if (context.canPop()) {
-              context.pop();
-            } else {
-              context.go('/portal');
-            }
-          },
+          tooltip: l10n.coreBack,
+          onPressed: () => exitDetailRoute(context, fallbackRoute: '/portal'),
         ),
         title: Text(
           l10n.searchTitle,
@@ -91,6 +86,7 @@ class _SearchPageState extends ConsumerState<SearchPage> {
                         _controller.text.isNotEmpty
                             ? IconButton(
                               icon: Icon(Icons.clear_rounded),
+                              tooltip: l10n.coreClear,
                               onPressed: () {
                                 _controller.clear();
                                 ref.read(searchQueryProvider.notifier).clear();

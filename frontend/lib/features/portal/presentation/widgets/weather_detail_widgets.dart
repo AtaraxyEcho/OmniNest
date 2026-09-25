@@ -180,10 +180,10 @@ class _MetricCell extends StatelessWidget {
 Widget _buildUvBar(int value) {
   final pct = (value / 11).clamp(0.0, 1.0);
   final color = switch (value) {
-    <= 2 => const Color(0xFF4ADE80),
-    <= 5 => const Color(0xFFFACC15),
-    <= 7 => const Color(0xFFFB923C),
-    _ => const Color(0xFFEF4444),
+    <= 2 => SeverityColors.good,
+    <= 5 => SeverityColors.warning,
+    <= 7 => SeverityColors.caution,
+    _ => SeverityColors.danger,
   };
   return SizedBox(
     height: 6,

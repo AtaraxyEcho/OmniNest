@@ -91,6 +91,7 @@ class ServerProbeClient {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.receiveTimeout:
       case DioExceptionType.sendTimeout:
+      case DioExceptionType.transformTimeout:
         return ServerProbeFailure.timeout;
       case DioExceptionType.connectionError:
         return ServerProbeFailure.unreachable;

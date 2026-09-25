@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:gbk_codec/gbk_codec.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 
-const int maxLocalSubtitleBytes = 2 * 1024 * 1024;
+const int maxLocalSubtitleBytes = FileSizeThresholds.subtitleMaxBytes;
 
 /// 解码本地字幕文件，兼容常见中文和 Unicode 编码。
 String decodeSubtitleFile(Uint8List bytes) {

@@ -8,6 +8,7 @@ import 'package:omninest/features/backdrop/domain/app_backdrop.dart';
 import 'package:omninest/features/backdrop/domain/app_backdrop_policy.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_video_view.dart';
+import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 
 /// 应用级背景渲染层。
 ///
@@ -249,7 +250,10 @@ class _AppBackdropFallback extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF0A1821), Color(0xFF111927)],
+          colors: [
+            BackdropStageColors.surfaceStart,
+            BackdropStageColors.surfaceEnd,
+          ],
         ),
       ),
       child: Center(

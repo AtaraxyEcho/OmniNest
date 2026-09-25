@@ -518,9 +518,15 @@ class _InitialSetupPageState extends ConsumerState<InitialSetupPage> {
                   Expanded(
                     child: AppDropdown<String>(
                       value: _defaultLocale,
-                      items: const [
-                        AppDropdownItem(value: 'zh-CN', label: '中文'),
-                        AppDropdownItem(value: 'en-US', label: 'English'),
+                      items: [
+                        AppDropdownItem(
+                          value: 'zh-CN',
+                          label: l10n.settingsLanguageChinese,
+                        ),
+                        AppDropdownItem(
+                          value: 'en-US',
+                          label: l10n.settingsLanguageEnglish,
+                        ),
                       ],
                       onChanged:
                           (value) => setState(() {
@@ -692,17 +698,20 @@ class _LanguageSwitch extends ConsumerStatefulWidget {
 class _LanguageSwitchState extends ConsumerState<_LanguageSwitch> {
   final MenuController _menu = MenuController();
 
-  static const _languageOptions = <(String, String)>[
-    ('zh', '中文'),
-    ('en', 'English'),
-  ];
+  static const _languageCodes = <String>['zh', 'en'];
+
+  String _languageLabel(AppLocalizations l10n, String code) {
+    return code == 'zh'
+        ? l10n.settingsLanguageChinese
+        : l10n.settingsLanguageEnglish;
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final l10n = AppLocalizations.of(context);
     final language = ref.watch(localeControllerProvider);
-    final currentLabel =
-        _languageOptions.firstWhere((option) => option.$1 == language).$2;
+    final currentLabel = _languageLabel(l10n, language);
     return MenuAnchor(
       controller: _menu,
       useRootOverlay: true,
@@ -722,7 +731,7 @@ class _LanguageSwitchState extends ConsumerState<_LanguageSwitch> {
         minimumSize: const WidgetStatePropertyAll(Size(120, 0)),
       ),
       menuChildren: [
-        for (final (code, label) in _languageOptions)
+        for (final code in _languageCodes)
           MenuItemButton(
             onPressed: () {
               _menu.close();
@@ -754,7 +763,7 @@ class _LanguageSwitchState extends ConsumerState<_LanguageSwitch> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  label,
+                  _languageLabel(l10n, code),
                   style: TextStyle(
                     color: code == language ? colors.primary : colors.onSurface,
                     fontWeight:

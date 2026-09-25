@@ -11,6 +11,7 @@ import 'package:omninest/features/backdrop/presentation/app_backdrop_controls.da
 import 'package:omninest/features/backdrop/presentation/app_backdrop_drop_surface.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_image.dart';
 import 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
+import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 
 export 'package:omninest/features/backdrop/presentation/app_backdrop_palette.dart';
 
@@ -895,7 +896,10 @@ class _BackdropVideoPlaceholder extends StatelessWidget {
         gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF0B1720), Color(0xFF162234)],
+          colors: [
+            BackdropStageColors.panelStart,
+            BackdropStageColors.panelEnd,
+          ],
         ),
       ),
       child: Center(

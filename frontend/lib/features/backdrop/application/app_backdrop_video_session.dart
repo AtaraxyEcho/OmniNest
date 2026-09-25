@@ -7,16 +7,90 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
-final appBackdropVideoSessionProvider = Provider<AppBackdropVideoSession>((
-  ref,
-) {
-  final session = AppBackdropVideoSession._();
-  ref.onDispose(session.dispose);
-  return session;
-});
+final appBackdropVideoSessionProvider =
+    NotifierProvider<AppBackdropVideoSessionNotifier, AppBackdropVideoState>(
+      AppBackdropVideoSessionNotifier.new,
+    );
 
-/// 应用动态背景视频播放会话。
-class AppBackdropVideoSession extends ChangeNotifier {
+/// 应用背景视频会话可观察状态。
+class AppBackdropVideoState {
+  const AppBackdropVideoState({
+    this.controller,
+    this.renderable = true,
+    this.openError,
+    this.opening = false,
+    this.generation = 0,
+    this.sourceIdentity = '',
+    this.diagnostics,
+  });
+
+  final VideoController? controller;
+  final bool renderable;
+  final Object? openError;
+  final bool opening;
+  final int generation;
+  final String sourceIdentity;
+  final AppBackdropVideoDiagnostics? diagnostics;
+
+  bool get ready => controller != null;
+
+  AppBackdropVideoState copyWith({
+    VideoController? controller,
+    bool? renderable,
+    Object? openError,
+    bool? opening,
+    int? generation,
+    String? sourceIdentity,
+    AppBackdropVideoDiagnostics? diagnostics,
+  }) {
+    return AppBackdropVideoState(
+      controller: controller ?? this.controller,
+      renderable: renderable ?? this.renderable,
+      openError: openError ?? this.openError,
+      opening: opening ?? this.opening,
+      generation: generation ?? this.generation,
+      sourceIdentity: sourceIdentity ?? this.sourceIdentity,
+      diagnostics: diagnostics ?? this.diagnostics,
+    );
+  }
+}
+
+class AppBackdropVideoSessionNotifier extends Notifier<AppBackdropVideoState> {
+  AppBackdropVideoSessionNotifier() : _session = AppBackdropVideoSession._();
+
+  final AppBackdropVideoSession _session;
+
+  @override
+  AppBackdropVideoState build() {
+    ref.onDispose(_session.dispose);
+    _session._onStateChanged = () => state = _session._snapshot();
+    return _session._snapshot();
+  }
+
+  void configure({
+    required String? path,
+    required bool muted,
+    required bool active,
+  }) {
+    _session.configure(path: path, muted: muted, active: active);
+  }
+
+  void setLayoutUsable(bool usable) => _session.setLayoutUsable(usable);
+
+  void updateLifecycleState(AppLifecycleState lifecycleState) {
+    _session.updateLifecycleState(lifecycleState);
+  }
+
+  void retry() => _session.retry();
+
+  static void retryPath(String path) => AppBackdropVideoSession.retryPath(path);
+
+  static String sourceIdentityOf(String path) =>
+      AppBackdropVideoSession.sourceIdentityOf(path);
+}
+
+/// 应用动态背景视频播放会话内部实现。
+class AppBackdropVideoSession {
   AppBackdropVideoSession._();
 
   static const int _maxOpenAttempts = 3;
@@ -57,6 +131,7 @@ class AppBackdropVideoSession extends ChangeNotifier {
   int _openAttempts = 0;
   int _successfulOpenCount = 0;
   int _retryCount = 0;
+  void Function()? _onStateChanged;
 
   /// 当前可用于渲染的 video controller。
   VideoController? get controller => _controller;
@@ -602,14 +677,24 @@ class AppBackdropVideoSession extends ChangeNotifier {
 
   void _notifySafely() {
     if (!_disposed) {
-      notifyListeners();
+      _onStateChanged?.call();
     }
   }
 
-  @override
+  AppBackdropVideoState _snapshot() {
+    return AppBackdropVideoState(
+      controller: _controller,
+      renderable: _renderable,
+      openError: _openError,
+      opening: _opening,
+      generation: _generation,
+      sourceIdentity: sourceIdentityOf(_path),
+      diagnostics: diagnostics,
+    );
+  }
+
   void dispose() {
     if (_disposed) {
-      super.dispose();
       return;
     }
     _disposed = true;
@@ -622,7 +707,6 @@ class AppBackdropVideoSession extends ChangeNotifier {
     if (detached != null) {
       unawaited(_disposeDetachedSession(detached));
     }
-    super.dispose();
   }
 }
 

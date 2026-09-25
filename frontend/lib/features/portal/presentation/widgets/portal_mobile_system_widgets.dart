@@ -104,227 +104,6 @@ class _StatItem extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Portal 天气卡片粒子效果 — 淡化版（弹窗效果的 ~30% 强度）
-// ═══════════════════════════════════════════════════════════════════════════════
-
-class _CardAtmosphere {
-  const _CardAtmosphere({required this.tint, required this.particle});
-  final Color tint;
-  final Color particle;
-
-  static const sunny = _CardAtmosphere(
-    tint: Color(0x0CE8A849),
-    particle: Color(0x40F0D68A),
-  );
-  static const partlyCloudy = _CardAtmosphere(
-    tint: Color(0x0A42A5F5),
-    particle: Color(0x30FFFFFF),
-  );
-  static const cloudy = _CardAtmosphere(
-    tint: Color(0x0C607D8B),
-    particle: Color(0x25B0BEC5),
-  );
-  static const rain = _CardAtmosphere(
-    tint: Color(0x101A2332),
-    particle: Color(0x3080CBC4),
-  );
-  static const storm = _CardAtmosphere(
-    tint: Color(0x140D1117),
-    particle: Color(0x2878909C),
-  );
-  static const snow = _CardAtmosphere(
-    tint: Color(0x0C607D8B),
-    particle: Color(0x40FFFFFF),
-  );
-  static const fog = _CardAtmosphere(
-    tint: Color(0x0A78909C),
-    particle: Color(0x20FFFFFF),
-  );
-  static const haze = _CardAtmosphere(
-    tint: Color(0x10737D83),
-    particle: Color(0x30F2F0E8),
-  );
-  static const dust = _CardAtmosphere(
-    tint: Color(0x16816B4C),
-    particle: Color(0x34E9D7A8),
-  );
-  static const heat = _CardAtmosphere(
-    tint: Color(0x10FFD082),
-    particle: Color(0x42FFD25F),
-  );
-  static const cold = _CardAtmosphere(
-    tint: Color(0x109EC8E8),
-    particle: Color(0x46FFFFFF),
-  );
-  static const sunnyNight = _CardAtmosphere(
-    tint: Color(0x140D1B2A),
-    particle: Color(0x55FFFFFF),
-  );
-  static const dawn = _CardAtmosphere(
-    tint: Color(0x149FC7EC),
-    particle: Color(0x50DDEBFF),
-  );
-  static const dusk = _CardAtmosphere(
-    tint: Color(0x18B85C38),
-    particle: Color(0x50FFE1C0),
-  );
-  static const cloudyNight = _CardAtmosphere(
-    tint: Color(0x181A2332),
-    particle: Color(0x42EAF4FF),
-  );
-  static const cloudyDusk = _CardAtmosphere(
-    tint: Color(0x166B5567),
-    particle: Color(0x42FFE0C9),
-  );
-  static const rainNight = _CardAtmosphere(
-    tint: Color(0x1807111D),
-    particle: Color(0x45CFEFFF),
-  );
-  static const rainDusk = _CardAtmosphere(
-    tint: Color(0x183F4254),
-    particle: Color(0x46D6F5FF),
-  );
-  static const stormNight = _CardAtmosphere(
-    tint: Color(0x1C05070D),
-    particle: Color(0x42D6E8FF),
-  );
-  static const snowNight = _CardAtmosphere(
-    tint: Color(0x18243545),
-    particle: Color(0x60FFFFFF),
-  );
-  static const snowDusk = _CardAtmosphere(
-    tint: Color(0x16677083),
-    particle: Color(0x60FFFFFF),
-  );
-  static const fogNight = _CardAtmosphere(
-    tint: Color(0x16283742),
-    particle: Color(0x46FFFFFF),
-  );
-  static const hazeNight = _CardAtmosphere(
-    tint: Color(0x16151B20),
-    particle: Color(0x42E8E6DE),
-  );
-  static const dustNight = _CardAtmosphere(
-    tint: Color(0x18201A14),
-    particle: Color(0x44EAD29A),
-  );
-  static const heatNight = _CardAtmosphere(
-    tint: Color(0x185A3442),
-    particle: Color(0x44FFC36B),
-  );
-  static const coldNight = _CardAtmosphere(
-    tint: Color(0x180A1724),
-    particle: Color(0x60FFFFFF),
-  );
-  static const cloudyDawn = _CardAtmosphere(
-    tint: Color(0x1472899B),
-    particle: Color(0x42DDEBFF),
-  );
-  static const rainDawn = _CardAtmosphere(
-    tint: Color(0x1826374A),
-    particle: Color(0x46D6F5FF),
-  );
-  static const snowDawn = _CardAtmosphere(
-    tint: Color(0x14526A7F),
-    particle: Color(0x60FFFFFF),
-  );
-  static const fogDawn = _CardAtmosphere(
-    tint: Color(0x147C909D),
-    particle: Color(0x4AFFFFFF),
-  );
-  static const hazeDawn = _CardAtmosphere(
-    tint: Color(0x147E8B91),
-    particle: Color(0x44F5F0E7),
-  );
-  static const dustDawn = _CardAtmosphere(
-    tint: Color(0x16927B56),
-    particle: Color(0x46F1DCA5),
-  );
-  static const heatDawn = _CardAtmosphere(
-    tint: Color(0x14FFC98A),
-    particle: Color(0x46FFD680),
-  );
-  static const coldDawn = _CardAtmosphere(
-    tint: Color(0x148DB7D5),
-    particle: Color(0x60FFFFFF),
-  );
-  static const fogDusk = _CardAtmosphere(
-    tint: Color(0x14A89080),
-    particle: Color(0x45FFFFFF),
-  );
-  static const hazeDusk = _CardAtmosphere(
-    tint: Color(0x16504A50),
-    particle: Color(0x45FFF4E8),
-  );
-  static const dustDusk = _CardAtmosphere(
-    tint: Color(0x185B3F2D),
-    particle: Color(0x48F3D28F),
-  );
-  static const heatDusk = _CardAtmosphere(
-    tint: Color(0x18B35E49),
-    particle: Color(0x48FFC973),
-  );
-  static const coldDusk = _CardAtmosphere(
-    tint: Color(0x1633465A),
-    particle: Color(0x60FFFFFF),
-  );
-
-  static _CardAtmosphere forScene(
-    WeatherScene s,
-    PortalWeatherProfile profile,
-  ) => switch (profile.time) {
-    PortalWeatherTime.night => switch (s) {
-      WeatherScene.sunny => sunnyNight,
-      WeatherScene.partlyCloudy || WeatherScene.cloudy => cloudyNight,
-      WeatherScene.rain => rainNight,
-      WeatherScene.storm => stormNight,
-      WeatherScene.snow => snowNight,
-      WeatherScene.fog => fogNight,
-      WeatherScene.haze => hazeNight,
-      WeatherScene.dust => dustNight,
-      WeatherScene.heat => heatNight,
-      WeatherScene.cold => coldNight,
-    },
-    PortalWeatherTime.dawn => switch (s) {
-      WeatherScene.sunny || WeatherScene.partlyCloudy => dawn,
-      WeatherScene.cloudy => cloudyDawn,
-      WeatherScene.rain => rainDawn,
-      WeatherScene.storm => stormNight,
-      WeatherScene.snow => snowDawn,
-      WeatherScene.fog => fogDawn,
-      WeatherScene.haze => hazeDawn,
-      WeatherScene.dust => dustDawn,
-      WeatherScene.heat => heatDawn,
-      WeatherScene.cold => coldDawn,
-    },
-    PortalWeatherTime.dusk => switch (s) {
-      WeatherScene.sunny || WeatherScene.partlyCloudy => dusk,
-      WeatherScene.cloudy => cloudyDusk,
-      WeatherScene.rain => rainDusk,
-      WeatherScene.storm => stormNight,
-      WeatherScene.snow => snowDusk,
-      WeatherScene.fog => fogDusk,
-      WeatherScene.haze => hazeDusk,
-      WeatherScene.dust => dustDusk,
-      WeatherScene.heat => heatDusk,
-      WeatherScene.cold => coldDusk,
-    },
-    PortalWeatherTime.day => switch (s) {
-      WeatherScene.sunny => sunny,
-      WeatherScene.partlyCloudy => partlyCloudy,
-      WeatherScene.cloudy => cloudy,
-      WeatherScene.rain => rain,
-      WeatherScene.storm => storm,
-      WeatherScene.snow => snow,
-      WeatherScene.fog => fog,
-      WeatherScene.haze => haze,
-      WeatherScene.dust => dust,
-      WeatherScene.heat => heat,
-      WeatherScene.cold => cold,
-    },
-  };
-}
-
 class _CardParticlePainter extends CustomPainter {
   _CardParticlePainter({required this.weather, required this.elapsed});
 
@@ -336,7 +115,7 @@ class _CardParticlePainter extends CustomPainter {
     final spec = WeatherSceneSpec.from(weather);
     final profile = spec.profile;
     final scene = spec.scene;
-    final atm = _CardAtmosphere.forScene(scene, profile);
+    final atm = WeatherCardAtmosphere.forScene(scene, profile);
 
     canvas.drawRect(Offset.zero & size, Paint()..color = atm.tint);
 
@@ -378,7 +157,7 @@ class _CardParticlePainter extends CustomPainter {
   void _paintRain(
     Canvas canvas,
     Size size,
-    _CardAtmosphere atm, {
+    WeatherCardAtmosphere atm, {
     required double intensity,
     required bool heavy,
     required double wind,
@@ -405,7 +184,7 @@ class _CardParticlePainter extends CustomPainter {
   void _paintSnow(
     Canvas canvas,
     Size size,
-    _CardAtmosphere atm,
+    WeatherCardAtmosphere atm,
     WeatherSceneSpec spec,
   ) {
     final profile = spec.profile;
@@ -462,7 +241,7 @@ class _CardParticlePainter extends CustomPainter {
   void _paintSunGlow(
     Canvas canvas,
     Size size,
-    _CardAtmosphere atm, {
+    WeatherCardAtmosphere atm, {
     required PortalWeatherProfile profile,
     bool dimmed = false,
   }) {
@@ -481,8 +260,12 @@ class _CardParticlePainter extends CustomPainter {
           Paint()
             ..shader = RadialGradient(
               colors: [
-                const Color(0xFFEAF4FF).withValues(alpha: dimmed ? 0.05 : 0.10),
-                const Color(0xFFB4C8E2).withValues(alpha: dimmed ? 0.02 : 0.04),
+                WeatherCardFxColors.nightGlow.withValues(
+                  alpha: dimmed ? 0.05 : 0.10,
+                ),
+                WeatherCardFxColors.nightGlowSoft.withValues(
+                  alpha: dimmed ? 0.02 : 0.04,
+                ),
                 Colors.transparent,
               ],
             ).createShader(Rect.fromCircle(center: c, radius: r));
@@ -496,9 +279,9 @@ class _CardParticlePainter extends CustomPainter {
     }
     final glowColor =
         profile.isDawn
-            ? const Color(0xFFDDEBFF)
+            ? WeatherCardFxColors.dawnGlow
             : profile.isDusk
-            ? const Color(0xFFFFC59A)
+            ? WeatherCardFxColors.duskGlow
             : atm.particle;
     final p =
         Paint()
@@ -516,18 +299,18 @@ class _CardParticlePainter extends CustomPainter {
   void _paintClouds(
     Canvas canvas,
     Size size,
-    _CardAtmosphere atm,
+    WeatherCardAtmosphere atm,
     int count, {
     required PortalWeatherProfile profile,
   }) {
     final p = Paint();
     final cloudColor =
         profile.isNight
-            ? const Color(0xFFEAF4FF).withValues(alpha: 0.42)
+            ? WeatherCardFxColors.nightGlow.withValues(alpha: 0.42)
             : profile.isDawn
-            ? const Color(0xFFDDEBFF).withValues(alpha: 0.42)
+            ? WeatherCardFxColors.dawnGlow.withValues(alpha: 0.42)
             : profile.isDusk
-            ? const Color(0xFFFFE0C9).withValues(alpha: 0.42)
+            ? WeatherCardFxColors.duskCloud.withValues(alpha: 0.42)
             : atm.particle;
     for (var i = 0; i < count; i++) {
       final depth = 0.46 + _cardUnit(i * 37 + 13) * 0.74;
@@ -599,17 +382,17 @@ class _CardParticlePainter extends CustomPainter {
   void _paintFog(
     Canvas canvas,
     Size size,
-    _CardAtmosphere atm, {
+    WeatherCardAtmosphere atm, {
     required PortalWeatherProfile profile,
   }) {
     final p = Paint();
     final fogColor =
         profile.isNight
-            ? const Color(0xFFEAF4FF)
+            ? WeatherCardFxColors.nightGlow
             : profile.isDawn
-            ? const Color(0xFFF4FAFF)
+            ? WeatherCardFxColors.dawnFog
             : profile.isDusk
-            ? const Color(0xFFFFEFE4)
+            ? WeatherCardFxColors.duskFog
             : atm.particle;
     for (var i = 0; i < 4; i++) {
       final by = size.height * (0.18 + i * 0.19);
@@ -636,7 +419,7 @@ class _CardParticlePainter extends CustomPainter {
     }
   }
 
-  void _paintHaze(Canvas canvas, Size size, _CardAtmosphere atm) {
+  void _paintHaze(Canvas canvas, Size size, WeatherCardAtmosphere atm) {
     final p = Paint()..style = PaintingStyle.fill;
     for (var i = 0; i < 14; i++) {
       final x =
@@ -649,7 +432,7 @@ class _CardParticlePainter extends CustomPainter {
     }
   }
 
-  void _paintDust(Canvas canvas, Size size, _CardAtmosphere atm) {
+  void _paintDust(Canvas canvas, Size size, WeatherCardAtmosphere atm) {
     final p = Paint()..style = PaintingStyle.fill;
     for (var i = 0; i < 4; i++) {
       final x =
@@ -684,7 +467,7 @@ class _CardParticlePainter extends CustomPainter {
     }
   }
 
-  void _paintHeat(Canvas canvas, Size size, _CardAtmosphere atm) {
+  void _paintHeat(Canvas canvas, Size size, WeatherCardAtmosphere atm) {
     final p =
         Paint()
           ..style = PaintingStyle.stroke
@@ -707,7 +490,7 @@ class _CardParticlePainter extends CustomPainter {
     }
   }
 
-  void _paintCold(Canvas canvas, Size size, _CardAtmosphere atm) {
+  void _paintCold(Canvas canvas, Size size, WeatherCardAtmosphere atm) {
     final p =
         Paint()
           ..style = PaintingStyle.stroke

@@ -5,6 +5,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
+import 'package:omninest/app/theme/backdrop_scrim_colors.dart';
 
 /// 背景素材图片视图:三端统一渲染服务端网络素材。
 ///
@@ -79,8 +80,8 @@ class _AppBackdropImageState extends State<AppBackdropImage> {
     4096,
   ];
 
-  static const Color _loadingColor = Color(0xFF0A1821);
-  static const Color _transparent = Color(0x00000000);
+  static const Color _loadingColor = BackdropStageColors.loading;
+  static const Color _transparent = BackdropStageColors.transparent;
 
   /// 显示器物理像素尺寸;窗口 maximize 不改变该值,解码键保持稳定。
   static ui.Size? _displayPhysicalSize() {

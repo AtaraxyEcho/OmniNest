@@ -815,6 +815,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get coreClear => '清除';
 
   @override
+  String get coreUnknownDate => '未知日期';
+
+  @override
+  String get coreUndetermined => '未确定';
+
+  @override
+  String get videoSubtitleLangZh => '中文';
+
+  @override
+  String get videoSubtitleLangEn => 'English';
+
+  @override
+  String get videoSubtitleLangJa => '日本語';
+
+  @override
+  String get videoSubtitleLangKo => '한국어';
+
+  @override
+  String get videoSubtitleLangUnd => '未确定';
+
+  @override
   String get coreChooseDate => '选择日期';
 
   @override
@@ -6807,6 +6828,9 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
+  String get photosExportShared => '已打开系统分享，可保存到相册或其它应用';
+
+  @override
   String get photosDownloadSourceUnavailable => '原图暂不可用，无法下载';
 
   @override
@@ -7586,9 +7610,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get musicDeckRecent => '最近播放';
 
   @override
-  String get musicDeckOffline => '离线内容';
-
-  @override
   String get musicDeckLocalManagement => '本地资源';
 
   @override
@@ -7769,12 +7790,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get musicDeckLocalPlaylist => '本地歌单';
-
-  @override
-  String get musicDeckOfflineSubtitle => '管理已下载到当前设备、断网后仍可播放的内容。';
-
-  @override
-  String get musicDeckOfflineEmpty => '当前还没有可离线播放的音乐。离线下载将在后续下载管理能力接入后显示。';
 
   @override
   String get musicDeckRetry => '重试';
@@ -9641,6 +9656,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get errorNeedPassword => '请输入分享密码';
+
+  @override
+  String get errorPasswordInvalid => '密码错误';
+
+  @override
+  String get errorOldPasswordInvalid => '原密码错误';
 
   @override
   String get errorShareSessionInvalid => '分享会话无效';

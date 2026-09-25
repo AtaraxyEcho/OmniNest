@@ -62,9 +62,15 @@ class _AdminTasksPageState extends ConsumerState<AdminTasksPage>
     );
     final taskAsync = ref.watch(adminTaskPageProvider(query));
     final dlqAsync = ref.watch(adminDlqProvider);
-    if (taskAsync.hasValue) {
-      _lastTaskPage = taskAsync.value;
-    }
+    ref.listen<AsyncValue<AdminPage<AdminTaskRecord>>>(
+      adminTaskPageProvider(query),
+      (previous, next) {
+        final value = next.value;
+        if (value != null) {
+          _lastTaskPage = value;
+        }
+      },
+    );
     final page = taskAsync.value ?? _lastTaskPage;
     if (page == null) {
       return taskAsync.hasError

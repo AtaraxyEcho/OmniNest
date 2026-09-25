@@ -28,7 +28,7 @@ void main() {
       (index) => AdminMonitoringComponent(
         name: 'component-$index',
         status: 'UP',
-        detail: const <String, dynamic>{'status': 'ready'},
+        detail: const <String, String>{'status': 'ready'},
       ),
     );
     final alerts = List<AdminMonitoringAlert>.generate(

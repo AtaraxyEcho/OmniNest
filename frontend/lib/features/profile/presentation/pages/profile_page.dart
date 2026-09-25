@@ -10,6 +10,7 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/locale/application/locale_controller.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/workbench_panel.dart';
@@ -46,7 +47,6 @@ class ProfilePage extends ConsumerStatefulWidget {
 }
 
 class _ProfilePageState extends ConsumerState<ProfilePage> {
-  NotificationPreferences? _notificationPreferences;
   late ProfileSection _selectedSection;
 
   @override
@@ -82,7 +82,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       _showMessage(l10n.profileAvatarFormatError);
       return;
     }
-    if (file.bytes!.length > 5 * 1024 * 1024) {
+    if (file.bytes!.length > FileSizeThresholds.avatarUploadMaxBytes) {
       _showMessage(l10n.profileAvatarSizeError);
       return;
     }
@@ -101,16 +101,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   Future<void> _updateNotificationPreferences(
     NotificationPreferences preferences,
   ) async {
-    final previous = _notificationPreferences;
     final preferencesController = ref.read(
       notificationPreferencesProvider.notifier,
     );
-    setState(() => _notificationPreferences = preferences);
     try {
       await preferencesController.save(preferences);
     } catch (_) {
       if (!mounted) return;
-      setState(() => _notificationPreferences = previous);
       _showMessage(AppLocalizations.of(context).profileNotificationSaveFailed);
     }
   }
@@ -388,7 +385,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             ),
           ),
       data: (value) {
-        _notificationPreferences ??= value;
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -397,7 +393,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             const SizedBox(height: 16),
             ProfileNotificationSettingsCard(
               typesAsync: types,
-              prefs: _notificationPreferences!,
+              prefs: value,
               onChanged: _updateNotificationPreferences,
             ),
           ],

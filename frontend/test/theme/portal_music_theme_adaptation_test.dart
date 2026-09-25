@@ -1,5 +1,6 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_theme.dart';
@@ -125,17 +126,19 @@ void main() {
       glow: Color(0x3380CBC4),
     );
     await tester.pumpWidget(
-      const MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 180,
-            height: 120,
-            child: PortalGradientCover(
-              palette: palette,
-              title: '标题',
-              subtitle: '副标题',
-              imageUrl: 'https://example.invalid/cover.jpg',
-              directImage: true,
+      ProviderScope(
+        child: MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 180,
+              height: 120,
+              child: PortalGradientCover(
+                palette: palette,
+                title: '标题',
+                subtitle: '副标题',
+                imageUrl: 'https://example.invalid/cover.jpg',
+                directImage: true,
+              ),
             ),
           ),
         ),

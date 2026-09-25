@@ -2,13 +2,16 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter/material.dart';
+import 'package:omninest/core/errors/error_code_l10n.dart';
 import 'package:omninest/core/errors/error_message.dart';
 
 String movieErrorMessage(Object error, [AppLocalizations? l10n]) {
-  final userFacingError = describeUserFacingError(error);
-  final localizedMessage = switch (userFacingError.code) {
-    _ => null,
-  };
+  final userFacingError = describeUserFacingError(error, l10n: l10n);
+  final code = userFacingError.code;
+  final localizedMessage =
+      (l10n != null && code != null && code.isNotEmpty)
+          ? l10n.messageForErrorCode(code, fallback: userFacingError.message)
+          : null;
   if (localizedMessage != null) {
     return localizedMessage;
   }

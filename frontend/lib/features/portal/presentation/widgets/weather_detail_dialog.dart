@@ -6,10 +6,11 @@ import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/portal/application/weather_provider.dart';
+import 'package:omninest/features/portal/presentation/theme/weather_atmospheres.dart';
 import 'package:omninest/features/portal/presentation/widgets/portal_weather_profile.dart';
 import 'package:omninest/features/portal/presentation/widgets/weather_detail_layout.dart';
+import 'package:omninest/app/theme/severity_colors.dart';
 
-part 'weather_detail_atmospheres.dart';
 part 'weather_detail_painters.dart';
 part 'weather_detail_widgets.dart';
 
@@ -136,7 +137,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
     final viewport = MediaQuery.sizeOf(context);
     final metrics = WeatherDetailLayoutMetrics.resolve(viewport);
     final spec = WeatherSceneSpec.from(widget.weather);
-    final atm = _Atmosphere.forScene(spec.scene, spec.profile);
+    final atm = WeatherAtmosphere.forScene(spec.scene, spec.profile);
     final effectsReady = _effectsReady && !_animationsDisabled;
 
     return Dialog(
@@ -194,7 +195,7 @@ class _WeatherDetailDialogState extends State<_WeatherDetailDialog>
                         ),
                       DecoratedBox(
                         decoration: BoxDecoration(
-                          color: const Color(0x8C0F2027),
+                          color: WeatherDetailChromeColors.panelFill,
                           border: Border.all(
                             color: Colors.white.withValues(alpha: 0.12),
                           ),

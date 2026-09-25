@@ -10,6 +10,7 @@ import 'package:omninest/core/utils/image_decode_width.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/reader/reader_cover_ui.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
+import 'package:omninest/app/theme/feature/smoke_glass_colors.dart';
 
 class PortalVisualPalette {
   const PortalVisualPalette({
@@ -74,16 +75,16 @@ class PortalVisualPalette {
     if (scheme.brightness == Brightness.light && backdropActive) {
       return const PortalVisualPalette(
         background: Colors.transparent,
-        surface: Color(0x4D0C1920),
-        surfaceStrong: Color(0x7512242B),
+        surface: PortalBackdropGlassColors.surface,
+        surfaceStrong: PortalBackdropGlassColors.surfaceStrong,
         clearStructuralSurfaces: false,
         lightweightSurfaceAlpha: 0.18,
         structuralAlphaCeiling: 0.46,
-        text: Color(0xFFF4F7F5),
-        muted: Color(0xD1D6E3E1),
-        accent: Color(0xFF9FDBE3),
-        accentAlt: Color(0xFFD5C27A),
-        glow: Color(0x383D8EA0),
+        text: SmokeGlassColors.text,
+        muted: PortalBackdropGlassColors.muted,
+        accent: SmokeGlassColors.accent,
+        accentAlt: SmokeGlassColors.accentAlt,
+        glow: PortalBackdropGlassColors.glow,
       );
     }
     if (scheme.brightness == Brightness.light) {
@@ -140,17 +141,17 @@ class PortalVisualPalette {
       );
     }
     return const PortalVisualPalette(
-      background: Color(0xFF071016),
-      surface: Color(0xA6121D25),
-      surfaceStrong: Color(0xD9142029),
+      background: SmokeGlassColors.background,
+      surface: SmokeGlassColors.surface,
+      surfaceStrong: SmokeGlassColors.surfaceStrong,
       clearStructuralSurfaces: false,
       lightweightSurfaceAlpha: 0.36,
       structuralAlphaCeiling: null,
-      text: Color(0xFFF4F7F5),
-      muted: Color(0xB8DDE8E7),
-      accent: Color(0xFF9FDBE3),
-      accentAlt: Color(0xFFD5C27A),
-      glow: Color(0x663D8EA0),
+      text: SmokeGlassColors.text,
+      muted: SmokeGlassColors.muted,
+      accent: SmokeGlassColors.accent,
+      accentAlt: SmokeGlassColors.accentAlt,
+      glow: SmokeGlassColors.glow,
     );
   }
 }
@@ -455,9 +456,9 @@ class PortalGradientCover extends StatelessWidget {
     // 禁渐变规范：每个变体取单一纯色（回退色列表沿用双份同色保持接口）。
     final solid = switch (variant % 4) {
       0 => palette.accentAlt,
-      1 => const Color(0xFF263A66),
-      2 => const Color(0xFF244641),
-      _ => const Color(0xFF20233D),
+      1 => PortalCoverFallbackColors.deepBlue,
+      2 => PortalCoverFallbackColors.deepTeal,
+      _ => PortalCoverFallbackColors.deepIndigo,
     };
     final colors = [solid, solid];
     return ConstrainedBox(

@@ -84,7 +84,8 @@ UserFacingError _describeDioException(
     ),
     DioExceptionType.connectionTimeout ||
     DioExceptionType.sendTimeout ||
-    DioExceptionType.receiveTimeout => UserFacingError(
+    DioExceptionType.receiveTimeout ||
+    DioExceptionType.transformTimeout => UserFacingError(
       title: title,
       message: l10n?.errorNetworkTimeout ?? AppErrorCodes.networkTimeout,
       code: 'REQUEST_TIMEOUT',

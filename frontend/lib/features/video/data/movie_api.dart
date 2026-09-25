@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
+import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/device/playback_device_identity.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
@@ -11,7 +12,7 @@ import 'package:omninest/features/tasks/domain/task_record.dart';
 class MovieApi {
   const MovieApi(this.apiClient);
 
-  static const int _subtitleMaxBytes = 2 * 1024 * 1024;
+  static const int _subtitleMaxBytes = FileSizeThresholds.subtitleMaxBytes;
 
   final ApiClient apiClient;
 
