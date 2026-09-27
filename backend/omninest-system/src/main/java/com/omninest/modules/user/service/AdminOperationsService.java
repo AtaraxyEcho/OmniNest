@@ -436,6 +436,7 @@ public class AdminOperationsService {
     private AdminOperationsDto.ExternalStorageItem toExternalStorageItem(ExternalStorageAccountSummary account) {
         return new AdminOperationsDto.ExternalStorageItem(
                 account.id(),
+                account.ownerUserId(),
                 account.provider(),
                 account.displayName(),
                 account.status(),

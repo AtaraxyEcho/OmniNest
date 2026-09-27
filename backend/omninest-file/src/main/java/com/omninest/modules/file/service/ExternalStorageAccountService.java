@@ -26,6 +26,7 @@ public class ExternalStorageAccountService {
     private final StorageExternalAccountRepository externalAccountRepository;
     private final ExternalStorageService externalStorageService;
     private final ExternalStorageCredentialService externalStorageCredentialService;
+    private final ExternalStorageOAuthService externalStorageOAuthService;
 
     /**
      * 查询当前用户的外部存储账户列表。
@@ -43,6 +44,7 @@ public class ExternalStorageAccountService {
 
     /**
      * 创建外部存储账户。
+     * OAuth 类连接器在实例级应用未配置时直接拒绝，避免保存出无法授权的僵尸连接。
      *
      * @param ownerUserId 用户 ID
      * @param request     创建请求
@@ -50,12 +52,21 @@ public class ExternalStorageAccountService {
      */
     @Transactional(rollbackFor = Exception.class)
     public ExternalStorageAccountDto createExternalAccount(UUID ownerUserId, CreateExternalStorageRequest request) {
+        String provider = ExternalStorageProviders.requireAllowed(request.provider());
+        if (isOAuthProvider(provider) && externalStorageOAuthService.findAppCredentials(provider).isEmpty()) {
+            throw new BusinessException(ErrorCode.CONFIG_VALUE_INVALID,
+                    "该连接器尚未配置实例级 OAuth 应用，请联系管理员在管理后台的外部存储页面完成配置后再创建");
+        }
         StorageExternalAccount account = new StorageExternalAccount();
         account.setOwnerUserId(ownerUserId);
-        account.setProvider(ExternalStorageProviders.requireAllowed(request.provider()));
+        account.setProvider(provider);
         account.setDisplayName(request.displayName().trim());
         account.setEncryptedCredentials(externalStorageCredentialService.encrypt(request.encryptedCredentials()));
         return toExternalAccountDto(externalAccountRepository.save(account));
+    }
+
+    private boolean isOAuthProvider(String provider) {
+        return ExternalStorageProviders.isOAuth(provider);
     }
 
     /**

@@ -19,11 +19,13 @@ void main() {
     MediaImportFilePicker picker, {
     MediaImportService? importService,
     FutureOr<void> Function() onImportComplete = _noop,
+    void Function(List<XFile> files, String spaceType)? onFilesPicked,
     List<String> acceptedExtensions = const <String>['jpg', 'png'],
     List<String> unsupportedExtensions = const <String>[],
     ImportButtonStyle style = ImportButtonStyle.iconButton,
     String? label,
     Color? color,
+    bool allowSharedSpace = false,
   }) {
     return ProviderScope(
       overrides: [
@@ -45,7 +47,8 @@ void main() {
                         acceptedExtensions: acceptedExtensions,
                         unsupportedExtensions: unsupportedExtensions,
                         onImportComplete: onImportComplete,
-                        allowSharedSpace: false,
+                        onFilesPicked: onFilesPicked,
+                        allowSharedSpace: allowSharedSpace,
                         style: style,
                         label: label,
                         color: color,
@@ -296,6 +299,74 @@ void main() {
     await tester.pump();
 
     expect(service.cancellationToken?.isCancelled, isTrue);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('队列模式禁止共享空间时直接以个人空间回调', (tester) async {
+    final picked = <String>[];
+    await tester.pumpWidget(
+      buildButton(
+        (_) async => <XFile>[
+          XFile(
+            'book.epub',
+            name: 'book.epub',
+            mimeType: 'application/epub+zip',
+            length: 3,
+            bytes: Uint8List.fromList(<int>[1, 2, 3]),
+          ),
+        ],
+        acceptedExtensions: const <String>['epub'],
+        onFilesPicked: (files, spaceType) {
+          picked.add(spaceType);
+        },
+      ),
+    );
+
+    await tester.tap(find.byTooltip('导入文件'));
+    await tester.pumpAndSettle();
+
+    expect(picked, <String>['PERSONAL']);
+    expect(find.byType(Dialog), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('队列模式允许共享空间时弹出空间选择并回传选择结果', (tester) async {
+    final picked = <String>[];
+    tester.view.physicalSize = const Size(1200, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      buildButton(
+        (_) async => <XFile>[
+          XFile(
+            'book.epub',
+            name: 'book.epub',
+            mimeType: 'application/epub+zip',
+            length: 3,
+            bytes: Uint8List.fromList(<int>[1, 2, 3]),
+          ),
+        ],
+        acceptedExtensions: const <String>['epub'],
+        allowSharedSpace: true,
+        onFilesPicked: (files, spaceType) {
+          picked.add(spaceType);
+        },
+      ),
+    );
+
+    await tester.tap(find.byTooltip('导入文件'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(find.text('选择导入位置'), findsOneWidget);
+    await tester.tap(find.text('共享空间'));
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, '确定'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(picked, <String>['SHARED']);
     expect(tester.takeException(), isNull);
   });
 }

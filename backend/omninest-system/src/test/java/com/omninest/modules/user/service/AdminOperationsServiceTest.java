@@ -197,6 +197,7 @@ class AdminOperationsServiceTest {
         UUID externalId = UUID.fromString("cccccccc-cccc-cccc-cccc-cccccccccccc");
         ExternalStorageAccountSummary externalAccount = new ExternalStorageAccountSummary(
                 externalId,
+                ownerUserId,
                 "S3",
                 "冷备桶",
                 "ACTIVE",

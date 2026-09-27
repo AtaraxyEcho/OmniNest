@@ -23,7 +23,24 @@ public final class ExternalStorageProviders {
             "DROPBOX"
     );
 
+    private static final Set<String> OAUTH = Set.of(
+            "ONEDRIVE",
+            "GDRIVE",
+            "GOOGLE_DRIVE",
+            "DROPBOX"
+    );
+
     private ExternalStorageProviders() {
+    }
+
+    /**
+     * 判断 Provider 是否为 OAuth 授权类型。
+     *
+     * @param provider 已规范化的 Provider 编码
+     * @return 是否 OAuth 类型
+     */
+    public static boolean isOAuth(String provider) {
+        return OAUTH.contains(provider);
     }
 
     /**

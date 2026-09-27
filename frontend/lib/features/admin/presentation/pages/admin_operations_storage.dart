@@ -2,6 +2,86 @@ part of 'admin_operations_pages.dart';
 
 enum _StorageStatusFilter { all, enabled, disabled, unhealthy }
 
+/// 挂载媒体库约定目录；与后端 provision 逻辑保持一致，匹配忽略大小写。
+const List<String> _mountCatalogSlots = ['movie', 'tv', 'anime'];
+final Set<String> _mountCatalogRoots = _mountCatalogSlots.toSet();
+
+String _mountCatalogLabel(AppLocalizations l10n, String root) {
+  return switch (root) {
+    'movie' => l10n.adminMountLibraryCatalogMovie,
+    'tv' => l10n.adminMountLibraryCatalogTv,
+    _ => l10n.adminMountLibraryCatalogAnime,
+  };
+}
+
+bool _isMountCatalogRoot(String relativeRoot) =>
+    _mountCatalogRoots.contains(relativeRoot.toLowerCase());
+
+class _MountLibraryState {
+  const _MountLibraryState({
+    required this.enabled,
+    required this.autoImport,
+    required this.presentRoots,
+    required this.provisioned,
+    this.sourceIds = const <String>[],
+  });
+
+  final bool enabled;
+  final bool autoImport;
+  final Set<String> presentRoots;
+  final bool provisioned;
+  final List<String> sourceIds;
+
+  int get sourceCount => presentRoots.length;
+  bool get isPartial =>
+      provisioned && presentRoots.length < _mountCatalogRoots.length;
+}
+
+_MountLibraryState _resolveMountLibraryState({
+  required String mountKey,
+  required List<VideoStorageLocation> locations,
+  required List<VideoLibrarySource> sources,
+}) {
+  final location =
+      locations
+          .where(
+            (item) => item.mountKey == mountKey && item.relativeRoot == '.',
+          )
+          .firstOrNull;
+  if (location == null) {
+    return const _MountLibraryState(
+      enabled: false,
+      autoImport: false,
+      presentRoots: {},
+      provisioned: false,
+    );
+  }
+  final catalog =
+      sources
+          .where(
+            (source) =>
+                source.storageLocationId == location.id &&
+                _isMountCatalogRoot(source.relativeRoot),
+          )
+          .toList();
+  if (catalog.isEmpty) {
+    return const _MountLibraryState(
+      enabled: false,
+      autoImport: false,
+      presentRoots: {},
+      provisioned: false,
+    );
+  }
+  return _MountLibraryState(
+    enabled: catalog.every((source) => source.enabled),
+    autoImport: catalog.any((source) => source.importPolicy != 'MANUAL_REVIEW'),
+    presentRoots:
+        catalog.map((source) => source.relativeRoot.toLowerCase()).toSet(),
+    provisioned: true,
+    sourceIds: catalog.map((source) => source.id).toList(),
+  );
+}
+
 bool _storageHealthy(AdminStorageLocation location) =>
     location.healthStatus.toUpperCase() == 'AVAILABLE';
 
@@ -320,21 +400,8 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
     final locations = _filteredLocations(widget.view.locations, query);
     final listSection = AdminTableSection(
       title: l10n.adminStorageMountsSection,
-      trailing: [
-        if (canManageStorage)
-          FilledButton.tonalIcon(
-            onPressed:
-                () => showDialog<void>(
-                  context: context,
-                  builder:
-                      (context) => _StorageLocationWizard(
-                        mounts: widget.view.trustedMounts,
-                      ),
-                ),
-            icon: const Icon(Icons.add_rounded),
-            label: Text(l10n.adminAddLocalStorageLocation),
-          ),
-      ],
+      subtitle: l10n.adminLocalStorageLocationsSubtitle,
+      trailing: const <Widget>[],
       filters: [
         for (final filter in _StorageStatusFilter.values)
           ChoiceChip(
@@ -448,27 +515,6 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
               ),
               if (canManageStorage)
                 IconButton(
-                  tooltip:
-                      location.enabled
-                          ? l10n.adminStorageDisableAction
-                          : l10n.adminStatusEnabled,
-                  icon: Icon(
-                    location.enabled
-                        ? Icons.block_rounded
-                        : Icons.check_circle_outline_rounded,
-                    size: 20,
-                  ),
-                  onPressed:
-                      () => _toggleStorageLocation(
-                        context,
-                        ref,
-                        l10n,
-                        location,
-                        enabled: !location.enabled,
-                      ),
-                ),
-              if (canManageStorage)
-                IconButton(
                   tooltip: l10n.adminStorageDeleteAction,
                   icon: const Icon(Icons.delete_outline_rounded, size: 20),
                   onPressed:
@@ -502,7 +548,10 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
           ),
         ),
         const SizedBox(height: 24),
-        _AdminTrustedMountsSection(mounts: widget.view.trustedMounts),
+        _AdminTrustedMountsSection(
+          mounts: widget.view.trustedMounts,
+          canManage: canManageStorage && canManageSources,
+        ),
         const SizedBox(height: 24),
         listSection,
         const SizedBox(height: 32),
@@ -512,78 +561,184 @@ class _AdminStoragePageState extends ConsumerState<AdminStoragePage> {
   }
 }
 
-/// 可信挂载点健康卡：展示部署白名单层的挂载键与当前节点可用性，
-/// 使四层链路（部署配置→位置→库源→扫描）最底层的状态可观测。
-class _AdminTrustedMountsSection extends StatelessWidget {
-  const _AdminTrustedMountsSection({required this.mounts});
+/// 可信挂载点：配置即挂载，管理员只保留「启用媒体库」与「扫描后自动入库」两个开关。
+/// 启用后系统在挂载根下按 Movie/TV/Anime 约定目录维护三个类型库源。
+class _AdminTrustedMountsSection extends ConsumerStatefulWidget {
+  const _AdminTrustedMountsSection({
+    required this.mounts,
+    required this.canManage,
+  });
 
   final List<AdminTrustedMount> mounts;
+  final bool canManage;
+
+  @override
+  ConsumerState<_AdminTrustedMountsSection> createState() =>
+      _AdminTrustedMountsSectionState();
+}
+
+class _AdminTrustedMountsSectionState
+    extends ConsumerState<_AdminTrustedMountsSection> {
+  String? _busyMountKey;
+  String? _scanningMountKey;
+
+  Future<void> _provision(
+    AdminTrustedMount mount, {
+    required bool enabled,
+    required bool autoImport,
+  }) async {
+    if (_busyMountKey != null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final wasEnabled =
+        _resolveMountLibraryState(
+          mountKey: mount.mountKey,
+          locations:
+              ref.read(videoStorageLocationsProvider).asData?.value ?? const [],
+          sources:
+              ref.read(videoLibrarySourcesProvider).asData?.value ?? const [],
+        ).enabled;
+    setState(() => _busyMountKey = mount.mountKey);
+    try {
+      await ref
+          .read(videoLibrarySourceActionsProvider)
+          .provisionMountLibrary(
+            mountKey: mount.mountKey,
+            enabled: enabled,
+            autoImport: autoImport,
+          );
+      if (!mounted) {
+        return;
+      }
+      ref.read(adminOperationsActionsProvider).scheduleStorageRelatedRefresh();
+      if (enabled && !wasEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.adminMountLibraryProvisionSuccess)),
+        );
+      }
+    } on Exception catch (error) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            '${l10n.adminMountLibraryProvisionFailed}: '
+            '${describeUserFacingError(error, l10n: l10n).message}',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busyMountKey = null);
+      }
+    }
+  }
+
+  Future<void> _scanAll(
+    AdminTrustedMount mount,
+    _MountLibraryState state,
+  ) async {
+    if (_scanningMountKey != null || state.sourceIds.isEmpty) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    setState(() => _scanningMountKey = mount.mountKey);
+    try {
+      final result = await ref
+          .read(videoLibrarySourceActionsProvider)
+          .scanAll(state.sourceIds);
+      if (!mounted) {
+        return;
+      }
+      if (result.failed == 0) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.adminMountLibraryScanAllSuccess(result.success)),
+          ),
+        );
+      } else {
+        final lastError =
+            result.lastError == null
+                ? ''
+                : ' · ${describeUserFacingError(Exception(result.lastError), l10n: l10n).message}';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              '${l10n.adminMountLibraryScanAllPartial(result.success, result.failed)}$lastError',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _scanningMountKey = null);
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final locations =
+        ref.watch(videoStorageLocationsProvider).asData?.value ??
+        const <VideoStorageLocation>[];
+    final sources =
+        ref.watch(videoLibrarySourcesProvider).asData?.value ??
+        const <VideoLibrarySource>[];
     return AdminTableSection(
       title: l10n.adminTrustedMountsTitle,
       subtitle: l10n.adminTrustedMountsSubtitle,
       children: [
-        if (mounts.isEmpty)
+        if (widget.mounts.isEmpty)
           _EmptyText(l10n.adminTrustedMountsEmpty)
         else
           Padding(
             padding: const EdgeInsets.only(top: 4),
-            child: Wrap(
-              spacing: 10,
-              runSpacing: 10,
+            child: Column(
               children: [
-                for (final mount in mounts)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                for (final mount in widget.mounts)
+                  _MountLibraryCard(
+                    mount: mount,
+                    state: _resolveMountLibraryState(
+                      mountKey: mount.mountKey,
+                      locations: locations,
+                      sources: sources,
                     ),
-                    decoration: BoxDecoration(
-                      color: context.adminColors.surfaceContainerLow.withValues(
-                        alpha: 0.42,
-                      ),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: context.adminColors.outlineVariant.withValues(
-                          alpha: 0.18,
-                        ),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          mount.available
-                              ? Icons.dns_outlined
-                              : Icons.dns_outlined,
-                          size: 18,
-                          color:
-                              mount.available
-                                  ? context.adminColors.success
-                                  : context.adminColors.tertiary,
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          mount.mountKey,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(width: 8),
-                        AdminStatusTag(
-                          label: healthStatusLabel(
-                            l10n,
-                            mount.available ? 'AVAILABLE' : 'UNAVAILABLE',
+                    canManage: widget.canManage,
+                    busy: _busyMountKey == mount.mountKey,
+                    onEnableChanged:
+                        widget.canManage
+                            ? (value) => _provision(
+                              mount,
+                              enabled: value,
+                              autoImport:
+                                  _resolveMountLibraryState(
+                                    mountKey: mount.mountKey,
+                                    locations: locations,
+                                    sources: sources,
+                                  ).autoImport,
+                            )
+                            : null,
+                    onAutoImportChanged:
+                        widget.canManage
+                            ? (value) => _provision(
+                              mount,
+                              enabled: true,
+                              autoImport: value,
+                            )
+                            : null,
+                    scanning: _scanningMountKey == mount.mountKey,
+                    onScanAll:
+                        () => _scanAll(
+                          mount,
+                          _resolveMountLibraryState(
+                            mountKey: mount.mountKey,
+                            locations: locations,
+                            sources: sources,
                           ),
-                          tone:
-                              mount.available
-                                  ? AdminTagTone.success
-                                  : AdminTagTone.warning,
                         ),
-                      ],
-                    ),
                   ),
               ],
             ),
@@ -593,293 +748,244 @@ class _AdminTrustedMountsSection extends StatelessWidget {
   }
 }
 
-class _StorageLocationWizard extends ConsumerStatefulWidget {
-  const _StorageLocationWizard({required this.mounts});
+class _MountLibraryCard extends StatelessWidget {
+  const _MountLibraryCard({
+    required this.mount,
+    required this.state,
+    required this.canManage,
+    required this.busy,
+    required this.onEnableChanged,
+    required this.onAutoImportChanged,
+    required this.scanning,
+    required this.onScanAll,
+  });
 
-  final List<AdminTrustedMount> mounts;
+  final AdminTrustedMount mount;
+  final _MountLibraryState state;
+  final bool canManage;
+  final bool busy;
+  final ValueChanged<bool>? onEnableChanged;
+  final ValueChanged<bool>? onAutoImportChanged;
+  final bool scanning;
+  final VoidCallback? onScanAll;
 
-  @override
-  ConsumerState<_StorageLocationWizard> createState() =>
-      _StorageLocationWizardState();
-}
-
-class _StorageLocationWizardState
-    extends ConsumerState<_StorageLocationWizard> {
-  final _nameController = TextEditingController();
-  String? _mountKey;
-  String? _parent;
-  bool _saving = false;
-  bool _createLibrarySource = true;
-  VideoLibraryType _libraryType = VideoLibraryType.movie;
-
-  @override
-  void initState() {
-    super.initState();
-    _mountKey =
-        widget.mounts.where((mount) => mount.available).firstOrNull?.mountKey;
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final l10n = AppLocalizations.of(context);
-    final name = _nameController.text.trim();
-    final mountKey = _mountKey;
-    final relativeRoot = _parent ?? '.';
-    if (name.isEmpty || mountKey == null) return;
-    setState(() => _saving = true);
-    try {
-      final location = await ref
-          .read(adminOperationsActionsProvider)
-          .createStorageLocation(
-            name: name,
-            mountKey: mountKey,
-            relativeRoot: relativeRoot,
-          );
-      if (!mounted) return;
-      if (_createLibrarySource) {
-        // 合并流程：建完挂载位置后立即创建影视库源，无需再走第二步。
-        await ref
-            .read(videoLibrarySourceActionsProvider)
-            .create(
-              name: name,
-              storageLocationId: location.id,
-              relativeRoot: '.',
-              libraryType: _libraryType,
-            );
-      }
-      if (!mounted) return;
-      // createStorageLocation / library source create 已安排合并失效；
-      // 此处再触发一次同一 epoch，确保离开对话框后视图最新且不双重建。
-      ref.read(adminOperationsActionsProvider).scheduleStorageRelatedRefresh();
-      if (!mounted) return;
-      Navigator.of(context).pop();
-    } on Exception catch (error) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            l10n.adminLoadFailed(
-              describeUserFacingError(error, l10n: l10n).message,
-            ),
-          ),
-        ),
-      );
+  String _statusLabel(AppLocalizations l10n) {
+    if (state.isPartial) {
+      return l10n.adminMountLibraryStatusPartial;
     }
+    return state.enabled
+        ? l10n.adminMountLibraryStatusOn
+        : l10n.adminMountLibraryStatusOff;
+  }
+
+  AdminTagTone _statusTone() {
+    if (state.isPartial) {
+      return AdminTagTone.warning;
+    }
+    return state.enabled ? AdminTagTone.success : AdminTagTone.neutral;
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    final current = _parent ?? '.';
-    return AlertDialog(
-      title: Text(l10n.adminAddLocalStorageLocation),
-      content: SizedBox(
-        width: 480,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _nameController,
-              decoration: InputDecoration(
-                labelText: l10n.adminDisplayNameLabel,
-              ),
-            ),
-            const SizedBox(height: 14),
-            AppDropdown<String>(
-              value: _mountKey ?? '',
-              items: [
-                for (final mount in widget.mounts)
-                  AppDropdownItem(
-                    value: mount.mountKey,
-                    label:
-                        mount.available
-                            ? mount.displayName
-                            : '${mount.displayName} (${mount.mountKey})',
-                    enabled: mount.available,
-                  ),
-              ],
-              onChanged:
-                  _saving
-                      ? null
-                      : (value) {
-                        setState(() {
-                          _mountKey = value!;
-                          _parent = null;
-                        });
-                      },
-              label: l10n.adminMountKey,
-              helperText: l10n.adminMountKeyHint,
-            ),
-            const SizedBox(height: 8),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              dense: true,
-              title: Text(l10n.adminAutoCreateLibrarySource),
-              subtitle: Text(l10n.adminAutoCreateLibrarySourceHint),
-              value: _createLibrarySource,
-              onChanged:
-                  _saving
-                      ? null
-                      : (value) => setState(() => _createLibrarySource = value),
-            ),
-            if (_createLibrarySource) ...[
-              const SizedBox(height: 8),
-              AppDropdown<VideoLibraryType>(
-                value: _libraryType,
-                items: [
-                  for (final type in const [
-                    VideoLibraryType.movie,
-                    VideoLibraryType.tvSeries,
-                    VideoLibraryType.anime,
-                    VideoLibraryType.root,
-                  ])
-                    AppDropdownItem(
-                      value: type,
-                      label: switch (type) {
-                        VideoLibraryType.movie => l10n.videoLibraryTypeMovie,
-                        VideoLibraryType.tvSeries =>
-                          l10n.videoLibraryTypeTvSeries,
-                        VideoLibraryType.anime => l10n.videoLibraryTypeAnime,
-                        VideoLibraryType.root => l10n.videoLibraryTypeRoot,
-                      },
-                    ),
-                ],
-                onChanged:
-                    _saving
-                        ? null
-                        : (value) => setState(() => _libraryType = value!),
-                label: l10n.videoLibraryType,
-                helperText: l10n.videoLibraryTypeHint,
-              ),
-            ],
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Text(
-                  l10n.adminStorageFieldPath,
-                  style: Theme.of(context).textTheme.labelLarge,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    current,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ),
-                IconButton(
-                  tooltip: l10n.coreBack,
-                  onPressed:
-                      current != '.' && !_saving
-                          ? () => setState(() {
-                            final separator = current.lastIndexOf('/');
-                            _parent =
-                                separator < 0
-                                    ? null
-                                    : current.substring(0, separator);
-                          })
-                          : null,
-                  icon: const Icon(Icons.arrow_upward_rounded, size: 20),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            // Expanded 会把 AlertDialog 撑满剩余可用高度，
-            // 目录浏览区用 Flexible 限高，弹窗按内容自适应。
-            Flexible(
-              child: Container(
-                height: 300,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).dividerColor),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Builder(
-                  builder: (context) {
-                    final directoryAsync = ref.watch(
-                      adminMountDirectoriesProvider((
-                        mountKey: _mountKey ?? '',
-                        parent: _parent,
-                      )),
-                    );
-                    return directoryAsync.when(
-                      loading:
-                          () => const Center(
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          ),
-                      error:
-                          (error, _) => Center(
-                            child: Text(
-                              l10n.adminLoadFailed(
-                                describeUserFacingError(
-                                  error,
-                                  l10n: l10n,
-                                ).message,
-                              ),
-                            ),
-                          ),
-                      data:
-                          (directories) =>
-                              directories.isEmpty
-                                  ? Center(child: Text(l10n.adminNoSubfolders))
-                                  : ListView.builder(
-                                    itemCount: directories.length,
-                                    itemBuilder: (context, index) {
-                                      final directory = directories[index];
-                                      return ListTile(
-                                        dense: true,
-                                        leading: const Icon(
-                                          Icons.folder_outlined,
-                                          size: 20,
-                                        ),
-                                        title: Text(
-                                          directory.name,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        subtitle: Text(
-                                          directory.relativePath,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                        onTap:
-                                            _saving
-                                                ? null
-                                                : () => setState(
-                                                  () =>
-                                                      _parent =
-                                                          directory
-                                                              .relativePath,
-                                                ),
-                                      );
-                                    },
-                                  ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final canToggle = canManage && mount.available && !busy;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 6),
+      decoration: BoxDecoration(
+        color: context.adminColors.surfaceContainerLow.withValues(alpha: 0.42),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color:
+              state.isPartial
+                  ? theme.colorScheme.outlineVariant
+                  : context.adminColors.outlineVariant.withValues(alpha: 0.22),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: _saving ? null : () => Navigator.of(context).pop(),
-          child: Text(l10n.adminCancel),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.dns_outlined,
+                size: 20,
+                color:
+                    mount.available
+                        ? context.adminColors.success
+                        : context.adminColors.tertiary,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  mount.mountKey,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              AdminStatusTag(
+                label: healthStatusLabel(
+                  l10n,
+                  mount.available ? 'AVAILABLE' : 'UNAVAILABLE',
+                ),
+                tone:
+                    mount.available
+                        ? AdminTagTone.success
+                        : AdminTagTone.warning,
+              ),
+              const SizedBox(width: 8),
+              AdminStatusTag(label: _statusLabel(l10n), tone: _statusTone()),
+              if (busy) ...[
+                const SizedBox(width: 12),
+                const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              ],
+              const SizedBox(width: 8),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            l10n.adminMountLibraryCatalogLabel,
+            style: theme.textTheme.labelMedium?.copyWith(color: muted),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              for (final root in _mountCatalogSlots)
+                _CatalogChip(
+                  label: _mountCatalogLabel(l10n, root),
+                  present: state.presentRoots.contains(root),
+                  enabled: state.provisioned,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            state.isPartial
+                ? l10n.adminMountLibraryPartialHint(state.sourceCount)
+                : state.provisioned
+                ? l10n.adminMountLibraryEnableHint
+                : l10n.adminMountLibraryEnableHintOff,
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+          const SizedBox(height: 4),
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(l10n.adminMountLibraryEnable),
+              // 库不完整时呈现为关闭，打开会补齐缺失的类型库，避免「已打开却无法补齐」。
+              value: state.isPartial ? false : state.enabled,
+              onChanged: canToggle ? onEnableChanged : null,
+            ),
+          ),
+          Material(
+            type: MaterialType.transparency,
+            child: SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(l10n.adminMountLibraryAutoImport),
+              subtitle: Text(
+                l10n.adminMountLibraryAutoImportHint,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              value: state.autoImport,
+              onChanged:
+                  canToggle && state.enabled ? onAutoImportChanged : null,
+            ),
+          ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Padding(
+              padding: const EdgeInsets.only(right: 8, bottom: 4),
+              child: TextButton.icon(
+                onPressed:
+                    canManage &&
+                            mount.available &&
+                            state.provisioned &&
+                            state.sourceIds.isNotEmpty &&
+                            !busy &&
+                            !scanning
+                        ? onScanAll
+                        : null,
+                icon:
+                    scanning
+                        ? const SizedBox.square(
+                          dimension: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                        : const Icon(Icons.manage_search_rounded, size: 18),
+                label: Text(l10n.adminMountLibraryScanAll),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CatalogChip extends StatelessWidget {
+  const _CatalogChip({
+    required this.label,
+    required this.present,
+    required this.enabled,
+  });
+
+  final String label;
+  final bool present;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color =
+        present
+            ? theme.colorScheme.primary
+            : theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.55);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color:
+              present
+                  ? theme.colorScheme.primary.withValues(alpha: 0.45)
+                  : theme.colorScheme.outlineVariant.withValues(alpha: 0.5),
         ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          child: Text(l10n.adminUseCurrentFolder),
-        ),
-      ],
+        color:
+            present
+                ? theme.colorScheme.primary.withValues(alpha: 0.10)
+                : Colors.transparent,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            present ? Icons.check_circle_rounded : Icons.circle_outlined,
+            size: 14,
+            color: color,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: present ? theme.colorScheme.onSurface : color,
+              fontWeight: present ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

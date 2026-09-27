@@ -117,6 +117,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
                           ),
                           child: _buildFileView(
                             context,
+                            ref,
                             controller,
                             l10n,
                             recycle,
@@ -239,6 +240,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
                                 ),
                                 child: _buildFileView(
                                   context,
+                                  ref,
                                   controller,
                                   l10n,
                                   recycle,
@@ -290,6 +292,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
   /// 根据用户选择构建列表或网格文件视图。
   Widget _buildFileView(
     BuildContext context,
+    WidgetRef ref,
     FileBrowserController controller,
     AppLocalizations l10n,
     bool recycle,
@@ -297,6 +300,9 @@ class _FileNodeWorkspace extends ConsumerWidget {
   ) {
     final isShared = state.spaceType == 'SHARED';
     final favorites = state.section == FileManagerSection.favorites;
+    // 无 activity:write 的角色隐藏收藏入口。
+    final canManageActivity =
+        ref.watch(userCapabilitiesProvider).canManageOwnActivity;
     if (state.viewMode == FileBrowserViewMode.list) {
       return _withFilePagination(
         context,
@@ -395,7 +401,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
                   ? null
                   : (file) => ShareLinkSheet.show(context, file: file),
           onToggleFavorite:
-              recycle
+              recycle || !canManageActivity
                   ? null
                   : (file) => unawaited(
                     _runFileAction(
@@ -503,7 +509,7 @@ class _FileNodeWorkspace extends ConsumerWidget {
         onShare:
             recycle ? null : (file) => ShareLinkSheet.show(context, file: file),
         onToggleFavorite:
-            recycle
+            recycle || !canManageActivity
                 ? null
                 : (file) => unawaited(
                   _runFileAction(

@@ -164,7 +164,7 @@ public class FileController {
 
     @Operation(summary = "列出收藏文件", description = "列出当前用户收藏的文件")
     @GetMapping("/api/v1/files/favorites")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     ApiResponse<PageResponse<FileNodeDto>> listFavoriteFiles(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "200") int size
@@ -313,7 +313,7 @@ public class FileController {
 
     @Operation(summary = "添加收藏", description = "将文件添加到收藏夹")
     @PostMapping("/api/v1/files/{fileId}/favorite")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     ApiResponse<FileNodeDto> addFavorite(@PathVariable UUID fileId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         return ApiResponse.success(fileFavoriteService.addFavorite(ownerUserId, fileId));
@@ -321,7 +321,7 @@ public class FileController {
 
     @Operation(summary = "取消收藏", description = "将文件从收藏夹移除")
     @DeleteMapping("/api/v1/files/{fileId}/favorite")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     ApiResponse<Void> removeFavorite(@PathVariable UUID fileId) {
         UUID ownerUserId = currentUserContext.requireCurrentUserId();
         fileFavoriteService.removeFavorite(ownerUserId, fileId);
@@ -379,7 +379,7 @@ public class FileController {
 
     @Operation(summary = "批量添加收藏", description = "批量将多个文件添加到收藏夹")
     @PostMapping("/api/v1/files/batch/favorite")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     ApiResponse<List<FileNodeDto>> batchAddFavorites(
             @Valid @RequestBody BatchFileOperationRequest body
     ) {
@@ -389,7 +389,7 @@ public class FileController {
 
     @Operation(summary = "批量取消收藏", description = "批量将多个文件从收藏夹移除")
     @DeleteMapping("/api/v1/files/batch/favorite")
-    @PreAuthorize("hasAuthority('" + Permissions.FILE_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     ApiResponse<Void> batchRemoveFavorites(
             @Valid @RequestBody BatchFileOperationRequest body
     ) {

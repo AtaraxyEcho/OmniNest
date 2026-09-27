@@ -84,6 +84,7 @@ public class FileExternalStorageAdministration implements ExternalStorageAdminis
     private ExternalStorageAccountSummary toSummary(StorageExternalAccount account) {
         return new ExternalStorageAccountSummary(
                 account.getId(),
+                account.getOwnerUserId(),
                 account.getProvider(),
                 account.getDisplayName(),
                 account.getStatus(),

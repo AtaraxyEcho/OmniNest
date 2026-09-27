@@ -17,13 +17,17 @@ import com.omninest.modules.file.dto.CreateImportTaskRequest;
 import com.omninest.modules.file.dto.ExternalFileItemDto;
 import com.omninest.modules.file.dto.ExternalFileListDto;
 import com.omninest.modules.file.dto.ExternalSpaceDto;
+import com.omninest.modules.file.dto.ExternalStorageConnectorDto;
 import com.omninest.modules.file.dto.ImportTaskDto;
 import com.omninest.modules.file.event.ExternalImportRequestedEvent;
 import com.omninest.modules.file.repository.StorageExternalAccountRepository;
 import com.omninest.modules.file.repository.StorageImportTaskRepository;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -56,11 +60,12 @@ public class ExternalStorageService {
     // ========== Remote 生命周期 ==========
 
     /**
-     * 激活外部存储 remote：解密凭证 → rclone config/create。
+     * 激活外部存储 remote：解密凭证并转换为 rclone 参数后执行 config/create。
+     * OAuth 类连接器在此时把规范化凭据组装为 rclone 认可的 token JSON blob。
      */
     public void activateRemote(StorageExternalAccount account) {
         String remoteName = toRemoteName(account);
-        Map<String, String> params = decryptCredentials(account);
+        Map<String, String> params = buildRcloneParameters(account);
         String rcloneType = toRcloneType(account.getProvider());
         rcloneGateway.createRemote(remoteName, rcloneType, params);
         log.info("外部存储 remote 已激活: accountId={}", account.getId());
@@ -151,28 +156,42 @@ public class ExternalStorageService {
 
     /**
      * 列出连接器目录。
+     * OAuth 类连接器附带实例级应用配置状态，供前端在创建前给出可执行引导。
      *
      * @return 连接器列表
      */
-    public List<com.omninest.modules.file.dto.ExternalStorageConnectorDto> listConnectors() {
+    public List<ExternalStorageConnectorDto> listConnectors() {
         return List.of(
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("WEBDAV", "WebDAV", "PASSWORD", "AVAILABLE"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("S3", "S3", "ACCESS_KEY", "AVAILABLE"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("ONEDRIVE", "OneDrive", "OAUTH2", "OAUTH"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("GDRIVE", "Google Drive", "OAUTH2", "OAUTH"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("DROPBOX", "Dropbox", "OAUTH2", "OAUTH"),
-                new com.omninest.modules.file.dto.ExternalStorageConnectorDto("ALIYUN_DRIVE", "Aliyun Drive", "COOKIE", "TOKEN_PASTE")
+                connector("WEBDAV", "WebDAV", "PASSWORD", "AVAILABLE"),
+                connector("S3", "S3", "ACCESS_KEY", "AVAILABLE"),
+                oauthConnector("ONEDRIVE", "OneDrive"),
+                oauthConnector("GDRIVE", "Google Drive"),
+                oauthConnector("DROPBOX", "Dropbox")
         );
+    }
+
+    private ExternalStorageConnectorDto connector(
+            String code, String displayName, String authMode, String availability) {
+        return new ExternalStorageConnectorDto(
+                code, displayName, authMode, availability, true);
+    }
+
+    private ExternalStorageConnectorDto oauthConnector(String code, String displayName) {
+        boolean configured = oauthService.findAppCredentials(code).isPresent();
+        return new ExternalStorageConnectorDto(
+                code, displayName, "OAUTH2", "OAUTH", configured);
     }
 
     /**
      * 测试外部存储连通性（list 根目录）。
+     * 业务异常消息直接透出，避免把"未配置 OAuth 应用"等可修复原因
+     * 掩盖成统一的连接失败话术。
+     * 与 browse 一致：DB 读写经仓库自身事务，rclone 网络 IO 不占用数据库事务。
      *
      * @param ownerUserId 所有者
      * @param accountId 账户 ID
      * @return 测试结果
      */
-    @Transactional(rollbackFor = Exception.class)
     public com.omninest.modules.file.dto.ExternalStorageTestResultDto testConnection(
             UUID ownerUserId,
             UUID accountId
@@ -183,18 +202,21 @@ public class ExternalStorageService {
             prepareUsableRemote(account);
             rcloneGateway.listDirectory(resolveFs(account), "", false);
             account.setLastErrorCode(null);
-            account.setLastCheckedAt(java.time.Instant.now());
+            account.setLastCheckedAt(Instant.now());
             accountRepository.save(account);
             return new com.omninest.modules.file.dto.ExternalStorageTestResultDto(
                     true, null, "连接正常", account.getLastCheckedAt());
         } catch (RuntimeException exception) {
             String code = "CONNECTION_FAILED";
+            String message = exception instanceof BusinessException businessException
+                    ? businessException.getMessage()
+                    : "无法连接远程存储，请检查地址与凭据";
             account.setLastErrorCode(code);
-            account.setLastCheckedAt(java.time.Instant.now());
+            account.setLastCheckedAt(Instant.now());
             accountRepository.save(account);
             log.warn("外部存储连接测试失败: accountId={}", accountId, exception);
             return new com.omninest.modules.file.dto.ExternalStorageTestResultDto(
-                    false, code, "无法连接远程存储，请检查地址与凭据", account.getLastCheckedAt());
+                    false, code, message, account.getLastCheckedAt());
         }
     }
 
@@ -311,40 +333,96 @@ public class ExternalStorageService {
 
     /**
      * 确保远程可用：OAuth 类先刷新 token，再确保 rclone remote 存在。
+     * token 发生刷新时强制重建 remote，使 rclone 侧拿到最新凭据。
      */
     private void prepareUsableRemote(StorageExternalAccount account) {
-        maybeRefreshOAuthToken(account);
-        ensureRemoteActivated(account);
+        boolean tokenRefreshed = maybeRefreshOAuthToken(account);
+        ensureRemoteActivated(account, tokenRefreshed);
     }
 
-    private void maybeRefreshOAuthToken(StorageExternalAccount account) {
-        String provider = account.getProvider() == null
-                ? ""
-                : account.getProvider().trim().toUpperCase(java.util.Locale.ROOT);
-        boolean oauth = provider.equals("ONEDRIVE")
-                || provider.equals("GDRIVE")
-                || provider.equals("GOOGLE_DRIVE")
-                || provider.equals("DROPBOX");
-        if (!oauth) {
-            return;
+    private boolean maybeRefreshOAuthToken(StorageExternalAccount account) {
+        if (!isOAuthProvider(normalizedProvider(account))) {
+            return false;
         }
-        oauthService.ensureAccessToken(account);
+        return oauthService.ensureAccessToken(account).refreshed();
     }
 
     /**
-     * 确保 rclone remote 已创建。如果尚未激活则自动激活。
+     * 确保 rclone remote 已创建。
+     * config/listremotes 返回的名称带尾冒号，两种形式都视为存在。
+     *
+     * @param account 外部存储账户
+     * @param recreate 是否无视存在性强制重建
      */
-    private void ensureRemoteActivated(StorageExternalAccount account) {
+    private void ensureRemoteActivated(StorageExternalAccount account, boolean recreate) {
         String remoteName = toRemoteName(account);
-        try {
-            List<String> remotes = rcloneGateway.listRemoteNames();
-            if (remotes.contains(remoteName)) {
-                return;
+        if (!recreate) {
+            try {
+                List<String> remotes = rcloneGateway.listRemoteNames();
+                if (remotes.contains(remoteName) || remotes.contains(remoteName + ":")) {
+                    return;
+                }
+            } catch (Exception e) {
+                log.warn("检查 remote 列表失败，尝试重新激活: {}", remoteName, e);
             }
-        } catch (Exception e) {
-            log.warn("检查 remote 列表失败，尝试重新激活: {}", remoteName, e);
         }
         activateRemote(account);
+    }
+
+    private String normalizedProvider(StorageExternalAccount account) {
+        return account.getProvider() == null
+                ? ""
+                : account.getProvider().trim().toUpperCase(Locale.ROOT);
+    }
+
+    private boolean isOAuthProvider(String provider) {
+        return ExternalStorageProviders.isOAuth(provider);
+    }
+
+    /**
+     * 将账户凭据转换为 rclone config/create 参数。
+     * 口令类连接器的存储结构本身就是 rclone 参数，直接透传；
+     * OAuth 类连接器存储的是 OmniNest 规范化 token，需要重新组装。
+     */
+    private Map<String, String> buildRcloneParameters(StorageExternalAccount account) {
+        Map<String, String> flat = decryptCredentials(account);
+        String provider = normalizedProvider(account);
+        if (!isOAuthProvider(provider)) {
+            return flat;
+        }
+        return buildOAuthRcloneParameters(provider, flat);
+    }
+
+    /**
+     * 组装 OAuth 连接器的 rclone 参数。
+     * rclone 的 drive 与 onedrive 后端支持自定义 client_id/client_secret，
+     * 一并下发以便 rclone 在 token 过期时具备自刷新能力；dropbox 后端
+     * 不支持自定义应用，只下发 token。
+     */
+    private Map<String, String> buildOAuthRcloneParameters(String provider, Map<String, String> flat) {
+        JSONObject token = new JSONObject(new LinkedHashMap<>());
+        appendIfPresent(token, "access_token", flat);
+        appendIfPresent(token, "token_type", flat);
+        appendIfPresent(token, "refresh_token", flat);
+        appendIfPresent(token, "expiry", flat);
+        Map<String, String> params = new LinkedHashMap<>();
+        if (!token.isEmpty()) {
+            params.put("token", token.toJSONString());
+        }
+        if ("ONEDRIVE".equals(provider) || "GDRIVE".equals(provider) || "GOOGLE_DRIVE".equals(provider)) {
+            oauthService.findAppCredentials(provider).ifPresent(app -> {
+                params.put("client_id", app.clientId());
+                params.put("client_secret", app.clientSecret());
+            });
+        }
+        return params;
+    }
+
+    private void appendIfPresent(JSONObject token, String key, Map<String, String> source) {
+        String value = source.get(key);
+        if (value != null && !value.isBlank()) {
+            token.put(key, value);
+        }
     }
 
     /**
@@ -388,8 +466,10 @@ public class ExternalStorageService {
             case "WEBDAV" -> "webdav";
             case "ONEDRIVE" -> "onedrive";
             case "GDRIVE", "GOOGLE_DRIVE" -> "drive";
-            case "ALIYUN_DRIVE" -> "alipan";
             case "DROPBOX" -> "dropbox";
+            // 存量阿里云盘账户：rclone 主线无 alipan 后端，给出可执行的处置指引。
+            case "ALIYUN_DRIVE" -> throw new BusinessException(
+                    ErrorCode.PARAM_ERROR, "阿里云盘连接器已下架，请删除该连接后改用其他远程类型");
             default -> throw new BusinessException(ErrorCode.PARAM_ERROR, "不支持的外部存储类型");
         };
     }

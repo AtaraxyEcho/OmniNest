@@ -117,7 +117,8 @@ class FileManagerServiceTest {
             notificationService, fileQueryService, resourceShareLinkService, readThroughCache, fileNodeSupport);
     private final FileUploadQueueService fileUploadQueueService = new FileUploadQueueService(uploadSessionRepository);
     private final ExternalStorageAccountService externalStorageAccountService = new ExternalStorageAccountService(
-            externalAccountRepository, externalStorageService, mock(ExternalStorageCredentialService.class));
+            externalAccountRepository, externalStorageService, mock(ExternalStorageCredentialService.class),
+            mock(ExternalStorageOAuthService.class));
     private final FileManagerService fileManagerService = new FileManagerService(
             fileNodeRepository,
             accessRecordRepository,

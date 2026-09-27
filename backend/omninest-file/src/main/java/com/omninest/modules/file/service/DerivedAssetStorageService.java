@@ -112,13 +112,6 @@ public class DerivedAssetStorageService {
     }
 
     /**
-     * 删除当前用户拥有的派生资源及其对象元数据。
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @param fileNodeId 文件节点 ID
-     * @return 找到并删除派生资源时返回 true
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     /**
      * 查询已存在的派生资产文件节点 ID。
      *
@@ -139,17 +132,46 @@ public class DerivedAssetStorageService {
             String assetType,
             String fileName
     ) {
+        return findRegisteredFileNodeId(ownerUserId, resourceType, resourceId, assetType, fileName)
+                .filter(this::objectStillExists);
+    }
+
+    /**
+     * 查询已登记的派生资产文件节点 ID，不做对象存储存在性探测。
+     *
+     * <p>供封面缩略图等热路径使用：登记即认为可用，对象丢失由读流失败
+     * 触发调用方失效缓存并重新派生，或由对账任务清理孤儿节点。</p>
+     *
+     * @param ownerUserId 所有者用户 ID
+     * @param resourceType 资源类型
+     * @param resourceId 资源 ID
+     * @param assetType 资产类型
+     * @param fileName 资产文件名
+     * @return 派生资产 FileNode ID；未登记时返回空
+     */
+    public Optional<UUID> findRegisteredFileNodeId(
+            UUID ownerUserId,
+            String resourceType,
+            UUID resourceId,
+            String assetType,
+            String fileName
+    ) {
         String path = normalizedPath(resourceType, resourceId, assetType, fileName);
         return fileNodeRepository.findActivePath(ownerUserId, path)
                 .filter(node -> SOURCE_TYPE_DERIVED.equals(node.getSourceType())
                         && node.getCurrentObjectId() != null)
-                .filter(node -> fileObjectRepository.findById(node.getCurrentObjectId())
-                        .map(object -> objectStorageClient.objectExists(new ObjectStorageKey(
-                                object.getBucketName(),
-                                object.getObjectKey()
-                        )))
-                        .orElse(false))
                 .map(FileNode::getId);
+    }
+
+    private boolean objectStillExists(UUID fileNodeId) {
+        return fileNodeRepository.findById(fileNodeId)
+                .filter(node -> node.getCurrentObjectId() != null)
+                .flatMap(node -> fileObjectRepository.findById(node.getCurrentObjectId()))
+                .map(object -> objectStorageClient.objectExists(new ObjectStorageKey(
+                        object.getBucketName(),
+                        object.getObjectKey()
+                )))
+                .orElse(false);
     }
 
     /**
@@ -160,6 +182,7 @@ public class DerivedAssetStorageService {
      * @param fileNodeId 派生资产 FileNode ID
      * @return 是否删除了节点
      */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public boolean deleteDerivedFileNode(UUID fileNodeId) {
         if (fileNodeId == null) {
             return false;

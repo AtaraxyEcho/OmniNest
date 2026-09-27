@@ -21,9 +21,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -56,6 +58,24 @@ public class ExternalStorageOAuthService {
     private final StorageExternalAccountRepository accountRepository;
     private final ExternalStorageCredentialService credentialService;
     private final CredentialCipher credentialCipher;
+
+    /**
+     * token 校验或刷新结果。
+     *
+     * @param credentials 规范化后的完整凭据
+     * @param refreshed 是否实际执行了 token 刷新
+     */
+    public record TokenRefreshResult(JSONObject credentials, boolean refreshed) {
+    }
+
+    /**
+     * 实例级 OAuth 应用凭据。
+     *
+     * @param clientId 应用客户端 ID
+     * @param clientSecret 应用客户端密钥
+     */
+    public record ConnectorAppCredentials(String clientId, String clientSecret) {
+    }
 
     @Transactional(readOnly = true)
     public List<ConnectorOAuthAppDto> listApps() {
@@ -133,8 +153,8 @@ public class ExternalStorageOAuthService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "外部存储账户不存在"));
 
         JSONObject tokens = exchangeCode(connectorCode, app, code.trim());
-        String credentialsJson = JSON.toJSONString(tokens);
-        account.setEncryptedCredentials(credentialService.encrypt(credentialsJson));
+        JSONObject canonical = canonicalizeTokens(tokens);
+        account.setEncryptedCredentials(credentialService.encrypt(canonical.toJSONString()));
         account.setStatus(ExternalStorageStatus.ACTIVE.getValue());
         account.setLastErrorCode(null);
         account.setLastCheckedAt(Instant.now());
@@ -143,19 +163,22 @@ public class ExternalStorageOAuthService {
     }
 
     /**
-     * 刷新 access_token；无法刷新时抛出业务异常。
+     * 校验并返回可用的 access token；需要刷新时使用实例级 OAuth 应用换取新 token 并回写。
+     *
+     * @param account 外部存储账户
+     * @return 规范化凭据与是否实际执行了刷新
      */
-    public JSONObject ensureAccessToken(StorageExternalAccount account) {
+    public TokenRefreshResult ensureAccessToken(StorageExternalAccount account) {
         JSONObject credentials = JSON.parseObject(
                 credentialService.decryptToJson(account.getEncryptedCredentials())
         );
-        if (credentials == null) {
-            throw new BusinessException(ErrorCode.PARAM_ERROR, "凭据为空");
+        if (credentials == null || credentials.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "该连接尚未完成 OAuth 授权，请先在连接列表中发起授权");
         }
         String access = credentials.getString("access_token");
         Object expiry = credentials.get("expiry");
         if (access != null && !access.isBlank() && !isExpired(expiry)) {
-            return credentials;
+            return new TokenRefreshResult(credentials, false);
         }
         String refresh = credentials.getString("refresh_token");
         if (refresh == null || refresh.isBlank()) {
@@ -163,13 +186,62 @@ public class ExternalStorageOAuthService {
         }
         StorageConnectorOAuthApp app = requireApp(account.getProvider());
         JSONObject refreshed = refreshTokens(account.getProvider(), app, refresh);
-        credentials.putAll(refreshed.toJavaObject(Map.class));
-        if (!refreshed.containsKey("refresh_token")) {
-            credentials.put("refresh_token", refresh);
+        JSONObject canonical = canonicalizeTokens(refreshed);
+        if (!canonical.containsKey("refresh_token")) {
+            canonical.put("refresh_token", refresh);
         }
-        account.setEncryptedCredentials(credentialService.encrypt(JSON.toJSONString(credentials)));
+        account.setEncryptedCredentials(credentialService.encrypt(canonical.toJSONString()));
         accountRepository.save(account);
-        return credentials;
+        return new TokenRefreshResult(canonical, true);
+    }
+
+    /**
+     * 读取连接器实例级 OAuth 应用凭据；未配置或未启用时返回空。
+     *
+     * @param connectorCode 连接器编码
+     * @return OAuth 应用凭据
+     */
+    public Optional<ConnectorAppCredentials> findAppCredentials(String connectorCode) {
+        return oauthAppRepository.findFirstByConnectorCodeAndEnabledTrue(
+                        connectorCode.trim().toUpperCase(Locale.ROOT))
+                .map(app -> new ConnectorAppCredentials(
+                        app.getClientId(),
+                        credentialCipher.decrypt(app.getClientSecretEncrypted())
+                ));
+    }
+
+    /**
+     * 将提供方 token 响应规范化为 OmniNest 统一凭据结构。
+     * 只保留 access_token、refresh_token、token_type、expiry 四个字段，
+     * expires_in 秒数在此时转换为 rclone 认可的 ISO-8601 expiry。
+     *
+     * @param tokens 提供方 token 端点原始响应
+     * @return 规范化凭据
+     */
+    private JSONObject canonicalizeTokens(JSONObject tokens) {
+        String access = tokens.getString("access_token");
+        if (access == null || access.isBlank()) {
+            throw new BusinessException(ErrorCode.PARAM_ERROR, "OAuth 授权失败：提供方未返回 access_token");
+        }
+        JSONObject canonical = new JSONObject(new LinkedHashMap<>());
+        canonical.put("access_token", access);
+        String refresh = tokens.getString("refresh_token");
+        if (refresh != null && !refresh.isBlank()) {
+            canonical.put("refresh_token", refresh);
+        }
+        String tokenType = tokens.getString("token_type");
+        canonical.put("token_type", tokenType == null || tokenType.isBlank() ? "Bearer" : tokenType);
+        String expiry = tokens.getString("expiry");
+        if (expiry == null || expiry.isBlank()) {
+            Long expiresIn = tokens.getLong("expires_in");
+            if (expiresIn != null && expiresIn > 0) {
+                expiry = Instant.now().plusSeconds(expiresIn).toString();
+            }
+        }
+        if (expiry != null && !expiry.isBlank()) {
+            canonical.put("expiry", expiry);
+        }
+        return canonical;
     }
 
     private boolean isExpired(Object expiry) {
@@ -189,7 +261,7 @@ public class ExternalStorageOAuthService {
                         connectorCode.trim().toUpperCase(Locale.ROOT))
                 .orElseThrow(() -> new BusinessException(
                         ErrorCode.CONFIG_VALUE_INVALID,
-                        "未配置该连接器的 OAuth 应用，请管理员在远程来源中配置"
+                        "未配置该连接器的 OAuth 应用，请管理员在管理后台的外部存储页面配置"
                 ));
     }
 

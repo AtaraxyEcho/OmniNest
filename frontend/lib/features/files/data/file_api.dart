@@ -6,6 +6,7 @@ import 'package:dio/dio.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/files/data/file_api_response_parser.dart';
 import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/files/domain/file_node.dart';
@@ -240,14 +241,18 @@ class FileApi {
     return TaskSubmission.fromJson(parseData(response.data));
   }
 
+  /// 收藏文件（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<FileNode> addFavorite(String fileId) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/files/$fileId/favorite',
     );
     return parseFileNodeResponse(response.data);
   }
 
+  /// 取消收藏文件（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> removeFavorite(String fileId) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/files/$fileId/favorite',
     );
@@ -305,7 +310,9 @@ class FileApi {
     return parseBatchFileNodeResponse(response.data);
   }
 
+  /// 批量收藏（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<List<FileNode>> batchAddFavorites(List<String> fileIds) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/files/batch/favorite',
       data: {'fileIds': fileIds},
@@ -313,7 +320,9 @@ class FileApi {
     return parseBatchFileNodeResponse(response.data);
   }
 
+  /// 批量取消收藏（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> batchRemoveFavorites(List<String> fileIds) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.delete<Map<String, dynamic>>(
       '/files/batch/favorite',
       data: {'fileIds': fileIds},
@@ -600,6 +609,7 @@ class FileApi {
             displayName: json['displayName']?.toString() ?? '',
             authMode: json['authMode']?.toString() ?? '',
             availability: json['availability']?.toString() ?? '',
+            oauthConfigured: json['oauthConfigured'] != false,
           ),
         )
         .where((item) => item.code.isNotEmpty)

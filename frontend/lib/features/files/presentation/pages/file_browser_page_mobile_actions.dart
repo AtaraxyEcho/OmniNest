@@ -20,10 +20,15 @@ class _FileMobileCreateButton extends StatelessWidget {
     );
   }
 
-  Future<void> _showActions(BuildContext context) {
+  Future<void> _showActions(BuildContext context) async {
     final l10n = AppLocalizations.of(context);
+    final container = ProviderScope.containerOf(context, listen: false);
+    final canContribute =
+        container.read(userCapabilitiesProvider).canContributeContent;
     final canWrite =
-        state.section == FileManagerSection.allFiles && !state.isBusy;
+        canContribute &&
+        state.section == FileManagerSection.allFiles &&
+        !state.isBusy;
     return showModalBottomSheet<void>(
       context: context,
       backgroundColor: context.mobileColors.surfaceRaised,

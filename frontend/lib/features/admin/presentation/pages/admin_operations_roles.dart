@@ -124,6 +124,21 @@ class _RolePermissionDialogState extends ConsumerState<_RolePermissionDialog> {
   bool _submitting = false;
   String? _error;
 
+  static String _moduleLabel(String module) {
+    return switch (module) {
+      'activity' => '本人活动',
+      'preference' => '本人偏好',
+      'profile' => '个人资料',
+      'file' => '文件',
+      'media' => '媒体',
+      'photo' => '照片',
+      'backdrop' => '背景库',
+      'task' => '任务',
+      'system' => '系统',
+      _ => module,
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
@@ -138,7 +153,10 @@ class _RolePermissionDialogState extends ConsumerState<_RolePermissionDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               for (final module in modules) ...[
-                Text(module, style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  _moduleLabel(module),
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,

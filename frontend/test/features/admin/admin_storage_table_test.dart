@@ -172,7 +172,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('挂载位置向导弹窗按内容自适应高度', (tester) async {
+  testWidgets('存储位置区只读且无添加向导入口', (tester) async {
     tester.view.physicalSize = const Size(1440, 1200);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -229,22 +229,9 @@ void main() {
         .signInAsAdmin();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('添加挂载位置'));
-    await tester.pumpAndSettle();
-
     expect(tester.takeException(), isNull);
-    // AlertDialog 默认垂直内边距 24×2；目录浏览区若用 Expanded 会把弹窗
-    // 卡片撑满可用高度（1200 - 48 = 1152），限高后应明显小于可用高度。
-    // AlertDialog 元素命中的是外层 padding 壳，可见卡片是其内部的 Material。
-    final cardFinder =
-        find
-            .descendant(
-              of: find.byType(AlertDialog),
-              matching: find.byType(Material),
-            )
-            .first;
-    final dialogHeight = tester.getSize(cardFinder).height;
-    expect(dialogHeight, lessThan(1152));
-    expect(dialogHeight, greaterThan(400));
+    // 存储位置表已降级为只读，不再提供「添加挂载位置」向导。
+    expect(find.text('添加挂载位置'), findsNothing);
+    expect(find.text('可信挂载点'), findsOneWidget);
   });
 }

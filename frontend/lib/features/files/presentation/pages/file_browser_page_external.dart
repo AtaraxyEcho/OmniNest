@@ -37,10 +37,10 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
               onPressed:
                   enabled
                       ? () => unawaited(
-                        _showExternalStorageDialog(
+                        _addExternalStorage(
                           context: context,
                           ref: ref,
-                          onSubmit: controller.createExternalStorage,
+                          controller: controller,
                         ),
                       )
                       : null,
@@ -69,19 +69,19 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
                                       context: context,
                                       ref: ref,
                                       account: account,
-                                      onSubmit:
-                                          ({
-                                            required String provider,
-                                            required String displayName,
-                                            required String
-                                            encryptedCredentials,
-                                          }) =>
-                                              controller.updateExternalStorage(
-                                                accountId: account.id,
-                                                displayName: displayName,
-                                                encryptedCredentials:
-                                                    encryptedCredentials,
-                                              ),
+                                      onSubmit: ({
+                                        required String provider,
+                                        required String displayName,
+                                        required String encryptedCredentials,
+                                      }) async {
+                                        await controller.updateExternalStorage(
+                                          accountId: account.id,
+                                          displayName: displayName,
+                                          encryptedCredentials:
+                                              encryptedCredentials,
+                                        );
+                                        return account;
+                                      },
                                     )
                                     : null,
                             icon: const Icon(Icons.edit_outlined),
@@ -192,6 +192,25 @@ class _ExternalStorageWorkspace extends ConsumerWidget {
         code == 'GDRIVE' ||
         code == 'GOOGLE_DRIVE' ||
         code == 'DROPBOX';
+  }
+
+  /// 新建外部存储连接；OAuth 类型保存成功后立即引导用户完成授权。
+  Future<void> _addExternalStorage({
+    required BuildContext context,
+    required WidgetRef ref,
+    required FileBrowserController controller,
+  }) async {
+    final account = await _showExternalStorageDialog(
+      context: context,
+      ref: ref,
+      onSubmit: controller.createExternalStorage,
+    );
+    if (account == null || !context.mounted) {
+      return;
+    }
+    if (_isOAuthProvider(account.provider)) {
+      await _startOAuthAuthorize(context, ref, controller, account);
+    }
   }
 
   Future<void> _startOAuthAuthorize(

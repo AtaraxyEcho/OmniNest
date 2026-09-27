@@ -43,18 +43,19 @@ extension FileBrowserIntegrationActions on FileBrowserController {
     });
   }
 
-  Future<void> createExternalStorage({
+  Future<ExternalStorageAccount> createExternalStorage({
     required String provider,
     required String displayName,
     required String encryptedCredentials,
   }) async {
-    await _runAction(FileOperation.addExternalStorage, () async {
-      await _repository.createExternalStorage(
+    return _runAction(FileOperation.addExternalStorage, () async {
+      final account = await _repository.createExternalStorage(
         provider: provider,
         displayName: displayName,
         encryptedCredentials: encryptedCredentials,
       );
       await showExternalStorage();
+      return account;
     });
   }
 

@@ -41,6 +41,12 @@ AdminTagTone _scanStatusTone(String status) {
   };
 }
 
+/// 是否为挂载约定目录（Movie/TV/Anime，忽略大小写）。
+bool _isManagedCatalogRoot(String relativeRoot) {
+  final root = relativeRoot.toLowerCase();
+  return root == 'movie' || root == 'tv' || root == 'anime';
+}
+
 /// 库类型展示名。
 String _libraryTypeLabel(AppLocalizations l10n, VideoLibraryType libraryType) {
   return switch (libraryType) {
@@ -74,7 +80,7 @@ class _LibrarySourcesSectionState
     bool canAdd,
     List<VideoStorageLocation> locations,
   ) {
-    final button = FilledButton.tonalIcon(
+    final button = OutlinedButton.icon(
       onPressed:
           canAdd
               ? () => showDialog<void>(
@@ -86,8 +92,8 @@ class _LibrarySourcesSectionState
                     ),
               )
               : null,
-      icon: const Icon(Icons.add_rounded),
-      label: Text(l10n.adminLibrarySourceAdd),
+      icon: const Icon(Icons.add_rounded, size: 18),
+      label: Text(l10n.adminLibraryAdvancedAdd),
     );
     if (canAdd) {
       return button;
@@ -301,6 +307,11 @@ class _LibrarySourcesSectionState
       title: l10n.adminLibrarySourcesSection,
       subtitle: l10n.adminLibrarySourcesSubtitle,
       trailing: [
+        AdminStatusTag(
+          label: l10n.adminLibrarySourceCountLabel(filtered.length),
+          tone: AdminTagTone.info,
+        ),
+        const SizedBox(width: 8),
         if (canManage) _buildAddButton(context, l10n, canAdd, locations),
       ],
       children: [
@@ -364,7 +375,11 @@ class _LibrarySourcesSectionState
                 '${locationName(source)} · ${source.relativeRoot}',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
-              AdminCellText(_libraryTypeLabel(l10n, source.libraryType)),
+              AdminCellText(
+                '${_libraryTypeLabel(l10n, source.libraryType)} · '
+                '${_isManagedCatalogRoot(source.relativeRoot) ? l10n.adminLibrarySourceManaged : l10n.adminLibrarySourceCustom}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               AdminStatusTag(
                 label: _scanStatusLabel(l10n, source.scanStatus),
                 tone: _scanStatusTone(source.scanStatus),

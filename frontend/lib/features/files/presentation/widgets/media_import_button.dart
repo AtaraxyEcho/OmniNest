@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/responsive_breakpoints.dart';
 import 'package:omninest/core/widgets/space_selector_sheet.dart';
@@ -81,8 +82,9 @@ class MediaImportButton extends ConsumerStatefulWidget {
 
   /// 选择文件后交给外部队列处理，不弹模态进度窗口。
   ///
-  /// 设置后跳过空间选择与阻塞式上传对话框；上传、扫描与入库由调用方异步完成。
-  final void Function(List<XFile> files)? onFilesPicked;
+  /// 设置后仍会弹出空间选择（[allowSharedSpace] 为 false 时直接用个人空间），
+  /// 但跳过阻塞式上传对话框；上传、扫描与入库由调用方异步完成。
+  final void Function(List<XFile> files, String spaceType)? onFilesPicked;
 
   /// 按钮文案；不传则使用通用「导入文件」。
   final String? label;
@@ -103,12 +105,20 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
     return switch (widget.style) {
       ImportButtonStyle.textButton => TextButton.icon(
         onPressed: _busy ? null : _handleImport,
-        icon: _ImportButtonIcon(busy: _busy, color: widget.color, size: 18),
+        icon: _ImportButtonIcon(
+          busy: _busy,
+          color: widget.color,
+          size: AppControlTokens.buttonIconSize,
+        ),
         label: Text(buttonLabel),
       ),
       ImportButtonStyle.iconButton => IconButton(
         onPressed: _busy ? null : _handleImport,
-        icon: _ImportButtonIcon(busy: _busy, color: widget.color, size: 20),
+        icon: _ImportButtonIcon(
+          busy: _busy,
+          color: widget.color,
+          size: AppControlTokens.iconButtonIconSize,
+        ),
         tooltip: buttonLabel,
       ),
       ImportButtonStyle.filledButton => FilledButton.icon(
@@ -116,14 +126,18 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
         icon: _ImportButtonIcon(
           busy: _busy,
           color: widget.color ?? Theme.of(context).colorScheme.onPrimary,
-          size: 18,
+          size: AppControlTokens.buttonIconSize,
         ),
         label: Text(buttonLabel),
       ),
       ImportButtonStyle.outlinedButton => OutlinedButton.icon(
         onPressed: _busy ? null : _handleImport,
         style: OutlinedButton.styleFrom(foregroundColor: widget.color),
-        icon: _ImportButtonIcon(busy: _busy, color: widget.color, size: 18),
+        icon: _ImportButtonIcon(
+          busy: _busy,
+          color: widget.color,
+          size: AppControlTokens.buttonIconSize,
+        ),
         label: Text(buttonLabel),
       ),
     };
@@ -141,22 +155,13 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       final unsupportedFiles = _unsupportedFiles(files);
       if (unsupportedFiles.isNotEmpty) {
         if (!mounted || !messenger.mounted) return;
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l10n.importUnsupportedFormat(
-                _unsupportedFileNames(unsupportedFiles),
-                _supportedExtensionNames(),
-              ),
-            ),
+        _showSnack(
+          messenger,
+          l10n.importUnsupportedFormat(
+            _unsupportedFileNames(unsupportedFiles),
+            _supportedExtensionNames(),
           ),
         );
-        return;
-      }
-
-      final onFilesPicked = widget.onFilesPicked;
-      if (onFilesPicked != null) {
-        onFilesPicked(files);
         return;
       }
 
@@ -168,6 +173,12 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
 
       final spaceType =
           spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL';
+
+      final onFilesPicked = widget.onFilesPicked;
+      if (onFilesPicked != null) {
+        onFilesPicked(files, spaceType);
+        return;
+      }
       final importService = ref.read(mediaImportServiceProvider);
       final isCompact = ResponsiveBreakpoints.isCompact(
         MediaQuery.sizeOf(context).width,
@@ -194,13 +205,20 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
       }
     } on Object {
       if (mounted && messenger.mounted) {
-        messenger.showSnackBar(SnackBar(content: Text(l10n.importFailed)));
+        _showSnack(messenger, l10n.importFailed);
       }
     } finally {
       if (mounted) {
         setState(() => _busy = false);
       }
     }
+  }
+
+  /// 先 clearSnackBars 再弹出，避免同文案 SnackBar Hero tag 重复断言。
+  void _showSnack(ScaffoldMessengerState messenger, String message) {
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<List<XFile>> _pickImportFiles(AppLocalizations l10n) async {
@@ -357,12 +375,9 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
               result.failures.isEmpty
                   ? ''
                   : ' (${result.failures.take(2).map(_failureSummary).join('; ')})';
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                '${l10n.importProcessing(result.imported.length)}$failureSuffix',
-              ),
-            ),
+          _showSnack(
+            messenger,
+            '${l10n.importProcessing(result.imported.length)}$failureSuffix',
           );
           return;
         }
@@ -377,16 +392,13 @@ class _MediaImportButtonState extends ConsumerState<MediaImportButton> {
           result.failures.isEmpty
               ? ''
               : ' (${result.failures.take(2).map(_failureSummary).join('; ')})';
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '${l10n.importComplete(result.imported.length)}$failureSuffix',
-          ),
-        ),
+      _showSnack(
+        messenger,
+        '${l10n.importComplete(result.imported.length)}$failureSuffix',
       );
     } on Object {
       if (!mounted || !messenger.mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(l10n.importRefreshFailed)));
+      _showSnack(messenger, l10n.importRefreshFailed);
     }
   }
 

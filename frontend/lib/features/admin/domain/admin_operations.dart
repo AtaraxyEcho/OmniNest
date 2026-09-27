@@ -653,6 +653,7 @@ class AdminExternalStorageView {
 class AdminExternalStorageItem {
   const AdminExternalStorageItem({
     required this.id,
+    required this.ownerUserId,
     required this.provider,
     required this.displayName,
     required this.status,
@@ -663,6 +664,7 @@ class AdminExternalStorageItem {
   factory AdminExternalStorageItem.fromJson(Map<String, dynamic> json) {
     return AdminExternalStorageItem(
       id: json['id']?.toString() ?? '',
+      ownerUserId: json['ownerUserId']?.toString() ?? '',
       provider: json['provider']?.toString() ?? '',
       displayName: json['displayName']?.toString() ?? '',
       status: json['status']?.toString() ?? '',
@@ -672,6 +674,7 @@ class AdminExternalStorageItem {
   }
 
   final String id;
+  final String ownerUserId;
   final String provider;
   final String displayName;
   final String status;

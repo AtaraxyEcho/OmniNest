@@ -787,9 +787,9 @@ Future<void> _showNameDialog({
   await _runFileActionWithMessenger(messenger, () => onSubmit(value));
 }
 
-Future<void> _showExternalStorageDialog({
+Future<ExternalStorageAccount?> _showExternalStorageDialog({
   required BuildContext context,
-  required Future<void> Function({
+  required Future<ExternalStorageAccount> Function({
     required String provider,
     required String displayName,
     required String encryptedCredentials,
@@ -811,7 +811,7 @@ Future<void> _showExternalStorageDialog({
     }
   }
   if (!context.mounted) {
-    return;
+    return null;
   }
   final result = await showDialog<
     ({String provider, String displayName, String credentialsJson})
@@ -823,14 +823,19 @@ Future<void> _showExternalStorageDialog({
           connectors: connectors,
         ),
   );
-  if (result != null) {
-    await _runFileActionWithMessenger(
-      messenger,
-      () => onSubmit(
-        provider: result.provider,
-        displayName: result.displayName,
-        encryptedCredentials: result.credentialsJson,
-      ),
-    );
+  if (result == null) {
+    return null;
   }
+  ExternalStorageAccount? submitted;
+  final ok = await _runFileActionWithMessenger(messenger, () async {
+    submitted = await onSubmit(
+      provider: result.provider,
+      displayName: result.displayName,
+      encryptedCredentials: result.credentialsJson,
+    );
+  });
+  if (!ok) {
+    return null;
+  }
+  return submitted;
 }

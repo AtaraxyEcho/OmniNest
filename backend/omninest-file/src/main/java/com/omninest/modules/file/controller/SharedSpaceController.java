@@ -114,7 +114,7 @@ public class SharedSpaceController {
 
     @Operation(summary = "管理员：更新共享空间配置")
     @PutMapping("/config")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     public ApiResponse<Void> updateConfig(@RequestBody @Valid SharedSpaceConfigRequest request) {
         UUID operatorId = currentUserContext.requireCurrentUserId();
         if (request.maxBytes() != null && !request.maxBytes().isBlank()) {
@@ -130,7 +130,7 @@ public class SharedSpaceController {
 
     @Operation(summary = "管理员：设置角色权限")
     @PutMapping("/permissions/{roleId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    @PreAuthorize("hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')")
     public ApiResponse<Void> setRolePermission(
             @PathVariable UUID roleId,
             @RequestBody @Valid SharedSpacePermissionRequest request) {

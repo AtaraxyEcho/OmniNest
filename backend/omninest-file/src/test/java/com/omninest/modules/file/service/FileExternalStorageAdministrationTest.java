@@ -42,6 +42,7 @@ class FileExternalStorageAdministrationTest {
 
         assertThat(summaries).hasSize(1);
         assertThat(summaries.getFirst().id()).isEqualTo(ACCOUNT_ID);
+        assertThat(summaries.getFirst().ownerUserId()).isEqualTo(OWNER_USER_ID);
         assertThat(summaries.getFirst().displayName()).isEqualTo("归档存储");
     }
 

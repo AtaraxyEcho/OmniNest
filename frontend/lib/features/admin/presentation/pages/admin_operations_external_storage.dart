@@ -5,6 +5,14 @@ class AdminExternalStoragePage extends ConsumerWidget {
 
   final AdminExternalStorageView view;
 
+  /// 管理端只展示所有者短标识，避免整段 UUID 撑破信息行。
+  String _shortId(String id) {
+    if (id.length <= 8) {
+      return id.isEmpty ? '-' : id;
+    }
+    return id.substring(0, 8);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
@@ -109,7 +117,9 @@ class AdminExternalStoragePage extends ConsumerWidget {
                     for (final item in filtered)
                       _InfoRow(
                         leading: item.displayName,
-                        middle: '${item.provider}\n${item.updatedAt}',
+                        middle:
+                            '${l10n.adminExternalStorageOwner} ${_shortId(item.ownerUserId)}\n'
+                            '${item.provider}\n${item.updatedAt}',
                         trailing: Wrap(
                           spacing: 8,
                           crossAxisAlignment: WrapCrossAlignment.center,
@@ -186,6 +196,42 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
   bool _enabled = true;
   bool _saving = false;
   String? _errorMessage;
+  String? _lastGeneratedRedirect;
+
+  @override
+  void initState() {
+    super.initState();
+    // 回调地址预填属于一次性副作用，避开 build 与 initState 的 ref 限制。
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(_syncRedirectPrefill);
+      }
+    });
+  }
+
+  /// 根据当前 API 基地址推导该连接器的 OAuth 回调地址。
+  String? _callbackUri() {
+    final base = ref.read(appEnvironmentProvider)?.apiBaseUrl;
+    if (base == null || base.isEmpty) {
+      return null;
+    }
+    final normalized =
+        base.endsWith('/') ? base.substring(0, base.length - 1) : base;
+    return '$normalized/external-connectors/$_connectorCode/oauth/callback';
+  }
+
+  /// 空值或仍是上次自动生成值时刷新预填；用户手动改写过则不覆盖。
+  void _syncRedirectPrefill() {
+    final generated = _callbackUri();
+    if (generated == null) {
+      return;
+    }
+    final current = _redirectController.text.trim();
+    if (current.isEmpty || current == _lastGeneratedRedirect) {
+      _lastGeneratedRedirect = generated;
+      _redirectController.text = generated;
+    }
+  }
 
   @override
   void dispose() {
@@ -243,8 +289,10 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
                 value: _connectorCode,
                 items: _oauthConnectorItems,
                 onChanged:
-                    (value) =>
-                        setState(() => _connectorCode = value ?? 'ONEDRIVE'),
+                    (value) => setState(() {
+                      _connectorCode = value ?? 'ONEDRIVE';
+                      _syncRedirectPrefill();
+                    }),
                 label: l10n.adminType,
               ),
               const SizedBox(height: 12),
@@ -269,6 +317,8 @@ class _OAuthAppDialogState extends ConsumerState<_OAuthAppDialog> {
                 controller: _redirectController,
                 decoration: InputDecoration(
                   labelText: l10n.adminExternalStorageRedirectUri,
+                  helperText: l10n.adminOAuthRedirectHint,
+                  helperMaxLines: 2,
                   isDense: true,
                 ),
               ),

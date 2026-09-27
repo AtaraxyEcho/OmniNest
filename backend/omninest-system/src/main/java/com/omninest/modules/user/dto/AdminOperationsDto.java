@@ -216,7 +216,8 @@ public final class AdminOperationsDto {
     @Schema(description = "外部存储账户信息")
     public record ExternalStorageItem(
             @Schema(description = "账户 ID") UUID id,
-            @Schema(description = "存储提供者", example = "RCLONE") String provider,
+            @Schema(description = "所属用户 ID") UUID ownerUserId,
+            @Schema(description = "存储提供者", example = "WEBDAV") String provider,
             @Schema(description = "显示名称", example = "我的网盘") String displayName,
             @Schema(description = "状态", example = "ACTIVE") String status,
             @Schema(description = "创建时间") Instant createdAt,
@@ -227,14 +228,6 @@ public final class AdminOperationsDto {
     @Schema(description = "外部存储视图")
     public record ExternalStorageView(
             @Schema(description = "外部存储列表") List<ExternalStorageItem> items
-    ) {
-    }
-
-    @Schema(description = "创建外部存储请求")
-    public record CreateExternalStorageRequest(
-            @Schema(description = "存储提供者", example = "RCLONE") @NotBlank String provider,
-            @Schema(description = "显示名称", example = "我的网盘") @NotBlank String displayName,
-            @Schema(description = "加密凭据") String credentials
     ) {
     }
 

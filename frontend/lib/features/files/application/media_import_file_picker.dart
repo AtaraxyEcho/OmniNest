@@ -44,17 +44,14 @@ Future<List<XFile>> _pickFilesWithSelector(
 }
 
 Future<List<XFile>> _pickWindowsFiles(List<String> extensions) async {
-  final result = await file_picker.FilePicker.platform.pickFiles(
+  final files = await file_picker.FilePicker.pickFiles(
     type:
         extensions.isEmpty
             ? file_picker.FileType.any
             : file_picker.FileType.custom,
     allowedExtensions: extensions.isEmpty ? null : extensions,
-    allowMultiple: true,
-    withData: false,
-    lockParentWindow: false,
   );
-  return result?.xFiles ?? const <XFile>[];
+  return files.map((file) => file.xFile).toList(growable: false);
 }
 
 List<String> mediaImportFilePickerExtensions(

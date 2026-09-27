@@ -11,7 +11,6 @@ Map<String, String> _providerLabels(AppLocalizations l10n) => {
   'WEBDAV': 'WebDAV',
   'ONEDRIVE': 'OneDrive',
   'GDRIVE': 'Google Drive',
-  'ALIYUN_DRIVE': l10n.filesAliyunDrive,
   'DROPBOX': 'Dropbox',
 };
 
@@ -67,10 +66,26 @@ class _ExternalStorageAccountDialogState
   late final TextEditingController _webdavUrlCtrl;
   late final TextEditingController _webdavUserCtrl;
   late final TextEditingController _webdavPassCtrl;
-  // 通用 OAuth 凭据
-  late final TextEditingController _oauthClientIdCtrl;
-  late final TextEditingController _oauthClientSecretCtrl;
-  late final TextEditingController _oauthTokenCtrl;
+
+  bool get _isOAuthProvider {
+    final code = _provider.toUpperCase();
+    return code == 'ONEDRIVE' ||
+        code == 'GDRIVE' ||
+        code == 'GOOGLE_DRIVE' ||
+        code == 'DROPBOX';
+  }
+
+  /// OAuth 连接器依赖实例级应用：目录明确报告未配置时禁止提交，
+  /// 服务端创建接口以同样规则兜底。目录不可用时放行，由服务端拒绝并提示。
+  bool get _oauthAppMissing {
+    if (!_isOAuthProvider) {
+      return false;
+    }
+    final connector = widget.connectors.where(
+      (item) => item.code.toUpperCase() == _provider.toUpperCase(),
+    );
+    return connector.isNotEmpty && !connector.first.oauthConfigured;
+  }
 
   @override
   void initState() {
@@ -84,9 +99,6 @@ class _ExternalStorageAccountDialogState
     _webdavUrlCtrl = TextEditingController();
     _webdavUserCtrl = TextEditingController();
     _webdavPassCtrl = TextEditingController();
-    _oauthClientIdCtrl = TextEditingController();
-    _oauthClientSecretCtrl = TextEditingController();
-    _oauthTokenCtrl = TextEditingController();
 
     if (account != null) {
       _provider = account.provider;
@@ -106,11 +118,6 @@ class _ExternalStorageAccountDialogState
         _webdavVendor = metadata['vendor'] ?? 'other';
         _webdavUrlCtrl.text = metadata['url'] ?? '';
         _webdavUserCtrl.text = metadata['user'] ?? '';
-      case 'ONEDRIVE':
-      case 'GDRIVE':
-      case 'ALIYUN_DRIVE':
-      case 'DROPBOX':
-        _oauthClientIdCtrl.text = metadata['client_id'] ?? '';
     }
   }
 
@@ -124,28 +131,25 @@ class _ExternalStorageAccountDialogState
     _webdavUrlCtrl.dispose();
     _webdavUserCtrl.dispose();
     _webdavPassCtrl.dispose();
-    _oauthClientIdCtrl.dispose();
-    _oauthClientSecretCtrl.dispose();
-    _oauthTokenCtrl.dispose();
     super.dispose();
   }
 
   bool get _canSubmit {
     if (_displayNameCtrl.text.trim().isEmpty) return false;
+    if (_oauthAppMissing) return false;
+    if (_isOAuthProvider) return true;
     final canKeepSecret = widget.account?.credentialsConfigured == true;
+    // AWS 官方 S3 无需自定义端点，其余 S3 兼容服务必须提供端点。
+    final endpointRequired = _s3ProviderType != 'AWS';
     return switch (_provider) {
       'S3' =>
         _s3AccessKeyCtrl.text.trim().isNotEmpty &&
             (canKeepSecret || _s3SecretKeyCtrl.text.trim().isNotEmpty) &&
-            _s3EndpointCtrl.text.trim().isNotEmpty,
+            (!endpointRequired || _s3EndpointCtrl.text.trim().isNotEmpty),
       'WEBDAV' =>
         _webdavUrlCtrl.text.trim().isNotEmpty &&
             _webdavUserCtrl.text.trim().isNotEmpty &&
             (canKeepSecret || _webdavPassCtrl.text.trim().isNotEmpty),
-      'ONEDRIVE' ||
-      'GDRIVE' ||
-      'ALIYUN_DRIVE' ||
-      'DROPBOX' => canKeepSecret || _oauthTokenCtrl.text.trim().isNotEmpty,
       _ => false,
     };
   }
@@ -157,7 +161,9 @@ class _ExternalStorageAccountDialogState
         'access_key_id': _s3AccessKeyCtrl.text.trim(),
         if (_s3SecretKeyCtrl.text.trim().isNotEmpty)
           'secret_access_key': _s3SecretKeyCtrl.text.trim(),
-        'endpoint': _s3EndpointCtrl.text.trim(),
+        // 编辑模式始终提交 endpoint 以支持显式清空；新建 AWS 留空时不提交该键。
+        if (widget.account != null || _s3EndpointCtrl.text.trim().isNotEmpty)
+          'endpoint': _s3EndpointCtrl.text.trim(),
         if (widget.account != null || _s3RegionCtrl.text.trim().isNotEmpty)
           'region': _s3RegionCtrl.text.trim(),
       },
@@ -168,14 +174,7 @@ class _ExternalStorageAccountDialogState
         if (_webdavPassCtrl.text.trim().isNotEmpty)
           'pass': _webdavPassCtrl.text.trim(),
       },
-      'ONEDRIVE' || 'GDRIVE' || 'ALIYUN_DRIVE' || 'DROPBOX' => {
-        if (_oauthClientIdCtrl.text.trim().isNotEmpty)
-          'client_id': _oauthClientIdCtrl.text.trim(),
-        if (_oauthClientSecretCtrl.text.trim().isNotEmpty)
-          'client_secret': _oauthClientSecretCtrl.text.trim(),
-        if (_oauthTokenCtrl.text.trim().isNotEmpty)
-          'token': _oauthTokenCtrl.text.trim(),
-      },
+      // OAuth 连接的凭据只能通过授权流程获得，创建时提交空结构。
       _ => <String, String>{},
     };
     return jsonEncode(map);
@@ -240,25 +239,37 @@ class _ExternalStorageAccountDialogState
                   ),
                   onChanged: (_) => setState(() {}),
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  l10n.filesConnectionCredentials,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: context.filesColors.onSurfaceVariant,
-                  ),
-                ),
-                if (isEdit &&
-                    widget.account?.credentialsConfigured == true) ...[
-                  const SizedBox(height: 6),
+                if (_oauthAppMissing) ...[
+                  const SizedBox(height: 10),
                   Text(
-                    l10n.filesExistingSecretPreserved,
+                    l10n.filesOAuthAppMissing,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: context.filesColors.onSurfaceVariant,
+                      color: context.filesColors.error,
                     ),
                   ),
                 ],
-                const SizedBox(height: 8),
-                ..._buildCredentialFields(),
+                // OAuth 连接不在此表单收集任何凭据，保存后通过授权流程获取 token。
+                if (!_isOAuthProvider) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    l10n.filesConnectionCredentials,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: context.filesColors.onSurfaceVariant,
+                    ),
+                  ),
+                  if (isEdit &&
+                      widget.account?.credentialsConfigured == true) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      l10n.filesExistingSecretPreserved,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: context.filesColors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  ..._buildCredentialFields(),
+                ],
               ],
             ),
           ),
@@ -319,8 +330,11 @@ class _ExternalStorageAccountDialogState
         TextField(
           controller: _s3EndpointCtrl,
           decoration: InputDecoration(
-            labelText: l10n.filesEndpointRequired,
-            hintText: l10n.filesEndpointHint,
+            labelText:
+                _s3ProviderType == 'AWS'
+                    ? l10n.filesEndpoint
+                    : l10n.filesEndpointRequired,
+            hintText: _s3ProviderType == 'AWS' ? null : l10n.filesEndpointHint,
             isDense: true,
           ),
           onChanged: (_) => setState(() {}),
@@ -381,44 +395,7 @@ class _ExternalStorageAccountDialogState
           onChanged: (_) => setState(() {}),
         ),
       ],
-      'ONEDRIVE' || 'GDRIVE' || 'ALIYUN_DRIVE' || 'DROPBOX' => [
-        TextField(
-          controller: _oauthClientIdCtrl,
-          decoration: InputDecoration(
-            labelText: l10n.filesClientIdOptional,
-            isDense: true,
-          ),
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _oauthClientSecretCtrl,
-          decoration: InputDecoration(
-            labelText: l10n.filesClientSecretOptional,
-            hintText:
-                widget.account == null
-                    ? null
-                    : l10n.filesKeepExistingSecretHint,
-            isDense: true,
-          ),
-          obscureText: true,
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _oauthTokenCtrl,
-          decoration: InputDecoration(
-            labelText: l10n.filesOauthTokenJson,
-            hintText:
-                widget.account == null
-                    ? '{"access_token":"...","refresh_token":"...","expiry":"..."}'
-                    : l10n.filesKeepExistingSecretHint,
-            isDense: true,
-          ),
-          maxLines: 4,
-          onChanged: (_) => setState(() {}),
-        ),
-      ],
+      'ONEDRIVE' || 'GDRIVE' || 'GOOGLE_DRIVE' || 'DROPBOX' => const <Widget>[],
       _ => [Text(l10n.filesUnknownStorageType)],
     };
   }

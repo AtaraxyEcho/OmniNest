@@ -334,12 +334,16 @@ class ExternalStorageConnector {
     required this.displayName,
     required this.authMode,
     this.availability = '',
+    this.oauthConfigured = true,
   });
 
   final String code;
   final String displayName;
   final String authMode;
   final String availability;
+
+  /// OAuth 类连接器的实例级应用是否已配置；未配置时创建会被服务端拒绝。
+  final bool oauthConfigured;
 }
 
 class ExternalFileItem {
