@@ -4,6 +4,7 @@ import 'package:omninest/app/connectivity_listener.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/core/preferences/user_preferences_api.dart';
 import 'package:omninest/core/preferences/preference_sync_service.dart';
 import 'package:omninest/core/storage/local_database.dart';
@@ -33,11 +34,21 @@ final apiClientProvider = Provider<ApiClient>((ref) {
     throw StateError('服务器地址未配置');
   }
   final sessionStore = ref.watch(authSessionStoreProvider);
+  Set<String> readPermissions() =>
+      ref.read(authSessionProvider).asData?.value.user?.permissions ??
+      const <String>{};
   final apiClient = ApiClient(
     environment,
     sessionStore: sessionStore,
     refreshSession:
         () => ref.read(authSessionProvider.notifier).refreshSession(),
+    readPermissions: readPermissions,
+  );
+  // 自动写回缺 activity/preference 写权限时静默跳过，不发网络；
+  // 用户主动写由 API 预检抛 FORBIDDEN，后端 @PreAuthorize 兜底。
+  apiClient.dio.interceptors.insert(
+    0,
+    CapabilityGateInterceptor(readPermissions: readPermissions),
   );
   // 封面专域缓存的下载客户端与 ApiClient 同生命周期，重建时刷新引用。
   MusicCoverCache.configure(apiClient.dio);

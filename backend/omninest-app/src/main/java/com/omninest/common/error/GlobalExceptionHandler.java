@@ -117,9 +117,29 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(AuthorizationDeniedException.class)
     ResponseEntity<ApiResponse<Void>> handleAccessDenied(AuthorizationDeniedException exception) {
-        log.warn("权限不足: {}", exception.getMessage());
+        // 预期能力缺口（内容写/体验写）按 DEBUG，避免低权限会话刷屏；管理面或其它拒绝保持 WARN。
+        if (isExpectedCapabilityDenial(exception)) {
+            log.debug("权限不足(能力类): {}", exception.getMessage());
+        } else {
+            log.warn("权限不足: {}", exception.getMessage());
+        }
         return ResponseEntity.status(HttpStatus.FORBIDDEN)
                 .body(ApiResponse.error(ErrorCode.FORBIDDEN, "权限不足，无法执行此操作"));
+    }
+
+    private boolean isExpectedCapabilityDenial(AuthorizationDeniedException exception) {
+        String message = String.valueOf(exception.getMessage());
+        String lower = message.toLowerCase(Locale.ROOT);
+        if (lower.contains("/admin/")) {
+            return false;
+        }
+        return lower.contains("activity:")
+                || lower.contains("preference:")
+                || lower.contains("profile:")
+                || lower.contains("file:write")
+                || lower.contains("media:write")
+                || lower.contains("photo:write")
+                || lower.contains("backdrop:write");
     }
 
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)

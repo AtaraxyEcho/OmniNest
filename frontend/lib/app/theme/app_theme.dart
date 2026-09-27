@@ -295,7 +295,7 @@ class OmniNestTheme {
           backgroundColor: colors.primary,
           foregroundColor: colors.onPrimary,
           minimumSize: Size(44, controlMinHeight),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          padding: AppControlTokens.buttonPadding,
           shape: roundedShape,
         ),
       ),
@@ -303,6 +303,7 @@ class OmniNestTheme {
         style: OutlinedButton.styleFrom(
           foregroundColor: colors.onSurface,
           minimumSize: Size(44, controlMinHeight),
+          padding: AppControlTokens.buttonPadding,
           side: BorderSide(color: colors.outline),
           shape: roundedShape,
         ),

@@ -62,7 +62,7 @@ file:
     max-files-per-scan: 100000
     max-scan-depth: 32
     mounts:
-      media:
+      library:
         host-path: ${OMNINEST_LOCAL_MEDIA_ROOT:../.omninest/local-media}
         process-path: ${OMNINEST_LOCAL_MEDIA_PROCESS_ROOT:/mnt/local-media}
 
@@ -81,7 +81,9 @@ omninest:
     embedded-worker-enabled: ${OMNINEST_RUNTIME_EMBEDDED_WORKER_ENABLED:true}
   security:
     jwt-secret: ${OMNINEST_SECURITY_JWT_SECRET:change-me-omninest-local-jwt-secret-at-least-32-bytes}
-    credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}
+    # 外部存储凭据 AES-GCM 密钥的本地回退值（32 零字节的 Base64）。
+    # 仅用于开发环境开箱即用；生产环境必须通过环境变量显式配置独立密钥。
+    credential-encryption-key: ${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}
     refresh-cookie-secure: ${OMNINEST_SECURITY_REFRESH_COOKIE_SECURE:false}
     refresh-cookie-same-site: ${OMNINEST_SECURITY_REFRESH_COOKIE_SAME_SITE:STRICT}
     registration-enabled: ${OMNINEST_SECURITY_REGISTRATION_ENABLED:false}

@@ -80,22 +80,27 @@ OmniNest Backend 是统一的服务端入口，负责 REST API、身份认证、
 
 ## 角色与权限
 
-内置角色：`SUPER_ADMIN`（全量）、`ADMIN`（用户/任务/媒体库管理，无系统配置写）、`MEMBER`（个人空间默认）、`GUEST`（有限只读）。注册默认 `MEMBER`。
+内置角色：`SUPER_ADMIN`（全量）、`ADMIN`（用户/任务/媒体库管理，无系统配置写）、`MEMBER`（个人空间默认）、`GUEST`（内容只读的体验账号，可维护本人进度与偏好）。注册默认 `MEMBER`。
 
 | 能力域 | 权限码 | 说明 |
 | --- | --- | --- |
-| 个人文件 | `file:read` / `file:write` | 文件、分享、离线下载、外部存储 |
-| 个人媒体 | `media:read` / `media:write` | 影视、音乐、阅读（本人及可见共享） |
+| 本人账户 | `profile:read` / `profile:write` | 资料、会话、密码、头像、2FA |
+| 本人活动 | `activity:read` / `activity:write` | 进度、历史、队列、书签、收藏、任务摘要、通知已读 |
+| 本人偏好 | `preference:read` / `preference:write` | UI/播放/天气城市等偏好 |
+| 个人文件 | `file:read` / `file:write` | 文件、分享、离线下载、外部存储（内容贡献） |
+| 个人媒体 | `media:read` / `media:write` | 影视、音乐、阅读内容读写（不含本人活动） |
 | 服务器媒体库 | `media:library:manage` | 影视库来源、扫描授权、库级元数据 |
 | 照片 | `photo:read` / `photo:write` / `photo:admin` | 个人相册 / 全站扫描与重生成 |
+| 背景库 | `backdrop:read` / `backdrop:write` | 壳层背景素材 |
 | 任务 | `task:read` / `task:admin` | 本人任务 / 全站与死信 |
 | 系统 | `system:config:*` / `system:user:*` | 配置与用户管理 |
 
 要点：
 
 - 接口以权限码 `@PreAuthorize` 为主，不按角色名硬编码；自定义角色可持管理码进入 `/admin`。
-- 本人任务：`GET /tasks` 全类型；影视进度：`GET /video/tasks` 仅影视任务类型白名单。
-- 任务重试：本人 `POST /tasks/{id}/retry`（仅 `FAILED`）；死信 `POST /tasks/dlq/{id}/retry` 需 `system:config:manage`。
+- `ALL_MEMBERS` 影视库对任意持有 `media:read` 的 ACTIVE 用户（含 GUEST）可见。
+- 本人任务：`GET /tasks` 全类型；`GET /tasks/summary` 仅需 `activity:read`。
+- 任务重试：本人 `POST /tasks/{id}/retry`（仅 `FAILED`）；死信 `POST /tasks/dlq/{id}/retry` 需 `task:admin`。
 - 本人任务 DTO 默认不返回失败堆栈摘要；`result` 保留业务字段。
 
 ## 数据与存储方案

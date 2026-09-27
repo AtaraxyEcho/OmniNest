@@ -143,11 +143,10 @@ class ApplicationEnvironmentContractTest {
                 "music.providers.netease-base-url",
                 "photo.ai.endpoint",
                 "file.local-media.enabled",
-                "file.local-media.mounts.media.host-path",
-                "file.local-media.mounts.media.process-path",
+                "file.local-media.mounts.library.host-path",
+                "file.local-media.mounts.library.process-path",
                 "omninest.setup.enabled",
                 "omninest.setup.persistent-state-enabled",
-                "omninest.security.credential-encryption-key",
                 "omninest.security.registration-enabled",
                 "omninest.security.trusted-proxies",
                 "omninest.security.allowed-origins",
@@ -189,6 +188,12 @@ class ApplicationEnvironmentContractTest {
                 .isEqualTo("${OMNINEST_RCLONE_RC_PASS:}");
         assertThat(prod.getProperty("omninest.aria2.rpc-secret"))
                 .isEqualTo("${OMNINEST_ARIA2_RPC_SECRET:}");
+        // 凭据加密密钥：dev 提供本地回退值便于开箱联调，prod 必须显式注入，
+        // 运行时由 ProductionSecretsValidator 拒绝空值。
+        assertThat(dev.getProperty("omninest.security.credential-encryption-key"))
+                .isEqualTo("${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=}");
+        assertThat(prod.getProperty("omninest.security.credential-encryption-key"))
+                .isEqualTo("${OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY:}");
     }
 
     private Set<String> applicationVariables(String resourceName) throws IOException {

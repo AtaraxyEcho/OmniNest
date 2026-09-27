@@ -48,6 +48,7 @@ public class ProductionSecretsValidator implements ApplicationRunner {
         REQUIRED_SECRETS.put("omninest.minio.secret-key", "OMNINEST_MINIO_SECRET_KEY");
         REQUIRED_SECRETS.put("omninest.rclone.password", "OMNINEST_RCLONE_RC_PASS");
         REQUIRED_SECRETS.put("omninest.aria2.rpc-secret", "OMNINEST_ARIA2_RPC_SECRET");
+        REQUIRED_SECRETS.put("omninest.security.credential-encryption-key", "OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY");
     }
 
     private final Environment environment;

@@ -75,6 +75,16 @@ class ProductionSecretsValidatorTest {
     }
 
     @Test
+    @DisplayName("prod 启动失败：外部存储凭据加密密钥为空")
+    void failsWhenCredentialEncryptionKeyIsBlank() {
+        MockEnvironment environment = completeProdEnvironment();
+        environment.setProperty("omninest.security.credential-encryption-key", " ");
+        assertThatThrownBy(() -> new ProductionSecretsValidator(environment).validate())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("OMNINEST_SECURITY_CREDENTIAL_ENCRYPTION_KEY");
+    }
+
+    @Test
     @DisplayName("prod 启动成功：关键凭据均已显式配置")
     void succeedsWhenSecretsAreConfigured() {
         assertThatCode(() -> new ProductionSecretsValidator(completeProdEnvironment()).validate())
@@ -96,6 +106,8 @@ class ProductionSecretsValidatorTest {
                         "omninest.minio.secret-key", "minio-secret",
                         "omninest.rclone.password", "rclone-secret",
                         "omninest.aria2.rpc-secret", "aria2-secret",
+                        "omninest.security.credential-encryption-key",
+                                "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=",
                         "omninest.security.jwt-secret", "jwt-secret-at-least-32-bytes-long!!"
                 )
         ));
@@ -118,6 +130,8 @@ class ProductionSecretsValidatorTest {
         environment.setProperty("omninest.minio.secret-key", "minio-secret");
         environment.setProperty("omninest.rclone.password", "rclone-secret");
         environment.setProperty("omninest.aria2.rpc-secret", "aria2-secret");
+        environment.setProperty("omninest.security.credential-encryption-key",
+                "QUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUE=");
         environment.setProperty("omninest.security.jwt-secret", "jwt-secret-at-least-32-bytes-long!!");
         environment.setProperty("photo.ai.secret", "ai-sidecar-secret");
         environment.setProperty("omninest.setup.enabled", "false");

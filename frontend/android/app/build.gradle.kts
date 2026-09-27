@@ -2,8 +2,7 @@ import org.gradle.api.GradleException
 
 plugins {
     id("com.android.application")
-    id("kotlin-android")
-    // Flutter Gradle 插件必须在 Android 和 Kotlin 插件之后应用。
+    // Flutter Gradle 插件；Kotlin 由 AGP 9 Built-in Kotlin 提供。
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -42,10 +41,6 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_17.toString()
-    }
-
     defaultConfig {
         applicationId = "com.omninest.app"
         // 平台版本统一继承 Flutter 工具链配置。
@@ -74,6 +69,12 @@ android {
                 else -> null
             }
         }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
     }
 }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/painting.dart';
 
 /// 桌面/Web 与移动端共用的控件尺寸令牌。
 ///
@@ -13,6 +14,21 @@ abstract final class AppControlTokens {
 
   /// 主按钮 / 描边按钮最小高度。
   static double get buttonHeight => isDesktopDensity ? 36 : 44;
+
+  /// 主按钮 / 描边按钮统一内容内边距。
+  ///
+  /// Filled 与 Outlined 必须共用同一组水平/垂直内边距，避免同类操作按钮
+  /// 因样式分支出现高度与视觉密度漂移。
+  static const EdgeInsets buttonPadding = EdgeInsets.symmetric(
+    horizontal: 16,
+    vertical: 10,
+  );
+
+  /// 带图标操作按钮的图标边长。
+  static const double buttonIconSize = 18;
+
+  /// 纯图标按钮内图标边长。
+  static const double iconButtonIconSize = 20;
 
   /// 输入框、下拉闭合态目标高度（不含浮动标签额外空间）。
   static double get fieldHeight => isDesktopDensity ? 36 : 44;

@@ -63,7 +63,7 @@ file:
     max-files-per-scan: 100000
     max-scan-depth: 32
     mounts:
-      media:
+      library:
         host-path: ${OMNINEST_LOCAL_MEDIA_ROOT:../.omninest/local-media}
         process-path: ${OMNINEST_LOCAL_MEDIA_PROCESS_ROOT:/mnt/local-media}
 

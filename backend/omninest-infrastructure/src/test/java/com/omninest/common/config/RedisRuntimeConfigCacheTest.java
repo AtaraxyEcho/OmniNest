@@ -66,4 +66,27 @@ class RedisRuntimeConfigCacheTest {
 
         Assertions.assertThat(value).isEmpty();
     }
+
+    @Test
+    void secondGetServesLocalCacheWithoutRedis() {
+        Mockito.when(valueOperations.get("omninest:config:music.quality"))
+                .thenReturn("lossless");
+
+        cache.get("music.quality");
+        cache.get("music.quality");
+
+        Mockito.verify(valueOperations, Mockito.times(1)).get("omninest:config:music.quality");
+    }
+
+    @Test
+    void evictClearsLocalCache() {
+        Mockito.when(valueOperations.get("omninest:config:music.quality"))
+                .thenReturn("lossless");
+        cache.get("music.quality");
+
+        cache.evict("music.quality");
+        cache.get("music.quality");
+
+        Mockito.verify(valueOperations, Mockito.times(2)).get("omninest:config:music.quality");
+    }
 }

@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/features/search/search_ui.dart';
 import 'package:omninest/app/mobile_shell/mobile_navigation_config.dart';
 import 'package:omninest/app/mobile_shell/mobile_shell_feature_bindings.dart';
 import 'package:omninest/app/providers.dart';
@@ -270,10 +273,7 @@ class _MobileTopBar extends ConsumerWidget {
                   .read(mobileModuleSearchActiveProvider(searchHost).notifier)
                   .toggle();
     } else {
-      onSearch =
-          () => context.push(
-            '/search?scope=${MobileNavigationConfig.searchScopeForBranch(branch)}',
-          );
+      onSearch = () => unawaited(showGlobalSearchDialog(context));
     }
     final titleText = Text(
       _title(l10n),
