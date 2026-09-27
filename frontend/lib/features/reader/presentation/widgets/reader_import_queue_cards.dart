@@ -1,11 +1,13 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/widgets/space_selector_sheet.dart';
 import 'package:omninest/features/reader/application/reader_import_queue_controller.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
@@ -21,34 +23,56 @@ class ImportFromDeviceButton extends ConsumerStatefulWidget {
 class _ImportFromDeviceButtonState
     extends ConsumerState<ImportFromDeviceButton> {
   Future<void> _pickAndUpload() async {
-    final l10n = AppLocalizations.of(context);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final picked = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['epub', 'txt', 'cbz', 'zip', 'pdf'],
-        withData: kIsWeb,
-        allowMultiple: true,
       );
-      if (result == null || result.files.isEmpty) return;
+      if (picked.isEmpty) return;
       if (!mounted) return;
-      final files = result.files.map(_toUploadFile).whereType<XFile>().toList();
+      final files = <XFile>[];
+      for (final file in picked) {
+        final uploadFile = await _toUploadFile(file);
+        if (uploadFile != null) {
+          files.add(uploadFile);
+        }
+      }
       if (files.isEmpty) throw StateError('No readable files selected');
-      ref.read(readerImportQueueProvider.notifier).enqueue(files);
-    } on Exception {
+      if (!mounted) {
+        return;
+      }
+      final spaceSelection = await showSpaceSelectorSheet(
+        context,
+        allowShared: true,
+      );
+      if (spaceSelection == null || !mounted) {
+        return;
+      }
+      ref
+          .read(readerImportQueueProvider.notifier)
+          .enqueue(
+            files,
+            spaceType:
+                spaceSelection == SpaceSelection.shared ? 'SHARED' : 'PERSONAL',
+          );
+    } on Exception catch (error) {
       if (mounted) {
-        showReaderSnackBar(context, l10n.readerImportFailed);
+        showReaderSnackBar(
+          context,
+          describeUserFacingError(error).displayMessage,
+        );
       }
     }
   }
 
-  XFile? _toUploadFile(PlatformFile file) {
+  Future<XFile?> _toUploadFile(PlatformFile file) async {
     final fileName = file.name;
     final path = file.path;
     if (path != null && path.isNotEmpty) {
       return XFile(path, name: fileName, mimeType: _mimeTypeFor(fileName));
     }
-    final bytes = file.bytes;
-    if (bytes == null || bytes.isEmpty) {
+    final bytes = await file.readAsBytes();
+    if (bytes.isEmpty) {
       return null;
     }
     return XFile.fromData(
@@ -74,20 +98,15 @@ class _ImportFromDeviceButtonState
     final rc = context.readerColors;
     return OutlinedButton.icon(
       onPressed: _pickAndUpload,
-      icon: Icon(Icons.upload_file_rounded, size: 18, color: rc.onSurface),
-      label: Text(
-        AppLocalizations.of(context).readerAddBook,
-        style: TextStyle(
-          color: rc.onSurface,
-          fontSize: AppTypography.bodyMedium,
-          height: 1.2,
-          fontWeight: FontWeight.w600,
-        ),
+      icon: Icon(
+        Icons.upload_file_rounded,
+        size: AppControlTokens.buttonIconSize,
+        color: rc.onSurface,
       ),
+      label: Text(AppLocalizations.of(context).readerAddBook),
       style: OutlinedButton.styleFrom(
+        foregroundColor: rc.onSurface,
         side: BorderSide(color: rc.outlineVariant),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
   }
@@ -144,7 +163,28 @@ class ImportJobRow extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(color: rc.outlineVariant),
+                      ),
+                      child: Text(
+                        job.spaceType == 'SHARED'
+                            ? l10n.importToSharedSpace
+                            : l10n.importToPersonalSpace,
+                        style: TextStyle(
+                          color: rc.onSurfaceVariant,
+                          fontSize: 9,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Text(
                       label,
                       style: TextStyle(
@@ -156,6 +196,21 @@ class ImportJobRow extends ConsumerWidget {
                     ),
                   ],
                 ),
+                if (failed &&
+                    job.errorMessage != null &&
+                    job.errorMessage!.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    job.errorMessage!.trim(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: rc.danger,
+                      fontSize: AppTypography.labelSmall,
+                      height: 1.3,
+                    ),
+                  ),
+                ],
                 if (!failed) ...[
                   const SizedBox(height: 6),
                   ClipRRect(

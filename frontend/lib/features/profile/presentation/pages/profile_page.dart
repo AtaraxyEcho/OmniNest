@@ -66,28 +66,29 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   Future<void> _pickAndUploadAvatar() async {
     final l10n = AppLocalizations.of(context);
     final profileService = ref.read(profileCommandServiceProvider);
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      withData: true,
-    );
+    final result = await FilePicker.pickFiles(type: FileType.image);
     if (!mounted) {
       return;
     }
-    if (result == null || result.files.isEmpty) return;
-    final file = result.files.first;
-    if (file.bytes == null) return;
+    if (result.isEmpty) return;
+    final file = result.first;
+    final bytes = await file.readAsBytes();
+    if (!mounted) {
+      return;
+    }
+    if (bytes.isEmpty) return;
     final extension = file.extension?.toLowerCase();
     if (extension == null ||
         !['jpg', 'jpeg', 'png', 'webp'].contains(extension)) {
       _showMessage(l10n.profileAvatarFormatError);
       return;
     }
-    if (file.bytes!.length > FileSizeThresholds.avatarUploadMaxBytes) {
+    if (bytes.length > FileSizeThresholds.avatarUploadMaxBytes) {
       _showMessage(l10n.profileAvatarSizeError);
       return;
     }
     try {
-      await profileService.uploadAvatar(file.bytes!, file.name);
+      await profileService.uploadAvatar(bytes, file.name);
       if (!mounted) {
         return;
       }

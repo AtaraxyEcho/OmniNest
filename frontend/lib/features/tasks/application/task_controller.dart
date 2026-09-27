@@ -4,6 +4,8 @@ import 'package:omninest/app/providers.dart';
 import 'package:omninest/features/tasks/data/task_api.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
+import 'package:omninest/core/auth/user_capabilities.dart';
+
 final taskApiProvider = Provider<TaskApi>((ref) {
   return TaskApi(ref.watch(apiClientProvider));
 });
@@ -13,10 +15,15 @@ final taskListProvider = NotifierProvider<TaskListNotifier, List<TaskRecord>>(
 );
 
 /// 独立读取全局任务条所需摘要，不依赖任务页面分页状态。
+/// 无 task:read 时改走 summary 接口，避免 GUEST 打 /tasks 吃 403。
 final activeTaskSummaryProvider = FutureProvider<ActiveTaskSummary>((
   ref,
 ) async {
   ref.watch(sessionEpochProvider);
+  final canViewTasks = ref.watch(userCapabilitiesProvider).canViewOwnTasks;
+  if (!canViewTasks) {
+    return ref.watch(taskApiProvider).summary();
+  }
   final tasks = await ref.watch(taskApiProvider).list(page: 0, size: 100);
   return ActiveTaskSummary.fromRecords(tasks);
 });

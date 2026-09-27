@@ -144,8 +144,10 @@ class ReaderItemServiceTest {
         assertThat(result).hasSize(2);
         assertThat(result.get(0).title()).isEqualTo("My Book");
         assertThat(result.get(0).addedToBookshelf()).isTrue();
+        assertThat(result.get(0).fileNodeId()).isEqualTo(FILE_NODE_ID);
         assertThat(result.get(1).title()).isEqualTo("Shared Book");
         assertThat(result.get(1).addedToBookshelf()).isFalse();
+        assertThat(result.get(1).fileNodeId()).isEqualTo(SHARED_FILE_NODE_ID);
     }
 
     @Test

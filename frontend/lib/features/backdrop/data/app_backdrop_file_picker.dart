@@ -42,8 +42,8 @@ abstract class BackdropFilePicker {
   Future<List<BackdropPickedFile>> pick();
 }
 
-/// 默认实现:file_picker。Web 必须 withReadStream(withData:false 在 Web 会把
-/// 文件退化为 base64 data URL 整载内存);桌面/移动由 file_picker 提供路径。
+/// 默认实现:file_picker。Web 通过 readAsByteStream 流式读取，避免整载内存；
+/// 桌面/移动由 file_picker 提供路径。
 class DefaultBackdropFilePicker implements BackdropFilePicker {
   const DefaultBackdropFilePicker();
 
@@ -51,23 +51,20 @@ class DefaultBackdropFilePicker implements BackdropFilePicker {
 
   @override
   Future<List<BackdropPickedFile>> pick() async {
-    final result = await FilePicker.platform.pickFiles(
-      allowMultiple: true,
+    final files = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: allowedExtensions,
-      withData: false,
-      withReadStream: true,
     );
-    final files = result?.files ?? const <PlatformFile>[];
-    return files
-        .map(
-          (file) => BackdropPickedFile(
-            name: file.name,
-            size: file.size,
-            path: isWebPlatform ? null : file.path,
-            readStream: file.readStream,
-          ),
-        )
-        .toList(growable: false);
+    return Future.wait(
+      files.map((file) async {
+        final size = file.lengthSync() ?? await file.length() ?? 0;
+        return BackdropPickedFile(
+          name: file.name,
+          size: size,
+          path: isWebPlatform ? null : file.path,
+          readStream: file.readAsByteStream(),
+        );
+      }),
+    );
   }
 }

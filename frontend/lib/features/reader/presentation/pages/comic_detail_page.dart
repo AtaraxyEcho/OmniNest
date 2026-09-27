@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
@@ -472,11 +473,14 @@ class _ComicDetailPageState extends ConsumerState<ComicDetailPage> {
               : l10n.readerAddedToBookshelf,
         );
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (mounted) {
         showReaderSnackBar(
           context,
-          AppLocalizations.of(context).readerOperationFailed,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).displayMessage,
         );
       }
     } finally {

@@ -2,9 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/realtime_providers.dart';
+import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
 import 'package:omninest/features/admin/admin_dashboard.dart';
 import 'package:omninest/features/files/file_dashboard.dart';
+import 'package:omninest/features/files/data/file_providers.dart';
+import 'package:omninest/features/files/domain/file_node.dart';
 import 'package:omninest/features/music/music_portal.dart';
 import 'package:omninest/features/photos/photo_dashboard.dart';
 import 'package:omninest/features/portal/portal_dashboard.dart';
@@ -27,6 +30,25 @@ final portalPhotoDashboardProvider = photoDashboardProvider;
 final portalAdminSummaryProvider = adminConsoleSummaryProvider;
 
 final portalReaderDashboardProvider = readerDashboardProvider;
+
+/// 全局搜索等场景的文件预设：优先最近文件，为空时回退根目录列表。
+final portalRecentFilesProvider = FutureProvider<List<FileNode>>((ref) async {
+  final repo = ref.watch(fileRepositoryProvider);
+  try {
+    final recent = await repo.listRecentFiles();
+    if (recent.isNotEmpty) {
+      return recent;
+    }
+  } on Exception catch (error) {
+    devLog('最近文件加载失败，回退根目录: $error');
+  }
+  try {
+    return await repo.listFiles();
+  } on Exception catch (error) {
+    devLog('根目录文件加载失败: $error');
+    return const <FileNode>[];
+  }
+});
 
 /// Portal 可独立刷新的摘要分区。
 enum PortalDashboardSection {

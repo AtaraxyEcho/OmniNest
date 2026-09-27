@@ -7,6 +7,7 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/features/reader/application/reader_tts_speed_controller.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 import 'package:omninest/features/reader/reader_debug_log.dart';
 
 /// 阅读器 TTS 语音朗读控制栏。
@@ -62,6 +63,7 @@ class _ReaderTtsControlsState extends ConsumerState<ReaderTtsControls> {
       if (mounted) setState(() => _state = TtsState.playing);
     } on Exception catch (e) {
       if (kDebugMode) readerDebugLog('TTS: restart failed: $e');
+      _reportUnavailable();
     }
   }
 
@@ -97,7 +99,22 @@ class _ReaderTtsControlsState extends ConsumerState<ReaderTtsControls> {
       }
     } on Exception catch (e) {
       if (kDebugMode) readerDebugLog('TTS: operation failed: $e');
+      _reportUnavailable();
     }
+  }
+
+  /// TTS 不可用时恢复按钮态并给出可理解提示（禁止透出原始异常）。
+  void _reportUnavailable() {
+    if (!mounted) {
+      return;
+    }
+    if (_state != TtsState.stopped) {
+      setState(() => _state = TtsState.stopped);
+    }
+    showReaderSnackBar(
+      context,
+      AppLocalizations.of(context).readerTtsUnavailable,
+    );
   }
 
   Future<void> _stop() async {

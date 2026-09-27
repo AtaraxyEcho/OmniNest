@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/application/reader_progress_snapshot.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
@@ -65,6 +66,11 @@ mixin ReaderViewPageLibraryActionsMixin on ConsumerState<ReaderViewPage> {
   /// 切换书架状态。
   Future<void> toggleBookshelf(ReaderItemDetail detail) async {
     if (bookshelfBusy) return;
+    // 无 activity:write 的角色：明确提示无权限，不触发远端请求。
+    if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+      showReaderSnackBar(context, AppLocalizations.of(context).errorForbidden);
+      return;
+    }
     setState(() => bookshelfBusy = true);
     final l10n = AppLocalizations.of(context);
     try {

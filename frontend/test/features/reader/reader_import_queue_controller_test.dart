@@ -222,6 +222,39 @@ void main() {
     await _waitUntil(() => container.read(readerImportQueueProvider).isEmpty);
     expect(mediaService.ensureDirectoryCalls, 2);
   });
+
+  test('导入队列按任务空间解析目录并回传 spaceType', () async {
+    final mediaService = _RecordingMediaImportService();
+    final container = _container(
+      mediaService: mediaService,
+      readerApi: _ReaderApiStub(),
+    );
+    addTearDown(container.dispose);
+
+    container.read(readerImportQueueProvider.notifier).enqueue(<XFile>[
+      _memoryFile('personal.epub'),
+      _memoryFile('shared.cbz'),
+    ], spaceType: 'SHARED');
+    container.read(readerImportQueueProvider.notifier).enqueue(<XFile>[
+      _memoryFile('private.epub'),
+    ], spaceType: 'PERSONAL');
+    final enqueuedSpaceTypes = container
+        .read(readerImportQueueProvider)
+        .map((job) => job.spaceType)
+        .toList(growable: false);
+    expect(enqueuedSpaceTypes, <String>['SHARED', 'SHARED', 'PERSONAL']);
+
+    await _waitUntil(() => container.read(readerImportQueueProvider).isEmpty);
+
+    expect(
+      mediaService.directorySpaceTypes,
+      unorderedEquals(<String?>['SHARED', 'PERSONAL']),
+    );
+    expect(
+      mediaService.uploadSpaceTypes,
+      unorderedEquals(<String?>['SHARED', 'SHARED', 'PERSONAL']),
+    );
+  });
 }
 
 ProviderContainer _container({
@@ -270,6 +303,40 @@ Future<void> _waitUntil(bool Function() condition) async {
     await Future<void>.delayed(const Duration(milliseconds: 10));
   }
   fail('condition was not met before timeout');
+}
+
+class _RecordingMediaImportService extends MediaImportService {
+  _RecordingMediaImportService() : super(_UnusedFileApi(), _UnusedTaskApi());
+
+  final List<String?> directorySpaceTypes = <String?>[];
+  final List<String?> uploadSpaceTypes = <String?>[];
+
+  @override
+  Future<String?> ensureDefaultDirectory({
+    required String directoryName,
+    String? spaceType,
+  }) async {
+    directorySpaceTypes.add(spaceType);
+    return 'dir-$spaceType';
+  }
+
+  @override
+  Future<ImportedMediaFile> importFile({
+    required XFile file,
+    required String parentId,
+    String? spaceType,
+    FileUploadPolicy? policy,
+    required bool reuseExistingFiles,
+    ImportProgressCallback? onProgress,
+    MediaImportCancellationToken? cancellationToken,
+  }) async {
+    cancellationToken?.throwIfCancelled();
+    uploadSpaceTypes.add(spaceType);
+    return ImportedMediaFile(
+      fileName: file.name,
+      fileNodeId: 'node-${file.name}',
+    );
+  }
 }
 
 class _QueuedMediaImportService extends MediaImportService {

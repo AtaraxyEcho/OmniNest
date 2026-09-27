@@ -597,6 +597,7 @@ public class ReaderItemService {
 
         return new ReaderItemDto(
                 item.getId(),
+                item.getFileNodeId(),
                 item.getItemType(),
                 item.getContentKind(),
                 item.getTitle(),

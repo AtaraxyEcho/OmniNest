@@ -35,6 +35,7 @@ import 'package:omninest/features/files/domain/file_manager_models.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/portal/presentation/theme/weather_atmospheres.dart';
 
@@ -554,7 +555,7 @@ class _PortalInlineRetry extends StatelessWidget {
   }
 }
 
-/// 继续观看行：点击进入对应影片，视觉与原预览卡行一致。
+/// 继续观看行：续播进入播放器；选集入口见最近添加等 `movieDetailRoute`。
 class _PortalContinueWatchingRow extends StatelessWidget {
   const _PortalContinueWatchingRow({required this.item});
 
@@ -567,7 +568,7 @@ class _PortalContinueWatchingRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
-        onTap: () => context.push('/video/${item.id}'),
+        onTap: () => context.push(moviePlayRoute(item.id)),
         child: Row(
           children: [
             PortalMediaThumbnail(

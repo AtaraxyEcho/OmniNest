@@ -7,6 +7,7 @@ import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_item.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
+import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 
 /// Portal 列表卡分页状态：已加载条目、总数与追加加载在飞标记。
@@ -344,7 +345,8 @@ class PortalVideoPreviewController
         PortalVideoPreviewItem(
           id: movie.id,
           title: movie.title,
-          route: '/video/${movie.id}',
+          // 分集进剧集详情选集，电影进影片详情。
+          route: movieDetailRoute(movie),
           posterUrl: movie.posterImageUrl ?? movie.backdropImageUrl,
           secondaryText: movie.year,
         ),

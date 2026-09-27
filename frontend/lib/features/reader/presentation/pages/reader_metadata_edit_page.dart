@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/reader/application/reader_controller.dart';
@@ -234,7 +235,10 @@ class _ReaderMetadataEditPageState
           _initForm(detail);
           return _buildForm(detail);
         },
-        error: (e, _) => AppErrorView(message: e.toString()),
+        error:
+            (e, _) => AppErrorView(
+              message: describeUserFacingError(e).displayMessage,
+            ),
         loading: () => const AppLoading.detail(),
       ),
     );
@@ -542,25 +546,30 @@ class _ReaderMetadataEditPageState
     } on Exception catch (e) {
       if (mounted) {
         final l10n = AppLocalizations.of(context);
-        showReaderSnackBar(context, l10n.readerOperationFailedError('$e'));
+        showReaderSnackBar(
+          context,
+          describeUserFacingError(e, l10n: l10n).displayMessage,
+        );
       }
     }
   }
 
   Future<void> _pickAndUpload() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['jpg', 'jpeg', 'png', 'webp'],
-        withData: true,
       );
-      if (result == null || result.files.isEmpty) return;
+      if (result.isEmpty) return;
       if (!mounted) {
         return;
       }
-      final file = result.files.first;
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) return;
+      final file = result.first;
+      final bytes = await file.readAsBytes();
+      if (!mounted) {
+        return;
+      }
+      if (bytes.isEmpty) return;
       await ref
           .read(readerCenterControllerProvider.notifier)
           .uploadCover(

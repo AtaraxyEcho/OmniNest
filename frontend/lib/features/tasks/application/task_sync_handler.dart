@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/realtime/realtime_models.dart';
 import 'package:omninest/core/realtime/realtime_scope_handler.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
@@ -26,6 +27,11 @@ class TaskSyncHandler implements RealtimeScopeHandler {
     // 任务列表 provider 不存在说明任务模块从未激活：无本地状态可刷，
     // 页面首次打开本就会拉取最新数据，直接确认消费避免持久记录无限重试。
     if (!ref.exists(taskListProvider)) return true;
+    // 无 task:read 的角色（如 GUEST）不拉完整任务列表，避免 403 刷屏。
+    if (!ref.read(userCapabilitiesProvider).canViewOwnTasks) {
+      _summaryRevisions.clear(invalidations);
+      return true;
+    }
     await ref.read(taskListProvider.notifier).load();
     _summaryRevisions.clear(invalidations);
     return true;

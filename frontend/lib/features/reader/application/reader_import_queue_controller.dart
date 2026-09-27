@@ -20,6 +20,7 @@ class ReaderImportJob {
     required this.status,
     this.progress = 0,
     this.errorMessage,
+    this.spaceType = 'PERSONAL',
   });
 
   final String id;
@@ -27,6 +28,9 @@ class ReaderImportJob {
   final ReaderImportJobStatus status;
   final double progress;
   final String? errorMessage;
+
+  /// 目标空间类型（PERSONAL / SHARED）。
+  final String spaceType;
 
   ReaderImportJob copyWith({
     ReaderImportJobStatus? status,
@@ -40,6 +44,7 @@ class ReaderImportJob {
       status: status ?? this.status,
       progress: progress ?? this.progress,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
+      spaceType: spaceType,
     );
   }
 }
@@ -58,13 +63,15 @@ final readerImportQueueProvider =
 class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
   static const int _maxConcurrentImports = 3;
   final Map<String, XFile> _files = <String, XFile>{};
+  final Map<String, String> _jobSpaceTypes = <String, String>{};
   final Map<String, MediaImportCancellationToken> _cancellations =
       <String, MediaImportCancellationToken>{};
   final Set<String> _pendingIds = <String>{};
   final Set<String> _runningIds = <String>{};
   final Map<String, Completer<void>> _completionWaiters =
       <String, Completer<void>>{};
-  Future<String?>? _readerDirectory;
+  final Map<String, Future<String?>> _readerDirectories =
+      <String, Future<String?>>{};
   int _sequence = 0;
   String? _sessionUserId;
 
@@ -95,22 +102,26 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
     _pendingIds.clear();
     _runningIds.clear();
     _files.clear();
-    // 目录 ID 属前一账号个人空间，换号后必须重新解析，避免新账号
+    _jobSpaceTypes.clear();
+    // 目录 ID 属前一账号对应空间，换号后必须重新解析，避免新账号
     // 携旧目录 ID 发起上传。
-    _readerDirectory = null;
+    _readerDirectories.clear();
   }
 
-  void enqueue(List<XFile> files) {
+  void enqueue(List<XFile> files, {String spaceType = 'PERSONAL'}) {
     if (files.isEmpty) return;
+    final normalizedSpaceType = spaceType == 'SHARED' ? 'SHARED' : 'PERSONAL';
     final jobs = <ReaderImportJob>[];
     for (final file in files) {
       final id = '${DateTime.now().microsecondsSinceEpoch}-${_sequence++}';
       _files[id] = file;
+      _jobSpaceTypes[id] = normalizedSpaceType;
       jobs.add(
         ReaderImportJob(
           id: id,
           fileName: file.name,
           status: ReaderImportJobStatus.queued,
+          spaceType: normalizedSpaceType,
         ),
       );
     }
@@ -176,6 +187,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
   Future<void> _run(String jobId) async {
     final file = _files[jobId];
     if (file == null) return;
+    final spaceType = _jobSpaceTypes[jobId] ?? 'PERSONAL';
     final cancellation = MediaImportCancellationToken();
     _cancellations[jobId] = cancellation;
     // parentId 提升到方法级，供 catch 内的自愈轮询复用。
@@ -188,22 +200,39 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
           clearError: true,
         ),
       );
-      _readerDirectory ??= ref
-          .read(mediaImportServiceProvider)
-          .ensureDefaultDirectory(
-            directoryName: 'Reader',
-            spaceType: 'PERSONAL',
-          );
-      parentId = await _readerDirectory;
+      final directoryFuture = _readerDirectories.putIfAbsent(
+        spaceType,
+        () => ref
+            .read(mediaImportServiceProvider)
+            .ensureDefaultDirectory(
+              directoryName: 'Reader',
+              spaceType: spaceType,
+            ),
+      );
+      try {
+        parentId = await directoryFuture;
+      } on Object {
+        // 失败 Future 不得留在缓存，否则后续同空间任务会粘住同一失败结果。
+        if (identical(_readerDirectories[spaceType], directoryFuture)) {
+          _readerDirectories.remove(spaceType);
+        }
+        rethrow;
+      }
       if (!ref.mounted) return;
-      if (parentId == null) throw StateError('Reader directory unavailable');
+      if (parentId == null) {
+        // 解析成功但无目录同样不可复用，必须剔除以便下次重试。
+        if (identical(_readerDirectories[spaceType], directoryFuture)) {
+          _readerDirectories.remove(spaceType);
+        }
+        throw StateError('Reader directory unavailable');
+      }
       cancellation.throwIfCancelled();
       final uploaded = await ref
           .read(mediaImportServiceProvider)
           .importFile(
             file: file,
             parentId: parentId,
-            spaceType: 'PERSONAL',
+            spaceType: spaceType,
             reuseExistingFiles: true,
             cancellationToken: cancellation,
             onProgress: (_, uploadedBytes, totalBytes) {
@@ -348,6 +377,7 @@ class ReaderImportQueueController extends Notifier<List<ReaderImportJob>> {
       state = state.where((job) => job.id != jobId).toList(growable: false);
     }
     _files.remove(jobId);
+    _jobSpaceTypes.remove(jobId);
     _cancellations.remove(jobId)?.cancel();
     final waiter = _completionWaiters.remove(jobId);
     if (waiter != null && !waiter.isCompleted) {

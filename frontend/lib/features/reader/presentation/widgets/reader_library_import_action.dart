@@ -25,23 +25,57 @@ class ReaderLibraryImportAction extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final rc = context.readerColors;
     final isIcon = style == ImportButtonStyle.iconButton;
+    final isFilled = style == ImportButtonStyle.filledButton;
+    final Color color = switch (style) {
+      ImportButtonStyle.iconButton => rc.onSurfaceVariant,
+      ImportButtonStyle.filledButton => rc.surface,
+      ImportButtonStyle.outlinedButton => rc.onSurface,
+      ImportButtonStyle.textButton => rc.onSurface,
+    };
+    final button = MediaImportButton(
+      subsystemDirectory: 'Reader',
+      acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
+      reuseExistingFiles: true,
+      onFilesPicked: (files, spaceType) {
+        ref
+            .read(readerImportQueueProvider.notifier)
+            .enqueue(files, spaceType: spaceType);
+      },
+      onImportComplete: () {
+        ref.read(readerCenterControllerProvider.notifier).refresh();
+      },
+      style: style,
+      color: color,
+      label: label,
+    );
     return SizedBox(
       width: isIcon ? 40 : null,
       height: isIcon ? 40 : null,
-      child: MediaImportButton(
-        subsystemDirectory: 'Reader',
-        acceptedExtensions: const ['epub', 'txt', 'cbz', 'zip', 'pdf'],
-        reuseExistingFiles: true,
-        onFilesPicked: (files) {
-          ref.read(readerImportQueueProvider.notifier).enqueue(files);
-        },
-        onImportComplete: () {
-          ref.read(readerCenterControllerProvider.notifier).refresh();
-        },
-        style: style,
-        color: isIcon ? rc.onSurfaceVariant : null,
-        label: label,
+      child: isFilled ? _withReaderFilledColors(context, rc, button) : button,
+    );
+  }
+
+  /// 只覆盖填充按钮配色，必须保留主题圆角/内边距/高度。
+  ///
+  /// 直接 `copyWith(filledButtonTheme: styleFrom(...))` 会整段替换主题
+  /// 按钮样式，丢失 `roundedShape` 后回退到 Material 默认胶囊形。
+  Widget _withReaderFilledColors(
+    BuildContext context,
+    ReaderColors rc,
+    Widget child,
+  ) {
+    final theme = Theme.of(context);
+    final baseStyle = theme.filledButtonTheme.style ?? FilledButton.styleFrom();
+    return Theme(
+      data: theme.copyWith(
+        filledButtonTheme: FilledButtonThemeData(
+          style: baseStyle.copyWith(
+            backgroundColor: WidgetStatePropertyAll(rc.primary),
+            foregroundColor: WidgetStatePropertyAll(rc.surface),
+          ),
+        ),
       ),
+      child: child,
     );
   }
 }

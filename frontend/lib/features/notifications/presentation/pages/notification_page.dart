@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/global_theme_colors.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/user_avatar_menu.dart';
 import 'package:omninest/features/notifications/application/notification_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
@@ -58,6 +59,9 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
     final colors = context.globalColors;
     final notifications = ref.watch(notificationControllerProvider).items;
     final unreadCount = ref.watch(unreadCountProvider);
+    // 无 activity:write 的角色隐藏全部主动写入口，只保留浏览。
+    final canManageActivity =
+        ref.watch(userCapabilitiesProvider).canManageOwnActivity;
     final content =
         notifications.isEmpty
             ? _EmptyState(colors: colors)
@@ -70,8 +74,9 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                 return _NotificationTile(
                   notification: notification,
                   colors: colors,
+                  canManage: canManageActivity,
                   onTap: () {
-                    if (!notification.read) {
+                    if (canManageActivity && !notification.read) {
                       ref
                           .read(notificationControllerProvider.notifier)
                           .markRead(notification.id);
@@ -92,17 +97,18 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    if (notifications.any((notification) => !notification.read))
+                    if (canManageActivity && notifications.any((n) => !n.read))
                       TextButton.icon(
                         onPressed: _markAllRead,
                         icon: const Icon(Icons.done_all_rounded, size: 18),
                         label: Text(l10n.notificationMarkAllRead),
                       ),
-                    IconButton(
-                      onPressed: _clearAll,
-                      icon: const Icon(Icons.delete_sweep_outlined),
-                      tooltip: l10n.notificationClearAll,
-                    ),
+                    if (canManageActivity)
+                      IconButton(
+                        onPressed: _clearAll,
+                        icon: const Icon(Icons.delete_sweep_outlined),
+                        tooltip: l10n.notificationClearAll,
+                      ),
                   ],
                 ),
               ),
@@ -133,12 +139,12 @@ class _NotificationPageState extends ConsumerState<NotificationPage> {
           style: const TextStyle(fontWeight: FontWeight.w700),
         ),
         actions: [
-          if (notifications.any((n) => !n.read))
+          if (canManageActivity && notifications.any((n) => !n.read))
             TextButton(
               onPressed: _markAllRead,
               child: Text(l10n.notificationMarkAllRead),
             ),
-          if (notifications.isNotEmpty)
+          if (canManageActivity && notifications.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.delete_sweep_outlined),
               tooltip: l10n.notificationClearAll,
@@ -214,12 +220,14 @@ class _NotificationTile extends StatelessWidget {
   const _NotificationTile({
     required this.notification,
     required this.colors,
+    required this.canManage,
     required this.onTap,
     required this.onDelete,
   });
 
   final NotificationDto notification;
   final GlobalThemeColors colors;
+  final bool canManage;
   final VoidCallback onTap;
   final VoidCallback onDelete;
 
@@ -323,11 +331,14 @@ class _NotificationTile extends StatelessWidget {
               ),
             ],
           ),
-          trailing: IconButton(
-            onPressed: onDelete,
-            icon: const Icon(Icons.delete_outline_rounded, size: 19),
-            tooltip: l10n.notificationDelete,
-          ),
+          trailing:
+              canManage
+                  ? IconButton(
+                    onPressed: onDelete,
+                    icon: const Icon(Icons.delete_outline_rounded, size: 19),
+                    tooltip: l10n.notificationDelete,
+                  )
+                  : null,
         ),
       ),
     );

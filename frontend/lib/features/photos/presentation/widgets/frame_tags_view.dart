@@ -15,12 +15,14 @@ import 'package:omninest/features/photos/presentation/widgets/frame_palette.dart
 class FrameTagsView extends ConsumerStatefulWidget {
   const FrameTagsView({
     required this.onOpenPhoto,
-    required this.onToggleFavorite,
+    this.onToggleFavorite,
     super.key,
   });
 
   final ValueChanged<PhotoItem> onOpenPhoto;
-  final ValueChanged<PhotoItem> onToggleFavorite;
+
+  /// null 时隐藏收藏入口（无 activity:write 的角色）。
+  final ValueChanged<PhotoItem>? onToggleFavorite;
 
   @override
   ConsumerState<FrameTagsView> createState() => _FrameTagsViewState();
@@ -148,13 +150,13 @@ class _TagPhotos extends ConsumerWidget {
   const _TagPhotos({
     required this.tag,
     required this.onOpenPhoto,
-    required this.onToggleFavorite,
+    this.onToggleFavorite,
     super.key,
   });
 
   final String tag;
   final ValueChanged<PhotoItem> onOpenPhoto;
-  final ValueChanged<PhotoItem> onToggleFavorite;
+  final ValueChanged<PhotoItem>? onToggleFavorite;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

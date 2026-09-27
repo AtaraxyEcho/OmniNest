@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/features/files/media_import_ui.dart'
+    show ImportButtonStyle;
 import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_empty_state.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_library_import_action.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_page_scaffold.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_parse_feedback.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_shelf_row.dart';
@@ -69,10 +73,39 @@ class ReaderBookshelfPage extends ConsumerWidget {
             if (shelved.isEmpty)
               SliverFillRemaining(
                 hasScrollBody: false,
-                child: ReaderEmptyState(
-                  title: AppLocalizations.of(context).readerShelfEmpty,
-                  subtitle: AppLocalizations.of(context).readerShelfEmptyHint,
-                  icon: Icons.auto_stories_outlined,
+                // 与书库空态一致：贴内容区顶部、水平居中，不在剩余高度里垂直居中。
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 32),
+                  child: ReaderEmptyState(
+                    title: AppLocalizations.of(context).readerShelfEmpty,
+                    subtitle: AppLocalizations.of(context).readerShelfEmptyHint,
+                    icon: Icons.auto_stories_outlined,
+                    action: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton.icon(
+                          onPressed: () => context.go('/reader'),
+                          icon: const Icon(
+                            Icons.library_books_outlined,
+                            size: AppControlTokens.buttonIconSize,
+                          ),
+                          label: Text(
+                            AppLocalizations.of(context).readerGoToLibrary,
+                          ),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: rc.primary,
+                            foregroundColor: rc.surface,
+                          ),
+                        ),
+                        ReaderLibraryImportAction(
+                          style: ImportButtonStyle.outlinedButton,
+                          label: AppLocalizations.of(context).readerImportBooks,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               )
             else

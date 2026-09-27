@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';
@@ -27,21 +28,8 @@ const _transitionDuration = Duration(milliseconds: 450);
 const _idleHideDuration = Duration(seconds: 3);
 const _transitionCurve = Curves.easeOutCubic;
 
-/// 入场扩缩时长：略长于压暗淡入的前半段，避免缩放突然弹出。
-const _entryDuration = Duration(milliseconds: 320);
-
-/// 压暗淡入 / 淡回时长。
-///
-/// 淡入要慢：此前 80ms 压暗接近一帧完成，叠加原生吸附丢帧会看成闪烁。
-/// 淡回同样放缓，让画面从暗到亮连续，而不是“瞬间亮起”。
-const _dipOutDuration = Duration(milliseconds: 280);
-const _dipFadeInDuration = Duration(milliseconds: 420);
-
-/// 吸附落定等待上限（压暗底部）。
-///
-/// 只等交换链重建所需的短窗，不再 `await applied` 2 秒。超时也继续淡回，
-/// 黑场时长可控，不会把用户钉在纯黑上。
-const _dipChromeSettle = Duration(milliseconds: 450);
+/// 入场扩缩时长：轻微推近，内容本身不做压暗/淡入。
+const _entryDuration = Duration(milliseconds: 220);
 
 /// preview 高清档升级前，等待原生吸附落定的上限。
 ///
@@ -52,18 +40,14 @@ const _previewUpgradeChromeSettle = Duration(milliseconds: 400);
 /// 判定为卡顿/停帧的单帧间隔；超过则重置自动播放计时。
 const _frameGapFreezeThreshold = Duration(milliseconds: 800);
 
-/// 黑场遮罩标识：测试据此断言压暗为多帧渐变且会退回透明。
-@visibleForTesting
-const slideshowDipOverlayKey = ValueKey<String>('slideshow-dip-overlay');
-
 /// Fullscreen immersive slideshow (design: Photos Management UI Design).
 ///
 /// Black full-bleed photos, dual-layer crossfade, segmented progress, collapsible
 /// thumb strip, info panel, keyboard and fullscreen. Chrome auto-hides after
-/// 3s idle; canvas tap toggles chrome. Entry uses a slow soft dim: content is
-/// already painted underneath, then dimmed over ~280ms, the native snap runs
-/// under that dim, and the frame eases back in over ~420ms. No multi-second
-/// black hold, no one-frame blink.
+/// 3s idle; canvas tap toggles chrome. Entry is content-first: the first frame
+/// paints as soon as the route settles and the native immersive snap runs in
+/// parallel. No dim/black overlay — any hold or full-screen mask brings back
+/// the multi-second freeze.
 class PhotoSlideshowPage extends ConsumerStatefulWidget {
   const PhotoSlideshowPage({
     required this.photos,
@@ -117,14 +101,10 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   /// 上一帧时间戳：用于检测启动期停帧并重置自动播放计时。
   DateTime? _lastFrameAt;
 
-  /// 入场自绘扩缩：原生窗口一步吸附，丝滑过渡由内容层缩放 + 压暗淡回承担。
+  /// 入场自绘扩缩：原生窗口一步吸附，丝滑过渡由内容层轻微缩放承担。
   late final AnimationController _entryController;
   late final Animation<double> _entryScale;
   late final Animation<double> _entryFade;
-
-  /// 压暗遮罩：淡入盖住吸附窗口，吸附落定后缓慢淡回。
-  late final AnimationController _dipController;
-  late final Animation<double> _dipOpacity;
 
   /// 解码位图缓存：位图本体归 ImageCache 所有（live 保活），本页持窗口引用。
   late final SlideshowImageCache _imageCache = SlideshowImageCache();
@@ -184,33 +164,21 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     )..addStatusListener(_onEntryStatus);
     final entryCurve = CurvedAnimation(
       parent: _entryController,
-      // 对称缓入缓出：缩放与压暗淡回同一节奏，避免“弹一下”的突兀感。
-      curve: Curves.easeInOutCubic,
+      curve: Curves.easeOutCubic,
     );
-    // 不从 opacity 0 淡入：淡入交给压暗层，内容本身始终可绘制。
+    // 不从 opacity 0 淡入：避免与原生吸附丢帧叠成黑屏/闪烁。
     _entryScale = Tween<double>(begin: 0.985, end: 1).animate(entryCurve);
     _entryFade = const AlwaysStoppedAnimation<double>(1);
-    // 压暗/淡回都用长时长 + easeInOut，保证多帧渐变，消除闪烁。
-    _dipController = AnimationController(
-      vsync: this,
-      duration: _dipOutDuration,
-      reverseDuration: _dipFadeInDuration,
-    );
-    _dipOpacity = CurvedAnimation(
-      parent: _dipController,
-      curve: Curves.easeInOut,
-      reverseCurve: Curves.easeInOutCubic,
-    );
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       unawaited(_bootstrapSlideshow());
     });
   }
 
-  /// 内容先画、再软压暗、吸附、缓慢亮回。
+  /// 内容优先进场：路由过渡一结束立即呈现，原生沉浸吸附并行申请。
   ///
-  /// 淡入必须多帧完成：过快的压暗会在吸附丢帧时看成闪烁。黑场只覆盖
-  /// 吸附短窗（[_dipChromeSettle]），不再 `await applied` 数秒。
+  /// 不做压暗/黑场遮罩：任何全屏遮罩或 `await applied` 都会把启动
+  /// 拉回秒级卡顿黑屏。吸附丢掉的若干帧远好于长时间黑场。
   Future<void> _bootstrapSlideshow() async {
     // 进场即预热首图两档并尝试上屏：取图/解码与路由过渡并行。
     unawaited(_prewarmInitialImage());
@@ -221,45 +189,15 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
     if (!mounted) {
       return;
     }
-    // 桌面：在已有内容上缓慢压暗，为原生吸附铺一层视觉缓冲。
-    if (isDesktopPlatform) {
-      await _dipToBlack();
-      if (!mounted) {
-        return;
-      }
-    }
-    // 沉浸租约与压暗底部重叠：吸附黑帧落入遮罩之下。
-    _windowChromeLease = ref
-        .read(windowChromeControllerProvider.notifier)
-        .acquireImmersive(owner: 'photos.slideshow');
-    if (isDesktopPlatform) {
-      try {
-        await ref
-            .read(windowChromeControllerProvider.notifier)
-            .applied
-            .timeout(_dipChromeSettle, onTimeout: () {});
-      } on Exception catch (error) {
-        devLog('Window chrome apply wait failed: $error');
-      }
-      if (!mounted) {
-        return;
-      }
-    }
-    // 呈现与淡回、扩缩同刻启动：用户看到的是连续的“暗 → 亮 + 轻微推近”。
+    // 过渡完成即呈现：loading 有模糊封面，ready 有首图。
     if (!_presentationVisible.isCompleted) {
       _presentationVisible.complete();
     }
     _entryController.forward();
-    unawaited(_dipController.reverse());
-  }
-
-  /// 桌面端软压暗到全黑；非桌面端无原生几何切换，不做遮罩。
-  Future<bool> _dipToBlack() async {
-    if (!isDesktopPlatform) {
-      return true;
-    }
-    await _dipController.forward(from: 0);
-    return mounted;
+    // 沉浸租约与内容展示并行，不阻塞首帧。
+    _windowChromeLease = ref
+        .read(windowChromeControllerProvider.notifier)
+        .acquireImmersive(owner: 'photos.slideshow');
   }
 
   /// 等待路由入场过渡完成（completed）。
@@ -361,7 +299,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
       _presentationVisible.complete();
     }
     _entryController.dispose();
-    _dipController.dispose();
     _windowChromeLease?.release();
     // 位图本体归 ImageCache 所有（live 保活），页面销毁不 dispose；
     // 窗口引用随 State 释放，后台完成的解码因 _disposed 守卫不再写回。
@@ -812,6 +749,14 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
   }
 
   Future<void> _toggleFavorite(PhotoItem photo) async {
+    // 无 activity:write 的角色：按钮保留但点击明确提示无权限。
+    if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).errorForbidden)),
+      );
+      return;
+    }
     try {
       await ref
           .read(photoCenterControllerProvider.notifier)
@@ -899,16 +844,6 @@ class _PhotoSlideshowPageState extends ConsumerState<PhotoSlideshowPage>
                     child: _buildStage(context, photo, showControls),
                   ),
                 ),
-                // 软压暗遮罩（桌面端）：缓慢淡入盖住吸附，再缓慢淡回。
-                // 非桌面端无原生窗口几何切换，不引入多余黑场。
-                if (isDesktopPlatform)
-                  IgnorePointer(
-                    child: FadeTransition(
-                      key: slideshowDipOverlayKey,
-                      opacity: _dipOpacity,
-                      child: const ColoredBox(color: Colors.black),
-                    ),
-                  ),
               ],
             ),
           ),

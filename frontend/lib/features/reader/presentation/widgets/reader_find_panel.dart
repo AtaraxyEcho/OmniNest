@@ -33,6 +33,7 @@ class ReaderFindPanel extends StatefulWidget {
 class _ReaderFindPanelState extends State<ReaderFindPanel> {
   final TextEditingController _controller = TextEditingController();
   List<int> _matches = const [];
+  bool _truncated = false;
 
   @override
   void didUpdateWidget(covariant ReaderFindPanel oldWidget) {
@@ -53,12 +54,16 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
   void _search(String query) {
     final normalized = query.trim().toLowerCase();
     if (normalized.isEmpty) {
-      setState(() => _matches = const []);
+      setState(() {
+        _matches = const [];
+        _truncated = false;
+      });
       return;
     }
     final source = widget.plainText.toLowerCase();
     final matches = <int>[];
     var start = 0;
+    var truncated = false;
     while (matches.length < 100) {
       final index = source.indexOf(normalized, start);
       if (index < 0) {
@@ -67,7 +72,14 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
       matches.add(index);
       start = index + math.max(1, normalized.length);
     }
-    setState(() => _matches = matches);
+    // 达到上限且仍有后续命中时标记截断。
+    if (matches.length == 100 && source.indexOf(normalized, start) >= 0) {
+      truncated = true;
+    }
+    setState(() {
+      _matches = matches;
+      _truncated = truncated;
+    });
   }
 
   TextSpan _highlightedSnippet(int offset) {
@@ -153,6 +165,17 @@ class _ReaderFindPanelState extends State<ReaderFindPanel> {
             onChanged: _search,
           ),
         ),
+        if (_truncated)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              l10n.readerSearchTruncated,
+              style: TextStyle(
+                color: widget.settings.onSurfaceVariantColor,
+                fontSize: AppTypography.labelSmall,
+              ),
+            ),
+          ),
         Expanded(
           child:
               _controller.text.trim().isNotEmpty && _matches.isEmpty

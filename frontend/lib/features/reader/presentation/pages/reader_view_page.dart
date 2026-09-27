@@ -9,6 +9,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/reader/presentation/widgets/scroll_restore.dart';
 import 'package:omninest/app/appearance/application/font_scale_scope.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/utils/fullscreen_helper.dart' as fs;
 import 'package:omninest/core/utils/platform_helper.dart';
 import 'package:omninest/core/window/window_chrome_controller.dart';

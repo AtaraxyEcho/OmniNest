@@ -371,6 +371,9 @@ Future<void> _pumpSlideshowViaPush(
   await tester.pump();
 }
 
+/// 已移除的压暗遮罩 key：断言进场不得再挂载同名全屏黑场。
+const _removedDipOverlayKey = ValueKey<String>('slideshow-dip-overlay');
+
 /// 幻灯片图层树中不允许出现 opacity=0 的 RawImage 祖先（黑屏回归断言）。
 void _expectNoTransparentLayer(WidgetTester tester) {
   final opacities =
@@ -569,7 +572,7 @@ void main() {
     });
   });
 
-  testWidgets('桌面端压暗为多帧渐变并覆盖吸附，随后缓慢淡回', (tester) async {
+  testWidgets('桌面端进场内容优先上屏，不挂压暗/黑场遮罩', (tester) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.windows;
     _mockPathProvider();
     final photos = [_photoWithUrl('photo-1')];
@@ -586,50 +589,29 @@ void main() {
         await tester.pump();
         await tester.pump();
 
-        final dipFinder = find.byKey(slideshowDipOverlayKey);
-        expect(dipFinder, findsOneWidget, reason: '桌面端应挂软压暗遮罩');
-        double dipOpacity() =>
-            tester.widget<FadeTransition>(dipFinder).opacity.value;
+        // 不得再引入全屏压暗遮罩：会与吸附丢帧叠成卡顿黑屏。
+        expect(find.byKey(_removedDipOverlayKey), findsNothing);
 
-        // 路由过渡期内：压暗未启动，内容层已在树中。
-        expect(chromeHidden.value, isFalse);
-        expect(dipOpacity(), 0);
-
-        // 压暗淡入必须是多帧渐变，禁止一帧到 1 造成闪烁。
-        final inSamples = <double>[];
-        for (var i = 0; i < 40 && dipOpacity() < 1; i++) {
-          await tester.pump(const Duration(milliseconds: 40));
-          inSamples.add(dipOpacity());
-        }
-        expect(dipOpacity(), greaterThan(0.95), reason: '压暗应到达全黑底部');
-        expect(
-          inSamples.where((v) => v > 0 && v < 1).length,
-          greaterThanOrEqualTo(2),
-          reason: '压暗淡入应有多个中间帧',
-        );
-
-        // 吸附发生在压暗底部。
-        for (var i = 0; i < 20 && chromeHidden.value == false; i++) {
-          await tester.pump(const Duration(milliseconds: 30));
-        }
-        expect(chromeHidden.value, isTrue);
-        expect(dipOpacity(), greaterThan(0.95));
-
-        // 淡回同样多帧，最终退回透明；总黑场不得拖到 2 秒级。
-        final outSamples = <double>[];
-        for (var i = 0; i < 40 && dipOpacity() > 0; i++) {
+        // 过渡结束后立即上屏，不等待吸附落定。
+        for (
+          var i = 0;
+          i < 20 && find.byType(RawImage).evaluate().isEmpty;
+          i++
+        ) {
           await tester.pump(const Duration(milliseconds: 50));
-          outSamples.add(dipOpacity());
         }
-        expect(dipOpacity(), 0, reason: '内容应淡回，压暗退回透明');
-        expect(
-          outSamples.where((v) => v > 0 && v < 1).length,
-          greaterThanOrEqualTo(2),
-          reason: '淡回应有多个中间帧，而非瞬间消失',
-        );
+        expect(find.byType(RawImage), findsWidgets, reason: '过渡结束后应已上屏');
+        _expectNoTransparentLayer(tester);
+
+        // 沉浸租约与内容并行申请。
+        for (var i = 0; i < 20 && chromeHidden.value == false; i++) {
+          await tester.pump(const Duration(milliseconds: 50));
+        }
+        expect(chromeHidden.value, isTrue, reason: '沉浸租约应与内容并行申请');
+
+        await tester.pump(const Duration(milliseconds: 300));
         expect(find.byType(RawImage), findsWidgets);
-        // preview 升级的吸附落定超时（400ms）是 Future.timeout 计时器；
-        // 推进到其触发，避免用例结束时残留 pending timer。
+        // preview 升级的吸附落定超时（400ms）是 Future.timeout 计时器。
         await tester.pump(const Duration(milliseconds: 500));
         expect(tester.takeException(), isNull);
       });
@@ -639,7 +621,7 @@ void main() {
     }
   });
 
-  testWidgets('非桌面端不引入压暗遮罩', (tester) async {
+  testWidgets('进场不挂载全屏黑场遮罩', (tester) async {
     _mockPathProvider();
     final photos = [_photoWithUrl('photo-1')];
     final chromeHidden = ValueNotifier<bool>(false);
@@ -651,9 +633,9 @@ void main() {
       await tester.pump();
       await tester.pump();
       expect(
-        find.byKey(slideshowDipOverlayKey),
+        find.byKey(_removedDipOverlayKey),
         findsNothing,
-        reason: '非桌面端无原生窗口几何切换，不应插入压暗遮罩',
+        reason: '压暗/黑场遮罩会复发启动卡顿，不得挂载',
       );
     });
   });

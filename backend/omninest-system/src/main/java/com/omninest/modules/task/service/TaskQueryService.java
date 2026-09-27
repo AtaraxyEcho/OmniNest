@@ -5,6 +5,7 @@ import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.common.error.BusinessException;
 import com.omninest.modules.task.domain.TaskRecord;
 import com.omninest.modules.task.dto.TaskDto;
+import com.omninest.modules.task.dto.TaskSummaryDto;
 import com.omninest.modules.task.repository.TaskRecordRepository;
 import java.util.List;
 import java.util.UUID;
@@ -66,6 +67,39 @@ public class TaskQueryService {
             page = taskRecordRepository.findByOwnerUserId(ownerUserId, pageable);
         }
         return page.map(TaskDto::from);
+    }
+
+    /**
+     * 本人任务轻量摘要：统计进行中/失败数量并选出优先展示任务。
+     *
+     * <p>不返回堆栈；用于 Portal 角标，GUEST 等无 task:read 的角色可调用。</p>
+     */
+    @Transactional(readOnly = true)
+    public TaskSummaryDto summaryOwned(UUID ownerUserId) {
+        List<String> activeStatuses = List.of(
+                TaskStatus.QUEUED.getValue(),
+                TaskStatus.RUNNING.getValue(),
+                TaskStatus.RETRY_WAIT.getValue()
+        );
+        List<String> failedStatuses = List.of(
+                TaskStatus.FAILED.getValue(),
+                TaskStatus.DLQ.getValue()
+        );
+        long active = taskRecordRepository.countByOwnerUserIdAndStatusIn(ownerUserId, activeStatuses);
+        long failed = taskRecordRepository.countByOwnerUserIdAndStatusIn(ownerUserId, failedStatuses);
+        List<TaskDto> recent = listOwned(ownerUserId, null, PageRequest.of(0, 50))
+                .getContent();
+        TaskDto priority = recent.stream()
+                .filter(task -> failedStatuses.contains(task.status()))
+                .findFirst()
+                .orElseGet(() -> recent.stream()
+                        .filter(task -> TaskStatus.RUNNING.getValue().equals(task.status()))
+                        .findFirst()
+                        .orElseGet(() -> recent.stream()
+                                .filter(task -> activeStatuses.contains(task.status()))
+                                .findFirst()
+                                .orElse(null)));
+        return new TaskSummaryDto(active, failed, priority);
     }
 
     /**

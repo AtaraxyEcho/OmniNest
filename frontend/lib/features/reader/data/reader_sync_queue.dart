@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:omninest/core/errors/app_exception.dart';
+import 'package:omninest/core/errors/error_codes.dart';
 import 'package:omninest/core/storage/local_database.dart';
 import 'package:omninest/features/reader/data/reader_api.dart';
 import 'package:omninest/features/reader/data/reader_local_storage.dart';
@@ -359,6 +361,14 @@ class ReaderSyncQueue {
       try {
         await _dispatch(api, op);
         await _markCompleted(op.id);
+      } on AppException catch (error) {
+        if (error.code == AppErrorCodes.forbidden) {
+          // 无 activity:write 的角色：书签/标注/笔记保留本地（本地优先
+          // 模型，本地即真值），跳过远端同步，不做无意义重试。
+          await _markCompleted(op.id);
+        } else {
+          await _markFailed(op);
+        }
       } on FormatException {
         await _markFailed(op);
       } on TypeError {

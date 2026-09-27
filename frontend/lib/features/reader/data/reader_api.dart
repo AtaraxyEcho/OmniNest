@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/reader/data/reader_file_downloader.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
@@ -283,11 +284,7 @@ class ReaderApi {
 
   // ─── Progress ────────────────────────────────────────────────
 
-  /// 更新阅读进度
-  ///
-  /// progressPercent 为全书进度（0-1），仅用于显示。
-  /// 恢复定位使用 chapterId + charOffset（章节内字符偏移）。
-  /// 漫画模式使用 pageId / pageIndex / pageFingerprint 精确定位。
+  /// 更新阅读进度（自动写回）：无能力时静默 no-op，不发网络。
   Future<void> updateProgress({
     required String itemId,
     int charOffset = 0,
@@ -303,6 +300,9 @@ class ReaderApi {
     int? manifestVersion,
     double? intraPageOffset,
   }) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return;
+    }
     await apiClient.dio.put<Map<String, dynamic>>(
       '/reader/items/$itemId/progress',
       data: {
@@ -332,7 +332,7 @@ class ReaderApi {
     return _parseList(response.data, ReaderBookmark.fromJson, '书签列表格式不正确');
   }
 
-  /// 创建书签
+  /// 创建书签（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<ReaderBookmark> createBookmark({
     required String itemId,
     required int charOffset,
@@ -340,6 +340,7 @@ class ReaderApi {
     String? note,
     String? clientOperationId,
   }) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/bookmarks',
       data: {
@@ -352,8 +353,9 @@ class ReaderApi {
     return ReaderBookmark.fromJson(parseData(response.data));
   }
 
-  /// 删除书签
+  /// 删除书签（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> deleteBookmark(String bookmarkId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.delete<Map<String, dynamic>>(
       '/reader/bookmarks/$bookmarkId',
     );
@@ -369,7 +371,7 @@ class ReaderApi {
     return _parseList(response.data, ReaderAnnotation.fromJson, '标注列表格式不正确');
   }
 
-  /// 创建标注
+  /// 创建标注（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<ReaderAnnotation> createAnnotation({
     required String itemId,
     String? chapterId,
@@ -380,6 +382,7 @@ class ReaderApi {
     String? color,
     String? clientOperationId,
   }) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/annotations',
       data: {
@@ -395,12 +398,13 @@ class ReaderApi {
     return ReaderAnnotation.fromJson(parseData(response.data));
   }
 
-  /// 更新标注
+  /// 更新标注（用户主动写）：无能力时抛 FORBIDDEN。
   Future<ReaderAnnotation> updateAnnotation(
     String annotationId, {
     String? note,
     String? color,
   }) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/reader/annotations/$annotationId',
       data: {if (note != null) 'note': note, if (color != null) 'color': color},
@@ -408,8 +412,9 @@ class ReaderApi {
     return ReaderAnnotation.fromJson(parseData(response.data));
   }
 
-  /// 删除标注
+  /// 删除标注（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> deleteAnnotation(String annotationId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.delete<Map<String, dynamic>>(
       '/reader/annotations/$annotationId',
     );
@@ -425,7 +430,7 @@ class ReaderApi {
     return _parseList(response.data, ReaderNote.fromJson, '笔记列表格式不正确');
   }
 
-  /// 创建笔记
+  /// 创建笔记（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<ReaderNote> createNote({
     required String itemId,
     int? charOffset,
@@ -433,6 +438,7 @@ class ReaderApi {
     required String content,
     String? clientOperationId,
   }) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/notes',
       data: {
@@ -445,12 +451,13 @@ class ReaderApi {
     return ReaderNote.fromJson(parseData(response.data));
   }
 
-  /// 更新笔记
+  /// 更新笔记（用户主动写）：无能力时抛 FORBIDDEN。
   Future<ReaderNote> updateNote(
     String noteId, {
     String? title,
     required String content,
   }) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/reader/notes/$noteId',
       data: {if (title != null) 'title': title, 'content': content},
@@ -458,15 +465,17 @@ class ReaderApi {
     return ReaderNote.fromJson(parseData(response.data));
   }
 
-  /// 删除笔记
+  /// 删除笔记（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> deleteNote(String noteId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.delete<Map<String, dynamic>>('/reader/notes/$noteId');
   }
 
   // ─── Bookshelf ───────────────────────────────────────────────
 
-  /// 切换条目的书架状态
+  /// 切换条目的书架状态（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> toggleBookshelf(String itemId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/bookshelf',
     );
@@ -474,7 +483,7 @@ class ReaderApi {
 
   // ─── Sessions ────────────────────────────────────────────────
 
-  /// 记录阅读会话
+  /// 记录阅读会话（自动写回）：无能力时静默 no-op，不发网络。
   Future<void> recordSession({
     required String clientSessionId,
     required String itemId,
@@ -482,6 +491,9 @@ class ReaderApi {
     required String endedAt,
     required int durationSeconds,
   }) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return;
+    }
     await apiClient.dio.post<Map<String, dynamic>>(
       '/reader/items/$itemId/sessions',
       data: {

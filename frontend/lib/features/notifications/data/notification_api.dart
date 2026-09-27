@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
 
 class NotificationApi {
@@ -37,7 +38,9 @@ class NotificationApi {
     return (data['data'] as num?)?.toInt() ?? 0;
   }
 
+  /// 标记通知已读（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<void> markRead(List<String> ids) async {
+    _client.requirePermission(activityWritePermission);
     final response = await _client.dio.put<Map<String, dynamic>>(
       '/notifications/read',
       data: {'ids': ids},
@@ -45,21 +48,27 @@ class NotificationApi {
     _requireSuccess(response.data);
   }
 
+  /// 全部标为已读（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> markAllRead() async {
+    _client.requirePermission(activityWritePermission);
     final response = await _client.dio.put<Map<String, dynamic>>(
       '/notifications/read-all',
     );
     _requireSuccess(response.data);
   }
 
+  /// 删除通知（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<void> deleteNotification(String notificationId) async {
+    _client.requirePermission(activityWritePermission);
     final response = await _client.dio.delete<Map<String, dynamic>>(
       '/notifications/$notificationId',
     );
     _requireSuccess(response.data);
   }
 
+  /// 清空通知（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> clearAll() async {
+    _client.requirePermission(activityWritePermission);
     try {
       final response = await _client.dio.delete<Map<String, dynamic>>(
         '/notifications',

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:omninest/features/search/search_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -37,6 +38,7 @@ import 'package:omninest/features/portal/presentation/widgets/portal_hero_ellips
 import 'package:omninest/features/portal/presentation/widgets/weather_detail_dialog.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/reader_cover_ui.dart';
+import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/app/theme/feature/photos_chrome_colors.dart';
 
@@ -403,7 +405,7 @@ class _PortalDesktopVisualHostState
       immersive: immersive,
       child: PortalVisualTopBar(
         palette: palette,
-        onSearch: () => context.go('/search'),
+        onSearch: () => unawaited(showGlobalSearchDialog(context)),
         trailing: [
           _PortalLocalBackdropButton(palette: palette),
           const SizedBox(width: 10),

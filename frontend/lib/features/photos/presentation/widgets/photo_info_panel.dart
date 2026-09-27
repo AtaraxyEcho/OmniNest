@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/features/photos/application/photo_controller.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
 import 'package:omninest/features/photos/presentation/widgets/frame_dialogs.dart';
@@ -126,11 +127,20 @@ class PhotoInfoPanel extends ConsumerWidget {
   }
 
   /// 切换收藏；成功后刷新详情数据，面板经 provider watch 自动回显。
+  ///
+  /// 无 activity:write 的角色：按钮保留但点击明确提示无权限。
   Future<void> _toggleFavorite(
     BuildContext context,
     WidgetRef ref,
     PhotoItem fresh,
   ) async {
+    if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context).errorForbidden)),
+      );
+      return;
+    }
     try {
       await ref
           .read(photoCenterControllerProvider.notifier)

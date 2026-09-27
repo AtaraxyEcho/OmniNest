@@ -99,7 +99,7 @@ extension _ReaderViewPageRootBuild on _ReaderViewPageState {
           },
           error:
               (e, _) => AppErrorView(
-                message: e.toString(),
+                message: describeUserFacingError(e).displayMessage,
                 onBack: safePop,
                 onRetry:
                     () =>

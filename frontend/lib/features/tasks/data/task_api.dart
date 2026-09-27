@@ -52,6 +52,26 @@ class TaskApi {
     throw TimeoutException('等待任务完成超时');
   }
 
+  /// 本人任务轻量摘要（无 task:read 也可调用）。
+  Future<ActiveTaskSummary> summary() async {
+    final response = await _client.dio.get<Map<String, dynamic>>(
+      '/tasks/summary',
+    );
+    final data = response.data?['data'] as Map<String, dynamic>?;
+    if (data == null) {
+      return const ActiveTaskSummary(activeCount: 0, failedCount: 0);
+    }
+    final priority = data['priorityTask'];
+    return ActiveTaskSummary(
+      activeCount: (data['activeCount'] as num?)?.toInt() ?? 0,
+      failedCount: (data['failedCount'] as num?)?.toInt() ?? 0,
+      priorityTask:
+          priority is Map<String, dynamic>
+              ? TaskRecord.fromJson(priority)
+              : null,
+    );
+  }
+
   Future<void> retry(String taskId) async {
     // 本人任务重试；死信队列重试走管理端 /admin/tasks。
     await _client.dio.post<Map<String, dynamic>>('/tasks/$taskId/retry');

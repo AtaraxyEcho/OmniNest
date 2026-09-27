@@ -6,6 +6,7 @@ import com.omninest.common.api.PageResponse;
 import com.omninest.common.security.CurrentUserContext;
 import com.omninest.common.security.Permissions;
 import com.omninest.modules.task.dto.TaskDto;
+import com.omninest.modules.task.dto.TaskSummaryDto;
 import com.omninest.modules.task.service.TaskQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -44,6 +45,17 @@ public class TaskController {
                 ownerUserId, status, PageRequest.of(safePage, safeSize));
         return ApiResponse.success(PageResponse.of(
                 result.getContent(), safePage, safeSize, result.getTotalElements()));
+    }
+
+    /**
+     * 本人任务轻量摘要（Portal 角标）；不要求 task:read。
+     */
+    @Operation(summary = "本人任务摘要", description = "返回进行中/失败计数与优先展示任务，不含完整列表与堆栈")
+    @GetMapping("/api/v1/tasks/summary")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
+    ApiResponse<TaskSummaryDto> summary() {
+        UUID ownerUserId = currentUserContext.requireCurrentUserId();
+        return ApiResponse.success(taskQueryService.summaryOwned(ownerUserId));
     }
 
     /**

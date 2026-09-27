@@ -11,7 +11,7 @@ class _FrameViewContent extends ConsumerWidget {
     required this.onOpenAlbum,
     required this.onDeleteAlbum,
     required this.onCreateAlbum,
-    required this.onToggleFavorite,
+    this.onToggleFavorite,
     required this.onRestoreFromTrash,
     required this.onDeleteForeverFromTrash,
     required this.onEmptyTrash,
@@ -23,7 +23,9 @@ class _FrameViewContent extends ConsumerWidget {
   final ValueChanged<PhotoAlbum> onOpenAlbum;
   final ValueChanged<PhotoAlbum> onDeleteAlbum;
   final VoidCallback onCreateAlbum;
-  final ValueChanged<PhotoItem> onToggleFavorite;
+
+  /// null 时收藏入口整体隐藏（无 activity:write 的角色）。
+  final ValueChanged<PhotoItem>? onToggleFavorite;
   final ValueChanged<PhotoItem> onRestoreFromTrash;
   final ValueChanged<PhotoItem> onDeleteForeverFromTrash;
   final VoidCallback onEmptyTrash;

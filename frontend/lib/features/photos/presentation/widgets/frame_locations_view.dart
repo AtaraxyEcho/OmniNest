@@ -16,12 +16,14 @@ import 'package:omninest/features/photos/presentation/widgets/photo_thumb_image.
 class FrameLocationsView extends ConsumerStatefulWidget {
   const FrameLocationsView({
     required this.onOpenPhoto,
-    required this.onToggleFavorite,
+    this.onToggleFavorite,
     super.key,
   });
 
   final ValueChanged<PhotoItem> onOpenPhoto;
-  final ValueChanged<PhotoItem> onToggleFavorite;
+
+  /// null 时隐藏收藏入口（无 activity:write 的角色）。
+  final ValueChanged<PhotoItem>? onToggleFavorite;
 
   @override
   ConsumerState<FrameLocationsView> createState() => _FrameLocationsViewState();
@@ -246,14 +248,14 @@ class _LocationDetail extends StatelessWidget {
     required this.photos,
     required this.onBack,
     required this.onOpenPhoto,
-    required this.onToggleFavorite,
+    this.onToggleFavorite,
   });
 
   final String location;
   final List<PhotoItem> photos;
   final VoidCallback onBack;
   final ValueChanged<PhotoItem> onOpenPhoto;
-  final ValueChanged<PhotoItem> onToggleFavorite;
+  final ValueChanged<PhotoItem>? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {

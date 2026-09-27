@@ -111,7 +111,7 @@ class ReaderStatsServiceTest {
         item.setItemType("EPUB");
         when(itemRepository.findAllById(any())).thenReturn(List.of(item));
         ReaderItemDto dto = new ReaderItemDto(
-                ITEM_ID, "EPUB", "TEXT", "测试书籍", null, null, null, null,
+                ITEM_ID, null, "EPUB", "TEXT", "测试书籍", null, null, null, null,
                 null, null, Instant.now(), Instant.now(), false, null, "PERSONAL", 0, "READY", null, null
         );
         when(itemService.toDto(eq(item), eq(false), isNull(), anyMap())).thenReturn(dto);

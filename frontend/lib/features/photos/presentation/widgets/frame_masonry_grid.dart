@@ -27,7 +27,7 @@ class FrameMasonryGrid extends ConsumerStatefulWidget {
   const FrameMasonryGrid({
     required this.photos,
     required this.onOpenPhoto,
-    required this.onToggleFavorite,
+    this.onToggleFavorite,
     this.emptyMessage,
     this.emptySubtitle,
     super.key,
@@ -35,7 +35,9 @@ class FrameMasonryGrid extends ConsumerStatefulWidget {
 
   final List<PhotoItem> photos;
   final ValueChanged<PhotoItem> onOpenPhoto;
-  final ValueChanged<PhotoItem> onToggleFavorite;
+
+  /// null 时隐藏收藏入口（无 activity:write 的角色）。
+  final ValueChanged<PhotoItem>? onToggleFavorite;
 
   /// 空态主文案；缺省为"还没有照片"。
   final String? emptyMessage;
@@ -54,6 +56,12 @@ class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
   List<MasonryPlacedTile> _placed = const [];
   double _totalLogicalHeight = 0;
 
+  /// 已挂载但已离开 cache 窗口的 tile：分帧卸载，避免单批语义更新过大。
+  final Set<String> _hysteresisIds = <String>{};
+  Set<String> _lastKeepIds = <String>{};
+
+  static const int _maxUnloadPerFrame = 4;
+
   void _ensureLayout(int columns) {
     if (_hasLayout &&
         identical(_layoutPhotos, widget.photos) &&
@@ -63,6 +71,8 @@ class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
     _layoutPhotos = widget.photos;
     _layoutColumns = columns;
     _hasLayout = true;
+    _hysteresisIds.clear();
+    _lastKeepIds = <String>{};
     _placed = placeMasonryTiles(
       widget.photos,
       columns,
@@ -158,10 +168,40 @@ class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
                     constraints.remainingPaintExtent +
                     cachePad;
                 final visible = <Widget>[];
+                final wantedIds = <String>{};
                 for (final tile in placed) {
                   final top = tile.logicalTop * columnWidth;
                   final height = tile.logicalExtent * columnWidth;
                   if (top + height < cacheTop || top > cacheBottom) {
+                    continue;
+                  }
+                  wantedIds.add(tile.photo.id);
+                }
+                // 离开 cache 的 tile 先进滞后集继续挂载，每帧最多卸载
+                // [_maxUnloadPerFrame] 个，避免滚动时单批语义更新触发
+                // Windows 桥 "will not be in the tree"。
+                for (final id in _lastKeepIds) {
+                  if (!wantedIds.contains(id)) {
+                    _hysteresisIds.add(id);
+                  }
+                }
+                _hysteresisIds.removeAll(wantedIds);
+                final drop = _hysteresisIds.take(_maxUnloadPerFrame).toSet();
+                _hysteresisIds.removeAll(drop);
+                final keepIds = <String>{...wantedIds, ..._hysteresisIds};
+                _lastKeepIds = keepIds;
+                if (_hysteresisIds.isNotEmpty) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (!mounted) {
+                      return;
+                    }
+                    setState(() {});
+                  });
+                }
+                for (final tile in placed) {
+                  final top = tile.logicalTop * columnWidth;
+                  final height = tile.logicalExtent * columnWidth;
+                  if (!keepIds.contains(tile.photo.id)) {
                     continue;
                   }
                   final left = tile.column * (columnWidth + _masonryColumnGap);
@@ -193,7 +233,9 @@ class _FrameMasonryGridState extends ConsumerState<FrameMasonryGrid> {
                         onToggleSelection:
                             () => _toggleSelect(tile.photo, isSelectionMode),
                         onToggleFavorite:
-                            () => widget.onToggleFavorite(tile.photo),
+                            widget.onToggleFavorite == null
+                                ? null
+                                : () => widget.onToggleFavorite!(tile.photo),
                       ),
                     ),
                   );

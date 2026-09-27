@@ -17,6 +17,7 @@ import 'package:omninest/app/theme/feature/photos_colors.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/navigation/navigation_extensions.dart';
 import 'package:omninest/core/utils/image_decode_width.dart';
@@ -344,8 +345,7 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
       0,
       _pages.isEmpty ? 0 : _pages.length - 1,
     );
-    final startPhoto =
-        _pages.isEmpty ? _current : _pages[startIndex];
+    final startPhoto = _pages.isEmpty ? _current : _pages[startIndex];
     final result = await context.push<Object>(
       '/photos/slideshow',
       extra: {
@@ -536,6 +536,19 @@ class _PhotoDetailBodyState extends ConsumerState<_PhotoDetailBody> {
             photo: currentFresh,
             onClose: _closeViewer,
             onToggleFavorite: () async {
+              // 无 activity:write 的角色：按钮保留但点击明确提示无权限。
+              if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        AppLocalizations.of(context).errorForbidden,
+                      ),
+                    ),
+                  );
+                }
+                return;
+              }
               try {
                 if (!mounted) return;
                 await ref

@@ -149,11 +149,14 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
         ref.invalidate(readerItemDetailProvider(widget.itemId));
         ref.invalidate(readerCenterControllerProvider);
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) return;
       showReaderSnackBar(
         context,
-        AppLocalizations.of(context).readerOperationFailed,
+        describeUserFacingError(
+          error,
+          l10n: AppLocalizations.of(context),
+        ).displayMessage,
       );
     } finally {
       if (mounted) {
@@ -170,11 +173,14 @@ class _ReaderItemDetailPageState extends ConsumerState<ReaderItemDetailPage> {
       if (mounted) {
         ref.invalidate(readerItemDetailProvider(widget.itemId));
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (!mounted) return;
       showReaderSnackBar(
         context,
-        AppLocalizations.of(context).readerOperationFailed,
+        describeUserFacingError(
+          error,
+          l10n: AppLocalizations.of(context),
+        ).displayMessage,
       );
     }
   }

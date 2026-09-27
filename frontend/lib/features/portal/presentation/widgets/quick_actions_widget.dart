@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:omninest/features/search/search_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 
@@ -32,7 +35,7 @@ class QuickActionsWidget extends StatelessWidget {
             _ActionButton(
               icon: Icons.search_rounded,
               label: l10n.portalQuickSearch,
-              onTap: () => context.go('/search'),
+              onTap: () => unawaited(showGlobalSearchDialog(context)),
             ),
           ],
         ),

@@ -30,6 +30,10 @@ class ReaderShortcutPanel extends StatelessWidget {
       if (isComic) ('M', l10n.readerShortcutMode),
       ('Esc', l10n.readerShortcutClose),
       ('?', l10n.readerShortcutsTitle),
+      // 触控：与 reader_side_tap_zone / 内容拖动一致，不描述未实现手势。
+      (l10n.readerShortcutsTouchTitle, ''),
+      ('Tap', l10n.readerShortcutTapSides),
+      ('Drag', l10n.readerShortcutDragScroll),
     ];
 
     return ListView.separated(
@@ -44,6 +48,21 @@ class ReaderShortcutPanel extends StatelessWidget {
           ),
       itemBuilder: (context, index) {
         final entry = entries[index];
+        // 分组标题行（触控手势）。
+        if (entry.$2.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: Text(
+              entry.$1,
+              style: TextStyle(
+                color: settings.onSurfaceVariantColor,
+                fontSize: AppTypography.labelSmall,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 1,
+              ),
+            ),
+          );
+        }
         return Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           child: Row(

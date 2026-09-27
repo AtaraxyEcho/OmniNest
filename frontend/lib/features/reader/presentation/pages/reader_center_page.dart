@@ -229,11 +229,14 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
               : AppLocalizations.of(context).readerRemovedFromBookshelf,
         );
       }
-    } on Exception {
+    } on Exception catch (error) {
       if (mounted) {
         showReaderSnackBar(
           context,
-          AppLocalizations.of(context).readerOperationFailed,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).displayMessage,
         );
       }
     }
@@ -249,11 +252,14 @@ class _ReaderCenterPageState extends ConsumerState<ReaderCenterPage> {
         context,
         AppLocalizations.of(context).readerDeletedItem(item.title),
       );
-    } on Exception {
+    } on Exception catch (error) {
       if (mounted) {
         showReaderSnackBar(
           context,
-          AppLocalizations.of(context).readerDeleteItemFailed,
+          describeUserFacingError(
+            error,
+            l10n: AppLocalizations.of(context),
+          ).displayMessage,
         );
       }
     }

@@ -25,6 +25,8 @@ public final class ReaderDtos {
     /** 阅读条目摘要。 */
     public record ReaderItemDto(
             UUID id,
+            /** 关联文件节点 ID；空间迁移与封面设置依赖该字段 */
+            UUID fileNodeId,
             String itemType,
             String contentKind,
             String title,

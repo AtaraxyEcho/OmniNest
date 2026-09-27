@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/photos_colors.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/errors/user_facing_error_l10n.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
@@ -179,7 +180,12 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
                             onCreateAlbum:
                                 () => _showCreateAlbumDialog(context),
                             onToggleFavorite:
-                                (photo) => unawaited(_toggleFavorite(photo)),
+                                ref
+                                        .watch(userCapabilitiesProvider)
+                                        .canManageOwnActivity
+                                    ? (photo) =>
+                                        unawaited(_toggleFavorite(photo))
+                                    : null,
                             onRestoreFromTrash:
                                 (photo) => unawaited(_restoreFromTrash(photo)),
                             onDeleteForeverFromTrash:
@@ -226,7 +232,10 @@ class _PhotosPageState extends ConsumerState<PhotosPage> {
           onOpenAlbum: (album) => context.push('/photos/albums/${album.id}'),
           onDeleteAlbum: (album) => _confirmDeleteAlbum(context, album),
           onCreateAlbum: () => _showCreateAlbumDialog(context),
-          onToggleFavorite: (photo) => unawaited(_toggleFavorite(photo)),
+          onToggleFavorite:
+              ref.watch(userCapabilitiesProvider).canManageOwnActivity
+                  ? (photo) => unawaited(_toggleFavorite(photo))
+                  : null,
           onRestoreFromTrash: (photo) => unawaited(_restoreFromTrash(photo)),
           onDeleteForeverFromTrash:
               (photo) => unawaited(_purgeFromTrash(photo)),

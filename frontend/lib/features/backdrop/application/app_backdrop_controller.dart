@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/storage/local_database_provider.dart';
 import 'package:omninest/core/utils/platform_helper.dart';
@@ -92,7 +93,9 @@ class AppBackdropController extends AsyncNotifier<AppBackdropState> {
     // read 而非 watch:偏好 save 会更新 state,若 watch(future) 会导致本控制器
     // 在每次选中/启用后整树重建 → 反复 refresh → 视频会话被打断。
     await ref.read(backdropPreferencesProvider.future);
-    if (userId != null) {
+    final canUseServerLibrary =
+        ref.read(userCapabilitiesProvider).canUseBackdropLibrary;
+    if (userId != null && canUseServerLibrary) {
       await refreshServerAssets();
     }
     var loaded = await _loadCurrentState(repository);

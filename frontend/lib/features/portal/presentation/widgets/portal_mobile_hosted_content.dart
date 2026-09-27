@@ -381,7 +381,8 @@ class _PortalContinueStrip extends ConsumerWidget {
             imageUrl: item.posterUrl,
             progress: item.progressPercent / 100,
             icon: Icons.movie_outlined,
-            route: '/video/${item.id}',
+            // 续播语义进播放器；要选集请走最近添加/历史的 movieDetailRoute。
+            route: moviePlayRoute(item.id),
             shape: _PortalContinueMediaShape.portrait,
           ),
         );

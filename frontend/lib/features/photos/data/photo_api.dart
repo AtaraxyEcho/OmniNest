@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/photos/data/photo_batch_archive_downloader.dart';
 import 'package:omninest/features/photos/data/photo_file_downloader.dart';
 import 'package:omninest/features/photos/domain/photo.dart';
@@ -150,8 +151,9 @@ class PhotoApi {
     return PhotoPage.fromJson(parseData(response.data));
   }
 
-  /// 添加收藏
+  /// 收藏照片（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<void> addFavorite(String photoId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.post<Map<String, dynamic>>('/photos/$photoId/favorite');
   }
 
@@ -189,8 +191,9 @@ class PhotoApi {
     return PhotoPage.fromJson(parseData(response.data));
   }
 
-  /// 取消收藏
+  /// 取消收藏（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> removeFavorite(String photoId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.delete<Map<String, dynamic>>(
       '/photos/$photoId/favorite',
     );

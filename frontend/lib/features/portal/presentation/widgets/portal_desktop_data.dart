@@ -264,8 +264,9 @@ class _PortalDesktopData {
             movieItem == null
                 ? primaryMovieItem == null
                     ? '/video'
-                    : '/video/${primaryMovieItem!.id}'
-                : '/video/${movieItem.id}/play',
+                    // 分集进剧集详情选集，电影进影片详情。
+                    : movieDetailRoute(primaryMovieItem!)
+                : moviePlayRoute(movieItem.id),
         actionLabel:
             movieItem == null
                 ? l10n.portalDockMovies

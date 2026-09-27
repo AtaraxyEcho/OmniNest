@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/router.dart';
 import 'package:omninest/features/notifications/application/notification_foreground_presenter.dart';
 import 'package:omninest/features/notifications/application/notification_preferences_controller.dart';
 import 'package:omninest/features/notifications/domain/notification_models.dart';
@@ -44,7 +45,10 @@ class NotificationForegroundToast extends ConsumerWidget {
     if (!enabled) {
       return;
     }
-    final router = GoRouter.of(context);
+    // Toast 挂在 MaterialApp.builder，位于 GoRouter 之上，GoRouter.of 会抛
+    // 「No GoRouter found」；优先用当前 context，否则回退应用级路由实例。
+    final GoRouter router =
+        GoRouter.maybeOf(context) ?? ref.read(appRouterProvider);
     final path = router.routeInformationProvider.value.uri.path;
     if (path == '/notifications') {
       return;

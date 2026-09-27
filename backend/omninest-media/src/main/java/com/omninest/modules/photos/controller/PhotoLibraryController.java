@@ -284,7 +284,7 @@ public class PhotoLibraryController {
     // ─── 收藏 ───
 
     @Operation(summary = "获取收藏照片", description = "返回用户收藏的所有照片")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/photos/favorites")
     ApiResponse<List<PhotoItemDto>> listFavorites(HttpServletResponse response) {
         UUID userId = currentUserContext.requireCurrentUserId();
@@ -301,7 +301,7 @@ public class PhotoLibraryController {
     }
 
     @Operation(summary = "分页获取收藏照片", description = "按关键词、页码和白名单排序返回收藏照片轻量列表")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/photos/favorites/page")
     ApiResponse<PageResponse<PhotoListItemDto>> listFavoritesPage(
             @RequestParam(defaultValue = "0") int page,
@@ -320,7 +320,7 @@ public class PhotoLibraryController {
     }
 
     @Operation(summary = "收藏照片", description = "将指定照片添加到收藏")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/photos/{photoId}/favorite")
     ApiResponse<Void> addFavorite(@PathVariable UUID photoId) {
         UUID userId = currentUserContext.requireCurrentUserId();
@@ -329,7 +329,7 @@ public class PhotoLibraryController {
     }
 
     @Operation(summary = "取消收藏照片", description = "将指定照片从收藏中移除")
-    @PreAuthorize("hasAuthority('" + Permissions.PHOTO_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @DeleteMapping("/api/v1/photos/{photoId}/favorite")
     ApiResponse<Void> removeFavorite(@PathVariable UUID photoId) {
         UUID userId = currentUserContext.requireCurrentUserId();

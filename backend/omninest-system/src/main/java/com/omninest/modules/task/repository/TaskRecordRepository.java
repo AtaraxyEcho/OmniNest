@@ -73,6 +73,15 @@ public interface TaskRecordRepository extends JpaRepository<TaskRecord, UUID> {
     Page<TaskRecord> findByOwnerUserId(UUID ownerUserId, Pageable pageable);
 
     /**
+     * 统计用户指定状态集合的任务数量。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param statuses 状态集合
+     * @return 匹配数量
+     */
+    long countByOwnerUserIdAndStatusIn(UUID ownerUserId, Collection<String> statuses);
+
+    /**
      * 按状态分页查询用户任务。
      *
      * @param ownerUserId 所属用户 ID

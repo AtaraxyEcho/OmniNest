@@ -1,11 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/reader_colors.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/core/widgets/confirm_action_dialog.dart';
+import 'package:omninest/features/files/application/space_migration_service.dart';
+import 'package:omninest/features/reader/application/reader_controller.dart';
 import 'package:omninest/features/reader/domain/reader_models.dart';
 import 'package:omninest/features/reader/presentation/reader_l10n_helpers.dart';
 import 'package:omninest/features/reader/presentation/widgets/reader_cover_image.dart';
+import 'package:omninest/features/reader/presentation/widgets/reader_snack_bar.dart';
 
 /// 元数据管理区：标题 + 搜索 + 限高懒加载列表。
 ///
@@ -25,11 +32,13 @@ class MetadataSection extends StatefulWidget {
 
 class _MetadataSectionState extends State<MetadataSection> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _listScrollController = ScrollController();
   String _query = '';
 
   @override
   void dispose() {
     _searchController.dispose();
+    _listScrollController.dispose();
     super.dispose();
   }
 
@@ -178,9 +187,13 @@ class _MetadataSectionState extends State<MetadataSection> {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(14),
                 child: Scrollbar(
+                  controller: _listScrollController,
                   thumbVisibility: true,
+                  interactive: true,
                   // builder 懒构建：大书库只创建视口内行，避免一次实例化全部条目。
                   child: ListView.builder(
+                    controller: _listScrollController,
+                    primary: false,
                     physics: const ClampingScrollPhysics(),
                     padding: EdgeInsets.fromLTRB(12, 12, 8, 12),
                     itemCount: filtered.length,
@@ -241,22 +254,26 @@ class _MetadataSectionState extends State<MetadataSection> {
   }
 }
 
-class _MetadataRow extends StatefulWidget {
+class _MetadataRow extends ConsumerStatefulWidget {
   const _MetadataRow({required this.item});
 
   final ReaderItem item;
 
   @override
-  State<_MetadataRow> createState() => _MetadataRowState();
+  ConsumerState<_MetadataRow> createState() => _MetadataRowState();
 }
 
-class _MetadataRowState extends State<_MetadataRow> {
+class _MetadataRowState extends ConsumerState<_MetadataRow> {
   bool _hovered = false;
+  bool _migrating = false;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final item = widget.item;
+    final isShared = item.spaceType == 'SHARED';
+    final canMigrateSpace =
+        item.fileNodeId != null && item.fileNodeId!.isNotEmpty;
     final statusLabel = switch (item.metadataStatus) {
       'PENDING' => l10n.readerStatusPending,
       'FAILED' => l10n.readerStatusFailed,
@@ -341,6 +358,28 @@ class _MetadataRowState extends State<_MetadataRow> {
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: context.readerColors.outlineVariant.withValues(
+                          alpha: 0.5,
+                        ),
+                      ),
+                    ),
+                    child: Text(
+                      isShared
+                          ? l10n.importToSharedSpace
+                          : l10n.importToPersonalSpace,
+                      style: TextStyle(
+                        color: context.readerColors.onSurfaceVariant,
+                        fontSize: 10,
+                        height: 1.2,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -375,10 +414,104 @@ class _MetadataRowState extends State<_MetadataRow> {
                 ),
               ),
             ),
+            SizedBox(width: 4),
+            PopupMenuButton<String>(
+              tooltip: l10n.filesOpenFileMenu,
+              enabled: !_migrating && canMigrateSpace,
+              icon: Icon(
+                Icons.more_vert_rounded,
+                size: 18,
+                color:
+                    canMigrateSpace && !_migrating
+                        ? context.readerColors.onSurfaceVariant
+                        : context.readerColors.onSurfaceVariant.withValues(
+                          alpha: 0.35,
+                        ),
+              ),
+              onSelected: (value) => unawaited(_handleMenuAction(value)),
+              itemBuilder: (context) {
+                final fileNodeId = item.fileNodeId;
+                if (fileNodeId == null || fileNodeId.isEmpty) {
+                  return const <PopupMenuEntry<String>>[];
+                }
+                return <PopupMenuEntry<String>>[
+                  if (!isShared)
+                    PopupMenuItem<String>(
+                      value: 'moveToShared',
+                      child: Text(l10n.filesMoveToShared),
+                    )
+                  else
+                    PopupMenuItem<String>(
+                      value: 'moveToPersonal',
+                      child: Text(l10n.filesMoveToPersonal),
+                    ),
+                ];
+              },
+            ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _handleMenuAction(String action) async {
+    final item = widget.item;
+    final fileNodeId = item.fileNodeId;
+    if (fileNodeId == null || fileNodeId.isEmpty || _migrating) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context);
+    final toShared = action == 'moveToShared';
+    final confirmed = await confirmDestructiveAction(
+      context,
+      title:
+          toShared
+              ? l10n.filesMoveToSharedConfirm
+              : l10n.filesMoveToPersonalConfirm,
+      message:
+          toShared
+              ? l10n.filesMoveToSharedMessage(item.title)
+              : l10n.filesMoveToPersonalMessage(item.title),
+      confirmLabel:
+          toShared ? l10n.filesMoveToShared : l10n.filesMoveToPersonalLabel,
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    setState(() => _migrating = true);
+    try {
+      final service = ref.read(spaceMigrationServiceProvider);
+      if (toShared) {
+        await service.moveToSharedSpace(fileNodeId);
+      } else {
+        await service.moveToPersonalSpace(fileNodeId);
+      }
+      if (!mounted) {
+        return;
+      }
+      await ref.read(readerCenterControllerProvider.notifier).refresh();
+      if (!mounted) {
+        return;
+      }
+      final resolvedL10n = AppLocalizations.of(context);
+      showReaderSnackBar(
+        context,
+        toShared
+            ? resolvedL10n.filesMoveToSharedSuccess
+            : resolvedL10n.filesMoveToPersonalSuccess,
+      );
+    } on Exception {
+      if (mounted) {
+        showReaderSnackBar(
+          context,
+          AppLocalizations.of(context).filesMoveSpaceFailed,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _migrating = false);
+      }
+    }
   }
 
   Widget _fallbackIcon(ReaderItem item) {

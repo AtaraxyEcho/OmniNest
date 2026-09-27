@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:omninest/app/providers.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/features/portal/application/weather_preferences_controller.dart';
 import 'package:omninest/core/log/dev_log.dart';
 
@@ -278,6 +279,10 @@ final userLocationProvider = FutureProvider<String?>((ref) async {
 
     // 上报位置到后端（供桌面端等其他设备共享）
     try {
+      final capabilities = ref.read(userCapabilitiesProvider);
+      if (!capabilities.canReportLocation) {
+        return location;
+      }
       final apiClient = ref.read(apiClientProvider);
       await apiClient.dio.post(
         '/weather/location',
