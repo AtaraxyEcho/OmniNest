@@ -121,6 +121,357 @@ void registerMusicQueueTests() {
     expect(state.playbackItems.single.track.lyricsRaw, '[00:02.00]Far');
   });
 
+  test('列表摘要投影缺歌词时起播补拉单曲详情', () async {
+    final api = _FakeMusicApi();
+    final summary = MusicTrack(
+      id: 'track-lyric',
+      fileNodeId: 'file-lyric',
+      title: 'Summary Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+    );
+    final full = summary.copyWith(lyricsRaw: '[00:03.00]Detail');
+    api.libraryTracks
+      ..clear()
+      ..add(summary);
+    api.trackDetailOverrides['track-lyric'] = full;
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .playTrack(summary);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(api.trackDetailRequests, ['track-lyric']);
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.track.lyricsRaw, '[00:03.00]Detail');
+    expect(state.playbackItems.single.track.lyricsRaw, '[00:03.00]Detail');
+  });
+
+  test('列表摘要投影缺歌词时恢复后补拉单曲详情', () async {
+    final api = _FakeMusicApi();
+    final summary = MusicTrack(
+      id: 'track-restore-lyric',
+      fileNodeId: 'file-restore-lyric',
+      title: 'Restored Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+    );
+    api.libraryTracks
+      ..clear()
+      ..add(summary);
+    api.trackDetailOverrides['track-restore-lyric'] = summary.copyWith(
+      lyricsRaw: '[00:04.00]Restored',
+    );
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[
+        MusicPlayableItem.fromQueueJson(
+          MusicPlayableItem.local(summary).toQueueJson(),
+        ),
+      ],
+      currentIndex: 0,
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    await container.read(musicCenterControllerProvider.future);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(api.trackDetailRequests, ['track-restore-lyric']);
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.track.lyricsRaw, '[00:04.00]Restored');
+    expect(state.playbackItems.single.track.lyricsRaw, '[00:04.00]Restored');
+  });
+
+  test('首页命中摘要曲目时仍优先保留 lastPlayed 完整投影的歌词', () async {
+    final api = _FakeMusicApi();
+    final summary = MusicTrack(
+      id: 'track-merge',
+      fileNodeId: 'file-merge',
+      title: 'Merge Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+    );
+    api.libraryTracks
+      ..clear()
+      ..add(summary);
+    api.lastPlayedTrack = summary.copyWith(lyricsRaw: '[00:05.00]Kept');
+    api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(
+      items: <MusicPlayableItem>[
+        MusicPlayableItem.fromQueueJson(
+          MusicPlayableItem.local(summary).toQueueJson(),
+        ),
+      ],
+      currentIndex: 0,
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final state = await container.read(musicCenterControllerProvider.future);
+
+    expect(state.currentItem?.track.lyricsRaw, '[00:05.00]Kept');
+    expect(api.trackDetailRequests, isEmpty);
+  });
+
+  test('本地歌词补拉失败写入 errorMessage 且不阻断播放', () async {
+    final api = _FakeMusicApi();
+    final summary = MusicTrack(
+      id: 'track-lyric-fail',
+      fileNodeId: 'file-lyric-fail',
+      title: 'Fail Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+    );
+    api.libraryTracks
+      ..clear()
+      ..add(summary);
+    api.trackDetailErrors['track-lyric-fail'] = Exception('detail down');
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .playTrack(summary);
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.playableKey, 'local:track-lyric-fail');
+    expect(state.isPlaying, isTrue);
+    expect(state.currentItem?.track.lyricsRaw, isNull);
+    expect(state.errorMessage, 'MUSIC_LYRICS_LOAD_FAILED');
+  });
+
+  test('在线歌词补拉失败写入 errorMessage 且不阻断播放', () async {
+    final api =
+        _FakeMusicApi()
+          ..onlineLyricsErrors['188888'] = Exception('lyrics down');
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .playOnlineTrack(
+          const OnlineTrack(
+            platform: 'netease',
+            songId: '188888',
+            title: 'Cloud Song',
+            artistName: 'Online Artist',
+          ),
+        );
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.playableKey, 'online:netease:188888');
+    expect(state.isPlaying, isTrue);
+    expect(state.currentTrack?.lyricsRaw, isNull);
+    expect(state.errorMessage, 'MUSIC_LYRICS_LOAD_FAILED');
+    expect(state.currentItem?.lyricsLoadFailed, isTrue);
+  });
+
+  test('切歌后迟到的歌词补拉失败不串台', () async {
+    final api = _FakeMusicApi();
+    final first = MusicTrack(
+      id: 'track-fail-target',
+      fileNodeId: 'file-fail-target',
+      title: 'Fail Target',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+    );
+    final second = MusicTrack(
+      id: 'track-keep-clean',
+      fileNodeId: 'file-keep-clean',
+      title: 'Keep Clean',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+      lyricsRaw: '[00:08.00]Clean',
+    );
+    api.libraryTracks
+      ..clear()
+      ..addAll([first, second]);
+    final gate = Completer<void>();
+    api.trackDetailGates['track-fail-target'] = gate;
+    api.trackDetailErrors['track-fail-target'] = Exception('detail down');
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+    final controller = container.read(musicCenterControllerProvider.notifier);
+
+    await controller.playTrack(first);
+    // 补拉仍在途时切到下一曲，再放行失败：旧失败不得写入 errorMessage 或标记任何曲。
+    await controller.playTrack(second);
+    gate.complete();
+    await Future<void>.delayed(Duration.zero);
+
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.currentItem?.playableKey, 'local:track-keep-clean');
+    expect(state.currentItem?.lyricsLoadFailed, isFalse);
+    expect(state.errorMessage, isNull);
+    final firstItem = state.playbackItems.firstWhere(
+      (item) => item.playableKey == 'local:track-fail-target',
+    );
+    expect(firstItem.lyricsLoadFailed, isFalse);
+  });
+
+  test('ensureTrackDetail 缺歌词时补拉并回写曲库投影', () async {
+    final api = _FakeMusicApi();
+    final summary = MusicTrack(
+      id: 'track-ensure',
+      fileNodeId: 'file-ensure',
+      title: 'Ensure Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+    );
+    api.libraryTracks
+      ..clear()
+      ..add(summary);
+    api.trackDetailOverrides['track-ensure'] = summary.copyWith(
+      lyricsRaw: '[00:06.00]Ensured',
+    );
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    final detail = await container
+        .read(musicCenterControllerProvider.notifier)
+        .ensureTrackDetail('track-ensure');
+
+    expect(api.trackDetailRequests, ['track-ensure']);
+    expect(detail?.lyricsRaw, '[00:06.00]Ensured');
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(
+      state.tracks.singleWhere((track) => track.id == 'track-ensure').lyricsRaw,
+      '[00:06.00]Ensured',
+    );
+  });
+
+  test('ensureTrackDetail 已有歌词时直接返回本地投影', () async {
+    final api = _FakeMusicApi();
+    final full = MusicTrack(
+      id: 'track-ensure-kept',
+      fileNodeId: 'file-ensure-kept',
+      title: 'Kept Cut',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+      lyricsRaw: '[00:07.00]Kept',
+    );
+    api.libraryTracks
+      ..clear()
+      ..add(full);
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    final detail = await container
+        .read(musicCenterControllerProvider.notifier)
+        .ensureTrackDetail('track-ensure-kept');
+
+    expect(api.trackDetailRequests, isEmpty);
+    expect(detail?.lyricsRaw, '[00:07.00]Kept');
+  });
+
+  test('ensureTrackDetail 失败时写入 errorMessage 并返回已知摘要', () async {
+    final api = _FakeMusicApi();
+    final summary = MusicTrack(
+      id: 'track-ensure-fail',
+      fileNodeId: 'file-ensure-fail',
+      title: 'Ensure Fail',
+      artistName: 'Omni Band',
+      albumTitle: 'City Lights',
+      format: 'flac',
+      favorite: false,
+    );
+    api.libraryTracks
+      ..clear()
+      ..add(summary);
+    api.trackDetailErrors['track-ensure-fail'] = Exception('detail down');
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    final detail = await container
+        .read(musicCenterControllerProvider.notifier)
+        .ensureTrackDetail('track-ensure-fail');
+
+    expect(detail?.id, 'track-ensure-fail');
+    expect(detail?.lyricsRaw, isNull);
+    final state = container.read(musicCenterControllerProvider).value!;
+    expect(state.errorMessage, isNotNull);
+  });
+
   test('曲库已完整加载时才把找不到的本地曲按已删除剪掉', () async {
     final api = _FakeMusicApi();
     api.restoredPlaybackQueue = MusicPlaybackQueueSnapshot(

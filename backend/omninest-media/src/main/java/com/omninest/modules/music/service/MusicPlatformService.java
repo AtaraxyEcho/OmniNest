@@ -46,6 +46,16 @@ public class MusicPlatformService {
      */
     private static final Duration PLAYLIST_TRACKS_CACHE_TTL = Duration.ofMinutes(30);
 
+    /**
+     * 播放地址缓存：平台 URL 有寿命，用保守短 TTL，避免返回过期地址。
+     */
+    private static final Duration PLAYBACK_URL_CACHE_TTL = Duration.ofMinutes(5);
+
+    /**
+     * 歌词缓存：平台歌词基本不变，但需允许较快收敛到补录/修正后的文本。
+     */
+    private static final Duration LYRICS_CACHE_TTL = Duration.ofHours(1);
+
     private final List<MusicPlatformProvider> providers;
     private final MusicRuntimeConfigService configService;
     private final ReadThroughCache readThroughCache;
@@ -126,7 +136,15 @@ public class MusicPlatformService {
                     "未登录，请先登录" + provider.platform().displayName()
             );
         }
-        return provider.getPlaybackUrl(ownerUserId, songId, mediaMid, quality);
+        String cacheKey = "omninest:music:playback-url:"
+                + ownerUserId + ":" + provider.platform().apiValue()
+                + ":" + songId + ":" + (quality == null ? "" : quality.trim().toLowerCase());
+        return readThroughCache.getOrLoad(
+                cacheKey,
+                PLAYBACK_URL_CACHE_TTL,
+                () -> provider.getPlaybackUrl(ownerUserId, songId, mediaMid, quality),
+                PlaybackUrlResult.class
+        );
     }
 
     /**
@@ -146,7 +164,14 @@ public class MusicPlatformService {
         if (!provider.capabilities().lyrics()) {
             return new MusicPlatformProvider.LyricsResult(null, null);
         }
-        return provider.getLyrics(ownerUserId, songId);
+        String cacheKey = "omninest:music:lyrics:"
+                + ownerUserId + ":" + provider.platform().apiValue() + ":" + songId;
+        return readThroughCache.getOrLoad(
+                cacheKey,
+                LYRICS_CACHE_TTL,
+                () -> provider.getLyrics(ownerUserId, songId),
+                MusicPlatformProvider.LyricsResult.class
+        );
     }
 
     /**

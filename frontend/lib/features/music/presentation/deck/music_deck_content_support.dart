@@ -683,7 +683,11 @@ List<MusicDeckCoverItem> _playlistCoverItems(
   ];
 }
 
-ValueChanged<MusicPlayableItem> _favoriteHandler(WidgetRef ref) {
+/// 无 activity:write 时返回 null，曲目卡片据此隐藏收藏动作。
+ValueChanged<MusicPlayableItem>? _favoriteHandler(WidgetRef ref) {
+  if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+    return null;
+  }
   return (item) {
     if (item.ref is LocalMusicRef) {
       ref

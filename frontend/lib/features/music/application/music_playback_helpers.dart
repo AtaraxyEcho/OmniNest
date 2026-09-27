@@ -33,6 +33,9 @@ extension MusicPlaybackHelpers on MusicCenterController {
     _queuePersistence.schedule(pendingState);
     if (item.ref is OnlineMusicRef) {
       unawaited(_loadOnlineLyrics(item, generation));
+    } else if (item.ref is LocalMusicRef &&
+        item.track.lyricsRaw?.isNotEmpty != true) {
+      unawaited(_loadLocalLyrics(item, generation));
     }
     MusicPlaybackPlan plan;
     try {
@@ -67,6 +70,7 @@ extension MusicPlaybackHelpers on MusicCenterController {
     }
     final latest = _currentState;
     if (latest == null || latest.currentItem?.playableKey != item.playableKey) {
+      // 解析完成前队列上下文已被替换：不再写计划/历史，避免旧请求污染新曲。
       return;
     }
     // 解析期间队列可能已被 reorder/remove 改变，回写索引按 key 重定位而非沿用旧几何。
@@ -82,7 +86,8 @@ extension MusicPlaybackHelpers on MusicCenterController {
       ),
     );
     _promoteRecentItem(item);
-    unawaited(_recordPlayableHistory(item));
+    // 历史写入与起播同拍完成，避免调用方在 await playTrack 后立刻读到未落库的历史。
+    await _recordPlayableHistory(item);
     final nextIndex = index + 1;
     if (nextIndex < queue.length && queue[nextIndex].ref is OnlineMusicRef) {
       unawaited(_playbackResolver.prefetch(queue[nextIndex]));
@@ -150,6 +155,9 @@ extension MusicPlaybackHelpers on MusicCenterController {
   }
 
   Future<void> _recordPlayableHistory(MusicPlayableItem item) async {
+    if (!ref.read(userCapabilitiesProvider).canManageOwnActivity) {
+      return;
+    }
     try {
       await _api.recordPlayableHistory(
         playableKey: item.playableKey,
@@ -184,6 +192,7 @@ extension MusicPlaybackHelpers on MusicCenterController {
       // 原文、译文与逐字三轨保存：译文为空时行级 translation 全部为 null，
       // 逐字为空时词级 words 全部为空，渲染层退回行级显示。
       final updatedItem = item.copyWith(
+        lyricsLoadFailed: false,
         track: item.track.copyWith(
           lyricsRaw: result.lyrics,
           lyricsTranslation: result.translation,
@@ -201,11 +210,115 @@ extension MusicPlaybackHelpers on MusicCenterController {
                         : candidate,
               )
               .toList(growable: false),
+          recentItems: current.recentItems
+              .map(
+                (candidate) =>
+                    candidate.playableKey == item.playableKey
+                        ? updatedItem
+                        : candidate,
+              )
+              .toList(growable: false),
         ),
       );
     } on Object catch (error) {
-      _partialErrors.add(describeUserFacingError(error).message);
+      // 歌词补拉失败要让用户看见：写入 errorMessage 由中心页 SnackBar 展示。
+      if (generation == _playRequestGeneration) {
+        _reportLyricsLoadFailure(error, item.playableKey);
+      }
     }
+  }
+
+  /// 列表投影不带歌词，本地曲起播或恢复后按 trackId 补拉完整曲目。
+  Future<void> _loadLocalLyrics(MusicPlayableItem item, int generation) async {
+    final ref = item.ref;
+    if (ref is! LocalMusicRef || item.track.lyricsRaw?.isNotEmpty == true) {
+      return;
+    }
+    try {
+      final detail = await _api.trackDetail(ref.trackId);
+      if (generation != _playRequestGeneration) {
+        return;
+      }
+      final current = _currentState;
+      if (current == null) {
+        return;
+      }
+      final stillNeeded = [current.currentItem, ...current.playbackItems].any(
+        (candidate) =>
+            candidate != null &&
+            candidate.playableKey == item.playableKey &&
+            candidate.track.lyricsRaw?.isNotEmpty != true,
+      );
+      if (!stillNeeded) {
+        return;
+      }
+      _mergeTrackDetail(detail, playableKey: item.playableKey);
+    } on Object catch (error) {
+      if (generation == _playRequestGeneration) {
+        _reportLyricsLoadFailure(error, item.playableKey);
+      }
+    }
+  }
+
+  /// 把完整曲目投影合并回曲库列表与播放队列（列表投影不带歌词）。
+  void _mergeTrackDetail(MusicTrack detail, {String? playableKey}) {
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    final key = playableKey ?? 'local:${detail.id}';
+    final updatedItem = MusicPlayableItem.local(detail);
+    MusicPlayableItem patch(MusicPlayableItem candidate) =>
+        candidate.playableKey == key ? updatedItem : candidate;
+    _replaceState(
+      current.copyWith(
+        currentItem:
+            current.currentItem?.playableKey == key
+                ? updatedItem
+                : current.currentItem,
+        playbackItems: current.playbackItems.map(patch).toList(growable: false),
+        tracks: current.tracks
+            .map((track) => track.id == detail.id ? detail : track)
+            .toList(growable: false),
+        recentItems: current.recentItems.map(patch).toList(growable: false),
+      ),
+    );
+  }
+
+  /// 歌词补拉失败：写入 `errorMessage` 让中心页 SnackBar 立即反馈，
+  /// 并按 [failedKey] 给对应队列项打上 [MusicPlayableItem.lyricsLoadFailed]。
+  void _reportLyricsLoadFailure(Object error, String failedKey) {
+    if (kDebugMode) {
+      devLog('[MusicLyrics] 加载失败: $error');
+    }
+    _setError('MUSIC_LYRICS_LOAD_FAILED');
+    final current = _currentState;
+    if (current == null) {
+      return;
+    }
+    var changed = false;
+    MusicPlayableItem markFailed(MusicPlayableItem candidate) {
+      if (candidate.playableKey != failedKey || candidate.lyricsLoadFailed) {
+        return candidate;
+      }
+      changed = true;
+      return candidate.copyWith(lyricsLoadFailed: true);
+    }
+
+    final nextCurrent =
+        current.currentItem == null ? null : markFailed(current.currentItem!);
+    final nextPlaybackItems = current.playbackItems
+        .map(markFailed)
+        .toList(growable: false);
+    if (!changed) {
+      return;
+    }
+    _replaceState(
+      current.copyWith(
+        currentItem: nextCurrent,
+        playbackItems: nextPlaybackItems,
+      ),
+    );
   }
 
   MusicPlayableItem _itemForTrack(MusicCenterState state, MusicTrack track) {

@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.omninest.common.cache.ReadThroughCache;
@@ -23,6 +24,8 @@ import com.omninest.modules.music.domain.MusicAlbum;
 import com.omninest.modules.music.domain.MusicArtist;
 import com.omninest.modules.music.domain.MusicScanJob;
 import com.omninest.modules.music.domain.MusicTrack;
+import com.omninest.modules.music.dto.MusicDtos.MusicTrackDto;
+import com.omninest.modules.music.dto.MusicDtos.UpdateMusicTrackRequest;
 import com.omninest.modules.music.event.MusicScanEvent;
 import com.omninest.modules.music.repository.MusicAlbumRepository;
 import com.omninest.modules.music.repository.MusicArtistRepository;
@@ -36,6 +39,7 @@ import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -277,6 +281,165 @@ class MusicAdminServiceTest {
         var trackCaptor = ArgumentCaptor.forClass(MusicTrack.class);
         verify(trackRepository).save(trackCaptor.capture());
         assertThat(trackCaptor.getValue().getLyricsRaw()).isEqualTo("[00:02.00]Sidecar lyric");
+    }
+
+    @Test
+    void updateTrackWithoutCoverDoesNotClearCoverOrReleaseAssets() {
+        UUID coverFileId = UUID.fromString("40000000-0000-0000-0000-000000000010");
+        MusicTrack track = existingTrack(coverFileId, "[00:01.00]Keep me", "Pop");
+        stubUpdateTrackCollaborators(track);
+
+        adminService.updateTrack(OWNER_ID, track.getId(), new UpdateMusicTrackRequest(
+                "New Title",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        ));
+
+        assertThat(track.getTitle()).isEqualTo("New Title");
+        assertThat(track.getCoverFileId()).isEqualTo(coverFileId);
+        assertThat(track.getLyricsRaw()).isEqualTo("[00:01.00]Keep me");
+        assertThat(track.getGenre()).isEqualTo("Pop");
+        verifyNoInteractions(coverRetentionService);
+    }
+
+    @Test
+    void updateTrackReplacesCoverAndReleasesPreviousAsset() {
+        UUID previousCoverFileId = UUID.fromString("40000000-0000-0000-0000-000000000011");
+        UUID nextCoverFileId = UUID.fromString("40000000-0000-0000-0000-000000000012");
+        MusicTrack track = existingTrack(previousCoverFileId, null, null);
+        stubUpdateTrackCollaborators(track);
+
+        adminService.updateTrack(OWNER_ID, track.getId(), new UpdateMusicTrackRequest(
+                "New Title",
+                null,
+                null,
+                null,
+                null,
+                nextCoverFileId,
+                null
+        ));
+
+        assertThat(track.getCoverFileId()).isEqualTo(nextCoverFileId);
+        verify(coverRetentionService).releaseUnreferenced(OWNER_ID, previousCoverFileId);
+    }
+
+    @Test
+    void updateTrackKeepingSameCoverDoesNotReleaseAsset() {
+        UUID coverFileId = UUID.fromString("40000000-0000-0000-0000-000000000013");
+        MusicTrack track = existingTrack(coverFileId, null, null);
+        stubUpdateTrackCollaborators(track);
+
+        adminService.updateTrack(OWNER_ID, track.getId(), new UpdateMusicTrackRequest(
+                "New Title",
+                null,
+                null,
+                null,
+                null,
+                coverFileId,
+                null
+        ));
+
+        assertThat(track.getCoverFileId()).isEqualTo(coverFileId);
+        verifyNoInteractions(coverRetentionService);
+    }
+
+    @Test
+    void updateTrackClearCoverRemovesCoverAndInlineFallbackAndReleasesAsset() {
+        UUID coverFileId = UUID.fromString("40000000-0000-0000-0000-000000000014");
+        MusicTrack track = existingTrack(coverFileId, null, null);
+        track.getProviderMetadata().put("coverDataUrl", "data:image/png;base64,AQIDBA==");
+        track.getProviderMetadata().put("coverUrl", "https://cdn.example/cover.jpg");
+        stubUpdateTrackCollaborators(track);
+
+        adminService.updateTrack(OWNER_ID, track.getId(), new UpdateMusicTrackRequest(
+                "New Title",
+                null,
+                null,
+                null,
+                null,
+                null,
+                true
+        ));
+
+        assertThat(track.getCoverFileId()).isNull();
+        assertThat(track.getProviderMetadata())
+                .doesNotContainKeys("coverDataUrl", "coverUrl");
+        verify(coverRetentionService).releaseUnreferenced(OWNER_ID, coverFileId);
+    }
+
+    @Test
+    void updateTrackEmptyLyricsClearsLyricsAndTranslation() {
+        MusicTrack track = existingTrack(null, "[00:01.00]Old", null);
+        track.setLyricsTranslation("旧译文");
+        stubUpdateTrackCollaborators(track);
+
+        adminService.updateTrack(OWNER_ID, track.getId(), new UpdateMusicTrackRequest(
+                "New Title",
+                null,
+                null,
+                null,
+                "",
+                null,
+                null
+        ));
+
+        assertThat(track.getLyricsRaw()).isEmpty();
+        assertThat(track.getLyricsTranslation()).isNull();
+    }
+
+    private MusicTrack existingTrack(UUID coverFileId, String lyricsRaw, String genre) {
+        MusicTrack track = new MusicTrack();
+        track.setId(UUID.fromString("70000000-0000-0000-0000-000000000001"));
+        track.setOwnerUserId(OWNER_ID);
+        track.setFileNodeId(AUDIO_FILE_ID);
+        track.setTitle("Old Title");
+        track.setArtistName("Old Artist");
+        track.setAlbumTitle("Old Album");
+        track.setCoverFileId(coverFileId);
+        track.setLyricsRaw(lyricsRaw);
+        track.setGenre(genre);
+        track.setArtistId(UUID.fromString("60000000-0000-0000-0000-000000000001"));
+        track.setAlbumId(UUID.fromString("50000000-0000-0000-0000-000000000001"));
+        track.setProviderMetadata(new LinkedHashMap<>());
+        return track;
+    }
+
+    private void stubUpdateTrackCollaborators(MusicTrack track) {
+        when(musicLibraryService.requireTrack(OWNER_ID, track.getId())).thenReturn(track);
+        when(trackRepository.save(any(MusicTrack.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        MusicArtist artist = new MusicArtist();
+        artist.setId(UUID.fromString("60000000-0000-0000-0000-000000000002"));
+        MusicAlbum album = new MusicAlbum();
+        album.setId(UUID.fromString("50000000-0000-0000-0000-000000000002"));
+        when(catalogService.resolveArtist(eq(OWNER_ID), any(), any(), any())).thenReturn(artist);
+        when(catalogService.resolveAlbum(eq(OWNER_ID), any(), any(), any(), any(), any(), any()))
+                .thenReturn(album);
+        when(musicLibraryService.toTrackDto(any(MusicTrack.class), eq(false)))
+                .thenAnswer(invocation -> {
+                    MusicTrack saved = invocation.getArgument(0);
+                    return new MusicTrackDto(
+                            saved.getId(),
+                            saved.getFileNodeId(),
+                            saved.getTitle(),
+                            saved.getArtistName(),
+                            saved.getAlbumTitle(),
+                            saved.getDurationSeconds(),
+                            saved.getFormat(),
+                            saved.getBitrate(),
+                            saved.getSampleRate(),
+                            saved.getFileSize(),
+                            saved.getLyricsRaw(),
+                            saved.getLyricsTranslation(),
+                            saved.getGenre(),
+                            null,
+                            false,
+                            null
+                    );
+                });
     }
 
     private void stubScanJob() {

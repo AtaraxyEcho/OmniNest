@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/theme/app_theme.dart';
 import 'package:omninest/app/theme/app_theme_palette.dart';
+import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
 import 'package:omninest/core/auth/auth_models.dart';
@@ -376,6 +378,16 @@ class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
 
 /// 只提供控制岛用例走到的链路，恢复的播放模式固定为单曲循环。
 class _IslandPlayModeStubApi implements MusicApi {
+  /// 真实 ApiClient（未注入权限读取器 → 视为有权限），
+  /// 供队列持久化的能力预检访问。
+  @override
+  final ApiClient apiClient = ApiClient(
+    const AppEnvironment(
+      apiBaseUrl: 'http://localhost:8080/api/v1',
+      wsBaseUrl: 'ws://localhost:8080/ws',
+    ),
+  );
+
   MusicPagedResult<T> _emptyPage<T>() =>
       MusicPagedResult<T>(items: <T>[], page: 0, size: 30);
 

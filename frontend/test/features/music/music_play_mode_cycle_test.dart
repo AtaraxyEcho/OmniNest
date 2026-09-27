@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/environment.dart';
+import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_playback_queue_store.dart';
@@ -143,6 +145,16 @@ class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
 
 /// 仅实现构建链路与播放模式轮换用到的接口方法；未实现的方法按契约抛错。
 class _StubMusicApi implements MusicApi {
+  /// 真实 ApiClient（未注入权限读取器 → 视为有权限），
+  /// 供队列持久化的能力预检访问。
+  @override
+  final ApiClient apiClient = ApiClient(
+    const AppEnvironment(
+      apiBaseUrl: 'http://localhost:8080/api/v1',
+      wsBaseUrl: 'ws://localhost:8080/ws',
+    ),
+  );
+
   MusicPlaybackQueueSnapshot? queueSnapshot;
 
   /// 远端回写的播放队列快照：用于断言播放模式的编码。

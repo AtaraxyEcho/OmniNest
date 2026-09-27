@@ -2,7 +2,9 @@ import 'package:flutter/gestures.dart' show kLongPressTimeout, kPressTimeout;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/data/music_api.dart';
 import 'package:omninest/features/music/data/music_playback_queue_store.dart';
@@ -263,6 +265,16 @@ class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
 
 class _StubMusicApi implements MusicApi {
   _StubMusicApi({required this.queueSnapshot, this.libraryTracks = _tracks});
+
+  /// 真实 ApiClient（未注入权限读取器 → 视为有权限），
+  /// 供队列持久化的能力预检访问。
+  @override
+  final ApiClient apiClient = ApiClient(
+    const AppEnvironment(
+      apiBaseUrl: 'http://localhost:8080/api/v1',
+      wsBaseUrl: 'ws://localhost:8080/ws',
+    ),
+  );
 
   MusicPlaybackQueueSnapshot queueSnapshot;
 

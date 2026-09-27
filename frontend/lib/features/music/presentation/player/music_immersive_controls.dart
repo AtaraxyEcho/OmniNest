@@ -159,13 +159,14 @@ class _DigitalImmersiveGlassPlayerControls extends ConsumerWidget {
     final playMode = center?.playMode ?? MusicPlayMode.sequential;
     final chrome = _DockGlassChrome.resolve(context);
     // 收藏入口只在当前播放项为本地曲目时出现：收藏命令仅覆盖本地曲库，
-    // 与曲库列表和移动端播放页的门控一致。
+    // 与曲库列表和移动端播放页的门控一致；无 activity:write 时隐藏。
     final currentItem = center?.currentItem;
     final canFavorite =
         track != null &&
         currentItem != null &&
         currentItem.track.id == track!.id &&
-        currentItem.ref is LocalMusicRef;
+        currentItem.ref is LocalMusicRef &&
+        ref.watch(userCapabilitiesProvider).canManageOwnActivity;
     final pill = BorderRadius.circular(999);
     return DecoratedBox(
       decoration: BoxDecoration(
@@ -721,11 +722,9 @@ class _GlassMusicProgress extends StatelessWidget {
       initialData: player.state.duration,
       builder: (context, durationSnapshot) {
         final duration = durationSnapshot.data ?? Duration.zero;
-        return StreamBuilder<Duration>(
-          stream: player.stream.position,
-          initialData: player.state.position,
-          builder: (context, positionSnapshot) {
-            final position = positionSnapshot.data ?? Duration.zero;
+        return MusicThrottledPositionBuilder(
+          player: player,
+          builder: (context, position) {
             final totalMs = duration.inMilliseconds;
             final value =
                 totalMs <= 0

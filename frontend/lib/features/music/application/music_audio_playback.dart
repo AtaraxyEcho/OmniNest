@@ -212,7 +212,9 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _durationController.add(duration);
       _positionController.add(Duration.zero);
       _bindSoundEvents(source, handle);
-      _startTicker();
+      if (play) {
+        _startTicker();
+      }
     } on Exception catch (error) {
       _log('SoLoud 音乐打开失败: $error', playbackFailure: true);
       rethrow;
@@ -267,6 +269,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     final handle = _handle;
     if (handle == null) {
       _state = _state.copyWith(playing: false);
+      _stopTicker();
       return;
     }
     try {
@@ -274,10 +277,13 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       _state = _state.copyWith(playing: false);
       _spectrumSampler.reset();
       _emitPosition();
+      _stopTicker();
     } on SoLoudSoundHandleNotFoundCppException {
       _handle = null;
+      _stopTicker();
     } on Exception catch (error) {
       _log('SoLoud 暂停失败: $error');
+      _stopTicker();
     }
   }
 
@@ -388,7 +394,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       return;
     }
     _disposed = true;
-    _ticker?.cancel();
+    _stopTicker();
     await _disposeCurrentSource();
     _audioData?.dispose();
     _spectrumSampler.dispose();
@@ -411,11 +417,23 @@ class MusicAudioPlayer implements MusicAudioPlayback {
   }
 
   void _startTicker() {
+    if (_disposed || !_state.playing) {
+      return;
+    }
     _ticker ??= Timer.periodic(_tickInterval, (_) => _tick());
+  }
+
+  void _stopTicker() {
+    _ticker?.cancel();
+    _ticker = null;
   }
 
   void _tick() {
     if (_disposed) {
+      return;
+    }
+    if (!_state.playing) {
+      _stopTicker();
       return;
     }
     _emitPosition();
@@ -424,7 +442,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       playing: _state.playing,
     );
     final handle = _handle;
-    if (handle == null || !_state.playing) {
+    if (handle == null) {
       return;
     }
     if (!_soLoud.getIsValidVoiceHandle(handle)) {
@@ -444,6 +462,9 @@ class MusicAudioPlayer implements MusicAudioPlayback {
       return;
     }
     final position = _safePosition(handle);
+    if (position == _state.position) {
+      return;
+    }
     _state = _state.copyWith(position: position);
     _positionController.add(position);
   }
@@ -470,6 +491,7 @@ class MusicAudioPlayer implements MusicAudioPlayback {
     _handle = null;
     _state = _state.copyWith(playing: false);
     _spectrumSampler.reset();
+    _stopTicker();
     _completedController.add(true);
   }
 
@@ -577,9 +599,15 @@ class MusicSpectrumSampler extends ChangeNotifier
   }
 
   /// 使用播放器的连续时钟采集一帧频谱。
+  ///
+  /// 无监听者时不读原生采样：视觉器已下线，60Hz 全量映射只是主 isolate 空转。
   void tick({required Duration elapsed, required bool playing}) {
     final track = _track;
     if (!playing || track == null) {
+      return;
+    }
+    if (!hasListeners) {
+      _lastTickElapsed = elapsed;
       return;
     }
     final previousElapsed = _lastTickElapsed;

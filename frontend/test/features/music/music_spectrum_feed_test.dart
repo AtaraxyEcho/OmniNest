@@ -3,36 +3,44 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
-import 'package:omninest/features/music/application/music_spectrum_analyzer.dart';
+import 'package:omninest/features/music/application/music_spectrum_frame.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 
 void main() {
-  test('频谱采样器在界面监听者离场后继续采样并可重新挂载', () {
+  test('无监听者时不读原生采样，重新挂载后恢复', () {
     final player = _FakeSpectrumPlayback();
     final sampler = MusicSpectrumSampler(readFrame: player.readSpectrumFrame)
       ..setTrack(_track);
     var notifications = 0;
     void listener() => notifications++;
+
     sampler.addListener(listener);
     sampler.tick(elapsed: const Duration(milliseconds: 16), playing: true);
-    final fresh = sampler.value;
-    expect(fresh.source, MusicSpectrumSource.nativeFft);
-    expect(fresh.sequence, 1);
+    expect(player.readCount, 1);
+    expect(sampler.value.sequence, 1);
     expect(notifications, 1);
 
     sampler.removeListener(listener);
     sampler.tick(elapsed: const Duration(milliseconds: 48), playing: true);
-    expect(identical(sampler.value, fresh), isTrue);
-
     sampler.tick(elapsed: const Duration(milliseconds: 148), playing: true);
-    expect(sampler.value.source, MusicSpectrumSource.nativeFft);
+    expect(player.readCount, 1, reason: '无监听者时不应读取原生采样');
     expect(sampler.value.sequence, 1);
-    expect(sampler.value.energy, lessThan(fresh.energy));
 
     sampler.addListener(listener);
     sampler.tick(elapsed: const Duration(milliseconds: 164), playing: true);
+    expect(player.readCount, 2);
     expect(sampler.value.sequence, 2);
     expect(notifications, 2);
+    sampler.dispose();
+  });
+
+  test('暂停时不读原生采样', () {
+    final player = _FakeSpectrumPlayback();
+    final sampler = MusicSpectrumSampler(readFrame: player.readSpectrumFrame)
+      ..setTrack(_track);
+    sampler.addListener(() {});
+    sampler.tick(elapsed: const Duration(milliseconds: 16), playing: false);
+    expect(player.readCount, 0);
     sampler.dispose();
   });
 }
@@ -48,7 +56,7 @@ const MusicTrack _track = MusicTrack(
 );
 
 class _FakeSpectrumPlayback implements MusicAudioPlayback {
-  int _readCount = 0;
+  int readCount = 0;
 
   @override
   MusicAudioPlayerState get state => const MusicAudioPlayerState();
@@ -68,10 +76,7 @@ class _FakeSpectrumPlayback implements MusicAudioPlayback {
 
   @override
   MusicSpectrumFrame? readSpectrumFrame({required MusicTrack track}) {
-    _readCount++;
-    if (_readCount == 2 || _readCount == 3) {
-      return null;
-    }
+    readCount++;
     return MusicSpectrumFrame(
       bands: List<double>.filled(32, 0.6),
       bass: 0.7,
@@ -82,7 +87,7 @@ class _FakeSpectrumPlayback implements MusicAudioPlayback {
       active: true,
       source: MusicSpectrumSource.nativeFft,
       confidence: 0.9,
-      sequence: _readCount == 1 ? 1 : 2,
+      sequence: readCount,
     );
   }
 
@@ -100,6 +105,7 @@ class _FakeSpectrumPlayback implements MusicAudioPlayback {
 
   @override
   void setVolume(double volume) {}
+
   @override
   void setRelativePlaySpeed(double speed) {}
 

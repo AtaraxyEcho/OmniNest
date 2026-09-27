@@ -8,6 +8,7 @@ import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/feature/music_backdrop_theme.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_controller.dart';
 import 'package:omninest/features/backdrop/application/app_backdrop_scene_controller.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -74,7 +75,9 @@ class _MusicMobileMiniPlayerSlotState
               0.0,
               1.0,
             );
-    final canFavorite = item?.ref is LocalMusicRef;
+    final canFavorite =
+        item?.ref is LocalMusicRef &&
+        ref.watch(userCapabilitiesProvider).canManageOwnActivity;
     final l10n = AppLocalizations.of(context);
     final backdrop = ref.watch(appBackdropControllerProvider).asData?.value;
     final backdropVisible = ref.watch(

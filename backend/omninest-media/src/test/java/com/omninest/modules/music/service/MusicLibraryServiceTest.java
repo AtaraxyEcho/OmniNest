@@ -75,6 +75,47 @@ class MusicLibraryServiceTest {
     );
 
     @Test
+    void trackSummaryDtoOmitsLyricsForListProjection() {
+        MusicTrack track = track();
+        track.setLyricsRaw("[00:01.00]Hello");
+        track.setLyricsTranslation("你好");
+        track.setTitle("Night Drive");
+
+        var summary = libraryService.toTrackSummaryDto(track, true);
+        var full = libraryService.toTrackDto(track, true);
+
+        assertThat(summary.lyricsRaw()).isNull();
+        assertThat(summary.lyricsTranslation()).isNull();
+        assertThat(summary.favorite()).isTrue();
+        assertThat(full.lyricsRaw()).isEqualTo("[00:01.00]Hello");
+        assertThat(full.lyricsTranslation()).isEqualTo("你好");
+    }
+
+    @Test
+    void getTrackReturnsFullProjectionWithLyrics() {
+        MusicTrack track = track();
+        track.setLyricsRaw("[00:01.00]Hello");
+        when(trackRepository.findByIdAndOwnerUserId(TRACK_ID, OWNER_ID)).thenReturn(Optional.of(track));
+        when(favoriteRepository.existsByOwnerUserIdAndTrackId(OWNER_ID, TRACK_ID)).thenReturn(true);
+
+        var dto = libraryService.getTrack(OWNER_ID, TRACK_ID);
+
+        assertThat(dto.id()).isEqualTo(TRACK_ID);
+        assertThat(dto.lyricsRaw()).isEqualTo("[00:01.00]Hello");
+        assertThat(dto.favorite()).isTrue();
+    }
+
+    @Test
+    void getTrackRejectsTrackOfOtherOwner() {
+        when(trackRepository.findByIdAndOwnerUserId(TRACK_ID, OWNER_ID)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> libraryService.getTrack(OWNER_ID, TRACK_ID))
+                .isInstanceOf(BusinessException.class)
+                .extracting("errorCode")
+                .isEqualTo(ErrorCode.MEDIA_NOT_FOUND);
+    }
+
+    @Test
     void albumTracksReturnsOwnerScopedTracks() {
         UUID albumId = UUID.fromString("50000000-0000-0000-0000-000000000001");
         MusicAlbum album = new MusicAlbum();

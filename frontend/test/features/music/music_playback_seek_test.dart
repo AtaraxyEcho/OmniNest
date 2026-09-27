@@ -80,7 +80,9 @@ void main() {
       await container
           .read(musicPlaybackSessionProvider.notifier)
           .seekTo(const Duration(seconds: 42));
-      for (var attempt = 0; attempt < 30; attempt++) {
+      // 真实时钟轮询：并发全量测试时机器负载会显著拉长事件循环调度，
+      // 预算给足 5 秒；条件满足立即退出，不拖慢正常路径。
+      for (var attempt = 0; attempt < 500; attempt++) {
         if (player.seekCalls.isNotEmpty &&
             player.seekCalls.last == const Duration(seconds: 42)) {
           break;
@@ -88,12 +90,25 @@ void main() {
         await Future<void>.delayed(const Duration(milliseconds: 10));
       }
 
-      expect(player.seekCalls, isNotEmpty);
-      expect(player.seekCalls.last, const Duration(seconds: 42));
+      final sessionState = container.read(musicPlaybackSessionProvider);
+      expect(
+        player.seekCalls,
+        isNotEmpty,
+        reason: 'seek 未生效：lastError=${sessionState.lastError}',
+      );
+      expect(
+        player.seekCalls.last,
+        const Duration(seconds: 42),
+        reason:
+            'seek 被覆盖：calls=${player.seekCalls}, '
+            'lastError=${sessionState.lastError}',
+      );
       expect(
         player.seekCalls.where((position) => position == Duration.zero),
         isEmpty,
-        reason: '音源打开后的归零 seek 会覆盖用户跳转',
+        reason:
+            '音源打开后的归零 seek 会覆盖用户跳转：'
+            'calls=${player.seekCalls}',
       );
     } finally {
       container.dispose();

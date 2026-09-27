@@ -66,6 +66,68 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
   });
+
+  testWidgets('空歌词展示暂无歌词，补拉失败展示加载失败', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final player = _P();
+    addTearDown(player.dispose);
+    final container = ProviderContainer.test(
+      overrides: [
+        musicCenterControllerProvider.overrideWith(() => _C(_S())),
+        musicPlaybackSessionProvider.overrideWith(() => _Sess(player)),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    Widget buildHost({required bool lyricsLoadFailed}) {
+      return UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: Scaffold(
+            body: SizedBox(
+              height: 200,
+              child: MusicImmersiveLyrics(
+                palette: const MusicImmersivePalette(
+                  background: Color(0xFF000000),
+                  surface: Color(0xFF000000),
+                  surfaceStrong: Color(0xFF000000),
+                  text: Colors.white,
+                  muted: Colors.white,
+                  accent: Colors.white,
+                  accentAlt: Colors.white,
+                  glow: Colors.white,
+                ),
+                player: player,
+                onSeek: (position) => player.seek(position),
+                track: _track,
+                lyrics: const <MusicLyricLine>[],
+                lyricsLoadFailed: lyricsLoadFailed,
+                scale: 1,
+                textAlign: TextAlign.left,
+                blockAnchor: Alignment.centerLeft,
+                onTogglePlayback: () {},
+                onPrevious: () {},
+                onNext: () {},
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(buildHost(lyricsLoadFailed: false));
+    await tester.pump();
+    expect(find.text('暂无歌词'), findsOneWidget);
+    expect(find.text('歌词加载失败'), findsNothing);
+
+    await tester.pumpWidget(buildHost(lyricsLoadFailed: true));
+    await tester.pump();
+    expect(find.text('歌词加载失败'), findsOneWidget);
+    expect(find.text('暂无歌词'), findsNothing);
+  });
 }
 
 class _S {

@@ -3,6 +3,7 @@ package com.omninest.modules.music.repository;
 import com.omninest.modules.music.domain.MusicPlaylistItem;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -11,6 +12,18 @@ import org.springframework.data.repository.query.Param;
 
 public interface MusicPlaylistItemRepository extends JpaRepository<MusicPlaylistItem, UUID> {
     List<MusicPlaylistItem> findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(UUID ownerUserId, UUID playlistId);
+
+    /**
+     * 查询歌单首条目（排序最前），用于封面取值，避免加载整单条目。
+     *
+     * @param ownerUserId 所属用户标识
+     * @param playlistId 歌单标识
+     * @return 首条目
+     */
+    Optional<MusicPlaylistItem> findTopByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(
+            UUID ownerUserId,
+            UUID playlistId
+    );
 
     /**
      * 按歌单和曲目顺序批量查询用户的歌单项。

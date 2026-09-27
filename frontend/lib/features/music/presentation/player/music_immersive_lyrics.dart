@@ -67,6 +67,7 @@ class MusicImmersiveLyrics extends StatefulWidget {
     this.scrollMode = true,
     this.trackOffsetMs,
     this.onAdjustLyricOffset,
+    this.lyricsLoadFailed = false,
     super.key,
   });
 
@@ -98,6 +99,9 @@ class MusicImmersiveLyrics extends StatefulWidget {
 
   /// 滚动歌词模式（设备级偏好，非跨端同步的视觉设置）：
   final bool scrollMode;
+
+  /// 歌词补拉失败标记：空歌词时区分「加载失败」与「暂无歌词」。
+  final bool lyricsLoadFailed;
   final VoidCallback onTogglePlayback;
   final VoidCallback onPrevious;
   final VoidCallback onNext;
@@ -236,15 +240,33 @@ class _MusicImmersiveLyricsState extends State<MusicImmersiveLyrics>
       );
     }
     if (widget.lyrics.isEmpty) {
+      final emptyLabel =
+          widget.lyricsLoadFailed
+              ? AppLocalizations.of(context).musicLyricsLoadFailed
+              : AppLocalizations.of(context).musicNoLyrics;
       return Center(
-        child: Text(
-          track.title,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: widget.palette.text,
-            fontSize: AppTypography.displaySmall * widget.scale,
-            fontWeight: FontWeight.w800,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              track.title,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: widget.palette.text,
+                fontSize: AppTypography.displaySmall * widget.scale,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            SizedBox(height: 8 * widget.scale),
+            Text(
+              emptyLabel,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: widget.palette.muted,
+                fontSize: AppTypography.bodyLarge * widget.scale,
+              ),
+            ),
+          ],
         ),
       );
     }

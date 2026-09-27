@@ -40,6 +40,29 @@ const MusicTrack _appliedTrack = MusicTrack(
   favorite: false,
 );
 
+const MusicTrack _trackWithLyrics = MusicTrack(
+  id: 'track-1',
+  fileNodeId: 'file-1',
+  title: 'Raw Filename',
+  artistName: 'Unknown Artist',
+  albumTitle: 'Unknown Album',
+  format: 'flac',
+  favorite: false,
+  lyricsRaw: '[00:01.00] Existing line',
+);
+
+const MusicTrack _trackWithCoverAndLyrics = MusicTrack(
+  id: 'track-1',
+  fileNodeId: 'file-1',
+  title: 'Raw Filename',
+  artistName: 'Unknown Artist',
+  albumTitle: 'Unknown Album',
+  format: 'flac',
+  favorite: false,
+  coverUrl: '/api/v1/music/covers/cover-1',
+  lyricsRaw: '[00:01.00] Existing line',
+);
+
 void main() {
   testWidgets('在线匹配展示候选并应用后回填表单', (tester) async {
     final api = _StubMusicApi();
@@ -130,7 +153,118 @@ void main() {
     expect(api.appliedLyricsTrackIds, ['track-1']);
     expect(api.appliedLyricsTexts.single, '[00:01.00] First line');
     expect(find.text('歌词已应用到「Matched Title」'), findsOneWidget);
-    expect(find.text('在线歌词'), findsOneWidget);
+    // 按钮文件名与歌词状态区各展示一次来源标签。
+    expect(find.text('在线歌词'), findsNWidgets(2));
+  });
+
+  testWidgets('列表投影缺歌词时补拉详情并预览已有歌词', (tester) async {
+    final api = _StubMusicApi()..trackDetailResult = _trackWithLyrics;
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        musicPlaybackQueueStoreProvider.overrideWithValue(
+          _MemoryMusicPlaybackQueueStore(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const MusicMetadataEditPage(trackId: 'track-1'),
+        ),
+      ),
+    );
+    await container.read(musicCenterControllerProvider.future);
+    await tester.pumpAndSettle();
+
+    expect(api.trackDetailRequests, ['track-1']);
+    expect(find.text('已有歌词（可替换）'), findsOneWidget);
+    expect(find.textContaining('[00:01.00] Existing line'), findsWidgets);
+  });
+
+  testWidgets('移除封面与清空歌词保存时提交 clearCover 与空歌词', (tester) async {
+    final api = _StubMusicApi()..currentTracks = const [_trackWithCoverAndLyrics];
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        musicPlaybackQueueStoreProvider.overrideWithValue(
+          _MemoryMusicPlaybackQueueStore(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const MusicMetadataEditPage(trackId: 'track-1'),
+        ),
+      ),
+    );
+    await container.read(musicCenterControllerProvider.future);
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('清空歌词'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('清空歌词'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('移除封面'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('移除封面'));
+    await tester.pumpAndSettle();
+
+    await tester.ensureVisible(find.text('保存'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存'));
+    await tester.pumpAndSettle();
+
+    expect(api.updatedTrackClearCover, isTrue);
+    expect(api.updatedTrackLyricsRaw, '');
+  });
+
+  testWidgets('列表投影已带歌词时直接预览且不重复补拉', (tester) async {
+    final api =
+        _StubMusicApi()
+          ..currentTracks = const [_trackWithLyrics]
+          ..trackDetailResult = _trackWithLyrics;
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        musicPlaybackQueueStoreProvider.overrideWithValue(
+          _MemoryMusicPlaybackQueueStore(),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          locale: const Locale('zh'),
+          home: const MusicMetadataEditPage(trackId: 'track-1'),
+        ),
+      ),
+    );
+    await container.read(musicCenterControllerProvider.future);
+    await tester.pumpAndSettle();
+
+    expect(api.trackDetailRequests, isEmpty);
+    expect(find.text('已有歌词（可替换）'), findsOneWidget);
+    expect(find.textContaining('[00:01.00] Existing line'), findsWidgets);
   });
 }
 
@@ -152,7 +286,19 @@ class _MemoryMusicPlaybackQueueStore implements MusicPlaybackQueueStore {
 class _StubMusicApi implements MusicApi {
   final scrapeCandidateTrackIds = <String>[];
   final appliedScrapeTrackIds = <String>[];
+  final trackDetailRequests = <String>[];
   List<MusicTrack> currentTracks = const [_track];
+  MusicTrack? trackDetailResult;
+
+  @override
+  Future<MusicTrack> trackDetail(String trackId) async {
+    trackDetailRequests.add(trackId);
+    final detail = trackDetailResult;
+    if (detail != null) {
+      return detail;
+    }
+    return currentTracks.firstWhere((track) => track.id == trackId);
+  }
 
   @override
   Future<MusicDashboard> dashboard() async => MusicDashboard.empty();
@@ -212,6 +358,23 @@ class _StubMusicApi implements MusicApi {
 
   final appliedLyricsTrackIds = <String>[];
   final appliedLyricsTexts = <String>[];
+  bool updatedTrackClearCover = false;
+  String? updatedTrackLyricsRaw;
+
+  @override
+  Future<void> updateTrack({
+    required String trackId,
+    String? title,
+    String? artistName,
+    String? albumTitle,
+    String? genre,
+    String? lyricsRaw,
+    String? coverFileId,
+    bool clearCover = false,
+  }) async {
+    updatedTrackClearCover = clearCover;
+    updatedTrackLyricsRaw = lyricsRaw;
+  }
 
   @override
   Future<MusicLyricsResult?> searchLyrics(String trackId) async =>

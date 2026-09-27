@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/core/widgets/app_slider.dart';
 import 'package:omninest/app/theme/feature/music_chrome_colors.dart';
@@ -183,7 +186,9 @@ class _MusicPlaybackButtonState extends State<MusicPlaybackButton> {
 }
 
 /// Music 模块统一使用的播放进度条。
-class MusicPlaybackProgressBar extends StatelessWidget {
+///
+/// 拖动期间用本地值呈现，避免展示层位置节流导致滑块回弹。
+class MusicPlaybackProgressBar extends StatefulWidget {
   const MusicPlaybackProgressBar({
     required this.value,
     required this.onChanged,
@@ -202,26 +207,88 @@ class MusicPlaybackProgressBar extends StatelessWidget {
   final Color thumbColor;
 
   @override
+  State<MusicPlaybackProgressBar> createState() =>
+      _MusicPlaybackProgressBarState();
+}
+
+class _MusicPlaybackProgressBarState extends State<MusicPlaybackProgressBar> {
+  double? _dragValue;
+  Timer? _dragReleaseTimer;
+
+  @override
+  void dispose() {
+    _dragReleaseTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant MusicPlaybackProgressBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final drag = _dragValue;
+    // 位置流追上拖动值后交还给外部状态，避免节流窗口内回弹。
+    if (drag != null && (widget.value - drag).abs() < 0.002) {
+      _dragReleaseTimer?.cancel();
+      _dragValue = null;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final value = (_dragValue ?? widget.value).clamp(0.0, 1.0);
     return Semantics(
-      label: semanticLabel,
+      label: widget.semanticLabel,
       slider: true,
       child: SliderTheme(
         data: SliderTheme.of(context).copyWith(
           trackHeight: 4,
-          activeTrackColor: activeColor,
-          inactiveTrackColor: inactiveColor,
-          disabledActiveTrackColor: activeColor.withValues(alpha: 0.32),
-          disabledInactiveTrackColor: inactiveColor.withValues(alpha: 0.54),
-          thumbColor: thumbColor,
-          disabledThumbColor: thumbColor.withValues(alpha: 0.42),
-          overlayColor: activeColor.withValues(alpha: 0.16),
+          activeTrackColor: widget.activeColor,
+          inactiveTrackColor: widget.inactiveColor,
+          disabledActiveTrackColor: widget.activeColor.withValues(alpha: 0.32),
+          disabledInactiveTrackColor: widget.inactiveColor.withValues(
+            alpha: 0.54,
+          ),
+          thumbColor: widget.thumbColor,
+          disabledThumbColor: widget.thumbColor.withValues(alpha: 0.42),
+          overlayColor: widget.activeColor.withValues(alpha: 0.16),
           thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 5.5),
           overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
           trackShape: const RoundedRectSliderTrackShape(),
           showValueIndicator: ShowValueIndicator.never,
         ),
-        child: AppSlider(value: value.clamp(0.0, 1.0), onChanged: onChanged),
+        child: AppSlider(
+          value: value,
+          onChangeStart:
+              widget.onChanged == null
+                  ? null
+                  : (_) {
+                    _dragReleaseTimer?.cancel();
+                    setState(() => _dragValue = widget.value);
+                  },
+          onChanged:
+              widget.onChanged == null
+                  ? null
+                  : (next) {
+                    setState(() => _dragValue = next);
+                    widget.onChanged!(next);
+                  },
+          onChangeEnd:
+              widget.onChanged == null
+                  ? null
+                  : (next) {
+                    // 保留拖动值至位置流追上；流停更时定时收回，避免滑块卡死。
+                    setState(() => _dragValue = next);
+                    widget.onChanged!(next);
+                    _dragReleaseTimer?.cancel();
+                    _dragReleaseTimer = Timer(
+                      const Duration(milliseconds: 400),
+                      () {
+                        if (mounted && _dragValue != null) {
+                          setState(() => _dragValue = null);
+                        }
+                      },
+                    );
+                  },
+        ),
       ),
     );
   }
@@ -324,5 +391,101 @@ class _MusicPlayModeButtonState extends State<MusicPlayModeButton> {
         ),
       ),
     );
+  }
+}
+
+/// 将播放位置流节流到约 8Hz 的展示构建器。
+///
+/// 原始位置流保持高频（歌词逐字填充依赖）；进度条与时间文本按展示节流重建。
+/// 拖动中的值由进度条本地状态呈现，松手后跟流，避免节流导致回弹。
+class MusicThrottledPositionBuilder extends StatefulWidget {
+  const MusicThrottledPositionBuilder({
+    required this.player,
+    required this.builder,
+    this.interval = const Duration(milliseconds: 120),
+    super.key,
+  });
+
+  final MusicAudioPlayback player;
+  final Duration interval;
+  final Widget Function(BuildContext context, Duration position) builder;
+
+  @override
+  State<MusicThrottledPositionBuilder> createState() =>
+      _MusicThrottledPositionBuilderState();
+}
+
+class _MusicThrottledPositionBuilderState
+    extends State<MusicThrottledPositionBuilder> {
+  StreamSubscription<Duration>? _positionSub;
+  Timer? _trailingTimer;
+  Duration _position = Duration.zero;
+  Duration? _pending;
+  DateTime _lastPaint = DateTime.fromMillisecondsSinceEpoch(0);
+
+  @override
+  void initState() {
+    super.initState();
+    _position = widget.player.state.position;
+    _bind();
+  }
+
+  @override
+  void didUpdateWidget(covariant MusicThrottledPositionBuilder oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.player, widget.player)) {
+      _positionSub?.cancel();
+      _trailingTimer?.cancel();
+      _pending = null;
+      _position = widget.player.state.position;
+      _bind();
+    }
+  }
+
+  @override
+  void dispose() {
+    _trailingTimer?.cancel();
+    unawaited(_positionSub?.cancel());
+    super.dispose();
+  }
+
+  void _bind() {
+    _positionSub = widget.player.stream.position.listen(_onPosition);
+  }
+
+  void _onPosition(Duration position) {
+    final now = DateTime.now();
+    if (now.difference(_lastPaint) >= widget.interval) {
+      _trailingTimer?.cancel();
+      _trailingTimer = null;
+      _pending = null;
+      _lastPaint = now;
+      if (mounted && position != _position) {
+        setState(() => _position = position);
+      } else {
+        _position = position;
+      }
+      return;
+    }
+    _pending = position;
+    _trailingTimer ??= Timer(widget.interval, _flushPending);
+  }
+
+  void _flushPending() {
+    _trailingTimer = null;
+    final pending = _pending;
+    _pending = null;
+    if (pending == null || !mounted) {
+      return;
+    }
+    _lastPaint = DateTime.now();
+    if (pending != _position) {
+      setState(() => _position = pending);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return widget.builder(context, _position);
   }
 }

@@ -74,17 +74,16 @@ class _MusicDeckCreatePlaylistDialogState
   }
 
   Future<void> _pickCover() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
-      allowMultiple: false,
-      withData: true,
-    );
-    if (!mounted || result == null || result.files.isEmpty) {
+    final result = await FilePicker.pickFiles(type: FileType.image);
+    if (!mounted || result.isEmpty) {
       return;
     }
-    final file = result.files.first;
-    final bytes = file.bytes;
-    if (bytes == null) {
+    final file = result.first;
+    final bytes = await file.readAsBytes();
+    if (!mounted) {
+      return;
+    }
+    if (bytes.isEmpty) {
       return;
     }
     Uint8List? preview;

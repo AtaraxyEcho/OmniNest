@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,7 +59,7 @@ class MusicCoverThumbnailServiceTest {
 
     @Test
     void reusesStoredThumbnailWithoutDecodingSource() {
-        when(storageService.findStoredFileNodeId(OWNER_ID, "MUSIC_COVER", COVER_ID, "THUMBNAIL", FILE_NAME))
+        when(storageService.findRegisteredFileNodeId(OWNER_ID, "MUSIC_COVER", COVER_ID, "THUMBNAIL", FILE_NAME))
                 .thenReturn(Optional.of(THUMBNAIL_ID));
 
         MusicCoverThumbnailService.ThumbnailResult result = service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
@@ -68,8 +69,33 @@ class MusicCoverThumbnailServiceTest {
     }
 
     @Test
+    void servesWarmMappingWithoutStorageLookup() {
+        when(storageService.findRegisteredFileNodeId(OWNER_ID, "MUSIC_COVER", COVER_ID, "THUMBNAIL", FILE_NAME))
+                .thenReturn(Optional.of(THUMBNAIL_ID));
+        service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
+
+        MusicCoverThumbnailService.ThumbnailResult second = service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
+
+        assertThat(second.fileId()).isEqualTo(THUMBNAIL_ID);
+        verify(storageService, times(1))
+                .findRegisteredFileNodeId(OWNER_ID, "MUSIC_COVER", COVER_ID, "THUMBNAIL", FILE_NAME);
+    }
+
+    @Test
+    void invalidateResolutionForcesStorageLookupAgain() {
+        when(storageService.findRegisteredFileNodeId(OWNER_ID, "MUSIC_COVER", COVER_ID, "THUMBNAIL", FILE_NAME))
+                .thenReturn(Optional.of(THUMBNAIL_ID));
+        service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
+        service.invalidateResolution(COVER_ID);
+        service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
+
+        verify(storageService, times(2))
+                .findRegisteredFileNodeId(OWNER_ID, "MUSIC_COVER", COVER_ID, "THUMBNAIL", FILE_NAME);
+    }
+
+    @Test
     void skipsDerivationForSourcesAboveAcceptedSize() {
-        when(storageService.findStoredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(storageService.findRegisteredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
 
         MusicCoverThumbnailService.ThumbnailResult result =
                 service.ensureThumbnail(OWNER_ID, COVER_ID, MAX_SOURCE_BYTES + 1);
@@ -83,7 +109,7 @@ class MusicCoverThumbnailServiceTest {
     @Test
     void derivesThumbnailAndStoresItUnderCoverKey() throws Exception {
         AtomicReference<Integer> storedWidth = new AtomicReference<>();
-        when(storageService.findStoredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(storageService.findRegisteredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(storageService.store(any(), any(), any(), any(), any(), any(), any(Path.class)))
                 .thenAnswer(invocation -> {
                     storedWidth.set(readWidth(invocation.<Path>getArgument(6)));
@@ -111,7 +137,7 @@ class MusicCoverThumbnailServiceTest {
 
     @Test
     void fallsBackWhenSourceIsNotADecodableImage() {
-        when(storageService.findStoredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(storageService.findRegisteredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         stubSource("not-an-image".getBytes(StandardCharsets.US_ASCII));
 
         MusicCoverThumbnailService.ThumbnailResult result = service.ensureThumbnail(OWNER_ID, COVER_ID, 1024);
@@ -129,7 +155,7 @@ class MusicCoverThumbnailServiceTest {
         CountDownLatch releaseStores = new CountDownLatch(1);
         CountDownLatch secondCallStarted = new CountDownLatch(1);
         AtomicReference<Thread> secondThread = new AtomicReference<>();
-        when(storageService.findStoredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(storageService.findRegisteredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(storageService.store(any(), any(), any(), any(), any(), any(), any(Path.class)))
                 .thenAnswer(invocation -> {
                     storeCalls.incrementAndGet();
@@ -166,7 +192,7 @@ class MusicCoverThumbnailServiceTest {
         CountDownLatch parked = new CountDownLatch(4);
         CountDownLatch release = new CountDownLatch(1);
         Set<UUID> openedCovers = ConcurrentHashMap.newKeySet();
-        when(storageService.findStoredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(storageService.findRegisteredFileNodeId(any(), any(), any(), any(), any())).thenReturn(Optional.empty());
         when(fileQueryService.openReadableFileContent(eq(OWNER_ID), any())).thenAnswer(invocation -> {
             openedCovers.add(invocation.getArgument(1));
             parked.countDown();

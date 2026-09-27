@@ -80,9 +80,37 @@ class MusicPlaylistServiceTest {
         assertThatThrownBy(() -> playlistService.update(
                 OWNER_ID,
                 PLAYLIST_ID,
-                new UpdatePlaylistRequest("Changed", null, null)
+                new UpdatePlaylistRequest("Changed", null, null, null)
         )).isInstanceOf(BusinessException.class)
                 .hasMessageContaining("自建歌单");
+    }
+
+    @Test
+    void updateClearCoverRemovesCoverAndReleasesPreviousAsset() {
+        UUID previousCoverFileId = UUID.fromString("40000000-0000-0000-0000-000000000002");
+        MusicPlaylist playlist = new MusicPlaylist();
+        playlist.setId(PLAYLIST_ID);
+        playlist.setOwnerUserId(OWNER_ID);
+        playlist.setName("Road Trip");
+        playlist.setPlaylistType("CUSTOM");
+        playlist.setCoverFileId(previousCoverFileId);
+        when(playlistRepository.findByIdAndOwnerUserId(PLAYLIST_ID, OWNER_ID))
+                .thenReturn(Optional.of(playlist));
+        when(playlistRepository.save(any(MusicPlaylist.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(playlistItemRepository.countByOwnerUserIdAndPlaylistId(OWNER_ID, PLAYLIST_ID)).thenReturn(0L);
+        when(playlistItemRepository.findTopByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(
+                OWNER_ID, PLAYLIST_ID)).thenReturn(Optional.empty());
+
+        var result = playlistService.update(
+                OWNER_ID,
+                PLAYLIST_ID,
+                new UpdatePlaylistRequest("Road Trip", null, null, true)
+        );
+
+        assertThat(result.coverFileId()).isNull();
+        assertThat(playlist.getCoverFileId()).isNull();
+        verify(coverRetentionService).releaseUnreferenced(OWNER_ID, previousCoverFileId);
     }
 
     @Test
@@ -120,8 +148,8 @@ class MusicPlaylistServiceTest {
                 .thenReturn(List.of(first, second));
         when(trackRepository.findByOwnerUserIdAndIdIn(OWNER_ID, List.of(FIRST_TRACK_ID, SECOND_TRACK_ID)))
                 .thenReturn(List.of(secondTrack, firstTrack));
-        when(musicLibraryService.toTrackDto(firstTrack, false)).thenReturn(dto(FIRST_TRACK_ID, "First"));
-        when(musicLibraryService.toTrackDto(secondTrack, false)).thenReturn(dto(SECOND_TRACK_ID, "Second"));
+        when(musicLibraryService.toTrackSummaryDto(firstTrack, false)).thenReturn(dto(FIRST_TRACK_ID, "First"));
+        when(musicLibraryService.toTrackSummaryDto(secondTrack, false)).thenReturn(dto(SECOND_TRACK_ID, "Second"));
 
         var result = playlistService.playlistTracks(OWNER_ID, PLAYLIST_ID);
 
@@ -141,13 +169,15 @@ class MusicPlaylistServiceTest {
                 .thenReturn(List.of(playlist));
         when(playlistItemRepository.countByOwnerUserIdAndPlaylistIdIn(OWNER_ID, List.of(PLAYLIST_ID)))
                 .thenReturn(List.<Object[]>of(new Object[]{PLAYLIST_ID, 1L}));
-        when(playlistItemRepository.findOrderedByOwnerAndPlaylistIds(OWNER_ID, List.of(PLAYLIST_ID)))
-                .thenReturn(List.of(first));
+        when(playlistItemRepository.findOrderedByOwnerAndPlaylistIds(
+                OWNER_ID,
+                List.of(PLAYLIST_ID)
+        )).thenReturn(List.of(first));
         when(trackRepository.findByOwnerUserIdAndIdIn(
                 eq(OWNER_ID),
                 anyList()
         )).thenReturn(List.of(firstTrack));
-        when(musicLibraryService.toTrackDto(firstTrack, false))
+        when(musicLibraryService.toTrackSummaryDto(firstTrack, false))
                 .thenReturn(dto(FIRST_TRACK_ID, "First", "https://example.com/cover.jpg"));
 
         var result = playlistService.playlists(OWNER_ID);
@@ -169,13 +199,13 @@ class MusicPlaylistServiceTest {
                 .thenReturn(Optional.of(playlist));
         when(playlistItemRepository.countByOwnerUserIdAndPlaylistId(OWNER_ID, PLAYLIST_ID))
                 .thenReturn(1L);
-        when(playlistItemRepository.findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(
+        when(playlistItemRepository.findTopByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(
                 OWNER_ID,
                 PLAYLIST_ID
-        )).thenReturn(List.of(remaining));
+        )).thenReturn(Optional.of(remaining));
         when(trackRepository.findByIdAndOwnerUserId(SECOND_TRACK_ID, OWNER_ID))
                 .thenReturn(Optional.of(secondTrack));
-        when(musicLibraryService.toTrackDto(secondTrack, false))
+        when(musicLibraryService.toTrackSummaryDto(secondTrack, false))
                 .thenReturn(dto(SECOND_TRACK_ID, "Second", "https://example.com/second.jpg"));
 
         var result = playlistService.removeItems(

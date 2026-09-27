@@ -69,6 +69,13 @@ public class MusicCoverThumbnailService {
     private static final int MAX_CONCURRENT_DERIVATIONS = 4;
 
     private static final Duration GENERATION_WAIT = Duration.ofSeconds(60);
+
+    /** 已解析缩略图映射的进程内缓存时长：命中即跳过 DB 与对象探测。 */
+    private static final Duration RESOLVED_CACHE_TTL = Duration.ofMinutes(10);
+
+    /** 进程内解析缓存容量上限，超出时淘汰最早过期条目。 */
+    private static final int RESOLVED_CACHE_MAX_ENTRIES = 4096;
+
     private final MediaProcessingLimitsProperties processingLimits;
     private final ProcessingTempProperties processingTempProperties;
     private final DerivedAssetStorageService derivedAssetStorageService;
@@ -76,7 +83,15 @@ public class MusicCoverThumbnailService {
 
     /** 同一封面的并发首请求只派生一次，其余请求等待结果后复用同一对象键。 */
     private final ConcurrentHashMap<UUID, CompletableFuture<ThumbnailResult>> inFlight = new ConcurrentHashMap<>();
+    /** coverFileId → 已解析结果；对象丢失或封面删除时由调用方失效。 */
+    private final ConcurrentHashMap<UUID, CachedResolution> resolvedCache = new ConcurrentHashMap<>();
     private final Semaphore derivationPermits = new Semaphore(MAX_CONCURRENT_DERIVATIONS);
+
+    private record CachedResolution(ThumbnailResult result, long expireAtMillis) {
+        private boolean expired() {
+            return System.currentTimeMillis() >= expireAtMillis;
+        }
+    }
 
     /**
      * 缩略图解析结果。
@@ -123,7 +138,15 @@ public class MusicCoverThumbnailService {
      * @return 缩略图节点与是否值得重试；调用方据此决定响应的缓存时长
      */
     public ThumbnailResult ensureThumbnail(UUID ownerUserId, UUID coverFileId, long sourceSizeBytes) {
-        UUID stored = derivedAssetStorageService.findStoredFileNodeId(
+        CachedResolution cached = resolvedCache.get(coverFileId);
+        if (cached != null && !cached.expired()) {
+            return cached.result();
+        }
+        if (cached != null) {
+            resolvedCache.remove(coverFileId, cached);
+        }
+        // 热路径用登记查询：对象存在性由读流失败触发 invalidate，避免每张封面一次 MinIO HEAD。
+        UUID stored = derivedAssetStorageService.findRegisteredFileNodeId(
                 ownerUserId,
                 RESOURCE_TYPE,
                 coverFileId,
@@ -131,10 +154,10 @@ public class MusicCoverThumbnailService {
                 FILE_NAME
         ).orElse(null);
         if (stored != null) {
-            return ThumbnailResult.derived(stored);
+            return remember(coverFileId, ThumbnailResult.derived(stored));
         }
         if (sourceSizeBytes > processingLimits.getMaxCoverThumbnailSourceBytes()) {
-            return ThumbnailResult.NOT_APPLICABLE;
+            return remember(coverFileId, ThumbnailResult.NOT_APPLICABLE);
         }
         CompletableFuture<ThumbnailResult> future = new CompletableFuture<>();
         CompletableFuture<ThumbnailResult> running = inFlight.putIfAbsent(coverFileId, future);
@@ -144,11 +167,53 @@ public class MusicCoverThumbnailService {
         ThumbnailResult generated = ThumbnailResult.RETRY_SOON;
         try {
             generated = generate(ownerUserId, coverFileId);
+            // 临时失败（RETRY_SOON）不写入长期映射，下次请求仍可派生。
+            if (!generated.retryLater()) {
+                remember(coverFileId, generated);
+            }
         } finally {
             inFlight.remove(coverFileId, future);
             future.complete(generated);
         }
         return generated;
+    }
+
+    /**
+     * 失效封面的缩略图映射。
+     *
+     * <p>读流发现派生对象缺失或封面本体删除时调用，使下次请求重新派生或回退。</p>
+     *
+     * @param coverFileId 封面原图文件节点 ID
+     */
+    public void invalidateResolution(UUID coverFileId) {
+        if (coverFileId != null) {
+            resolvedCache.remove(coverFileId);
+        }
+    }
+
+    private ThumbnailResult remember(UUID coverFileId, ThumbnailResult result) {
+        resolvedCache.put(
+                coverFileId,
+                new CachedResolution(result, System.currentTimeMillis() + RESOLVED_CACHE_TTL.toMillis())
+        );
+        evictResolvedIfNeeded();
+        return result;
+    }
+
+    private void evictResolvedIfNeeded() {
+        if (resolvedCache.size() <= RESOLVED_CACHE_MAX_ENTRIES) {
+            return;
+        }
+        resolvedCache.entrySet().removeIf(entry -> entry.getValue().expired());
+        if (resolvedCache.size() <= RESOLVED_CACHE_MAX_ENTRIES) {
+            return;
+        }
+        resolvedCache.entrySet().stream()
+                .sorted((a, b) -> Long.compare(a.getValue().expireAtMillis, b.getValue().expireAtMillis))
+                .limit(resolvedCache.size() - RESOLVED_CACHE_MAX_ENTRIES)
+                .map(entry -> entry.getKey())
+                .toList()
+                .forEach(resolvedCache::remove);
     }
 
     private ThumbnailResult awaitRunning(CompletableFuture<ThumbnailResult> running, UUID coverFileId) {

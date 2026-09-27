@@ -22,7 +22,7 @@ class MusicPlaybackSessionServiceTest {
 
     private final MusicPlaybackTokenService tokenService =
             new MusicPlaybackTokenService(new TestPayloadAuthenticator());
-    private final MusicPlaybackSessionStore sessionStore = new InMemorySessionStore();
+    private final InMemorySessionStore sessionStore = new InMemorySessionStore();
     private final MusicPlaybackSessionService sessionService =
             new MusicPlaybackSessionService(tokenService, sessionStore);
 
@@ -74,6 +74,41 @@ class MusicPlaybackSessionServiceTest {
     }
 
     @Test
+    void warmCacheStillVerifiesTokenEveryRequest() {
+        MusicPlaybackPlanDto plan = sessionService.createOnlinePlan(
+                OWNER_ID,
+                "netease",
+                "https://music.example.com/audio.mp3",
+                180,
+                "mp3"
+        );
+        ParsedPlaybackUrl parsedUrl = parsePlaybackUrl(plan.url());
+
+        assertThat(sessionService.resolve(parsedUrl.sessionId(), parsedUrl.token())).isPresent();
+        assertThat(sessionService.resolve(parsedUrl.sessionId(), parsedUrl.token() + "x")).isEmpty();
+        assertThat(sessionService.resolve(parsedUrl.sessionId(), parsedUrl.token())).isPresent();
+    }
+
+    @Test
+    void warmCacheAvoidsRepeatedStoreLookups() {
+        MusicPlaybackPlanDto plan = sessionService.createLocalPlan(
+                OWNER_ID,
+                TRACK_ID,
+                "http://localhost:9000/audio.flac",
+                Instant.now().plusSeconds(600),
+                245,
+                "flac"
+        );
+        ParsedPlaybackUrl parsedUrl = parsePlaybackUrl(plan.url());
+        int findsBefore = sessionStore.findCount;
+
+        sessionService.resolve(parsedUrl.sessionId(), parsedUrl.token());
+        sessionService.resolve(parsedUrl.sessionId(), parsedUrl.token());
+
+        assertThat(sessionStore.findCount - findsBefore).isEqualTo(1);
+    }
+
+    @Test
     void createOnlinePlanHidesSourceUrlAndUsesOnlineSourceType() {
         MusicPlaybackPlanDto plan = sessionService.createOnlinePlan(
                 OWNER_ID,
@@ -112,6 +147,7 @@ class MusicPlaybackSessionServiceTest {
      */
     private static final class InMemorySessionStore implements MusicPlaybackSessionStore {
         private final Map<String, MusicPlaybackSession> sessions = new HashMap<>();
+        private int findCount;
 
         @Override
         public void save(MusicPlaybackSession session) {
@@ -120,6 +156,7 @@ class MusicPlaybackSessionServiceTest {
 
         @Override
         public Optional<MusicPlaybackSession> find(String sessionId) {
+            findCount++;
             return Optional.ofNullable(sessions.get(sessionId));
         }
 

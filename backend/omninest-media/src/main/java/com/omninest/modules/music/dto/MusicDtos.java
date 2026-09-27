@@ -201,10 +201,15 @@ public final class MusicDtos {
     ) {
     }
 
+    /**
+     * 歌单更新请求。coverFileId 为部分更新：null 表示保留原封面；
+     * clearCover 为 true 时显式清空封面（优先于 coverFileId）。
+     */
     public record UpdatePlaylistRequest(
             @NotBlank @Size(max = 300) String name,
             @Size(max = 2000) String description,
-            UUID coverFileId
+            UUID coverFileId,
+            Boolean clearCover
     ) {
     }
 
@@ -265,13 +270,21 @@ public final class MusicDtos {
     public record MusicScrapeRequest(boolean force) {
     }
 
+    /**
+     * 曲目元数据更新请求。除 title 外字段为部分更新：null 表示保留原值，
+     * 显式传值（含空字符串）才覆盖。
+     *
+     * <p>封面：coverFileId 非空表示替换；clearCover 为 true 表示清空封面
+     * （优先于 coverFileId）。歌词：lyricsRaw 传空字符串表示清空原文与译文。</p>
+     */
     public record UpdateMusicTrackRequest(
             @NotBlank String title,
             String artistName,
             String albumTitle,
             String genre,
             String lyricsRaw,
-            UUID coverFileId
+            UUID coverFileId,
+            Boolean clearCover
     ) {
     }
 

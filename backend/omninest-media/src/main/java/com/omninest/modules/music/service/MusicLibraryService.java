@@ -101,7 +101,7 @@ public class MusicLibraryService {
                 albumRepository.countActiveByOwnerUserId(ownerUserId),
                 artistRepository.countActiveByOwnerUserId(ownerUserId),
                 playHistoryRepository.countByOwnerUserId(ownerUserId),
-                toTrackDtos(ownerUserId, trackRepository.findTop12ByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)),
+                toTrackSummaryDtos(ownerUserId, trackRepository.findTop12ByOwnerUserIdOrderByUpdatedAtDesc(ownerUserId)),
                 albumRepository.findTop12ActiveByOwnerUserId(ownerUserId).stream()
                         .map(this::toAlbumDto)
                         .toList(),
@@ -119,7 +119,7 @@ public class MusicLibraryService {
                 PageRequest.of(PageClamps.safePage(page), PageClamps.safeSize(size),
                         resolveSort(sort, TRACK_SORT_FIELDS, Sort.by(Sort.Direction.ASC, "title"))));
         return new PageImpl<>(
-                toTrackDtos(ownerUserId, result.getContent()),
+                toTrackSummaryDtos(ownerUserId, result.getContent()),
                 result.getPageable(),
                 result.getTotalElements());
     }
@@ -145,7 +145,7 @@ public class MusicLibraryService {
     public List<MusicTrackDto> albumTracks(UUID ownerUserId, UUID albumId) {
         MusicAlbum album = albumRepository.findByIdAndOwnerUserId(albumId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐专辑不存在"));
-        return toTrackDtos(ownerUserId, trackRepository.findAlbumTracks(ownerUserId, album.getId()));
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findAlbumTracks(ownerUserId, album.getId()));
     }
 
     /**
@@ -159,7 +159,7 @@ public class MusicLibraryService {
     public List<MusicTrackDto> artistTracks(UUID ownerUserId, UUID artistId) {
         MusicArtist artist = artistRepository.findByIdAndOwnerUserId(artistId, ownerUserId)
                 .orElseThrow(() -> new BusinessException(ErrorCode.MEDIA_NOT_FOUND, "音乐歌手不存在"));
-        return toTrackDtos(ownerUserId, trackRepository.findArtistTracks(ownerUserId, artist.getId()));
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findArtistTracks(ownerUserId, artist.getId()));
     }
 
     @Transactional(readOnly = true)
@@ -212,7 +212,7 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackDtos(ownerUserId, trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds));
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds));
     }
 
     @Transactional(readOnly = true)
@@ -230,7 +230,7 @@ public class MusicLibraryService {
         if (trackIds.isEmpty()) {
             return List.of();
         }
-        return toTrackDtos(ownerUserId, trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds));
+        return toTrackSummaryDtos(ownerUserId, trackRepository.findByOwnerUserIdAndIdIn(ownerUserId, trackIds));
     }
 
     /**
@@ -268,7 +268,7 @@ public class MusicLibraryService {
                 if (track != null) {
                     results.add(new MusicRecentItemDto(
                             history.getPlayableKey(),
-                            toTrackDto(track, favoriteTrackIds.contains(track.getId())),
+                            toTrackSummaryDto(track, favoriteTrackIds.contains(track.getId())),
                             null,
                             history.getPlayedAt()
                     ));
@@ -292,7 +292,7 @@ public class MusicLibraryService {
             return new MusicSearchResultDto(List.of(), List.of(), List.of());
         }
         return new MusicSearchResultDto(
-                toTrackDtos(ownerUserId, trackRepository.searchByOwnerUserId(
+                toTrackSummaryDtos(ownerUserId, trackRepository.searchByOwnerUserId(
                         ownerUserId,
                         normalized,
                         PageRequest.of(0, 20)
@@ -603,6 +603,48 @@ public class MusicLibraryService {
     }
 
     /**
+     * 列表投影：不携带歌词大字段，播放或详情接口再按需取词。
+     *
+     * @param track 曲目实体
+     * @param favorite 是否已收藏
+     * @return 轻量曲目 DTO
+     */
+    public MusicTrackDto toTrackSummaryDto(MusicTrack track, boolean favorite) {
+        return new MusicTrackDto(
+                track.getId(),
+                track.getFileNodeId(),
+                track.getTitle(),
+                fallback(track.getArtistName(), "Unknown Artist"),
+                fallback(track.getAlbumTitle(), "Unknown Album"),
+                track.getDurationSeconds(),
+                track.getFormat(),
+                track.getBitrate(),
+                track.getSampleRate(),
+                track.getFileSize(),
+                null,
+                null,
+                track.getGenre(),
+                coverUrlForTrack(track),
+                favorite,
+                track.getUpdatedAt()
+        );
+    }
+
+    /**
+     * 查询单曲完整投影（含歌词），供播放前补拉与详情展示。
+     *
+     * @param ownerUserId 所属用户 ID
+     * @param trackId 曲目 ID
+     * @return 含歌词的曲目 DTO
+     */
+    @Transactional(readOnly = true)
+    public MusicTrackDto getTrack(UUID ownerUserId, UUID trackId) {
+        MusicTrack track = requireTrack(ownerUserId, trackId);
+        boolean favorite = favoriteRepository.existsByOwnerUserIdAndTrackId(ownerUserId, trackId);
+        return toTrackDto(track, favorite);
+    }
+
+    /**
      * 本地曲目封面解析链：封面文件稳定 API 路径优先，缺省回退提供方
      * 元数据（内嵌数据地址、外部链接）。
      *
@@ -619,10 +661,10 @@ public class MusicLibraryService {
         );
     }
 
-    private List<MusicTrackDto> toTrackDtos(UUID ownerUserId, List<MusicTrack> tracks) {
+    private List<MusicTrackDto> toTrackSummaryDtos(UUID ownerUserId, List<MusicTrack> tracks) {
         Set<UUID> favoriteTrackIds = favoriteTrackIds(ownerUserId, tracks.stream().map(MusicTrack::getId).toList());
         return tracks.stream()
-                .map(track -> toTrackDto(track, favoriteTrackIds.contains(track.getId())))
+                .map(track -> toTrackSummaryDto(track, favoriteTrackIds.contains(track.getId())))
                 .toList();
     }
 

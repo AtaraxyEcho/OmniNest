@@ -10,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/log/dev_log.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
@@ -83,6 +84,7 @@ class _ImmersiveLyrics extends StatelessWidget {
     this.lyricScrollMode = true,
     this.trackOffsetMs,
     this.onAdjustLyricOffset,
+    this.lyricsLoadFailed = false,
   });
 
   final MusicImmersivePalette palette;
@@ -114,6 +116,9 @@ class _ImmersiveLyrics extends StatelessWidget {
   final int? trackOffsetMs;
   final void Function(int deltaMs)? onAdjustLyricOffset;
 
+  /// 歌词补拉失败标记：空歌词时区分「加载失败」与「暂无歌词」。
+  final bool lyricsLoadFailed;
+
   @override
   Widget build(BuildContext context) {
     return MusicImmersiveLyrics(
@@ -127,6 +132,7 @@ class _ImmersiveLyrics extends StatelessWidget {
       scrollMode: lyricScrollMode,
       trackOffsetMs: trackOffsetMs,
       onAdjustLyricOffset: onAdjustLyricOffset,
+      lyricsLoadFailed: lyricsLoadFailed,
       textAlign: textAlign,
       blockAnchor: blockAnchor,
       onTogglePlayback: onTogglePlayback,

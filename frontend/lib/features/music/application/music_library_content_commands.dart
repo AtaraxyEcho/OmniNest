@@ -45,7 +45,40 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
   }
 
+  /// 列表投影不带歌词：编辑页等打开时按需补拉完整曲目并回写中心状态。
+  ///
+  /// 已有歌词时直接返回本地投影；失败时返回已知摘要并写入 errorMessage。
+  Future<MusicTrack?> ensureTrackDetail(String trackId) async {
+    final current = _currentState;
+    MusicTrack? known;
+    if (current != null) {
+      known =
+          _findTrack(current.tracks, trackId) ??
+          _findTrack(current.selectedPlaylistTracks, trackId) ??
+          _findTrack(current.selectedAlbumTracks, trackId) ??
+          _findTrack(current.selectedArtistTracks, trackId) ??
+          _findTrack(current.playbackQueue, trackId);
+    }
+    if (known?.lyricsRaw?.isNotEmpty == true) {
+      return known;
+    }
+    try {
+      final detail = await _api.trackDetail(trackId);
+      if (_controllerDisposed) {
+        return detail;
+      }
+      _mergeTrackDetail(detail);
+      return detail;
+    } on Exception catch (error) {
+      _setError(describeUserFacingError(error).message);
+      return known;
+    }
+  }
+
   /// 更新本地曲目元数据，并在需要时先上传自定义封面。
+  ///
+  /// [clearCover] 为 true 时显式清空封面（与 [coverBytes] 互斥，新封面优先）；
+  /// [lyricsRaw] 传空字符串表示清空歌词。
   Future<void> updateTrackMetadata({
     required String trackId,
     required String title,
@@ -55,6 +88,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
     String? lyricsRaw,
     List<int>? coverBytes,
     String? coverFileName,
+    bool clearCover = false,
   }) async {
     try {
       final coverFileId =
@@ -72,6 +106,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
         genre: genre,
         lyricsRaw: lyricsRaw,
         coverFileId: coverFileId,
+        clearCover: clearCover && coverBytes == null,
       );
       await refresh();
     } on Exception catch (error) {
@@ -180,13 +215,14 @@ extension MusicLibraryContentCommands on MusicCenterController {
     }
   }
 
-  /// 更新自定义歌单。
+  /// 更新自定义歌单。[clearCover] 为 true 时显式清空封面（新封面优先）。
   Future<void> updatePlaylist(
     MusicPlaylist playlist, {
     required String name,
     String? description,
     List<int>? coverBytes,
     String? coverFileName,
+    bool clearCover = false,
   }) async {
     final current = _currentState;
     if (current == null) {
@@ -205,6 +241,7 @@ extension MusicLibraryContentCommands on MusicCenterController {
         name: name,
         description: description,
         coverFileId: coverFileId,
+        clearCover: clearCover && coverBytes == null,
       );
       _replaceState(
         current.copyWith(

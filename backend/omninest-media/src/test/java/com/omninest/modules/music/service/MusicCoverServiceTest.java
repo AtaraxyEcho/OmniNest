@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -163,8 +164,11 @@ class MusicCoverServiceTest {
         assertThat(stream.freshness()).isEqualTo(MusicCoverService.ThumbnailFreshness.DERIVED);
         assertThat(stream.descriptor().fileId()).isEqualTo(THUMBNAIL_ID);
         assertThat(stream.descriptor().contentType()).isEqualTo("image/jpeg");
+        assertThat(stream.sourceFileId()).isEqualTo(FILE_ID);
+        // 派生缩略图与原图同 owner：只校验原图归属，免二次 validateOwnedImage。
         verify(fileQueryService).validateOwnedImage(OWNER_ID, FILE_ID);
-        verify(fileQueryService).validateOwnedImage(OWNER_ID, THUMBNAIL_ID);
+        verify(fileQueryService, never()).validateOwnedImage(OWNER_ID, THUMBNAIL_ID);
+        verify(fileMetadataQueryService).findActiveById(THUMBNAIL_ID);
     }
 
     @Test

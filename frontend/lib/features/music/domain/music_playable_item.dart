@@ -50,7 +50,11 @@ final class OnlineMusicRef extends MusicPlayableRef {
 
 /// 统一可播放音乐对象。
 class MusicPlayableItem {
-  const MusicPlayableItem({required this.ref, required this.track});
+  const MusicPlayableItem({
+    required this.ref,
+    required this.track,
+    this.lyricsLoadFailed = false,
+  });
 
   /// 从本地曲库曲目创建可播放对象。
   factory MusicPlayableItem.local(MusicTrack track) {
@@ -128,10 +132,18 @@ class MusicPlayableItem {
   /// 兼容现有展示组件的曲目信息投影。
   final MusicTrack track;
 
+  /// 运行时歌词补拉失败标记：仅用于播放页空歌词区分「加载失败」与「暂无」，
+  /// 不入队列快照，恢复后按需重新补拉。
+  final bool lyricsLoadFailed;
+
   String get playableKey => ref.playableKey;
 
-  MusicPlayableItem copyWith({MusicTrack? track}) {
-    return MusicPlayableItem(ref: ref, track: track ?? this.track);
+  MusicPlayableItem copyWith({MusicTrack? track, bool? lyricsLoadFailed}) {
+    return MusicPlayableItem(
+      ref: ref,
+      track: track ?? this.track,
+      lyricsLoadFailed: lyricsLoadFailed ?? this.lyricsLoadFailed,
+    );
   }
 
   /// 转换为不包含凭据和临时播放地址的队列快照。

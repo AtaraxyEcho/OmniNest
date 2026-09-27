@@ -262,6 +262,8 @@ class _MusicImmersivePlayerStageState
                       lyricSpec: lyricSpec,
                       trackOffsetMs: trackOffsetMs,
                       onAdjustLyricOffset: _adjustTrackLyricOffset,
+                      lyricsLoadFailed:
+                          state?.currentItem?.lyricsLoadFailed ?? false,
                       blockAnchor: lyricSpec.blockAnchor,
                       textAlign: lyricSpec.textAlign,
                       // 居中布局仅在堆叠卡片可见时用固定三行窗口，其余形态

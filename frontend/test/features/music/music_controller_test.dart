@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:omninest/app/environment.dart';
 import 'package:omninest/app/environment_providers.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
@@ -44,11 +45,39 @@ MusicPagedResult<T> _paged<T>(List<T> items, int page, int size) {
   );
 }
 
+/// 未登录会话下能力矩阵默认全 false，播放历史被门控；测试放开 activity:write。
+const _activityCapable = UserCapabilities(
+  canBrowseContent: true,
+  canContributeContent: true,
+  canManageOwnActivity: true,
+  canManagePreferences: true,
+  canManageAccount: true,
+  canUseBackdropLibrary: true,
+  canUploadBackdrop: true,
+  canViewOwnTasks: true,
+  canAdminTasks: true,
+  canManageMediaLibrary: true,
+  canManagePhotos: true,
+  canAdminUsers: true,
+  canReadSystemConfig: true,
+  canManageSystemConfig: true,
+  canAccessAdminConsole: true,
+  canSharedBrowse: true,
+  canSharedUpload: true,
+  canReadWeather: true,
+  canReportLocation: true,
+  canManageTwoFactor: true,
+  canReadActivity: true,
+);
+
 void main() {
   test('play track loads playback plan and marks music playing', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
-      overrides: [musicApiProvider.overrideWithValue(api)],
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+      ],
     );
     addTearDown(container.dispose);
     await container.read(musicCenterControllerProvider.future);
@@ -68,7 +97,10 @@ void main() {
   test('online temporary track does not request local playback plan', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
-      overrides: [musicApiProvider.overrideWithValue(api)],
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+      ],
     );
     addTearDown(container.dispose);
     await container.read(musicCenterControllerProvider.future);
@@ -471,6 +503,29 @@ void main() {
     },
   );
 
+  test('track metadata clearCover and empty lyrics pass through api', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [musicApiProvider.overrideWithValue(api)],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    await container
+        .read(musicCenterControllerProvider.notifier)
+        .updateTrackMetadata(
+          trackId: 'track-1',
+          title: 'Updated title',
+          lyricsRaw: '',
+          clearCover: true,
+        );
+
+    expect(api.updatedTrackClearCover, isTrue);
+    expect(api.updatedTrackCoverFileId, isNull);
+    expect(api.updatedTrackLyricsRaw, '');
+    expect(api.uploadedCoverNames, isEmpty);
+  });
+
   test('deleting a custom playlist removes it from state', () async {
     final api = _FakeMusicApi();
     final container = ProviderContainer.test(
@@ -702,6 +757,46 @@ void main() {
     expect(state.tracks.map((track) => track.id), ['track-2']);
   });
 
+  test('无 activity:write 时队列持久化跳过远端保存（本地保留回归）', () async {
+    final api = _RestrictedActivityApi();
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        userCapabilitiesProvider.overrideWithValue(
+          UserCapabilities.fromUser(null),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    final controller = container.read(musicCenterControllerProvider.notifier);
+    await controller.playTrack(api.track);
+    await controller.flushPlaybackQueue();
+
+    expect(api.queueSaveAttempts, 0, reason: '无能力时不得触发远端队列保存，也不得把空结果伪装成远端成功');
+  });
+
+  test('有 activity:write 时队列远端保存照常触发（对照组）', () async {
+    final api = _FakeMusicApi();
+    final container = ProviderContainer.test(
+      overrides: [
+        musicApiProvider.overrideWithValue(api),
+        musicPlaybackQueueOwnerIdProvider.overrideWith((ref) async => 'user-a'),
+        userCapabilitiesProvider.overrideWithValue(_activityCapable),
+      ],
+    );
+    addTearDown(container.dispose);
+    await container.read(musicCenterControllerProvider.future);
+
+    final controller = container.read(musicCenterControllerProvider.notifier);
+    await controller.playTrack(api.track);
+    await controller.flushPlaybackQueue();
+
+    expect(api.queueSaveAttempts, greaterThanOrEqualTo(1));
+  });
+
   registerMusicPlatformTests();
   registerMusicFirstFrameTieringTests();
   registerMusicPlaylistPreloadTests();
@@ -772,6 +867,7 @@ class _FakeMusicApi implements MusicApi {
   final onlinePlaybackRequests = <String>[];
   final lyricsRequests = <String>[];
   final onlineLyrics = <String, String>{};
+  final onlineLyricsErrors = <String, Object>{};
   final recordedHistoryKeys = <String>[];
   MusicPlaybackQueueSnapshot restoredPlaybackQueue =
       const MusicPlaybackQueueSnapshot();
@@ -806,6 +902,8 @@ class _FakeMusicApi implements MusicApi {
   String? updatedTrackGenre;
   String? updatedTrackLyricsRaw;
   String? updatedTrackCoverFileId;
+  bool updatedTrackClearCover = false;
+  bool updatedPlaylistClearCover = false;
   final scrapeCandidateTrackIds = <String>[];
   final appliedScrapeTrackIds = <String>[];
   final appliedLyricsTrackIds = <String>[];
@@ -897,6 +995,32 @@ class _FakeMusicApi implements MusicApi {
       page: page,
       size: size,
       totalElements: all.length,
+    );
+  }
+
+  final trackDetailRequests = <String>[];
+  final trackDetailOverrides = <String, MusicTrack>{};
+  final trackDetailErrors = <String, Object>{};
+  final trackDetailGates = <String, Completer<void>>{};
+
+  @override
+  Future<MusicTrack> trackDetail(String trackId) async {
+    trackDetailRequests.add(trackId);
+    final gate = trackDetailGates[trackId];
+    if (gate != null) {
+      await gate.future;
+    }
+    final error = trackDetailErrors[trackId];
+    if (error != null) {
+      throw error;
+    }
+    final override = trackDetailOverrides[trackId];
+    if (override != null) {
+      return override;
+    }
+    return libraryTracks.firstWhere(
+      (track) => track.id == trackId,
+      orElse: () => throw StateError('track not found: $trackId'),
     );
   }
 
@@ -1049,6 +1173,10 @@ class _FakeMusicApi implements MusicApi {
     String songId,
   ) async {
     lyricsRequests.add('$platform:$songId');
+    final error = onlineLyricsErrors[songId];
+    if (error != null) {
+      throw error;
+    }
     final raw = onlineLyrics[songId];
     return raw == null ? null : MusicPlatformLyrics(lyrics: raw);
   }
@@ -1297,6 +1425,7 @@ class _FakeMusicApi implements MusicApi {
     String? genre,
     String? lyricsRaw,
     String? coverFileId,
+    bool clearCover = false,
   }) async {
     updatedTrackId = trackId;
     updatedTrackTitle = title;
@@ -1305,6 +1434,7 @@ class _FakeMusicApi implements MusicApi {
     updatedTrackGenre = genre;
     updatedTrackLyricsRaw = lyricsRaw;
     updatedTrackCoverFileId = coverFileId;
+    updatedTrackClearCover = clearCover;
   }
 
   @override
@@ -1322,8 +1452,10 @@ class _FakeMusicApi implements MusicApi {
     required String name,
     String? description,
     String? coverFileId,
+    bool clearCover = false,
   }) async {
     updatedPlaylistCoverFileId = coverFileId;
+    updatedPlaylistClearCover = clearCover;
     return MusicPlaylist(
       id: playlistId,
       name: name,
@@ -1465,4 +1597,17 @@ class _DelayedMusicApi extends _FakeMusicApi {
     }
     return super.playbackPlan(trackId);
   }
+}
+
+/// 受限角色替身：apiClient 注入空权限集，队列持久化的能力预检
+/// （apiClient.hasPermission）按"无 activity:write"放行本地分支。
+class _RestrictedActivityApi extends _FakeMusicApi {
+  @override
+  ApiClient get apiClient => ApiClient(
+    const AppEnvironment(
+      apiBaseUrl: 'http://localhost:8080/api/v1',
+      wsBaseUrl: 'ws://localhost:8080/ws',
+    ),
+    readPermissions: () => const <String>{},
+  );
 }

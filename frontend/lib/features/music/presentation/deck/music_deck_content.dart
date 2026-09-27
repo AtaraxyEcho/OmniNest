@@ -6,7 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
+import 'package:omninest/app/theme/control_tokens.dart';
 import 'package:omninest/app/theme/feature/music_colors.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/file_purge_confirmation.dart';
 import 'package:omninest/features/files/presentation/widgets/media_import_button.dart';
@@ -593,9 +595,15 @@ class _PlaylistsContent extends ConsumerWidget {
           subtitle: l10n.musicDeckPlaylistsSubtitle,
           trailing:
               sources.contains(MusicPlatform.local)
-                  ? FilledButton.icon(
+                  ? OutlinedButton.icon(
                     onPressed: () => _showCreatePlaylistDialog(context, ref),
-                    icon: const Icon(Icons.add_rounded, size: 18),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: context.musicColors.onSurface,
+                    ),
+                    icon: const Icon(
+                      Icons.add_rounded,
+                      size: AppControlTokens.buttonIconSize,
+                    ),
                     label: Text(l10n.musicCreatePlaylist),
                   )
                   : null,

@@ -284,8 +284,8 @@ extension MusicCenterStateLoad on MusicCenterController {
 
   /// 用曲库投影替换队列里的窗口快照项。
   ///
-  /// 快照只带标题/艺人/封面等少数字段，歌词、收藏与码率都在曲目实体上；恢复的
-  /// 会话若不补齐，详情页就取不到歌词（内嵌封面被快照剔除后也靠这里回填）。
+  /// 快照只带标题/艺人/封面等少数字段，收藏与码率在曲目实体上；内嵌封面被快照
+  /// 剔除后也靠这里回填。列表投影不带歌词，歌词由起播/恢复时的 `trackDetail` 补拉。
   List<MusicPlayableItem> _hydrateQueueFromLibrary(
     List<MusicPlayableItem> items,
     Map<String, MusicTrack> trackById,
@@ -303,9 +303,24 @@ extension MusicCenterStateLoad on MusicCenterController {
         continue;
       }
       changed = true;
-      hydrated.add(MusicPlayableItem.local(refreshed));
+      hydrated.add(
+        MusicPlayableItem.local(_withLyricsFrom(refreshed, item.track)),
+      );
     }
     return changed ? hydrated : items;
+  }
+
+  /// 列表投影不带歌词：在摘要曲目上补齐已知完整投影的歌词字段。
+  MusicTrack _withLyricsFrom(MusicTrack summary, MusicTrack? full) {
+    if (summary.lyricsRaw?.isNotEmpty == true ||
+        full?.lyricsRaw?.isNotEmpty != true) {
+      return summary;
+    }
+    return summary.copyWith(
+      lyricsRaw: full!.lyricsRaw,
+      lyricsTranslation: full.lyricsTranslation,
+      lyricsWords: full.lyricsWords,
+    );
   }
 
   MusicPlayableItem? _refreshPlayableItem(
@@ -337,7 +352,12 @@ extension MusicCenterStateLoad on MusicCenterController {
     final trackId = (playableRef as LocalMusicRef).trackId;
     final refreshed = _findTrack(tracks, trackId);
     if (refreshed != null) {
-      return MusicPlayableItem.local(refreshed);
+      // 列表是摘要投影；lastPlayed 含歌词，合并到摘要上以保留最新收藏/封面。
+      return MusicPlayableItem.local(
+        lastPlayed != null && lastPlayed.id == trackId
+            ? _withLyricsFrom(refreshed, lastPlayed)
+            : refreshed,
+      );
     }
     if (lastPlayed != null && lastPlayed.id == trackId) {
       // 恢复的当前曲常在已加载页之外（曲库按 100 条分页），lastPlayed 就是它的

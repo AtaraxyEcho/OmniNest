@@ -48,6 +48,33 @@ void main() {
     expect(adapter.lastPath, '/music/tracks/track-1/playback-plan');
   });
 
+  test('track detail endpoint returns full projection with lyrics', () async {
+    final adapter = _CapturingHttpClientAdapter(
+      body: {
+        'code': 200,
+        'message': 'success',
+        'data': {
+          'id': 'track-1',
+          'fileNodeId': 'file-1',
+          'title': 'Night Drive',
+          'artistName': 'Omni Band',
+          'albumTitle': 'City Lights',
+          'format': 'flac',
+          'lyricsRaw': '[00:01.00]Hello',
+          'favorite': true,
+        },
+      },
+    );
+    final api = MusicApi(_apiClient(adapter));
+
+    final track = await api.trackDetail('track-1');
+
+    expect(adapter.lastMethod, 'GET');
+    expect(adapter.lastPath, '/music/tracks/track-1');
+    expect(track.lyricsRaw, '[00:01.00]Hello');
+    expect(track.favorite, isTrue);
+  });
+
   test(
     'playback plan resolves api relative stream url to absolute url',
     () async {
@@ -517,6 +544,60 @@ void main() {
       'coverFileId': 'cover-2',
     });
     expect(playlist.coverFileId, 'cover-2');
+  });
+
+  test('update playlist can explicitly clear cover', () async {
+    final adapter = _CapturingHttpClientAdapter(
+      body: {
+        'code': 200,
+        'message': 'success',
+        'data': {
+          'id': 'playlist-1',
+          'name': 'Road Trip 2',
+          'playlistType': 'CUSTOM',
+          'trackCount': 0,
+        },
+      },
+    );
+    final api = MusicApi(_apiClient(adapter));
+
+    await api.updatePlaylist(
+      playlistId: 'playlist-1',
+      name: 'Road Trip 2',
+      clearCover: true,
+    );
+
+    expect(adapter.lastData, {
+      'name': 'Road Trip 2',
+      'description': null,
+      'clearCover': true,
+    });
+  });
+
+  test('update track sends clearCover and empty lyrics', () async {
+    final adapter = _CapturingHttpClientAdapter(
+      body: {
+        'code': 200,
+        'message': 'success',
+        'data': {'id': 'track-1'},
+      },
+    );
+    final api = MusicApi(_apiClient(adapter));
+
+    await api.updateTrack(
+      trackId: 'track-1',
+      title: 'Night Drive',
+      lyricsRaw: '',
+      clearCover: true,
+    );
+
+    expect(adapter.lastMethod, 'PUT');
+    expect(adapter.lastPath, '/admin/music/tracks/track-1');
+    expect(adapter.lastData, {
+      'title': 'Night Drive',
+      'lyricsRaw': '',
+      'clearCover': true,
+    });
   });
 
   test('upload cover sends multipart file to music cover endpoint', () async {

@@ -6,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/providers.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
 import 'package:omninest/features/music/application/music_platform_library_controller.dart';
 import 'package:omninest/features/music/application/music_playback_resolver.dart';
@@ -159,13 +161,16 @@ class MusicCenterController extends AsyncNotifier<MusicCenterState> {
     if (_queuePersistence.restoreRequiresRemoteSync) {
       _queuePersistence.schedule(loaded, delay: Duration.zero);
     }
-    // 恢复的会话不经过播放请求路径：在线曲目恢复后歌词为空，
+    // 恢复的会话不经过播放请求路径：列表投影与在线曲目恢复后歌词为空，
     // 此处补拉一次，与主动播放时的行为一致。
     final restoredItem = loaded.currentItem;
     if (restoredItem != null &&
-        restoredItem.ref is OnlineMusicRef &&
         restoredItem.track.lyricsRaw?.isNotEmpty != true) {
-      unawaited(_loadOnlineLyrics(restoredItem, _playRequestGeneration));
+      if (restoredItem.ref is OnlineMusicRef) {
+        unawaited(_loadOnlineLyrics(restoredItem, _playRequestGeneration));
+      } else if (restoredItem.ref is LocalMusicRef) {
+        unawaited(_loadLocalLyrics(restoredItem, _playRequestGeneration));
+      }
     }
     unawaited(_backfillSecondary());
     return loaded;

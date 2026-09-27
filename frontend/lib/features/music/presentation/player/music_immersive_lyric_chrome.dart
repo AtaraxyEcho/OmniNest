@@ -79,10 +79,7 @@ class _LyricEdgeFade extends StatelessWidget {
         } else {
           final extent =
               (height * _edgeFadeHeightRatio)
-                  .clamp(
-                    _edgeFadeMinHeight,
-                    _edgeFadeMaxHeight,
-                  )
+                  .clamp(_edgeFadeMinHeight, _edgeFadeMaxHeight)
                   .toDouble();
           stop = (extent / height).clamp(0.0, 0.45).toDouble();
           end = 1 - stop;

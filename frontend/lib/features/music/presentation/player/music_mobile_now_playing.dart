@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/app/theme/mobile_layout_tokens.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/features/music/application/music_audio_playback.dart';
 import 'package:omninest/features/music/application/music_controller.dart';
 import 'package:omninest/features/music/application/music_local_preferences_controller.dart';
@@ -151,6 +152,7 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                             player: session.player,
                             track: track,
                             lyrics: lyrics,
+                            lyricsLoadFailed: item?.lyricsLoadFailed ?? false,
                             scale:
                                 MediaQuery.sizeOf(context).width < 390
                                     ? 0.86
@@ -207,7 +209,11 @@ class _MusicMobileNowPlayingState extends ConsumerState<MusicMobileNowPlaying> {
                     item: item,
                     track: track,
                     onToggleFavorite:
-                        track == null || item?.ref is! LocalMusicRef
+                        track == null ||
+                                item?.ref is! LocalMusicRef ||
+                                !ref
+                                    .watch(userCapabilitiesProvider)
+                                    .canManageOwnActivity
                             ? null
                             : () => _toggleFavorite(context, track),
                   ),
@@ -647,91 +653,95 @@ class _MobilePlaybackControls extends StatelessWidget {
       initialData: player.state.duration,
       builder: (context, durationSnapshot) {
         final duration = durationSnapshot.data ?? Duration.zero;
-        return StreamBuilder<Duration>(
-          stream: player.stream.position,
-          initialData: player.state.position,
-          builder: (context, positionSnapshot) {
-            final position = positionSnapshot.data ?? Duration.zero;
-            final totalMs = duration.inMilliseconds;
-            final progress =
-                totalMs <= 0
-                    ? 0.0
-                    : (position.inMilliseconds / totalMs)
-                        .clamp(0.0, 1.0)
-                        .toDouble();
-            return Column(
-              children: [
-                MusicPlaybackProgressBar(
-                  value: progress,
-                  semanticLabel: l10n.portalMusicVisualizerSeek,
-                  activeColor: MusicChromeColors.tealAccent,
-                  inactiveColor: Colors.white.withValues(alpha: 0.14),
-                  thumbColor: Colors.white,
-                  onChanged:
-                      enabled && totalMs > 0
-                          ? (value) => unawaited(
-                            onSeek(
-                              Duration(milliseconds: (totalMs * value).round()),
-                            ),
-                          )
-                          : null,
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Row(
-                    children: [
-                      Text(_formatDuration(position), style: _timeStyle),
-                      const Spacer(),
-                      Text(_formatDuration(duration), style: _timeStyle),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Row(
+        final totalMs = duration.inMilliseconds;
+        return Column(
+          children: [
+            MusicThrottledPositionBuilder(
+              player: player,
+              builder: (context, position) {
+                final progress =
+                    totalMs <= 0
+                        ? 0.0
+                        : (position.inMilliseconds / totalMs)
+                            .clamp(0.0, 1.0)
+                            .toDouble();
+                return Column(
                   children: [
-                    // 播放模式单按钮轮换：与桌面 Dock 同一交互（只换图标，不留底色）。
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: MusicPlayModeButton(
-                          playMode: playMode,
-                          onTap: enabled ? onCyclePlayMode : null,
-                          iconSize: 20,
-                          padding: 10,
-                          idleColor: Colors.white.withValues(alpha: 0.62),
-                          activeColor: MusicChromeColors.tealAccent,
-                        ),
+                    MusicPlaybackProgressBar(
+                      value: progress,
+                      semanticLabel: l10n.portalMusicVisualizerSeek,
+                      activeColor: MusicChromeColors.tealAccent,
+                      inactiveColor: Colors.white.withValues(alpha: 0.14),
+                      thumbColor: Colors.white,
+                      onChanged:
+                          enabled && totalMs > 0
+                              ? (value) => unawaited(
+                                onSeek(
+                                  Duration(
+                                    milliseconds: (totalMs * value).round(),
+                                  ),
+                                ),
+                              )
+                              : null,
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          Text(_formatDuration(position), style: _timeStyle),
+                          const Spacer(),
+                          Text(_formatDuration(duration), style: _timeStyle),
+                        ],
                       ),
                     ),
-                    IconButton(
-                      tooltip: l10n.musicDeckPrevious,
-                      onPressed: enabled ? onPrevious : null,
-                      icon: Icon(Icons.skip_previous_rounded, size: 30),
-                      color: Colors.white,
-                    ),
-                    const SizedBox(width: 10),
-                    MusicPlaybackButton(
-                      isPlaying: isPlaying,
-                      tooltip: isPlaying ? l10n.musicPause : l10n.musicPlay,
-                      onPressed: enabled ? onTogglePlayback : null,
-                      buttonSize: MusicPlaybackButtonSize.regular,
-                      backgroundColor: MusicChromeColors.tealPanel,
-                      accentColor: MusicChromeColors.tealAccent,
-                      foregroundColor: Colors.white,
-                    ),
-                    const SizedBox(width: 10),
-                    IconButton(
-                      tooltip: l10n.musicDeckNext,
-                      onPressed: enabled ? onNext : null,
-                      icon: Icon(Icons.skip_next_rounded, size: 30),
-                      color: Colors.white,
-                    ),
-                    const Expanded(child: SizedBox.shrink()),
                   ],
+                );
+              },
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                // 播放模式单按钮轮换：与桌面 Dock 同一交互（只换图标，不留底色）。
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: MusicPlayModeButton(
+                      playMode: playMode,
+                      onTap: enabled ? onCyclePlayMode : null,
+                      iconSize: 20,
+                      padding: 10,
+                      idleColor: Colors.white.withValues(alpha: 0.62),
+                      activeColor: MusicChromeColors.tealAccent,
+                    ),
+                  ),
                 ),
+                IconButton(
+                  tooltip: l10n.musicDeckPrevious,
+                  onPressed: enabled ? onPrevious : null,
+                  icon: Icon(Icons.skip_previous_rounded, size: 30),
+                  color: Colors.white,
+                ),
+                const SizedBox(width: 10),
+                MusicPlaybackButton(
+                  isPlaying: isPlaying,
+                  tooltip: isPlaying ? l10n.musicPause : l10n.musicPlay,
+                  onPressed: enabled ? onTogglePlayback : null,
+                  buttonSize: MusicPlaybackButtonSize.regular,
+                  backgroundColor: MusicChromeColors.tealPanel,
+                  accentColor: MusicChromeColors.tealAccent,
+                  foregroundColor: Colors.white,
+                ),
+                const SizedBox(width: 10),
+                IconButton(
+                  tooltip: l10n.musicDeckNext,
+                  onPressed: enabled ? onNext : null,
+                  icon: Icon(Icons.skip_next_rounded, size: 30),
+                  color: Colors.white,
+                ),
+                const Expanded(child: SizedBox.shrink()),
               ],
-            );
-          },
+            ),
+          ],
         );
       },
     );

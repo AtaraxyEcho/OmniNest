@@ -100,8 +100,13 @@ public class MusicCoverService {
      *
      * @param descriptor 实际写出的内容描述
      * @param freshness 响应的可缓存程度
+     * @param sourceFileId 封面原图文件标识，用于派生对象缺失时失效映射
      */
-    public record ThumbnailStream(CoverStreamDescriptor descriptor, ThumbnailFreshness freshness) {
+    public record ThumbnailStream(
+            CoverStreamDescriptor descriptor,
+            ThumbnailFreshness freshness,
+            UUID sourceFileId
+    ) {
     }
 
     /**
@@ -129,16 +134,36 @@ public class MusicCoverService {
                     source,
                     result.retryLater()
                             ? ThumbnailFreshness.RETRY_SOON
-                            : ThumbnailFreshness.STABLE_FALLBACK
+                            : ThumbnailFreshness.STABLE_FALLBACK,
+                    fileId
             );
         }
         if (thumbnailFileId.equals(fileId)) {
-            return new ThumbnailStream(source, ThumbnailFreshness.DERIVED);
+            return new ThumbnailStream(source, ThumbnailFreshness.DERIVED, fileId);
         }
+        // 派生缩略图与原图同 owner，免二次归属校验；仍读元数据取 MIME 与字节数。
         return new ThumbnailStream(
-                prepareCoverStream(ownerUserId, thumbnailFileId),
-                ThumbnailFreshness.DERIVED
+                prepareDerivedDescriptor(ownerUserId, thumbnailFileId),
+                ThumbnailFreshness.DERIVED,
+                fileId
         );
+    }
+
+    /**
+     * 读取同 owner 派生资产的流式描述，不做二次归属校验。
+     */
+    private CoverStreamDescriptor prepareDerivedDescriptor(UUID ownerUserId, UUID fileId) {
+        FileDescriptor node = fileMetadataQueryService.findActiveById(fileId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在"));
+        if (!NodeType.FILE.getValue().equals(node.nodeType())
+                || node.sizeBytes() > processingLimits.getMaxStreamCoverBytes()) {
+            throw new BusinessException(ErrorCode.FILE_NOT_FOUND, "封面文件不存在");
+        }
+        String contentType = node.mimeType();
+        if (contentType == null || contentType.isBlank()) {
+            contentType = "image/jpeg";
+        }
+        return new CoverStreamDescriptor(ownerUserId, fileId, contentType, node.sizeBytes());
     }
 
     /**
@@ -152,6 +177,24 @@ public class MusicCoverService {
         try (FileContentStream content = fileQueryService.openReadableFileContent(
                 descriptor.ownerUserId(), descriptor.fileId())) {
             content.inputStream().transferTo(outputStream);
+        }
+    }
+
+    /**
+     * 写出缩略图内容；派生对象读失败时失效映射并抛出，下次请求重新派生或回退原图。
+     *
+     * @param thumbnail 缩略图流式读取结果
+     * @param outputStream 响应输出流
+     * @throws IOException 内容读取或写出失败
+     */
+    public void streamThumbnail(ThumbnailStream thumbnail, OutputStream outputStream) throws IOException {
+        try {
+            streamCover(thumbnail.descriptor(), outputStream);
+        } catch (IOException | RuntimeException ex) {
+            if (thumbnail.freshness() == ThumbnailFreshness.DERIVED) {
+                coverThumbnailService.invalidateResolution(thumbnail.sourceFileId());
+            }
+            throw ex;
         }
     }
 

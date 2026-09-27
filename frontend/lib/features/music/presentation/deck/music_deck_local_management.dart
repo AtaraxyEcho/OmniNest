@@ -53,7 +53,10 @@ class _LocalManagementContent extends ConsumerWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: context.musicColors.onSurface,
                 ),
-                icon: const Icon(Icons.travel_explore_rounded, size: 18),
+                icon: const Icon(
+                  Icons.travel_explore_rounded,
+                  size: AppControlTokens.buttonIconSize,
+                ),
                 label: Text(l10n.musicScrapeLibrary),
               ),
               const SizedBox(width: 12),
@@ -63,7 +66,10 @@ class _LocalManagementContent extends ConsumerWidget {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: context.musicColors.onSurface,
                 ),
-                icon: const Icon(Icons.radar_rounded, size: 18),
+                icon: const Icon(
+                  Icons.radar_rounded,
+                  size: AppControlTokens.buttonIconSize,
+                ),
                 label: Text(l10n.musicStartScan),
               ),
             ],

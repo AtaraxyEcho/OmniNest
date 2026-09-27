@@ -205,6 +205,18 @@ class _MusicQueuePersistenceCoordinator {
   }
 
   Future<void> _persist(MusicPlaybackQueueSnapshot snapshot) async {
+    if (!api.apiClient.hasPermission(activityWritePermission)) {
+      // 无能力时只保留本地快照，不触远端、不触发远端成功回调，
+      // 避免把"跳过"伪装成"远端保存成功"后覆盖本地队列状态。
+      final owner = ownerId;
+      if (_disposed || owner == null) {
+        return;
+      }
+      if (identical(_latestSnapshot, snapshot)) {
+        await _saveLocal(owner, snapshot);
+      }
+      return;
+    }
     final (response, error) = await _saveRemoteWithRetry(snapshot);
     if (_disposed) {
       return;

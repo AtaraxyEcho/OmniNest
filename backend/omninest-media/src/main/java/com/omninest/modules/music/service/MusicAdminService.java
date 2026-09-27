@@ -255,6 +255,12 @@ public class MusicAdminService {
                 .orElseThrow(() -> new BusinessException(ErrorCode.NOT_FOUND, "音乐库扫描任务不存在"));
     }
 
+    /**
+     * 更新曲目元数据。可选字段采用部分更新：请求未携带（null）时保留原值，
+     * 避免仅编辑标题或歌词时误清已有封面、歌词与流派。
+     *
+     * <p>清空语义：clearCover=true 清空封面；lyricsRaw 传空字符串清空歌词原文与译文。</p>
+     */
     @Transactional(rollbackFor = Exception.class)
     public MusicTrackDto updateTrack(UUID ownerUserId, UUID trackId, UpdateMusicTrackRequest request) {
         log.info("更新音乐曲目: trackId={}", trackId);
@@ -272,17 +278,44 @@ public class MusicAdminService {
         track.setTitle(request.title().trim());
         track.setArtistName(artistName);
         track.setAlbumTitle(albumTitle);
-        track.setGenre(request.genre());
-        track.setLyricsRaw(request.lyricsRaw());
-        track.setCoverFileId(request.coverFileId());
+        if (request.genre() != null) {
+            track.setGenre(request.genre());
+        }
+        if (request.lyricsRaw() != null) {
+            track.setLyricsRaw(request.lyricsRaw());
+            if (request.lyricsRaw().isEmpty()) {
+                track.setLyricsTranslation(null);
+            }
+        }
+        applyCoverUpdate(track, request.coverFileId(), Boolean.TRUE.equals(request.clearCover()));
         track.setArtistId(artist.getId());
         track.setAlbumId(album.getId());
         track.setMetadataStatus(MetadataStatus.MANUAL.getValue());
         trackRepository.save(track);
-        coverRetentionService.releaseUnreferenced(ownerUserId, previousCoverFileId);
+        // 封面未变时不能回收：未携带 coverFileId 只表示“不修改”，不是替换。
+        if (previousCoverFileId != null && !previousCoverFileId.equals(track.getCoverFileId())) {
+            coverRetentionService.releaseUnreferenced(ownerUserId, previousCoverFileId);
+        }
         catalogService.refreshStatistics(ownerUserId, previousArtistId, previousAlbumId, track);
         recordTrackUpdated(ownerUserId, track);
         return musicLibraryService.toTrackDto(track, false);
+    }
+
+    /**
+     * 应用封面部分更新：clearCover 优先清空（含内联/外部回退地址），
+     * 否则仅在携带新 coverFileId 时替换。
+     */
+    private void applyCoverUpdate(MusicTrack track, UUID coverFileId, boolean clearCover) {
+        if (clearCover) {
+            track.setCoverFileId(null);
+            track.getProviderMetadata().remove("coverDataUrl");
+            track.getProviderMetadata().remove("coverUrl");
+            return;
+        }
+        if (coverFileId != null) {
+            track.setCoverFileId(coverFileId);
+            track.getProviderMetadata().remove("coverDataUrl");
+        }
     }
 
     @Transactional(rollbackFor = Exception.class)

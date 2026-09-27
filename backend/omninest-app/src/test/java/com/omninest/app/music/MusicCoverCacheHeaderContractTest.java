@@ -156,7 +156,8 @@ class MusicCoverCacheHeaderContractTest {
     private void stubThumbnail(ThumbnailFreshness freshness) {
         when(musicCoverService.prepareThumbnailStream(OWNER, COVER_FILE_ID)).thenReturn(new ThumbnailStream(
                 new CoverStreamDescriptor(OWNER, COVER_FILE_ID, "image/jpeg", 128L),
-                freshness
+                freshness,
+                COVER_FILE_ID
         ));
     }
 

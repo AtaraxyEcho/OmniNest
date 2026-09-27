@@ -66,6 +66,15 @@ extension MusicCenterQueueRestore on MusicCenterController {
         queueSource: rebuilt.source,
       ),
     );
+    // 来源列表是摘要投影，重建后的当前曲缺歌词，与起播/恢复路径对齐补拉一次。
+    final rebuiltCurrent = rebuilt.items[rebuilt.index];
+    if (rebuiltCurrent.track.lyricsRaw?.isNotEmpty != true) {
+      if (rebuiltCurrent.ref is OnlineMusicRef) {
+        unawaited(_loadOnlineLyrics(rebuiltCurrent, _playRequestGeneration));
+      } else if (rebuiltCurrent.ref is LocalMusicRef) {
+        unawaited(_loadLocalLyrics(rebuiltCurrent, _playRequestGeneration));
+      }
+    }
   }
 
   /// 按快照来源重建全量队列；来源不可重建或未命中当前曲时返回 null（降级窗口快照）。

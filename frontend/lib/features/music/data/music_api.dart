@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:omninest/core/device/playback_device_identity.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/core/network/retry_interceptor.dart';
 import 'package:omninest/features/music/domain/music_models.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
@@ -37,6 +38,14 @@ class MusicApi {
       queryParameters: {'page': page, 'size': size, 'sort': sort},
     );
     return _parsePage(response.data, MusicTrack.fromJson, '歌曲列表格式不正确');
+  }
+
+  /// 单曲完整投影（含歌词）。列表接口不带歌词，播放前按需取词。
+  Future<MusicTrack> trackDetail(String trackId) async {
+    final response = await apiClient.dio.get<Map<String, dynamic>>(
+      '/music/tracks/$trackId',
+    );
+    return MusicTrack.fromJson(parseData(response.data));
   }
 
   Future<MusicPagedResult<MusicAlbum>> albums({
@@ -127,6 +136,7 @@ class MusicApi {
     required String name,
     String? description,
     String? coverFileId,
+    bool clearCover = false,
   }) async {
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/music/playlists/$playlistId',
@@ -134,6 +144,7 @@ class MusicApi {
         'name': name,
         'description': description,
         if (coverFileId != null) 'coverFileId': coverFileId,
+        if (clearCover) 'clearCover': true,
       },
     );
     return MusicPlaylist.fromJson(parseData(response.data));
@@ -197,13 +208,17 @@ class MusicApi {
     return _resolvePlaybackPlan(parsePlaybackPlan(parseData(response.data)));
   }
 
+  /// 收藏曲目（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<void> favorite(String trackId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.post<Map<String, dynamic>>(
       '/music/tracks/$trackId/favorite',
     );
   }
 
+  /// 取消收藏曲目（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> removeFavorite(String trackId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.delete<Map<String, dynamic>>(
       '/music/tracks/$trackId/favorite',
     );
@@ -228,6 +243,7 @@ class MusicApi {
     String? genre,
     String? lyricsRaw,
     String? coverFileId,
+    bool clearCover = false,
   }) async {
     await apiClient.dio.put<Map<String, dynamic>>(
       '/admin/music/tracks/$trackId',
@@ -238,6 +254,7 @@ class MusicApi {
         if (genre != null) 'genre': genre,
         if (lyricsRaw != null) 'lyricsRaw': lyricsRaw,
         if (coverFileId != null) 'coverFileId': coverFileId,
+        if (clearCover) 'clearCover': true,
       },
     );
   }
@@ -257,13 +274,18 @@ class MusicApi {
     return data['fileId'] as String;
   }
 
+  /// 记录曲目播放历史（自动写回）：无能力时静默 no-op。
   Future<void> recordPlayHistory(String trackId, {int playDuration = 0}) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return;
+    }
     await apiClient.dio.post<Map<String, dynamic>>(
       '/music/tracks/$trackId/play-history',
       data: {'playDuration': playDuration},
     );
   }
 
+  /// 记录可播放对象播放历史（自动写回）：无能力时静默 no-op。
   Future<void> recordPlayableHistory({
     required String playableKey,
     required String title,
@@ -274,6 +296,9 @@ class MusicApi {
 
     int playDuration = 0,
   }) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return;
+    }
     await apiClient.dio.post<Map<String, dynamic>>(
       '/music/play-history',
       data: <String, dynamic>{
@@ -313,9 +338,15 @@ class MusicApi {
   }
 
   /// 保存播放队列并返回服务端规范化结果（含服务端时间戳）。
+  ///
+  /// 自动写回：无 `activity:write` 时不发网络，直接返回传入的本地快照，
+  /// 防止拦截器兜底 reject 冒泡到队列持久化层。
   Future<MusicPlaybackQueueSnapshot> savePlaybackQueue(
     MusicPlaybackQueueSnapshot snapshot,
   ) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return snapshot;
+    }
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/music/playback-queue',
       data: snapshot.toJson(),
@@ -323,10 +354,14 @@ class MusicApi {
     return MusicPlaybackQueueSnapshot.fromJson(parseData(response.data));
   }
 
+  /// 保存播放位置（自动写回）：无能力时静默 no-op。
   Future<void> savePosition({
     required String trackId,
     required int positionSeconds,
   }) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return;
+    }
     await apiClient.dio.put<Map<String, dynamic>>(
       '/music/position',
       data: {'trackId': trackId, 'positionSeconds': positionSeconds},
@@ -352,10 +387,16 @@ class MusicApi {
     return MusicPlaybackProgress.fromJson(Map<String, dynamic>.from(data));
   }
 
-  /// 保存本地或在线音乐的跨设备进度。
+  /// 保存本地或在线音乐的跨设备进度（自动写回）。
+  ///
+  /// 无 `activity:write` 时返回传入的本地进度，不触发网络，
+  /// 离线重放队列据此正常出队且不污染本地缓存。
   Future<MusicPlaybackProgress> savePlaybackProgress(
     MusicPlaybackProgress progress,
   ) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return progress;
+    }
     final deviceId = await PlaybackDeviceIdentity.getOrCreate();
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/music/progress',

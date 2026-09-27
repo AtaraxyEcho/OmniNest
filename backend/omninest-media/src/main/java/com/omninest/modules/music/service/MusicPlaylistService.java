@@ -94,12 +94,17 @@ public class MusicPlaylistService {
         playlist.setName(request.name().trim());
         playlist.setDescription(request.description());
         UUID previousCoverFileId = playlist.getCoverFileId();
-        if (request.coverFileId() != null) {
+        if (Boolean.TRUE.equals(request.clearCover())) {
+            playlist.setCoverFileId(null);
+        } else if (request.coverFileId() != null) {
             musicCoverService.validateOwnedCover(ownerUserId, request.coverFileId());
             playlist.setCoverFileId(request.coverFileId());
         }
         MusicPlaylist saved = playlistRepository.save(playlist);
-        coverRetentionService.releaseUnreferenced(ownerUserId, previousCoverFileId);
+        // 封面未变时仍被自身引用，回收服务会跳过；显式判断保持与曲目一致。
+        if (previousCoverFileId != null && !previousCoverFileId.equals(saved.getCoverFileId())) {
+            coverRetentionService.releaseUnreferenced(ownerUserId, previousCoverFileId);
+        }
         recordPlaylistEvent(ownerUserId, saved, SyncAction.UPDATED);
         return toDto(
                 saved,
@@ -139,7 +144,7 @@ public class MusicPlaylistService {
         return trackIds.stream()
                 .map(tracksById::get)
                 .filter(Objects::nonNull)
-                .map(track -> musicLibraryService.toTrackDto(track, false))
+                .map(track -> musicLibraryService.toTrackSummaryDto(track, false))
                 .toList();
     }
 
@@ -231,7 +236,7 @@ public class MusicPlaylistService {
         firstTrackIds.forEach((playlistId, trackId) -> {
             MusicTrack track = tracks.get(trackId);
             if (track != null) {
-                covers.put(playlistId, musicLibraryService.toTrackDto(track, false).coverUrl());
+                covers.put(playlistId, musicLibraryService.toTrackSummaryDto(track, false).coverUrl());
             }
         });
         return covers;
@@ -239,11 +244,9 @@ public class MusicPlaylistService {
 
     private String firstTrackCover(UUID ownerUserId, UUID playlistId) {
         return playlistItemRepository
-                .findByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(ownerUserId, playlistId)
-                .stream()
-                .findFirst()
+                .findTopByOwnerUserIdAndPlaylistIdOrderBySortOrderAscCreatedAtAsc(ownerUserId, playlistId)
                 .flatMap(item -> trackRepository.findByIdAndOwnerUserId(item.getTrackId(), ownerUserId))
-                .map(track -> musicLibraryService.toTrackDto(track, false).coverUrl())
+                .map(track -> musicLibraryService.toTrackSummaryDto(track, false).coverUrl())
                 .orElse(null);
     }
 
