@@ -6,6 +6,7 @@ import 'package:omninest/core/config/file_size_thresholds.dart';
 import 'package:omninest/core/device/playback_device_identity.dart';
 import 'package:omninest/core/errors/app_exception.dart';
 import 'package:omninest/core/network/api_client.dart';
+import 'package:omninest/core/network/capability_gate_interceptor.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -104,13 +105,17 @@ class MovieApi {
         .toList();
   }
 
+  /// 删除指定观看历史（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<void> deleteHistoryItem(String historyId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.delete<Map<String, dynamic>>(
       '/video/history/$historyId',
     );
   }
 
+  /// 清空观看历史（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> clearHistory() async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.delete<Map<String, dynamic>>('/video/history');
   }
 
@@ -188,14 +193,21 @@ class MovieApi {
     return PlaybackPlan.fromJson(parseData(response.data));
   }
 
-  Future<PlaybackPlan> updateProgress({
+  /// 更新播放进度（自动写回）。
+  ///
+  /// 无 `activity:write` 时静默 no-op：不发网络、不抛异常，调用方
+  /// （进度同步服务 / 播放页）按成功处理。
+  Future<void> updateProgress({
     required String videoItemId,
     required int positionSeconds,
     required int durationSeconds,
     bool completed = false,
   }) async {
+    if (!apiClient.hasPermission(activityWritePermission)) {
+      return;
+    }
     final deviceId = await PlaybackDeviceIdentity.getOrCreate();
-    final response = await apiClient.dio.put<Map<String, dynamic>>(
+    await apiClient.dio.put<Map<String, dynamic>>(
       '/video/items/$videoItemId/progress',
       data: {
         'positionSeconds': positionSeconds,
@@ -205,7 +217,6 @@ class MovieApi {
         'deviceId': deviceId,
       },
     );
-    return PlaybackPlan.fromJson(parseData(response.data));
   }
 
   /// 读取有界字幕文本。
@@ -264,10 +275,12 @@ class MovieApi {
     );
   }
 
+  /// 收藏 / 取消收藏（用户主动写）：无能力时抛 FORBIDDEN，禁止假成功。
   Future<MovieFavoriteState> favorite({
     required String videoItemId,
     required bool favorite,
   }) async {
+    apiClient.requirePermission(activityWritePermission);
     final response = await apiClient.dio.put<Map<String, dynamic>>(
       '/video/items/$videoItemId/favorite',
       queryParameters: {'favorite': favorite},
@@ -460,6 +473,29 @@ class MovieApi {
       parseData(response.data),
       VideoStorageDirectory.fromJson,
     );
+  }
+
+  Future<List<VideoLibrarySource>> provisionMountLibrary({
+    required String mountKey,
+    required bool enabled,
+    required bool autoImport,
+  }) async {
+    final response = await apiClient.dio.post<Map<String, dynamic>>(
+      '/video/library-sources/mount-provision',
+      data: {
+        'mountKey': mountKey,
+        'enabled': enabled,
+        'autoImport': autoImport,
+      },
+    );
+    final data = parseData(response.data);
+    final rawSources = data['sources'];
+    return rawSources is List
+        ? rawSources
+            .whereType<Map<String, dynamic>>()
+            .map(VideoLibrarySource.fromJson)
+            .toList()
+        : const <VideoLibrarySource>[];
   }
 
   Future<VideoLibrarySource> createLibrarySource({
@@ -669,7 +705,9 @@ class MovieApi {
     return data['favorite'] == true;
   }
 
+  /// 收藏 / 取消收藏剧集（用户主动写）：无能力时抛 FORBIDDEN。
   Future<void> toggleSeriesFavorite(String seriesId) async {
+    apiClient.requirePermission(activityWritePermission);
     await apiClient.dio.post<Map<String, dynamic>>(
       '/video/series/$seriesId/favorite',
     );

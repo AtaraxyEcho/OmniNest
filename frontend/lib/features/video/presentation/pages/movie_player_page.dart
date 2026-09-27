@@ -86,6 +86,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
 
   // 拖动状态 — 解决进度条跳回起点
   bool _isSeeking = false;
+  bool _progressSyncWarned = false;
   // seek 后保留起始位置，防止 _openIfNeeded 重新从头打开
   int _seekStart = 0;
 
@@ -505,7 +506,21 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
       );
     } catch (_) {
       devLog('播放进度同步失败');
+      _notifyProgressSyncDeferred();
     }
+  }
+
+  /// 进度未能同步时非阻断提示一次（同一播放会话限流），播放不中断。
+  void _notifyProgressSyncDeferred() {
+    if (!mounted || _progressSyncWarned) {
+      return;
+    }
+    _progressSyncWarned = true;
+    showMovieFeedback(
+      context,
+      AppLocalizations.of(context).videoProgressSyncDeferred,
+      isError: true,
+    );
   }
 
   void _startProgressSync(PlaybackPlan plan) {
@@ -520,6 +535,7 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
       computeCompleted:
           (position, duration) => isMoviePlaybackCompleted(position, duration),
       shouldSkip: () => _isSeeking,
+      onSyncFailed: _notifyProgressSyncDeferred,
     );
   }
 
@@ -620,16 +636,19 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
   Future<void> _importSubtitle() async {
     final l10n = AppLocalizations.of(context);
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['srt', 'ass', 'ssa', 'vtt'],
-        withData: true,
       );
-      if (result == null || result.files.isEmpty || !mounted) {
+      if (result.isEmpty || !mounted) {
         return;
       }
-      final file = result.files.first;
-      if (file.size > maxLocalSubtitleBytes) {
+      final file = result.first;
+      final fileSize = file.lengthSync() ?? await file.length() ?? 0;
+      if (!mounted) {
+        return;
+      }
+      if (fileSize > maxLocalSubtitleBytes) {
         showMovieFeedback(
           context,
           l10n.videoSubtitleFileTooLarge,
@@ -637,8 +656,11 @@ class _MoviePlayerPageState extends ConsumerState<MoviePlayerPage> {
         );
         return;
       }
-      final bytes = file.bytes;
-      if (bytes == null || bytes.isEmpty) {
+      final bytes = await file.readAsBytes();
+      if (!mounted) {
+        return;
+      }
+      if (bytes.isEmpty) {
         showMovieFeedback(
           context,
           l10n.videoSubtitleImportFailed,

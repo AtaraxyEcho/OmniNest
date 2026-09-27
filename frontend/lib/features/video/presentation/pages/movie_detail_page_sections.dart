@@ -11,7 +11,7 @@ class _Backdrop extends StatelessWidget {
     required this.saving,
     required this.onBack,
     required this.onToggleEdit,
-    required this.onToggleFavorite,
+    this.onToggleFavorite,
   });
 
   final String? backdropUrl;
@@ -22,7 +22,9 @@ class _Backdrop extends StatelessWidget {
   final bool saving;
   final VoidCallback onBack;
   final VoidCallback onToggleEdit;
-  final VoidCallback onToggleFavorite;
+
+  /// null 时隐藏收藏按钮（无 activity:write 的角色）。
+  final VoidCallback? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -139,25 +141,28 @@ class _Backdrop extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(width: 10),
-                Material(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    onTap: onToggleFavorite,
-                    customBorder: const CircleBorder(),
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Icon(
-                        favorited
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded,
-                        size: 22,
-                        color:
-                            favorited ? MovieDetailTheme.accent : Colors.white,
+                if (onToggleFavorite != null)
+                  Material(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: onToggleFavorite,
+                      customBorder: const CircleBorder(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(
+                          favorited
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
+                          size: 22,
+                          color:
+                              favorited
+                                  ? MovieDetailTheme.accent
+                                  : Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -329,11 +334,20 @@ class _StatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final normalized = status.toUpperCase();
-    final (color, hasBackground) = switch (normalized) {
-      'MATCHED' => (MovieDetailTheme.mutedText, false),
-      'PENDING' => (MovieDetailTheme.statusPending, true),
-      _ => (MovieDetailTheme.statusFailed, true),
+    final (color, hasBackground, label) = switch (normalized) {
+      'MATCHED' => (
+        MovieDetailTheme.mutedText,
+        false,
+        l10n.videoMetadataStatusComplete,
+      ),
+      'PENDING' => (
+        MovieDetailTheme.statusPending,
+        true,
+        l10n.videoMetadataStatusNeedsWork,
+      ),
+      _ => (MovieDetailTheme.statusFailed, true, l10n.videoMetadataStatusIssue),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -342,7 +356,7 @@ class _StatusChip extends StatelessWidget {
             hasBackground ? color.withValues(alpha: 0.10) : Colors.transparent,
       ),
       child: Text(
-        normalized,
+        label,
         style: MovieDetailTheme.mono(AppTypography.bodySmall, color: color),
       ),
     );

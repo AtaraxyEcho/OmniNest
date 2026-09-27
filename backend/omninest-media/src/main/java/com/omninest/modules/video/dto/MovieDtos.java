@@ -127,7 +127,11 @@ public final class MovieDtos {
             long positionSeconds,
             long durationSeconds,
             double progressPercent,
-            Instant updatedAt
+            Instant updatedAt,
+            String mediaType,
+            UUID seriesId,
+            Integer seasonNumber,
+            Integer episodeNumber
     ) {
     }
 
@@ -283,7 +287,9 @@ public final class MovieDtos {
             long positionSeconds,
             long durationSeconds,
             boolean completed,
-            Instant playedAt
+            Instant playedAt,
+            String mediaType,
+            UUID seriesId
     ) {
     }
 

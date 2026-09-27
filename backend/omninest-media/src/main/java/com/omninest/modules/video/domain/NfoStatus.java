@@ -5,12 +5,16 @@ import lombok.Getter;
 
 /**
  * NFO 导出状态。
+ *
+ * <p>与 {@code media_video_items.nfo_status}、{@code media_nfo_exports.status}
+ * 的 CHECK 约束保持一致。</p>
  */
 @Getter
 @AllArgsConstructor
 public enum NfoStatus {
     PENDING("PENDING"),
     GENERATED("GENERATED"),
+    FAILED("FAILED"),
     DISABLED("DISABLED");
 
     private final String value;

@@ -304,6 +304,7 @@ public class VideoItemDtoConverter {
             }
             metadata = movie.getMetadata();
         } else if (episode != null) {
+            // 列表卡片展示作品名（系列名），集标题不作为主标题，避免 Portal/列表显示成集数。
             title = episode.getTitle();
             overview = episode.getOverview();
             runtimeSeconds = episode.getRuntimeSeconds();
@@ -322,7 +323,12 @@ public class VideoItemDtoConverter {
                     if (backdropFileId == null) {
                         backdropFileId = series.getBackdropFileId();
                     }
-                    if (title == null || title.isBlank()) title = series.getTitle();
+                    String seriesTitle = series.getTitle();
+                    if (seriesTitle != null && !seriesTitle.isBlank()) {
+                        title = seriesTitle;
+                    } else if (title == null || title.isBlank()) {
+                        title = episode.getTitle();
+                    }
                     if (genres.isEmpty()) genres = catalogMappers.extractGenreNames(series.getGenres());
                     if (castMembers.isEmpty()) {
                         castMembers = catalogMappers.toCastDtos(catalogOwnerUserId, series.getCastMembers());
@@ -412,13 +418,15 @@ public class VideoItemDtoConverter {
                 posterFileId = movie.getPosterFileId();
             }
         } else if (episode != null) {
+            // 列表卡片展示作品名（系列名），与 Portal 瓷砖一致。
             title = episode.getTitle();
             releaseDate = episode.getAirDate();
             runtimeSeconds = episode.getRuntimeSeconds();
             rating = episode.getRating();
             if (series != null) {
-                if (title == null || title.isBlank()) {
-                    title = series.getTitle();
+                String seriesTitle = series.getTitle();
+                if (seriesTitle != null && !seriesTitle.isBlank()) {
+                    title = seriesTitle;
                 }
                 genres = catalogMappers.extractGenreNames(series.getGenres());
                 posterFileId = index.seriesPosterAssetMap().get(series.getId());

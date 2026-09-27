@@ -6,6 +6,7 @@ import 'package:omninest/app/theme/feature/video_colors.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/widgets/brand_logo.dart';
 import 'package:omninest/core/widgets/mobile_shell_scope.dart';
 import 'package:omninest/core/widgets/mobile_ui.dart';
@@ -170,8 +171,7 @@ class _MovieShellState extends ConsumerState<MovieShell> {
   Widget build(BuildContext context) {
     final ref = this.ref;
     final user = ref.watch(authSessionProvider).asData?.value.user;
-    final canManage =
-        user?.permissions.contains('media:library:manage') ?? false;
+    final canManage = ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
     // 管理分区不再静默回退到电影：无权限时由内容区显示明确提示。
     final effectiveSection = widget.section;
 
@@ -367,45 +367,51 @@ class MovieTopBar extends StatelessWidget {
             const Spacer(),
           const SizedBox(width: 12),
           Consumer(
-            builder:
-                (context, ref, _) => MediaImportButton(
-                  subsystemDirectory: 'Media',
-                  acceptedExtensions: const <String>[
-                    'mp4',
-                    'mkv',
-                    'webm',
-                    'mov',
-                    'm4v',
-                    'avi',
-                    'flv',
-                    'wmv',
-                    'ts',
-                    'm2ts',
-                  ],
-                  onImportCompleteWithResult: (result) async {
-                    final taskApi = ref.read(taskApiProvider);
-                    for (final file in result.imported) {
-                      final taskId = file.mediaAutoImportTaskId;
-                      if (taskId == null || taskId.isEmpty) {
-                        continue;
-                      }
-                      try {
-                        await taskApi.waitForTerminal(
-                          taskId,
-                          timeout: const Duration(minutes: 2),
-                          interval: const Duration(seconds: 2),
-                        );
-                      } on Object {
-                        // 自动导入失败不阻断已完成的上传结果。
-                      }
+            builder: (context, ref, _) {
+              final canManage =
+                  ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
+              if (!canManage) {
+                return const SizedBox.shrink();
+              }
+              return MediaImportButton(
+                subsystemDirectory: 'Media',
+                acceptedExtensions: const <String>[
+                  'mp4',
+                  'mkv',
+                  'webm',
+                  'mov',
+                  'm4v',
+                  'avi',
+                  'flv',
+                  'wmv',
+                  'ts',
+                  'm2ts',
+                ],
+                onImportCompleteWithResult: (result) async {
+                  final taskApi = ref.read(taskApiProvider);
+                  for (final file in result.imported) {
+                    final taskId = file.mediaAutoImportTaskId;
+                    if (taskId == null || taskId.isEmpty) {
+                      continue;
                     }
-                    await onRefresh?.call();
-                    return null;
-                  },
-                  onImportComplete: onRefresh ?? () async {},
-                  style: ImportButtonStyle.iconButton,
-                  color: palette.mutedForeground,
-                ),
+                    try {
+                      await taskApi.waitForTerminal(
+                        taskId,
+                        timeout: const Duration(minutes: 2),
+                        interval: const Duration(seconds: 2),
+                      );
+                    } on Object {
+                      // 自动导入失败不阻断已完成的上传结果。
+                    }
+                  }
+                  await onRefresh?.call();
+                  return null;
+                },
+                onImportComplete: onRefresh ?? () async {},
+                style: ImportButtonStyle.iconButton,
+                color: palette.mutedForeground,
+              );
+            },
           ),
           const SizedBox(width: 2),
           IconButton(

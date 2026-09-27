@@ -12,6 +12,7 @@ import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/data/movie_playback_repository_impl.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/domain/movie_playback_repository.dart';
+import 'package:omninest/features/video/domain/series_play_target.dart';
 import 'package:omninest/features/tasks/application/task_controller.dart';
 import 'package:omninest/features/tasks/domain/task_record.dart';
 
@@ -173,6 +174,19 @@ final videoLibrarySourceActionsProvider = Provider<VideoLibrarySourceActions>((
   return VideoLibrarySourceActions(ref);
 });
 
+/// 批量扫描结果：成功/失败计数与最后一条错误摘要。
+class ScanAllResult {
+  const ScanAllResult({
+    required this.success,
+    required this.failed,
+    this.lastError,
+  });
+
+  final int success;
+  final int failed;
+  final String? lastError;
+}
+
 class VideoLibrarySourceActions {
   const VideoLibrarySourceActions(this.ref);
 
@@ -196,6 +210,21 @@ class VideoLibrarySourceActions {
     );
     ref.invalidate(videoLibrarySourcesProvider);
     // 挂载直达会在服务端新建存储位置，位置下拉需要同步刷新。
+    ref.invalidate(videoStorageLocationsProvider);
+  }
+
+  /// 按约定目录开通/更新挂载媒体库（Movie/TV/Anime 三库源）。
+  Future<void> provisionMountLibrary({
+    required String mountKey,
+    required bool enabled,
+    required bool autoImport,
+  }) async {
+    await _api.provisionMountLibrary(
+      mountKey: mountKey,
+      enabled: enabled,
+      autoImport: autoImport,
+    );
+    ref.invalidate(videoLibrarySourcesProvider);
     ref.invalidate(videoStorageLocationsProvider);
   }
 
@@ -243,6 +272,27 @@ class VideoLibrarySourceActions {
     ref.invalidate(videoLibrarySourcesProvider);
     ref.invalidate(latestMediaScanRunProvider(sourceId));
     return task;
+  }
+
+  /// 批量扫描多个库源；返回成功/失败计数与最后一条错误摘要。
+  Future<ScanAllResult> scanAll(List<String> sourceIds) async {
+    var success = 0;
+    var failed = 0;
+    String? lastError;
+    for (final sourceId in sourceIds) {
+      try {
+        await scan(sourceId);
+        success++;
+      } on Exception catch (error) {
+        failed++;
+        lastError = error.toString();
+      }
+    }
+    return ScanAllResult(
+      success: success,
+      failed: failed,
+      lastError: lastError,
+    );
   }
 
   Future<MediaSelectionSummary> updateSelection({
@@ -362,6 +412,31 @@ final movieFavoriteProvider = FutureProvider.autoDispose
 final movieSeriesDetailProvider = FutureProvider.autoDispose
     .family<MovieSeriesDetail, String>((ref, seriesId) {
       return ref.watch(movieApiProvider).seriesDetail(seriesId);
+    });
+
+/// 系列 PLAY 意图（续播 / 下一集 / 首集），供详情页按钮文案与跳转使用。
+///
+/// continue 与 history 任一失败时按空列表降级，回落为首集行为。
+final seriesPlayIntentProvider = FutureProvider.autoDispose
+    .family<SeriesPlayIntent, String>((ref, seriesId) async {
+      final api = ref.watch(movieApiProvider);
+      List<MovieContinueWatching> continues;
+      List<MovieWatchHistory> history;
+      try {
+        continues = await api.continueWatching();
+      } on Exception {
+        continues = const [];
+      }
+      try {
+        history = await api.history();
+      } on Exception {
+        history = const [];
+      }
+      return resolveSeriesPlayIntent(
+        seriesId: seriesId,
+        continueWatching: continues,
+        history: history,
+      );
     });
 
 final activeMovieSeasonKeysProvider = Provider<Set<SeasonKey>>(
@@ -490,8 +565,16 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
           .copyWith(
             dashboard: next.dashboard,
             movies: next.movies,
-            tvSeries: next.tvSeries,
-            animeSeries: next.animeSeries,
+            // 实时刷新时 seriesByType 失败会得到空列表；已有数据时保留旧值，
+            // 避免刮削后网络/序列化异常把剧集/动漫分区清空。
+            tvSeries:
+                next.tvSeries.isNotEmpty
+                    ? next.tvSeries
+                    : current?.tvSeries ?? next.tvSeries,
+            animeSeries:
+                next.animeSeries.isNotEmpty
+                    ? next.animeSeries
+                    : current?.animeSeries ?? next.animeSeries,
             recentItems: next.recentItems,
             continueWatching: next.continueWatching,
             // 懒加载分区列表（收藏/历史/合集/任务）保留刷新前旧值：
@@ -535,7 +618,8 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       return;
     }
     if (current.section == MovieSection.tvShows ||
-        current.section == MovieSection.anime) {
+        current.section == MovieSection.anime ||
+        current.section == MovieSection.management) {
       await _loadPage(movies: false);
     }
   }
@@ -799,18 +883,18 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
 
   Future<MovieCenterState> _loadState() async {
     _partialErrors.clear();
+    final emptyPage = const MediaPage<MovieVideoItem>(
+      items: [],
+      page: 0,
+      size: 36,
+      totalElements: 0,
+      totalPages: 0,
+    );
     final results = await Future.wait([
       _safe(_api.dashboard, MovieDashboard.empty()),
-      _safe(
-        _api.libraryPage,
-        const MediaPage<MovieVideoItem>(
-          items: [],
-          page: 0,
-          size: 36,
-          totalElements: 0,
-          totalPages: 0,
-        ),
-      ),
+      _safe(() => _api.libraryPage(mediaType: 'MOVIE'), emptyPage),
+      // 分集一并拉取：影片管理需要电影+剧集/动漫全集；电影分区仍按 mediaType 过滤。
+      _safe(() => _api.libraryPage(mediaType: 'EPISODE'), emptyPage),
       // 预取两类系列列表：侧边栏计数与剧集/动漫分区首屏即有稳定数据
       // （后端 dashboard 的 series 字段恒为空，不能作为计数来源）。
       _safe(() => _api.seriesByType(seriesType: 'TV'), const <MovieSeries>[]),
@@ -821,11 +905,16 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
     ]);
     final dashboard = results[0] as MovieDashboard;
     final moviePage = results[1] as MediaPage<MovieVideoItem>;
-    final tvSeries = results[2] as List<MovieSeries>;
-    final animeList = results[3] as List<MovieSeries>;
+    final episodePage = results[2] as MediaPage<MovieVideoItem>;
+    final tvSeries = results[3] as List<MovieSeries>;
+    final animeList = results[4] as List<MovieSeries>;
+    final mergedItems = <String, MovieVideoItem>{
+      for (final item in moviePage.items) item.id: item,
+      for (final item in episodePage.items) item.id: item,
+    }.values.toList(growable: false);
     return MovieCenterState(
       dashboard: dashboard,
-      movies: moviePage.items,
+      movies: mergedItems,
       recentItems: dashboard.recentlyAdded,
       continueWatching: dashboard.continueWatching,
       favoriteItems: const [],
@@ -836,6 +925,8 @@ class MovieCenterController extends AsyncNotifier<MovieCenterState> {
       animeSeries: animeList,
       moviePage: moviePage.page,
       movieHasMore: moviePage.page + 1 < moviePage.totalPages,
+      episodePage: episodePage.page,
+      episodeHasMore: episodePage.page + 1 < episodePage.totalPages,
       loadedSections: const {MovieSection.movies},
       errorMessage: _partialErrors.isEmpty ? null : _partialErrors.join('；'),
     );

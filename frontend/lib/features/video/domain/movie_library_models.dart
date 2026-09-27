@@ -263,6 +263,10 @@ class MovieContinueWatching {
     this.posterFileId,
     this.posterUrl,
     this.updatedAt,
+    this.mediaType,
+    this.seriesId,
+    this.seasonNumber,
+    this.episodeNumber,
   });
 
   final String id;
@@ -273,6 +277,16 @@ class MovieContinueWatching {
   final int durationSeconds;
   final double progressPercent;
   final DateTime? updatedAt;
+
+  /// 后端 MediaType：MOVIE / EPISODE。
+  final String? mediaType;
+
+  /// 分集所属系列 id；电影为空。
+  final String? seriesId;
+
+  /// 分集季号/集号；电影为空。
+  final int? seasonNumber;
+  final int? episodeNumber;
 
   factory MovieContinueWatching.fromJson(Map<String, dynamic> json) {
     return MovieContinueWatching(
@@ -285,6 +299,16 @@ class MovieContinueWatching {
       progressPercent: MovieJson.asDouble(json['progressPercent']),
       updatedAt:
           DateTime.tryParse(json['updatedAt']?.toString() ?? '')?.toLocal(),
+      mediaType: json['mediaType']?.toString(),
+      seriesId: json['seriesId']?.toString(),
+      seasonNumber:
+          json['seasonNumber'] == null
+              ? null
+              : MovieJson.asInt(json['seasonNumber']),
+      episodeNumber:
+          json['episodeNumber'] == null
+              ? null
+              : MovieJson.asInt(json['episodeNumber']),
     );
   }
 }
@@ -300,6 +324,8 @@ class MovieWatchHistory {
     this.posterFileId,
     this.posterUrl,
     this.playedAt,
+    this.mediaType,
+    this.seriesId,
   });
 
   final String id;
@@ -311,6 +337,12 @@ class MovieWatchHistory {
   final int durationSeconds;
   final bool completed;
   final DateTime? playedAt;
+
+  /// 后端 MediaType：MOVIE / EPISODE。
+  final String? mediaType;
+
+  /// 分集所属系列 id；电影为空。
+  final String? seriesId;
 
   factory MovieWatchHistory.fromJson(Map<String, dynamic> json) {
     return MovieWatchHistory(
@@ -324,6 +356,8 @@ class MovieWatchHistory {
       completed: json['completed'] == true,
       playedAt:
           DateTime.tryParse(json['playedAt']?.toString() ?? '')?.toLocal(),
+      mediaType: json['mediaType']?.toString(),
+      seriesId: json['seriesId']?.toString(),
     );
   }
 

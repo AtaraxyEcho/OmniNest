@@ -31,13 +31,14 @@ void main() {
 
       expect(first.movies.map((item) => item.id), ['movie-1']);
       expect(first.movieHasMore, isTrue);
-      // 初始加载现会并行预取剧集/动漫系列列表。
-      expect(adapter.requestedPaths.take(2), [
+      // 初始加载并行请求：dashboard + MOVIE/EPISODE 各一页 library + 两类系列列表。
+      expect(adapter.requestedPaths.take(3), [
         '/video/dashboard',
+        '/video/library/page',
         '/video/library/page',
       ]);
       expect(
-        adapter.requestedPaths.skip(2).toSet().difference({
+        adapter.requestedPaths.skip(3).toSet().difference({
           '/video/series/by-type',
         }),
         isEmpty,
@@ -50,7 +51,8 @@ void main() {
 
       expect(next.movies.map((item) => item.id), ['movie-1', 'movie-2']);
       expect(next.movieHasMore, isFalse);
-      expect(adapter.requestedPages, [0, 1]);
+      // 初始化 MOVIE p0、EPISODE p0，再加载下一电影页 p1。
+      expect(adapter.requestedPages, [0, 0, 1]);
     },
   );
 }

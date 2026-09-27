@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:go_router/go_router.dart';
+import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_empty_state.dart';
@@ -89,7 +90,12 @@ class HistorySection extends StatelessWidget {
                   onTap:
                       item.videoItemId.isEmpty
                           ? null
-                          : () => context.push('/video/${item.videoItemId}'),
+                          : () => context.push(
+                            movieDetailRouteFromIds(
+                              videoItemId: item.videoItemId,
+                              seriesId: item.seriesId,
+                            ),
+                          ),
                   onDelete: onDelete == null ? null : () => onDelete!(item),
                 ),
             ],

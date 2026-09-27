@@ -121,6 +121,8 @@ class _SeasonEpisodeList extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final canManageLibrary =
+        ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
     final episodesAsync = ref.watch(
       movieSeasonDetailProvider(
         SeasonKey(seriesId: seriesId, seasonNumber: seasonNumber),
@@ -162,7 +164,10 @@ class _SeasonEpisodeList extends ConsumerWidget {
                   thickness: 1,
                   color: MovieDetailTheme.border,
                 ),
-              _EpisodeRow(episode: episodes[i]),
+              _EpisodeRow(
+                episode: episodes[i],
+                canManageLibrary: canManageLibrary,
+              ),
             ],
           ],
         );
@@ -172,13 +177,26 @@ class _SeasonEpisodeList extends ConsumerWidget {
 }
 
 class _EpisodeRow extends StatelessWidget {
-  const _EpisodeRow({required this.episode});
+  const _EpisodeRow({required this.episode, required this.canManageLibrary});
 
   final MovieVideoItem episode;
+  final bool canManageLibrary;
+
+  String? _unavailableLabel(AppLocalizations l10n) {
+    return switch (episodeUnavailableReason(episode.availabilityStatus)) {
+      EpisodeUnavailableReason.none => null,
+      EpisodeUnavailableReason.fileMissing => l10n.videoEpisodeFileMissing,
+      EpisodeUnavailableReason.fileChanged => l10n.videoEpisodeFileChanged,
+      EpisodeUnavailableReason.sourceUnavailable =>
+        l10n.videoEpisodeSourceUnavailable,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final available = episode.availabilityStatus == 'AVAILABLE';
+    final unavailableLabel = _unavailableLabel(l10n);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -217,7 +235,37 @@ class _EpisodeRow extends StatelessWidget {
                                 : MovieDetailTheme.mutedText,
                       ),
                     ),
-                    if (episode.overview != null &&
+                    if (unavailableLabel != null) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              unavailableLabel,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: MovieDetailTheme.mono(
+                                AppTypography.bodySmall,
+                                color: MovieDetailTheme.statusFailed,
+                              ),
+                            ),
+                          ),
+                          if (canManageLibrary) ...[
+                            const SizedBox(width: 8),
+                            InkWell(
+                              onTap: () => context.go('/admin/storage'),
+                              child: Text(
+                                l10n.videoEpisodeCheckLibrarySource,
+                                style: MovieDetailTheme.mono(
+                                  AppTypography.bodySmall,
+                                  color: MovieDetailTheme.accent,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ] else if (episode.overview != null &&
                         episode.overview!.trim().isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(

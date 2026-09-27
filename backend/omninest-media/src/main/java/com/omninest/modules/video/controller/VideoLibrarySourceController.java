@@ -14,6 +14,8 @@ import com.omninest.modules.video.dto.MediaScanDtos.UpdateSelectionRequest;
 import com.omninest.modules.video.dto.MediaScanDtos.UnavailableMediaDto;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.CreateVideoLibrarySourceRequest;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionDto;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionRequest;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.UpdateVideoLibrarySourceRequest;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.VideoLibrarySourceDto;
 import com.omninest.modules.video.service.MediaLibraryAccessService;
@@ -63,6 +65,23 @@ public class VideoLibrarySourceController {
     @PreAuthorize("hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')")
     ApiResponse<VideoLibrarySourceDto> create(@Valid @RequestBody CreateVideoLibrarySourceRequest request) {
         return ApiResponse.success(sourceService.create(currentUserContext.requireCurrentUserId(), request));
+    }
+
+    @Operation(
+            summary = "挂载媒体库一键开通",
+            description = "按约定目录 Movie/TV/Anime 维护三个类型库源，仅需启用与自动入库开关"
+    )
+    @PostMapping("/api/v1/video/library-sources/mount-provision")
+    @PreAuthorize(
+            "hasAuthority('" + Permissions.MEDIA_LIBRARY_MANAGE + "')"
+                    + " and hasAuthority('" + Permissions.SYSTEM_CONFIG_MANAGE + "')"
+    )
+    ApiResponse<MountLibraryProvisionDto> provisionMountLibrary(
+            @Valid @RequestBody MountLibraryProvisionRequest request
+    ) {
+        return ApiResponse.success(
+                sourceService.provisionMountLibrary(currentUserContext.requireCurrentUserId(), request)
+        );
     }
 
     @Operation(summary = "更新影视库来源")

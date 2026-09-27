@@ -279,45 +279,51 @@ class _MovieMobileTopBar extends StatelessWidget {
           Text(l10n.portalDockMovies, style: text.mono(size: 10)),
           const Spacer(),
           Consumer(
-            builder:
-                (context, ref, _) => MediaImportButton(
-                  subsystemDirectory: 'Media',
-                  acceptedExtensions: const <String>[
-                    'mp4',
-                    'mkv',
-                    'webm',
-                    'mov',
-                    'm4v',
-                    'avi',
-                    'flv',
-                    'wmv',
-                    'ts',
-                    'm2ts',
-                  ],
-                  onImportCompleteWithResult: (result) async {
-                    final taskApi = ref.read(taskApiProvider);
-                    for (final file in result.imported) {
-                      final taskId = file.mediaAutoImportTaskId;
-                      if (taskId == null || taskId.isEmpty) {
-                        continue;
-                      }
-                      try {
-                        await taskApi.waitForTerminal(
-                          taskId,
-                          timeout: const Duration(minutes: 2),
-                          interval: const Duration(seconds: 2),
-                        );
-                      } on Object {
-                        // 自动导入失败不阻断已完成的上传结果。
-                      }
+            builder: (context, ref, _) {
+              final canManage =
+                  ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
+              if (!canManage) {
+                return const SizedBox.shrink();
+              }
+              return MediaImportButton(
+                subsystemDirectory: 'Media',
+                acceptedExtensions: const <String>[
+                  'mp4',
+                  'mkv',
+                  'webm',
+                  'mov',
+                  'm4v',
+                  'avi',
+                  'flv',
+                  'wmv',
+                  'ts',
+                  'm2ts',
+                ],
+                onImportCompleteWithResult: (result) async {
+                  final taskApi = ref.read(taskApiProvider);
+                  for (final file in result.imported) {
+                    final taskId = file.mediaAutoImportTaskId;
+                    if (taskId == null || taskId.isEmpty) {
+                      continue;
                     }
-                    await onRefresh?.call();
-                    return null;
-                  },
-                  onImportComplete: onRefresh ?? () async {},
-                  style: ImportButtonStyle.iconButton,
-                  color: palette.mutedForeground,
-                ),
+                    try {
+                      await taskApi.waitForTerminal(
+                        taskId,
+                        timeout: const Duration(minutes: 2),
+                        interval: const Duration(seconds: 2),
+                      );
+                    } on Object {
+                      // 自动导入失败不阻断已完成的上传结果。
+                    }
+                  }
+                  await onRefresh?.call();
+                  return null;
+                },
+                onImportComplete: onRefresh ?? () async {},
+                style: ImportButtonStyle.iconButton,
+                color: palette.mutedForeground,
+              );
+            },
           ),
           IconButton(
             onPressed: () => _showSearchDialog(context),

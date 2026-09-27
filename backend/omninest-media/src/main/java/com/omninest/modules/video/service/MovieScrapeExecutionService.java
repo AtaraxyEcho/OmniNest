@@ -188,10 +188,7 @@ public class MovieScrapeExecutionService {
 
     private void executeEpisode(MediaVideoItem item, ScrapeCandidateDto candidate) {
         // 扫描阶段已经建立 Series/Season/Episode 层级，刮削只更新 Series，不按 Episode 再次搜索。
-        MediaTvSeries series = item.getSeriesId() == null
-                ? findOrCreateSeries(item.getOwnerUserId(), candidate)
-                : tvSeriesRepository.findByIdAndOwnerUserId(item.getSeriesId(), item.getOwnerUserId())
-                        .orElseGet(() -> findOrCreateSeries(item.getOwnerUserId(), candidate));
+        MediaTvSeries series = resolveSeries(item, candidate);
         boolean seriesAlreadyExisted = series.getPosterFileId() != null;
 
         applySeriesCandidate(series, candidate);
@@ -276,7 +273,27 @@ public class MovieScrapeExecutionService {
         }
     }
 
-    private MediaTvSeries findOrCreateSeries(UUID ownerUserId, ScrapeCandidateDto candidate) {
+    /**
+     * 优先沿用扫描阶段建立的系列，避免刮削另建无 librarySourceId 的系列
+     * 导致剧集/动漫从 seriesByType 查询中消失。
+     */
+    private MediaTvSeries resolveSeries(MediaVideoItem item, ScrapeCandidateDto candidate) {
+        if (item.getSeriesId() != null) {
+            MediaTvSeries existing = tvSeriesRepository
+                    .findByIdAndOwnerUserId(item.getSeriesId(), item.getOwnerUserId())
+                    .orElse(null);
+            if (existing != null) {
+                return existing;
+            }
+        }
+        return findOrCreateSeries(item.getOwnerUserId(), candidate, item.getLibrarySourceId());
+    }
+
+    private MediaTvSeries findOrCreateSeries(
+            UUID ownerUserId,
+            ScrapeCandidateDto candidate,
+            UUID librarySourceId
+    ) {
         Integer tmdbId;
         try {
             tmdbId = Integer.parseInt(candidate.externalId());
@@ -284,15 +301,23 @@ public class MovieScrapeExecutionService {
             // 无法解析为 TMDB ID，创建无 tmdbId 的记录
             MediaTvSeries series = new MediaTvSeries();
             series.setOwnerUserId(ownerUserId);
+            series.setLibrarySourceId(librarySourceId);
             series.setTitle(candidate.title() != null ? candidate.title() : "未知剧集");
             return series;
         }
 
         try {
             return tvSeriesRepository.findByTmdbIdAndOwnerUserId(tmdbId, ownerUserId)
+                    .map(existing -> {
+                        if (existing.getLibrarySourceId() == null && librarySourceId != null) {
+                            existing.setLibrarySourceId(librarySourceId);
+                        }
+                        return existing;
+                    })
                     .orElseGet(() -> {
                         MediaTvSeries newSeries = new MediaTvSeries();
                         newSeries.setOwnerUserId(ownerUserId);
+                        newSeries.setLibrarySourceId(librarySourceId);
                         newSeries.setTmdbId(tmdbId);
                         newSeries.setTitle(candidate.title());
                         newSeries.setOriginalTitle(candidate.originalTitle());
@@ -539,7 +564,10 @@ public class MovieScrapeExecutionService {
         metadata.put("providerBackdropUrl", candidate.backdropUrl());
         metadata.put("scrapedAt", Instant.now().toString());
         series.setMetadata(metadata);
-        if (series.getLibrarySourceId() == null) {
+        // 本地约定目录（Anime/TV）已定型系列类型；刮削仅在无库源归属时推断，
+        // 且不得把已有 ANIME 降级为 TV。
+        if (series.getLibrarySourceId() == null
+                && !SeriesType.ANIME.getValue().equals(series.getSeriesType())) {
             series.setSeriesType(detectSeriesType(candidate.genres(), candidate.originalLanguage()));
         }
         // 剧集刮削按集触发：演员表仅在没有数据时补齐，避免每集刮削重复下载全部头像。

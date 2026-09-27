@@ -12,12 +12,14 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.omninest.common.api.PageResponse;
 import com.omninest.common.enums.ErrorCode;
 import com.omninest.common.messaging.QueueNames;
 import com.omninest.common.error.BusinessException;
 import com.omninest.common.sync.SyncAction;
 import com.omninest.common.sync.SyncScope;
 import com.omninest.modules.file.domain.StorageLocation;
+import com.omninest.modules.file.service.StorageDirectoryService;
 import com.omninest.modules.file.service.StorageLocationService;
 import com.omninest.modules.media.service.MediaSyncEventService;
 import com.omninest.modules.task.service.TaskDispatchService;
@@ -28,6 +30,8 @@ import com.omninest.modules.video.domain.MediaLibraryType;
 import com.omninest.modules.video.domain.MediaScanRun;
 import com.omninest.modules.video.dto.MovieDtos.ScrapeTaskDto;
 import com.omninest.modules.video.dto.VideoLibrarySourceDtos.CreateVideoLibrarySourceRequest;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.MountLibraryProvisionRequest;
+import com.omninest.modules.video.dto.VideoLibrarySourceDtos.VideoLibrarySourceDto;
 import com.omninest.modules.video.event.LocalVideoLibraryScanRequestedEvent;
 import com.omninest.modules.video.repository.VideoLibrarySourceRepository;
 import com.omninest.modules.video.repository.MediaScanRunRepository;
@@ -57,10 +61,12 @@ class VideoLibrarySourceServiceTest {
     private final MediaScanCandidateRepository candidateRepository = mock(MediaScanCandidateRepository.class);
     private final MediaVideoItemRepository videoItemRepository = mock(MediaVideoItemRepository.class);
     private final StorageLocationService storageLocationService = mock(StorageLocationService.class);
+    private final StorageDirectoryService storageDirectoryService = mock(StorageDirectoryService.class);
     private final TaskRecordService taskRecordService = mock(TaskRecordService.class);
     private final TaskDispatchService taskDispatchService = mock(TaskDispatchService.class);
     private final MediaLibraryDiscoveryExecutor discoveryExecutor = mock(MediaLibraryDiscoveryExecutor.class);
     private final MediaLibraryAccessService accessService = mock(MediaLibraryAccessService.class);
+    private final MediaLibraryReviewService reviewService = mock(MediaLibraryReviewService.class);
     private final MediaSyncEventService syncEventService = mock(MediaSyncEventService.class);
     private final VideoLibrarySourceService service = new VideoLibrarySourceService(
             sourceRepository,
@@ -69,10 +75,12 @@ class VideoLibrarySourceServiceTest {
             candidateRepository,
             videoItemRepository,
             storageLocationService,
+            storageDirectoryService,
             taskRecordService,
             taskDispatchService,
             discoveryExecutor,
             accessService,
+            reviewService,
             syncEventService
     );
 
@@ -334,6 +342,236 @@ class VideoLibrarySourceServiceTest {
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("重复或重叠");
         verify(storageLocationService, never()).rollbackAutoCreatedLocation(any());
+    }
+
+    @Test
+    void provisionMountLibraryCreatesThreeTypedCatalogSources() {
+        StorageLocation rootLocation = systemLocation(LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, true));
+        when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of());
+        when(storageDirectoryService.listMountChildren("media", ".", 0, 200))
+                .thenReturn(PageResponse.of(List.of(), 0, 200, 0));
+        when(sourceRepository.save(any(VideoLibrarySource.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.provisionMountLibrary(
+                OWNER_ID,
+                new MountLibraryProvisionRequest("media", true, true)
+        );
+
+        verify(storageDirectoryService).ensureMountDirectories("media", List.of("Movie", "TV", "Anime"));
+        assertThat(result.sources()).hasSize(3);
+        assertThat(result.sources())
+                .extracting(VideoLibrarySourceDto::relativeRoot)
+                .containsExactly("Movie", "TV", "Anime");
+        assertThat(result.sources())
+                .extracting(VideoLibrarySourceDto::libraryType)
+                .containsExactly(
+                        MediaLibraryType.MOVIE,
+                        MediaLibraryType.TV_SERIES,
+                        MediaLibraryType.ANIME
+                );
+        assertThat(result.sources())
+                .allSatisfy(source -> {
+                    assertThat(source.enabled()).isTrue();
+                    assertThat(source.importPolicy()).isEqualTo(MediaImportPolicy.AUTO_ADD_ALL_MATCHED);
+                });
+    }
+
+    @Test
+    void provisionMountLibraryTogglesExistingCatalogSources() {
+        StorageLocation rootLocation = systemLocation(LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, false));
+        VideoLibrarySource movie = new VideoLibrarySource();
+        movie.setId(UUID.randomUUID());
+        movie.setStorageLocationId(LOCATION_ID);
+        movie.setRelativeRoot("Movie");
+        movie.setLibraryType(MediaLibraryType.MOVIE.name());
+        movie.setImportPolicy(MediaImportPolicy.AUTO_ADD_ALL_MATCHED.name());
+        movie.setEnabled(true);
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(movie));
+        when(storageDirectoryService.listMountChildren("media", ".", 0, 200))
+                .thenReturn(PageResponse.of(List.of(), 0, 200, 0));
+        when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
+        when(sourceRepository.save(any(VideoLibrarySource.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.provisionMountLibrary(
+                OWNER_ID,
+                new MountLibraryProvisionRequest("media", false, false)
+        );
+
+        assertThat(result.enabled()).isFalse();
+        assertThat(result.sources()).hasSize(3);
+        assertThat(movie.isEnabled()).isFalse();
+        assertThat(movie.getImportPolicy()).isEqualTo(MediaImportPolicy.MANUAL_REVIEW.name());
+        assertThat(movie.getHealthStatus()).isEqualTo("DISABLED");
+    }
+
+    @Test
+    void executeScanSwallowsAutoApplyFailureAfterDiscovery() {
+        LocalVideoLibraryScanRequestedEvent event = new LocalVideoLibraryScanRequestedEvent(
+                UUID.randomUUID(),
+                OWNER_ID,
+                SOURCE_ID,
+                RUN_ID
+        );
+        doThrow(new BusinessException(ErrorCode.CONFLICT, "自动入库失败"))
+                .when(reviewService)
+                .autoApplyIfConfigured(OWNER_ID, RUN_ID);
+
+        service.executeScan(event);
+
+        verify(discoveryExecutor).execute(event);
+        verify(reviewService).autoApplyIfConfigured(OWNER_ID, RUN_ID);
+    }
+
+    @Test
+    void provisionMountLibraryRejectsTypeFlipOnScannedSource() {
+        StorageLocation rootLocation = systemLocation(LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, false));
+        VideoLibrarySource scannedMovieDir = new VideoLibrarySource();
+        scannedMovieDir.setId(UUID.randomUUID());
+        scannedMovieDir.setStorageLocationId(LOCATION_ID);
+        scannedMovieDir.setRelativeRoot("Movie");
+        scannedMovieDir.setLibraryType(MediaLibraryType.TV_SERIES.name());
+        scannedMovieDir.setLastScannedCount(3);
+        scannedMovieDir.setScanStatus("READY");
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(scannedMovieDir));
+        when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
+
+        assertThatThrownBy(() -> service.provisionMountLibrary(
+                OWNER_ID,
+                new MountLibraryProvisionRequest("media", true, true)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不能直接更改类型");
+    }
+
+    @Test
+    void provisionMountLibraryRejectsDuringActiveScan() {
+        StorageLocation rootLocation = systemLocation(LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, false));
+        VideoLibrarySource scanning = new VideoLibrarySource();
+        scanning.setId(UUID.randomUUID());
+        scanning.setStorageLocationId(LOCATION_ID);
+        scanning.setRelativeRoot("Movie");
+        scanning.setLibraryType(MediaLibraryType.MOVIE.name());
+        scanning.setScanStatus("DISCOVERING");
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(scanning));
+        when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
+
+        assertThatThrownBy(() -> service.provisionMountLibrary(
+                OWNER_ID,
+                new MountLibraryProvisionRequest("media", true, false)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不能变更挂载媒体库配置");
+    }
+
+    @Test
+    void provisionMountLibraryRejectsWhenMountRootSourceExists() {
+        StorageLocation rootLocation = systemLocation(LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, true));
+        VideoLibrarySource rootSource = new VideoLibrarySource();
+        rootSource.setId(UUID.randomUUID());
+        rootSource.setStorageLocationId(LOCATION_ID);
+        rootSource.setRelativeRoot(".");
+        rootSource.setLibraryType(MediaLibraryType.ROOT.name());
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(rootSource));
+        when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
+
+        assertThatThrownBy(() -> service.provisionMountLibrary(
+                OWNER_ID,
+                new MountLibraryProvisionRequest("media", true, true)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("重复或重叠");
+        verify(storageLocationService).rollbackAutoCreatedLocation(LOCATION_ID);
+    }
+
+    @Test
+    void provisionRollsBackAutoCreatedLocationWhenCatalogUpsertFails() {
+        StorageLocation rootLocation = systemLocation(LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, true));
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of());
+        when(storageDirectoryService.listMountChildren("media", ".", 0, 200))
+                .thenReturn(PageResponse.of(List.of(), 0, 200, 0));
+        when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
+        when(sourceRepository.save(any(VideoLibrarySource.class)))
+                .thenThrow(new BusinessException(ErrorCode.CONFLICT, "写入失败"));
+
+        assertThatThrownBy(() -> service.provisionMountLibrary(
+                OWNER_ID,
+                new MountLibraryProvisionRequest("media", true, true)
+        )).isInstanceOf(BusinessException.class);
+        verify(storageLocationService).rollbackAutoCreatedLocation(LOCATION_ID);
+    }
+
+    @Test
+    void provisionMatchesCatalogRootsIgnoringCase() {
+        StorageLocation rootLocation = systemLocation(LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, false));
+        VideoLibrarySource lowerMovie = new VideoLibrarySource();
+        lowerMovie.setId(UUID.randomUUID());
+        lowerMovie.setStorageLocationId(LOCATION_ID);
+        lowerMovie.setRelativeRoot("movie");
+        lowerMovie.setLibraryType(MediaLibraryType.MOVIE.name());
+        lowerMovie.setImportPolicy(MediaImportPolicy.MANUAL_REVIEW.name());
+        lowerMovie.setEnabled(false);
+        lowerMovie.setScanStatus("READY");
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(lowerMovie));
+        when(storageDirectoryService.listMountChildren("media", ".", 0, 200))
+                .thenReturn(PageResponse.of(List.of(), 0, 200, 0));
+        when(storageLocationService.listByMountKeyForBusiness("media")).thenReturn(List.of(rootLocation));
+        when(sourceRepository.save(any(VideoLibrarySource.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var result = service.provisionMountLibrary(
+                OWNER_ID,
+                new MountLibraryProvisionRequest("media", true, true)
+        );
+
+        assertThat(result.sources())
+                .extracting(VideoLibrarySourceDto::relativeRoot)
+                .contains("movie");
+        assertThat(lowerMovie.isEnabled()).isTrue();
+        assertThat(lowerMovie.getImportPolicy()).isEqualTo(MediaImportPolicy.AUTO_ADD_ALL_MATCHED.name());
+    }
+
+    @Test
+    void provisionRejectsCaseVariantDuplicateCatalogRoots() {
+        StorageLocation rootLocation = systemLocation(LOCATION_ID, "media", ".");
+        when(storageLocationService.findOrCreateSystemLocation(OWNER_ID, "media", "."))
+                .thenReturn(new StorageLocationService.SystemLocationResolution(rootLocation, false));
+        VideoLibrarySource upper = new VideoLibrarySource();
+        upper.setId(UUID.randomUUID());
+        upper.setStorageLocationId(LOCATION_ID);
+        upper.setRelativeRoot("Movie");
+        upper.setLibraryType(MediaLibraryType.MOVIE.name());
+        upper.setScanStatus("READY");
+        VideoLibrarySource lower = new VideoLibrarySource();
+        lower.setId(UUID.randomUUID());
+        lower.setStorageLocationId(LOCATION_ID);
+        lower.setRelativeRoot("movie");
+        lower.setLibraryType(MediaLibraryType.MOVIE.name());
+        lower.setScanStatus("READY");
+        when(sourceRepository.findByStorageLocationId(LOCATION_ID)).thenReturn(List.of(upper, lower));
+
+        assertThatThrownBy(() -> service.provisionMountLibrary(
+                OWNER_ID,
+                new MountLibraryProvisionRequest("media", true, true)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("大小写不同");
     }
 
     private StorageLocation systemLocation(UUID locationId, String mountKey, String relativeRoot) {

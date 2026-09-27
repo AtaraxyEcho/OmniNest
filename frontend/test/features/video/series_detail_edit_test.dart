@@ -13,6 +13,7 @@ import 'package:omninest/core/network/api_client.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/data/movie_api.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
+import 'package:omninest/features/video/domain/series_play_target.dart';
 import 'package:omninest/features/video/presentation/pages/series_detail_page.dart';
 
 void main() {
@@ -41,6 +42,12 @@ void main() {
             'series-1',
           ).overrideWith((ref) async => _detail),
           seriesFavoriteProvider('series-1').overrideWith((ref) async => false),
+          seriesPlayIntentProvider(
+            'series-1',
+          ).overrideWith(
+            (ref) async =>
+                const SeriesPlayIntent(kind: SeriesPlayIntentKind.first),
+          ),
           authSessionProvider.overrideWith(() => _AdminSessionNotifier()),
         ],
         child: MaterialApp(

@@ -11,7 +11,7 @@ class _Backdrop extends StatelessWidget {
     required this.saving,
     required this.onBack,
     required this.onToggleEdit,
-    required this.onToggleFavorite,
+    this.onToggleFavorite,
   });
 
   final String? backdropUrl;
@@ -22,7 +22,9 @@ class _Backdrop extends StatelessWidget {
   final bool saving;
   final VoidCallback onBack;
   final VoidCallback onToggleEdit;
-  final VoidCallback onToggleFavorite;
+
+  /// null 时隐藏收藏按钮（无 activity:write 的角色）。
+  final VoidCallback? onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -135,25 +137,28 @@ class _Backdrop extends StatelessWidget {
                     ),
                   ),
                 const SizedBox(width: 10),
-                Material(
-                  color: Colors.black.withValues(alpha: 0.45),
-                  shape: const CircleBorder(),
-                  child: InkWell(
-                    onTap: onToggleFavorite,
-                    customBorder: const CircleBorder(),
-                    child: Padding(
-                      padding: const EdgeInsets.all(6),
-                      child: Icon(
-                        favorited
-                            ? Icons.star_rounded
-                            : Icons.star_outline_rounded,
-                        size: 22,
-                        color:
-                            favorited ? MovieDetailTheme.accent : Colors.white,
+                if (onToggleFavorite != null)
+                  Material(
+                    color: Colors.black.withValues(alpha: 0.45),
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: onToggleFavorite,
+                      customBorder: const CircleBorder(),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Icon(
+                          favorited
+                              ? Icons.star_rounded
+                              : Icons.star_outline_rounded,
+                          size: 22,
+                          color:
+                              favorited
+                                  ? MovieDetailTheme.accent
+                                  : Colors.white,
+                        ),
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -332,11 +337,20 @@ class _SeriesStatusChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final normalized = status.toUpperCase();
-    final (color, hasBackground) = switch (normalized) {
-      'MATCHED' => (MovieDetailTheme.mutedText, false),
-      'PENDING' => (MovieDetailTheme.statusPending, true),
-      _ => (MovieDetailTheme.statusFailed, true),
+    final (color, hasBackground, label) = switch (normalized) {
+      'MATCHED' => (
+        MovieDetailTheme.mutedText,
+        false,
+        l10n.videoMetadataStatusComplete,
+      ),
+      'PENDING' => (
+        MovieDetailTheme.statusPending,
+        true,
+        l10n.videoMetadataStatusNeedsWork,
+      ),
+      _ => (MovieDetailTheme.statusFailed, true, l10n.videoMetadataStatusIssue),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -345,7 +359,7 @@ class _SeriesStatusChip extends StatelessWidget {
             hasBackground ? color.withValues(alpha: 0.10) : Colors.transparent,
       ),
       child: Text(
-        normalized,
+        label,
         style: MovieDetailTheme.mono(AppTypography.bodySmall, color: color),
       ),
     );
@@ -353,36 +367,55 @@ class _SeriesStatusChip extends StatelessWidget {
 }
 
 class _SeriesPlayButton extends StatelessWidget {
-  const _SeriesPlayButton({required this.onTap, required this.busy});
+  const _SeriesPlayButton({
+    required this.onTap,
+    required this.busy,
+    this.intent,
+  });
 
   final VoidCallback onTap;
   final bool busy;
+  final SeriesPlayIntent? intent;
+
+  String _label(AppLocalizations l10n) {
+    return switch (intent?.kind) {
+      SeriesPlayIntentKind.resume => l10n.videoDetailContinueWatching,
+      SeriesPlayIntentKind.nextEpisode => l10n.videoDetailPlayNextEpisode,
+      _ => l10n.videoDetailPlay,
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
-    return MouseRegion(
-      cursor: busy ? MouseCursor.defer : SystemMouseCursors.click,
-      child: Material(
-        color: busy ? MovieDetailTheme.mutedText : MovieDetailTheme.foreground,
-        child: InkWell(
-          onTap: busy ? null : onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                CustomPaint(size: const Size(10, 12), painter: _PlayGlyph()),
-                const SizedBox(width: 12),
-                Text(
-                  l10n.videoDetailPlay,
-                  style: MovieDetailTheme.mono(
-                    14,
-                    color: MovieDetailTheme.background,
-                    letterSpacing: 2,
+    final label = _label(l10n);
+    return Semantics(
+      button: true,
+      label: label,
+      child: MouseRegion(
+        cursor: busy ? MouseCursor.defer : SystemMouseCursors.click,
+        child: Material(
+          color:
+              busy ? MovieDetailTheme.mutedText : MovieDetailTheme.foreground,
+          child: InkWell(
+            onTap: busy ? null : onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CustomPaint(size: const Size(10, 12), painter: _PlayGlyph()),
+                  const SizedBox(width: 12),
+                  Text(
+                    label,
+                    style: MovieDetailTheme.mono(
+                      14,
+                      color: MovieDetailTheme.background,
+                      letterSpacing: 2,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

@@ -190,11 +190,27 @@ class MediaLibraryReviewWorkspaceState
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               IconButton(
+                onPressed:
+                    page.page > 0 ? () => setState(() => _page = 0) : null,
+                tooltip: MaterialLocalizations.of(context).firstPageTooltip,
+                icon: const Icon(Icons.first_page_rounded, size: 20),
+              ),
+              IconButton(
                 onPressed: page.page > 0 ? () => setState(() => _page--) : null,
                 tooltip: MaterialLocalizations.of(context).previousPageTooltip,
                 icon: const Icon(Icons.chevron_left_rounded),
               ),
-              Text('${page.page + 1} / ${page.totalPages}'),
+              Text(
+                l10n.adminListRangeLabel(
+                  page.page * (page.size > 0 ? page.size : 1) + 1,
+                  ((page.page + 1) * (page.size > 0 ? page.size : 1)).clamp(
+                    0,
+                    page.totalElements,
+                  ),
+                  page.totalElements,
+                ),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
               IconButton(
                 onPressed:
                     page.page + 1 < page.totalPages
@@ -202,6 +218,14 @@ class MediaLibraryReviewWorkspaceState
                         : null,
                 tooltip: MaterialLocalizations.of(context).nextPageTooltip,
                 icon: const Icon(Icons.chevron_right_rounded),
+              ),
+              IconButton(
+                onPressed:
+                    page.page + 1 < page.totalPages
+                        ? () => setState(() => _page = page.totalPages - 1)
+                        : null,
+                tooltip: MaterialLocalizations.of(context).lastPageTooltip,
+                icon: const Icon(Icons.last_page_rounded, size: 20),
               ),
             ],
           ),
@@ -644,7 +668,14 @@ class _MediaTreeNodeTileState extends ConsumerState<_MediaTreeNodeTile> {
                               icon: const Icon(Icons.chevron_left_rounded),
                             ),
                             Text(
-                              '${page.page + 1} / ${page.totalPages}',
+                              l10n.adminListRangeLabel(
+                                page.page * (page.size > 0 ? page.size : 1) + 1,
+                                ((page.page + 1) * page.size).clamp(
+                                  0,
+                                  page.totalElements,
+                                ),
+                                page.totalElements,
+                              ),
                               style: Theme.of(context).textTheme.bodySmall,
                             ),
                             IconButton(

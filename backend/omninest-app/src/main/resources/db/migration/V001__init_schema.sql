@@ -1244,10 +1244,10 @@ CREATE TABLE "omni"."video_library_sources" (
   ),
   CONSTRAINT "chk_video_library_sources_health" CHECK (
     health_status IN ('AVAILABLE', 'DEGRADED', 'OFFLINE', 'DISABLED')
-  ),
-  CONSTRAINT "uk_video_library_sources_location_root" UNIQUE (
-    storage_location_id, relative_root
   )
+);
+CREATE UNIQUE INDEX "uk_video_library_sources_location_root" ON "omni"."video_library_sources" (
+  "storage_location_id", lower("relative_root")
 );
 CREATE INDEX "idx_video_library_sources_owner_enabled" ON "omni"."video_library_sources" (
   "owner_user_id", "enabled"

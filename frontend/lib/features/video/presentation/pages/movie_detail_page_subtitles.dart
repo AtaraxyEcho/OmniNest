@@ -15,41 +15,43 @@ class _SubtitlesTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final canManage = ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
     final tracksAsync = ref.watch(movieSubtitlesProvider(item.id));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Align(
-          alignment: Alignment.centerRight,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: uploading ? null : onUpload,
-              borderRadius: MovieRedesignPalette.borderRadius,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: MovieRedesignPalette.borderRadius,
-                  border: Border.all(color: MovieDetailTheme.border),
-                ),
-                child: Text(
-                  l10n.videoDetailUploadSubtitle,
-                  style: MovieDetailTheme.mono(
-                    12,
-                    color:
-                        uploading
-                            ? MovieDetailTheme.mutedText
-                            : MovieDetailTheme.secondaryText,
+        if (canManage)
+          Align(
+            alignment: Alignment.centerRight,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: uploading ? null : onUpload,
+                borderRadius: MovieRedesignPalette.borderRadius,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: MovieRedesignPalette.borderRadius,
+                    border: Border.all(color: MovieDetailTheme.border),
+                  ),
+                  child: Text(
+                    l10n.videoDetailUploadSubtitle,
+                    style: MovieDetailTheme.mono(
+                      12,
+                      color:
+                          uploading
+                              ? MovieDetailTheme.mutedText
+                              : MovieDetailTheme.secondaryText,
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
-        const SizedBox(height: 12),
+        if (canManage) const SizedBox(height: 12),
         tracksAsync.when(
           loading:
               () => const Center(

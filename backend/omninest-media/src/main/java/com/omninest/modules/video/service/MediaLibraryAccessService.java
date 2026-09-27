@@ -35,7 +35,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class MediaLibraryAccessService {
-    private static final Set<String> MEMBER_ROLES = Set.of("MEMBER", "ADMIN", "SUPER_ADMIN");
     private static final String SYSTEM_SCOPE = "SYSTEM";
 
     private final VideoLibrarySourceRepository sourceRepository;
@@ -190,7 +189,7 @@ public class MediaLibraryAccessService {
             case SELECTED_USERS -> selectedLibraryIds == null
                     ? accessRepository.existsByLibrarySourceIdAndUserId(source.getId(), profile.id())
                     : selectedLibraryIds.contains(source.getId());
-            case ALL_MEMBERS -> profile.roles().stream().anyMatch(MEMBER_ROLES::contains);
+            case ALL_MEMBERS -> profile.permissions().contains(Permissions.MEDIA_READ);
         };
     }
 

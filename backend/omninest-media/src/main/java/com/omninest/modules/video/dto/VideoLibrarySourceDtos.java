@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -17,6 +18,43 @@ import java.util.UUID;
 public final class VideoLibrarySourceDtos {
 
     private VideoLibrarySourceDtos() {
+    }
+
+    /**
+     * 挂载媒体库一键开通/更新请求。
+     *
+     * <p>系统在挂载根下按约定目录 Movie、TV、Anime 维护三个类型库源，
+     * 管理员只需开关启用与扫描后自动入库，无需手动划分媒体库类型。</p>
+     *
+     * @param mountKey 部署可信挂载键
+     * @param enabled 是否启用该挂载的媒体库
+     * @param autoImport 扫描后是否自动入库已匹配候选
+     */
+    @Schema(description = "挂载媒体库开通请求")
+    public record MountLibraryProvisionRequest(
+            @NotBlank @Size(max = 80) String mountKey,
+            boolean enabled,
+            boolean autoImport
+    ) {
+    }
+
+    /**
+     * 挂载媒体库开通结果。
+     *
+     * @param mountKey 挂载键
+     * @param storageLocationId 挂载根存储位置 ID
+     * @param enabled 是否启用
+     * @param autoImport 是否自动入库
+     * @param sources 约定目录下的三个类型库源
+     */
+    @Schema(description = "挂载媒体库开通结果")
+    public record MountLibraryProvisionDto(
+            String mountKey,
+            UUID storageLocationId,
+            boolean enabled,
+            boolean autoImport,
+            List<VideoLibrarySourceDto> sources
+    ) {
     }
 
     /**

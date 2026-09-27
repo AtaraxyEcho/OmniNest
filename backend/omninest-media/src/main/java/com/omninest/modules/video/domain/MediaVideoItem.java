@@ -2,7 +2,6 @@ package com.omninest.modules.video.domain;
 
 import com.omninest.modules.media.domain.MetadataStatus;
 import com.omninest.modules.video.domain.MediaType;
-import com.omninest.modules.video.domain.NfoStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
@@ -95,7 +94,8 @@ public class MediaVideoItem {
     private boolean scrapeLocked;
 
     @Column(name = "nfo_status", nullable = false, length = 32)
-    private String nfoStatus = NfoStatus.DISABLED.getValue();
+    // 默认值用字面量，避免 Hibernate 元模型初始化时强依赖枚举类加载。
+    private String nfoStatus = "DISABLED";
 
     @Column(name = "nfo_updated_at")
     private Instant nfoUpdatedAt;

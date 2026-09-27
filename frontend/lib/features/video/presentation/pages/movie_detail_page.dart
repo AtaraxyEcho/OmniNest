@@ -8,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/application/movie_detail_action_controller.dart';
@@ -202,13 +203,16 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
 
   Future<void> _pickAndUploadSubtitle() async {
     final l10n = AppLocalizations.of(context);
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['vtt', 'srt', 'ass', 'ssa', 'ttml', 'sub'],
-      withData: true,
     );
-    final file = result?.files.singleOrNull;
-    if (file == null || file.bytes == null || !mounted) {
+    final file = result.singleOrNull;
+    if (file == null || !mounted) {
+      return;
+    }
+    final bytes = await file.readAsBytes();
+    if (!mounted || bytes.isEmpty) {
       return;
     }
     final language = await showDialog<String>(
@@ -226,7 +230,7 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
             .uploadSubtitle(
               videoItemId: widget.item.id,
               fileName: file.name,
-              bytes: file.bytes!,
+              bytes: bytes,
               mimeType: _subtitleMime(file.extension),
               language: language,
             ),
@@ -294,7 +298,10 @@ class _MovieDetailViewState extends ConsumerState<_MovieDetailView> {
                   });
                 }
               },
-              onToggleFavorite: () => unawaited(_toggleFavorite(favorited)),
+              onToggleFavorite:
+                  ref.watch(userCapabilitiesProvider).canManageOwnActivity
+                      ? () => unawaited(_toggleFavorite(favorited))
+                      : null,
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),

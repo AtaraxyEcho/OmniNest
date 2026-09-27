@@ -44,7 +44,7 @@ void main() {
     final filterBar = find.byType(MovieRedesignFilterSortBar);
     expect(filterBar, findsOneWidget);
     await tester.tap(
-      find.descendant(of: filterBar, matching: find.text('待刮削')),
+      find.descendant(of: filterBar, matching: find.text('待整理')),
     );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));

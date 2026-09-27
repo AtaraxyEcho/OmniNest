@@ -138,7 +138,9 @@ public class MovieEngagementService {
                                     h.getPositionSeconds(),
                                     h.getDurationSeconds(),
                                     h.isCompleted(),
-                                    h.getPlayedAt()
+                                    h.getPlayedAt(),
+                                    item.mediaType(),
+                                    item.seriesId()
                             );
                         })
                         .stream())

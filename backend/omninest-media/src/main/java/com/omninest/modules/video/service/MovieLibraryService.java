@@ -49,6 +49,7 @@ import com.omninest.modules.video.repository.MediaWatchHistoryRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -533,7 +534,7 @@ public class MovieLibraryService {
                         LinkedHashMap::new
                 ));
 
-        return progressItemIds.entrySet().stream()
+        List<MovieContinueWatchingDto> mapped = progressItemIds.entrySet().stream()
                 .flatMap(entry -> Optional.ofNullable(itemIndex.get(entry.getValue()))
                         .map(item -> {
                             MediaPlaybackProgress progress = entry.getKey();
@@ -545,11 +546,49 @@ public class MovieLibraryService {
                                     progress.getPositionSeconds(),
                                     progress.getDurationSeconds(),
                                     progressPercent(progress),
-                                    progress.getUpdatedAt()
+                                    progress.getUpdatedAt(),
+                                    item.mediaType(),
+                                    item.seriesId(),
+                                    item.seasonNumber(),
+                                    item.episodeNumber()
                             );
                         })
                         .stream())
                 .toList();
+        return dedupeContinueWatchingBySeries(mapped);
+    }
+
+    /**
+     * 同一剧集只保留最近一次未看完进度，避免继续观看出现多张同系列分集卡。
+     * 电影（seriesId 为空）不合并；组内按 updatedAt 取最新。
+     */
+    private List<MovieContinueWatchingDto> dedupeContinueWatchingBySeries(
+            List<MovieContinueWatchingDto> entries
+    ) {
+        Map<UUID, MovieContinueWatchingDto> latestBySeries = new LinkedHashMap<>();
+        List<MovieContinueWatchingDto> movies = new ArrayList<>();
+        for (MovieContinueWatchingDto entry : entries) {
+            if (entry.seriesId() == null) {
+                movies.add(entry);
+                continue;
+            }
+            MovieContinueWatchingDto current = latestBySeries.get(entry.seriesId());
+            Instant currentAt = current == null || current.updatedAt() == null
+                    ? Instant.EPOCH
+                    : current.updatedAt();
+            Instant entryAt = entry.updatedAt() == null ? Instant.EPOCH : entry.updatedAt();
+            if (current == null || entryAt.isAfter(currentAt)) {
+                latestBySeries.put(entry.seriesId(), entry);
+            }
+        }
+        List<MovieContinueWatchingDto> result = new ArrayList<>(movies);
+        result.addAll(latestBySeries.values());
+        result.sort((left, right) -> {
+            Instant leftAt = left.updatedAt() == null ? Instant.EPOCH : left.updatedAt();
+            Instant rightAt = right.updatedAt() == null ? Instant.EPOCH : right.updatedAt();
+            return rightAt.compareTo(leftAt);
+        });
+        return result;
     }
 
     private UUID parseVideoItemId(String mediaKey) {

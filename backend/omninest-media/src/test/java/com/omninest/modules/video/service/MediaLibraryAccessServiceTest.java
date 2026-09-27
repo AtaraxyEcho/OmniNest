@@ -98,13 +98,12 @@ class MediaLibraryAccessServiceTest {
     }
 
     @Test
-    void allMembersDoesNotIncludeGuestOnlyAccount() {
+    void allMembersIncludesGuestWithMediaRead() {
         VideoLibrarySource source = source(MediaLibraryVisibility.ALL_MEMBERS);
         when(sourceRepository.findById(SOURCE_ID)).thenReturn(Optional.of(source));
         when(userDirectoryQueryService.requireAuthorizationProfile(MEMBER_ID)).thenReturn(profile("GUEST"));
 
-        assertThatThrownBy(() -> service.requireRead(MEMBER_ID, SOURCE_ID))
-                .isInstanceOf(BusinessException.class);
+        assertThat(service.requireRead(MEMBER_ID, SOURCE_ID)).isSameAs(source);
     }
 
     @Test

@@ -138,8 +138,13 @@ class MovieCenterState {
         .toSet();
   }
 
-  List<MovieSeries> get filteredSeries {
-    var result = tvSeries.toList();
+  List<MovieSeries> get filteredSeries => _filterAndSortSeries(tvSeries);
+
+  List<MovieSeries> get filteredAnimeSeries =>
+      _filterAndSortSeries(animeSeries);
+
+  List<MovieSeries> _filterAndSortSeries(List<MovieSeries> source) {
+    var result = source.toList();
     if (selectedGenres.isNotEmpty) {
       result =
           result.where((s) => s.genres.any(selectedGenres.contains)).toList();
@@ -158,30 +163,52 @@ class MovieCenterState {
             return y != null && y <= yearTo!;
           }).toList();
     }
-    return result;
+    result = switch (filter) {
+      MovieLibraryFilter.all => result,
+      MovieLibraryFilter.matched =>
+        result.where((s) => s.metadataStatus == 'MATCHED').toList(),
+      MovieLibraryFilter.pending =>
+        result.where((s) => s.metadataStatus == 'PENDING').toList(),
+      MovieLibraryFilter.failed =>
+        result.where((s) => s.metadataStatus == 'FAILED').toList(),
+      MovieLibraryFilter.recent => [...result]..sort((a, b) {
+        final ad = a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final bd = b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return bd.compareTo(ad);
+      }),
+    };
+    return _sortSeries(result);
   }
 
-  List<MovieSeries> get filteredAnimeSeries {
-    var result = animeSeries;
-    if (selectedGenres.isNotEmpty) {
-      result =
-          result.where((s) => s.genres.any(selectedGenres.contains)).toList();
+  List<MovieSeries> _sortSeries(List<MovieSeries> items) {
+    final sorted = List<MovieSeries>.from(items);
+    final sign = sortAscending ? 1 : -1;
+    switch (sortBy) {
+      case MovieSortBy.dateAdded:
+        sorted.sort((a, b) {
+          final aDate = a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bDate = b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return sign * aDate.compareTo(bDate);
+        });
+      case MovieSortBy.releaseDate:
+        sorted.sort((a, b) {
+          final aDate =
+              a.firstAirDate ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bDate =
+              b.firstAirDate ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return sign * aDate.compareTo(bDate);
+        });
+      case MovieSortBy.rating:
+        sorted.sort(
+          (a, b) => sign * ((a.rating ?? 0).compareTo(b.rating ?? 0)),
+        );
+      case MovieSortBy.title:
+        sorted.sort(
+          (a, b) =>
+              sign * a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
     }
-    if (yearFrom != null) {
-      result =
-          result.where((s) {
-            final y = s.firstAirDate?.year;
-            return y != null && y >= yearFrom!;
-          }).toList();
-    }
-    if (yearTo != null) {
-      result =
-          result.where((s) {
-            final y = s.firstAirDate?.year;
-            return y != null && y <= yearTo!;
-          }).toList();
-    }
-    return result;
+    return sorted;
   }
 
   List<MovieVideoItem> get filteredMovies {
@@ -204,6 +231,8 @@ class MovieCenterState {
         }).toList(),
       MovieSection.recent => recentItems,
       MovieSection.favorites => favoriteItems,
+      // 影片管理展示全部条目（电影 + 剧集/动漫分集）。
+      MovieSection.management => movies,
       _ => movies,
     };
     var filtered = switch (filter) {

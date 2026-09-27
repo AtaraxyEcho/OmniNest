@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
@@ -6,37 +7,53 @@ import 'package:omninest/features/video/presentation/widgets/movie_poster_image.
 import 'package:omninest/features/video/presentation/widgets/redesign/movie_redesign_progress_bar.dart';
 
 /// 继续观看卡片的辅助文案与回调。
+///
+/// [MovieContinueWatching.title] 对分集已是系列名（后端转换器统一作品名），
+/// 卡片主标题直接使用；集数用 [episodeLabel] 表达。
 class MovieRedesignContinueItem {
   const MovieRedesignContinueItem({
     required this.data,
     required this.timeText,
+    this.episodeLabel,
     this.onPlay,
     this.onDetail,
   });
 
   final MovieContinueWatching data;
   final String timeText;
+
+  /// 如 `S02E09`；电影为空。
+  final String? episodeLabel;
   final VoidCallback? onPlay;
   final VoidCallback? onDetail;
 }
 
-/// 新版继续观看横条：衬线小标题 + 2/4 列 16:9 进度卡片。
+/// 新版继续观看横条：衬线小标题 + 横向滚动 16:9 进度卡片（隐藏滚动条）。
 class MovieRedesignContinueStrip extends StatelessWidget {
   const MovieRedesignContinueStrip({
     required this.items,
     required this.title,
     this.subtitleEn,
+    this.onViewAll,
     super.key,
   });
 
   final List<MovieRedesignContinueItem> items;
   final String title;
   final String? subtitleEn;
+  final VoidCallback? onViewAll;
 
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
-    final columns = width >= 640 ? 4 : 2;
+    final gap = width >= 640 ? 12.0 : 8.0;
+    // 横滑卡宽：约一屏 2/3.5 张，保证露出下一张的可滚动暗示。
+    final cardWidth =
+        width >= 1024
+            ? 280.0
+            : width >= 640
+            ? 240.0
+            : 200.0;
     return Padding(
       padding: const EdgeInsets.only(bottom: 28),
       child: Column(
@@ -62,26 +79,37 @@ class MovieRedesignContinueStrip extends StatelessWidget {
                   ),
                 ),
               ],
+              const Spacer(),
+              if (onViewAll != null)
+                TextButton(
+                  onPressed: onViewAll,
+                  child: Text(
+                    AppLocalizations.of(context).videoContinueViewAll,
+                  ),
+                ),
             ],
           ),
           const SizedBox(height: 12),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final gap = width >= 640 ? 12.0 : 8.0;
-              final cardWidth =
-                  (constraints.maxWidth - gap * (columns - 1)) / columns;
-              return Wrap(
-                spacing: gap,
-                runSpacing: gap,
-                children: [
-                  for (final item in items)
-                    SizedBox(
-                      width: cardWidth,
-                      child: MovieRedesignContinueCard(item: item),
-                    ),
-                ],
-              );
-            },
+          SizedBox(
+            height: cardWidth * 9 / 16 + 72,
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.only(right: 4),
+                itemCount: items.length,
+                separatorBuilder: (_, _) => SizedBox(width: gap),
+                itemBuilder: (context, index) {
+                  return SizedBox(
+                    width: cardWidth,
+                    child: MovieRedesignContinueCard(item: items[index]),
+                  );
+                },
+              ),
+            ),
           ),
         ],
       ),
@@ -207,6 +235,15 @@ class _MovieRedesignContinueCardState extends State<MovieRedesignContinueCard> {
                         color: palette.secondaryForeground,
                       ),
                     ),
+                    if (widget.item.episodeLabel != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.item.episodeLabel!,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: text.mono(size: metaSize),
+                      ),
+                    ],
                     const SizedBox(height: 2),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,

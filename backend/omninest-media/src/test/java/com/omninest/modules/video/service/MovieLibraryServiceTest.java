@@ -179,6 +179,52 @@ class MovieLibraryServiceTest {
     }
 
     @Test
+    void continueWatchingKeepsOnlyLatestProgressPerSeries() {
+        UUID episode9Id = UUID.fromString("20000000-0000-0000-0000-000000000009");
+        UUID episode10Id = UUID.fromString("20000000-0000-0000-0000-000000000010");
+        MediaVideoItem episode9 = episodeItem(episode9Id, SERIES_ID, 9);
+        MediaVideoItem episode10 = episodeItem(episode10Id, SERIES_ID, 10);
+
+        MediaPlaybackProgress older = new MediaPlaybackProgress();
+        older.setMediaType(MediaPlaybackType.VIDEO.value());
+        older.setMediaKey(episode9Id.toString());
+        older.setOwnerUserId(OWNER_ID);
+        older.setPositionSeconds(100);
+        older.setDurationSeconds(2000);
+        older.setUpdatedAt(Instant.parse("2026-05-20T10:00:00Z"));
+
+        MediaPlaybackProgress newer = new MediaPlaybackProgress();
+        newer.setMediaType(MediaPlaybackType.VIDEO.value());
+        newer.setMediaKey(episode10Id.toString());
+        newer.setOwnerUserId(OWNER_ID);
+        newer.setPositionSeconds(300);
+        newer.setDurationSeconds(2000);
+        newer.setUpdatedAt(Instant.parse("2026-05-21T10:00:00Z"));
+
+        when(progressService.latest(OWNER_ID, MediaPlaybackType.VIDEO))
+                .thenReturn(List.of(older, newer));
+        when(mediaLibraryAccessService.findReadableLibraryIds(OWNER_ID)).thenReturn(Set.of());
+        when(videoItemRepository.findReadableByIds(
+                org.mockito.ArgumentMatchers.eq(OWNER_ID),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        )).thenReturn(List.of(episode9, episode10));
+        when(episodeRepository.findAllById(any())).thenReturn(List.of());
+        when(contentAssetService.primaryVideoAssets(
+                org.mockito.ArgumentMatchers.any(UUID.class),
+                org.mockito.ArgumentMatchers.anyCollection()
+        )).thenReturn(Map.of());
+
+        var result = movieLibraryService.continueWatching(OWNER_ID);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.getFirst().id()).isEqualTo(episode10Id);
+        assertThat(result.getFirst().seriesId()).isEqualTo(SERIES_ID);
+        assertThat(result.getFirst().episodeNumber()).isEqualTo(10);
+        assertThat(result.getFirst().seasonNumber()).isEqualTo(1);
+    }
+
+    @Test
     void libraryPageBoundsPageSizeAndReturnsLightweightItems() {
         MediaVideoItem movie = movie("Inception", "MOVIE");
         MediaMovie logicalMovie = logicalMovie("Inception");
@@ -351,6 +397,20 @@ class MovieLibraryServiceTest {
         item.setFileNodeId(FILE_NODE_ID);
         item.setMediaType(mediaType);
         item.setMovieId(LOGICAL_MOVIE_ID);
+        item.setMetadataStatus("MATCHED");
+        item.setUpdatedAt(Instant.parse("2026-05-21T09:00:00Z"));
+        return item;
+    }
+
+    private MediaVideoItem episodeItem(UUID id, UUID seriesId, int episodeNumber) {
+        MediaVideoItem item = new MediaVideoItem();
+        item.setId(id);
+        item.setOwnerUserId(OWNER_ID);
+        item.setFileNodeId(UUID.randomUUID());
+        item.setMediaType("EPISODE");
+        item.setSeriesId(seriesId);
+        item.setSeasonNumber(1);
+        item.setEpisodeNumber(episodeNumber);
         item.setMetadataStatus("MATCHED");
         item.setUpdatedAt(Instant.parse("2026-05-21T09:00:00Z"));
         return item;

@@ -7,6 +7,7 @@ import com.omninest.common.messaging.QueueNames;
 import com.omninest.modules.task.domain.TaskStatus;
 import com.omninest.modules.task.service.TaskDispatchService;
 import com.omninest.modules.task.service.TaskRecordService;
+import com.omninest.modules.video.domain.MediaImportPolicy;
 import com.omninest.modules.video.domain.MediaLibraryType;
 import com.omninest.modules.video.domain.MediaScanCandidate;
 import com.omninest.modules.video.domain.MediaScanRun;
@@ -173,18 +174,49 @@ public class MediaLibraryReviewService {
             ApplySelectionRequest request
     ) {
         MediaScanRun run = requireRun(ownerUserId, runId);
-        UUID catalogOwnerId = run.getOwnerUserId();
         if (!List.of("READY", "PAUSED", "PARTIAL").contains(run.getStatus())) {
             throw new BusinessException(ErrorCode.CONFLICT, "当前发现运行不能开始入库");
         }
         if (run.getSelectionRevision() != request.expectedRevision()) {
             throw new BusinessException(ErrorCode.CONFLICT, "候选选择已更新，请刷新后重试");
         }
+        return enqueueApply(ownerUserId, run, request.expectedRevision());
+    }
+
+    /**
+     * 发现完成后按导入策略自动入库已选候选。
+     *
+     * <p>仅当库源策略为自动入库且存在已选候选时入队；
+     * 人工确认策略下保持审阅后手动应用。</p>
+     */
+    @Transactional(rollbackFor = Exception.class)
+    public void autoApplyIfConfigured(UUID operatorUserId, UUID runId) {
+        MediaScanRun run = requireRun(operatorUserId, runId);
+        if (!"READY".equals(run.getStatus())) {
+            return;
+        }
+        VideoLibrarySource source = requireSource(operatorUserId, run.getLibrarySourceId());
+        if (MediaImportPolicy.MANUAL_REVIEW.name().equals(source.getImportPolicy())) {
+            return;
+        }
+        long selected = candidateRepository.countByOwnerUserIdAndScanRunIdAndSelectedTrue(
+                run.getOwnerUserId(),
+                runId
+        );
+        if (selected == 0) {
+            return;
+        }
+        enqueueApply(operatorUserId, run, run.getSelectionRevision());
+    }
+
+    private ScrapeTaskDto enqueueApply(UUID operatorUserId, MediaScanRun run, long selectionRevision) {
+        UUID runId = run.getId();
+        UUID catalogOwnerId = run.getOwnerUserId();
         long selected = candidateRepository.countByOwnerUserIdAndScanRunIdAndSelectedTrue(catalogOwnerId, runId);
         if (selected == 0) {
             throw new BusinessException(ErrorCode.PARAM_ERROR, "请至少选择一个可入库候选项");
         }
-        VideoLibrarySource source = requireSource(ownerUserId, run.getLibrarySourceId());
+        VideoLibrarySource source = requireSource(operatorUserId, run.getLibrarySourceId());
         UUID taskId = UUID.randomUUID();
         run.setApplyTaskId(taskId);
         run.setStatus("QUEUED");
@@ -194,14 +226,14 @@ public class MediaLibraryReviewService {
         sourceRepository.save(source);
         Map<String, Object> payload = Map.of(
                 "catalogOwnerId", catalogOwnerId.toString(),
-                "operatorUserId", ownerUserId.toString(),
+                "operatorUserId", operatorUserId.toString(),
                 "sourceId", source.getId().toString(),
                 "scanRunId", runId.toString(),
-                "selectionRevision", request.expectedRevision()
+                "selectionRevision", selectionRevision
         );
         taskRecordService.createQueuedTask(
                 taskId,
-                ownerUserId,
+                operatorUserId,
                 APPLY_TASK_TYPE,
                 QueueNames.LOCAL_VIDEO_LIBRARY_APPLY_ROUTING_KEY,
                 "QUEUED",

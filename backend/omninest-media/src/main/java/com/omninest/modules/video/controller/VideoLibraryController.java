@@ -114,42 +114,42 @@ public class VideoLibraryController {
     }
 
     @Operation(summary = "获取最近添加", description = "返回最近添加到视频库的视频列表")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/video/recent")
     ApiResponse<List<MovieVideoItemDto>> recent(@RequestParam(defaultValue = "30") int days) {
         return ApiResponse.success(movieLibraryService.recent(currentUserContext.requireCurrentUserId(), days));
     }
 
     @Operation(summary = "获取继续观看列表", description = "返回用户未看完的视频列表")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/video/continue")
     ApiResponse<List<MovieContinueWatchingDto>> continueWatching() {
         return ApiResponse.success(movieLibraryService.continueWatching(currentUserContext.requireCurrentUserId()));
     }
 
     @Operation(summary = "获取收藏视频", description = "返回用户收藏的所有视频")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/video/favorites")
     ApiResponse<List<MovieVideoItemDto>> favorites() {
         return ApiResponse.success(movieEngagementService.favorites(currentUserContext.requireCurrentUserId()));
     }
 
     @Operation(summary = "获取收藏系列", description = "返回用户收藏的剧集与动漫，按收藏时间倒序")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/video/favorites/series")
     ApiResponse<List<MovieSeriesDto>> favoriteSeries() {
         return ApiResponse.success(movieLibraryService.favoriteSeries(currentUserContext.requireCurrentUserId()));
     }
 
     @Operation(summary = "获取收藏状态", description = "查询指定视频的收藏状态")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/video/items/{videoItemId}/favorite/status")
     ApiResponse<MovieFavoriteStateDto> favoriteStatus(@PathVariable UUID videoItemId) {
         return ApiResponse.success(movieEngagementService.favoriteStatus(currentUserContext.requireCurrentUserId(), videoItemId));
     }
 
     @Operation(summary = "收藏/取消收藏视频", description = "切换指定视频的收藏状态")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/video/items/{videoItemId}/favorite")
     ApiResponse<MovieFavoriteStateDto> favorite(
             @PathVariable UUID videoItemId,
@@ -159,14 +159,14 @@ public class VideoLibraryController {
     }
 
     @Operation(summary = "获取观看历史", description = "返回用户的视频观看历史记录")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/video/history")
     ApiResponse<List<MovieWatchHistoryDto>> history() {
         return ApiResponse.success(movieEngagementService.history(currentUserContext.requireCurrentUserId()));
     }
 
     @Operation(summary = "删除观看记录", description = "删除指定的观看历史记录")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @DeleteMapping("/api/v1/video/history/{historyId}")
     ApiResponse<Void> deleteHistoryItem(@PathVariable UUID historyId) {
         movieEngagementService.deleteHistoryItem(currentUserContext.requireCurrentUserId(), historyId);
@@ -174,7 +174,7 @@ public class VideoLibraryController {
     }
 
     @Operation(summary = "清空观看历史", description = "清空用户的全部观看历史记录")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @DeleteMapping("/api/v1/video/history")
     ApiResponse<Void> clearHistory() {
         movieEngagementService.clearHistory(currentUserContext.requireCurrentUserId());
@@ -235,7 +235,7 @@ public class VideoLibraryController {
     }
 
     @Operation(summary = "收藏/取消收藏剧集", description = "切换指定剧集的收藏状态")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PostMapping("/api/v1/video/series/{seriesId}/favorite")
     ApiResponse<Map<String, Boolean>> toggleSeriesFavorite(@PathVariable UUID seriesId) {
         boolean favorite = movieEngagementService.toggleSeriesFavorite(currentUserContext.requireCurrentUserId(), seriesId);
@@ -243,7 +243,7 @@ public class VideoLibraryController {
     }
 
     @Operation(summary = "获取剧集收藏状态", description = "查询指定剧集的收藏状态")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_READ + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_READ + "')")
     @GetMapping("/api/v1/video/series/{seriesId}/favorite/status")
     ApiResponse<Map<String, Boolean>> seriesFavoriteStatus(@PathVariable UUID seriesId) {
         boolean favorite = movieEngagementService.seriesFavoriteStatus(currentUserContext.requireCurrentUserId(), seriesId);
@@ -341,7 +341,7 @@ public class VideoLibraryController {
     }
 
     @Operation(summary = "更新播放进度", description = "更新指定视频的播放进度")
-    @PreAuthorize("hasAuthority('" + Permissions.MEDIA_WRITE + "')")
+    @PreAuthorize("hasAuthority('" + Permissions.ACTIVITY_WRITE + "')")
     @PutMapping("/api/v1/video/items/{videoItemId}/progress")
     ApiResponse<PlaybackPlanDto> updateProgress(
             @PathVariable UUID videoItemId,

@@ -9,7 +9,6 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
-import com.omninest.modules.video.domain.NfoStatus;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -35,7 +34,8 @@ public class MediaNfoExport {
     private String exportPath;
 
     @Column(name = "status", nullable = false, length = 32)
-    private String status = NfoStatus.PENDING.getValue();
+    // 默认值用字面量，避免 Hibernate 元模型初始化时强依赖枚举类加载。
+    private String status = "PENDING";
 
     @Column(name = "error_summary")
     private String errorSummary;

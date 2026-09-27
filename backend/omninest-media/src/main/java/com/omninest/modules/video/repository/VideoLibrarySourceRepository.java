@@ -37,22 +37,6 @@ public interface VideoLibrarySourceRepository extends JpaRepository<VideoLibrary
     Optional<VideoLibrarySource> findByIdAndOwnerUserId(UUID id, UUID ownerUserId);
 
     /**
-     * 判断同一存储位置子目录是否已登记。
-     *
-     * @param ownerUserId 所有者用户 ID
-     * @param storageLocationId 存储位置 ID
-     * @param relativeRoot 相对根目录
-     * @return 已登记时返回 true
-     */
-    boolean existsByOwnerUserIdAndStorageLocationIdAndRelativeRoot(
-            UUID ownerUserId,
-            UUID storageLocationId,
-            String relativeRoot
-    );
-
-    boolean existsByStorageLocationIdAndRelativeRoot(UUID storageLocationId, String relativeRoot);
-
-    /**
      * 统计存储位置关联的影视库来源数量。
      *
      * @param storageLocationId 存储位置 ID

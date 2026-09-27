@@ -5,11 +5,12 @@ import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:omninest/app/theme/app_typography.dart';
-import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/errors/error_message.dart';
 import 'package:omninest/core/widgets/app_error_view.dart';
 import 'package:omninest/core/widgets/app_loading.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
+import 'package:omninest/features/video/domain/movie_detail_routes.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_collections.dart';
@@ -205,9 +206,7 @@ class _MovieContent extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
-    final user = ref.watch(authSessionProvider).asData?.value.user;
-    final canManage =
-        user?.permissions.contains('media:library:manage') ?? false;
+    final canManage = ref.watch(userCapabilitiesProvider).canManageMediaLibrary;
     if (state.section.requiresManagementRole && !canManage) {
       return _ManagementAccessDenied(l10n: l10n);
     }
@@ -241,13 +240,20 @@ class _MovieContent extends ConsumerWidget {
       MovieSection.favorites => _FavoritesSection(state: state),
       MovieSection.history => HistorySection(
         items: state.watchHistory,
+        // 无 activity:write 的角色隐藏删历史入口，只保留浏览。
         onDelete:
-            (entry) => ref
-                .read(movieCenterControllerProvider.notifier)
-                .deleteHistoryItem(entry),
+            ref.watch(userCapabilitiesProvider).canManageOwnActivity
+                ? (entry) => ref
+                    .read(movieCenterControllerProvider.notifier)
+                    .deleteHistoryItem(entry)
+                : null,
         onClearAll:
-            () =>
-                ref.read(movieCenterControllerProvider.notifier).clearHistory(),
+            ref.watch(userCapabilitiesProvider).canManageOwnActivity
+                ? () =>
+                    ref
+                        .read(movieCenterControllerProvider.notifier)
+                        .clearHistory()
+                : null,
       ),
       MovieSection.management => const MovieAdminSection(),
     };
@@ -289,7 +295,7 @@ class _ManagementAccessDenied extends StatelessWidget {
   }
 }
 
-/// 电影卡片：点击打开页内详情抽屉，系列进剧集详情，播放进播放器。
+/// 电影卡片：点击打开页内详情抽屉，系列分集进剧集详情，播放进播放器。
 MovieRedesignCardData _movieCard(
   BuildContext context,
   WidgetRef ref,
@@ -297,15 +303,88 @@ MovieRedesignCardData _movieCard(
 ) {
   return MovieRedesignCardData.fromVideoItem(item).copyWith(
     onTap: () {
-      if (item.mediaType == 'TV') {
-        context.push('/video/series/${item.id}');
-      } else {
-        context.push('/video/${item.id}');
-      }
+      // 分集持有 seriesId 时进剧集详情选集；电影进影片详情。
+      // 不能用 mediaType=='TV'（后端仅有 MOVIE/EPISODE），也不能用分集 id 拼系列路由。
+      context.push(movieDetailRoute(item));
     },
     onPlay: () {
-      unawaited(context.push('/video/${item.id}/play'));
+      unawaited(context.push(moviePlayRoute(item.id)));
     },
+  );
+}
+
+/// 系列卡片：悬停播放优先续播该系列，否则进系列详情；点击仍进详情。
+MovieRedesignCardData _seriesCard(
+  BuildContext context,
+  MovieCenterState state,
+  MovieSeries series,
+) {
+  return MovieRedesignCardData.fromSeries(series).copyWith(
+    onTap: () => context.push(movieSeriesDetailRoute(series.id)),
+    onPlay: () {
+      final resume =
+          state.continueWatching
+              .where((item) => item.seriesId == series.id)
+              .firstOrNull;
+      final targetId = resume?.id;
+      unawaited(
+        context.push(
+          targetId == null
+              ? movieSeriesDetailRoute(series.id)
+              : moviePlayRoute(targetId),
+        ),
+      );
+    },
+  );
+}
+
+String? _episodeLabelOf(MovieContinueWatching item) {
+  final season = item.seasonNumber;
+  final episode = item.episodeNumber;
+  if (season == null || episode == null) {
+    return null;
+  }
+  // 通用记法 SxxExx，固定两位。
+  final seasonText = season.toString().padLeft(2, '0');
+  final episodeText = episode.toString().padLeft(2, '0');
+  return 'S${seasonText}E$episodeText';
+}
+
+/// 共用继续观看条目：分集补 SxxExx（主标题已是系列名）。
+List<MovieRedesignContinueItem> _buildContinueItems(
+  BuildContext context,
+  MovieCenterState state,
+) {
+  return [
+    for (final item in state.continueWatching)
+      MovieRedesignContinueItem(
+        data: item,
+        episodeLabel: _episodeLabelOf(item),
+        timeText: movieRedesignRelativeTime(context, item.updatedAt),
+        onPlay: () => unawaited(context.push(moviePlayRoute(item.id))),
+      ),
+  ];
+}
+
+/// 继续观看横条：Movies / TV / Anime 共用；溢出横向滚动且隐藏滚动条。
+Widget _sharedContinueStrip(
+  BuildContext context,
+  WidgetRef ref,
+  MovieCenterState state,
+) {
+  final l10n = AppLocalizations.of(context);
+  final items = _buildContinueItems(context, state);
+  if (items.isEmpty) {
+    return const SizedBox.shrink();
+  }
+  return MovieRedesignContinueStrip(
+    title: l10n.videoSectionContinueWatching,
+    subtitleEn: l10n.videoRedesignSubContinue,
+    items: items,
+    onViewAll:
+        () => ref
+            .read(movieCenterControllerProvider.notifier)
+            .selectSection(MovieSection.continueWatching),
   );
 }
 
@@ -378,14 +457,6 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
     final l10n = AppLocalizations.of(context);
     final controller = ref.read(movieCenterControllerProvider.notifier);
     final filteredItems = state.filteredMovies;
-    final continueItems = [
-      for (final item in state.continueWatching)
-        MovieRedesignContinueItem(
-          data: item,
-          timeText: movieRedesignRelativeTime(context, item.updatedAt),
-          onPlay: () => unawaited(context.push('/video/${item.id}/play')),
-        ),
-    ];
     final filters = [
       MovieRedesignChip(value: 'all', label: l10n.videoRedesignFilterAll),
       MovieRedesignChip(
@@ -421,35 +492,42 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
             ),
           ),
         ),
-        if (continueItems.isNotEmpty)
+        if (state.continueWatching.isNotEmpty)
           SliverPadding(
             padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
-              child: MovieRedesignContinueStrip(
-                title: l10n.videoSectionContinueWatching,
-                subtitleEn: l10n.videoRedesignSubContinue,
-                items: continueItems,
-              ),
+              child: _sharedContinueStrip(context, ref, state),
             ),
           ),
         SliverPadding(
           padding: const EdgeInsets.only(bottom: 16),
           sliver: SliverToBoxAdapter(
-            child: MovieRedesignFilterSortBar(
-              filters: filters,
-              filterValue: state.filter.name,
-              onFilter: (value) {
-                controller.setFilter(
-                  MovieLibraryFilter.values.firstWhere((f) => f.name == value),
-                );
-              },
-              sorts: sorts,
-              sortValue: state.sortBy.name,
-              onSort: (value) {
-                controller.setSort(
-                  MovieSortBy.values.firstWhere((s) => s.name == value),
-                );
-              },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                MovieRedesignFilterSortBar(
+                  filters: filters,
+                  filterValue: state.filter.name,
+                  onFilter: (value) {
+                    controller.setFilter(
+                      MovieLibraryFilter.values.firstWhere(
+                        (f) => f.name == value,
+                      ),
+                    );
+                  },
+                  sorts: sorts,
+                  sortValue: state.sortBy.name,
+                  onSort: (value) {
+                    controller.setSort(
+                      MovieSortBy.values.firstWhere((s) => s.name == value),
+                    );
+                  },
+                ),
+                if (state.searchQuery.trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _SearchScopeNotice(loadedCount: state.movies.length),
+                ],
+              ],
             ),
           ),
         ),
@@ -460,7 +538,10 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
               child: MovieRedesignEmptyState(
                 icon: Icons.movie_outlined,
                 title: l10n.videoRedesignNoMatches,
-                subtitle: l10n.videoRedesignAdjustFilters,
+                subtitle:
+                    state.searchQuery.trim().isNotEmpty
+                        ? l10n.videoSearchNoHitsLoadMore
+                        : l10n.videoRedesignAdjustFilters,
               ),
             ),
           )
@@ -493,8 +574,28 @@ class _MovieLibrarySectionState extends ConsumerState<_MovieLibrarySection> {
   }
 }
 
+/// 搜索范围提示：本地过滤仅覆盖已加载分页，避免“库里有却搜不到”的误解。
+class _SearchScopeNotice extends StatelessWidget {
+  const _SearchScopeNotice({required this.loadedCount});
+
+  final int loadedCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final palette = context.movieRedesign;
+    final text = context.movieRedesignText;
+    return Text(
+      AppLocalizations.of(context).videoSearchScopeLoadedOnly(loadedCount),
+      style: text.mono(
+        size: 11,
+        color: palette.mutedForeground.withValues(alpha: 0.85),
+      ),
+    );
+  }
+}
+
 /// 剧集/动漫分区：系列海报网格，点击进剧集详情。
-class _SeriesGridSection extends StatelessWidget {
+class _SeriesGridSection extends ConsumerWidget {
   const _SeriesGridSection({
     required this.title,
     required this.subtitleEn,
@@ -508,8 +609,28 @@ class _SeriesGridSection extends StatelessWidget {
   final List<MovieSeries> series;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
+    final centerState = ref.watch(movieCenterControllerProvider).requireValue;
+    final controller = ref.read(movieCenterControllerProvider.notifier);
+    final filters = [
+      MovieRedesignChip(value: 'all', label: l10n.videoRedesignFilterAll),
+      MovieRedesignChip(
+        value: 'matched',
+        label: l10n.videoRedesignFilterMatched,
+      ),
+      MovieRedesignChip(
+        value: 'pending',
+        label: l10n.videoRedesignFilterPending,
+      ),
+      MovieRedesignChip(value: 'failed', label: l10n.videoRedesignFilterFailed),
+    ];
+    final sorts = [
+      MovieRedesignChip(value: 'dateAdded', label: l10n.videoSortDateAdded),
+      MovieRedesignChip(value: 'rating', label: l10n.videoRating),
+      MovieRedesignChip(value: 'releaseDate', label: l10n.videoYear),
+      MovieRedesignChip(value: 'title', label: l10n.videoSortTitle),
+    ];
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(
         parent: BouncingScrollPhysics(),
@@ -523,6 +644,34 @@ class _SeriesGridSection extends StatelessWidget {
               subtitleEn: subtitleEn,
               count: series.isEmpty ? null : series.length,
               subtitle: subtitle,
+            ),
+          ),
+        ),
+        if (centerState.continueWatching.isNotEmpty)
+          SliverPadding(
+            padding: EdgeInsets.zero,
+            sliver: SliverToBoxAdapter(
+              child: _sharedContinueStrip(context, ref, centerState),
+            ),
+          ),
+        SliverPadding(
+          padding: const EdgeInsets.only(bottom: 16),
+          sliver: SliverToBoxAdapter(
+            child: MovieRedesignFilterSortBar(
+              filters: filters,
+              filterValue: centerState.filter.name,
+              onFilter: (value) {
+                controller.setFilter(
+                  MovieLibraryFilter.values.firstWhere((f) => f.name == value),
+                );
+              },
+              sorts: sorts,
+              sortValue: centerState.sortBy.name,
+              onSort: (value) {
+                controller.setSort(
+                  MovieSortBy.values.firstWhere((s) => s.name == value),
+                );
+              },
             ),
           ),
         ),
@@ -542,9 +691,7 @@ class _SeriesGridSection extends StatelessWidget {
             sliver: MovieRedesignPosterSliverGrid(
               items: [
                 for (final item in series)
-                  MovieRedesignCardData.fromSeries(item).copyWith(
-                    onTap: () => context.push('/video/series/${item.id}'),
-                  ),
+                  _seriesCard(context, centerState, item),
               ],
             ),
           ),
@@ -607,13 +754,13 @@ class _RecentSection extends ConsumerWidget {
 }
 
 /// 继续观看分区：2/4 列进度卡片。
-class _ContinueSection extends StatelessWidget {
+class _ContinueSection extends ConsumerWidget {
   const _ContinueSection({required this.state});
 
   final MovieCenterState state;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context);
     return CustomScrollView(
       physics: const AlwaysScrollableScrollPhysics(
@@ -648,19 +795,7 @@ class _ContinueSection extends StatelessWidget {
             padding: EdgeInsets.zero,
             sliver: SliverToBoxAdapter(
               child: _ContinueCardWrap(
-                items: [
-                  for (final item in state.continueWatching)
-                    MovieRedesignContinueItem(
-                      data: item,
-                      timeText: movieRedesignRelativeTime(
-                        context,
-                        item.updatedAt,
-                      ),
-                      onPlay:
-                          () =>
-                              unawaited(context.push('/video/${item.id}/play')),
-                    ),
-                ],
+                items: _buildContinueItems(context, state),
               ),
             ),
           ),
@@ -747,9 +882,7 @@ class _FavoritesSection extends ConsumerWidget {
                 for (final item in state.favoriteItems)
                   _movieCard(context, ref, item),
                 for (final series in state.favoriteSeries)
-                  MovieRedesignCardData.fromSeries(series).copyWith(
-                    onTap: () => context.push('/video/series/${series.id}'),
-                  ),
+                  _seriesCard(context, state, series),
               ],
             ),
           ),

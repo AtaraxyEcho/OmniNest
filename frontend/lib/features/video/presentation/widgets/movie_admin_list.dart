@@ -443,7 +443,7 @@ class _MovieAdminSectionState extends ConsumerState<MovieAdminSection> {
       if (!deleted || !mounted || !context.mounted) {
         return;
       }
-      showMovieFeedback(context, l10n.videoMovedToRecycleBin);
+      showMovieFeedback(context, l10n.videoItemPermanentlyDeleted);
     } catch (error) {
       if (!mounted || !context.mounted) {
         return;

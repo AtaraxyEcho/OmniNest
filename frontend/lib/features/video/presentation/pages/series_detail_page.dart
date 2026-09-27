@@ -7,10 +7,12 @@ import 'package:go_router/go_router.dart';
 import 'package:omninest/app/l10n/app_localizations.dart';
 import 'package:omninest/app/theme/app_typography.dart';
 import 'package:omninest/core/auth/auth_controller.dart';
+import 'package:omninest/core/auth/user_capabilities.dart';
 import 'package:omninest/core/utils/route_exit.dart';
 import 'package:omninest/features/video/application/movie_controller.dart';
 import 'package:omninest/features/video/application/movie_detail_action_controller.dart';
 import 'package:omninest/features/video/domain/movie_library_models.dart';
+import 'package:omninest/features/video/domain/series_play_target.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_poster_image.dart';
 import 'package:omninest/features/video/presentation/theme/movie_redesign_theme.dart';
 import 'package:omninest/features/video/presentation/widgets/movie_feedback.dart';
@@ -65,14 +67,14 @@ class SeriesDetailPage extends ConsumerWidget {
                             movieSeriesDetailProvider(seriesId),
                           ),
                       borderRadius: MovieRedesignPalette.borderRadius,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
                           horizontal: 12,
                           vertical: 6,
                         ),
                         child: Text(
-                          'RETRY',
-                          style: TextStyle(
+                          AppLocalizations.of(context).coreRetry,
+                          style: const TextStyle(
                             fontFamily: 'JetBrainsMono',
                             fontSize: AppTypography.bodySmall,
                             color: MovieDetailTheme.secondaryText,
@@ -198,35 +200,42 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
     }
   }
 
-  /// PLAY：播放最早一季的第一个可播分集（分集续播由播放器按分集进度处理）。
-  Future<void> _playFirstEpisode() async {
+  /// PLAY：按续播 / 下一集 / 首集规则解析目标分集后进入播放器。
+  Future<void> _playSeries() async {
     if (_resolvingPlay) {
-      return;
-    }
-    final seasons = _sortedSeasons;
-    if (seasons.isEmpty) {
       return;
     }
     setState(() => _resolvingPlay = true);
     try {
-      for (final season in seasons) {
-        final seasonDetail = await ref.read(
-          movieSeasonDetailProvider(
-            SeasonKey(seriesId: series.id, seasonNumber: season.seasonNumber),
-          ).future,
+      final intent = await ref.read(seriesPlayIntentProvider(series.id).future);
+      final String? targetId;
+      if (intent.kind == SeriesPlayIntentKind.resume &&
+          intent.videoItemId != null) {
+        targetId = intent.videoItemId;
+      } else {
+        final episodes = sortEpisodesForPlay(
+          await ref.read(movieSeriesEpisodesProvider(series.id).future),
         );
-        final playable = seasonDetail.episodes.where(
-          (episode) => episode.availabilityStatus == 'AVAILABLE',
+        targetId = pickSeriesPlayEpisodeId(
+          orderedEpisodes: episodes,
+          afterVideoItemId:
+              intent.kind == SeriesPlayIntentKind.nextEpisode
+                  ? intent.afterVideoItemId
+                  : null,
         );
-        if (playable.isEmpty) {
-          continue;
-        }
-        if (!mounted) {
-          return;
-        }
-        context.push('/video/${playable.first.id}/play');
+      }
+      if (!mounted) {
         return;
       }
+      if (targetId == null || targetId.isEmpty) {
+        showMovieFeedback(
+          context,
+          AppLocalizations.of(context).videoDetailNoPlayableEpisode,
+          isError: true,
+        );
+        return;
+      }
+      context.push('/video/$targetId/play');
     } on Exception catch (error) {
       if (mounted) {
         showMovieFeedback(context, movieErrorMessage(error), isError: true);
@@ -272,7 +281,10 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
                   });
                 }
               },
-              onToggleFavorite: () => unawaited(_toggleFavorite(favorited)),
+              onToggleFavorite:
+                  ref.watch(userCapabilitiesProvider).canManageOwnActivity
+                      ? () => unawaited(_toggleFavorite(favorited))
+                      : null,
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -294,8 +306,13 @@ class _SeriesDetailViewState extends ConsumerState<_SeriesDetailView> {
                       ),
                       const SizedBox(height: 32),
                       _SeriesPlayButton(
-                        onTap: _playFirstEpisode,
+                        onTap: _playSeries,
                         busy: _resolvingPlay,
+                        intent:
+                            ref
+                                .watch(seriesPlayIntentProvider(series.id))
+                                .asData
+                                ?.value,
                       ),
                       const SizedBox(height: 32),
                       _SeriesOverviewText(

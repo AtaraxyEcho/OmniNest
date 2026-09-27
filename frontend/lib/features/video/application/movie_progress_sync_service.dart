@@ -17,6 +17,7 @@ class MovieProgressSyncService {
   ///
   /// [shouldSkip] 返回 true 时跳过本周期（如拖动 seek 中）。
   /// [computeCompleted] 由调用方根据位置/时长判定是否播完。
+  /// [onSyncFailed] 同步失败时回调（播放不中断）；同一会话由调用方自行限流。
   void start({
     required String videoItemId,
     required Duration interval,
@@ -24,6 +25,7 @@ class MovieProgressSyncService {
     required int Function() readDurationSeconds,
     required bool Function(int position, int duration) computeCompleted,
     bool Function()? shouldSkip,
+    void Function()? onSyncFailed,
   }) {
     stop();
     _videoItemId = videoItemId;
@@ -45,6 +47,7 @@ class MovieProgressSyncService {
         );
       } on Exception {
         // 进度同步失败不打断播放，下次周期重试。
+        onSyncFailed?.call();
       }
     });
   }

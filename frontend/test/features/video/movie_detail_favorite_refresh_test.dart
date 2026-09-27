@@ -81,7 +81,8 @@ class _AdminSessionNotifier extends AuthSessionNotifier {
       id: 'user-1',
       username: 'admin',
       role: 'ADMIN',
-      permissions: const <String>{'media:write'},
+      // 对齐真实 ADMIN 角色：持有 activity:write，详情页收藏入口可见。
+      permissions: const <String>{'media:write', 'activity:write'},
     ),
   );
 }
